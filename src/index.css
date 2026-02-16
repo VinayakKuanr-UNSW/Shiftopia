@@ -1,0 +1,330 @@
+/* ============================================================
+   SHIFTOPIA - Metropolis Modern Theme
+   ============================================================ */
+
+/* Import Outfit and Plus Jakarta Sans */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+
+/* Import theme styles */
+@import './styles/theme.css';
+
+/* Import enhanced component styles */
+@import './styles/enhanced-components.css';
+
+/* ============================================================
+   BASE RESETS
+   ============================================================ */
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   BASE LAYER - CSS Variables
+   ============================================================ */
+@layer base {
+  :root {
+    /* Metropolis Modern Theme Variables */
+
+    /* Backgrounds: Deep Slate/Navy */
+    --background: 222 47% 11%;
+    /* #0f172a - Clean Deep Slate */
+    --foreground: 210 40% 98%;
+    /* #f8fafc */
+
+    /* Cards: Slightly lighter/glassy */
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+
+    /* Primary: Electric Indigo */
+    --primary: 243 75% 59%;
+    /* #4f46e5 */
+    --primary-foreground: 210 40% 98%;
+
+    /* Secondary: Muted Steel */
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    /* Accent: Matching Primary or Amber for highlights */
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 243 75% 59%;
+    --radius: 0.75rem;
+
+    /* Sidebar variables */
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 243 75% 59%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 217 33% 17%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217 33% 17%;
+    --sidebar-ring: 243 75% 59%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+}
+
+/* ============================================================
+   TYPOGRAPHY OVERRIDES
+   ============================================================ */
+@layer base {
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-heading tracking-tight;
+  }
+
+  body {
+    @apply font-sans antialiased text-foreground bg-background selection:bg-primary/30 selection:text-primary-foreground;
+  }
+}
+
+/* ============================================================
+   COMPONENTS LAYER
+   ============================================================ */
+@layer components {
+
+  /* Calendar container */
+  .calendar-container {
+    @apply overflow-x-auto;
+  }
+
+  .calendar-container>div {
+    min-height: 600px;
+  }
+
+  /* Sidebar transitions */
+  .sidebar-transition {
+    @apply transition-all duration-300 ease-in-out;
+  }
+
+  .main-content {
+    @apply transition-[margin] duration-300 ease-in-out;
+  }
+
+  /* Metropolis Card */
+  .modern-card {
+    @apply bg-card/40 backdrop-blur-md border border-white/10 rounded-xl shadow-lg transition-all duration-300 hover:shadow-glow hover:border-primary/30 hover:bg-card/60;
+  }
+
+  /* Glass Button */
+  .lovable-button {
+    @apply bg-primary/90 text-primary-foreground rounded-lg px-4 py-2.5 font-medium text-sm transition-all duration-300 shadow-lg shadow-primary/20 hover:bg-primary hover:shadow-primary/40 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .lovable-button-secondary {
+    @apply bg-secondary/50 backdrop-blur-sm text-secondary-foreground border border-white/10 rounded-lg px-4 py-2.5 font-medium text-sm transition-all duration-300 hover:bg-secondary/80 hover:border-white/20 hover:-translate-y-0.5;
+  }
+
+  /* Glass Input */
+  .lovable-input {
+    @apply bg-black/20 border border-white/10 rounded-lg px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all duration-200 hover:border-white/20 hover:bg-black/30;
+  }
+
+  /* Sidebar styles */
+  .lovable-sidebar {
+    @apply bg-sidebar/95 backdrop-blur-xl border-r border-sidebar-border transition-all duration-300;
+  }
+
+  /* Calendar day styles */
+  .calendar-day {
+    @apply rounded-lg p-2 transition-all duration-150 hover:bg-primary/20 cursor-pointer border border-transparent hover:border-primary/20;
+  }
+
+  .calendar-day-selected {
+    @apply bg-primary text-primary-foreground shadow-glow border-primary;
+  }
+
+  .calendar-day-today {
+    @apply ring-1 ring-primary bg-primary/10;
+  }
+
+  /* Status badges */
+  .status-badge-open {
+    @apply bg-blue-500/10 text-blue-400 border border-blue-500/20 shadow-[0_0_10px_rgba(59, 130, 246, 0.1)];
+  }
+
+  .status-badge-offered {
+    @apply bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-[0_0_10px_rgba(245, 158, 11, 0.1)];
+  }
+
+  .status-badge-filled {
+    @apply bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16, 185, 129, 0.1)];
+  }
+
+  .status-badge-draft {
+    @apply bg-slate-500/10 text-slate-400 border border-slate-500/20;
+  }
+
+  /* Management page styles */
+  .management-header {
+    @apply bg-gradient-to-r from-primary/10 to-transparent border-b border-white/5 p-6 rounded-t-xl backdrop-blur-sm;
+  }
+
+  .management-card {
+    @apply bg-card/40 backdrop-blur-md border border-white/10 rounded-xl p-6 transition-all duration-300 hover:bg-card/60 hover:border-primary/20 hover:shadow-glow;
+  }
+
+  .bid-card {
+    @apply bg-card/30 border border-white/5 rounded-lg transition-all duration-200 hover:bg-card/50 hover:border-white/10 hover:shadow-lg;
+  }
+
+  .swap-request-card {
+    @apply bg-card/30 border border-white/5 rounded-lg p-4 transition-all duration-200 hover:bg-card/50 hover:border-white/10;
+  }
+}
+
+/* ============================================================
+   UTILITIES LAYER
+   ============================================================ */
+@layer utilities {
+
+  /* Audit trail icon */
+  .audit-trail-icon {
+    @apply shrink-0 mt-0.5;
+  }
+
+  /* Gradients */
+  .gradient-primary {
+    @apply bg-gradient-to-r from-primary/20 to-primary/5;
+  }
+
+  .gradient-accent {
+    @apply bg-gradient-to-r from-accent/20 to-accent/5;
+  }
+
+  .glass-panel {
+    @apply bg-white/5 backdrop-blur-lg border border-white/10 shadow-xl;
+  }
+
+  .text-glow {
+    text-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+  }
+}
+
+/* ============================================================
+   RADIX SELECT THEME COMPLIANCE
+   ============================================================ */
+[data-radix-popper-content-wrapper]>[data-state],
+[data-radix-select-content] {
+  background: hsl(var(--popover)) !important;
+  color: hsl(var(--popover-foreground)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(12px);
+}
+
+[data-radix-select-item] {
+  background: transparent !important;
+  border-radius: 4px;
+}
+
+[data-radix-select-item]:hover,
+[data-radix-select-item][data-highlighted],
+[data-radix-select-item][data-state='checked'] {
+  background: hsl(var(--primary)) !important;
+  color: white !important;
+}
+
+/* ============================================================
+   SCROLLBAR STYLING
+   ============================================================ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 99px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ============================================================
+   RADIX SELECT THEME COMPLIANCE
+   ============================================================ */
+
+/* ============================================================
+   GLOBAL STYLES (Migrated from main.tsx)
+   ============================================================ */
+
+#root {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Theme Glass Scrollbar Overrides */
+.theme-glass ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.theme-glass ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Ensure full height layouts */
+.h-full,
+.h-screen {
+  height: 100% !important;
+}
+
+/* Fix for transparent components in glass theme */
+.theme-glass input::placeholder,
+.theme-glass textarea::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Fix for components in glass theme */
+.theme-glass .bg-card,
+.theme-glass .bg-background {
+  background-color: rgba(30, 30, 40, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+/* Glassmorphism effects - Enhanced */
+.glass-panel-heavy {
+  background-color: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+/* Fix the Index page scrolling */
+body {
+  overflow: auto;
+}

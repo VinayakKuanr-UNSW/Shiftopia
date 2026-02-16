@@ -1,0 +1,350 @@
+/* ============================================================
+   SHIFTOPIA THEME SYSTEM
+   Light and Dark themes only
+   ============================================================ */
+
+/* ============================================================
+   CSS CUSTOM PROPERTIES - Brand Colors
+   ============================================================ */
+:root {
+  /* Brand Colors */
+  --brand-primary: #6366f1;
+  --brand-primary-dark: #4f46e5;
+  --brand-primary-light: #818cf8;
+  --brand-secondary: #10b981;
+  --brand-accent: #f59e0b;
+
+  /* Border Radius */
+  --radius: 0.75rem;
+
+  /* Opacity helpers */
+  --border-opacity-soft: 0.4;
+  --border-opacity-strong: 0.6;
+}
+
+/* ============================================================
+   LIGHT THEME
+   ============================================================ */
+.light {
+  --background-image: radial-gradient(circle at 15% 50%,
+      rgba(99, 102, 241, 0.03) 0%,
+      transparent 50%),
+    radial-gradient(circle at 85% 30%,
+      rgba(16, 185, 129, 0.02) 0%,
+      transparent 40%);
+  /* Page background - very light neutral for better surface separation */
+  --background-color: #F7F8FA;
+
+  --background: 220 14% 96%;
+  /* Near-black for strong title contrast */
+  --foreground: 221 39% 11%;
+
+  /* Cards - pure white for clear separation from page bg */
+  --card: 0 0% 100%;
+  --card-foreground: 221 39% 11%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 221 39% 11%;
+
+  --primary: 239 84% 67%;
+  --primary-foreground: 0 0% 100%;
+
+  /* Secondary - slightly tinted for inset areas */
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 221 39% 11%;
+
+  /* Muted - subtle tint for inset panels */
+  --muted: 220 13% 95%;
+  /* Muted foreground - proper contrast ratio */
+  --muted-foreground: 220 9% 46%;
+
+  --accent: 220 14% 96%;
+  --accent-foreground: 221 39% 11%;
+
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+
+  /* Improved borders - matches #E5E7EB */
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --ring: 239 84% 67%;
+
+  /* Inset background for tables, KPI panels */
+  --inset-bg: 220 14% 95%;
+
+  /* Sidebar */
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 221 39% 11%;
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: 220 14% 96%;
+  --sidebar-accent-foreground: 221 39% 11%;
+  --sidebar-border: 220 13% 91%;
+  --sidebar-ring: var(--ring);
+
+  /* Chart */
+  --chart-1: 239 84% 67%;
+  --chart-2: 160 60% 45%;
+  --chart-3: 30 80% 55%;
+  --chart-4: 280 65% 60%;
+  --chart-5: 340 75% 55%;
+}
+
+/* ============================================================
+   DARK THEME
+   ============================================================ */
+.dark {
+  --background-image: radial-gradient(circle at 15% 50%,
+      rgba(99, 102, 241, 0.08) 0%,
+      transparent 50%),
+    radial-gradient(circle at 85% 30%,
+      rgba(16, 185, 129, 0.05) 0%,
+      transparent 40%);
+  --background-color: #0f172a;
+
+  --background: 222 47% 11%;
+  --foreground: 210 40% 98%;
+
+  --card: 222 47% 11%;
+  --card-foreground: 210 40% 98%;
+
+  --popover: 222 47% 11%;
+  --popover-foreground: 210 40% 98%;
+
+  --primary: 239 84% 67%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 217 33% 17%;
+  --secondary-foreground: 210 40% 98%;
+
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20% 65%;
+
+  --accent: 217 33% 17%;
+  --accent-foreground: 210 40% 98%;
+
+  --destructive: 0 62% 30%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 217 33% 17%;
+  --input: 217 33% 17%;
+  --ring: 239 84% 67%;
+
+  /* Sidebar */
+  --sidebar-background: var(--card);
+  --sidebar-foreground: var(--card-foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--secondary);
+  --sidebar-accent-foreground: var(--secondary-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+
+  /* Chart */
+  --chart-1: 239 84% 67%;
+  --chart-2: 160 60% 45%;
+  --chart-3: 30 80% 55%;
+  --chart-4: 280 65% 60%;
+  --chart-5: 340 75% 55%;
+}
+
+/* ============================================================
+   COLOR SCHEME
+   ============================================================ */
+html.light {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+html {
+  transition: background-color 0.3s ease;
+}
+
+/* ============================================================
+   GLOBAL BODY
+   ============================================================ */
+body {
+  background-color: var(--background-color);
+  background-image: var(--background-image, none);
+  background-attachment: fixed;
+  min-height: 100vh;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+    sans-serif;
+  line-height: 1.6;
+  letter-spacing: -0.01em;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ============================================================
+   MODERN CARD
+   ============================================================ */
+.modern-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border) / var(--border-opacity-soft));
+  border-radius: var(--radius);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  will-change: transform;
+}
+
+.modern-card:hover {
+  transform: translateY(-2px);
+  border-color: hsl(var(--border) / var(--border-opacity-strong));
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.dark .modern-card {
+  background: hsl(var(--card) / 0.95);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: hsl(var(--border) / 0.8);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.6);
+}
+
+/* ============================================================
+   FOCUS STATES
+   ============================================================ */
+*:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.dark *:focus-visible {
+  outline-offset: 3px;
+}
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.3s ease-out;
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.2s ease-out;
+}
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ============================================================
+   STATUS BADGES
+   ============================================================ */
+.status-badge-open,
+.status-badge-offered,
+.status-badge-filled,
+.status-badge-draft {
+  border: 1px solid transparent;
+}
+
+/* Light */
+.light .status-badge-open {
+  background: rgba(59, 130, 246, 0.1);
+  color: rgb(29, 78, 216);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.light .status-badge-offered {
+  background: rgba(245, 158, 11, 0.1);
+  color: rgb(180, 83, 9);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.light .status-badge-filled {
+  background: rgba(16, 185, 129, 0.1);
+  color: rgb(4, 120, 87);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.light .status-badge-draft {
+  background: rgba(107, 114, 128, 0.1);
+  color: rgb(55, 65, 81);
+  border-color: rgba(107, 114, 128, 0.3);
+}
+
+/* Dark */
+.dark .status-badge-open {
+  background: rgba(59, 130, 246, 0.2);
+  color: rgb(147, 197, 253);
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.dark .status-badge-offered {
+  background: rgba(245, 158, 11, 0.2);
+  color: rgb(252, 211, 77);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.dark .status-badge-filled {
+  background: rgba(16, 185, 129, 0.2);
+  color: rgb(110, 231, 183);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.dark .status-badge-draft {
+  background: rgba(107, 114, 128, 0.2);
+  color: rgb(209, 213, 219);
+  border-color: rgba(107, 114, 128, 0.4);
+}

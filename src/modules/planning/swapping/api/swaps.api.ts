@@ -1,0 +1,833 @@
+import { supabase } from '@/platform/realtime/client';
+import { SwapRequestWithDetails } from '../model/swap.types';
+import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
+
+import { shiftsApi } from '@/modules/rosters';
+import { checkCompliance, ComplianceCheckInput, ShiftTimeRange } from '@/modules/compliance';
+import { addDays, subDays, format, parseISO, differenceInHours } from 'date-fns';
+
+// Type assertion helper for Supabase queries with tables not in generated types
+const db = supabase as any;
+
+// §9 Time Lock: Swap actions are forbidden if shift starts within 4 hours
+const TIME_LOCK_HOURS = 4;
+const assertNotTimeLocked = (shiftDate: string, startTime: string) => {
+    const shiftStart = new Date(`${shiftDate}T${startTime}`);
+    const now = new Date();
+    const hoursUntilStart = differenceInHours(shiftStart, now);
+    if (hoursUntilStart < TIME_LOCK_HOURS) {
+        throw new Error(`Time locked: shift starts in ${hoursUntilStart}h (< ${TIME_LOCK_HOURS}h). Swap actions are forbidden.`);
+    }
+};
+
+// Helper: Run compliance check for a swap transaction
+const validateSwapCompliance = async (
+    requesterId: string,
+    requesterShift: any, // Shift object
+    offererId: string,
+    offeredShift: any | null // Shift object or null
+) => {
+    // 1. Define date range for roster fetch (surrounding the shifts)
+    // We need rosters for BOTH employees to check compliance for receiving the new shift.
+    // Range: +/- 30 days from the earliest shift date involved.
+    const dateRef = parseISO(requesterShift.shift_date);
+    const start = format(subDays(dateRef, 30), 'yyyy-MM-dd');
+    const end = format(addDays(dateRef, 30), 'yyyy-MM-dd');
+
+    // 2. Fetch Rosters
+    const requesterRoster = await shiftsApi.getEmployeeShifts(requesterId, start, end);
+    const offererRoster = await shiftsApi.getEmployeeShifts(offererId, start, end);
+
+    // 3. Check Offerer receiving Requester's Shift (Always happens in a swap)
+    const offererExistingShifts: ShiftTimeRange[] = offererRoster
+        .filter(s => s.id !== offeredShift?.id) // Exclude the shift they are giving away (if any)
+        .map(s => ({
+            shift_date: s.shift_date,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            unpaid_break_minutes: s.unpaid_break_minutes || 0,
+        }));
+
+    const offererCheckInput: ComplianceCheckInput = {
+        employee_id: offererId,
+        action_type: 'assign',
+        candidate_shift: {
+            shift_date: requesterShift.shift_date,
+            start_time: requesterShift.start_time,
+            end_time: requesterShift.end_time,
+            unpaid_break_minutes: requesterShift.unpaid_break_minutes || 0,
+        },
+        existing_shifts: offererExistingShifts,
+    };
+
+    const offererResult = checkCompliance(offererCheckInput);
+
+    // 4. Check Requester receiving Offered Shift (Only if 2-way)
+    let requesterResult = null;
+    if (offeredShift) {
+        const requesterExistingShifts: ShiftTimeRange[] = requesterRoster
+            .filter(s => s.id !== requesterShift.id) // Exclude shift they are giving away
+            .map(s => ({
+                shift_date: s.shift_date,
+                start_time: s.start_time,
+                end_time: s.end_time,
+                unpaid_break_minutes: s.unpaid_break_minutes || 0,
+            }));
+
+        const requesterCheckInput: ComplianceCheckInput = {
+            employee_id: requesterId,
+            action_type: 'assign',
+            candidate_shift: {
+                shift_date: offeredShift.shift_date,
+                start_time: offeredShift.start_time,
+                end_time: offeredShift.end_time,
+                unpaid_break_minutes: offeredShift.unpaid_break_minutes || 0,
+            },
+            existing_shifts: requesterExistingShifts,
+        };
+        requesterResult = checkCompliance(requesterCheckInput);
+    }
+
+    return {
+        offererResult,
+        requesterResult,
+        timestamp: new Date().toISOString()
+    };
+};
+
+// ShiftSwap interface for MySwaps page (matches DB structure more closely)
+export interface ShiftSwap {
+    id: string;
+    requester_shift_id: string;
+    requester_id: string; // FK to profiles
+    target_id: string | null; // FK to profiles
+    target_shift_id: string | null;
+    reason: string | null;
+    status: 'OPEN' | 'MANAGER_PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'EXPIRED';
+    created_at: string;
+    updated_at: string;
+}
+
+// Type for creating swap requests
+export interface CreateSwapData {
+    requesterShiftId: string;
+    requestedByEmployeeId: string;
+    swapWithEmployeeId?: string | null;
+    reason?: string | null;
+}
+
+// Extended interface with relations
+export interface ShiftSwapRelations extends ShiftSwap {
+    requester_shift?: any; // Was original_shift
+    target_shift?: any;   // Was offered_shift
+    requested_by?: any; // profile
+    swap_with?: any; // profile
+}
+
+// Interface for an offer received on a swap request (1-to-many model)
+export interface SwapOffer {
+    id: string;
+    swap_request_id: string;
+    offerer_id: string;
+    offered_shift_id?: string;
+    status: 'SUBMITTED' | 'SELECTED' | 'REJECTED' | 'WITHDRAWN' | 'EXPIRED';
+    compliance_snapshot?: any;
+    created_at: string;
+    offerer?: any; // Profile relation
+    offered_shift?: any; // Shift relation
+}
+
+export const swapsApi = {
+    // ----------------------------------------------------------------
+    // 1. CREATE
+    // ----------------------------------------------------------------
+
+    /**
+     * Create a new swap request.
+     */
+    async createSwapRequest(
+        requesterShiftId: string,
+        requestedByEmployeeId: string,
+        swapWithEmployeeId: string | null = null,
+        reason: string | null = null
+    ): Promise<ShiftSwap> {
+        console.log('[API] Creating swap request:', { requesterShiftId, requestedByEmployeeId, swapWithEmployeeId });
+
+        // §9 Time Lock Check: Fetch shift to verify time lock
+        const { data: shift, error: shiftErr } = await supabase
+            .from('shifts').select('shift_date, start_time').eq('id', requesterShiftId).single();
+        if (shiftErr || !shift) throw shiftErr || new Error('Shift not found');
+        assertNotTimeLocked(shift.shift_date, shift.start_time);
+
+        const { data, error } = await db
+            .from('shift_swaps')
+            .insert({
+                requester_shift_id: requesterShiftId,
+                requester_id: requestedByEmployeeId,
+                target_id: swapWithEmployeeId,
+                reason: reason,
+                status: 'OPEN', // T1: S4 → S9, OPEN
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('[API] Error creating swap request:', error);
+            throw error;
+        }
+
+        return data;
+    },
+
+    // ----------------------------------------------------------------
+    // 2. READ
+    // ----------------------------------------------------------------
+
+    /**
+     * Get all swap requests for a specific employee.
+     */
+    /**
+     * Get all swap requests for a specific employee.
+     * Optionally filtered by Organization (for Header context awareness)
+     */
+    async getMySwaps(employeeId: string, filters?: { organizationId?: string }): Promise<ShiftSwapRelations[]> {
+        // 1. Fetch Request where I am the requester
+        let requestsQuery = db
+            .from('shift_swaps')
+            .select(`
+                *,
+                requester_shift:shifts!requester_shift_id(
+                    *,
+                    roles(name),
+                    departments(name),
+                    sub_departments(name)
+                ),
+                target_shift:shifts!target_shift_id(
+                    *,
+                    roles(name),
+                    departments(name),
+                    sub_departments(name)
+                ),
+                requested_by:profiles!requester_id(*),
+                swap_with:profiles!target_id(*)
+            `)
+            .eq('requester_id', employeeId);
+
+        // 2. Fetch Offers I made (from swap_offers table)
+        // We need the PARENT swap request details for these.
+        const offersQuery = db
+            .from('swap_offers')
+            .select(`
+                swap_request:shift_swaps!swap_request_id(
+                    *,
+                    requester_shift:shifts!requester_shift_id(
+                        *,
+                        roles(name),
+                        departments(name),
+                        sub_departments(name)
+                    ),
+                    target_shift:shifts!target_shift_id(
+                        *,
+                        roles(name),
+                        departments(name),
+                        sub_departments(name)
+                    ),
+                    requested_by:profiles!requester_id(*),
+                    swap_with:profiles!target_id(*)
+                )
+            `)
+            .eq('offerer_id', employeeId);
+
+        if (filters?.organizationId) {
+            requestsQuery = requestsQuery.eq('requester_shift.organization_id', filters.organizationId);
+            // For offers, we filter on the parent swap's shift org
+            // Note: nested filtering in PostgREST is tricky.
+            // We'll filter in memory for simplicity or rely on the primary query structure.
+        }
+
+        const [requestsResult, offersResult] = await Promise.all([requestsQuery, offersQuery]);
+
+        if (requestsResult.error) throw requestsResult.error;
+        if (offersResult.error) throw offersResult.error;
+
+        const myRequests = requestsResult.data || [];
+
+        // Extract swap requests from my offers
+        const myOffersAsSwaps = (offersResult.data || [])
+            .map((o: any) => o.swap_request)
+            .filter((s: any) => s !== null);
+
+        // Deduplicate (unlikely to overlap unless I offered on my own request?)
+        const allSwaps = [...myRequests, ...myOffersAsSwaps];
+        const uniqueSwaps = Array.from(new Map(allSwaps.map(item => [item.id, item])).values());
+
+        return uniqueSwaps;
+    },
+
+    /**
+     * Get available swap requests (Marketplace).
+     */
+    /**
+     * Get available swap requests (Marketplace).
+     */
+    async getAvailableSwaps(
+        currentEmployeeId: string,
+        filters: {
+            organizationId: string;
+            departmentId?: string;
+            subDepartmentId?: string;
+        }
+    ): Promise<ShiftSwapRelations[]> {
+        console.log('[API] Fetching available swaps for:', currentEmployeeId, filters);
+
+        const { organizationId, departmentId, subDepartmentId } = filters;
+        const shiftJoinType = '!inner'; // Mandatory to filter by org
+
+        let query = db
+            .from('shift_swaps')
+            .select(`
+                *,
+                requester_shift:shifts!requester_shift_id${shiftJoinType}(
+                    *,
+                    roles(name),
+                    departments(name),
+                    sub_departments(name)
+                ),
+                target_shift:shifts!target_shift_id(
+                    *,
+                    roles(name),
+                    departments(name),
+                    sub_departments(name)
+                ),
+                requested_by:profiles!requester_id(*),
+                swap_with:profiles!target_id(*)
+            `)
+            .eq('status', 'OPEN')
+            .is('target_id', null)
+            .neq('requester_id', currentEmployeeId)
+            .eq('requester_shift.organization_id', organizationId);
+
+        // Hierarchy Filters
+        if (subDepartmentId && isValidUuid(subDepartmentId)) {
+            query = query.eq('requester_shift.sub_department_id', subDepartmentId);
+        } else if (departmentId && isValidUuid(departmentId)) {
+            query = query.eq('requester_shift.department_id', departmentId);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            console.error('[API] Error fetching available swaps:', error);
+            throw error;
+        }
+
+        return data || [];
+    },
+
+    /**
+     * Get a single swap request by ID with full details
+     */
+    async getSwapById(swapId: string): Promise<SwapRequestWithDetails | null> {
+        const { data, error } = await db
+            .from('shift_swaps')
+            .select(`
+                *,
+                requester_shift:shifts!requester_shift_id(
+                    *,
+                    roles(name),
+                    departments(name),
+                    sub_departments(name)
+                ),
+                target_shift:shifts!target_shift_id(
+                    *,
+                    roles(name),
+                    departments(name),
+                    sub_departments(name)
+                ),
+                requested_by:profiles!requester_id(*),
+                swap_with:profiles!target_id(*)
+            `)
+            .eq('id', swapId)
+            .single();
+
+        if (error) throw error;
+        return data ? mapDbToSwapRequest(data) : null;
+    },
+
+    /**
+     * Get offers for a specific swap request.
+     * TODO: Implement actual DB fetch when swap_offers table exists.
+     */
+    /**
+     * Make an offer on a swap request (1-to-many model).
+     * Inserts a new row into swap_offers.
+     */
+    async makeOffer(swapId: string, targetShiftId: string | undefined, targetId: string): Promise<void> {
+        console.log('[API] Making offer on swap:', { swapId, targetShiftId, targetId });
+
+        const offerData: any = {
+            swap_request_id: swapId,
+            offerer_id: targetId,
+            status: 'SUBMITTED',
+            // TODO: compliance_snapshot: ... (captured from frontend or re-run on backend)
+        };
+
+        if (targetShiftId) {
+            offerData.offered_shift_id = targetShiftId;
+        }
+
+        const { error } = await db
+            .from('swap_offers')
+            .insert(offerData);
+
+        if (error) {
+            console.error('[API] Error making offer:', error);
+            throw error;
+        }
+
+        // Optimistically update request status to 'OPEN' or specific state if needed, 
+        // but explicit state change should happen on selection.
+    },
+
+    /**
+     * Get swap request IDs where the current user has an active (SUBMITTED) offer.
+     * Used to show "Already Offered" state on Available Swaps cards.
+     * Only considers offers on swaps that are still active (OPEN or MANAGER_PENDING).
+     */
+    async getMyActiveOffers(employeeId: string): Promise<Set<string>> {
+        const { data, error } = await db
+            .from('swap_offers')
+            .select('swap_request_id, active_swap:shift_swaps!inner(status)')
+            .eq('offerer_id', employeeId)
+            .eq('status', 'SUBMITTED')
+            .in('active_swap.status', ['OPEN', 'MANAGER_PENDING']);
+
+        if (error) {
+            console.error('[API] Error fetching my active offers:', error);
+            return new Set();
+        }
+
+        return new Set((data || []).map((o: any) => o.swap_request_id));
+    },
+
+    /**
+     * Get full offer details for the current user's active offers.
+     * Used by OfferSwapModal to determine which shifts are already offered elsewhere.
+     * Only considers offers on swaps that are still active (OPEN or MANAGER_PENDING).
+     */
+    async getMyActiveOfferDetails(employeeId: string): Promise<{ swap_request_id: string; offered_shift_id: string | null }[]> {
+        const { data, error } = await db
+            .from('swap_offers')
+            .select('swap_request_id, offered_shift_id, active_swap:shift_swaps!inner(status)')
+            .eq('offerer_id', employeeId)
+            .eq('status', 'SUBMITTED')
+            .in('active_swap.status', ['OPEN', 'MANAGER_PENDING']);
+
+        if (error) {
+            console.error('[API] Error fetching my active offer details:', error);
+            return [];
+        }
+
+        return data || [];
+    },
+
+    /**
+     * Get offers for a specific swap request.
+     * Fetches from swap_offers table.
+     */
+    async getSwapOffers(swapId: string): Promise<SwapOffer[]> {
+        console.log('[API] Fetching offers for swap:', swapId);
+
+        const { data, error } = await db
+            .from('swap_offers')
+            .select(`
+                *,
+                offerer:profiles!offerer_id(*),
+                offered_shift:shifts!offered_shift_id(
+                    *,
+                    roles(name),
+                    departments(name),
+                    sub_departments(name)
+                )
+            `)
+            .eq('swap_request_id', swapId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('[API] Error fetching swap offers:', error);
+            return [];
+        }
+
+        return data || [];
+    },
+
+    /**
+     * Fetch all swap requests (MANAGER VIEW)
+     */
+    async fetchSwapRequests(filters: {
+        status?: string;
+        organizationId: string; // Mandatory for managers
+        departmentId?: string;
+        subDepartmentId?: string;
+    }): Promise<SwapRequestWithDetails[]> {
+        console.log('[API] Fetching all swap requests with filters:', filters);
+
+        const { organizationId, departmentId, subDepartmentId } = filters;
+
+        // Conditional inner join usage for filtering
+        // If filtering by subDepartmnent, ensure inner join on that.
+        // Organization is mandatory base filter.
+        const shiftJoinType = '!inner';
+
+        let query = db
+            .from('shift_swaps')
+            .select(`
+                *,
+                requester_shift:shifts!requester_shift_id${shiftJoinType}(
+                    *,
+                    roles(
+                        name,
+                        remuneration_levels(hourly_rate_min)
+                    ),
+                    departments(name),
+                    sub_departments(name)
+                ),
+                target_shift:shifts!target_shift_id(
+                    *,
+                    roles(
+                        name,
+                        remuneration_levels(hourly_rate_min)
+                    ),
+                    departments(name),
+                    sub_departments(name)
+                ),
+                requested_by:profiles!requester_id(*),
+                swap_with:profiles!target_id(*),
+                swap_offers (
+                    id,
+                    status,
+                    compliance_snapshot,
+                    offered_shift_id
+                )
+            `)
+            .eq('requester_shift.organization_id', organizationId)
+            .order('created_at', { ascending: false });
+
+        if (filters?.status && filters.status !== 'all') {
+            query = query.eq('status', filters.status);
+        }
+
+        // Hierarchy Filters
+        if (subDepartmentId && isValidUuid(subDepartmentId)) {
+            query = query.eq('requester_shift.sub_department_id', subDepartmentId);
+        } else if (departmentId && isValidUuid(departmentId)) {
+            query = query.eq('requester_shift.department_id', departmentId);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            console.error('[API] Error fetching swap requests:', error);
+            throw error;
+        }
+
+        return (data || []).map(mapDbToSwapRequest);
+    },
+
+    // ----------------------------------------------------------------
+    // 3. UPDATE (Actions)
+    // ----------------------------------------------------------------
+
+    async approveSwapRequest(requestId: string): Promise<void> {
+        // 1. Get the swap details — shift_swaps is AUTHORITATIVE (§10 Invariant 3)
+        const swap = await this.getSwapById(requestId);
+        if (!swap) throw new Error("Swap request not found");
+
+        // §9 Time Lock Check
+        if (swap.originalShift?.shift_date && swap.originalShift?.start_time) {
+            assertNotTimeLocked(swap.originalShift.shift_date, swap.originalShift.start_time);
+        }
+
+        // 2. Resolve target employee — shift_swaps.target_id is authoritative
+        const effectiveTargetId = swap.swap_with_employee_id;
+        if (!effectiveTargetId) {
+            throw new Error("No target employee on this swap request. Was an offer selected?");
+        }
+
+        // 3. Resolve offered shift — shift_swaps.target_shift_id is authoritative, offer is fallback
+        let offeredShiftId = swap.offered_shift_id;
+        let offeredShiftData: any = null;
+
+        // Best-effort: try to find the offer for compliance snapshot
+        const { data: offerData } = await db
+            .from('swap_offers')
+            .select('*, offered_shift:shifts!offered_shift_id(*)')
+            .eq('swap_request_id', requestId)
+            .eq('offerer_id', effectiveTargetId)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (offerData) {
+            offeredShiftData = offerData.offered_shift;
+            if (!offeredShiftId) offeredShiftId = offerData.offered_shift_id;
+        }
+
+        // If still no offered shift data, fetch directly from shifts table
+        if (!offeredShiftData && offeredShiftId) {
+            const { data: shiftRow } = await db.from('shifts').select('*').eq('id', offeredShiftId).single();
+            offeredShiftData = shiftRow;
+        }
+
+        // 4. Re-Verify Compliance (Drift Check per §8)
+        const complianceCheck = await validateSwapCompliance(
+            swap.requested_by_employee_id,
+            swap.originalShift,
+            effectiveTargetId,
+            offeredShiftData
+        );
+
+        const hasBlockingError =
+            (complianceCheck.offererResult?.overallStatus === 'fail') ||
+            (complianceCheck.requesterResult?.overallStatus === 'fail');
+
+        if (hasBlockingError) {
+            throw new Error("Compliance violation detected. Cannot approve swap.");
+        }
+
+        // 5. Execute Trade via SM (Atomic 2-way swap) — §4 T5
+        const { error: smError } = await db.rpc('sm_approve_peer_swap', {
+            p_requester_shift_id: swap.original_shift_id,
+            p_offered_shift_id: offeredShiftId || null,
+            p_requester_id: swap.requested_by_employee_id,
+            p_offerer_id: effectiveTargetId
+        });
+
+        if (smError) {
+            console.error("SM Approve Peer Swap Error:", smError);
+            throw smError;
+        }
+
+        // 6. Mark Swap as APPROVED in DB (after SM succeeds)
+        const { error: updateError } = await db
+            .from('shift_swaps')
+            .update({ status: 'APPROVED', updated_at: new Date().toISOString() })
+            .eq('id', requestId);
+
+        if (updateError) {
+            console.error("Failed to mark swap as APPROVED:", updateError);
+            throw updateError;
+        }
+    },
+
+    async rejectSwapRequest(requestId: string, reason?: string): Promise<void> {
+        // §4 T6: Only allowed from MANAGER_PENDING
+        const { data, error: fetchErr } = await db
+            .from('shift_swaps').select('status').eq('id', requestId).single();
+        if (fetchErr || !data) throw fetchErr || new Error('Swap not found');
+        if (data.status !== 'MANAGER_PENDING') {
+            throw new Error(`Cannot reject swap in state '${data.status}'. Must be MANAGER_PENDING.`);
+        }
+
+        const { error } = await db
+            .from('shift_swaps')
+            .update({ status: 'REJECTED', reason: reason })
+            .eq('id', requestId)
+            .eq('status', 'MANAGER_PENDING');
+
+        if (error) throw error;
+    },
+
+    async cancelSwapRequest(swapId: string): Promise<void> {
+        console.log('[API] Cancelling swap:', swapId);
+
+        // §4 T7: Only allowed from OPEN
+        const { data, error: fetchErr } = await db
+            .from('shift_swaps').select('status').eq('id', swapId).single();
+        if (fetchErr || !data) throw fetchErr || new Error('Swap not found');
+        if (data.status !== 'OPEN') {
+            throw new Error(`Cannot cancel swap in state '${data.status}'. Must be OPEN.`);
+        }
+
+        const { error } = await db
+            .from('shift_swaps')
+            .update({ status: 'CANCELLED' })
+            .eq('id', swapId)
+            .eq('status', 'OPEN');
+
+        if (error) throw error;
+    },
+
+    async acceptTrade(swapId: string, offerId: string, offererId: string, offerShiftId?: string): Promise<void> {
+        console.log('[API] Accepting trade:', { swapId, offerId, offererId, offerShiftId });
+
+        // 1. Fetch Swap Request to check status (Optimistic Locking)
+        const { data: swapRequest, error: fetchError } = await db
+            .from('shift_swaps')
+            .select('*, requester_shift:shifts!requester_shift_id(*)')
+            .eq('id', swapId)
+            .single();
+
+        if (fetchError || !swapRequest) throw fetchError || new Error("Swap request not found");
+
+        if (swapRequest.status !== 'OPEN') {
+            throw new Error("Swap request is no longer OPEN. It may have been accepted or cancelled.");
+        }
+
+        // 2. Run Compliance Check for Snapshot
+        // §9 Time Lock Check
+        assertNotTimeLocked(
+            swapRequest.requester_shift.shift_date,
+            swapRequest.requester_shift.start_time
+        );
+
+        let offeredShift = null;
+        if (offerShiftId) {
+            const { data: shift } = await supabase.from('shifts').select('*').eq('id', offerShiftId).single();
+            offeredShift = shift;
+        }
+
+        const complianceSnapshot = await validateSwapCompliance(
+            swapRequest.requester_id,
+            swapRequest.requester_shift,
+            offererId,
+            offeredShift
+        );
+
+        // 3. Identify if Compliance Failed (Block accept if critical?)
+        if (
+            (complianceSnapshot.offererResult?.overallStatus === 'fail') ||
+            (complianceSnapshot.requesterResult?.overallStatus === 'fail')
+        ) {
+            // Optional: You could allow forcing through warnings, but usually we block violations.
+            // For now, let's block on violation.
+            throw new Error("Compliance violation detected. Cannot accept offer.");
+        }
+
+        // 4. Update the Swap Request to lock in the target and move to Manager Approval
+        const updateData: any = {
+            target_id: offererId,
+            status: 'MANAGER_PENDING', // Move to Manager Review
+            updated_at: new Date().toISOString(),
+        };
+
+        if (offerShiftId) {
+            updateData.target_shift_id = offerShiftId;
+        }
+
+        const { error: swapError } = await db
+            .from('shift_swaps')
+            .update(updateData)
+            .eq('id', swapId)
+            // Extra safety: Verify status again in the query (though we did check above)
+            .eq('status', 'OPEN');
+
+        if (swapError) throw swapError;
+
+        // 5. Mark the selected offer as SELECTED and save Snapshot
+        const { error: offerError } = await db
+            .from('swap_offers')
+            .update({
+                status: 'SELECTED',
+                compliance_snapshot: complianceSnapshot
+            })
+            .eq('id', offerId);
+
+        if (offerError) {
+            // Rollback? Ideally this is a transaction. 
+            // Since we don't have atomic transactions in client lib, we might need an RPC for acceptTrade too.
+            // But following prompt "Guard acceptTrade with optimistic locking", the status check is key.
+            console.error("Error updating swap_offers", offerError);
+            // Try to revert swap request status...
+            await db.from('shift_swaps').update({ status: 'OPEN', target_id: null }).eq('id', swapId);
+            throw offerError;
+        }
+
+        // 6. Reject all other offers for this request
+        await db
+            .from('swap_offers')
+            .update({ status: 'REJECTED' })
+            .eq('swap_request_id', swapId)
+            .neq('id', offerId);
+    },
+
+    /**
+     * Reject a trade offer (Requester rejects an offer).
+     */
+    async rejectTrade(offerId: string): Promise<void> {
+        console.log('[API] Rejecting trade offer:', offerId);
+        const { error } = await db
+            .from('swap_offers')
+            .update({ status: 'REJECTED' })
+            .eq('id', offerId);
+
+        if (error) throw error;
+    }
+};
+
+// Helper to map DB columns to Frontend Model
+function mapDbToSwapRequest(row: any): SwapRequestWithDetails {
+    return {
+        id: row.id,
+        // Map DB columns to Frontend Model Properties
+        original_shift_id: row.requester_shift_id,
+        requested_by_employee_id: row.requester_id,
+        swap_with_employee_id: row.target_id,
+        offered_shift_id: row.target_shift_id,
+        status: row.status,
+        reason: row.reason,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+
+        // Relations
+        originalShift: mapDbShift(row.requester_shift),
+        requestedShift: mapDbShift(row.target_shift),
+        requestorEmployee: mapDbEmployee(row.requested_by),
+        targetEmployee: mapDbEmployee(row.swap_with),
+
+        // Metadata
+        managerApprovedAt: row.updated_at,
+        createdAt: row.created_at,
+        priority: 'medium',
+    } as SwapRequestWithDetails;
+}
+
+function mapDbShift(shift: any): any {
+    if (!shift) return undefined;
+
+    // Map snake_case to CamelCase, including nested relations
+    return {
+        ...shift, // Spread raw data to keep ID and others if needed
+        id: shift.id,
+        organizationId: shift.organization_id,
+        departmentId: shift.department_id,
+        subDepartmentId: shift.sub_department_id,
+        shiftDate: shift.shift_date,
+        startTime: shift.start_time,
+        endTime: shift.end_time,
+        roleId: shift.role_id,
+        netLength: shift.net_length_minutes,
+
+        // Relations explicitly requested in SwapRequestWithDetails
+        roles: shift.roles,
+        departments: shift.departments,
+        sub_departments: shift.sub_departments
+    };
+}
+
+function mapDbEmployee(profile: any): any {
+    if (!profile) return undefined;
+
+    return {
+        ...profile,
+        id: profile.id,
+        firstName: profile.first_name,
+        lastName: profile.last_name,
+        fullName: profile.first_name && profile.last_name
+            ? `${profile.first_name} ${profile.last_name}`.trim()
+            : (profile.full_name || profile.email),
+        avatarUrl: profile.avatar_url,
+        email: profile.email
+    };
+}
+

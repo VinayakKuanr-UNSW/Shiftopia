@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run lint:*)",
+      "Bash(npm run build:*)",
+      "Bash(tee:*)",
+      "Bash(find:*)",
+      "Bash(if [ -d \"c:\\\\Users\\\\vinay\\\\OneDrive\\\\Desktop\\\\Superman\\\\src\\\\design-system\" ])",
+      "Bash(then echo \"Folder exists\")",
+      "Bash(else echo \"Folder successfully deleted\")",
+      "Bash(fi)",
+      "Bash(dir /s /b \"c:\\\\Users\\\\vinay\\\\OneDrive\\\\Desktop\\\\Superman\\\\src\\\\modules\\\\core\")",
+      "Bash(wc:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(powershell -Command:*)"
+    ]
+  }
+}

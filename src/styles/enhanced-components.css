@@ -1,0 +1,294 @@
+/* Enhanced component styles for Lovable theme */
+
+/* Enhanced Card Styles */
+.lovable-card {
+  @apply bg-card/95 backdrop-blur-sm border border-border/30 rounded-xl shadow-sm transition-all duration-200 hover:shadow-md hover:border-border/60 hover:translate-y-[-1px];
+}
+
+.lovable-card-header {
+  @apply p-6 border-b border-border/20 bg-gradient-to-r from-primary/5 to-transparent;
+}
+
+.lovable-card-content {
+  @apply p-6 space-y-4;
+}
+
+/* Modern Card Variants */
+.modern-card {
+  @apply bg-card/95 backdrop-blur-md border border-border/30 rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl hover:border-border/50;
+}
+
+.glass-card {
+  @apply bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl shadow-lg transition-all duration-200 hover:bg-white/15;
+}
+
+/* Light mode specific glass panel - white bg with soft border and shadow */
+.light .glass-panel {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+/* Light mode section cards - pure white on light bg */
+.light .section-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* Light mode metric cards - white bg with subtle shadow, no dark fills */
+.light .metric-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+/* Light mode inset panels for tables, KPI grids */
+.light .inset-panel {
+  background: hsl(var(--inset-bg));
+  border: 1px solid hsl(var(--border));
+}
+
+.gradient-card {
+  @apply bg-gradient-to-br from-card to-card/80 border border-border/30 rounded-xl shadow-md transition-all duration-200 hover:shadow-lg;
+}
+
+/* Enhanced Status Badges */
+.status-badge {
+  @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold border transition-all duration-200;
+}
+
+.status-open {
+  @apply bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800/30;
+}
+
+.status-pending {
+  @apply bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800/30;
+}
+
+.status-approved {
+  @apply bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800/30;
+}
+
+.status-rejected {
+  @apply bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800/30;
+}
+
+.status-filled {
+  @apply bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800/30;
+}
+
+/* Enhanced Button Styles */
+.lovable-btn-primary {
+  @apply bg-primary text-primary-foreground hover:bg-primary/90 px-6 py-3 rounded-xl font-semibold text-base transition-all duration-200 shadow-md hover:shadow-lg hover:translate-y-[-1px] focus:ring-2 focus:ring-primary/20 focus:outline-none;
+}
+
+.lovable-btn-secondary {
+  @apply bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border px-6 py-3 rounded-xl font-semibold text-base transition-all duration-200 hover:translate-y-[-1px] focus:ring-2 focus:ring-border/20 focus:outline-none;
+}
+
+.lovable-btn-ghost {
+  @apply text-foreground hover:bg-accent hover:text-accent-foreground px-5 py-2.5 rounded-lg font-semibold text-base transition-all duration-200 focus:ring-2 focus:ring-accent/20 focus:outline-none;
+}
+
+/* Enhanced Form Elements */
+.lovable-input {
+  @apply bg-background border border-border rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 placeholder:text-muted-foreground/70 focus:outline-none;
+}
+
+.lovable-select {
+  @apply bg-background border border-border rounded-xl px-4 py-3 text-base font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-200 focus:outline-none;
+}
+
+/* Enhanced Layout Components */
+.lovable-section {
+  @apply bg-card/50 backdrop-blur-sm rounded-xl border border-border/30 p-8 space-y-6;
+}
+
+.lovable-header {
+  @apply bg-gradient-to-r from-primary/10 to-transparent border-b border-border/20 p-6 rounded-t-xl;
+}
+
+/* Navigation Enhancements */
+.nav-item-active {
+  @apply bg-gradient-to-r from-primary/20 to-primary/10 text-primary border border-primary/20 shadow-sm;
+}
+
+.nav-item-hover {
+  @apply hover:bg-muted/50 hover:text-foreground transition-all duration-200;
+}
+
+/* Sidebar Enhancements */
+.sidebar-section {
+  @apply space-y-2 mb-6;
+}
+
+.sidebar-header {
+  @apply flex items-center gap-3 px-4 py-2 mb-2;
+}
+
+.sidebar-item {
+  @apply flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 relative overflow-hidden;
+}
+
+/* Enhanced List Items */
+.lovable-list-item {
+  @apply bg-card/60 border border-border/30 rounded-xl p-6 transition-all duration-200 hover:bg-card/80 hover:border-border/50 hover:shadow-sm;
+}
+
+/* Enhanced Typography */
+.lovable-title {
+  @apply text-3xl font-bold text-foreground tracking-tight;
+}
+
+.lovable-subtitle {
+  @apply text-xl font-semibold text-muted-foreground;
+}
+
+.lovable-body {
+  @apply text-base text-foreground leading-relaxed;
+}
+
+.lovable-caption {
+  @apply text-sm text-muted-foreground font-medium;
+}
+
+/* Enhanced Spacing */
+.lovable-stack {
+  @apply space-y-6;
+}
+
+.lovable-stack-sm {
+  @apply space-y-3;
+}
+
+.lovable-stack-lg {
+  @apply space-y-8;
+}
+
+/* Enhanced Animations */
+.lovable-fade-in {
+  @apply animate-fade-in-up;
+}
+
+.lovable-hover-lift {
+  @apply transition-transform duration-200 hover:translate-y-[-2px];
+}
+
+.lovable-scale-hover {
+  @apply transition-transform duration-200 hover:scale-105;
+}
+
+/* Enhanced Grid Layouts */
+.lovable-grid {
+  @apply grid gap-6;
+}
+
+.lovable-grid-2 {
+  @apply grid grid-cols-1 md:grid-cols-2 gap-6;
+}
+
+.lovable-grid-3 {
+  @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6;
+}
+
+/* Enhanced Priority Indicators */
+.priority-high {
+  @apply text-red-600 dark:text-red-400 font-semibold;
+}
+
+.priority-medium {
+  @apply text-amber-600 dark:text-amber-400 font-semibold;
+}
+
+.priority-low {
+  @apply text-green-600 dark:text-green-400 font-semibold;
+}
+
+/* Enhanced Interactive Elements */
+.lovable-interactive {
+  @apply cursor-pointer transition-all duration-200 hover:bg-accent/50 rounded-xl p-3 focus:ring-2 focus:ring-primary/20 focus:outline-none;
+}
+
+.lovable-tooltip {
+  @apply bg-popover text-popover-foreground border border-border rounded-xl px-3 py-2 text-sm shadow-md font-medium;
+}
+
+/* Enhanced Loading States */
+.lovable-skeleton {
+  @apply animate-pulse bg-muted/50 rounded-xl;
+}
+
+/* Enhanced Empty States */
+.lovable-empty-state {
+  @apply text-center py-16 text-muted-foreground;
+}
+
+.lovable-empty-state-icon {
+  @apply mx-auto h-16 w-16 text-muted-foreground/50 mb-6 text-4xl;
+}
+
+/* Enhanced Focus States */
+.lovable-focus {
+  @apply focus:ring-2 focus:ring-primary/30 focus:border-primary focus:outline-none transition-all duration-200;
+}
+
+/* Enhanced Hover States */
+.lovable-hover {
+  @apply hover:bg-accent/30 hover:border-border/60 transition-all duration-200;
+}
+
+/* Enhanced Text Sizes */
+.text-heading-1 {
+  @apply text-4xl font-bold tracking-tight;
+}
+
+.text-heading-2 {
+  @apply text-3xl font-bold tracking-tight;
+}
+
+.text-heading-3 {
+  @apply text-2xl font-semibold tracking-tight;
+}
+
+.text-heading-4 {
+  @apply text-xl font-semibold;
+}
+
+.text-body-large {
+  @apply text-lg leading-relaxed;
+}
+
+.text-body {
+  @apply text-base leading-relaxed;
+}
+
+.text-body-small {
+  @apply text-sm;
+}
+
+.text-caption {
+  @apply text-xs font-medium;
+}
+
+/* Gradient Backgrounds */
+.gradient-primary {
+  @apply bg-gradient-to-r from-primary to-primary/80;
+}
+
+.gradient-secondary {
+  @apply bg-gradient-to-r from-secondary to-secondary/80;
+}
+
+.gradient-accent {
+  @apply bg-gradient-to-r from-accent to-accent/80;
+}
+
+/* Border Radius Utilities */
+.rounded-2xl {
+  @apply rounded-[1rem];
+}
+
+.rounded-3xl {
+  @apply rounded-[1.5rem];
+}

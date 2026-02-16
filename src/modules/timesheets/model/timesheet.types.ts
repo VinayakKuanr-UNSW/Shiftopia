@@ -1,0 +1,100 @@
+/**
+ * Timesheet Status State Machine
+ * 
+ * Flow:
+ * DRAFT -> SUBMITTED
+ * SUBMITTED -> APPROVED | REJECTED
+ * REJECTED -> DRAFT
+ * APPROVED -> LOCKED
+ */
+export type TimesheetStatus =
+    | "DRAFT"
+    | "SUBMITTED"
+    | "APPROVED"
+    | "REJECTED"
+    | "LOCKED"
+
+/**
+ * Core Timesheet Interface
+ * Immutability and versioning are key for payroll safety.
+ */
+export interface Timesheet {
+    id: string | number // Legacy uses number, new uses string
+    employeeId: string
+    periodStart: string // ISO Date
+    periodEnd: string   // ISO Date
+    status: TimesheetStatus | string // Legacy uses string
+    totalHours: number
+    totalPay?: number // From legacy
+    rosterId?: number | string // From legacy
+    groups?: any[] // From legacy
+    version: number
+    createdAt: string
+    updatedAt: string
+}
+
+/**
+ * Legacy TimesheetRow / UI Entry
+ */
+export interface TimesheetRow {
+    id: string | number;
+    // Update IDs
+    groupId?: string | number;
+    subGroupId?: string | number;
+
+    date: Date | string;
+    // Employee Info
+    employeeId: string;
+    employee: string;
+    // Hierarchy 1
+    organization: string;
+    department: string;
+    subDepartment: string;
+    // Hierarchy 2
+    group: string;
+    subGroup: string;
+    role: string;
+    remunerationLevel: string;
+    // Scheduled
+    scheduledStart: string;
+    scheduledEnd: string;
+    // Geofenced
+    clockIn: string;
+    clockOut: string;
+    // Adjusted (editable)
+    adjustedStart: string;
+    adjustedEnd: string;
+    length: string; // Auto-calculated
+    paidBreak: string;
+    unpaidBreak: string;
+    netLength: string; // Auto-calculated
+    // Payroll
+    approximatePay: string;
+    // Differential
+    differential: string; // Scheduled vs Actual difference
+    // Statuses
+    liveStatus: 'Completed' | 'Cancelled' | 'Active' | 'No-Show' | 'Swapped' | string;
+    timesheetStatus: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | string;
+}
+
+/**
+ * Individual entry within a timesheet (Domain Model)
+ */
+export interface TimesheetEntry {
+    id: string
+    timesheetId: string
+    date: string
+    startTime: string
+    endTime: string
+    breakMinutes: number
+    totalHours: number
+    description?: string
+    isOvertime: boolean
+}
+
+/**
+ * Extended Timesheet with entries
+ */
+export interface TimesheetWithEntries extends Timesheet {
+    entries: TimesheetEntry[]
+}

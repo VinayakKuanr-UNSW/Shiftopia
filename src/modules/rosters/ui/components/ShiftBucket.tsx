@@ -1,0 +1,172 @@
+/**
+ * ShiftBucket - Container component for a group of identical shifts.
+ * Renders a ShiftBucketHeader and, when expanded, a list of ShiftBucketRows.
+ */
+import React, { useState, useCallback } from 'react';
+import { cn } from '@/modules/core/lib/utils';
+import { ShiftBucketHeader } from './ShiftBucketHeader';
+import { ShiftBucketRow } from './ShiftBucketRow';
+import { type ShiftBucket as ShiftBucketType } from '@/modules/rosters/utils/bucket.utils';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/modules/core/ui/primitives/alert-dialog';
+import { useToast } from '@/modules/core/hooks/use-toast';
+
+/** Minimal shift data needed by the bucket row */
+export interface BucketShiftData {
+    id: string;
+    role: string;
+    startTime: string;
+    endTime: string;
+    employeeName?: string;
+    isAssigned: boolean;
+    isPublished: boolean;
+    isDraft: boolean;
+    isLocked: boolean;
+    assignedEmployeeId?: string | null;
+}
+
+export interface ShiftBucketProps {
+    bucket: ShiftBucketType;
+    /** The actual shift display data for each shift in the bucket */
+    shifts: BucketShiftData[];
+    canEdit: boolean;
+    /** Callbacks */
+    onEditShift: (shiftId: string) => void;
+    onDeleteShift: (shiftId: string) => void;
+    onPublishShift: (shiftId: string) => void;
+    onBulkPublish: (shiftIds: string[]) => void;
+    onBulkDelete: (shiftIds: string[]) => void;
+    /** Group color accent for theming */
+    accentColor?: string;
+}
+
+export const ShiftBucket: React.FC<ShiftBucketProps> = ({
+    bucket,
+    shifts,
+    canEdit,
+    onEditShift,
+    onDeleteShift,
+    onPublishShift,
+    onBulkPublish,
+    onBulkDelete,
+    accentColor,
+}) => {
+    const { toast } = useToast();
+    const [isExpanded, setIsExpanded] = useState(true);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+    const handleToggle = useCallback(() => {
+        setIsExpanded(prev => !prev);
+    }, []);
+
+    const handlePublishBucket = useCallback(() => {
+        // Only publish draft shifts
+        const draftShifts = shifts.filter(s => s.isDraft && !s.isPublished);
+        const skippedCount = shifts.length - draftShifts.length;
+
+        if (draftShifts.length === 0) {
+            toast({
+                title: 'Nothing to publish',
+                description: `All ${shifts.length} shifts are already published.`,
+            });
+            return;
+        }
+
+        onBulkPublish(draftShifts.map(s => s.id));
+
+        if (skippedCount > 0) {
+            toast({
+                title: 'Bucket Published',
+                description: `Published ${draftShifts.length} shifts. ${skippedCount} shift${skippedCount !== 1 ? 's' : ''} skipped (already published).`,
+            });
+        }
+    }, [shifts, onBulkPublish, toast]);
+
+    const handleDeleteBucket = useCallback(() => {
+        setDeleteDialogOpen(true);
+    }, []);
+
+    const confirmDeleteBucket = useCallback(() => {
+        const allIds = shifts.map(s => s.id);
+        onBulkDelete(allIds);
+        setDeleteDialogOpen(false);
+    }, [shifts, onBulkDelete]);
+
+    return (
+        <div className="mb-1.5">
+            {/* Header */}
+            <ShiftBucketHeader
+                startTime={bucket.startTime}
+                endTime={bucket.endTime}
+                stats={bucket.stats}
+                isExpanded={isExpanded}
+                canEdit={canEdit}
+                onToggle={handleToggle}
+                onPublishBucket={handlePublishBucket}
+                onDeleteBucket={handleDeleteBucket}
+            />
+
+            {/* Expanded rows */}
+            {isExpanded && (
+                <div
+                    className={cn(
+                        'border border-t-0 border-white/[0.06] rounded-b-lg overflow-hidden',
+                        'bg-black/10'
+                    )}
+                >
+                    {shifts.map(shift => (
+                        <ShiftBucketRow
+                            key={shift.id}
+                            shiftId={shift.id}
+                            role={shift.role}
+                            startTime={shift.startTime}
+                            endTime={shift.endTime}
+                            employeeName={shift.employeeName}
+                            isAssigned={shift.isAssigned}
+                            isPublished={shift.isPublished}
+                            isDraft={shift.isDraft}
+                            isLocked={shift.isLocked}
+                            canEdit={canEdit}
+                            onEdit={onEditShift}
+                            onDelete={onDeleteShift}
+                            onPublish={onPublishShift}
+                        />
+                    ))}
+                </div>
+            )}
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Bucket</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete all <strong>{shifts.length}</strong> shifts
+                            in this bucket ({bucket.startTime.substring(0, 5)} → {bucket.endTime.substring(0, 5)}).
+                            This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmDeleteBucket}
+                            className="bg-red-600 hover:bg-red-700"
+                        >
+                            Delete All
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </div>
+    );
+};
+
+export default ShiftBucket;
