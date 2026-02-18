@@ -18,43 +18,97 @@ interface AuditTableProps {
 }
 
 const eventBadgeColors: Record<string, string> = {
+    // Creation
     shift_created_draft: 'bg-gray-500/20 text-gray-300 border-gray-500/30',
     shift_created_published: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+    // Status
     published: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
     unpublished: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
-    employee_assigned: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-    employee_unassigned: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-    field_updated: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-    status_changed: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
-    pushed_to_bidding: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
-    removed_from_bidding: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
-    bid_submitted: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
-    bid_accepted: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-    bid_rejected: 'bg-red-500/20 text-red-300 border-red-500/30',
-    shift_cancelled: 'bg-red-600/20 text-red-400 border-red-600/30',
+    draft_status_changed: 'bg-gray-500/20 text-gray-300 border-gray-500/30',
+    cancelled: 'bg-red-600/20 text-red-400 border-red-600/30',
+    uncancelled: 'bg-green-500/20 text-green-300 border-green-500/30',
+    shift_soft_deleted: 'bg-red-700/20 text-red-400 border-red-700/30',
     shift_deleted: 'bg-red-700/20 text-red-400 border-red-700/30',
     shift_completed: 'bg-green-600/20 text-green-400 border-green-600/30',
+    // Assignment
+    employee_assigned: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+    employee_unassigned: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
     assignment_swapped: 'bg-violet-500/20 text-violet-300 border-violet-500/30',
+    // Schedule
+    schedule_changed: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
+    notes_updated: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
+    // Bidding
+    pushed_to_bidding: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+    removed_from_bidding: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
+    bid_placed: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+    bid_submitted: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+    bid_won: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+    bid_accepted: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+    bid_rejected: 'bg-red-500/20 text-red-300 border-red-500/30',
+    bid_withdrawn: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+    bid_status_changed: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+    // Trading
+    trade_requested: 'bg-violet-500/20 text-violet-300 border-violet-500/30',
+    trade_offer_submitted: 'bg-violet-500/20 text-violet-300 border-violet-500/30',
+    trade_offer_selected: 'bg-violet-600/20 text-violet-300 border-violet-600/30',
+    trade_pending_manager: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+    trade_approved: 'bg-green-500/20 text-green-300 border-green-500/30',
+    trade_rejected: 'bg-red-500/20 text-red-300 border-red-500/30',
+    trade_cancelled: 'bg-gray-500/20 text-gray-300 border-gray-500/30',
+    trade_expired: 'bg-gray-500/20 text-gray-300 border-gray-500/30',
+    trade_offer_rejected: 'bg-red-500/20 text-red-300 border-red-500/30',
+    trade_offer_withdrawn: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+    trade_offer_expired: 'bg-gray-500/20 text-gray-300 border-gray-500/30',
+    // Modification
+    field_updated: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+    status_changed: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
 };
 
 const eventLabels: Record<string, string> = {
+    // Creation
     shift_created_draft: 'Draft Created',
     shift_created_published: 'Created & Published',
+    // Status
     published: 'Published',
     unpublished: 'Unpublished',
-    employee_assigned: 'Assigned',
-    employee_unassigned: 'Unassigned',
-    field_updated: 'Updated',
-    status_changed: 'Status Changed',
-    pushed_to_bidding: 'To Bidding',
-    removed_from_bidding: 'From Bidding',
-    bid_submitted: 'Bid Submitted',
-    bid_accepted: 'Bid Accepted',
-    bid_rejected: 'Bid Rejected',
-    shift_cancelled: 'Cancelled',
+    draft_status_changed: 'Draft Changed',
+    cancelled: 'Cancelled',
+    uncancelled: 'Restored',
+    shift_soft_deleted: 'Soft Deleted',
     shift_deleted: 'Deleted',
     shift_completed: 'Completed',
+    // Assignment
+    employee_assigned: 'Assigned',
+    employee_unassigned: 'Unassigned',
     assignment_swapped: 'Swapped',
+    // Schedule
+    schedule_changed: 'Schedule Changed',
+    notes_updated: 'Notes Updated',
+    // Bidding
+    pushed_to_bidding: 'To Bidding',
+    removed_from_bidding: 'From Bidding',
+    bid_placed: 'Bid Placed',
+    bid_submitted: 'Bid Submitted',
+    bid_won: 'Bid Won',
+    bid_accepted: 'Bid Accepted',
+    bid_rejected: 'Bid Rejected',
+    bid_withdrawn: 'Bid Withdrawn',
+    bid_status_changed: 'Bid Updated',
+    // Trading
+    trade_requested: 'Trade Requested',
+    trade_offer_submitted: 'Offer Submitted',
+    trade_offer_selected: 'Offer Selected',
+    trade_pending_manager: 'Pending Manager',
+    trade_approved: 'Trade Approved',
+    trade_rejected: 'Trade Rejected',
+    trade_cancelled: 'Trade Cancelled',
+    trade_expired: 'Trade Expired',
+    trade_offer_rejected: 'Offer Rejected',
+    trade_offer_withdrawn: 'Offer Withdrawn',
+    trade_offer_expired: 'Offer Expired',
+    // Modification
+    field_updated: 'Updated',
+    status_changed: 'Status Changed',
 };
 
 function EventBadge({ eventType }: { eventType: string }) {
@@ -72,46 +126,81 @@ function EventTimeline({ events }: { events: AuditEvent[] }) {
     return (
         <div className="px-6 py-4 bg-slate-900/80 border-t border-slate-700/30">
             <div className="space-y-3">
-                {events.map((event, index) => (
-                    <div
-                        key={event.id}
-                        className="flex items-start gap-4"
-                    >
-                        {/* Timeline connector */}
-                        <div className="flex flex-col items-center pt-1">
-                            <div className={cn(
-                                'w-2.5 h-2.5 rounded-full ring-2 ring-offset-2 ring-offset-slate-900',
-                                index === events.length - 1
-                                    ? 'bg-emerald-400 ring-emerald-400/30'
-                                    : 'bg-slate-500 ring-slate-500/30'
-                            )} />
-                            {index < events.length - 1 && (
-                                <div className="w-0.5 flex-1 min-h-[24px] bg-gradient-to-b from-slate-600 to-slate-700 mt-1" />
-                            )}
-                        </div>
-
-                        {/* Event content */}
-                        <div className="flex-1 min-w-0 pb-2">
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <EventBadge eventType={event.event_type} />
-                                {event.changes && event.changes.length > 0 && (
-                                    <span className="text-gray-400 text-xs bg-slate-800/50 px-2 py-0.5 rounded">
-                                        {event.changes[0].field}:
-                                        <span className="text-red-400/70 line-through mx-1">{event.changes[0].before || '—'}</span>
-
-                                        <span className="text-emerald-400">{event.changes[0].after || '—'}</span>
-                                    </span>
+                {events.map((event, index) => {
+                    const snap = event.snapshot || {};
+                    return (
+                        <div
+                            key={event.id}
+                            className="flex items-start gap-4"
+                        >
+                            {/* Timeline connector */}
+                            <div className="flex flex-col items-center pt-1">
+                                <div className={cn(
+                                    'w-2.5 h-2.5 rounded-full ring-2 ring-offset-2 ring-offset-slate-900',
+                                    index === events.length - 1
+                                        ? 'bg-emerald-400 ring-emerald-400/30'
+                                        : 'bg-slate-500 ring-slate-500/30'
+                                )} />
+                                {index < events.length - 1 && (
+                                    <div className="w-0.5 flex-1 min-h-[24px] bg-gradient-to-b from-slate-600 to-slate-700 mt-1" />
                                 )}
                             </div>
-                            <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-500">
-                                <User className="w-3 h-3" />
-                                <span className="text-gray-400">{event.performed_by_name}</span>
-                                <span className="text-gray-600">•</span>
-                                <span>{formatDistanceToNow(new Date(event.performed_at), { addSuffix: true })}</span>
+
+                            {/* Event content */}
+                            <div className="flex-1 min-w-0 pb-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <EventBadge eventType={event.event_type} />
+                                    {event.changes && event.changes.length > 0 && (
+                                        <span className="text-gray-400 text-xs bg-slate-800/50 px-2 py-0.5 rounded">
+                                            {event.changes[0].field}:
+                                            <span className="text-red-400/70 line-through mx-1">{event.changes[0].before || '—'}</span>
+
+                                            <span className="text-emerald-400">{event.changes[0].after || '—'}</span>
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Snapshot context */}
+                                {snap.bidder_name && (
+                                    <div className="text-xs text-purple-400/80 mt-1">
+                                        Bidder: {snap.bidder_name}
+                                        {snap.decided_by && <span className="text-emerald-400"> • Decided by {snap.decided_by}</span>}
+                                        {snap.decided_at && <span className="text-gray-500"> at {new Date(snap.decided_at).toLocaleString()}</span>}
+                                    </div>
+                                )}
+                                {snap.requester_name && !snap.bidder_name && (
+                                    <div className="text-xs text-violet-400/80 mt-1">
+                                        Requested by: {snap.requester_name}
+                                    </div>
+                                )}
+                                {snap.offerer_name && (
+                                    <div className="text-xs text-violet-400/80 mt-1">
+                                        Offered by: {snap.offerer_name}
+                                    </div>
+                                )}
+                                {snap.approved_by && !snap.bidder_name && (
+                                    <div className="text-xs text-green-400/80 mt-1">
+                                        Approved by Manager: {snap.approved_by}
+                                        {snap.approved_at && <span className="text-gray-500"> at {new Date(snap.approved_at).toLocaleString()}</span>}
+                                    </div>
+                                )}
+
+                                <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-500">
+                                    <User className="w-3 h-3" />
+                                    <span className="text-gray-400">{event.performed_by_name}</span>
+                                    {event.performed_by_role && (
+                                        <>
+                                            <span className="text-gray-600">•</span>
+                                            <span className="text-gray-500 italic">{event.performed_by_role}</span>
+                                        </>
+                                    )}
+                                    <span className="text-gray-600">•</span>
+                                    <span>{formatDistanceToNow(new Date(event.performed_at), { addSuffix: true })}</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );

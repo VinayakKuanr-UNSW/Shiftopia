@@ -191,16 +191,6 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
 
       {hasPermission('configurations') && (
         <NavItem
-          icon={<Settings className="h-5 w-5" />}
-          label="Configurations"
-          path="/configurations"
-          active={isRouteActive('/configurations')}
-          sectionColor="amber"
-        />
-      )}
-
-      {hasPermission('configurations') && (
-        <NavItem
           icon={<ScrollText className="h-5 w-5" />}
           label="Contracts"
           path="/contracts"

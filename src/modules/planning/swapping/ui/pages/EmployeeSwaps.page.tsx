@@ -887,3 +887,5 @@ const EmptyState: React.FC<{
         <p className="text-sm text-muted-foreground max-w-md mx-auto">{description}</p>
     </div>
 );
+
+export default EmployeeSwapsPage;

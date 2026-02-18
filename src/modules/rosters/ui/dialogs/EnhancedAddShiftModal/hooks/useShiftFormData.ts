@@ -50,28 +50,50 @@ export function useShiftFormData({
     setSelectedRosterId,
 }: UseShiftFormDataProps): UseShiftFormDataReturn {
     // Determine correct IDs for fetching roles
-    const targetDeptId = (editMode && existingShift?.department_id) || context.departmentId;
-    const targetSubDeptId = (editMode && existingShift?.sub_department_id) || context.subDepartmentId;
+    // 1. Context IDs (from props/existing shift) - used for fetching generic data
+    const contextDeptId = (editMode && existingShift?.department_id) || context.departmentId;
+    const contextSubDeptId = (editMode && existingShift?.sub_department_id) || context.subDepartmentId;
 
-    // All queries are enabled only when the modal is open
-    const { data: roles = [] } = useRoles(
-        isOpen ? targetDeptId : undefined,
-        isOpen ? targetSubDeptId : undefined
+    // 2. Fetch Rosters first (to potentialy resolve department context)
+    const { data: rosters = [], isLoading: isLoadingRosters } = useRostersLookup(
+        isOpen ? context.organizationId : undefined,
+        {
+            departmentId: isOpen ? contextDeptId : undefined,
+            departmentIds: isOpen ? context.departmentIds : undefined,
+            subDepartmentId: isOpen ? contextSubDeptId : undefined,
+            subDepartmentIds: isOpen ? context.subDepartmentIds : undefined,
+        }
     );
+
+    React.useEffect(() => {
+        if (isOpen) {
+            console.log('[useShiftFormData] Modal Open. Context:', context);
+            console.log('[useShiftFormData] Filters:', { contextDeptId, contextSubDeptId });
+            console.log('[useShiftFormData] Fetched Rosters:', rosters.length, rosters.map(r => ({ id: r.id, start: r.start_date, sub: r.sub_department_id })));
+        }
+    }, [isOpen, context, contextDeptId, contextSubDeptId, rosters]);
+
+    // 3. Metadata Hooks (Restored)
     const { data: remunerationLevels = [], isLoading: isLoadingRem } = useRemunerationLevels();
     const { data: employees = [], isLoading: isLoadingEmps } = useEmployees();
     const { data: skills = [], isLoading: isLoadingSkills } = useSkills();
     const { data: licenses = [], isLoading: isLoadingLicenses } = useLicenses();
     const { data: events = [], isLoading: isLoadingEvents } = useEvents();
-    const { data: rosters = [], isLoading: isLoadingRosters } = useRostersLookup(
-        isOpen ? context.organizationId : undefined,
-        {
-            departmentId: isOpen ? targetDeptId : undefined,
-            departmentIds: isOpen ? context.departmentIds : undefined,
-            subDepartmentIds: isOpen ? context.subDepartmentIds : undefined,
-        }
+
+    // 4. Derive Role Context - Prefer specific roster context if available, fallback to global context
+    const selectedRoster = rosters.find(r => r.id === (selectedRosterId || context.rosterId));
+
+    // If context.departmentId is missing (e.g. "All Departments" view), use the roster's department
+    // This fixes the issue where "All Roles" are shown because departmentId is undefined
+    const roleDeptId = contextDeptId || selectedRoster?.department_id;
+    const roleSubDeptId = contextSubDeptId || selectedRoster?.sub_department_id;
+
+    // All queries are enabled only when the modal is open
+    const { data: roles = [] } = useRoles(
+        isOpen ? roleDeptId : undefined,
+        isOpen ? roleSubDeptId : undefined
     );
-    const { data: rosterStructure = [] } = useRosterStructure(selectedRosterId);
+    const { data: rosterStructure = [] } = useRosterStructure(selectedRosterId || context.rosterId);
 
     // Auto-select roster matching the date
     React.useEffect(() => {
@@ -83,6 +105,7 @@ export function useShiftFormData({
             if (!selectedRosterId || selectedRosterId !== context.rosterId) {
                 const target = rosters.find(r => r.id === context.rosterId);
                 if (target) {
+                    console.log('[useShiftFormData] Found roster matching context.rosterId:', target.id);
                     setSelectedRosterId(target.id);
                 }
             }
@@ -93,17 +116,24 @@ export function useShiftFormData({
         // Only run if we don't have a selection yet
         if (!selectedRosterId && rosters.length > 0 && context.date) {
             // Find roster strictly containing the date
-            // Prefer "Daily" rosters over "Template" rosters if possible? 
-            // For now, just finding the first match is standard, but usually daily rosters are what we want for ad-hoc shifts.
-            const matchingRoster = rosters.find(r =>
-                context.date >= r.start_date && context.date <= r.end_date
-            );
+            // Prefer rosters matching the current sub-department context if available
+            const matchingRoster = rosters.find(r => {
+                const dateMatch = context.date! >= r.start_date && context.date! <= r.end_date;
+                if (!dateMatch) return false;
+
+                // If we have a sub-department context, prefer rosters matching it
+                if (contextSubDeptId && r.sub_department_id === contextSubDeptId) return true;
+
+                // If no sub-department context or no specific match, first one wins
+                return true;
+            });
 
             if (matchingRoster) {
+                console.log('[useShiftFormData] Found matching roster by date:', matchingRoster.id);
                 setSelectedRosterId(matchingRoster.id);
             }
         }
-    }, [rosters, selectedRosterId, context.rosterId, context.date, setSelectedRosterId]);
+    }, [rosters, selectedRosterId, context.rosterId, context.date, contextSubDeptId, setSelectedRosterId]);
 
     const isLoadingData = isLoadingRem || isLoadingEmps || isLoadingSkills || isLoadingLicenses || isLoadingEvents || isLoadingRosters;
 

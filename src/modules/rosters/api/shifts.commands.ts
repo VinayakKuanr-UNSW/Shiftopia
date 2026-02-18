@@ -79,13 +79,12 @@ export const shiftsCommands = {
                 created_by_user_id: user?.id || null,
             };
 
-            console.log('Creating shift with payload:', payload);
+            console.log('Creating shift via RPC with payload:', payload);
 
-            const { data, error } = await supabase
-                .from('shifts')
-                .insert(payload as any)
-                .select('*')
-                .single();
+            const { data, error } = await supabase.rpc('sm_create_shift', {
+                p_shift_data: payload,
+                p_user_id: user?.id || '00000000-0000-0000-0000-000000000000', // Fallback if no user, though auth should prevent this
+            });
 
             if (error) {
                 console.error('Shift creation error:', error);
@@ -110,11 +109,12 @@ export const shiftsCommands = {
                 data: { user },
             } = await supabase.auth.getUser();
 
-            const payload: Record<string, any> = {
-                last_modified_by: user?.id || null,
-                updated_at: new Date().toISOString(),
-            };
+            const payload: Record<string, any> = {};
+            // We pass updates directly, but mapped to correct keys/types if needed
+            // The RPC handles COALESCE logic, so we only need to pass defined fields.
 
+            if (updates.roster_id !== undefined)
+                payload.roster_id = safeUuid(updates.roster_id);
             if (updates.department_id !== undefined)
                 payload.department_id = safeUuid(updates.department_id);
             if (updates.sub_department_id !== undefined)
@@ -125,13 +125,17 @@ export const shiftsCommands = {
                 payload.sub_group_name = updates.sub_group_name;
             if (updates.display_order !== undefined)
                 payload.display_order = updates.display_order;
+            if (updates.shift_group_id !== undefined)
+                payload.shift_group_id = safeUuid(updates.shift_group_id);
+            if (updates.shift_subgroup_id !== undefined)
+                payload.shift_subgroup_id = safeUuid(updates.shift_subgroup_id);
             if (updates.role_id !== undefined)
                 payload.role_id = safeUuid(updates.role_id);
             if (updates.remuneration_level_id !== undefined)
                 payload.remuneration_level_id = safeUuid(updates.remuneration_level_id);
             if (updates.shift_date !== undefined) {
                 payload.shift_date = updates.shift_date;
-                payload.roster_date = updates.shift_date;
+                // roster_date handles separately in RPC if shift_date provided
             }
             if (updates.start_time !== undefined)
                 payload.start_time = updates.start_time;
@@ -156,21 +160,15 @@ export const shiftsCommands = {
             if (updates.cancellation_reason !== undefined)
                 payload.cancellation_reason = updates.cancellation_reason;
 
-            if (
-                updates.paid_break_minutes !== undefined ||
-                updates.unpaid_break_minutes !== undefined
-            ) {
-                payload.break_minutes =
-                    (updates.paid_break_minutes || 0) +
-                    (updates.unpaid_break_minutes || 0);
-            }
+            // RPC handles break_minutes calculation if paid/unpaid are passed
 
-            const { data, error } = await supabase
-                .from('shifts')
-                .update(payload)
-                .eq('id', shiftId)
-                .select('*')
-                .single();
+            console.log('Updating shift via RPC:', shiftId, payload);
+
+            const { data, error } = await supabase.rpc('sm_update_shift', {
+                p_shift_id: shiftId,
+                p_shift_data: payload,
+                p_user_id: user?.id || '00000000-0000-0000-0000-000000000000',
+            });
 
             if (error) throw error;
             return data as unknown as Shift;
@@ -213,7 +211,7 @@ export const shiftsCommands = {
                 throw error;
             }
 
-            console.log('[shiftsApi] bulkAssignShifts success:', data?.length, 'shifts updated');
+            console.log('[shiftsApi] bulkAssignShifts success:', (data as any[])?.length, 'shifts updated');
 
             // Return updated shifts
             const { data: updatedShifts } = await supabase.from('shifts').select('*').in('id', shiftIds);
@@ -404,15 +402,17 @@ export const shiftsCommands = {
                 data: { user },
             } = await supabase.auth.getUser();
 
-            await supabase.from('shift_audit_log').insert({
+            await supabase.from('shift_audit_events').insert({
                 shift_id: shiftId,
-                action,
-                field_name: fieldName,
+                event_type: action,
+                event_category: 'MANUAL_LOG',
+                field_changed: fieldName,
                 old_value: oldValue,
                 new_value: newValue,
-                change_reason: reason,
-                changed_by_user_id: user?.id || null,
-                changed_by_name: user?.email || 'System',
+                metadata: reason ? { reason } : null,
+                performed_by_id: user?.id || null,
+                performed_by_name: user?.email || 'System',
+                performed_by_role: 'system', // Default since we don't have role handy
             });
         } catch (error) {
             console.error('Error adding audit log entry:', error);

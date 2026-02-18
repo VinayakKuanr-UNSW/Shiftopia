@@ -320,12 +320,8 @@ export const shiftsQueries = {
                 .order('name');
 
             if (subDepartmentId && isValidUuid(subDepartmentId)) {
-                if (departmentId && isValidUuid(departmentId)) {
-                    // Fetch roles specific to sub-department OR general roles for the department
-                    query = query.or(`sub_department_id.eq.${subDepartmentId},and(department_id.eq.${departmentId},sub_department_id.is.null)`);
-                } else {
-                    query = query.eq('sub_department_id', subDepartmentId);
-                }
+                // STRICT SCOPING: Only fetch roles for this specific sub-department
+                query = query.eq('sub_department_id', subDepartmentId);
             } else if (departmentId && isValidUuid(departmentId)) {
                 query = query.eq('department_id', departmentId);
             }
@@ -334,12 +330,7 @@ export const shiftsQueries = {
 
             if (error) {
                 console.error('Error fetching roles:', error);
-                // Fallback to all roles on error to prevent broken UI
-                const { data: allRoles } = await supabase
-                    .from('roles')
-                    .select('id, name, department_id, sub_department_id, remuneration_level_id')
-                    .order('name');
-                return allRoles || [];
+                return [];
             }
 
             return data || [];
@@ -354,7 +345,7 @@ export const shiftsQueries = {
             // Query roster_templates (published templates) not shift_templates
             let query = supabase
                 .from('roster_templates')
-                .select('id, name, description, department_id, sub_department_id, status, published_month, start_date, end_date')
+                .select('id, name, description, department_id, sub_department_id, status, published_month, start_date, end_date, organization_id')
                 .eq('status', 'published') // Only show published templates with valid date ranges
                 .order('name');
 
@@ -498,6 +489,7 @@ export const shiftsQueries = {
     async getRosters(organizationId: string, filters?: {
         departmentId?: string;
         departmentIds?: string[];
+        subDepartmentId?: string;
         subDepartmentIds?: string[]
     }): Promise<any[]> {
         try {
@@ -508,16 +500,21 @@ export const shiftsQueries = {
             let query = supabase
                 .from('rosters')
                 .select(`
-                    id, 
-                    name, 
-                    start_date, 
-                    end_date,
-                    groups:roster_groups(
-                        id, 
-                        name, 
-                        subGroups:roster_subgroups(id, name)
-                    )
-                `)
+                id,
+                start_date,
+                end_date,
+                organization_id,
+                department_id,
+                sub_department_id,
+                status,
+                description,
+                is_locked,
+                groups: roster_groups(
+                    id,
+                    name,
+                    subGroups: roster_subgroups(id, name)
+                )
+            `)
                 .order('start_date', { ascending: false });
 
             if (isValidUuid(organizationId)) {
@@ -530,8 +527,15 @@ export const shiftsQueries = {
                 query = query.in('department_id', filters.departmentIds.filter(id => isValidUuid(id)));
             }
 
-            if (filters?.subDepartmentIds && filters.subDepartmentIds.length > 0) {
-                query = query.in('sub_department_id', filters.subDepartmentIds.filter(id => isValidUuid(id)));
+            if (filters?.subDepartmentId && isValidUuid(filters.subDepartmentId)) {
+                query = query.eq('sub_department_id', filters.subDepartmentId);
+            } else if (filters?.subDepartmentIds !== undefined) {
+                if (filters.subDepartmentIds.length > 0) {
+                    query = query.in('sub_department_id', filters.subDepartmentIds.filter(id => isValidUuid(id)));
+                } else {
+                    // Explicitly empty array means "Global only" (sub_department_id is null)
+                    query = query.is('sub_department_id', null);
+                }
             }
 
             const { data, error } = await query;
@@ -558,13 +562,13 @@ export const shiftsQueries = {
             const { data, error } = await supabase
                 .from('roster_groups')
                 .select(`
+                id,
+                name,
+                subGroups: roster_subgroups(
                     id,
-                    name,
-                    subGroups:roster_subgroups(
-                        id,
-                        name
-                    )
-                `)
+                    name
+                )
+            `)
                 .eq('roster_id', rosterId)
                 .order('sort_order', { ascending: true });
 
@@ -601,28 +605,7 @@ export const shiftsQueries = {
         }
     },
 
-    async getShiftAuditLog(shiftId: string): Promise<any[]> {
-        try {
-            if (!isValidUuid(shiftId)) {
-                return [];
-            }
 
-            const { data, error } = await supabase
-                .from('shift_audit_log')
-                .select('*')
-                .eq('shift_id', shiftId)
-                .order('created_at', { ascending: false });
-
-            if (error) {
-                console.error('Error fetching audit log:', error);
-                return [];
-            }
-            return data || [];
-        } catch (error) {
-            console.error('Exception in getShiftAuditLog:', error);
-            return [];
-        }
-    },
 
     /**
      * Get count of pending shift offers (S3 - Published + Offered) for an employee
@@ -661,19 +644,19 @@ export const shiftsQueries = {
             let query = supabase
                 .from('shifts')
                 .select(`
-                    id,
-                    shift_date,
-                    start_time,
-                    end_time,
-                    notes,
-                    assignment_outcome,
-                    published_at,
-                    roles(name),
-                    departments(id, name),
-                    sub_departments(name),
-                    organizations(id, name),
-                    remuneration_levels(level_name, hourly_rate_min)
-                `)
+                id,
+                shift_date,
+                start_time,
+                end_time,
+                notes,
+                assignment_outcome,
+                published_at,
+                roles(name),
+                departments(id, name),
+                sub_departments(name),
+                organizations(id, name),
+                remuneration_levels(level_name, hourly_rate_min)
+            `)
                 .eq('assigned_employee_id', employeeId)
                 .eq('lifecycle_status', 'Published')
                 .eq('assignment_outcome', 'offered')
@@ -747,19 +730,19 @@ export const shiftsQueries = {
                 let query = supabase
                     .from('shifts')
                     .select(`
-                        id,
-                        shift_date,
-                        start_time,
-                        end_time,
-                        notes,
-                        assignment_outcome,
-                        created_at,
-                        roles(name),
-                        departments(id, name),
-                        sub_departments(name),
-                        organizations(id, name),
-                        remuneration_levels(level_name, hourly_rate_min)
-                    `)
+                id,
+                shift_date,
+                start_time,
+                end_time,
+                notes,
+                assignment_outcome,
+                created_at,
+                roles(name),
+                departments(id, name),
+                sub_departments(name),
+                organizations(id, name),
+                remuneration_levels(level_name, hourly_rate_min)
+            `)
                     .in('id', shiftIds)
                     .is('deleted_at', null)
                     .order('shift_date', { ascending: false }); // Show recent first
@@ -809,18 +792,18 @@ export const shiftsQueries = {
                 let query = supabase
                     .from('shifts')
                     .select(`
-                        id,
-                        shift_date,
-                        start_time,
-                        end_time,
-                        notes,
-                        assignment_outcome,
-                        roles(name),
-                        departments(id, name),
-                        sub_departments(name),
-                        organizations(id, name),
-                        remuneration_levels(level_name, hourly_rate_min)
-                    `)
+                id,
+                shift_date,
+                start_time,
+                end_time,
+                notes,
+                assignment_outcome,
+                roles(name),
+                departments(id, name),
+                sub_departments(name),
+                organizations(id, name),
+                remuneration_levels(level_name, hourly_rate_min)
+            `)
                     .in('id', shiftIds)
                     // Deleted shifts might still be relevant in history, but safer to hide if deleted
                     .is('deleted_at', null)
@@ -935,14 +918,14 @@ export const shiftsQueries = {
             let query = supabase
                 .from('shifts')
                 .select(`
-                    *,
-                    organizations(name),
-                    departments(name),
-                    sub_departments(name),
-                    roles(name),
-                    remuneration_levels(level_name, hourly_rate_min),
-                    profiles:assigned_employee_id(first_name, last_name)
-                `)
+                *,
+                organizations(name),
+                departments(name),
+                sub_departments(name),
+                roles(name),
+                remuneration_levels(level_name, hourly_rate_min),
+                profiles: assigned_employee_id(first_name, last_name)
+            `)
                 .eq('organization_id', organizationId)
                 .in('bidding_status', ['on_bidding_normal', 'on_bidding_urgent'])
                 .is('deleted_at', null)
@@ -979,11 +962,11 @@ export const shiftsQueries = {
             const { data, error } = await supabase
                 .from('shift_bids')
                 .select(`
-                    id, shift_id, employee_id, status, created_at,
-                    profiles!shift_bids_employee_id_fkey (
-                        id, full_name, first_name, last_name, employment_type
-                    )
-                `)
+                id, shift_id, employee_id, status, created_at,
+                profiles!shift_bids_employee_id_fkey(
+                    id, full_name, first_name, last_name, employment_type
+                )
+            `)
                 .eq('shift_id', shiftId)
                 .order('created_at', { ascending: false });
 

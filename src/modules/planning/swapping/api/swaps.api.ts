@@ -176,6 +176,23 @@ export const swapsApi = {
             throw error;
         }
 
+        // Update shift status to TradeRequested to reflect S9 state (Published + TradeRequested)
+        if (data) {
+            const { error: shiftUpdateError } = await db
+                .from('shifts')
+                .update({
+                    trading_status: 'TradeRequested',
+                    trade_requested_at: new Date().toISOString()
+                })
+                .eq('id', requesterShiftId);
+
+            if (shiftUpdateError) {
+                console.error('[API] Failed to update shift trading status:', shiftUpdateError);
+                // Note: ideally we would rollback the swap request creation here, 
+                // but for now we log the error as this is a non-transactional client-side operation.
+            }
+        }
+
         return data;
     },
 
@@ -623,7 +640,7 @@ export const swapsApi = {
     async rejectSwapRequest(requestId: string, reason?: string): Promise<void> {
         // §4 T6: Only allowed from MANAGER_PENDING
         const { data, error: fetchErr } = await db
-            .from('shift_swaps').select('status').eq('id', requestId).single();
+            .from('shift_swaps').select('status, requester_shift_id').eq('id', requestId).single();
         if (fetchErr || !data) throw fetchErr || new Error('Swap not found');
         if (data.status !== 'MANAGER_PENDING') {
             throw new Error(`Cannot reject swap in state '${data.status}'. Must be MANAGER_PENDING.`);
@@ -636,6 +653,21 @@ export const swapsApi = {
             .eq('status', 'MANAGER_PENDING');
 
         if (error) throw error;
+
+        // Revert shift status to NoTrade (S4) as the trade was rejected
+        if (data.requester_shift_id) {
+            const { error: shiftUpdateError } = await db
+                .from('shifts')
+                .update({
+                    trading_status: 'NoTrade',
+                    trade_requested_at: null
+                })
+                .eq('id', data.requester_shift_id);
+
+            if (shiftUpdateError) {
+                console.error('[API] Failed to revert shift trading status on rejection:', shiftUpdateError);
+            }
+        }
     },
 
     async cancelSwapRequest(swapId: string): Promise<void> {
@@ -643,7 +675,7 @@ export const swapsApi = {
 
         // §4 T7: Only allowed from OPEN
         const { data, error: fetchErr } = await db
-            .from('shift_swaps').select('status').eq('id', swapId).single();
+            .from('shift_swaps').select('status, requester_shift_id').eq('id', swapId).single();
         if (fetchErr || !data) throw fetchErr || new Error('Swap not found');
         if (data.status !== 'OPEN') {
             throw new Error(`Cannot cancel swap in state '${data.status}'. Must be OPEN.`);
@@ -656,6 +688,21 @@ export const swapsApi = {
             .eq('status', 'OPEN');
 
         if (error) throw error;
+
+        // Revert shift status to NoTrade (S4) as the trade was cancelled
+        if (data.requester_shift_id) {
+            const { error: shiftUpdateError } = await db
+                .from('shifts')
+                .update({
+                    trading_status: 'NoTrade',
+                    trade_requested_at: null
+                })
+                .eq('id', data.requester_shift_id);
+
+            if (shiftUpdateError) {
+                console.error('[API] Failed to revert shift trading status on cancellation:', shiftUpdateError);
+            }
+        }
     },
 
     async acceptTrade(swapId: string, offerId: string, offererId: string, offerShiftId?: string): Promise<void> {

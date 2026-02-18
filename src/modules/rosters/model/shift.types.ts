@@ -96,6 +96,7 @@ export interface Roster {
     status: string;
     createdBy: string;
     publishedAt?: string;
+    isLocked?: boolean;
     createdAt: string;
     updatedAt: string;
 }

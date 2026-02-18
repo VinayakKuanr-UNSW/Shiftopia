@@ -10,6 +10,7 @@ interface ModalFooterProps {
     isLoading: boolean;
     canSave: boolean;
     isPast: boolean;
+    isStarted?: boolean;
     isPublished: boolean;
     editMode: boolean;
     onCancel: () => void;
@@ -25,6 +26,7 @@ export const ModalFooter: React.FC<ModalFooterProps> = ({
     isLoading,
     canSave,
     isPast,
+    isStarted,
     isPublished,
     editMode,
     onCancel,
@@ -71,7 +73,7 @@ export const ModalFooter: React.FC<ModalFooterProps> = ({
                             <Lock className="h-4 w-4" />
                             Published (Locked)
                         </Button>
-                    ) : !isPast && (
+                    ) : (!isPast && !isStarted) && (
                         <Button
                             onClick={onSubmit}
                             disabled={isLoading || !canSave}

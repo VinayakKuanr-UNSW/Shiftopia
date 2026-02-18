@@ -12,11 +12,13 @@ import { ScopeSelection, ScopeTree } from '@/platform/auth/types';
  */
 interface PersonalScopeFilterProps {
     onScopeChange: (scope: ScopeSelection) => void;
+    multiSelect?: boolean;
     className?: string;
 }
 
 export const PersonalScopeFilter: React.FC<PersonalScopeFilterProps> = ({
     onScopeChange,
+    multiSelect = true,
     className,
 }) => {
     const context = useContext(AuthContext);
@@ -97,7 +99,7 @@ export const PersonalScopeFilter: React.FC<PersonalScopeFilterProps> = ({
             defaultSelection={defaultSelection}
             onScopeChange={onScopeChange}
             mode="personal"
-            multiSelect={true}
+            multiSelect={multiSelect}
             className={className}
         />
     );

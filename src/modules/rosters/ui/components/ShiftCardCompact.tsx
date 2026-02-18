@@ -107,7 +107,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
   const isPublished = shift.lifecycleStatus === 'published' || shift.lifecycleStatus === 'completed';
   const isCancelled = shift.lifecycleStatus === 'cancelled' || shift.isCancelled;
   const isOnBidding = shift.fulfillmentStatus === 'bidding' || shift.isOnBidding;
-  const isTrading = shift.isTradeRequested;
+  const isTrading = shift.isTradeRequested || !!(shift.rawShift as any)?.trade_requested_at || (shift.rawShift as any)?.trading_status === 'TradeRequested';
 
   // State Debug Info
   const rawShift = shift.rawShift || shift;
@@ -258,12 +258,12 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
             {/* 6. TRADE */}
             <div className="flex flex-col items-center gap-1">
               {(() => {
-                if (shift.isTrading) return <ArrowLeftRight className="w-4 h-4 text-purple-500" />;
+                if (isTrading) return <ArrowLeftRight className="w-4 h-4 text-purple-500" />;
                 // TODO: TradeAccepted? shift.trading_status?
                 return <Minus className="w-4 h-4 text-gray-400" />;
               })()}
               <span className="text-[9px] font-bold text-gray-400 truncate w-full text-center">
-                {shift.isTrading ? 'TradeRequested' : 'NoTrade'}
+                {isTrading ? 'TradeRequested' : 'NoTrade'}
               </span>
             </div>
 

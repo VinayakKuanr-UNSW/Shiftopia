@@ -1,18 +1,65 @@
 export type AuditEventType =
-    | 'draft_created'
+    // Creation
+    | 'shift_created_draft'
+    | 'shift_created_published'
+    // Status
     | 'published'
-    | 'assigned'
-    | 'unassigned'
+    | 'unpublished'
+    | 'draft_status_changed'
+    | 'cancelled'
+    | 'uncancelled'
+    | 'shift_soft_deleted'
+    | 'completed'
+    // Assignment
+    | 'employee_assigned'
+    | 'employee_unassigned'
+    // Schedule
+    | 'schedule_changed'
+    | 'notes_updated'
+    // Bidding
+    | 'pushed_to_bidding'
+    | 'removed_from_bidding'
+    | 'bid_placed'
+    | 'bid_won'
+    | 'bid_rejected'
+    | 'bid_withdrawn'
+    | 'bid_status_changed'
+    // Trading
     | 'trade_requested'
+    | 'trade_offer_submitted'
+    | 'trade_offer_selected'
+    | 'trade_pending_manager'
     | 'trade_approved'
     | 'trade_rejected'
-    | 'override_applied'
-    | 'cancelled'
-    | 'completed'
-    | 'pushed_to_bidding'
-    | 'removed_from_bidding';
+    | 'trade_cancelled'
+    | 'trade_expired'
+    | 'trade_offer_rejected'
+    | 'trade_offer_withdrawn'
+    | 'trade_offer_expired'
+    | 'trade_status_changed'
+    | 'trade_offer_status_changed'
+    // Legacy / fallback
+    | 'override_applied';
 
 export type AuditFlag = 'warning' | 'compliance' | 'override' | 'locked';
+
+/** Snapshot of context at the time of logging (role, department, names). */
+export interface AuditSnapshot {
+    role_name?: string;
+    department_name?: string;
+    sub_department_name?: string;
+    shift_date?: string;
+    start_time?: string;
+    end_time?: string;
+    bidder_name?: string;
+    requester_name?: string;
+    offerer_name?: string;
+    decided_by?: string;
+    decided_at?: string;
+    approved_by?: string;
+    approved_at?: string;
+    [key: string]: any;
+}
 
 export interface ChangeSet {
     field: string;
@@ -27,14 +74,21 @@ export interface AuditEvent {
     id: string;
     shift_id: string;
     event_type: AuditEventType | string;
+    event_category?: string;
     performed_by: string;
     performed_by_name: string;
+    performed_by_role?: string;
     performed_at: string;
     changes: ChangeSet[];
     notes?: string;
     flags?: AuditFlag[];
-    // Joined data for display
+    // Context snapshot (replaces old joined data)
+    snapshot?: AuditSnapshot;
+    related_entity_id?: string;
+    related_entity_type?: string;
+    // Derived display helpers (populated from snapshot)
     role_name?: string;
+    department_name?: string;
     shift_date?: string;
     start_time?: string;
 }
@@ -49,6 +103,7 @@ export interface ShiftSnapshot {
     data: any;
     performed_by_name: string;
     changes?: ChangeSet[];
+    snapshot?: AuditSnapshot;
 }
 
 export interface ComplianceStatus {

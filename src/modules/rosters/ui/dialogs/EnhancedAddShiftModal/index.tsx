@@ -12,7 +12,7 @@ import { useCreateShift, useUpdateShift } from '@/modules/rosters/state/useRoste
 
 // Types and Schema
 import { formSchema, FormValues, EnhancedAddShiftModalProps } from './types';
-import { calculateShiftLength, isDateInPast } from './utils';
+import { calculateShiftLength, isDateInPast, isShiftStarted } from './utils';
 
 // Hooks
 import { useShiftFormData, useHardValidation, useStepNavigation, useComplianceRunner } from './hooks';
@@ -117,13 +117,22 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
     // Context only has Names (strings) from the Grid View, but DB needs UUIDs.
     const resolvedContext = useMemo(() => {
         const roster = rosters.find(r => r.id === (selectedRosterId || safeContext.rosterId));
+
+        // Start with provided IDs, then fallback to Roster's defaults if missing
+        let departmentId = safeContext.departmentId || roster?.department_id;
+        let subDepartmentId = safeContext.subDepartmentId || roster?.sub_department_id;
         let groupId = safeContext.groupId;
         let subGroupId = safeContext.subGroupId;
 
-        if (roster && safeContext.groupName && !groupId) {
-            const searchName = safeContext.groupName.trim().toLowerCase();
-            // Find group by name (handle both original and snake_case)
+        if (roster && (safeContext.groupName || safeContext.group_type) && !groupId) {
+            const searchName = safeContext.groupName?.trim().toLowerCase();
+            const searchType = safeContext.group_type;
+
+            // Find group by external_id (group_type) FIRST, then fallback to name
             const group = roster.groups?.find(g => {
+                if (searchType && g.external_id === searchType) return true;
+                if (!searchName) return false;
+
                 const dbName = g.name.trim().toLowerCase();
                 const normalizedDbName = dbName.replace(/\s+/g, '_');
                 return dbName === searchName || normalizedDbName === searchName;
@@ -132,12 +141,13 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
             if (group) {
                 groupId = group.id;
 
-                // Find sub-group
+                // Find sub-group by name (flexible)
                 if (safeContext.subGroupName && !subGroupId) {
                     const subSearchName = safeContext.subGroupName.trim().toLowerCase();
                     const subGroup = group.subGroups?.find(sg => {
                         const dbSubName = sg.name.trim().toLowerCase();
-                        return dbSubName === subSearchName;
+                        const normalizedDbSubName = dbSubName.replace(/\s+/g, '_');
+                        return dbSubName === subSearchName || normalizedDbSubName === subSearchName;
                     });
                     if (subGroup) subGroupId = subGroup.id;
                 }
@@ -147,6 +157,8 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
         // Ensure we always return the most complete IDs possible
         return {
             ...safeContext,
+            departmentId: departmentId || safeContext.departmentId,
+            subDepartmentId: subDepartmentId || safeContext.subDepartmentId,
             groupId: groupId || safeContext.groupId,
             subGroupId: subGroupId || safeContext.subGroupId
         };
@@ -208,11 +220,21 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
         complianceResults,
     });
 
+    const isGridLaunch = safeContext.launchSource === 'grid';
+    const isEditModeSource = safeContext.launchSource === 'edit';
+
     // Context checks
-    const hasDepartment = !!safeContext.departmentId;
+    const hasDepartment = !!resolvedContext.departmentId;
     // In edit mode, fall back to the existing shift's roster ID if context is missing
     const derivedRosterId = selectedRosterId || safeContext.rosterId || (editMode ? existingShift?.roster_id : null);
     const hasRoster = !!derivedRosterId;
+
+    // Lock logic: Roster, Group, and Sub-Group should be locked if they come from Grid context or are being edited
+    // This ensures consistency within the selected view/context.
+    const isContextInherited = isGridLaunch || isEditModeSource;
+    const isRosterLocked = isContextInherited && !!derivedRosterId;
+    const isGroupLocked = isContextInherited && (!!resolvedContext.groupId || !!resolvedContext.groupName || !!resolvedContext.group_type);
+    const isSubGroupLocked = isContextInherited && (!!resolvedContext.subGroupId || !!resolvedContext.subGroupName);
 
     // Auto-select first available roster if none from context
     useEffect(() => {
@@ -246,11 +268,30 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
 
     // Read-only checks
     const isPast = useMemo(() => isDateInPast(watchShiftDate), [watchShiftDate]);
+    const isStarted = useMemo(
+        () => isShiftStarted(watchShiftDate, watchStart),
+        [watchShiftDate, watchStart]
+    );
     const isPublished = useMemo(
-        () => !isTemplateMode && existingShift?.lifecycle_status === 'published',
+        () => !isTemplateMode && existingShift?.lifecycle_status === 'Published',
         [isTemplateMode, existingShift]
     );
-    const isReadOnly = isPast || isPublished;
+    const isReadOnly = isPast || isStarted || isPublished;
+
+    useEffect(() => {
+        if (isOpen) {
+            console.log('[EnhancedAddShiftModal] ReadOnly Audit:', {
+                isPast,
+                isStarted,
+                isPublished,
+                isReadOnly,
+                watchShiftDate: watchShiftDate?.toISOString(),
+                watchStart,
+                editMode,
+                existingShiftId: existingShift?.id
+            });
+        }
+    }, [isOpen, isPast, isStarted, isPublished, isReadOnly, watchShiftDate, watchStart, editMode, existingShift]);
 
     // Invalidate compliance when key fields change
     useEffect(() => {
@@ -284,6 +325,8 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
 
         if (editMode && existingShift) {
             form.reset({
+                group_type: existingShift.group_type || (existingShift.groupName?.toLowerCase().replace(/\s+/g, '_') as any) || undefined,
+                sub_group_name: existingShift.sub_group_name || existingShift.subGroupName || '',
                 role_id: existingShift.role_id || existingShift.roleId || '',
                 remuneration_level_id: existingShift.remuneration_level_id || existingShift.remunerationLevelId || '',
                 shift_date: existingShift.shift_date ? new Date(existingShift.shift_date) : undefined,
@@ -582,6 +625,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
                     editMode={editMode}
                     isReadOnly={isReadOnly}
                     isPast={isPast}
+                    isStarted={isStarted}
                     isPublished={isPublished}
                     safeContext={resolvedContext}
                     onUnpublish={handleUnpublish}
@@ -601,6 +645,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
                                 completedSteps={completedSteps}
                                 onStepClick={handleStepClick}
                                 disabled={isReadOnly}
+                                editMode={editMode}
                             />
                         </div>
 
@@ -619,8 +664,9 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
                                         rosterStructure={rosterStructure}
                                         selectedRosterId={selectedRosterId}
                                         onRosterChange={setSelectedRosterId}
-                                        isGroupLocked={!!resolvedContext.groupId || !!resolvedContext.groupName}
-                                        isRosterLocked={!!resolvedContext.rosterId}
+                                        isGroupLocked={isGroupLocked}
+                                        isSubGroupLocked={isSubGroupLocked}
+                                        isRosterLocked={isRosterLocked}
                                     />
                                 )}
 
@@ -699,6 +745,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
                     isLoading={isLoading}
                     canSave={canSave}
                     isPast={isPast}
+                    isStarted={isStarted}
                     isPublished={isPublished}
                     editMode={editMode}
                     onCancel={handleCancel}

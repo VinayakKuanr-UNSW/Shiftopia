@@ -25,8 +25,8 @@ const DashboardPage = lazy(() => import('@/modules/dashboard/pages/DashboardPage
 const ProfilePage = lazy(() => import('@/modules/users/pages/ProfilePage'));
 const MyRosterPage = lazy(() => import('@/modules/rosters/pages/MyRosterPage'));
 const AvailabilityPage = lazy(() => import('@/modules/availability/pages/AvailabilityPage'));
-const EmployeeBidsPage = lazy(() => import('@/modules/planning/bidding/ui/pages/EmployeeBids.page').then(m => ({ default: m.EmployeeBidsPage })));
-const EmployeeSwapsPage = lazy(() => import('@/modules/planning/swapping/ui/pages/EmployeeSwaps.page').then(m => ({ default: m.EmployeeSwapsPage })));
+const EmployeeBidsPage = lazy(() => import('@/modules/planning/bidding/ui/pages/EmployeeBids.page'));
+const EmployeeSwapsPage = lazy(() => import('@/modules/planning/swapping/ui/pages/EmployeeSwaps.page'));
 const MyBroadcastsPage = lazy(() => import('@/modules/broadcasts/ui/pages/MyBroadcastsPage'));
 
 // Rostering
@@ -40,8 +40,8 @@ const AuditDashboardPage = lazy(() => import('@/modules/audit/pages/AuditDashboa
 const ShiftDetailView = lazy(() => import('@/modules/audit/pages/ShiftDetailView'));
 
 // Management
-const ManagerBidsPage = lazy(() => import('@/modules/planning/bidding/ui/pages/ManagerBids.page').then(m => ({ default: m.ManagerBidsPage })));
-const ManagerSwapsPage = lazy(() => import('@/modules/planning/swapping/ui/pages/ManagerSwaps.page').then(m => ({ default: m.ManagerSwapsPage })));
+const ManagerBidsPage = lazy(() => import('@/modules/planning/bidding/ui/pages/ManagerBids.page'));
+const ManagerSwapsPage = lazy(() => import('@/modules/planning/swapping/ui/pages/ManagerSwaps.page'));
 
 // ✅ Broadcast (Manager)
 const BroadcastManagerPage = lazy(() => import('@/modules/broadcasts/ui/pages/BroadcastsManager.page'));
@@ -49,7 +49,7 @@ const BroadcastManagerPage = lazy(() => import('@/modules/broadcasts/ui/pages/Br
 // Features
 const InsightsPage = lazy(() => import('@/modules/insights/pages/InsightsPage'));
 const AnalysisPage = lazy(() => import('@/modules/insights/pages/AnalysisPage'));
-const ConfigurationsPage = lazy(() => import('@/modules/configurations/pages/ConfigurationsPage'));
+
 const ContractsPage = lazy(() => import('@/modules/contracts/pages/ContractsPage'));
 const UsersPage = lazy(() => import('@/modules/users/pages/UsersPage'));
 
@@ -107,7 +107,9 @@ const AppRouter: React.FC = () => {
                 path="/dashboard"
                 element={
                     <ProtectedRouteWithLayout>
-                        <DashboardPage />
+                        <Suspense fallback={<PageLoader />}>
+                            <DashboardPage />
+                        </Suspense>
                     </ProtectedRouteWithLayout>
                 }
             />
@@ -268,15 +270,6 @@ const AppRouter: React.FC = () => {
                 element={
                     <ProtectedRouteWithLayout requiredFeature="insights">
                         <AnalysisPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
-
-            <Route
-                path="/configurations"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="configurations">
-                        <ConfigurationsPage />
                     </ProtectedRouteWithLayout>
                 }
             />

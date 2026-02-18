@@ -66,13 +66,13 @@ export const rostersApi = {
             if (!overrideExisting) {
                 const { data: existingRosters } = await supabase
                     .from('rosters')
-                    .select('date')
+                    .select('start_date')
                     .eq('department_id', departmentId)
-                    .gte('date', startDate)
-                    .lte('date', endDate);
+                    .gte('start_date', startDate)
+                    .lte('start_date', endDate);
 
                 const existingDates = new Set(
-                    existingRosters?.map((r) => r.date) || []
+                    existingRosters?.map((r) => r.start_date) || []
                 );
 
                 // Filter out dates that already have rosters
@@ -89,7 +89,8 @@ export const rostersApi = {
 
                 // Create rosters for remaining dates
                 const rostersToCreate = datesToCreate.map((date) => ({
-                    date: date.toISOString().split('T')[0],
+                    start_date: date.toISOString().split('T')[0],
+                    end_date: date.toISOString().split('T')[0],
                     template_id: templateId,
                     department_id: departmentId,
                     sub_department_id: subDepartmentId || null,
@@ -116,8 +117,8 @@ export const rostersApi = {
                     .from('rosters')
                     .delete()
                     .eq('department_id', departmentId)
-                    .gte('date', startDate)
-                    .lte('date', endDate);
+                    .gte('start_date', startDate)
+                    .lte('start_date', endDate);
 
                 if (deleteError) {
                     result.errors.push(`Delete error: ${deleteError.message}`);
@@ -126,7 +127,8 @@ export const rostersApi = {
 
                 // Create new rosters
                 const rostersToCreate = dates.map((date) => ({
-                    date: date.toISOString().split('T')[0],
+                    start_date: date.toISOString().split('T')[0],
+                    end_date: date.toISOString().split('T')[0],
                     template_id: templateId,
                     department_id: departmentId,
                     sub_department_id: subDepartmentId || null,
@@ -166,7 +168,7 @@ export const rostersApi = {
             const { data, error } = await supabase
                 .from('rosters')
                 .select('*')
-                .eq('date', date)
+                .eq('start_date', date)
                 .eq('department_id', departmentId)
                 .maybeSingle();
 
@@ -181,11 +183,13 @@ export const rostersApi = {
             return {
                 id: data.id,
                 organizationId: data.organization_id,
-                date: data.date,
+                startDate: data.start_date,
+                endDate: data.end_date,
                 status: data.status as any,
                 notes: data.description || '', // Map description to notes
                 createdAt: data.created_at,
                 updatedAt: data.updated_at,
+                isLocked: (data as any).is_locked,
                 lockedAt: undefined, // Not in DB
                 lockedBy: undefined, // Not in DB
                 groups: ((data as any).groups as Group[]) || [],
@@ -214,9 +218,9 @@ export const rostersApi = {
                 .from('rosters')
                 .select('*')
                 .eq('department_id', departmentId)
-                .gte('date', startDate)
-                .lte('date', endDate)
-                .order('date', { ascending: true });
+                .gte('start_date', startDate)
+                .lte('start_date', endDate)
+                .order('start_date', { ascending: true });
 
             if (error) {
                 console.error('Error fetching rosters:', error);
@@ -225,10 +229,12 @@ export const rostersApi = {
 
             return (data || []).map((roster) => ({
                 id: roster.id,
-                date: roster.date,
+                startDate: roster.start_date,
+                endDate: roster.end_date,
                 // ... simplified mapping
                 groups: ((roster as any).groups as Group[]) || [],
                 status: (roster.status as any) || 'draft',
+                isLocked: (roster as any).is_locked,
                 createdAt: roster.created_at,
                 updatedAt: roster.updated_at
             } as unknown as Roster));
@@ -267,9 +273,11 @@ export const rostersApi = {
 
             return {
                 id: data.id,
-                date: data.date,
+                startDate: data.start_date,
+                endDate: data.end_date,
                 groups: ((data as any).groups as Group[]) || [],
                 status: data.status as any,
+                isLocked: (data as any).is_locked,
                 createdAt: data.created_at,
                 updatedAt: data.updated_at
             } as unknown as Roster;
@@ -342,9 +350,11 @@ export const rostersApi = {
 
             return {
                 id: updatedRoster.id,
-                date: updatedRoster.date,
+                startDate: updatedRoster.start_date,
+                endDate: updatedRoster.end_date,
                 groups: ((updatedRoster as any).groups as Group[]) || [],
                 status: updatedRoster.status,
+                isLocked: (updatedRoster as any).is_locked,
                 createdAt: updatedRoster.created_at,
                 updatedAt: updatedRoster.updated_at
             } as unknown as Roster;
@@ -367,8 +377,8 @@ export const rostersApi = {
                 .from('rosters')
                 .select('id')
                 .eq('department_id', departmentId)
-                .gte('date', startDate)
-                .lte('date', endDate)
+                .gte('start_date', startDate)
+                .lte('start_date', endDate)
                 .limit(1);
 
             if (error) {

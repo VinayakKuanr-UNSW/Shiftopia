@@ -59,7 +59,8 @@ export interface ShiftAssignment {
 export interface DbRosterDay {
     id: string;
     organization_id: string;
-    date: string;
+    start_date: string;
+    end_date: string;
     status: RosterDayStatus;
     notes: string | null;
     created_by: string | null;
@@ -105,7 +106,8 @@ export interface RosterGroupStructure {
 
 export interface RosterStructure {
     rosterId: string;
-    date: string;
+    startDate: string;
+    endDate: string;
     groups: RosterGroupStructure[];
 }
 
@@ -190,7 +192,7 @@ export interface RosterShiftWithLiveState {
     group_id: string;
     group_name: string;
     roster_day_id: string;
-    roster_date: string;
+    shift_start_date: string;
     organization_id: string;
     department_id: string | null;
 
@@ -288,7 +290,8 @@ export interface AppliedTemplate {
 export interface RosterDay {
     id: string;
     organizationId: string;
-    date: string;
+    startDate: string;
+    endDate: string;
     status: RosterDayStatus;
     notes: string | null;
     createdAt: string;
@@ -304,7 +307,8 @@ export interface RosterDay {
 }
 
 export interface RosterDaySummary {
-    date: string;
+    startDate: string;
+    endDate: string;
     rosterDayId: string | null;
     status: RosterDayStatus;
     shiftCount: number;
@@ -441,7 +445,8 @@ export function dbRosterDayToFrontend(db: any): RosterDay {
     return {
         id: db.id,
         organizationId: db.organization_id,
-        date: db.date,
+        startDate: db.start_date,
+        endDate: db.end_date,
         status: db.status,
         notes: db.notes,
         createdAt: db.created_at,
@@ -515,7 +520,8 @@ export function dbRosterDayToFrontend(db: any): RosterDay {
  */
 export function dbRosterDaySummaryToFrontend(db: any): RosterDaySummary {
     return {
-        date: db.date,
+        startDate: db.start_date,
+        endDate: db.end_date,
         rosterDayId: db.roster_day_id,
         status: db.status || 'draft',
         shiftCount: Number(db.shift_count) || 0,
@@ -576,9 +582,8 @@ export function mergeRosterDaysToGroupMode(
         const subGroups: GroupModeSubGroup[] = group.subgroups.map((sg) => {
             const shifts: Record<string, GroupModeShift[]> = {};
 
-            // Collect shifts from all days for this subgroup
             for (const day of rosterDays) {
-                const dateKey = day.date;
+                const dateKey = day.startDate;
                 const matchingGroup = day.groups.find((g) => g.name === group.name);
                 const matchingSubgroup = matchingGroup?.subgroups.find(
                     (s) => s.name === sg.name
@@ -637,7 +642,8 @@ export function flatRosterShiftsToRosterDay(
         return {
             id: 'virtual-' + dateStr,
             organizationId,
-            date: dateStr,
+            startDate: dateStr,
+            endDate: dateStr,
             status: 'draft', // default
             notes: null,
             createdAt: new Date().toISOString(),
@@ -737,7 +743,8 @@ export function flatRosterShiftsToRosterDay(
     return {
         id: first.roster_day_id,
         organizationId: first.organization_id,
-        date: first.roster_date,
+        startDate: first.shift_start_date,
+        endDate: first.shift_start_date,
         status: 'published', // effectively published if pulling from live view
         notes: null,
         createdAt: first.created_at,

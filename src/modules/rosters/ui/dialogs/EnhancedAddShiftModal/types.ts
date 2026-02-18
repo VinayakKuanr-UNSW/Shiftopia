@@ -44,6 +44,7 @@ export interface ShiftContext {
     subGroupId?: string;
     subGroupName?: string;
     groupColor?: string;
+    group_type?: string;
     employeeId?: string;
     roleId?: string;
     rosterId?: string;
@@ -104,11 +105,15 @@ export interface Event {
 export interface Roster {
     id: string;
     name: string;
+    description?: string;
     start_date: string;
     end_date: string;
+    department_id?: string;
+    sub_department_id?: string;
     groups?: {
         id: string;
         name: string;
+        external_id?: string;
         subGroups: {
             id: string;
             name: string;
@@ -146,6 +151,7 @@ export interface ScheduleStepProps extends StepProps {
     selectedRosterId: string;
     onRosterChange: (id: string) => void;
     isGroupLocked?: boolean;
+    isSubGroupLocked?: boolean;
     isRosterLocked?: boolean;
 }
 

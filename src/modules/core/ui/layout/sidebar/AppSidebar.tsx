@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useLocation, NavLink } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { biddingApi, swapsApi } from '@/modules/planning';
@@ -14,6 +14,7 @@ import {
   BadgeCheck,
   RefreshCw,
   ChevronRight,
+  ChevronDown,
   HelpCircle,
   Settings,
   TrendingUp,
@@ -35,7 +36,8 @@ import { Badge } from '@/modules/core/ui/primitives/badge';
 import { ThemeSelector } from '@/modules/core/ui/components/ThemeSelector';
 import { BroadcastNotifications } from '@/modules/core/ui/components/broadcast/BroadcastNotifications';
 import { ACCESS_LEVEL_CONFIG } from '@/platform/auth/constants';
-import { ProfileIdentityCard } from './ProfileIdentityCard';
+import { SidebarUser } from './SidebarUser';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/modules/core/ui/primitives/collapsible';
 
 /* ============================================================
    ICON COLOR MAP
@@ -55,7 +57,7 @@ type IconColorKey =
   | 'swapRequests'
   | 'broadcast'
   | 'insights'
-  | 'configurations'
+
   | 'management'
   | 'sectionMyWorkspace'
   | 'sectionRostering'
@@ -81,7 +83,7 @@ const iconColorMap: Record<IconColorKey, string> = {
   swapRequests: 'text-rose-400',
   broadcast: 'text-red-400',
   insights: 'text-yellow-400',
-  configurations: 'text-gray-400',
+
   management: 'text-lime-400',
   sectionMyWorkspace: 'text-purple-400',
   sectionRostering: 'text-blue-400',
@@ -157,38 +159,59 @@ const NavigationItem = memo<NavigationItemProps>(
 NavigationItem.displayName = 'NavigationItem';
 
 /* ============================================================
-   SECTION HEADER COMPONENT
+   COLLAPSIBLE SECTION COMPONENT
    ============================================================ */
-interface SectionHeaderProps {
+interface CollapsibleSectionProps {
   icon: LucideIcon;
   title: string;
   color?: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
 }
 
-const SectionHeader = memo<SectionHeaderProps>(
-  ({ icon: Icon, title, color = 'text-primary' }) => (
-    <div className="flex items-center gap-3 mb-2 py-0 my-0 bg-inherit px-[40px] mx-0 rounded-full">
-      <Icon className={cn('h-6 w-6', color)} />
-      <span className="uppercase tracking-wider text-muted-foreground font-semibold text-base text-justify px-0 mx-0">
-        {title}
-      </span>
-    </div>
-  )
-);
+const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
+  icon: Icon,
+  title,
+  color = 'text-primary',
+  children,
+  defaultOpen = true,
+}) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
 
-SectionHeader.displayName = 'SectionHeader';
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="space-y-1">
+      <CollapsibleTrigger className="flex items-center w-full group py-1 px-2 rounded-lg hover:bg-muted/30 transition-colors">
+        <div className="flex items-center gap-3 flex-1 px-[25px]">
+          <Icon className={cn('h-5 w-5', color)} />
+          <span className="uppercase tracking-wider text-muted-foreground font-semibold text-sm">
+            {title}
+          </span>
+        </div>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 text-muted-foreground/50 transition-transform duration-200",
+            isOpen ? "rotate-0" : "-rotate-90"
+          )}
+        />
+      </CollapsibleTrigger>
+
+      <CollapsibleContent className="space-y-1 data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down overflow-hidden">
+        <div className="pt-1 pb-2">
+          {children}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+};
+
 
 /* ============================================================
    APP SIDEBAR COMPONENT
    ============================================================ */
 const AppSidebar: React.FC = () => {
   const location = useLocation();
-  const { user, activeContract, setActiveContractId, activeCertificateId, setActiveCertificateId, hasPermission, logout, activeCertificate } = useAuth();
+  const { user, hasPermission, logout } = useAuth();
   const queryClient = useQueryClient();
-
-  const displayedLevel = activeCertificate?.accessLevel || user?.highestAccessLevel || 'alpha';
-  const accessConfig = ACCESS_LEVEL_CONFIG[displayedLevel];
-  const AccessIcon = accessConfig.icon;
 
   // Helper function to check if a route is active
   const isRouteActive = (path: string): boolean => {
@@ -238,11 +261,8 @@ const AppSidebar: React.FC = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-              ShiftoPia <span className="text-[8px] text-white/30 tracking-tight ml-2">v8.3 Debugging</span>
+              ShiftoPia <span className="text-[8px] text-primary/40 tracking-tight ml-2 font-light">v9.0</span>
             </h1>
-            <p className="text-[8px] text-white/20 font-mono">
-              PERM: rosters={String(hasPermission('rosters'))} | management={String(hasPermission('management'))}
-            </p>
             <p className="text-xs text-muted-foreground">
               Workforce Management
             </p>
@@ -251,9 +271,9 @@ const AppSidebar: React.FC = () => {
       </div>
 
       {/* ==================== NAVIGATION ==================== */}
-      <div className="flex-1 overflow-y-auto space-y-6 py-4 px-[15px]">
+      <div className="flex-1 overflow-y-auto space-y-4 py-4 px-[15px]">
         {/* ---------- Main Navigation ---------- */}
-        <div className="space-y-2">
+        <div className="space-y-1">
           <NavigationItem
             to="/dashboard"
             icon={LayoutDashboard}
@@ -265,13 +285,12 @@ const AppSidebar: React.FC = () => {
         </div>
 
         {/* ---------- My Workspace Section ---------- */}
-        <div className="space-y-2">
-          <SectionHeader
-            icon={UserCircle2}
-            title="My Workspace"
-            color={iconColorMap.sectionMyWorkspace}
-          />
-
+        <CollapsibleSection
+          icon={UserCircle2}
+          title="Overview"
+          color={iconColorMap.sectionMyWorkspace}
+          defaultOpen={true}
+        >
           <NavigationItem
             to="/my-roster"
             icon={Calendar}
@@ -285,9 +304,9 @@ const AppSidebar: React.FC = () => {
             to="/availabilities"
             icon={CalendarDays}
             iconColor={iconColorMap.availabilities}
-            label="Availabilities"
+            label="My Availabilities"
             isActive={isRouteActive('/availabilities')}
-            description="Set your availability"
+            description="Manage your schedule"
           />
 
           <NavigationItem
@@ -300,7 +319,6 @@ const AppSidebar: React.FC = () => {
             onMouseEnter={() => handlePrefetch('/bids')}
           />
 
-          {/* My Swaps */}
           <NavigationItem
             to="/my-swaps"
             icon={RefreshCw}
@@ -311,7 +329,6 @@ const AppSidebar: React.FC = () => {
             onMouseEnter={() => handlePrefetch('/my-swaps')}
           />
 
-          {/* My Broadcasts - NEW */}
           <NavigationItem
             to="/my-broadcasts"
             icon={Radio}
@@ -320,19 +337,18 @@ const AppSidebar: React.FC = () => {
             isActive={isRouteActive('/my-broadcasts')}
             description="View announcements"
           />
-        </div>
+        </CollapsibleSection>
 
         {/* ---------- Rostering Section ---------- */}
         {(hasPermission('templates') ||
           hasPermission('rosters') ||
           hasPermission('timesheet-view')) && (
-            <div className="space-y-2">
-              <SectionHeader
-                icon={FolderKanban}
-                title="Rostering"
-                color={iconColorMap.sectionRostering}
-              />
-
+            <CollapsibleSection
+              icon={FolderKanban}
+              title="Rostering"
+              color={iconColorMap.sectionRostering}
+              defaultOpen={true}
+            >
               {hasPermission('templates') && (
                 <NavigationItem
                   to="/templates"
@@ -365,18 +381,17 @@ const AppSidebar: React.FC = () => {
                   description="Time tracking"
                 />
               )}
-            </div>
+            </CollapsibleSection>
           )}
 
         {/* ---------- Management Section ---------- */}
         {hasPermission('management') && (
-          <div className="space-y-2">
-            <SectionHeader
-              icon={Shield}
-              title="Management"
-              color={iconColorMap.sectionManagement}
-            />
-
+          <CollapsibleSection
+            icon={Shield}
+            title="Management"
+            color={iconColorMap.sectionManagement}
+            defaultOpen={true}
+          >
             <NavigationItem
               to="/management/bids"
               icon={BadgeCheck}
@@ -395,38 +410,20 @@ const AppSidebar: React.FC = () => {
               isActive={isRouteActive('/management/swaps')}
               description="Approve shift swaps"
             />
-
-            <NavigationItem
-              to="/audit"
-              icon={ClipboardList}
-              iconColor={iconColorMap.audit}
-              label="Audit Trail"
-              isActive={isRouteActive('/audit')}
-              description="Shift change history"
-            />
-
-            <NavigationItem
-              to="/users"
-              icon={Users}
-              iconColor={iconColorMap.contracts}
-              label="Users"
-              isActive={isRouteActive('/users')}
-              description="User skills & performance"
-            />
-          </div>
+          </CollapsibleSection>
         )}
 
-        {/* ---------- Additional Features Section ---------- */}
+        {/* ---------- Features Section ---------- */}
         {(hasPermission('broadcast') ||
           hasPermission('insights') ||
-          hasPermission('configurations')) && (
-            <div className="space-y-2">
-              <SectionHeader
-                icon={Sparkles}
-                title="Features"
-                color={iconColorMap.sectionFeatures}
-              />
-
+          hasPermission('audit') ||
+          hasPermission('management')) && (
+            <CollapsibleSection
+              icon={Sparkles}
+              title="Features"
+              color={iconColorMap.sectionFeatures}
+              defaultOpen={true}
+            >
               {hasPermission('broadcast') && (
                 <NavigationItem
                   to="/broadcast"
@@ -449,17 +446,29 @@ const AppSidebar: React.FC = () => {
                 />
               )}
 
-              {hasPermission('configurations') && (
+              {/* Moved Audit & Users Here */}
+              {hasPermission('audit') && (
                 <NavigationItem
-                  to="/configurations"
-                  icon={Settings}
-                  iconColor={iconColorMap.configurations}
-                  label="Configurations"
-                  isActive={isRouteActive('/configurations')}
-                  description="System settings"
+                  to="/audit"
+                  icon={ClipboardList}
+                  iconColor={iconColorMap.audit}
+                  label="Audit Trail"
+                  isActive={isRouteActive('/audit')}
+                  description="System logs"
                 />
               )}
-            </div>
+
+              {hasPermission('management') && (
+                <NavigationItem
+                  to="/users"
+                  icon={Users}
+                  iconColor={iconColorMap.contracts}
+                  label="Users"
+                  isActive={isRouteActive('/users')}
+                  description="Manage users"
+                />
+              )}
+            </CollapsibleSection>
           )}
       </div>
 
@@ -471,37 +480,10 @@ const AppSidebar: React.FC = () => {
           <BroadcastNotifications isCollapsed={false} />
         </div>
 
-        <Separator />
+        <Separator className="bg-border/30" />
 
-        {/* User Profile & Contract Switcher */}
-        <div className="mb-2">
-          <ProfileIdentityCard />
-        </div>
-
-        {/* Help Button */}
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full justify-start gap-2 h-10"
-        >
-          <HelpCircle className={cn('h-5 w-5', iconColorMap.help)} />
-          <span>Help & Support</span>
-        </Button>
-
-        {/* Logout Button */}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start gap-2 h-10 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-          onClick={() => {
-            logout();
-            // Optional: navigate to login handled by Auth provider usually, 
-            // but we can enforce it if needed, though useAuth usually handles state change.
-          }}
-        >
-          <LogOut className="h-5 w-5" />
-          <span>Log Out</span>
-        </Button>
+        {/* User Profile */}
+        <SidebarUser />
       </div>
     </div>
   );

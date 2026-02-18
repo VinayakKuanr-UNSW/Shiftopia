@@ -101,6 +101,7 @@ export interface Shift {
 
     trade_requested_at: string | null;
     is_trade_requested?: boolean;
+    trading_status?: 'NoTrade' | 'TradeRequested' | 'TradeAccepted' | 'TradeApproved';
 
     // Attendance
     attendance_status?: AttendanceStatus;

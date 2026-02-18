@@ -12,7 +12,7 @@ import {
   RosterFunctionBar,
   ViewType,
 } from '@/modules/rosters/ui/components/RosterFunctionBar';
-import PeopleModeGrid from '@/modules/rosters/ui/modes/PeopleModeGrid';
+import PeopleModeGrid, { EmployeeShift } from '@/modules/rosters/ui/modes/PeopleModeGrid';
 import UnfilledShiftsPanel, {
   UnfilledShift,
 } from '@/modules/rosters/ui/modes/UnfilledShiftsPanel';
@@ -46,6 +46,8 @@ import {
   useRequestTrade,
   useCancelShift,
 } from '@/modules/rosters/state/useRosterShifts';
+import { useRostersByDateRange } from '@/modules/rosters/state/useEnhancedRosters';
+import { usePublishRoster } from '@/modules/rosters/state/useRosterMutations';
 import { usePeopleModeData } from '@/modules/rosters/hooks/usePeopleModeData';
 import { shiftKeys, type ShiftFilters } from '@/modules/rosters/api/queryKeys';
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
@@ -102,7 +104,7 @@ const NewRostersPage: React.FC = () => {
   const [templateEndDate, setTemplateEndDate] = useState<Date | undefined>(undefined);
 
   // ==================== TOGGLE STATES ====================
-  const [isLocked, setIsLocked] = useState(false);
+  // const [isLocked, setIsLocked] = useState(false); // REMOVED local state
   const [showAvailabilities, setShowAvailabilities] = useState(false);
   const [showUnfilledPanel, setShowUnfilledPanel] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
@@ -114,7 +116,6 @@ const NewRostersPage: React.FC = () => {
   const [selectedShifts, setSelectedShifts] = useState<string[]>([]);
 
   // ==================== DERIVED ====================
-  const canEdit = hasPermission('update') && !isLocked;
 
   // ==================== DATE CALCULATION ====================
   // Use selectedDate as the start of the range (controlled by RosterFunctionBar)
@@ -165,6 +166,19 @@ const NewRostersPage: React.FC = () => {
     dates.length > 0 ? format(dates[dates.length - 1], 'yyyy-MM-dd') : null
     , [dates]);
 
+  // ==================== LOCK STATUS ====================
+  // Fetch Rosters for Lock Status
+  const { data: rosters = [] } = useRostersByDateRange(
+    startDate || '',
+    endDate || '',
+    selectedDepartmentIds[0] || ''
+  );
+
+  // Derive lock status from fetched rosters
+  // LOCK FEATURE REMOVED - Always editable if permission allows
+  const isLocked = false;
+  const canEdit = hasPermission('update');
+
   // Query shifts for date range (supports day, week, month views)
   const {
     data: shifts = [],
@@ -185,6 +199,11 @@ const NewRostersPage: React.FC = () => {
   const bidShiftMutation = useAcceptOffer();
   const swapShiftMutation = useRequestTrade();
   const cancelShiftMutation = useCancelShift();
+
+  // Roster Actions
+
+  const publishRosterMutation = usePublishRoster();
+
 
   // Employees lookup
   const { data: employees = [] } = useEmployees(selectedOrganizationId || undefined);
@@ -286,12 +305,27 @@ const NewRostersPage: React.FC = () => {
     refetch();
   };
 
-  const handlePublishRoster = () => {
-    toast({
-      title: 'Publish Roster',
-      description: 'This will publish the roster to all employees.',
-    });
+  const handlePublishRoster = async () => {
+    if (!startDate || !endDate || !selectedOrganizationId || !selectedDepartmentIds[0]) {
+      toast({ title: "Error", description: "Missing required selection details", variant: "destructive" });
+      return;
+    }
+
+    try {
+      await publishRosterMutation.mutateAsync({
+        organizationId: selectedOrganizationId,
+        departmentId: selectedDepartmentIds[0],
+        subDepartmentId: selectedSubDepartmentIds[0] || null,
+        startDate,
+        endDate
+      });
+      // Toast is handled in mutation onSuccess
+    } catch (error) {
+      // Error handled in mutation onError
+    }
   };
+
+  // Lock toggle handler removed
 
   // ==================== GHOST CELL NAVIGATION ====================
   // When user clicks a ghost cell, navigate to that month (reset to 1st of month)
@@ -428,6 +462,7 @@ const NewRostersPage: React.FC = () => {
         mode="managerial"
         onScopeChange={setScope}
         hidden={isGammaLocked}
+        multiSelect={false}
         className="m-3 mb-0"
       />
 
@@ -436,6 +471,8 @@ const NewRostersPage: React.FC = () => {
         // Context state
         selectedOrganizationId={selectedOrganizationId}
         selectedRosterId={selectedRosterId}
+        selectedDepartmentId={selectedDepartmentIds[0] || null}
+        selectedSubDepartmentId={selectedSubDepartmentIds[0] || null}
         // Context callbacks
         onRosterChange={setSelectedRosterId}
         // Ghost Cell Navigation - receive template date bounds
@@ -449,18 +486,15 @@ const NewRostersPage: React.FC = () => {
         onDateChange={setSelectedDate}
         onViewTypeChange={handleViewTypeChange}
         // Toggle states
-        isLocked={isLocked}
         showAvailabilities={showAvailabilities}
         showUnfilledPanel={showUnfilledPanel}
         isRefreshing={isRefreshing}
         // Toggle callbacks
-        onLockToggle={() => setIsLocked(!isLocked)}
         onAvailabilitiesToggle={() => setShowAvailabilities(!showAvailabilities)}
         onUnfilledPanelToggle={() => setShowUnfilledPanel(!showUnfilledPanel)}
         onRefresh={handleRefresh}
         onFiltersClick={() => setShowFilters(!showFilters)}
         // Actions
-        onAddShift={handleAddShift}
         onPublishRoster={handlePublishRoster}
         canEdit={canEdit}
         // Bulk Mode
@@ -468,49 +502,7 @@ const NewRostersPage: React.FC = () => {
         onBulkModeToggle={() => setBulkModeActive(!bulkModeActive)}
       />
 
-      {/* Mode Selector - Compact */}
-      <div className="flex-shrink-0 border-b border-white/5 bg-black/10 px-3 py-1.5 backdrop-blur-sm">
-        <div className="flex justify-center">
-          <ToggleGroup
-            type="single"
-            value={activeMode}
-            onValueChange={(v) => v && setActiveMode(v as RosterMode)}
-            className="inline-flex gap-1 p-1 rounded-lg bg-black/20 border border-white/5"
-          >
-            <ToggleGroupItem
-              value="group"
-              className="data-[state=on]:bg-primary/20 data-[state=on]:text-primary-foreground data-[state=on]:shadow-glow/20 px-3 py-1.5 h-auto text-xs font-medium transition-all hover:bg-white/5"
-            >
-              <Calendar className="h-3.5 w-3.5 mr-1.5" />
-              Group
-            </ToggleGroupItem>
-
-            <ToggleGroupItem
-              value="people"
-              className="data-[state=on]:bg-primary/20 data-[state=on]:text-primary-foreground data-[state=on]:shadow-glow/20 px-3 py-1.5 h-auto text-xs font-medium transition-all hover:bg-white/5"
-            >
-              <Users className="h-3.5 w-3.5 mr-1.5" />
-              People
-            </ToggleGroupItem>
-
-            <ToggleGroupItem
-              value="events"
-              className="data-[state=on]:bg-primary/20 data-[state=on]:text-primary-foreground data-[state=on]:shadow-glow/20 px-3 py-1.5 h-auto text-xs font-medium transition-all hover:bg-white/5"
-            >
-              <CalendarDays className="h-3.5 w-3.5 mr-1.5" />
-              Events
-            </ToggleGroupItem>
-
-            <ToggleGroupItem
-              value="roles"
-              className="data-[state=on]:bg-primary/20 data-[state=on]:text-primary-foreground data-[state=on]:shadow-glow/20 px-3 py-1.5 h-auto text-xs font-medium transition-all hover:bg-white/5"
-            >
-              <Briefcase className="h-3.5 w-3.5 mr-1.5" />
-              Roles
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-      </div>
+      {/* Mode Selector row REMOVED - now integrated into FunctionBar */}
 
       {/* Main Content */}
       <div className="flex-1 min-h-0 overflow-hidden flex relative">
@@ -573,9 +565,9 @@ const NewRostersPage: React.FC = () => {
               organizationId={selectedOrganizationId || undefined}
               organizationName={undefined} // TODO: Get from context
               rosterId={selectedRosterId || undefined}
-              departmentIds={selectedDepartmentIds}
+              departmentId={selectedDepartmentIds[0] || undefined}
               departmentName={undefined} // TODO: Get from RosterFunctionBar
-              subDepartmentIds={selectedSubDepartmentIds}
+              subDepartmentId={selectedSubDepartmentIds[0] || undefined}
               subDepartmentName={undefined}
               // Ghost Cell Navigation props
               templateStartDate={templateStartDate}
@@ -653,11 +645,6 @@ const NewRostersPage: React.FC = () => {
           onPublish={handleBulkPublish}
           allowedActions={{
             canPublish: true,
-          }}
-          onAssignAll={async (employeeId, shiftIds) => {
-            await bulkAssign.mutateAsync({ employeeId, shiftIds });
-            setSelectedShifts([]);
-            setBulkModeActive(false);
           }}
         />
       )}

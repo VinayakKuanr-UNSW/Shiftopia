@@ -24,19 +24,26 @@ export const SHIFT_STEPS: Step[] = [
     { id: 6, name: 'Review Logs', icon: <ClipboardList className="h-4 w-4" /> },
 ];
 
-interface StepIndicatorProps {
+export interface StepIndicatorProps {
     currentStep: number;
     completedSteps: Set<number>;
     onStepClick?: (step: number) => void;
     disabled?: boolean;
+    editMode?: boolean;
 }
 
 export function StepIndicator({
     currentStep,
     completedSteps,
     onStepClick,
-    disabled = false
+    disabled = false,
+    editMode = false
 }: StepIndicatorProps) {
+    const steps = SHIFT_STEPS.map(step => ({
+        ...step,
+        name: step.id === 6 && !editMode ? 'Review Details' : step.name
+    }));
+
     return (
         <div className="w-full">
             {/* Step circles with connecting lines */}
@@ -48,11 +55,11 @@ export function StepIndicator({
                 <div
                     className="absolute top-4 left-0 h-0.5 bg-emerald-500 transition-all duration-300"
                     style={{
-                        width: `${((currentStep - 1) / (SHIFT_STEPS.length - 1)) * 100}%`
+                        width: `${((currentStep - 1) / (steps.length - 1)) * 100}%`
                     }}
                 />
 
-                {SHIFT_STEPS.map((step, idx) => {
+                {steps.map((step, idx) => {
                     const isCompleted = completedSteps.has(step.id);
                     const isCurrent = currentStep === step.id;
                     const isPast = step.id < currentStep;

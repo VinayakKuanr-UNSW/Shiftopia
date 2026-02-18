@@ -179,17 +179,7 @@ export function useMyOffersHistory(employeeId: string | null, status: 'Accepted'
     });
 }
 
-/**
- * Fetch audit log for a shift.
- */
-export function useShiftAuditLog(shiftId: string | null) {
-    return useQuery({
-        queryKey: shiftKeys.auditLog(shiftId || ''),
-        queryFn: () => shiftsQueries.getShiftAuditLog(shiftId!),
-        enabled: !!shiftId,
-        staleTime: 15_000,
-    });
-}
+
 
 // ============================================================================
 // LOOKUP HOOKS (Long stale times - reference data)
@@ -639,6 +629,7 @@ export function useRequestTrade() {
 export function useRostersLookup(organizationId?: string, filters?: {
     departmentId?: string;
     departmentIds?: string[];
+    subDepartmentId?: string;
     subDepartmentIds?: string[];
 }) {
     return useQuery({

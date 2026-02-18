@@ -17,10 +17,12 @@ export type Database = {
       app_access_certificates: {
         Row: {
           access_level: Database["public"]["Enums"]["access_level"]
+          certificate_type: string
           created_at: string | null
           created_by: string | null
           department_id: string | null
           id: string
+          is_active: boolean
           organization_id: string
           sub_department_id: string | null
           updated_at: string | null
@@ -28,10 +30,12 @@ export type Database = {
         }
         Insert: {
           access_level: Database["public"]["Enums"]["access_level"]
+          certificate_type?: string
           created_at?: string | null
           created_by?: string | null
           department_id?: string | null
           id?: string
+          is_active?: boolean
           organization_id: string
           sub_department_id?: string | null
           updated_at?: string | null
@@ -39,10 +43,12 @@ export type Database = {
         }
         Update: {
           access_level?: Database["public"]["Enums"]["access_level"]
+          certificate_type?: string
           created_at?: string | null
           created_by?: string | null
           department_id?: string | null
           id?: string
+          is_active?: boolean
           organization_id?: string
           sub_department_id?: string | null
           updated_at?: string | null
@@ -1940,88 +1946,42 @@ export type Database = {
           roster_day_id?: string | null
           roster_shift_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "roster_audit_log_roster_day_id_fkey"
-            columns: ["roster_day_id"]
-            isOneToOne: false
-            referencedRelation: "roster_days"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
-      roster_days: {
+      roster_groups: {
         Row: {
-          created_at: string
-          created_by: string | null
-          date: string
-          department_id: string | null
+          created_at: string | null
+          external_id: string | null
           id: string
-          locked_at: string | null
-          locked_by: string | null
-          notes: string | null
-          organization_id: string
-          publish_count: number | null
-          published_at: string | null
-          published_by: string | null
-          status: Database["public"]["Enums"]["roster_day_status"]
-          sub_department_id: string | null
-          updated_at: string
+          name: string
+          roster_id: string
+          sort_order: number | null
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string
-          created_by?: string | null
-          date: string
-          department_id?: string | null
+          created_at?: string | null
+          external_id?: string | null
           id?: string
-          locked_at?: string | null
-          locked_by?: string | null
-          notes?: string | null
-          organization_id: string
-          publish_count?: number | null
-          published_at?: string | null
-          published_by?: string | null
-          status?: Database["public"]["Enums"]["roster_day_status"]
-          sub_department_id?: string | null
-          updated_at?: string
+          name: string
+          roster_id: string
+          sort_order?: number | null
+          updated_at?: string | null
         }
         Update: {
-          created_at?: string
-          created_by?: string | null
-          date?: string
-          department_id?: string | null
+          created_at?: string | null
+          external_id?: string | null
           id?: string
-          locked_at?: string | null
-          locked_by?: string | null
-          notes?: string | null
-          organization_id?: string
-          publish_count?: number | null
-          published_at?: string | null
-          published_by?: string | null
-          status?: Database["public"]["Enums"]["roster_day_status"]
-          sub_department_id?: string | null
-          updated_at?: string
+          name?: string
+          roster_id?: string
+          sort_order?: number | null
+          updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "roster_days_department_id_fkey"
-            columns: ["department_id"]
+            foreignKeyName: "roster_groups_roster_id_fkey"
+            columns: ["roster_id"]
             isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "roster_days_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "roster_days_sub_department_id_fkey"
-            columns: ["sub_department_id"]
-            isOneToOne: false
-            referencedRelation: "sub_departments"
+            referencedRelation: "rosters"
             referencedColumns: ["id"]
           },
         ]
@@ -2074,6 +2034,41 @@ export type Database = {
           },
         ]
       }
+      roster_subgroups: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          roster_group_id: string
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          roster_group_id: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          roster_group_id?: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roster_subgroups_roster_group_id_fkey"
+            columns: ["roster_group_id"]
+            isOneToOne: false
+            referencedRelation: "roster_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       roster_templates: {
         Row: {
           created_at: string
@@ -2082,8 +2077,10 @@ export type Database = {
           description: string | null
           end_date: string | null
           id: string
+          is_active: boolean | null
           is_base_template: boolean | null
           last_edited_by: string | null
+          last_used_at: string | null
           name: string
           organization_id: string
           published_at: string | null
@@ -2102,8 +2099,10 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           id?: string
+          is_active?: boolean | null
           is_base_template?: boolean | null
           last_edited_by?: string | null
+          last_used_at?: string | null
           name: string
           organization_id: string
           published_at?: string | null
@@ -2122,8 +2121,10 @@ export type Database = {
           description?: string | null
           end_date?: string | null
           id?: string
+          is_active?: boolean | null
           is_base_template?: boolean | null
           last_edited_by?: string | null
+          last_used_at?: string | null
           name?: string
           organization_id?: string
           published_at?: string | null
@@ -2264,6 +2265,68 @@ export type Database = {
             columns: ["published_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shift_audit_events: {
+        Row: {
+          batch_id: string | null
+          created_at: string
+          event_category: string
+          event_type: string
+          field_changed: string | null
+          id: string
+          metadata: Json | null
+          new_data: Json | null
+          new_value: string | null
+          old_data: Json | null
+          old_value: string | null
+          performed_by_id: string | null
+          performed_by_name: string
+          performed_by_role: string
+          shift_id: string
+        }
+        Insert: {
+          batch_id?: string | null
+          created_at?: string
+          event_category: string
+          event_type: string
+          field_changed?: string | null
+          id?: string
+          metadata?: Json | null
+          new_data?: Json | null
+          new_value?: string | null
+          old_data?: Json | null
+          old_value?: string | null
+          performed_by_id?: string | null
+          performed_by_name: string
+          performed_by_role: string
+          shift_id: string
+        }
+        Update: {
+          batch_id?: string | null
+          created_at?: string
+          event_category?: string
+          event_type?: string
+          field_changed?: string | null
+          id?: string
+          metadata?: Json | null
+          new_data?: Json | null
+          new_value?: string | null
+          old_data?: Json | null
+          old_value?: string | null
+          performed_by_id?: string | null
+          performed_by_name?: string
+          performed_by_role?: string
+          shift_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shift_audit_events_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
             referencedColumns: ["id"]
           },
         ]
@@ -2614,7 +2677,7 @@ export type Database = {
           rejection_reason: string | null
           requester_id: string
           requester_shift_id: string
-          status: Database["public"]["Enums"]["swap_status"] | null
+          status: Database["public"]["Enums"]["swap_request_status"] | null
           swap_type: string
           target_accepted: boolean | null
           target_id: string | null
@@ -2632,7 +2695,7 @@ export type Database = {
           rejection_reason?: string | null
           requester_id: string
           requester_shift_id: string
-          status?: Database["public"]["Enums"]["swap_status"] | null
+          status?: Database["public"]["Enums"]["swap_request_status"] | null
           swap_type?: string
           target_accepted?: boolean | null
           target_id?: string | null
@@ -2650,7 +2713,7 @@ export type Database = {
           rejection_reason?: string | null
           requester_id?: string
           requester_shift_id?: string
-          status?: Database["public"]["Enums"]["swap_status"] | null
+          status?: Database["public"]["Enums"]["swap_request_status"] | null
           swap_type?: string
           target_accepted?: boolean | null
           target_id?: string | null
@@ -2821,6 +2884,8 @@ export type Database = {
           roster_date: string | null
           roster_id: string
           roster_shift_id: string | null
+          roster_subgroup_id: string
+          roster_template_id: string | null
           scheduled_end: string | null
           scheduled_length_minutes: number | null
           scheduled_start: string | null
@@ -2923,6 +2988,8 @@ export type Database = {
           roster_date?: string | null
           roster_id: string
           roster_shift_id?: string | null
+          roster_subgroup_id: string
+          roster_template_id?: string | null
           scheduled_end?: string | null
           scheduled_length_minutes?: number | null
           scheduled_start?: string | null
@@ -3025,6 +3092,8 @@ export type Database = {
           roster_date?: string | null
           roster_id?: string
           roster_shift_id?: string | null
+          roster_subgroup_id?: string
+          roster_template_id?: string | null
           scheduled_end?: string | null
           scheduled_length_minutes?: number | null
           scheduled_start?: string | null
@@ -3095,10 +3164,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "shifts_roster_subgroup_id_fkey"
+            columns: ["roster_subgroup_id"]
+            isOneToOne: false
+            referencedRelation: "roster_subgroups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shifts_roster_template_id_fkey"
+            columns: ["roster_template_id"]
+            isOneToOne: false
+            referencedRelation: "roster_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shifts_roster_template_id_fkey"
+            columns: ["roster_template_id"]
+            isOneToOne: false
+            referencedRelation: "v_template_full"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "shifts_sub_department_id_fkey"
             columns: ["sub_department_id"]
             isOneToOne: false
             referencedRelation: "sub_departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shifts_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "roster_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shifts_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "v_template_full"
             referencedColumns: ["id"]
           },
           {
@@ -3259,6 +3363,61 @@ export type Database = {
             columns: ["swap_request_id"]
             isOneToOne: false
             referencedRelation: "swap_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      swap_offers: {
+        Row: {
+          compliance_snapshot: Json | null
+          created_at: string | null
+          id: string
+          offered_shift_id: string | null
+          offerer_id: string
+          status: Database["public"]["Enums"]["swap_offer_status"]
+          swap_request_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          compliance_snapshot?: Json | null
+          created_at?: string | null
+          id?: string
+          offered_shift_id?: string | null
+          offerer_id: string
+          status?: Database["public"]["Enums"]["swap_offer_status"]
+          swap_request_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          compliance_snapshot?: Json | null
+          created_at?: string | null
+          id?: string
+          offered_shift_id?: string | null
+          offerer_id?: string
+          status?: Database["public"]["Enums"]["swap_offer_status"]
+          swap_request_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "swap_offers_offered_shift_id_fkey"
+            columns: ["offered_shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "swap_offers_offerer_id_fkey"
+            columns: ["offerer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "swap_offers_swap_request_id_fkey"
+            columns: ["swap_request_id"]
+            isOneToOne: false
+            referencedRelation: "shift_swaps"
             referencedColumns: ["id"]
           },
         ]
@@ -3521,6 +3680,7 @@ export type Database = {
           assigned_employee_id: string | null
           assigned_employee_name: string | null
           created_at: string | null
+          day_of_week: number | null
           end_time: string | null
           event_tags: string[] | null
           id: string
@@ -3545,6 +3705,7 @@ export type Database = {
           assigned_employee_id?: string | null
           assigned_employee_name?: string | null
           created_at?: string | null
+          day_of_week?: number | null
           end_time?: string | null
           event_tags?: string[] | null
           id?: string
@@ -3569,6 +3730,7 @@ export type Database = {
           assigned_employee_id?: string | null
           assigned_employee_name?: string | null
           created_at?: string | null
+          day_of_week?: number | null
           end_time?: string | null
           event_tags?: string[] | null
           id?: string
@@ -3915,24 +4077,64 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           department_id: string | null
-          department_name: string | null
           description: string | null
           end_date: string | null
           groups: Json | null
           id: string | null
+          is_base_template: boolean | null
           last_edited_by: string | null
           name: string | null
           organization_id: string | null
-          organization_name: string | null
           published_at: string | null
           published_by: string | null
           published_month: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["template_status"] | null
           sub_department_id: string | null
-          sub_department_name: string | null
           updated_at: string | null
           version: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          department_id?: string | null
+          description?: string | null
+          end_date?: string | null
+          groups?: never
+          id?: string | null
+          is_base_template?: boolean | null
+          last_edited_by?: string | null
+          name?: string | null
+          organization_id?: string | null
+          published_at?: string | null
+          published_by?: string | null
+          published_month?: string | null
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["template_status"] | null
+          sub_department_id?: string | null
+          updated_at?: string | null
+          version?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          department_id?: string | null
+          description?: string | null
+          end_date?: string | null
+          groups?: never
+          id?: string | null
+          is_base_template?: boolean | null
+          last_edited_by?: string | null
+          name?: string | null
+          organization_id?: string | null
+          published_at?: string | null
+          published_by?: string | null
+          published_month?: string | null
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["template_status"] | null
+          sub_department_id?: string | null
+          updated_at?: string | null
+          version?: number | null
         }
         Relationships: [
           {
@@ -3979,6 +4181,16 @@ export type Database = {
         Args: { broadcast_uuid: string; employee_uuid: string }
         Returns: boolean
       }
+      activate_roster_for_range: {
+        Args: {
+          p_dept_id: string
+          p_end_date: string
+          p_org_id: string
+          p_start_date: string
+          p_sub_dept_id: string
+        }
+        Returns: Json
+      }
       add_roster_shift: {
         Args: {
           p_roster_subgroup_id: string
@@ -3991,6 +4203,29 @@ export type Database = {
           success: boolean
         }[]
       }
+      add_roster_subgroup_range:
+        | {
+            Args: {
+              p_dept_id: string
+              p_end_date: string
+              p_group_external_id: string
+              p_name: string
+              p_org_id: string
+              p_start_date: string
+              p_sub_dept_id: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_end_date: string
+              p_group_external_id: string
+              p_name: string
+              p_org_id: string
+              p_start_date: string
+            }
+            Returns: undefined
+          }
       admin_delete_shift_rpc: {
         Args: { p_admin_id: string; p_shift_id: string }
         Returns: Json
@@ -4000,6 +4235,24 @@ export type Database = {
           p_month: string
           p_organization_id: string
           p_template_id: string
+        }
+        Returns: Json
+      }
+      apply_template_to_date_range: {
+        Args: {
+          p_end_date: string
+          p_start_date: string
+          p_template_id: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      apply_template_to_date_range_v2: {
+        Args: {
+          p_end_date: string
+          p_start_date: string
+          p_template_id: string
+          p_user_id: string
         }
         Returns: Json
       }
@@ -4221,6 +4474,15 @@ export type Database = {
           violations: number
         }[]
       }
+      check_template_version: {
+        Args: { p_expected_version: number; p_template_id: string }
+        Returns: {
+          current_version: number
+          last_edited_at: string
+          last_edited_by: string
+          version_match: boolean
+        }[]
+      }
       cleanup_test_shifts: { Args: never; Returns: undefined }
       close_bidding_no_winner:
         | { Args: { p_shift_id: string }; Returns: Json }
@@ -4275,7 +4537,10 @@ export type Database = {
         Args: { p_employee_id?: string; p_shift_id: string }
         Returns: Json
       }
-      delete_shift_cascade: { Args: { p_shift_id: string }; Returns: boolean }
+      delete_shift_cascade: {
+        Args: { p_deleted_by?: string; p_shift_id: string }
+        Returns: boolean
+      }
       delete_shift_with_audit: {
         Args: { p_deleted_by?: string; p_reason?: string; p_shift_id: string }
         Returns: boolean
@@ -4298,6 +4563,14 @@ export type Database = {
         Returns: Json
       }
       ensure_shift_events_partitions: { Args: never; Returns: undefined }
+      fn_get_shift_lock_statuses: {
+        Args: { p_shift_ids: string[] }
+        Returns: {
+          is_locked: boolean
+          shift_id: string
+        }[]
+      }
+      fn_is_shift_locked: { Args: { p_shift_id: string }; Returns: boolean }
       get_broadcast_ack_stats: {
         Args: { broadcast_uuid: string }
         Returns: {
@@ -4413,14 +4686,29 @@ export type Database = {
             Returns: string
           }
         | { Args: { p_shift_id: string }; Returns: string }
+      get_template_conflicts: {
+        Args: {
+          p_end_date: string
+          p_start_date: string
+          p_template_id: string
+        }
+        Returns: Json
+      }
       get_time_category: {
         Args: { p_scheduled_start: string }
         Returns: string
       }
-      get_user_access_levels: {
-        Args: never
-        Returns: Database["public"]["Enums"]["access_level"][]
-      }
+      get_user_access_levels:
+        | {
+            Args: never
+            Returns: Database["public"]["Enums"]["access_level"][]
+          }
+        | {
+            Args: { _user_id: string }
+            Returns: {
+              access_level: string
+            }[]
+          }
       get_user_contracts: {
         Args: never
         Returns: {
@@ -4520,6 +4808,17 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      publish_roster_for_range: {
+        Args: {
+          p_dept_id: string
+          p_end_date: string
+          p_org_id: string
+          p_start_date: string
+          p_sub_dept_id: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
       publish_roster_shift: {
         Args: {
           p_published_by_user_id?: string
@@ -4536,6 +4835,16 @@ export type Database = {
       }
       publish_shift: {
         Args: { p_actor_id?: string; p_shift_id: string }
+        Returns: Json
+      }
+      publish_template_range: {
+        Args: {
+          p_end_date: string
+          p_force_override?: boolean
+          p_start_date: string
+          p_template_id: string
+          p_user_id: string
+        }
         Returns: Json
       }
       push_shift_to_bidding_on_cancel: {
@@ -4566,8 +4875,24 @@ export type Database = {
         }
         Returns: Json
       }
+      resolve_user_permissions: { Args: never; Returns: Json }
       restore_deleted_shift: { Args: { p_shift_id: string }; Returns: boolean }
       safe_uuid: { Args: { str: string }; Returns: string }
+      save_template_full: {
+        Args: {
+          p_description: string
+          p_expected_version: number
+          p_groups: Json
+          p_name: string
+          p_template_id: string
+          p_user_id: string
+        }
+        Returns: {
+          error_message: string
+          new_version: number
+          success: boolean
+        }[]
+      }
       select_bid_winner: {
         Args: {
           p_selected_by?: string
@@ -4597,13 +4922,30 @@ export type Database = {
         Returns: Json
       }
       sm_accept_trade: {
-        Args: { p_accepting_employee_id?: string; p_shift_id: string }
+        Args: { p_accepting_employee_id: string; p_shift_id: string }
         Returns: Json
+      }
+      sm_approve_peer_swap: {
+        Args: {
+          p_offered_shift_id: string
+          p_offerer_id: string
+          p_requester_id: string
+          p_requester_shift_id: string
+        }
+        Returns: undefined
       }
       sm_approve_trade: {
         Args: {
           p_new_employee_id: string
           p_shift_id: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      sm_bulk_assign: {
+        Args: {
+          p_employee_id: string
+          p_shift_ids: string[]
           p_user_id?: string
         }
         Returns: Json
@@ -4628,6 +4970,10 @@ export type Database = {
         Args: { p_reason?: string; p_shift_id: string; p_user_id?: string }
         Returns: Json
       }
+      sm_create_shift: {
+        Args: { p_shift_data: Json; p_user_id: string }
+        Returns: Json
+      }
       sm_decline_offer: {
         Args: { p_shift_id: string; p_user_id?: string }
         Returns: Json
@@ -4646,11 +4992,11 @@ export type Database = {
         Returns: Json
       }
       sm_employee_cancel: {
-        Args: { p_employee_id?: string; p_reason?: string; p_shift_id: string }
+        Args: { p_employee_id: string; p_reason?: string; p_shift_id: string }
         Returns: Json
       }
       sm_employee_drop_shift: {
-        Args: { p_employee_id: string; p_reason?: string; p_shift_id: string }
+        Args: { p_employee_id: string; p_reason: string; p_shift_id: string }
         Returns: Json
       }
       sm_manager_cancel: {
@@ -4663,11 +5009,11 @@ export type Database = {
         Returns: Json
       }
       sm_reject_offer: {
-        Args: { p_employee_id?: string; p_reason?: string; p_shift_id: string }
+        Args: { p_employee_id: string; p_reason?: string; p_shift_id: string }
         Returns: Json
       }
       sm_request_trade: {
-        Args: { p_employee_id?: string; p_shift_id: string }
+        Args: { p_shift_id: string; p_target_employee_id?: string }
         Returns: Json
       }
       sm_select_bid_winner: {
@@ -4676,6 +5022,10 @@ export type Database = {
       }
       sm_unpublish_shift: {
         Args: { p_reason?: string; p_shift_id: string; p_user_id?: string }
+        Returns: Json
+      }
+      sm_update_shift: {
+        Args: { p_shift_data: Json; p_shift_id: string; p_user_id: string }
         Returns: Json
       }
       state_machine_regression_snapshot_v3: {
@@ -4750,6 +5100,19 @@ export type Database = {
           from_state: string
           success: boolean
           to_state: string
+        }[]
+      }
+      toggle_roster_lock_for_range: {
+        Args: {
+          p_dept_id: string
+          p_end_date: string
+          p_lock_status: boolean
+          p_org_id: string
+          p_start_date: string
+          p_sub_dept_id: string
+        }
+        Returns: {
+          updated_count: number
         }[]
       }
       unpublish_roster_day: {
@@ -4828,10 +5191,11 @@ export type Database = {
       }
       validate_template_name: {
         Args: {
-          department_id: string
-          name: string
-          organization_id: string
-          sub_department_id: string
+          p_department_id: string
+          p_exclude_id?: string
+          p_name: string
+          p_organization_id: string
+          p_sub_department_id: string
         }
         Returns: Json
       }
@@ -4845,7 +5209,7 @@ export type Database = {
       }
     }
     Enums: {
-      access_level: "alpha" | "beta" | "gamma" | "delta" | "epsilon"
+      access_level: "alpha" | "beta" | "gamma" | "delta" | "epsilon" | "zeta"
       actor_type: "USER" | "SYSTEM"
       assignment_method: "manual" | "template" | "bid" | "trade" | "auto"
       assignment_status:
@@ -4993,6 +5357,20 @@ export type Database = {
         | "TradeRequested"
         | "TradeAccepted"
         | "TradeApproved"
+      swap_offer_status:
+        | "SUBMITTED"
+        | "SELECTED"
+        | "REJECTED"
+        | "WITHDRAWN"
+        | "EXPIRED"
+      swap_request_status:
+        | "OPEN"
+        | "OFFER_SELECTED"
+        | "MANAGER_PENDING"
+        | "APPROVED"
+        | "REJECTED"
+        | "CANCELLED"
+        | "EXPIRED"
       swap_status:
         | "pending"
         | "approved"
@@ -5155,7 +5533,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      access_level: ["alpha", "beta", "gamma", "delta", "epsilon"],
+      access_level: ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"],
       actor_type: ["USER", "SYSTEM"],
       assignment_method: ["manual", "template", "bid", "trade", "auto"],
       assignment_status: [
@@ -5310,6 +5688,22 @@ export const Constants = {
         "TradeRequested",
         "TradeAccepted",
         "TradeApproved",
+      ],
+      swap_offer_status: [
+        "SUBMITTED",
+        "SELECTED",
+        "REJECTED",
+        "WITHDRAWN",
+        "EXPIRED",
+      ],
+      swap_request_status: [
+        "OPEN",
+        "OFFER_SELECTED",
+        "MANAGER_PENDING",
+        "APPROVED",
+        "REJECTED",
+        "CANCELLED",
+        "EXPIRED",
       ],
       swap_status: [
         "pending",

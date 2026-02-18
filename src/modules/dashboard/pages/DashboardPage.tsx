@@ -1,7 +1,8 @@
 // src/pages/DashboardPage.tsx
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useAuth } from '@/platform/auth/useAuth';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   Calendar,
   Clock,
@@ -11,11 +12,26 @@ import {
   CheckCircle,
   AlertCircle,
   Briefcase,
-  ArrowRight
+  ArrowRight,
+  MapPin,
+  CalendarDays
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/modules/core/ui/primitives/card';
 import { Badge } from '@/modules/core/ui/primitives/badge';
+import { useEmployeeShifts } from '@/modules/rosters/state/useRosterShifts';
+import {
+  startOfWeek,
+  endOfWeek,
+  format,
+  addDays,
+  startOfDay,
+  isSameDay,
+  parseISO,
+  isAfter,
+  isBefore
+} from 'date-fns';
+import { Shift } from '@/modules/rosters/domain/shift.entity';
 
 /* ============================================================
    ANIMATION VARIANTS
@@ -40,7 +56,62 @@ const item = {
    ============================================================ */
 const DashboardPage: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const firstName = user?.firstName || 'User';
+
+  // Date Calculations
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const weekStart = useMemo(() => startOfWeek(today, { weekStartsOn: 1 }), [today]); // Monday start
+  const weekEnd = useMemo(() => endOfWeek(today, { weekStartsOn: 1 }), [today]);
+  const nextWeekEnd = useMemo(() => addDays(today, 14), [today]); // Fetch 2 weeks out for upcoming
+
+  // Data Fetching
+  const { data: weeklyShifts, isLoading: isLoadingWeekly } = useEmployeeShifts(
+    user?.id || null,
+    format(weekStart, 'yyyy-MM-dd'),
+    format(weekEnd, 'yyyy-MM-dd')
+  );
+
+  const { data: upcomingShifts, isLoading: isLoadingUpcoming } = useEmployeeShifts(
+    user?.id || null,
+    format(today, 'yyyy-MM-dd'),
+    format(nextWeekEnd, 'yyyy-MM-dd')
+  );
+
+  // Stats Calculation
+  const stats = useMemo(() => {
+    if (!weeklyShifts) return { count: 0, hours: 0, trend: 0 };
+
+    // Filter out cancelled shifts
+    const activeShifts = weeklyShifts.filter(s => !s.is_cancelled);
+
+    const count = activeShifts.length;
+    const hours = activeShifts.reduce((acc, shift) => {
+      return acc + ((shift.net_length_minutes || 0) / 60);
+    }, 0);
+
+    return { count, hours: hours.toFixed(1) };
+  }, [weeklyShifts]);
+
+  // Process Upcoming Shifts (Next 7 Days, sorted)
+  const displayShifts = useMemo(() => {
+    if (!upcomingShifts) return [];
+
+    return upcomingShifts
+      .filter(s => !s.is_cancelled)
+      .sort((a, b) => new Date(a.shift_date).getTime() - new Date(b.shift_date).getTime())
+      .slice(0, 5); // Show top 5
+  }, [upcomingShifts]);
+
+  const upcomingCount = displayShifts.length;
+  const isLoading = isLoadingWeekly || isLoadingUpcoming;
+
+  // Actions
+  const handleViewSchedule = () => navigate('/roster');
+  const handleNewRequest = () => {
+    // Placeholder for now
+    console.log('New Request clicked');
+  };
 
   return (
     <div className="space-y-8 p-1">
@@ -62,14 +133,23 @@ const DashboardPage: React.FC = () => {
               Welcome back, {firstName}
             </h1>
             <p className="text-blue-100/80 text-lg max-w-xl">
-              You have <span className="text-white font-semibold">2 upcoming shifts</span> and <span className="text-white font-semibold">3 notifications</span> waiting for you.
+              You have <span className="text-white font-semibold">{upcomingCount} upcoming shifts</span> this week.
             </p>
           </div>
           <div className="flex gap-3">
-            <Button variant="glass" className="bg-white/10 hover:bg-white/20 border-white/20">
+            <Button
+              variant="glass"
+              className="bg-white/10 hover:bg-white/20 border-white/20"
+              onClick={handleViewSchedule}
+            >
               View Schedule
             </Button>
-            <Button variant="default" className="bg-white text-primary hover:bg-white/90 shadow-xl shadow-black/20">
+            <Button
+              variant="default"
+              className="bg-white text-primary hover:bg-white/90 shadow-xl shadow-black/20"
+              onClick={handleNewRequest}
+              disabled
+            >
               New Request
             </Button>
           </div>
@@ -86,32 +166,35 @@ const DashboardPage: React.FC = () => {
         <StatCard
           icon={<Calendar className="h-6 w-6 text-blue-400" />}
           title="Shifts This Week"
-          value="5"
-          trend="+1 from last week"
+          value={isLoading ? '-' : stats.count.toString()}
+          trend="Current Roster"
           trendUp={true}
           delay={0.1}
+          loading={isLoading}
         />
         <StatCard
           icon={<Clock className="h-6 w-6 text-emerald-400" />}
           title="Hours Logged"
-          value="32.5"
-          trend="On track (160h goal)"
+          value={isLoading ? '-' : stats.hours}
+          trend="This Week"
           trendUp={true}
           delay={0.2}
+          loading={isLoading}
         />
         <StatCard
           icon={<Users className="h-6 w-6 text-purple-400" />}
           title="Team Members"
-          value="24"
-          trend="3 active now"
+          value="-"
+          trend="Unavailable"
           trendUp={true}
           delay={0.3}
+          loading={false}
         />
         <StatCard
           icon={<Briefcase className="h-6 w-6 text-amber-400" />}
           title="Next Payday"
-          value="Feb 1"
-          trend="6 days remaining"
+          value="Fri"
+          trend="Weekly Cycle"
           trendUp={true}
           delay={0.4}
         />
@@ -131,37 +214,30 @@ const DashboardPage: React.FC = () => {
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-xl">Upcoming Shifts</CardTitle>
-                  <CardDescription>Your schedule for the next 7 days</CardDescription>
+                  <CardDescription>Your schedule for the next few days</CardDescription>
                 </div>
-                <Button variant="ghost" size="sm" className="gap-1">
+                <Button variant="ghost" size="sm" className="gap-1" onClick={handleViewSchedule}>
                   View All <ArrowRight className="h-4 w-4" />
                 </Button>
               </CardHeader>
               <CardContent className="space-y-4">
-                <ShiftItem
-                  day="Today"
-                  date="Jan 24"
-                  time="09:00 - 17:00"
-                  role="Event Coordinator"
-                  location="Hall 4, ICC Sydney"
-                  status="confirmed"
-                />
-                <ShiftItem
-                  day="Tomorrow"
-                  date="Jan 25"
-                  time="14:00 - 22:00"
-                  role="Floor Manager"
-                  location="Grand Ballroom"
-                  status="confirmed"
-                />
-                <ShiftItem
-                  day="Monday"
-                  date="Jan 28"
-                  time="08:00 - 16:00"
-                  role="Safety Officer"
-                  location="Exhibition Centre"
-                  status="pending"
-                />
+                {isLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">Loading schedule...</div>
+                ) : displayShifts.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No upcoming shifts scheduled.
+                    <div className="mt-2">
+                      <Button variant="link" onClick={handleViewSchedule}>Check Roster</Button>
+                    </div>
+                  </div>
+                ) : (
+                  displayShifts.map((shift) => (
+                    <ShiftItem
+                      key={shift.id}
+                      shift={shift}
+                    />
+                  ))
+                )}
               </CardContent>
             </Card>
           </motion.div>
@@ -180,15 +256,15 @@ const DashboardPage: React.FC = () => {
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 flex flex-col items-center justify-center text-center">
-                    <span className="text-3xl font-bold text-primary">12</span>
+                    <span className="text-3xl font-bold text-primary">-</span>
                     <span className="text-sm text-primary/80 font-medium mt-1">Open Shifts</span>
                   </div>
                   <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 flex flex-col items-center justify-center text-center">
-                    <span className="text-3xl font-bold text-amber-500">5</span>
+                    <span className="text-3xl font-bold text-amber-500">-</span>
                     <span className="text-sm text-amber-500/80 font-medium mt-1">Pending items</span>
                   </div>
                   <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col items-center justify-center text-center">
-                    <span className="text-3xl font-bold text-emerald-500">98%</span>
+                    <span className="text-3xl font-bold text-emerald-500">-</span>
                     <span className="text-sm text-emerald-500/80 font-medium mt-1">Coverage</span>
                   </div>
                 </CardContent>
@@ -216,22 +292,11 @@ const DashboardPage: React.FC = () => {
                 <div className="relative border-l border-white/10 ml-3 space-y-8 py-2">
                   <ActivityItem
                     icon={<CheckCircle className="h-4 w-4 text-emerald-400" />}
-                    title="Timesheet Approved"
-                    time="2 hours ago"
-                    description="Your timesheet for Jan 20-24 has been approved."
+                    title="System Update"
+                    time="Just now"
+                    description="Dashboard has been updated with real-time data."
                   />
-                  <ActivityItem
-                    icon={<Bell className="h-4 w-4 text-blue-400" />}
-                    title="New Broadcast"
-                    time="5 hours ago"
-                    description="New safety protocols have been updated for Hall 7."
-                  />
-                  <ActivityItem
-                    icon={<AlertCircle className="h-4 w-4 text-amber-400" />}
-                    title="Shift Request"
-                    time="Yesterday"
-                    description="Your swap request for Feb 2 is still pending."
-                  />
+                  {/* Real activity feed to be implemented */}
                 </div>
               </CardContent>
             </Card>
@@ -253,9 +318,10 @@ interface StatCardProps {
   trend: string;
   trendUp?: boolean;
   delay?: number;
+  loading?: boolean;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ icon, title, value, trend, trendUp, delay = 0 }) => (
+const StatCard: React.FC<StatCardProps> = ({ icon, title, value, trend, trendUp, delay = 0, loading }) => (
   <motion.div variants={item} className="h-full">
     <Card className="h-full border-white/5 bg-card/40 backdrop-blur-lg hover:bg-card/60 transition-colors group">
       <CardContent className="p-6">
@@ -272,7 +338,9 @@ const StatCard: React.FC<StatCardProps> = ({ icon, title, value, trend, trendUp,
         </div>
         <div>
           <h3 className="text-sm font-medium text-muted-foreground mb-1">{title}</h3>
-          <div className="text-3xl font-bold font-heading tracking-tight mb-1">{value}</div>
+          <div className="text-3xl font-bold font-heading tracking-tight mb-1">
+            {loading ? <span className="animate-pulse">...</span> : value}
+          </div>
           <p className="text-xs text-muted-foreground/60">{trend}</p>
         </div>
       </CardContent>
@@ -281,36 +349,49 @@ const StatCard: React.FC<StatCardProps> = ({ icon, title, value, trend, trendUp,
 );
 
 interface ShiftItemProps {
-  day: string;
-  date: string;
-  time: string;
-  role: string;
-  location: string;
-  status: 'confirmed' | 'pending';
+  shift: Shift;
 }
 
-const ShiftItem: React.FC<ShiftItemProps> = ({ day, date, time, role, location, status }) => (
-  <div className="group flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all duration-300">
-    <div className="flex-shrink-0 flex flex-col items-center justify-center w-14 h-14 rounded-lg bg-black/20 border border-white/5 text-center">
-      <span className="text-[10px] text-muted-foreground uppercase font-bold">{date.split(' ')[0]}</span>
-      <span className="text-lg font-bold text-foreground">{date.split(' ')[1]}</span>
-    </div>
+const ShiftItem: React.FC<ShiftItemProps> = ({ shift }) => {
+  const dateObj = parseISO(shift.shift_date);
+  const dayName = isSameDay(dateObj, new Date()) ? 'Today' : format(dateObj, 'EEEE');
+  const dayDate = format(dateObj, 'MMM d');
+  const status = shift.lifecycle_status === 'Published' ? 'confirmed' : 'pending';
 
-    <div className="flex-grow min-w-0">
-      <div className="flex items-center justify-between mb-1">
-        <h4 className="font-semibold text-foreground truncate">{role}</h4>
-        <Badge variant={status === 'confirmed' ? 'success' : 'warning'}>
-          {status}
-        </Badge>
+  // Normalize role name
+  const roleName = shift.role_id ? (shift.roles?.name || 'Assigned Role') : 'Unassigned';
+
+  // Normalize location (Department / SubDepartment)
+  const location = shift.departments?.name || shift.sub_departments?.name || 'Main Venue';
+
+  return (
+    <div className="group flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all duration-300">
+      <div className="flex-shrink-0 flex flex-col items-center justify-center w-14 h-14 rounded-lg bg-black/20 border border-white/5 text-center">
+        <span className="text-[10px] text-muted-foreground uppercase font-bold">{dayDate.split(' ')[0]}</span>
+        <span className="text-lg font-bold text-foreground">{dayDate.split(' ')[1]}</span>
       </div>
-      <div className="flex items-center gap-3 text-sm text-muted-foreground">
-        <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {time}</span>
-        <span className="hidden sm:inline w-1 h-1 rounded-full bg-white/20" />
-        <span className="flex items-center gap-1 truncate"><Briefcase className="h-3.5 w-3.5" /> {location}</span>
+
+      <div className="flex-grow min-w-0">
+        <div className="flex items-center justify-between mb-1">
+          <h4 className="font-semibold text-foreground truncate">{roleName}</h4>
+          <Badge variant={status === 'confirmed' ? 'success' : 'warning'}>
+            {status}
+          </Badge>
+        </div>
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <span className="flex items-center gap-1 min-w-fit">
+            <CalendarDays className="h-3.5 w-3.5" /> {dayName}
+          </span>
+          <span className="flex items-center gap-1 min-w-fit">
+            <Clock className="h-3.5 w-3.5" /> {shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}
+          </span>
+          <span className="hidden sm:inline w-1 h-1 rounded-full bg-white/20" />
+          <span className="flex items-center gap-1 truncate"><MapPin className="h-3.5 w-3.5" /> {location}</span>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 interface ActivityItemProps {
   icon: React.ReactNode;

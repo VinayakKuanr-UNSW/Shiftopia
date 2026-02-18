@@ -87,7 +87,7 @@ export const useAuth = () => {
       insights: ['gamma', 'delta', 'epsilon'],
 
       // Delta and above (Managers)
-      configurations: ['delta', 'epsilon'],
+
       audit: ['delta', 'epsilon'],
 
       // Epsilon Only

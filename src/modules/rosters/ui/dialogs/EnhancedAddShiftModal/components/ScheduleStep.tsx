@@ -1,4 +1,5 @@
 import React from 'react';
+import { format, parseISO } from 'date-fns';
 import {
     FormControl,
     FormField,
@@ -41,6 +42,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
     selectedRosterId,
     onRosterChange,
     isGroupLocked,
+    isSubGroupLocked,
     isRosterLocked,
 }) => {
     const watchPaidBreak = form.watch('paid_break_minutes');
@@ -116,7 +118,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                             <SelectContent className="bg-[#1e293b] border-white/10 backdrop-blur-xl">
                                                 {rosters.map((roster) => (
                                                     <SelectItem key={roster.id} value={roster.id} className="text-sm focus:bg-amber-500/10 focus:text-amber-400">
-                                                        {roster.name}
+                                                        {roster.name || roster.description || (roster.start_date ? format(parseISO(roster.start_date), 'dd MMM yyyy') : 'Unknown Roster')}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
@@ -154,7 +156,10 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                             value={field.value}
                                         >
                                             <FormControl>
-                                                <SelectTrigger className="h-11 bg-white/[0.03] border-white/5 text-white text-sm hover:bg-white/10 hover:border-white/10 transition-all rounded-xl">
+                                                <SelectTrigger className={cn(
+                                                    "h-11 bg-white/[0.03] border-white/5 text-white text-sm hover:bg-white/10 hover:border-white/10 transition-all rounded-xl",
+                                                    isGroupLocked && "opacity-50 cursor-not-allowed bg-white/[0.01]"
+                                                )}>
                                                     <SelectValue placeholder="Select group" />
                                                 </SelectTrigger>
                                             </FormControl>
@@ -188,7 +193,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                 render={({ field }) => (
                                     <FormItem className="space-y-2">
                                         <FormLabel className="text-[11px] font-bold text-white/40 uppercase tracking-[0.1em]">Sub-Group</FormLabel>
-                                        {isGroupLocked ? (
+                                        {isSubGroupLocked ? (
                                             <FormControl>
                                                 <Input
                                                     {...field}

@@ -14,11 +14,13 @@ import { ScopeSelection } from '@/platform/auth/types';
  */
 interface ManagerialScopeFilterProps {
     onScopeChange: (scope: ScopeSelection) => void;
+    multiSelect?: boolean;
     className?: string;
 }
 
 export const ManagerialScopeFilter: React.FC<ManagerialScopeFilterProps> = ({
     onScopeChange,
+    multiSelect = true,
     className,
 }) => {
     const context = useContext(AuthContext);
@@ -76,7 +78,7 @@ export const ManagerialScopeFilter: React.FC<ManagerialScopeFilterProps> = ({
             onScopeChange={onScopeChange}
             hidden={isFullyLocked}
             mode="managerial"
-            multiSelect={true}
+            multiSelect={multiSelect}
             className={className}
         />
     );

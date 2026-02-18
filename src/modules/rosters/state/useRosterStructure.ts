@@ -18,7 +18,8 @@ async function fetchRosterStructure(
         .from('rosters')
         .select(`
             id,
-            date,
+            start_date,
+            end_date,
             roster_groups (
                 id,
                 name,
@@ -32,18 +33,23 @@ async function fetchRosterStructure(
             )
         `)
         .eq('organization_id', organizationId)
-        .gte('date', startDate)
-        .lte('date', endDate);
+        .gte('start_date', startDate)
+        .lte('start_date', endDate);
 
     if (filters?.departmentIds && filters.departmentIds.length > 0) {
         query = query.in('department_id', filters.departmentIds.filter(id => isValidUuid(id)));
     }
 
-    if (filters?.subDepartmentIds && filters.subDepartmentIds.length > 0) {
-        query = query.in('sub_department_id', filters.subDepartmentIds.filter(id => isValidUuid(id)));
+    if (filters?.subDepartmentIds !== undefined) {
+        if (filters.subDepartmentIds.length > 0) {
+            query = query.in('sub_department_id', filters.subDepartmentIds.filter(id => isValidUuid(id)));
+        } else {
+            // Explicitly empty array means "Global only" (sub_department_id is null)
+            query = query.is('sub_department_id', null);
+        }
     }
 
-    const { data, error } = await query.order('date');
+    const { data, error } = await query.order('start_date');
 
     if (error) {
         console.error('Error fetching roster structure:', error);
@@ -55,7 +61,8 @@ async function fetchRosterStructure(
     // Transform to friendly structure
     return data.map((roster: any) => ({
         rosterId: roster.id,
-        date: roster.date,
+        startDate: roster.start_date,
+        endDate: roster.end_date,
         groups: (roster.roster_groups || [])
             .sort((a: any, b: any) => a.sort_order - b.sort_order)
             .map((group: any) => ({

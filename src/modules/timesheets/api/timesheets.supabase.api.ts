@@ -152,13 +152,16 @@ export async function getShiftsForTimesheet(
         let employeeMap = new Map<string, { first_name: string; last_name: string }>();
 
         if (employeeIds.length > 0) {
-            const { data: employees } = await supabase
-                .from('employees')
+            const { data: profiles } = await supabase
+                .from('profiles')
                 .select('id, first_name, last_name')
                 .in('id', employeeIds);
 
-            if (employees) {
-                employeeMap = new Map(employees.map(e => [e.id, e]));
+            if (profiles) {
+                employeeMap = new Map(profiles.map(p => [p.id, {
+                    first_name: p.first_name || '',
+                    last_name: p.last_name || ''
+                }]));
             }
         }
 

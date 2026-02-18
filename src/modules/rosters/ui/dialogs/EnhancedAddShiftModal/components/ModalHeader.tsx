@@ -10,6 +10,7 @@ interface ModalHeaderProps {
     editMode: boolean;
     isReadOnly: boolean;
     isPast: boolean;
+    isStarted?: boolean;
     isPublished: boolean;
     safeContext: ShiftContext;
     onUnpublish: () => void;
@@ -19,6 +20,7 @@ export const ModalHeader: React.FC<ModalHeaderProps> = ({
     editMode,
     isReadOnly,
     isPast,
+    isStarted,
     isPublished,
     safeContext,
     onUnpublish
@@ -54,6 +56,13 @@ export const ModalHeader: React.FC<ModalHeaderProps> = ({
                 <div className="px-6 py-2 bg-amber-500/10 border-b border-amber-500/20 text-amber-400 text-xs flex items-center gap-2 font-medium">
                     <AlertCircle className="h-4 w-4" />
                     This shift is in the past and is read-only.
+                </div>
+            )}
+
+            {!isPast && isStarted && (
+                <div className="px-6 py-2 bg-amber-500/10 border-b border-amber-500/20 text-amber-400 text-xs flex items-center gap-2 font-medium">
+                    <AlertCircle className="h-4 w-4" />
+                    This shift has already started and is now read-only.
                 </div>
             )}
 

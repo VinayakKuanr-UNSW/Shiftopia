@@ -265,8 +265,8 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                     </div>
 
                     {/* 5. Helper for Trade */}
-                    <div className="flex justify-center" title={`Trade: ${shift.is_trade_requested ? 'Requested' : 'None'}`}>
-                        {shift.is_trade_requested ? (
+                    <div className="flex justify-center" title={`Trade: ${(shift.trade_requested_at || shift.is_trade_requested) ? 'Requested' : 'None'}`}>
+                        {(shift.trade_requested_at || shift.is_trade_requested) ? (
                             <ArrowLeftRight className="h-3.5 w-3.5 text-purple-500" />
                         ) : (
                             <Minus className="h-3.5 w-3.5 text-muted-foreground/30" /> // Grey 0
@@ -411,7 +411,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     )}
 
                     {/* Trade */}
-                    {shift.is_trade_requested && (
+                    {(shift.trade_requested_at || shift.is_trade_requested) && (
                         <Badge variant="outline" className="text-[10px] gap-1 border-purple-500/30 text-purple-600 dark:text-purple-400">
                             <ArrowLeftRight className="h-3 w-3" />
                             Trade Requested

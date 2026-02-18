@@ -71,7 +71,7 @@ export const useAuth = () => {
       delete: ['admin'],
 
       // Admin only
-      configurations: ['admin'],
+
     };
 
     const allowedRoles = permissions[feature];

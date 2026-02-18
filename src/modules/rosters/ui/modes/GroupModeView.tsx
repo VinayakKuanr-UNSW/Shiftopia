@@ -14,6 +14,8 @@ import {
   ArrowLeftRight,
   ChevronDown,
   ChevronRight,
+  Zap,
+  Lock,
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
@@ -26,7 +28,7 @@ import {
 } from '@/modules/core/ui/primitives/dropdown-menu';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
-import { format, addDays, startOfWeek, isToday, isBefore, startOfDay, parseISO, differenceInHours, differenceInMinutes } from 'date-fns';
+import { format, addDays, startOfWeek, isToday, isBefore, startOfDay, parseISO, isSameDay, differenceInHours, differenceInMinutes } from 'date-fns';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import {
@@ -552,8 +554,8 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           ? startOfDay(templateEndDate)
           : new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0);
 
-        // Generate all dates from selectedDate to monthEnd
-        let current = startOfDay(selectedDate);
+        // Generate all dates from startOfMonth(selectedDate) to monthEnd
+        let current = startOfMonth(selectedDate);
         while (current <= monthEnd) {
           result.push(current);
           current = addDays(current, 1);
@@ -582,7 +584,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     selectedSubDepartmentIds,
   } = useRosterUI();
 
-  const { data: rosterStructures = [] } = useRosterStructure(
+  const { data: rosterStructures = [], isError: isRosterError, error: rosterError } = useRosterStructure(
     organizationId,
     dateRangeStart,
     dateRangeEnd,
@@ -591,6 +593,17 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       subDepartmentIds: selectedSubDepartmentIds,
     }
   );
+
+  // Diagnostic log for active days (only in dev/debug)
+  useEffect(() => {
+    if (rosterStructures.length > 0) {
+      console.log(`[GroupModeView] Found ${rosterStructures.length} active rosters in current view.`);
+      console.log(`[GroupModeView] Active dates:`, rosterStructures.map(r => r.startDate));
+    }
+    if (isRosterError) {
+      console.error(`[GroupModeView] Roster fetch error:`, rosterError);
+    }
+  }, [rosterStructures, isRosterError, rosterError]);
 
   // Helper to get formatted group name
   const getGroupName = (externalId: string | null, name: string) => {
@@ -604,8 +617,8 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   const buildVisualGroupsFromShifts = (shifts: Shift[]): VisualGroup[] => {
 
     // 1. Build a unified structure map from the fetched roster structures
-    //    We merge groups/subgroups from all days in the view to handle potential inconsistencies or spanning rosters
     const groupsMap = new Map<string, {
+      id: string;
       name: string;
       externalId: string | null;
       type: TemplateGroupType;
@@ -613,43 +626,49 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       subGroups: Map<string, { id: string; name: string; sortOrder: number }>;
     }>();
 
-    // Helper to ensure group exists in map
-    const ensureGroup = (name: string, externalId: string | null, sortOrder: number) => {
-      // Key by externalId if available (stable across renames), else name
-      const key = externalId || name;
-      if (!groupsMap.has(key)) {
-        let type: TemplateGroupType = 'convention_centre'; // Default fallback
-        if (externalId && ['convention_centre', 'exhibition_centre', 'theatre'].includes(externalId)) {
-          type = externalId as TemplateGroupType;
-        } else if (!externalId) {
-          // Try to infer from name for legacy compatibility
-          const lowerName = name.toLowerCase().replace(/ /g, '_');
-          if (['convention_centre', 'exhibition_centre', 'theatre'].includes(lowerName)) {
-            type = lowerName as TemplateGroupType;
-          }
-        }
+    const toCanonicalKey = (name: string, externalId: string | null): string => {
+      if (externalId && ['convention_centre', 'exhibition_centre', 'theatre'].includes(externalId)) {
+        return externalId;
+      }
+      return name.trim().toLowerCase().replace(/\s+/g, '_');
+    };
 
+    const ensureGroup = (id: string, name: string, externalId: string | null, sortOrder: number) => {
+      const key = toCanonicalKey(name, externalId);
+      if (!groupsMap.has(key)) {
+        let type: TemplateGroupType = 'convention_centre';
+        if (['convention_centre', 'exhibition_centre', 'theatre'].includes(key)) {
+          type = key as TemplateGroupType;
+        }
         groupsMap.set(key, {
+          id,
           name,
           externalId,
           type,
           sortOrder,
           subGroups: new Map()
         });
+      } else {
+        const existing = groupsMap.get(key)!;
+        if (!existing.externalId && externalId) existing.externalId = externalId;
+        if ((!existing.id || existing.id === null) && id) existing.id = id;
       }
       return groupsMap.get(key)!;
     };
 
+    // Initialize with standard ICC Sydney groups
+    (['convention_centre', 'exhibition_centre', 'theatre'] as TemplateGroupType[]).forEach((type, idx) => {
+      ensureGroup(null as any, GROUP_DISPLAY_NAMES[type], type, idx);
+    });
+
     // Populate structure from API data
     rosterStructures.forEach(roster => {
       roster.groups.forEach(group => {
-        const groupEntry = ensureGroup(group.name, group.externalId, group.sortOrder);
+        const groupEntry = ensureGroup(group.id, group.name, group.externalId, group.sortOrder);
         group.subGroups.forEach(sg => {
-          // Use Name as key for subgroup merging to avoid ID conflicts across rosters if not synced
-          // Ideally we use ID, but for display merging name is often safer for "same logical group"
           if (!groupEntry.subGroups.has(sg.name)) {
             groupEntry.subGroups.set(sg.name, {
-              id: sg.id, // Keep the first ID we find (or maybe null if we want to be strict)
+              id: sg.id,
               name: sg.name,
               sortOrder: sg.sortOrder
             });
@@ -658,69 +677,25 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       });
     });
 
-    // If no structure found (e.g. empty roster), fall back to defaults or legacy inference
-    if (groupsMap.size === 0) {
-      // Fallback to legacy behavior if no DB structure exists
-      (['convention_centre', 'exhibition_centre', 'theatre'] as TemplateGroupType[]).forEach((type, idx) => {
-        ensureGroup(GROUP_DISPLAY_NAMES[type], type, idx);
-      });
-    }
-
-    // 2. Distribute Shifts into Groups
     const visualGroups: VisualGroup[] = [];
-
-    // Sort groups
     const sortedGroups = Array.from(groupsMap.values()).sort((a, b) => a.sortOrder - b.sortOrder);
 
     sortedGroups.forEach(groupDef => {
       const subGroups: VisualSubGroup[] = [];
-
-      // Prepare subgroups (including those from structure + any ad-hoc ones found in shifts)
       const subGroupMap = new Map<string, { id: string, name: string, shifts: Record<string, ShiftDisplay[]> }>();
 
-      // Initialize with known structure subgroups
       groupDef.subGroups.forEach(sg => {
         subGroupMap.set(sg.name, { id: sg.id, name: sg.name, shifts: {} });
       });
 
-      // Ensure "General" exists if map is empty?
-      // if (subGroupMap.size === 0) subGroupMap.set('General', { id: `generated-${groupDef.type}-general`, name: 'General', shifts: {} });
-
-
-      // Filter shifts for this group
       const groupShifts = shifts.filter(shift => {
-
-        // Match by SubGroup ID (Strong Link)
-        if ((shift as any).roster_subgroup_id) {
-          // Find if this subgroup belongs to current group
-          // This is tricky because we flattened structure. 
-          // We need to check if the shift's roster_subgroup_id matches any ID in this group's structure.
-          // This is O(N*M), but N (groups) is small.
-
-          // However, we merged based on Name/ExternalID. 
-          // So we should check if the shift's subgroup *logic* maps here.
-          // For now, let's rely on the LEAGACY COLUMNS which are Dual-Written.
-          // This is safer until we have full ID-based lookup map.
-          // WAIT - Plan says "Group shifts by roster_subgroup_id".
-
-          // Let's stick to legacy columns for grouping logic in this transitional step, 
-          // BUT use the STRUCTURE for defining the containers.
-          // This ensures shifts show up even if structure is missing, provided `group_type` is set.
-
-          const sType = (shift.group_type as TemplateGroupType) || 'convention_centre';
-          return sType === groupDef.type;
-        }
-
-        // Fallback to legacy grouping
         const sType = (shift.group_type as TemplateGroupType) || 'convention_centre';
         return sType === groupDef.type;
       });
 
       groupShifts.forEach(shift => {
         const subGroupName = shift.sub_group_name || 'General';
-
         if (!subGroupMap.has(subGroupName)) {
-          // Ad-hoc subgroup (legacy data not in structure?)
           subGroupMap.set(subGroupName, {
             id: `adhoc-${groupDef.type}-${subGroupName}`,
             name: subGroupName,
@@ -732,9 +707,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         const dateKey = shift.shift_date;
         if (!sgEntry.shifts[dateKey]) sgEntry.shifts[dateKey] = [];
 
-        // ... Shift Display Logic ...
         const assignedProfile = (shift as any).assigned_profiles || (shift as any).profiles;
-
         let employeeName = assignedProfile
           ? `${assignedProfile.first_name || ''} ${assignedProfile.last_name || ''}`.trim()
           : undefined;
@@ -743,66 +716,41 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           const p = profileMap[shift.assigned_employee_id];
           employeeName = `${p.first_name} ${p.last_name}`.trim();
         }
-
         if (!employeeName && shift.assigned_employee_id) employeeName = 'Assigned';
 
         let assignmentOutcome = (shift as any).assignment_outcome;
-        if (shift.assigned_employee_id && !assignmentOutcome) {
-          assignmentOutcome = 'pending';
-        }
+        if (shift.assigned_employee_id && !assignmentOutcome) assignmentOutcome = 'pending';
 
         const isPublished = shift.lifecycle_status === 'Published';
         const isDraft = shift.lifecycle_status === 'Draft';
-        const finalIsDraft = isPublished ? false : isDraft;
-
-        const patchedRawShift = { ...shift };
-        if (isPublished) {
-          patchedRawShift.lifecycle_status = 'Published';
-          patchedRawShift.is_draft = false;
-          patchedRawShift.is_published = true;
-          if (patchedRawShift.assigned_employee_id) {
-            if (!(patchedRawShift as any).assignment_outcome || (patchedRawShift as any).assignment_outcome === 'pending') {
-              (patchedRawShift as any).assignment_outcome = 'offered';
-            }
-          }
-        }
 
         sgEntry.shifts[dateKey].push({
           id: shift.id,
-          role: (shift as any).roles?.name || 'Shift',
+          employeeName,
+          status: getShiftStatus(shift),
           startTime: shift.start_time,
           endTime: shift.end_time,
-          employeeName: employeeName,
-          status: getShiftStatus(shift),
-          isPublished: false, // will be overridden by patched logic if needed, but logic above handles it
-          isDraft: finalIsDraft,
+          role: (shift as any).roles?.name || 'Shift',
+          isPublished,
+          isDraft: isPublished ? false : isDraft,
           isOnBidding: shift.bidding_status !== 'not_on_bidding',
           isUrgent: shift.bidding_status === 'on_bidding_urgent',
           isTrading: !!shift.trade_requested_at,
           isCancelled: shift.is_cancelled,
-          groupColor: groupDef.type, // Use the group type color
+          groupColor: groupDef.type,
           subGroup: subGroupName,
-          assignmentOutcome: assignmentOutcome,
+          assignmentOutcome,
           assignedEmployeeId: shift.assigned_employee_id,
-          rawShift: patchedRawShift,
-          isLocked: isShiftLocked(shift.shift_date, shift.start_time, 'roster_management'),
+          rawShift: shift,
+
         });
-
-        // Patch isPublished in the object we just pushed
-        sgEntry.shifts[dateKey][sgEntry.shifts[dateKey].length - 1].isPublished = isPublished;
       });
 
-      // Convert map to array
-      subGroupMap.forEach((sg) => {
-        subGroups.push(sg);
-      });
-
-      // Sort subgroups? (Based on structure sortOrder if available, else alpha)
-      // For now, basic sort
+      subGroupMap.forEach(sg => subGroups.push(sg));
       subGroups.sort((a, b) => a.name.localeCompare(b.name));
 
       visualGroups.push({
-        id: groupDef.externalId || groupDef.name, // Stable ID preferably
+        id: groupDef.id,
         name: getGroupName(groupDef.externalId, groupDef.name),
         type: groupDef.type,
         color: GLASS_STYLES[groupDef.type]?.accent || 'gray',
@@ -835,73 +783,35 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   };
 
   // ==================== DERIVE VISUAL GROUPS VIA MEMO ====================
-  // Now placed AFTER helper functions to avoid hoisting issues
   const visualGroups = useMemo(() => {
-    if (!externalShifts || externalShifts.length === 0) {
-      return getDefaultGroups();
-    }
+    if (!externalShifts) return buildVisualGroupsFromShifts([]);
 
-    let filteredShifts = externalShifts;
-    if (hasActiveFilters) {
-      filteredShifts = externalShifts.filter(shift => {
-        // 1. State ID
-        if (advancedFilters.stateId && advancedFilters.stateId !== 'all') {
-          const sId = determineShiftState(shift);
-          if (sId !== advancedFilters.stateId) return false;
-        }
+    const filteredShifts = externalShifts.filter(shift => {
+      if (!hasActiveFilters) return true;
+      if (advancedFilters.stateId && advancedFilters.stateId !== 'all') {
+        if (determineShiftState(shift) !== advancedFilters.stateId) return false;
+      }
+      if (advancedFilters.lifecycleStatus !== 'all') {
+        if (shift.lifecycle_status?.toLowerCase() !== advancedFilters.lifecycleStatus.toLowerCase()) return false;
+      }
+      if (advancedFilters.assignmentStatus !== 'all') {
+        if ((shift.assignment_status || 'unassigned') !== advancedFilters.assignmentStatus) return false;
+      }
+      if (advancedFilters.assignmentOutcome !== 'all') {
+        let outcome = shift.assignment_outcome || (shift.assigned_employee_id ? 'pending' : 'none');
+        if (advancedFilters.assignmentOutcome === 'none') {
+          if (outcome !== 'none' && outcome !== null) return false;
+        } else if (outcome !== advancedFilters.assignmentOutcome) return false;
+      }
+      if (advancedFilters.biddingStatus !== 'all') {
+        if ((shift.bidding_status || 'not_on_bidding') !== advancedFilters.biddingStatus) return false;
+      }
+      return true;
+    });
 
-        // 2. Lifecycle
-        if (advancedFilters.lifecycleStatus !== 'all') {
-          // Determine effective lifecycle (normalized)
-          const lc = shift.lifecycle_status?.toLowerCase();
-          const filterLc = advancedFilters.lifecycleStatus.toLowerCase();
-          if (lc !== filterLc) return false;
-        }
-
-        // 3. Assignment Status
-        if (advancedFilters.assignmentStatus !== 'all') {
-          const as = shift.assignment_status || 'unassigned';
-          if (as !== advancedFilters.assignmentStatus) return false;
-        }
-
-        // 4. Assignment Outcome
-        if (advancedFilters.assignmentOutcome !== 'all') {
-          // Normalize outcome
-          let outcome = shift.assignment_outcome || 'none';
-          if (shift.assigned_employee_id && !shift.assignment_outcome) {
-            outcome = 'pending'; // Inferred pending
-          }
-          if (outcome === 'none' && !shift.assigned_employee_id) {
-            outcome = 'none';
-          }
-
-          if (advancedFilters.assignmentOutcome === 'none') {
-            if (outcome !== 'none' && outcome !== null) return false;
-          } else {
-            if (outcome !== advancedFilters.assignmentOutcome) return false;
-          }
-        }
-
-        // 5. Bidding Status
-        if (advancedFilters.biddingStatus !== 'all') {
-          const bs = shift.bidding_status || 'not_on_bidding';
-          if (bs !== advancedFilters.biddingStatus) return false;
-        }
-
-        // 6. Trading Status
-        if (advancedFilters.tradingStatus !== 'all') {
-          const isTrading = !!shift.trade_requested_at;
-          if (advancedFilters.tradingStatus === 'requested' && !isTrading) return false;
-          if (advancedFilters.tradingStatus === 'none' && isTrading) return false;
-        }
-
-        return true;
-      });
-    }
-
-    const groups = buildVisualGroupsFromShifts(filteredShifts);
-    return groups; // Removed getDefaultGroups fallback as we handle it inside buildVisualGroups
-  }, [externalShifts, subDepartmentId, profileMap, advancedFilters, hasActiveFilters, rosterStructures]); // Added rosterStructures dependency
+    return buildVisualGroupsFromShifts(filteredShifts);
+  }, [externalShifts, rosterStructures, advancedFilters, hasActiveFilters, profileMap]);
+  // Added rosterStructures dependency
 
   // ==================== CONTEXT BUILDER ====================
   const buildShiftContext = (
@@ -922,10 +832,9 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       departmentName: departmentNameRef.current,
       subDepartmentId: subDepartmentIdRef.current,
       subDepartmentName: subDepartmentNameRef.current,
-      groupId: group.id,
+      group_type: group.type,
       groupName: group.name,
       groupColor: group.color,
-      subGroupId: subGroup.id,
       subGroupName: subGroup.name,
     };
   };
@@ -959,7 +868,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     // c. Pass the ID to the modal context
 
     const dateKey = format(date, 'yyyy-MM-dd');
-    const specificRoster = rosterStructures.find(r => r.date === dateKey); // rosterStructures has 'date' as YYYY-MM-DD
+    const specificRoster = rosterStructures.find(r => r.startDate === dateKey); // rosterStructures has 'startDate'
     let specificRosterId = specificRoster?.rosterId; // Use .rosterId (mapped from id)
 
     // Lazy Initialization: If roster doesn't exist for this date, create it.
@@ -977,7 +886,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           .from('rosters')
           .select('id')
           .eq('organization_id', organizationIdRef.current)
-          .eq('date', dateKey)
+          .eq('start_date', dateKey)
           .maybeSingle();
 
         if (fetchError) throw fetchError;
@@ -991,8 +900,9 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
             .from('rosters')
             .insert({
               organization_id: organizationIdRef.current,
-              name: `Daily Roster - ${format(date, 'dd MMM yyyy')}`,
-              date: dateKey,
+              department_id: departmentIdRef.current,
+              sub_department_id: subDepartmentIdRef.current,
+              description: `Daily Roster - ${format(date, 'dd MMM yyyy')}`,
               start_date: dateKey,
               end_date: dateKey,
               status: 'draft',
@@ -1037,7 +947,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     setShiftContext(context);
     setIsEditMode(false);
     setEditingShift(null);
-    setAddShiftModalOpen(true);
+    setIsAddShiftOpen(true);
   };
 
   const handleEditShift = (
@@ -1046,6 +956,25 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     subGroup: VisualSubGroup,
     date: Date
   ) => {
+    // SECURITY: prevent editing started shifts even if the modal logic is bypassed
+    const startTimeStr = shift.rawShift.start_time;
+    const shiftDateStr = shift.rawShift.shift_date;
+
+    // Simple started check for local UX (matching modal logic)
+    const [h, m] = startTimeStr.split(':').map(Number);
+    const shiftStart = parseISO(shiftDateStr);
+    shiftStart.setHours(h, m, 0, 0);
+
+    if (new Date() >= shiftStart && shift.rawShift.lifecycle_status !== 'Published') {
+      console.warn('[handleEditShift] Blocking edit for started shift:', shift.id);
+      toast({
+        title: 'Shift Locked',
+        description: 'This shift has already started and cannot be edited. You can only delete it from the menu.',
+        variant: 'default',
+      });
+      return;
+    }
+
     console.log('[handleEditShift] Opening edit modal for shift:', shift.id);
 
     const context = buildShiftContext(group, subGroup, date, 'edit');
@@ -1093,7 +1022,9 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     try {
       if (pendingAction.type === 'publish') {
         const result = await publishShiftMutation.mutateAsync(pendingAction.shift.id);
-        if (!(result as any).success) throw new Error('Publish failed');
+        if (!(result as any).success) {
+          throw new Error((result as any).error || (result as any).message || 'Publish failed. This shift might be in an invalid state for publishing (e.g. already started or conflicting).');
+        }
         toast({ title: 'Shift Published', description: 'Action completed successfully.' });
       }
       // setRefreshKey not needed as mutation invalidates queries
@@ -1207,6 +1138,8 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     try {
       await addSubGroupRangeMutation.mutateAsync({
         organizationId: organizationId || '',
+        departmentId: departmentId || '',
+        subDepartmentId: subDepartmentId || '',
         groupExternalId: selectedGroupForSubGroup.type,
         name: name,
         startDate,
@@ -1270,54 +1203,99 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           <button
             className="h-4 w-4 flex items-center justify-center hover:bg-white/20 rounded transition-colors"
             onClick={(e) => e.stopPropagation()}
-            // Explicitly disable trigger if locked (though likely hidden by parent logic if desired)
-            disabled={isLocked}
+            disabled={isLocked && false} // Allow menu to open even if locked, to show delete/locked status
           >
             <MoreHorizontal className={cn("h-3 w-3", isLocked ? "text-white/30" : "text-white")} />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="bg-[#1a2744] border-white/10 min-w-[160px] z-50">
-          {isLocked ? (
-            <DropdownMenuItem
-              onClick={() => handleDeleteShift(shift)}
-              className="text-red-400 hover:bg-red-500/10 cursor-pointer"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Shift (Locked)
-            </DropdownMenuItem>
-          ) : (
-            <>
-              {shift.isDraft && (
-                <DropdownMenuItem
-                  onClick={() => handleEditShift(shift, group, subGroup, date)}
-                  className="text-white hover:bg-white/10 cursor-pointer"
-                >
-                  <Edit2 className="h-4 w-4 mr-2" />
-                  Edit Shift
-                </DropdownMenuItem>
-              )}
+          {/* Normalization: Check calculation from handleEditShift for consistency */}
+          {(() => {
+            const [h, m] = shift.startTime.split(':').map(Number);
+            let hasStarted = false;
 
-              {shift.isDraft && !shift.isPublished && (
-                <DropdownMenuItem
-                  onClick={() => handleRequestPublish(shift)}
-                  className="text-white hover:bg-white/10 cursor-pointer"
-                >
-                  <Send className="h-4 w-4 mr-2" />
-                  Publish Shift
-                </DropdownMenuItem>
-              )}
+            if (shift.rawShift.scheduled_start) {
+              hasStarted = new Date() >= new Date(shift.rawShift.scheduled_start);
+            } else {
+              // Fallback to local parsing if scheduled_start is missing
+              const shiftDateObj = parseISO(shift.rawShift.shift_date);
+              shiftDateObj.setHours(h, m, 0, 0);
+              hasStarted = new Date() >= shiftDateObj;
+            }
 
-              <DropdownMenuSeparator className="bg-white/10" />
+            if (hasStarted && shift.rawShift.lifecycle_status !== 'Published') { // 'Published' is already readonly by other logic, but this covers Draft/Started
+              return (
+                <>
+                  <DropdownMenuItem disabled className="text-white/50 cursor-not-allowed">
+                    <Lock className="h-4 w-4 mr-2" />
+                    Edit Shift (Locked)
+                  </DropdownMenuItem>
 
-              <DropdownMenuItem
-                onClick={() => handleDeleteShift(shift)}
-                className="text-red-400 hover:bg-red-500/10 cursor-pointer"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete Shift
-              </DropdownMenuItem>
-            </>
-          )}
+                  <DropdownMenuItem disabled className="text-white/50 cursor-not-allowed">
+                    <Lock className="h-4 w-4 mr-2" />
+                    Publish (Locked)
+                  </DropdownMenuItem>
+
+                  <DropdownMenuSeparator className="bg-white/10" />
+
+                  <DropdownMenuItem
+                    onClick={() => handleDeleteShift(shift)}
+                    className="text-red-400 hover:bg-red-500/10 cursor-pointer"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Shift
+                  </DropdownMenuItem>
+                </>
+              );
+            }
+
+            // Standard Menu for Future/Unstarted Context
+            return (
+              <>
+                {isLocked ? (
+                  <DropdownMenuItem
+                    onClick={() => handleDeleteShift(shift)}
+                    className="text-red-400 hover:bg-red-500/10 cursor-pointer"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Shift (Locked)
+                  </DropdownMenuItem>
+                ) : (
+                  <>
+                    {shift.isDraft && (
+                      <DropdownMenuItem
+                        onClick={() => handleEditShift(shift, group, subGroup, date)}
+                        className="text-white hover:bg-white/10 cursor-pointer"
+                      >
+                        <Edit2 className="h-4 w-4 mr-2" />
+                        Edit Shift
+                      </DropdownMenuItem>
+                    )}
+
+                    {shift.isDraft && !shift.isPublished && (
+                      <DropdownMenuItem
+                        onClick={() => handleRequestPublish(shift)}
+                        className="text-white hover:bg-white/10 cursor-pointer"
+                      >
+                        <Send className="h-4 w-4 mr-2" />
+                        Publish Shift
+                      </DropdownMenuItem>
+                    )}
+
+                    <DropdownMenuSeparator className="bg-white/10" />
+
+                    <DropdownMenuItem
+                      onClick={() => handleDeleteShift(shift)}
+                      className="text-red-400 hover:bg-red-500/10 cursor-pointer"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Shift
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </>
+            );
+          })()}
         </DropdownMenuContent>
       </DropdownMenu>
     );
@@ -1326,7 +1304,31 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       <div
         key={shift.id}
         className="h-full relative group/card"
-        onDoubleClick={() => !isLocked && handleEditShift(shift, group, subGroup, date)}
+        onDoubleClick={() => {
+          const [h, m] = shift.startTime.split(':').map(Number);
+          let hasStarted = false;
+
+          if (shift.rawShift.scheduled_start) {
+            hasStarted = new Date() >= new Date(shift.rawShift.scheduled_start);
+          } else {
+            const shiftDateObj = parseISO(shift.rawShift.shift_date);
+            shiftDateObj.setHours(h, m, 0, 0);
+            hasStarted = new Date() >= shiftDateObj;
+          }
+
+          if (hasStarted && shift.rawShift.lifecycle_status !== 'Published') {
+            toast({
+              title: 'Shift Locked',
+              description: 'This shift has already started and cannot be edited. You can only delete it from the menu.',
+              variant: 'default',
+            });
+            return;
+          }
+
+          if (!isLocked) {
+            handleEditShift(shift, group, subGroup, date);
+          }
+        }}
       >
         <SmartShiftCard
           shift={shift.rawShift}
@@ -1382,7 +1384,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
               return (
                 <div
-                  key={group.id}
+                  key={group.type}
                   className={cn('rounded-2xl overflow-hidden', glassStyle.container)}
                 >
                   {/* Group Header with Collapse Toggle + Stats */}
@@ -1471,25 +1473,46 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                     !isGhost && dateIsPast && !dateIsToday && (isDark ? 'opacity-50' : 'opacity-40 bg-gray-50')
                                   )}
                                 >
-                                  <div className={cn(
-                                    "font-semibold",
-                                    isGhost
-                                      ? 'text-gray-500'
-                                      : dateIsToday
-                                        ? (isDark ? 'text-purple-300' : 'text-purple-700')
-                                        : (isDark ? 'text-white' : 'text-gray-900')
-                                  )}>
-                                    {format(date, 'EEE')}
-                                  </div>
-                                  <div className={cn(
-                                    "text-xs font-normal",
-                                    isGhost
-                                      ? 'text-gray-600'
-                                      : dateIsToday
-                                        ? (isDark ? 'text-purple-400' : 'text-purple-600')
-                                        : (isDark ? 'text-white/50' : 'text-gray-500')
-                                  )}>
-                                    {format(date, 'dd MMM')}
+                                  <div className="flex flex-col items-center gap-1.5 pt-1">
+                                    <div className={cn(
+                                      "font-semibold leading-tight",
+                                      isGhost
+                                        ? 'text-gray-500'
+                                        : dateIsToday
+                                          ? (isDark ? 'text-purple-300' : 'text-purple-700')
+                                          : (isDark ? 'text-white' : 'text-gray-900')
+                                    )}>
+                                      {format(date, 'EEE')}
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <div className={cn(
+                                        "text-[11px] font-medium leading-none",
+                                        isGhost
+                                          ? 'text-gray-600'
+                                          : dateIsToday
+                                            ? (isDark ? 'text-purple-400' : 'text-purple-600')
+                                            : (isDark ? 'text-white/50' : 'text-gray-500')
+                                      )}>
+                                        {format(date, 'dd MMM')}
+                                      </div>
+
+                                      {/* Roster Indicator (from DB status) - Robust matching */}
+                                      {rosterStructures.some(r => {
+                                        if (!r.startDate) return false;
+                                        try {
+                                          return isSameDay(parseISO(r.startDate), date);
+                                        } catch {
+                                          return false;
+                                        }
+                                      }) && (
+                                          <div
+                                            className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/30 border border-emerald-400/50 shadow-[0_0_12px_rgba(16,185,129,0.3)] hover:scale-125 transition-transform flex-shrink-0 cursor-help"
+                                            title="Active Roster Found"
+                                          >
+                                            <Zap className="h-3 w-3 fill-emerald-400 text-emerald-400 drop-shadow-[0_0_4px_rgba(16,185,129,0.9)]" />
+                                          </div>
+                                        )}
+                                    </div>
                                   </div>
                                 </th>
                               );

@@ -91,13 +91,8 @@ export const CalendarRangePicker: React.FC<CalendarRangePickerProps> = ({
     const isSelectable = (day: Date): boolean => {
         // Normalize dates for comparison (avoid time component issues)
         const normalizedDay = startOfDay(day);
-        const normalizedStart = startOfDay(monthStart);
-        const normalizedEnd = startOfDay(monthEnd);
 
-        // Must be within month boundaries (inclusive)
-        if (normalizedDay < normalizedStart || normalizedDay > normalizedEnd) {
-            return false;
-        }
+        // Removed strict monthStart/monthEnd clamp to allow navigating any month
 
         // For month view, any day in month is fine
         if (viewType === 'month') {
@@ -192,8 +187,6 @@ export const CalendarRangePicker: React.FC<CalendarRangePickerProps> = ({
                                         <option
                                             key={i}
                                             value={i}
-                                            disabled={!isTemplateMonth}
-                                            className={!isTemplateMonth ? 'opacity-40' : ''}
                                         >
                                             {format(new Date(2026, i, 1), 'MMMM')}
                                         </option>
@@ -225,8 +218,6 @@ export const CalendarRangePicker: React.FC<CalendarRangePickerProps> = ({
                                         <option
                                             key={year}
                                             value={year}
-                                            disabled={!isTemplateYear}
-                                            className={!isTemplateYear ? 'opacity-40' : ''}
                                         >
                                             {year}
                                         </option>

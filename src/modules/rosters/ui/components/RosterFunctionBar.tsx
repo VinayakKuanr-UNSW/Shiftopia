@@ -16,56 +16,36 @@ import {
 import {
   ChevronLeft,
   ChevronRight,
-  ChevronRight as ChevronSeparator,
   RefreshCw,
-  Filter,
-  Lock,
-  Unlock,
   PanelRight,
-  Plus,
   Send,
   CalendarCheck,
-  Building2,
+  Zap,
   Layers,
   Box,
-  GitBranch,
   Calendar,
+  Users,
+  CalendarDays,
+  Briefcase,
 } from 'lucide-react';
-import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO, min as minDate, max as maxDate } from 'date-fns';
+import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
-import { useAuth } from '@/platform/auth/useAuth';
 import {
   useTemplates,
   useRostersLookup,
 } from '@/modules/rosters/state/useRosterShifts';
+import { ActivateRosterDialog } from '../dialogs/ActivateRosterDialog';
 import { CalendarRangePicker } from './CalendarRangePicker';
 import { RosterFilterPopover } from './RosterFilterPopover';
-import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
-import { useRosterUI } from '@/modules/rosters/contexts/RosterUIContext';
+import { useRosterUI, RosterMode } from '@/modules/rosters/contexts/RosterUIContext';
+import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
+import { Separator } from '@/modules/core/ui/primitives/separator';
 
 /* ============================================================
    TYPES
    ============================================================ */
 export type ViewType = 'day' | '3day' | 'week' | 'month';
-
-interface OrganizationData {
-  id: string;
-  name: string;
-}
-
-interface DepartmentData {
-  id: string;
-  name: string;
-}
-
-interface SubDepartmentData {
-  id: string;
-  name: string;
-}
-
-// Helper to determine lock state
-// Helper to determine lock state
 
 interface RosterData {
   id: string;
@@ -81,9 +61,9 @@ interface TemplateData {
   department_id: string;
   sub_department_id: string;
   status: string;
-  published_month?: string; // e.g., '2026-01'
-  start_date?: string; // ISO date string e.g., '2026-02-01'
-  end_date?: string; // ISO date string e.g., '2026-02-28'
+  published_month?: string;
+  start_date?: string;
+  end_date?: string;
 }
 
 interface RangeOption {
@@ -96,39 +76,31 @@ export interface RosterFunctionBarProps {
   selectedOrganizationId: string | null;
   selectedRosterId: string | null;
 
-  // Context callbacks
   onRosterChange: (id: string | null) => void;
   onTemplateChange?: (id: string | null, groups?: any[]) => void;
-  // Ghost Cell Navigation - pass template date bounds to parent
   onTemplateDatesChange?: (startDate: Date | undefined, endDate: Date | undefined) => void;
 
-  // Date & View state
+  selectedDepartmentId?: string | null;
+  selectedSubDepartmentId?: string | null;
+
   selectedDate: Date;
   viewType: ViewType;
   onDateChange: (date: Date) => void;
   onViewTypeChange: (viewType: ViewType) => void;
 
-  // Toggle states
-  isLocked: boolean;
   showAvailabilities: boolean;
   showUnfilledPanel: boolean;
   isRefreshing?: boolean;
 
-  // Toggle callbacks
-  onLockToggle: () => void;
   onAvailabilitiesToggle: () => void;
   onUnfilledPanelToggle: () => void;
   onRefresh: () => void;
   onFiltersClick: () => void;
 
-  // Action callbacks
-  onAddShift: () => void;
   onPublishRoster: () => void;
 
-  // Permissions
   canEdit?: boolean;
 
-  // Bulk Mode
   isBulkMode?: boolean;
   onBulkModeToggle?: () => void;
 }
@@ -143,23 +115,23 @@ const IconButton: React.FC<{
   isActive?: boolean;
   isLoading?: boolean;
   disabled?: boolean;
-  variant?: 'default' | 'success' | 'warning' | 'danger';
-}> = ({ icon, tooltip, onClick, isActive, isLoading, disabled, variant = 'default' }) => {
-  const { isDark } = useTheme();
-
+  variant?: 'default' | 'success' | 'warning' | 'danger' | 'ghost';
+  className?: string;
+}> = ({ icon, tooltip, onClick, isActive, isLoading, disabled, variant = 'default', className }) => {
   const variantClasses = {
     default: isActive
-      ? (isDark ? 'bg-white/10 text-white' : 'bg-gray-100 text-gray-900')
-      : (isDark ? 'text-white/60 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'),
+      ? 'bg-white/15 text-white'
+      : 'text-white/60 hover:text-white hover:bg-white/10',
     success: isActive
-      ? (isDark ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-100 text-emerald-700')
-      : (isDark ? 'text-white/60 hover:text-emerald-300 hover:bg-emerald-500/10' : 'text-gray-500 hover:text-emerald-700 hover:bg-emerald-50'),
+      ? 'bg-emerald-500/20 text-emerald-300'
+      : 'text-white/60 hover:text-emerald-300 hover:bg-emerald-500/10',
     warning: isActive
-      ? (isDark ? 'bg-amber-500/20 text-amber-300' : 'bg-amber-100 text-amber-700')
-      : (isDark ? 'text-white/60 hover:text-amber-300 hover:bg-amber-500/10' : 'text-gray-500 hover:text-amber-700 hover:bg-amber-50'),
+      ? 'bg-amber-500/20 text-amber-300'
+      : 'text-white/60 hover:text-amber-300 hover:bg-amber-500/10',
     danger: isActive
-      ? (isDark ? 'bg-red-500/20 text-red-300' : 'bg-red-100 text-red-700')
-      : (isDark ? 'text-white/60 hover:text-red-300 hover:bg-red-500/10' : 'text-gray-500 hover:text-red-700 hover:bg-red-50'),
+      ? 'bg-red-500/20 text-red-300'
+      : 'text-white/60 hover:text-red-300 hover:bg-red-500/10',
+    ghost: 'text-white/40 hover:text-white hover:bg-white/5',
   };
 
   return (
@@ -170,14 +142,15 @@ const IconButton: React.FC<{
             onClick={onClick}
             disabled={disabled || isLoading}
             className={cn(
-              'h-8 w-8 flex items-center justify-center rounded-md transition-all duration-200', // Smaller, no border by default
+              'h-8 w-8 flex items-center justify-center rounded-lg transition-all',
               variantClasses[variant],
-              disabled && 'opacity-50 cursor-not-allowed',
-              isLoading && 'animate-pulse'
+              disabled && 'opacity-30 cursor-not-allowed',
+              isLoading && 'animate-pulse',
+              className
             )}
           >
             {isLoading ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
             ) : (
               icon
             )}
@@ -185,50 +158,12 @@ const IconButton: React.FC<{
         </TooltipTrigger>
         <TooltipContent
           side="bottom"
-          className={cn(
-            "text-xs",
-            isDark ? "bg-[#1a2744] border-white/10 text-white" : "bg-white border-gray-200 text-gray-900 shadow-sm"
-          )}
+          className="text-[10px] uppercase font-bold bg-slate-900 border-white/10 text-white backdrop-blur-md"
         >
           {tooltip}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
-  );
-};
-
-/* ============================================================
-   VIEW MODE SELECTOR COMPONENT
-   ============================================================ */
-const ViewModeSelector: React.FC<{
-  value: ViewType;
-  onChange: (value: ViewType) => void;
-}> = ({ value, onChange }) => {
-  const { isDark } = useTheme();
-
-  return (
-    <div className={cn(
-      "flex items-center rounded-lg p-0.5 border",
-      isDark ? "bg-white/5 border-white/10" : "bg-gray-100 border-gray-200"
-    )}>
-      {['day', '3day', 'week', 'month'].map((optionValue) => {
-        const option = { value: optionValue as ViewType, label: optionValue === '3day' ? '3-Day' : optionValue.charAt(0).toUpperCase() + optionValue.slice(1) };
-        return (
-          <button
-            key={option.value}
-            onClick={() => onChange(option.value)}
-            className={cn(
-              'px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200',
-              value === option.value
-                ? 'bg-blue-600 text-white shadow-sm'
-                : (isDark ? 'text-white/60 hover:text-white hover:bg-white/5' : 'text-gray-600 hover:text-gray-900 hover:bg-white')
-            )}
-          >
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
   );
 };
 
@@ -240,64 +175,47 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
   selectedDepartmentId,
   selectedSubDepartmentId,
   selectedRosterId,
-  onOrganizationChange,
-  onDepartmentChange,
-  onSubDepartmentChange,
   onRosterChange,
   onTemplateChange,
-  onTemplateDatesChange, // Ghost Cell Navigation callback
+  onTemplateDatesChange,
   selectedDate,
   viewType,
   onDateChange,
   onViewTypeChange,
-  isLocked,
   showAvailabilities,
   showUnfilledPanel,
   isRefreshing,
-  onLockToggle,
   onAvailabilitiesToggle,
   onUnfilledPanelToggle,
   onRefresh,
-  onFiltersClick,
-  onAddShift,
   onPublishRoster,
   canEdit = true,
   isBulkMode = false,
   onBulkModeToggle,
 }) => {
-  // TanStack Query hooks replace manual useEffect + useState chains
-  // Roster fetching
   const {
+    activeMode,
+    setActiveMode,
+    isBucketView,
+    setIsBucketView,
     selectedDepartmentIds,
     selectedSubDepartmentIds,
   } = useRosterUI();
 
-  const { data: rosters = [], isLoading: isLoadingRosters } = useRostersLookup(
+  const { data: rosters = [] } = useRostersLookup(
     selectedOrganizationId || undefined,
     {
       departmentIds: selectedDepartmentIds,
       subDepartmentIds: selectedSubDepartmentIds,
     }
   );
-  const { data: templates = [] } = useTemplates(undefined, undefined); // Will be driven by global scope if needed, or refined
+  const { data: templates = [] } = useTemplates(selectedSubDepartmentId || undefined, selectedDepartmentId || undefined);
 
+  const [isActivateDialogOpen, setIsActivateDialogOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedRangeIndex, setSelectedRangeIndex] = useState<number>(0);
 
-  // Auto-select active roster when data arrives
-  React.useEffect(() => {
-    if (rosters.length > 0 && !selectedRosterId && selectedOrganizationId) {
-      const today = new Date();
-      const activeRoster = rosters.find((r: RosterData) => {
-        const start = new Date(r.start_date);
-        const end = new Date(r.end_date);
-        return today >= start && today <= end;
-      });
-      onRosterChange(activeRoster?.id || rosters[0].id);
-    }
-  }, [rosters, selectedRosterId, selectedOrganizationId, onRosterChange]);
-
-  // Auto-select template when data arrives
+  // Auto-select template
   React.useEffect(() => {
     if (templates.length > 0 && !selectedTemplateId) {
       const baseTemplate = templates.find((t: TemplateData) =>
@@ -305,374 +223,269 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
       ) || templates[0];
       setSelectedTemplateId(baseTemplate.id);
       onTemplateChange?.(baseTemplate.id, undefined);
-    } else if (templates.length === 0) {
-      setSelectedTemplateId(null);
     }
   }, [templates, selectedTemplateId, onTemplateChange]);
 
-  // Get selected template's date boundaries (use actual start_date/end_date)
   const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
-  const templateMonth = React.useMemo(() => {
-    // Use actual start_date and end_date from the published template
-    if (selectedTemplate?.start_date && selectedTemplate?.end_date) {
-      const monthStart = new Date(selectedTemplate.start_date);
-      const monthEnd = new Date(selectedTemplate.end_date);
-      return { monthStart, monthEnd };
-    }
-    // Fallback: use published_month to derive dates
-    if (selectedTemplate?.published_month) {
-      const [year, month] = selectedTemplate.published_month.split('-').map(Number);
-      const monthStart = new Date(year, month - 1, 1);
-      const monthEnd = endOfMonth(monthStart);
-      return { monthStart, monthEnd };
-    }
-    // Default to current month if no template selected
-    const now = new Date();
-    return { monthStart: startOfMonth(now), monthEnd: endOfMonth(now) };
-  }, [selectedTemplate?.start_date, selectedTemplate?.end_date, selectedTemplate?.published_month]);
 
-  // Notify parent of template date changes (for Ghost Cell navigation)
+  const activeRangeBounds = React.useMemo(() => {
+    if (selectedTemplate?.start_date && selectedTemplate?.end_date) {
+      return {
+        monthStart: new Date(selectedTemplate.start_date),
+        monthEnd: new Date(selectedTemplate.end_date)
+      };
+    }
+    const monthStart = startOfMonth(selectedDate);
+    const monthEnd = endOfMonth(selectedDate);
+    return { monthStart, monthEnd };
+  }, [selectedTemplate, selectedDate]);
+
   React.useEffect(() => {
     if (onTemplateDatesChange) {
-      onTemplateDatesChange(templateMonth.monthStart, templateMonth.monthEnd);
+      onTemplateDatesChange(activeRangeBounds.monthStart, activeRangeBounds.monthEnd);
     }
-  }, [templateMonth, onTemplateDatesChange]);
+  }, [activeRangeBounds, onTemplateDatesChange]);
 
-  // Generate range options based on view type and template dates
-  // For 3-day and week views, allow selecting ANY start date (not just fixed segments)
   const rangeOptions: RangeOption[] = React.useMemo(() => {
-    const { monthStart, monthEnd } = templateMonth;
+    const { monthStart, monthEnd } = activeRangeBounds;
     const options: RangeOption[] = [];
 
     switch (viewType) {
       case 'day': {
-        // Each day of the template range
         const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
         days.forEach(day => {
-          options.push({
-            label: format(day, 'MMM d'),
-            startDate: day,
-            endDate: day,
-          });
+          options.push({ label: format(day, 'MMM d'), startDate: day, endDate: day });
         });
         break;
       }
       case '3day': {
-        // Allow ANY start date within the template range
-        // Generate an option for each possible starting day
         const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
         days.forEach(day => {
-          // Calculate end date (2 days after start)
           let rangeEnd = addDays(day, 2);
-          // Clamp to template end date
-          if (rangeEnd > monthEnd) {
-            rangeEnd = monthEnd;
-          }
-          options.push({
-            label: `${format(day, 'MMM d')} – ${format(rangeEnd, 'd')}`,
-            startDate: day,
-            endDate: rangeEnd,
-          });
+          if (rangeEnd > monthEnd) rangeEnd = monthEnd;
+          options.push({ label: `${format(day, 'MMM d')} – ${format(rangeEnd, 'd')}`, startDate: day, endDate: rangeEnd });
         });
         break;
       }
       case 'week': {
-        // Allow ANY start date within the template range
-        // Generate an option for each possible starting day
         const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
         days.forEach(day => {
-          // Calculate end date (6 days after start)
           let rangeEnd = addDays(day, 6);
-          // Clamp to template end date
-          if (rangeEnd > monthEnd) {
-            rangeEnd = monthEnd;
-          }
-          options.push({
-            label: `${format(day, 'MMM d')} – ${format(rangeEnd, 'd')}`,
-            startDate: day,
-            endDate: rangeEnd,
-          });
+          if (rangeEnd > monthEnd) rangeEnd = monthEnd;
+          options.push({ label: `${format(day, 'MMM d')} – ${format(rangeEnd, 'd')}`, startDate: day, endDate: rangeEnd });
         });
         break;
       }
       case 'month': {
-        // Single option for full template range (start to end date)
-        options.push({
-          label: format(monthStart, 'MMMM yyyy'),
-          startDate: monthStart,
-          endDate: monthEnd,
-        });
+        options.push({ label: format(monthStart, 'MMMM yyyy'), startDate: monthStart, endDate: monthEnd });
         break;
       }
     }
     return options;
-  }, [viewType, templateMonth]);
+  }, [viewType, activeRangeBounds]);
 
-  // Update parent date when range changes
   React.useEffect(() => {
-    if (rangeOptions.length > 0 && selectedRangeIndex >= 0) {
-      const clampedIndex = Math.min(selectedRangeIndex, rangeOptions.length - 1);
-      if (clampedIndex !== selectedRangeIndex) {
-        setSelectedRangeIndex(clampedIndex);
-      }
-      const selectedRange = rangeOptions[clampedIndex];
-      if (selectedRange && !isSameDay(selectedDate, selectedRange.startDate)) {
-        onDateChange(selectedRange.startDate);
-      }
+    const currentIdx = rangeOptions.findIndex(opt => isSameDay(opt.startDate, selectedDate));
+    if (currentIdx !== -1 && currentIdx !== selectedRangeIndex) {
+      setSelectedRangeIndex(currentIdx);
     }
-  }, [rangeOptions, selectedRangeIndex]);
+  }, [selectedDate, rangeOptions]);
 
-  // Reset range when viewType or template changes
-  React.useEffect(() => {
-    setSelectedRangeIndex(0);
-  }, [viewType, selectedTemplateId]);
-
-  // Navigation handlers
-
-  // Date navigation
-  const navigatePrevious = () => {
-    onDateChange((() => {
-      switch (viewType) {
-        case 'day': return addDays(selectedDate, -1);
-        case '3day': return addDays(selectedDate, -3);
-        case 'week': return addDays(selectedDate, -7);
-        case 'month': return new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1);
-        default: return selectedDate;
-      }
-    })());
-  };
-
-  const navigateNext = () => {
-    onDateChange((() => {
-      switch (viewType) {
-        case 'day': return addDays(selectedDate, 1);
-        case '3day': return addDays(selectedDate, 3);
-        case 'week': return addDays(selectedDate, 7);
-        case 'month': return new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1);
-        default: return selectedDate;
-      }
-    })());
-  };
-
-  const getDateDisplay = () => {
-    switch (viewType) {
-      case 'day':
-        return format(selectedDate, 'EEE, MMM d, yyyy');
-      case '3day': {
-        const end = addDays(selectedDate, 2);
-        return `${format(selectedDate, 'MMM d')} – ${format(end, 'MMM d, yyyy')}`;
-      }
-      case 'week': {
-        const start = startOfWeek(selectedDate, { weekStartsOn: 1 });
-        const end = endOfWeek(selectedDate, { weekStartsOn: 1 });
-        return `${format(start, 'MMM d')} – ${format(end, 'MMM d, yyyy')}`;
-      }
-      case 'month':
-        return format(selectedDate, 'MMMM yyyy');
-      default:
-        return '';
+  // FIX: Navigation logic that actually works across months
+  const handlePrevious = () => {
+    if (viewType === 'month') {
+      onDateChange(addMonths(selectedDate, -1));
+    } else if (selectedRangeIndex > 0) {
+      setSelectedRangeIndex(selectedRangeIndex - 1);
+      onDateChange(rangeOptions[selectedRangeIndex - 1].startDate);
+    } else {
+      onDateChange(addMonths(selectedDate, -1));
     }
   };
 
-  const selectedRoster = rosters.find(r => r.id === selectedRosterId);
-
-  const { isDark } = useTheme();
-  const { activeMode, isBucketView, setIsBucketView } = useRosterUI();
-
-  const containerClass = "bg-white/5 border border-white/10 hover:bg-white/10 transition-colors";
-
-  const selectTriggerClass = "h-7 w-auto min-w-[80px] max-w-[140px] border-0 bg-transparent text-foreground text-xs font-medium p-0 px-2 focus:ring-0 focus:ring-offset-0 hover:bg-white/5 rounded-md transition-colors";
-
-  const selectContentClass = "bg-popover border-white/10 backdrop-blur-xl";
-
-  const selectItemClass = "text-xs focus:bg-white/10";
-
-  const templateContainerClass = "bg-primary/5 border border-primary/20 hover:bg-primary/10 transition-colors";
-
-
-
-  // ... (inside component)
-  const {
-    isDeptLocked,
-    isSubDeptLocked,
-    selectDepartment: selectGlobalDepartment,
-    selectSubDepartment: selectGlobalSubDepartment
-  } = useOrgSelection();
-
-  // We keep isOrgLocked true as per design to force Context Header usage for Org switching
-  // or derive it if we want to support multi-org switching here (but context implies locked org)
-  const isOrgLocked = true;
-
+  const handleNext = () => {
+    if (viewType === 'month') {
+      onDateChange(addMonths(selectedDate, 1));
+    } else if (selectedRangeIndex < rangeOptions.length - 1) {
+      setSelectedRangeIndex(selectedRangeIndex + 1);
+      onDateChange(rangeOptions[selectedRangeIndex + 1].startDate);
+    } else {
+      onDateChange(addMonths(selectedDate, 1));
+    }
+  };
 
   return (
-    <div className="w-full flex-shrink-0 z-20 bg-background/50 backdrop-blur-md border-b border-white/5">
-      {/* Row 1: Context + Template + Date + Actions */}
-      <div className="px-4 py-3 flex items-center gap-3 flex-wrap">
+    <div className="w-full h-12 flex-shrink-0 z-20 bg-slate-950/40 backdrop-blur-2xl border-b border-white/10 px-3 flex items-center overflow-hidden">
+      <div className="w-full flex items-center justify-between">
 
-        {/* Template Selector */}
-        <div className={cn("flex items-center gap-1 rounded-lg px-1.5 py-1 border text-xs", templateContainerClass)}>
-          <Calendar className="h-3 w-3 text-purple-400" />
-          <Select
-            value={selectedTemplateId || ''}
-            onValueChange={(id) => {
-              setSelectedTemplateId(id);
-              onTemplateChange?.(id, undefined);
-            }}
-            disabled={templates.length === 0}
+        {/* Left Section: Context & Modes */}
+        <div className="flex items-center gap-2">
+          {/* Template Selector */}
+          <div className="flex items-center gap-1.5 rounded-lg bg-white/5 border border-white/10 pr-2 pl-1.5 h-8">
+            <Calendar className="h-3.5 w-3.5 text-indigo-400" />
+            <Select
+              value={selectedTemplateId || ''}
+              onValueChange={(id) => {
+                setSelectedTemplateId(id);
+                onTemplateChange?.(id, undefined);
+              }}
+              disabled={templates.length === 0}
+            >
+              <SelectTrigger className="h-6 w-auto min-w-[100px] border-0 bg-transparent p-0 text-[11px] font-bold text-white/80 focus:ring-0">
+                <SelectValue placeholder="Select Template" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-900 border-white/10">
+                {templates.map((t) => (
+                  <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <ToggleGroup
+            type="single"
+            value={activeMode}
+            onValueChange={(v) => v && setActiveMode(v as RosterMode)}
+            className="bg-black/20 border border-white/5 rounded-lg p-0.5"
           >
-            <SelectTrigger className={cn(selectTriggerClass, "h-6 min-w-[120px] max-w-[160px]")}>
-              <SelectValue placeholder="Template" />
-            </SelectTrigger>
-            <SelectContent className={selectContentClass}>
-              {templates.length === 0 ? (
-                <SelectItem value="__none__" disabled className="text-xs text-white/40">
-                  No templates
-                </SelectItem>
-              ) : (
-                templates.map((template) => (
-                  <SelectItem key={template.id} value={template.id} className={selectItemClass}>
-                    {template.name}
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
+            {[
+              { id: 'group', icon: <Box className="h-3.5 w-3.5" />, label: 'Group' },
+              { id: 'people', icon: <Users className="h-3.5 w-3.5" />, label: 'People' },
+              { id: 'events', icon: <CalendarDays className="h-3.5 w-3.5" />, label: 'Events' },
+              { id: 'roles', icon: <Briefcase className="h-3.5 w-3.5" />, label: 'Roles' },
+            ].map((m) => (
+              <ToggleGroupItem
+                key={m.id}
+                value={m.id}
+                className="h-7 px-2.5 text-[11px] font-bold rounded-md data-[state=on]:bg-white/10 data-[state=on]:text-white text-white/40 hover:text-white/60 transition-all"
+              >
+                <div className="flex items-center gap-1.5">
+                  {m.icon}
+                  <span className="hidden xl:inline">{m.label}</span>
+                </div>
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
         </div>
 
-        {/* View Mode */}
-        <div className="flex items-center rounded-lg p-1 bg-black/20 border border-white/5">
-          {['day', '3day', 'week', 'month'].map((v) => (
-            <button
-              key={v}
-              onClick={() => onViewTypeChange(v as ViewType)}
-              className={cn(
-                'px-3 py-1 text-xs font-medium rounded-md transition-all',
-                viewType === v
-                  ? 'bg-primary text-primary-foreground shadow-glow/20'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
-              )}
-            >
-              {v === '3day' ? '3D' : v.charAt(0).toUpperCase() + v.slice(1)}
-            </button>
-          ))}
-        </div>
+        {/* Center Section: Navigation & View */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center bg-black/40 border border-white/10 rounded-lg p-0.5 h-8">
+            {[
+              { id: 'day', label: 'D' },
+              { id: '3day', label: '3D' },
+              { id: 'week', label: 'W' },
+              { id: 'month', label: 'M' }
+            ].map((v) => (
+              <button
+                key={v.id}
+                onClick={() => onViewTypeChange(v.id as ViewType)}
+                className={cn(
+                  'px-2.5 py-1 text-[10px] uppercase font-black rounded-md transition-all h-6 min-w-[24px]',
+                  viewType === v.id
+                    ? 'bg-blue-600 text-white'
+                    : 'text-white/20 hover:text-white/40 hover:bg-white/5'
+                )}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
 
-        {/* Date Range */}
-        <div className={cn("flex items-center gap-1 rounded-lg px-2 py-1", containerClass)}>
-          <CalendarRangePicker
-            selectedDate={selectedDate}
-            viewType={viewType}
-            monthStart={templateMonth.monthStart}
-            monthEnd={templateMonth.monthEnd}
-            onRangeSelect={(startDate) => {
-              const idx = rangeOptions.findIndex(opt => isSameDay(opt.startDate, startDate));
-              if (idx >= 0) setSelectedRangeIndex(idx);
-              else onDateChange(startDate);
-            }}
-            displayLabel={rangeOptions[selectedRangeIndex]?.label || 'Date'}
-          />
-          <div className="flex items-center border-l border-white/10 pl-1 ml-1 space-x-0.5">
-            <button
-              onClick={() => setSelectedRangeIndex(Math.max(0, selectedRangeIndex - 1))}
-              disabled={selectedRangeIndex === 0}
-              className="h-6 w-6 flex items-center justify-center rounded hover:bg-white/10 text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
-            >
-              <ChevronLeft className="h-3 w-3" />
-            </button>
-            <button
-              onClick={() => setSelectedRangeIndex(Math.min(rangeOptions.length - 1, selectedRangeIndex + 1))}
-              disabled={selectedRangeIndex >= rangeOptions.length - 1}
-              className="h-6 w-6 flex items-center justify-center rounded hover:bg-white/10 text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
-            >
-              <ChevronRight className="h-3 w-3" />
-            </button>
+          <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-lg px-1 h-8">
+            <IconButton
+              icon={<ChevronLeft className="h-4 w-4" />}
+              tooltip="Prev"
+              onClick={handlePrevious}
+              variant="ghost"
+              className="h-6 w-6"
+            />
+
+            <CalendarRangePicker
+              selectedDate={selectedDate}
+              viewType={viewType}
+              monthStart={activeRangeBounds.monthStart}
+              monthEnd={activeRangeBounds.monthEnd}
+              onRangeSelect={onDateChange}
+              displayLabel={rangeOptions[selectedRangeIndex]?.label || 'Select Date'}
+            />
+
+            <IconButton
+              icon={<ChevronRight className="h-4 w-4" />}
+              tooltip="Next"
+              onClick={handleNext}
+              variant="ghost"
+              className="h-6 w-6"
+            />
           </div>
         </div>
 
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* Action Icons */}
-        <div className="flex items-center gap-2 mr-4">
-          <IconButton icon={<RefreshCw className="h-4 w-4" />} tooltip="Refresh" onClick={onRefresh} isLoading={isRefreshing} />
-          <RosterFilterPopover />
-          <div className="w-px h-4 bg-white/10" />
-          <IconButton icon={<CalendarCheck className="h-4 w-4" />} tooltip="Availabilities" onClick={onAvailabilitiesToggle} isActive={showAvailabilities} variant="success" />
-          <IconButton icon={isLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />} tooltip={isLocked ? 'Unlock' : 'Lock'} onClick={onLockToggle} isActive={isLocked} variant={isLocked ? 'warning' : 'default'} />
-          <IconButton icon={<PanelRight className="h-4 w-4" />} tooltip="Unfilled Shifts" onClick={onUnfilledPanelToggle} isActive={showUnfilledPanel} />
-
-          <div className="w-px h-4 bg-white/10" />
-
-          {/* Bucket View Toggle - only in Group mode */}
-          {activeMode === 'group' && (
+        {/* Right Section: Actions */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-lg px-1 py-1 h-8">
+            <IconButton icon={<RefreshCw className="h-3.5 w-3.5" />} tooltip="Reload" onClick={onRefresh} isLoading={isRefreshing} />
+            <RosterFilterPopover />
+            <Separator orientation="vertical" className="h-4 bg-white/10 mx-0.5" />
             <IconButton
-              icon={<Box className="h-4 w-4" />}
-              tooltip={isBucketView ? 'Exit Bucket View' : 'Bucket View'}
-              onClick={() => setIsBucketView(!isBucketView)}
-              isActive={isBucketView}
-              variant={isBucketView ? 'success' : 'default'}
+              icon={<CalendarCheck className="h-3.5 w-3.5" />}
+              tooltip="Avail"
+              onClick={onAvailabilitiesToggle}
+              isActive={showAvailabilities}
+              variant="success"
             />
-          )}
+            <IconButton
+              icon={<Zap className="h-3.5 w-3.5" />}
+              tooltip="Activate"
+              onClick={() => setIsActivateDialogOpen(true)}
+              variant="success"
+              disabled={!selectedDepartmentId}
+            />
+            <IconButton
+              icon={<PanelRight className="h-3.5 w-3.5" />}
+              tooltip="Unfilled"
+              onClick={onUnfilledPanelToggle}
+              isActive={showUnfilledPanel}
+            />
+            <Separator orientation="vertical" className="h-4 bg-white/10 mx-0.5" />
+            {activeMode === 'group' && (
+              <IconButton
+                icon={<Box className="h-3.5 w-3.5" />}
+                tooltip="Buckets"
+                onClick={() => setIsBucketView(!isBucketView)}
+                isActive={isBucketView}
+              />
+            )}
+            <IconButton
+              icon={<Layers className="h-3.5 w-3.5" />}
+              tooltip="Bulk"
+              onClick={onBulkModeToggle || (() => { })}
+              isActive={isBulkMode}
+            />
+          </div>
 
-          {/* Bulk Mode Toggle */}
           <IconButton
-            icon={<Layers className="h-4 w-4" />}
-            tooltip={isBulkMode ? 'Exit Bulk Mode' : 'Bulk Mode'}
-            onClick={onBulkModeToggle || (() => { })}
-            isActive={isBulkMode}
-            variant={isBulkMode ? 'success' : 'default'}
+            icon={<Send className="h-3.5 w-3.5" />}
+            tooltip="Publish Roster"
+            onClick={onPublishRoster}
+            disabled={!canEdit}
+            className="h-8 w-8 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-glow-blue/20"
           />
-        </div>
-
-        {/* Primary Actions */}
-        <div className="flex items-center gap-2 border-l border-white/10 pl-2 ml-2">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  onClick={onAddShift}
-                  disabled={!canEdit}
-                  className="h-8 w-8 bg-emerald-600 hover:bg-emerald-500 text-white shadow-glow hover:shadow-glow/50 border-0"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Add Global Shift</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  onClick={onPublishRoster}
-                  disabled={!canEdit}
-                  className="h-8 w-8 bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20 border-0"
-                >
-                  <Send className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Publish Roster</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
         </div>
       </div>
 
-      {/* Lock Banner */}
-      {
-        isLocked && (
-          <div className="px-3 py-1 bg-amber-500/10 border-t border-amber-500/20">
-            <div className="flex items-center justify-center gap-2 text-[10px] text-amber-300">
-              <Lock className="h-3 w-3" />
-              <span>Roster locked</span>
-            </div>
-          </div>
-        )
-      }
-    </div >
+      {/* Roster Initialization Dialog */}
+      {selectedOrganizationId && selectedDepartmentId && (
+        <ActivateRosterDialog
+          open={isActivateDialogOpen}
+          onOpenChange={setIsActivateDialogOpen}
+          organizationId={selectedOrganizationId}
+          departmentId={selectedDepartmentId}
+          subDepartmentId={selectedSubDepartmentId}
+          startDate={activeRangeBounds.monthStart}
+          endDate={activeRangeBounds.monthEnd}
+        />
+      )}
+    </div>
   );
 };
 

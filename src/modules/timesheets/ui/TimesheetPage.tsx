@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { format } from 'date-fns';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';
@@ -12,26 +12,18 @@ import {
     TimesheetShiftRow,
     TimesheetFilters,
 } from '../api/timesheets.supabase.api';
-import {
-    getOrganizations,
-    getDepartments,
-    getSubDepartments,
-    Organization,
-    Department,
-    SubDepartment,
-} from '@/modules/rosters';
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { useEffect } from 'react';
 
 const TimesheetPageInner: React.FC = () => {
-    // Global filter state
-    const [organizations, setOrganizations] = useState<Organization[]>([]);
-    const [departments, setDepartments] = useState<Department[]>([]);
-    const [subDepartments, setSubDepartments] = useState<SubDepartment[]>([]);
+    // Scope filter — single-select like rosters
+    const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
 
-    const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(null);
-    const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | null>(null);
-    const [selectedSubDepartmentId, setSelectedSubDepartmentId] = useState<string | null>(null);
+    // Derived IDs from scope
+    const selectedOrganizationId = scope.org_ids?.[0] || null;
+    const selectedDepartmentId = scope.dept_ids?.[0] || null;
+    const selectedSubDepartmentId = scope.subdept_ids?.[0] || null;
 
     // Date and view state
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -50,86 +42,13 @@ const TimesheetPageInner: React.FC = () => {
     const [loading, setLoading] = useState(false);
 
     const { toast } = useToast();
-    const { hasPermission, user, activeContract } = useAuth();
+    const { hasPermission, user } = useAuth();
     const { theme } = useTheme();
-    const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
-
-    // Sync with Scope Filter (Phase 5)
-    useEffect(() => {
-        if (scope.org_ids.length > 0 && selectedOrganizationId !== scope.org_ids[0]) {
-            setSelectedOrganizationId(scope.org_ids[0]);
-        }
-    }, [scope.org_ids]);
-
-    useEffect(() => {
-        if (scope.dept_ids.length > 0 && selectedDepartmentId !== scope.dept_ids[0]) {
-            setSelectedDepartmentId(scope.dept_ids[0]);
-        }
-    }, [scope.dept_ids]);
-
-    useEffect(() => {
-        if (scope.subdept_ids.length > 0 && selectedSubDepartmentId !== scope.subdept_ids[0]) {
-            setSelectedSubDepartmentId(scope.subdept_ids[0]);
-        }
-    }, [scope.subdept_ids]);
-
-    // Calculate Lock States
-    const isOrgLocked = !!activeContract;
-    const isDeptLocked = activeContract && ['gamma', 'beta', 'alpha'].includes(activeContract.accessLevel);
-    const isSubDeptLocked = activeContract && ['beta', 'alpha'].includes(activeContract.accessLevel);
-
-    // Load organizations on mount
-    useEffect(() => {
-        const loadOrgs = async () => {
-            const orgs = await getOrganizations();
-            setOrganizations(orgs);
-            if (orgs.length > 0 && !selectedOrganizationId) {
-                setSelectedOrganizationId(orgs[0].id);
-            }
-        };
-        loadOrgs();
-    }, []);
-
-    // Load departments when organization changes
-    useEffect(() => {
-        const loadDepts = async () => {
-            if (!selectedOrganizationId) {
-                setDepartments([]);
-                setSelectedDepartmentId(null);
-                return;
-            }
-            const depts = await getDepartments(selectedOrganizationId);
-            setDepartments(depts);
-            if (depts.length > 0) {
-                setSelectedDepartmentId(depts[0].id);
-            } else {
-                setSelectedDepartmentId(null);
-            }
-        };
-        loadDepts();
-    }, [selectedOrganizationId]);
-
-    // Load sub-departments when department changes
-    useEffect(() => {
-        const loadSubDepts = async () => {
-            if (!selectedDepartmentId) {
-                setSubDepartments([]);
-                setSelectedSubDepartmentId(null);
-                return;
-            }
-            const subDepts = await getSubDepartments(selectedDepartmentId);
-            setSubDepartments(subDepts);
-            if (subDepts.length > 0) {
-                setSelectedSubDepartmentId(subDepts[0].id);
-            } else {
-                setSelectedSubDepartmentId(null);
-            }
-        };
-        loadSubDepts();
-    }, [selectedDepartmentId]);
 
     // Load shifts when filters change
     const loadShifts = useCallback(async () => {
+        if (!selectedOrganizationId) return;
+
         setLoading(true);
         try {
             const dateString = format(selectedDate, 'yyyy-MM-dd');
@@ -327,6 +246,7 @@ const TimesheetPageInner: React.FC = () => {
                 mode="managerial"
                 onScopeChange={setScope}
                 hidden={isGammaLocked}
+                multiSelect={false}
                 className="mb-4"
             />
             <div className={`rounded-lg shadow-xl p-4 md:p-6 border ${getContainerBgClass()}`}>
@@ -340,19 +260,6 @@ const TimesheetPageInner: React.FC = () => {
                     onExportSpreadsheet={handleExportSpreadsheet}
                     onRefresh={handleRefresh}
                     isRefreshing={loading}
-                    // Global filters
-                    organizations={organizations}
-                    departments={departments}
-                    subDepartments={subDepartments}
-                    selectedOrganizationId={selectedOrganizationId}
-                    selectedDepartmentId={selectedDepartmentId}
-                    selectedSubDepartmentId={selectedSubDepartmentId}
-                    onOrganizationChange={setSelectedOrganizationId}
-                    onDepartmentChange={setSelectedDepartmentId}
-                    onSubDepartmentChange={setSelectedSubDepartmentId}
-                    isOrgLocked={isOrgLocked}
-                    isDeptLocked={isDeptLocked}
-                    isSubDeptLocked={isSubDeptLocked}
                     // Secondary filters
                     searchQuery={searchQuery}
                     setSearchQuery={setSearchQuery}

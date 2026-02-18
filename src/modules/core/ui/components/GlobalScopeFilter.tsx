@@ -203,15 +203,22 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
     const orgs = allowedScopeTree?.organizations || [];
 
     // Initialize selected IDs
-    const [selectedOrgIds, setSelectedOrgIds] = useState<string[]>(
-        defaultSelection?.org_ids || orgs.map(o => o.id)
-    );
-    const [selectedDeptIds, setSelectedDeptIds] = useState<string[]>(
-        defaultSelection?.dept_ids || []
-    );
-    const [selectedSubDeptIds, setSelectedSubDeptIds] = useState<string[]>(
-        defaultSelection?.subdept_ids || []
-    );
+    const [selectedOrgIds, setSelectedOrgIds] = useState<string[]>(() => {
+        const initial = defaultSelection?.org_ids || [];
+        if (initial.length > 0) return initial;
+        if (orgs.length === 0) return [];
+        return multiSelect ? orgs.map(o => o.id) : [orgs[0].id];
+    });
+    const [selectedDeptIds, setSelectedDeptIds] = useState<string[]>(() => {
+        const initial = defaultSelection?.dept_ids || [];
+        if (initial.length > 0) return multiSelect ? initial : [initial[0]];
+        return [];
+    });
+    const [selectedSubDeptIds, setSelectedSubDeptIds] = useState<string[]>(() => {
+        const initial = defaultSelection?.subdept_ids || [];
+        if (initial.length > 0) return multiSelect ? initial : [initial[0]];
+        return [];
+    });
 
     // Derive available departments based on selected orgs
     const availableDepts = useMemo(() => {
@@ -246,12 +253,17 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
         if (!lockConfig.deptLocked) {
             const allDeptIds = availableDepts.map(d => d.id);
             setSelectedDeptIds(prev => {
-                // Keep only valid selections, add new ones
+                // Keep only valid selections
                 const valid = prev.filter(id => allDeptIds.includes(id));
-                return valid.length > 0 ? valid : allDeptIds;
+                if (multiSelect) {
+                    return valid.length > 0 ? valid : allDeptIds;
+                } else {
+                    // Single select fallback: first available
+                    return valid.length > 0 ? [valid[0]] : (allDeptIds.length > 0 ? [allDeptIds[0]] : []);
+                }
             });
         }
-    }, [availableDepts, lockConfig.deptLocked]);
+    }, [availableDepts, lockConfig.deptLocked, multiSelect]);
 
     // Auto-select all sub-depts when depts change (for unlocked sub-depts)
     useEffect(() => {
@@ -259,10 +271,15 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
             const allSubDeptIds = availableSubDepts.map(sd => sd.id);
             setSelectedSubDeptIds(prev => {
                 const valid = prev.filter(id => allSubDeptIds.includes(id));
-                return valid.length > 0 ? valid : allSubDeptIds;
+                if (multiSelect) {
+                    return valid.length > 0 ? valid : allSubDeptIds;
+                } else {
+                    // Single select fallback: first available
+                    return valid.length > 0 ? [valid[0]] : (allSubDeptIds.length > 0 ? [allSubDeptIds[0]] : []);
+                }
             });
         }
-    }, [availableSubDepts, lockConfig.subDeptLocked]);
+    }, [availableSubDepts, lockConfig.subDeptLocked, multiSelect]);
 
     // Emit scope changes
     const emitScope = useCallback(() => {

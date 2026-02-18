@@ -16,6 +16,7 @@ interface ScopeFilterBannerProps {
     onScopeChange: (scope: ScopeSelection) => void;
     /** If true, the filter is fully locked (gamma) and should be hidden */
     hidden?: boolean;
+    multiSelect?: boolean;
     /** Additional CSS classes */
     className?: string;
 }
@@ -30,6 +31,7 @@ export const ScopeFilterBanner: React.FC<ScopeFilterBannerProps> = ({
     mode,
     onScopeChange,
     hidden = false,
+    multiSelect = true,
     className,
 }) => {
     const context = useContext(AuthContext);
@@ -53,10 +55,12 @@ export const ScopeFilterBanner: React.FC<ScopeFilterBannerProps> = ({
             {mode === 'personal' ? (
                 <PersonalScopeFilter
                     onScopeChange={onScopeChange}
+                    multiSelect={multiSelect}
                 />
             ) : (
                 <ManagerialScopeFilter
                     onScopeChange={onScopeChange}
+                    multiSelect={multiSelect}
                 />
             )}
         </div>

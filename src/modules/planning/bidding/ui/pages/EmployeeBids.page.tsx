@@ -1081,3 +1081,6 @@ export const EmployeeBidsPage: React.FC = () => {
         </div>
     );
 };
+
+export default EmployeeBidsPage;
+

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, Hash, Building2, MapPin, Briefcase, Tag, Settings, Timer, History, CalendarIcon as CalendarIcon2 } from 'lucide-react';
+import { Database, Hash, Building2, MapPin, Briefcase, Tag, Settings, Timer, History, Info, CalendarIcon as CalendarIcon2 } from 'lucide-react';
 import { Separator } from '@/modules/core/ui/primitives/separator';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { useToast } from '@/modules/core/hooks/use-toast';
@@ -152,7 +152,7 @@ export const ReviewLogsStep: React.FC<ReviewLogsStepProps> = ({
             </div>
 
             {/* Audit Trail included in Review Logs step for edit mode */}
-            {editMode && existingShift?.id && (
+            {editMode && existingShift?.id ? (
                 <div className="mt-8 pt-8 border-t border-white/10">
                     <h3 className="text-sm font-medium text-white/70 mb-4 flex items-center gap-2">
                         <History className="h-4 w-4" />
@@ -160,7 +160,22 @@ export const ReviewLogsStep: React.FC<ReviewLogsStepProps> = ({
                     </h3>
                     <ShiftAuditTrail shiftId={existingShift.id} className="h-[350px]" />
                 </div>
+            ) : (
+                <div className="mt-8 pt-8 border-t border-white/10">
+                    <h3 className="text-sm font-medium text-white/70 mb-4 flex items-center gap-2">
+                        <History className="h-4 w-4" />
+                        Audit History
+                    </h3>
+                    <div className="p-4 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm flex items-start gap-3">
+                        <Info className="h-5 w-5 shrink-0" />
+                        <div>
+                            <p className="font-medium">Audit logs are generated upon creation.</p>
+                            <p className="text-white/60 mt-1">Once you create this shift, all actions and modifications will be tracked here.</p>
+                        </div>
+                    </div>
+                </div>
             )}
+
         </div>
     );
 };

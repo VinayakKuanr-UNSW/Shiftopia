@@ -65,15 +65,18 @@ export function useAuditData(filters: AuditFilters, pagination: PaginationState)
             setTotalCount(count || 0);
 
             // Map database fields to our interface
-            // Extract shift data from new_data/old_data JSONB if available
+            // Prefer snapshot context (human-readable names) over raw JSONB data
             const formattedEvents: AuditEvent[] = (data || []).map((log: any) => {
+                const snapshot = log.snapshot || {};
                 const shiftData = log.new_data || log.old_data || {};
                 return {
                     id: log.id,
                     shift_id: log.shift_id,
                     event_type: log.event_type,
+                    event_category: log.event_category,
                     performed_by: log.performed_by_id || 'system',
                     performed_by_name: log.performed_by_name || 'System',
+                    performed_by_role: log.performed_by_role,
                     performed_at: log.created_at,
                     changes: log.field_changed ? [{
                         field: log.field_changed,
@@ -81,9 +84,14 @@ export function useAuditData(filters: AuditFilters, pagination: PaginationState)
                         after: log.new_value
                     }] : [],
                     notes: log.metadata?.notes,
-                    role_name: shiftData.role_name || log.metadata?.role_name,
-                    shift_date: shiftData.shift_date,
-                    start_time: shiftData.start_time,
+                    snapshot,
+                    related_entity_id: log.related_entity_id,
+                    related_entity_type: log.related_entity_type,
+                    // Prefer snapshot → shiftData → metadata for display names
+                    role_name: snapshot.role_name || shiftData.role_name || log.metadata?.role_name,
+                    department_name: snapshot.department_name || shiftData.department_name,
+                    shift_date: snapshot.shift_date || shiftData.shift_date,
+                    start_time: snapshot.start_time || shiftData.start_time,
                 };
             });
 
@@ -121,6 +129,7 @@ export function useAuditData(filters: AuditFilters, pagination: PaginationState)
                 shift_date: firstEvent?.shift_date,
                 start_time: firstEvent?.start_time,
                 role_name: firstEvent?.role_name,
+                department_name: firstEvent?.department_name,
                 events: sortedEvents,
                 event_count: sortedEvents.length,
                 first_event_at: firstEvent?.performed_at,

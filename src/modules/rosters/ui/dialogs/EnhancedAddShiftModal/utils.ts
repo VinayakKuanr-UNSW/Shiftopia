@@ -1,4 +1,4 @@
-import { isBefore, startOfDay } from 'date-fns';
+import { isBefore, startOfDay, parseISO } from 'date-fns';
 
 export const calculateShiftLength = (start: string, end: string): number => {
     if (!start || !end) return 0;
@@ -28,4 +28,42 @@ export const formatTimeDisplay = (time: string): string => {
 export const isDateInPast = (date: Date | undefined): boolean => {
     if (!date) return false;
     return isBefore(startOfDay(date), startOfDay(new Date()));
+};
+
+export const isShiftStarted = (date: Date | string | undefined, startTime: string | undefined): boolean => {
+    if (!date || !startTime) return false;
+
+    try {
+        const [h, m] = startTime.split(':').map(Number);
+
+        // Ensure we have a valid Date object for the base day (local day)
+        let baseDate: Date;
+        if (date instanceof Date) {
+            baseDate = new Date(date);
+        } else {
+            // If it's a "YYYY-MM-DD" string, parseISO handles it locally
+            baseDate = parseISO(date);
+        }
+
+        const start = new Date(baseDate);
+        start.setHours(h, m, 0, 0);
+
+        const now = new Date();
+        const started = now >= start;
+
+        if (started) {
+            console.log('[isShiftStarted] TRUE', {
+                date,
+                startTime,
+                parsedBase: baseDate.toISOString(),
+                calculatedStart: start.toString(),
+                now: now.toString()
+            });
+        }
+
+        return started;
+    } catch (e) {
+        console.error('[isShiftStarted] error', e);
+        return false;
+    }
 };

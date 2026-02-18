@@ -940,22 +940,10 @@ export function useTemplates(): UseTemplatesReturn {
           .eq('id', id)
           .single();
 
-        // 1. CASCADE DELETE: Use server-side RPC function to delete shifts + audit events
-        log('network', '📤 Deleting associated shifts via RPC...');
-        let shiftsDeleted = 0;
-        try {
-          const { data, error: rpcError } = await supabase
-            .rpc('delete_template_shifts_cascade', { p_template_id: id });
-
-          if (rpcError) {
-            log('warn', `RPC delete failed: ${rpcError.message}`);
-          } else {
-            shiftsDeleted = data || 0;
-            log('success', `✅ Deleted ${shiftsDeleted} associated shifts via RPC`);
-          }
-        } catch (shiftErr: any) {
-          log('warn', `Failed to delete associated shifts: ${shiftErr.message}`);
-        }
+        // 1. SKIP CASCADE DELETE: Template deletion should ONLY remove the template structure
+        // Shifts will simple be unlinked via ON DELETE SET NULL FK constraint
+        log('info', 'ℹ️ Preserving associated shifts (unlinking via FK cascade)...');
+        const shiftsDeleted = 0;
 
         // 2. Delete the template itself (will cascade to template_groups and template_subgroups via FK)
         const { error: err } = await supabase
@@ -1303,14 +1291,12 @@ export function useTemplates(): UseTemplatesReturn {
       }
 
       // Check uniqueness via RPC
-      if (currentTemplate?.organizationId && currentTemplate?.subDepartmentId) {
+      if (currentTemplate?.organizationId) { // Removed currentTemplate?.subDepartmentId from condition
         try {
           const { data } = await supabase.rpc('validate_template_name', {
-            p_organization_id: currentTemplate.organizationId,
-            p_department_id: currentTemplate.departmentId,
-            p_sub_department_id: currentTemplate.subDepartmentId,
-            p_name: sanitizeTemplateName(name),
-            p_exclude_id: excludeId || null,
+            p_organization_id: currentTemplate.organizationId, // Changed to currentTemplate.organizationId
+            p_name: name.trim(), // Changed to name.trim()
+            p_exclude_id: excludeId || null, // Fixed syntax
           });
 
           if (data?.[0] && !data[0].is_valid) {

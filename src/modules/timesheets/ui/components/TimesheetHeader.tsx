@@ -10,9 +10,6 @@ import {
     Search,
     Filter,
     X,
-    Building2,
-    Layers,
-    GitBranch,
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
@@ -39,21 +36,6 @@ import {
 } from '@/modules/core/ui/primitives/select';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 
-interface Organization {
-    id: string;
-    name: string;
-}
-
-interface Department {
-    id: string;
-    name: string;
-}
-
-interface SubDepartment {
-    id: string;
-    name: string;
-}
-
 interface TimesheetHeaderProps {
     selectedDate: Date;
     onDateChange: (date: Date) => void;
@@ -64,21 +46,6 @@ interface TimesheetHeaderProps {
     onExportSpreadsheet: () => void;
     onRefresh: () => void;
     isRefreshing: boolean;
-
-    // Global filter data
-    organizations: Organization[];
-    departments: Department[];
-    subDepartments: SubDepartment[];
-    selectedOrganizationId: string | null;
-    selectedDepartmentId: string | null;
-    selectedSubDepartmentId: string | null;
-    onOrganizationChange: (id: string | null) => void;
-    onDepartmentChange: (id: string | null) => void;
-
-    onSubDepartmentChange: (id: string | null) => void;
-    isOrgLocked?: boolean;
-    isDeptLocked?: boolean;
-    isSubDeptLocked?: boolean;
 
     // Secondary filter props
     searchQuery: string;
@@ -105,19 +72,6 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
     onExportSpreadsheet,
     onRefresh,
     isRefreshing,
-    // Global filters
-    organizations,
-    departments,
-    subDepartments,
-    selectedOrganizationId,
-    selectedDepartmentId,
-    selectedSubDepartmentId,
-    onOrganizationChange,
-    onDepartmentChange,
-    onSubDepartmentChange,
-    isOrgLocked = false,
-    isDeptLocked = false,
-    isSubDeptLocked = false,
     // Secondary filters
     searchQuery,
     setSearchQuery,
@@ -146,7 +100,7 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
 
     return (
         <div className="space-y-4 text-white">
-            {/* Title Row with Global Filters */}
+            {/* Title Row */}
             <div className="flex flex-col gap-4">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div className="flex items-center">
@@ -188,76 +142,6 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
                             <RefreshCw className={`mr-1.5 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                             {isRefreshing ? 'Refreshing...' : 'Refresh'}
                         </Button>
-                    </div>
-                </div>
-
-                {/* Global Organization Filters */}
-                <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10">
-                    {/* Organization */}
-                    <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-blue-400" />
-                        <Select
-                            value={selectedOrganizationId || ''}
-                            onValueChange={(val) => onOrganizationChange(val || null)}
-                            disabled={isOrgLocked}
-                        >
-                            <SelectTrigger className="w-[180px] bg-white/5 border-white/10">
-                                <SelectValue placeholder="Select Organization" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-gray-900/95 backdrop-blur-xl border-gray-800 text-white">
-                                {organizations.map((org) => (
-                                    <SelectItem key={org.id} value={org.id}>
-                                        {org.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <ChevronRight className="h-4 w-4 text-white/30" />
-
-                    {/* Department */}
-                    <div className="flex items-center gap-2">
-                        <Layers className="h-4 w-4 text-emerald-400" />
-                        <Select
-                            value={selectedDepartmentId || ''}
-                            onValueChange={(val) => onDepartmentChange(val || null)}
-                            disabled={!selectedOrganizationId || departments.length === 0 || isDeptLocked}
-                        >
-                            <SelectTrigger className="w-[180px] bg-white/5 border-white/10">
-                                <SelectValue placeholder="Select Department" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-gray-900/95 backdrop-blur-xl border-gray-800 text-white">
-                                {departments.map((dept) => (
-                                    <SelectItem key={dept.id} value={dept.id}>
-                                        {dept.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <ChevronRight className="h-4 w-4 text-white/30" />
-
-                    {/* Sub-Department */}
-                    <div className="flex items-center gap-2">
-                        <GitBranch className="h-4 w-4 text-purple-400" />
-                        <Select
-                            value={selectedSubDepartmentId || ''}
-                            onValueChange={(val) => onSubDepartmentChange(val || null)}
-                            disabled={!selectedDepartmentId || subDepartments.length === 0 || isSubDeptLocked}
-                        >
-                            <SelectTrigger className="w-[180px] bg-white/5 border-white/10">
-                                <SelectValue placeholder="Select Sub-Department" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-gray-900/95 backdrop-blur-xl border-gray-800 text-white">
-                                {subDepartments.map((subDept) => (
-                                    <SelectItem key={subDept.id} value={subDept.id}>
-                                        {subDept.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
                     </div>
                 </div>
             </div>

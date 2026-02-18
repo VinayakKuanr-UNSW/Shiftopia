@@ -27,7 +27,7 @@ import {
     Layers,
 } from 'lucide-react';
 
-export type EventCategory = 'creation' | 'status' | 'bidding' | 'assignment' | 'attendance' | 'modification';
+export type EventCategory = 'creation' | 'status' | 'bidding' | 'assignment' | 'attendance' | 'modification' | 'trading' | 'schedule' | 'details';
 
 export interface EventIconConfig {
     icon: React.ComponentType<{ className?: string }>;
@@ -70,6 +70,13 @@ export const EVENT_ICONS: Record<string, EventIconConfig> = {
         category: 'status',
         label: 'Unpublished',
     },
+    shift_soft_deleted: {
+        icon: Trash2,
+        color: 'text-red-400',
+        bgColor: 'bg-red-500/20',
+        category: 'status',
+        label: 'Deleted',
+    },
     shift_deleted: {
         icon: Trash2,
         color: 'text-red-400',
@@ -83,6 +90,20 @@ export const EVENT_ICONS: Record<string, EventIconConfig> = {
         bgColor: 'bg-red-500/20',
         category: 'status',
         label: 'Cancelled',
+    },
+    uncancelled: {
+        icon: Undo2,
+        color: 'text-green-400',
+        bgColor: 'bg-green-500/20',
+        category: 'status',
+        label: 'Uncancelled',
+    },
+    draft_status_changed: {
+        icon: Edit3,
+        color: 'text-gray-400',
+        bgColor: 'bg-gray-500/20',
+        category: 'status',
+        label: 'Draft Status Changed',
     },
 
     // Bidding (Purple)
@@ -100,12 +121,26 @@ export const EVENT_ICONS: Record<string, EventIconConfig> = {
         category: 'bidding',
         label: 'Removed from Bidding',
     },
+    bid_placed: {
+        icon: HandMetal,
+        color: 'text-purple-400',
+        bgColor: 'bg-purple-500/20',
+        category: 'bidding',
+        label: 'Bid Placed',
+    },
     bid_submitted: {
         icon: HandMetal,
         color: 'text-purple-400',
         bgColor: 'bg-purple-500/20',
         category: 'bidding',
         label: 'Bid Submitted',
+    },
+    bid_won: {
+        icon: CheckCircle2,
+        color: 'text-green-400',
+        bgColor: 'bg-green-500/20',
+        category: 'bidding',
+        label: 'Bid Won',
     },
     bid_accepted: {
         icon: CheckCircle2,
@@ -114,12 +149,105 @@ export const EVENT_ICONS: Record<string, EventIconConfig> = {
         category: 'bidding',
         label: 'Bid Accepted',
     },
+    bid_rejected: {
+        icon: XCircle,
+        color: 'text-red-400',
+        bgColor: 'bg-red-500/20',
+        category: 'bidding',
+        label: 'Bid Rejected',
+    },
     bid_withdrawn: {
         icon: Undo2,
         color: 'text-amber-400',
         bgColor: 'bg-amber-500/20',
         category: 'bidding',
         label: 'Bid Withdrawn',
+    },
+    bid_status_changed: {
+        icon: Edit3,
+        color: 'text-purple-400',
+        bgColor: 'bg-purple-500/20',
+        category: 'bidding',
+        label: 'Bid Updated',
+    },
+
+    // Trading (Violet)
+    trade_requested: {
+        icon: ArrowLeftRight,
+        color: 'text-violet-400',
+        bgColor: 'bg-violet-500/20',
+        category: 'trading',
+        label: 'Trade Requested',
+    },
+    trade_offer_submitted: {
+        icon: HandMetal,
+        color: 'text-violet-400',
+        bgColor: 'bg-violet-500/20',
+        category: 'trading',
+        label: 'Offer Submitted',
+    },
+    trade_offer_selected: {
+        icon: CheckCircle2,
+        color: 'text-violet-400',
+        bgColor: 'bg-violet-500/20',
+        category: 'trading',
+        label: 'Offer Selected',
+    },
+    trade_pending_manager: {
+        icon: Clock,
+        color: 'text-amber-400',
+        bgColor: 'bg-amber-500/20',
+        category: 'trading',
+        label: 'Pending Manager',
+    },
+    trade_approved: {
+        icon: CheckCircle2,
+        color: 'text-green-400',
+        bgColor: 'bg-green-500/20',
+        category: 'trading',
+        label: 'Trade Approved',
+    },
+    trade_rejected: {
+        icon: XCircle,
+        color: 'text-red-400',
+        bgColor: 'bg-red-500/20',
+        category: 'trading',
+        label: 'Trade Rejected',
+    },
+    trade_cancelled: {
+        icon: XCircle,
+        color: 'text-gray-400',
+        bgColor: 'bg-gray-500/20',
+        category: 'trading',
+        label: 'Trade Cancelled',
+    },
+    trade_expired: {
+        icon: Clock,
+        color: 'text-gray-400',
+        bgColor: 'bg-gray-500/20',
+        category: 'trading',
+        label: 'Trade Expired',
+    },
+    trade_offer_rejected: {
+        icon: XCircle,
+        color: 'text-red-400',
+        bgColor: 'bg-red-500/20',
+        category: 'trading',
+        label: 'Offer Rejected',
+    },
+    trade_offer_withdrawn: {
+        icon: Undo2,
+        color: 'text-amber-400',
+        bgColor: 'bg-amber-500/20',
+        category: 'trading',
+        label: 'Offer Withdrawn',
+    },
+    trade_offer_expired: {
+        icon: Clock,
+        color: 'text-gray-400',
+        bgColor: 'bg-gray-500/20',
+        category: 'trading',
+        label: 'Offer Expired',
     },
 
     // Assignment (Indigo)
@@ -143,6 +271,22 @@ export const EVENT_ICONS: Record<string, EventIconConfig> = {
         bgColor: 'bg-indigo-500/20',
         category: 'assignment',
         label: 'Assignment Swapped',
+    },
+
+    // Schedule (Teal)
+    schedule_changed: {
+        icon: Calendar,
+        color: 'text-teal-400',
+        bgColor: 'bg-teal-500/20',
+        category: 'schedule',
+        label: 'Schedule Changed',
+    },
+    notes_updated: {
+        icon: Edit3,
+        color: 'text-teal-400',
+        bgColor: 'bg-teal-500/20',
+        category: 'details',
+        label: 'Notes Updated',
     },
 
     // Attendance (Green/Red)
