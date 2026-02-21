@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Roster } from '@/types';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'date-fns';
+import { isSydneyToday, isSydneyPast } from '@/modules/core/lib/date.utils';
 import { Clock, ChevronDown, ChevronUp, Lock } from 'lucide-react';
 import { ShiftChip } from '../ShiftChip';
 import { cn } from '@/modules/core/lib/utils';
@@ -96,8 +97,8 @@ export const RosterWeekView: React.FC<RosterWeekViewProps> = ({
           const dateStr = day.toISOString();
           const isExpanded = expandedDays.has(dateStr);
           const isSelected = isSameDay(day, selectedDate);
-          const isCurrentDay = isSameDay(day, new Date());
-          const isPast = day < new Date(new Date().setHours(0, 0, 0, 0));
+          const isCurrentDay = isSydneyToday(day);
+          const isPast = isSydneyPast(day);
           const shifts = isSelected ? getAllShiftsForDay(roster, day) : [];
           const shiftCount = shifts.length;
 

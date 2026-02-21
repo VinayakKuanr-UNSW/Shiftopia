@@ -8,9 +8,8 @@ import { TemplateConflict } from '../model/templates.types';
 import TemplatesSidebar from '../ui/components/TemplatesSidebar';
 import TemplateEditor from '../ui/components/TemplateEditor';
 import CreateTemplateDialog from '../ui/dialogs/CreateTemplateDialog';
-import PublishTemplateDialog from '../ui/dialogs/PublishTemplateDialog';
-import { Loader2, AlertTriangle, FileText } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
+import { Loader2, AlertTriangle, FileText } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,13 +36,13 @@ const TemplatesPage: React.FC = () => {
     isSaving,
     error,
     hasUnsavedChanges,
-    conflicts,
     fetchTemplates,
     fetchTemplate,
     createTemplate,
     saveTemplate,
     deleteTemplate,
     duplicateTemplate,
+    updateTemplateStatus,
     setCurrentTemplate,
     updateLocalGroup,
     addLocalSubgroup,
@@ -54,14 +53,11 @@ const TemplatesPage: React.FC = () => {
     updateLocalShift,
     deleteLocalShift,
     discardChanges,
-    publishTemplate,
-    checkDateConflicts,
     validateName,
     checkVersion,
   } = useTemplates();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
 
   const [unsavedChangesDialog, setUnsavedChangesDialog] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
@@ -73,12 +69,34 @@ const TemplatesPage: React.FC = () => {
   } | null>(null);
 
   const organizationId = scope.org_ids[0] || '00000000-0000-0000-0000-000000000001';
+  const departmentId = scope.dept_ids[0] || '';
+  const subDepartmentId = scope.subdept_ids[0] || '';
 
   useEffect(() => {
     if (organizationId) {
-      fetchTemplates();
+      fetchTemplates({
+        organizationId,
+        departmentId: departmentId || undefined,
+        subDepartmentId: subDepartmentId || undefined,
+      });
     }
-  }, [fetchTemplates, organizationId]);
+  }, [fetchTemplates, organizationId, departmentId, subDepartmentId]);
+
+  // Handle scope change mid-editing: Clear selection if it no longer matches the filter
+  useEffect(() => {
+    if (currentTemplate) {
+      const isCorrectOrg = currentTemplate.organizationId === organizationId;
+      // If department is selected, template must match it. If not, any template in the org is fine.
+      const isCorrectDept = !departmentId || currentTemplate.departmentId === departmentId;
+      // If sub-department is selected, template must match it.
+      const isCorrectSubDept = !subDepartmentId || currentTemplate.subDepartmentId === subDepartmentId;
+
+      if (!isCorrectOrg || !isCorrectDept || !isCorrectSubDept) {
+        console.log('[TemplatesPage] Scope mismatch detected, clearing selected template');
+        setCurrentTemplate(null);
+      }
+    }
+  }, [organizationId, departmentId, subDepartmentId, currentTemplate, setCurrentTemplate]);
 
   const confirmAction = useCallback(
     (action: () => void) => {
@@ -113,7 +131,6 @@ const TemplatesPage: React.FC = () => {
     async (input: {
       name: string;
       description: string;
-      month: string;
       organizationId: string;
       departmentId: string;
       subDepartmentId: string;
@@ -121,7 +138,6 @@ const TemplatesPage: React.FC = () => {
       const result = await createTemplate({
         name: input.name,
         description: input.description,
-        month: input.month,
         organizationId: input.organizationId,
         departmentId: input.departmentId,
         subDepartmentId: input.subDepartmentId,
@@ -131,12 +147,6 @@ const TemplatesPage: React.FC = () => {
     },
     [createTemplate]
   );
-
-  const existingMonths = useMemo(() => {
-    return templates
-      .map(t => t.publishedMonth)
-      .filter((m): m is string => !!m);
-  }, [templates]);
 
   // ✅ FIXED: Always return boolean
   const handleSaveChanges = useCallback(async (): Promise<boolean> => {
@@ -169,23 +179,18 @@ const TemplatesPage: React.FC = () => {
     confirmAction(() => setCurrentTemplate(null));
   }, [setCurrentTemplate, confirmAction]);
 
-  const handlePublishRequest = useCallback(
-    (id: string) => {
-      if (String(currentTemplate?.id) !== id) {
-        handleSelectTemplate(id);
-      }
-      setPublishDialogOpen(true);
+  const handleArchiveTemplate = useCallback(
+    async (id: string) => {
+      await updateTemplateStatus(id, 'archived');
     },
-    [currentTemplate, handleSelectTemplate]
+    [updateTemplateStatus]
   );
 
-  const handlePublish = useCallback(
-    async () => {
-      const success = await publishTemplate();
-      if (success) setPublishDialogOpen(false);
-      return success;
+  const handleUpdateStatus = useCallback(
+    async (id: string, status: string) => {
+      return await updateTemplateStatus(id, status);
     },
-    [publishTemplate]
+    [updateTemplateStatus]
   );
 
   const sidebarTemplates = templates.map((t) => ({
@@ -214,33 +219,31 @@ const TemplatesPage: React.FC = () => {
       ) ?? 0,
   }));
 
-  if (error && !isLoading && templates.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <AlertTriangle className="h-10 w-10 text-red-500 mb-4" />
-        <p>{error}</p>
-        <Button onClick={fetchTemplates}>Retry</Button>
-      </div>
-    );
-  }
+  const renderContent = () => {
+    if (error && !isLoading && templates.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full w-full">
+          <AlertTriangle className="h-10 w-10 text-red-500 mb-4" />
+          <p>{error}</p>
+          <Button onClick={() => fetchTemplates({
+            organizationId,
+            departmentId: departmentId || undefined,
+            subDepartmentId: subDepartmentId || undefined,
+          })} className="mt-4">Retry</Button>
+        </div>
+      );
+    }
 
-  if (isLoading && templates.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
+    if (isLoading && templates.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-full w-full">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      );
+    }
 
-  return (
-    <div className="flex flex-col h-full">
-      <ScopeFilterBanner
-        mode="managerial"
-        onScopeChange={setScope}
-        hidden={isGammaLocked}
-        className="m-4 mb-0"
-      />
-      <div className="flex flex-1 overflow-hidden">
+    return (
+      <>
         <TemplatesSidebar
           templates={sidebarTemplates}
           selectedTemplateId={
@@ -251,7 +254,7 @@ const TemplatesPage: React.FC = () => {
           onCreateTemplate={() => setCreateDialogOpen(true)}
           onDeleteTemplate={deleteTemplate}
           onDuplicateTemplate={duplicateTemplate}
-          onOpenPublish={handlePublishRequest}
+          onArchiveTemplate={handleArchiveTemplate}
         />
 
         <div className="flex-1 overflow-hidden">
@@ -261,9 +264,6 @@ const TemplatesPage: React.FC = () => {
               isSaving={isSaving}
               hasUnsavedChanges={hasUnsavedChanges}
               onBack={handleBack}
-              onDiscardChanges={discardChanges}
-              onSaveChanges={handleSaveChanges}
-              onPublish={() => setPublishDialogOpen(true)}
               onUpdateGroup={updateLocalGroup}
               onAddSubgroup={addLocalSubgroup}
               onUpdateSubgroup={updateLocalSubgroup}
@@ -272,68 +272,77 @@ const TemplatesPage: React.FC = () => {
               onAddShift={addLocalShift}
               onUpdateShift={updateLocalShift}
               onDeleteShift={deleteLocalShift}
+              onSaveChanges={handleSaveChanges}
+              onUpdateStatus={handleUpdateStatus}
+              onDiscardChanges={discardChanges}
             />
           ) : (
-            <div className="flex flex-col items-center justify-center h-full">
-              <FileText className="h-10 w-10 mb-4" />
-              <Button onClick={() => setCreateDialogOpen(true)}>
-                Create Template
-              </Button>
+            <div className="flex flex-col flex-1 items-center justify-center h-full text-slate-400 bg-slate-900/20">
+              <FileText className="h-16 w-16 mb-4 opacity-20" />
+              <p className="text-lg">Select a template to view details</p>
+              <p className="text-sm opacity-60">
+                Or create a new one from the sidebar
+              </p>
             </div>
           )}
         </div>
+      </>
+    );
+  };
 
-        <CreateTemplateDialog
-          isOpen={createDialogOpen}
-          onOpenChange={setCreateDialogOpen}
-          onCreateTemplate={handleCreateTemplate}
-          existingMonths={existingMonths}
-        />
-
-        <PublishTemplateDialog
-          isOpen={publishDialogOpen}
-          onClose={() => setPublishDialogOpen(false)}
-          onPublish={handlePublish}
-          templateName={currentTemplate?.name || ''}
-          templateVersion={currentTemplate?.version || 1}
-          publishedMonth={currentTemplate?.publishedMonth}
-          isPublishing={isSaving}
-        />
-
-        <AlertDialog open={unsavedChangesDialog} onOpenChange={setUnsavedChangesDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
-              <AlertDialogDescription>
-                Discard your changes?
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={executePendingAction}>
-                Discard
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        <AlertDialog open={versionConflictDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Version conflict</AlertDialogTitle>
-              <AlertDialogDescription>
-                Server version is newer.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleVersionConflictRefresh}>
-                Refresh
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+  return (
+    <div className="flex flex-col h-full">
+      <ScopeFilterBanner
+        mode="managerial"
+        onScopeChange={setScope}
+        hidden={isGammaLocked}
+        multiSelect={false}
+        className="m-4 mb-0"
+      />
+      <div className="flex flex-1 overflow-hidden">
+        {renderContent()}
       </div>
+
+      <CreateTemplateDialog
+        isOpen={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+        onCreateTemplate={handleCreateTemplate}
+        initialScope={{ organizationId, departmentId, subDepartmentId }}
+      />
+
+      <AlertDialog open={unsavedChangesDialog} onOpenChange={setUnsavedChangesDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              Discard your changes?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={executePendingAction}>
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={versionConflictDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Version conflict</AlertDialogTitle>
+            <AlertDialogDescription>
+              Server version is newer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleVersionConflictRefresh}>
+              Refresh
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -240,3 +240,88 @@ export function usePublishRoster() {
         }
     });
 }
+
+interface ApplyTemplateVariables {
+    templateId: string;
+    startDate: string;
+    endDate: string;
+    userId: string;
+    forceStack?: boolean;
+    source: 'templates_page' | 'roster_modal';
+}
+
+export function useApplyTemplate() {
+    const queryClient = useQueryClient();
+    const { toast } = useToast();
+
+    return useMutation({
+        mutationFn: async ({ templateId, startDate, endDate, userId, forceStack = false, source }: ApplyTemplateVariables) => {
+            const { data, error } = await supabase.rpc('apply_template_to_date_range_v2', {
+                p_template_id: templateId,
+                p_start_date: startDate,
+                p_end_date: endDate,
+                p_user_id: userId,
+                p_force_stack: forceStack,
+                p_source: source
+            } as any) as any;
+
+            if (error) throw error;
+            return data;
+        },
+        onSuccess: (data) => {
+            // Invalidate structure and shifts
+            queryClient.invalidateQueries({ queryKey: [ROSTER_STRUCTURE_KEY] });
+            queryClient.invalidateQueries({ queryKey: [shiftKeys.all] });
+            queryClient.invalidateQueries({ queryKey: ['rosters'] }); // Roster records might have been created
+
+            toast({
+                title: "Template Applied",
+                description: `Appended ${data.shifts_created} shifts across ${data.days_processed} days.`,
+            });
+        },
+        onError: (error: any) => {
+            console.error('Error applying template:', error);
+            toast({
+                title: "Error",
+                description: error.message || "Failed to apply template",
+                variant: "destructive"
+            });
+        }
+    });
+}
+
+export function useClearTemplate() {
+    const queryClient = useQueryClient();
+    const { toast } = useToast();
+
+    return useMutation({
+        mutationFn: async ({ rosterId, templateId, userId }: { rosterId: string; templateId: string; userId: string }) => {
+            const { data, error } = await (supabase.rpc as any)('sm_clear_template_application', {
+                p_roster_id: rosterId,
+                p_template_id: templateId,
+                p_user_id: userId
+            });
+
+            if (error) throw error;
+            return data;
+        },
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: [ROSTER_STRUCTURE_KEY] });
+            queryClient.invalidateQueries({ queryKey: [shiftKeys.all] });
+            queryClient.invalidateQueries({ queryKey: ['rosters'] });
+
+            toast({
+                title: "Template Cleared",
+                description: `Removed ${data.shifts_deleted} template-derived shifts.`,
+            });
+        },
+        onError: (error: any) => {
+            console.error('Clear template error:', error);
+            toast({
+                title: "Error",
+                description: error.message || "Failed to clear template",
+                variant: "destructive"
+            });
+        },
+    });
+}

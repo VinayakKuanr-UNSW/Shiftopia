@@ -4,25 +4,24 @@ import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
 import { useTableSorting } from '@/modules/core/hooks/useTableSorting';
 import { SortableTableHeader } from '@/modules/core/ui/primitives/sortable-table-header';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, parse } from 'date-fns';
+import { SYDNEY_TZ, parseZonedDateTime, formatInTimezone } from '@/modules/core/lib/date.utils';
 import { biddingApi } from '../../api/bidding.api';
 import { complianceService, ComplianceValidationResult } from '@/modules/rosters/services/compliance.service';
 import {
-    Info, Filter as FilterIcon, Columns, List as ListIcon, User,
+    Info, User,
     Calendar, Clock, ThumbsUp, ShieldAlert, Ban, Flame,
     Megaphone, UserPlus, UserCheck, Circle, Minus, Gavel, Coffee, Shield, Loader2, AlertTriangle, CheckCircle, XCircle
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/modules/core/ui/primitives/tabs';
+import { Tabs, TabsContent } from '@/modules/core/ui/primitives/tabs';
 import { BidStatusBadge } from '../components/BidStatusBadge';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { motion } from 'framer-motion';
 import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
-import {
-    Select, SelectTrigger, SelectContent, SelectItem, SelectValue,
-} from '@/modules/core/ui/primitives/select';
+
 import {
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
     AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
@@ -33,6 +32,7 @@ import { useBulkBidCompliance, BulkComplianceShift } from '../../hooks/useBulkBi
 
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { FunctionBar } from '@/modules/core/ui/components/FunctionBar';
 
 // ============================================================================
 // INTERFACES
@@ -47,6 +47,9 @@ interface ShiftData {
     weekday: string;
     startTime: string;
     endTime: string;
+    startAt?: string | null;
+    endAt?: string | null;
+    tzIdentifier?: string | null;
     paidBreak: number;
     unpaidBreak: number;
     netLength: number;
@@ -74,6 +77,9 @@ interface BidData {
     weekday: string;
     startTime: string;
     endTime: string;
+    startAt?: string | null;
+    endAt?: string | null;
+    tzIdentifier?: string | null;
     paidBreak: number;
     unpaidBreak: number;
     netLength: number;
@@ -89,26 +95,45 @@ interface BidData {
 // ============================================================================
 // HELPERS
 // ============================================================================
+// Premium Department Color Styling (Badges)
 function getDeptColor(groupType: string | null | undefined, dept: string): string {
-    if (groupType === 'convention_centre') return 'border-blue-500/40 text-blue-300';
-    if (groupType === 'exhibition_centre') return 'border-green-500/40 text-green-300';
-    if (groupType === 'theatre') return 'border-red-500/40 text-red-300';
-    const d = dept.toLowerCase();
-    if (d.includes('convention')) return 'border-blue-500/40 text-blue-300';
-    if (d.includes('exhibition')) return 'border-green-500/40 text-green-300';
-    if (d.includes('theatre')) return 'border-red-500/40 text-red-300';
-    return 'border-white/20 text-white/60';
+    const base = "font-medium backdrop-blur-sm";
+
+    // Convention Centre (Blue)
+    if (groupType === 'convention_centre' || dept.toLowerCase().includes('convention'))
+        return `${base} bg - blue - 500 / 10 border - blue - 400 / 30 text - blue - 200`;
+
+    // Exhibition Centre (Green/Emerald)
+    if (groupType === 'exhibition_centre' || dept.toLowerCase().includes('exhibition'))
+        return `${base} bg - emerald - 500 / 10 border - emerald - 400 / 30 text - emerald - 200`;
+
+    // Theatre (Red)
+    if (groupType === 'theatre' || dept.toLowerCase().includes('theatre'))
+        return `${base} bg - red - 500 / 10 border - red - 400 / 30 text - red - 200`;
+
+    // Default (Slate/Neutral)
+    return `${base} bg - white / 5 border - white / 20 text - slate - 300`;
 }
 
+// Premium Card Background Styling (Glassmorphism & Gradients)
 function getCardBg(groupType: string | null | undefined, dept: string): string {
-    if (groupType === 'convention_centre') return 'bg-blue-900/20 border-blue-500/30';
-    if (groupType === 'exhibition_centre') return 'bg-green-900/20 border-green-500/30';
-    if (groupType === 'theatre') return 'bg-red-900/20 border-red-500/30';
-    const d = dept.toLowerCase();
-    if (d.includes('convention')) return 'bg-blue-900/20 border-blue-500/30';
-    if (d.includes('exhibition')) return 'bg-green-900/20 border-green-500/30';
-    if (d.includes('theatre')) return 'bg-red-900/20 border-red-500/30';
-    return 'bg-white/5 border-white/10';
+    // Base styles for all cards: Glass effect, subtle border, hover lift + shadow
+    const base = "relative overflow-hidden backdrop-blur-md border shadow-lg transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 hover:border-opacity-50 group";
+
+    // Convention Centre
+    if (groupType === 'convention_centre' || dept.toLowerCase().includes('convention'))
+        return `${base} bg - gradient - to - br from - blue - 900 / 40 via - blue - 950 / 40 to - slate - 900 / 60 border - blue - 500 / 20 hover: border - blue - 400 / 40 hover: shadow - blue - 900 / 20`;
+
+    // Exhibition Centre
+    if (groupType === 'exhibition_centre' || dept.toLowerCase().includes('exhibition'))
+        return `${base} bg - gradient - to - br from - emerald - 900 / 40 via - emerald - 950 / 40 to - slate - 900 / 60 border - emerald - 500 / 20 hover: border - emerald - 400 / 40 hover: shadow - emerald - 900 / 20`;
+
+    // Theatre
+    if (groupType === 'theatre' || dept.toLowerCase().includes('theatre'))
+        return `${base} bg - gradient - to - br from - red - 900 / 40 via - red - 950 / 40 to - slate - 900 / 60 border - red - 500 / 20 hover: border - red - 400 / 40 hover: shadow - red - 900 / 20`;
+
+    // Default
+    return `${base} bg - gradient - to - br from - slate - 800 / 50 via - slate - 900 / 50 to - black / 40 border - white / 10 hover: border - white / 20 hover: shadow - white / 5`;
 }
 
 function toSeconds(t: string): number {
@@ -129,12 +154,6 @@ export const EmployeeBidsPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'available' | 'myBids'>('available');
     const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
 
-    // Filters
-    const [deptFilter, setDeptFilter] = useState('all');
-    const [subDeptFilter, setSubDeptFilter] = useState('all');
-    const [roleFilter, setRoleFilter] = useState('all');
-    const [tierFilter, setTierFilter] = useState('all');
-    const [eligibilityFilter, setEligibilityFilter] = useState('all');
 
     // Selection
     const [selectedBidIds, setSelectedBidIds] = useState<any[]>([]);
@@ -201,14 +220,20 @@ export const EmployeeBidsPage: React.FC = () => {
     // ========================================================================
     const availableShifts: ShiftData[] = React.useMemo(() => {
         return rawAvailableShifts.map(s => {
-            const durationSec = toSeconds(s.end_time) - toSeconds(s.start_time);
-            const durationMin = durationSec > 0 ? durationSec / 60 : (durationSec + 86400) / 60;
+            const shiftStartAt = (s as any).start_at ? new Date((s as any).start_at) : parseZonedDateTime(s.shift_date, s.start_time, (s as any).tz_identifier || SYDNEY_TZ);
+            const shiftEndAt = (s as any).end_at ? new Date((s as any).end_at) : parseZonedDateTime(s.shift_date, s.end_time, (s as any).tz_identifier || SYDNEY_TZ);
+
+            // Adjust end time if shift passes midnight and no UTC end_at is provided
+            if (!(s as any).end_at && shiftEndAt < shiftStartAt) {
+                shiftEndAt.setDate(shiftEndAt.getDate() + 1);
+            }
+
+            const durationMin = (shiftEndAt.getTime() - shiftStartAt.getTime()) / (1000 * 60);
             const paidBreak = s.paid_break_minutes || 0;
             const unpaidBreak = s.unpaid_break_minutes || 0;
             const netLength = durationMin - unpaidBreak;
 
-            const start = parseISO(s.shift_date + 'T' + s.start_time);
-            const timeToStartHours = (start.getTime() - new Date().getTime()) / (1000 * 60 * 60);
+            const timeToStartHours = (shiftStartAt.getTime() - new Date().getTime()) / (1000 * 60 * 60);
             const isUrgent = (s as any).bidding_status === 'on_bidding_urgent' || (s as any).is_urgent || (timeToStartHours > 0 && timeToStartHours < 24);
 
             return {
@@ -217,10 +242,13 @@ export const EmployeeBidsPage: React.FC = () => {
                 organization: (s as any).organizations?.name || 'MCEC',
                 department: s.departments?.name || 'Unknown',
                 subGroup: s.sub_departments?.name || 'General',
-                date: s.shift_date,
-                weekday: format(parseISO(s.shift_date), 'EEE'),
-                startTime: s.start_time.slice(0, 5),
-                endTime: s.end_time.slice(0, 5),
+                date: (s as any).start_at ? formatInTimezone(new Date((s as any).start_at), (s as any).tz_identifier || SYDNEY_TZ, 'yyyy-MM-dd') : s.shift_date,
+                weekday: (s as any).start_at ? formatInTimezone(new Date((s as any).start_at), (s as any).tz_identifier || SYDNEY_TZ, 'EEE') : format(parseISO(s.shift_date), 'EEE'),
+                startTime: (s as any).start_at ? formatInTimezone(new Date((s as any).start_at), (s as any).tz_identifier || SYDNEY_TZ, 'HH:mm') : s.start_time.slice(0, 5),
+                endTime: (s as any).end_at ? formatInTimezone(new Date((s as any).end_at), (s as any).tz_identifier || SYDNEY_TZ, 'HH:mm') : s.end_time.slice(0, 5),
+                startAt: (s as any).start_at,
+                endAt: (s as any).end_at,
+                tzIdentifier: (s as any).tz_identifier,
                 paidBreak,
                 unpaidBreak,
                 netLength,
@@ -242,8 +270,15 @@ export const EmployeeBidsPage: React.FC = () => {
         return rawMyBids.map(b => {
             const s = b.shift;
             if (!s) return null;
-            const durationSec = toSeconds(s.end_time) - toSeconds(s.start_time);
-            const durationMin = durationSec > 0 ? durationSec / 60 : (durationSec + 86400) / 60;
+            const shiftStartAt = (s as any).start_at ? new Date((s as any).start_at) : parseZonedDateTime(s.shift_date, s.start_time, (s as any).tz_identifier || SYDNEY_TZ);
+            const shiftEndAt = (s as any).end_at ? new Date((s as any).end_at) : parseZonedDateTime(s.shift_date, s.end_time, (s as any).tz_identifier || SYDNEY_TZ);
+
+            // Adjust end time if shift passes midnight and no UTC end_at is provided
+            if (!(s as any).end_at && shiftEndAt < shiftStartAt) {
+                shiftEndAt.setDate(shiftEndAt.getDate() + 1);
+            }
+
+            const durationMin = (shiftEndAt.getTime() - shiftStartAt.getTime()) / (1000 * 60);
             const paidBreak = s.paid_break_minutes || 0;
             const unpaidBreak = s.unpaid_break_minutes || 0;
             const netLength = durationMin - unpaidBreak;
@@ -255,10 +290,13 @@ export const EmployeeBidsPage: React.FC = () => {
                 organization: (s as any).organizations?.name || 'MCEC',
                 department: s.departments?.name || 'Unknown',
                 subGroup: s.sub_departments?.name || 'General',
-                date: s.shift_date,
-                weekday: format(parseISO(s.shift_date), 'EEE'),
-                startTime: s.start_time.slice(0, 5),
-                endTime: s.end_time.slice(0, 5),
+                date: (s as any).start_at ? formatInTimezone(new Date((s as any).start_at), (s as any).tz_identifier || SYDNEY_TZ, 'yyyy-MM-dd') : s.shift_date,
+                weekday: (s as any).start_at ? formatInTimezone(new Date((s as any).start_at), (s as any).tz_identifier || SYDNEY_TZ, 'EEE') : format(parseISO(s.shift_date), 'EEE'),
+                startTime: (s as any).start_at ? formatInTimezone(new Date((s as any).start_at), (s as any).tz_identifier || SYDNEY_TZ, 'HH:mm') : s.start_time.slice(0, 5),
+                endTime: (s as any).end_at ? formatInTimezone(new Date((s as any).end_at), (s as any).tz_identifier || SYDNEY_TZ, 'HH:mm') : s.end_time.slice(0, 5),
+                startAt: (s as any).start_at,
+                endAt: (s as any).end_at,
+                tzIdentifier: (s as any).tz_identifier,
                 paidBreak,
                 unpaidBreak,
                 netLength,
@@ -301,41 +339,19 @@ export const EmployeeBidsPage: React.FC = () => {
     // ========================================================================
     // FILTERS
     // ========================================================================
-    const filterShifts = (items: ShiftData[]) => {
-        return items.filter((shift) => {
-            if (deptFilter !== 'all' && shift.department !== deptFilter) return false;
-            if (subDeptFilter !== 'all' && shift.subGroup !== subDeptFilter) return false;
-            if (roleFilter !== 'all' && shift.role !== roleFilter) return false;
-            if (tierFilter !== 'all' && shift.remunerationLevel !== tierFilter) return false;
-            if (eligibilityFilter === 'eligible' && !shift.isEligible) return false;
-            if (eligibilityFilter === 'ineligible' && shift.isEligible) return false;
-            return true;
-        });
-    };
-
-    const filterBids = (items: BidData[]) => {
-        return items.filter((bid) => {
-            if (deptFilter !== 'all' && bid.department !== deptFilter) return false;
-            if (subDeptFilter !== 'all' && bid.subGroup !== subDeptFilter) return false;
-            if (roleFilter !== 'all' && bid.role !== roleFilter) return false;
-            if (tierFilter !== 'all' && bid.remunerationLevel !== tierFilter) return false;
-            return true;
-        });
-    };
-
-    const filteredAvailableShifts = filterShifts(shiftsTableSort.sortedData);
-    const filteredMyBids = filterBids(bidsTableSort.sortedData);
+    const filteredAvailableShifts = shiftsTableSort.sortedData;
+    const filteredMyBids = bidsTableSort.sortedData;
 
     // ========================================================================
     // SELECTION HANDLERS
     // ========================================================================
     const handleSelectAllAvailable = (isChecked: boolean) => {
-        const eligibleShifts = filterShifts(availableShifts).filter(s => s.isEligible).map(s => s.id);
+        const eligibleShifts = availableShifts.filter(s => s.isEligible).map(s => s.id);
         setSelectedBidIds(isChecked ? eligibleShifts : []);
     };
 
     const handleSelectAllMyBids = (isChecked: boolean) => {
-        const allBidIds = filterBids(myBids).map(b => b.id);
+        const allBidIds = myBids.map(b => b.id);
         setSelectedBidIds(isChecked ? allBidIds : []);
     };
 
@@ -425,13 +441,6 @@ export const EmployeeBidsPage: React.FC = () => {
         setSelectedBidIds([]);
     };
 
-    const clearFilters = () => {
-        setDeptFilter('all');
-        setSubDeptFilter('all');
-        setRoleFilter('all');
-        setTierFilter('all');
-        setEligibilityFilter('all');
-    };
 
     // ========================================================================
     // RENDER CARD (Shared between Available and My Bids)
@@ -440,10 +449,14 @@ export const EmployeeBidsPage: React.FC = () => {
         const existingBid = myBids.find(b => String(b.shiftId) === String(shift.id) && b.status !== 'withdrawn');
         const isBidPlaced = !!existingBid;
 
-        // Calculate bidding closes: 4 hours before shift start
-        const shiftStart = new Date(`${shift.date}T${shift.startTime}:00`);
+        // Calculate bidding closes:
+        const shiftStart = shift.startAt
+            ? new Date(shift.startAt)
+            : parseZonedDateTime(shift.date, shift.startTime, SYDNEY_TZ);
+
+        // Bidding closes 4 hours before shift start
         const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
-        const now = new Date();
+        const now = new Date(); // Absolute now
         const isExpired = now >= biddingCloses;
         const msUntilClose = biddingCloses.getTime() - now.getTime();
 
@@ -453,7 +466,7 @@ export const EmployeeBidsPage: React.FC = () => {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
-                className={`p-4 rounded-lg border ${getCardBg(shift.groupType, shift.department)} transition-all duration-300`}
+                className={`p - 4 rounded - lg border ${getCardBg(shift.groupType, shift.department)} transition - all duration - 300`}
             >
                 {/* CHECKBOX + COMPLIANCE BADGE */}
                 <div className="flex items-center mb-3">
@@ -499,7 +512,7 @@ export const EmployeeBidsPage: React.FC = () => {
                 {/* SUB-GROUP BADGE */}
                 {shift.subGroup && shift.subGroup !== 'General' && (
                     <div className="mb-2">
-                        <Badge variant="outline" className={`text-[10px] px-2 py-0.5 font-medium border ${shift.subGroupColor}`}>
+                        <Badge variant="outline" className={`text - [10px] px - 2 py - 0.5 font - medium border ${shift.subGroupColor} `}>
                             {shift.subGroup}
                         </Badge>
                     </div>
@@ -551,8 +564,8 @@ export const EmployeeBidsPage: React.FC = () => {
                         <span>Closes in {(() => {
                             const hours = Math.floor(msUntilClose / (1000 * 60 * 60));
                             const mins = Math.floor((msUntilClose % (1000 * 60 * 60)) / (1000 * 60));
-                            if (hours > 0) return `${hours}h ${mins}m`;
-                            return `${mins}m`;
+                            if (hours > 0) return `${hours}h ${mins} m`;
+                            return `${mins} m`;
                         })()}</span>
                     </div>
                 )}
@@ -679,76 +692,6 @@ export const EmployeeBidsPage: React.FC = () => {
     return (
         <div className="min-h-screen w-full p-4 md:p-8">
             {/* FILTER BAR */}
-            <div className="flex flex-wrap items-center gap-3 mb-6">
-                <div className="flex items-center space-x-2 text-white/80 font-semibold">
-                    <FilterIcon size={18} />
-                    <span className="text-sm">Filters:</span>
-                </div>
-
-                <Select value={deptFilter} onValueChange={setDeptFilter}>
-                    <SelectTrigger className="w-[140px] bg-white/5 border-white/10 text-white/80 text-xs h-8">
-                        <SelectValue placeholder="Department" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Depts</SelectItem>
-                        <SelectItem value="Convention Centre">Convention Centre</SelectItem>
-                        <SelectItem value="Exhibition Centre">Exhibition Centre</SelectItem>
-                        <SelectItem value="Theatre">Theatre</SelectItem>
-                    </SelectContent>
-                </Select>
-
-                <Select value={subDeptFilter} onValueChange={setSubDeptFilter}>
-                    <SelectTrigger className="w-[120px] bg-white/5 border-white/10 text-white/80 text-xs h-8">
-                        <SelectValue placeholder="Sub-Dept" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        <SelectItem value="AM Base">AM Base</SelectItem>
-                        <SelectItem value="PM Base">PM Base</SelectItem>
-                        <SelectItem value="Bump-In">Bump-In</SelectItem>
-                    </SelectContent>
-                </Select>
-
-                <Select value={roleFilter} onValueChange={setRoleFilter}>
-                    <SelectTrigger className="w-[120px] bg-white/5 border-white/10 text-white/80 text-xs h-8">
-                        <SelectValue placeholder="Role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Roles</SelectItem>
-                        <SelectItem value="Team Leader">Team Leader</SelectItem>
-                        <SelectItem value="TM3">TM3</SelectItem>
-                        <SelectItem value="TM2">TM2</SelectItem>
-                    </SelectContent>
-                </Select>
-
-                {activeTab === 'available' && (
-                    <Select value={eligibilityFilter} onValueChange={setEligibilityFilter}>
-                        <SelectTrigger className="w-[100px] bg-white/5 border-white/10 text-white/80 text-xs h-8">
-                            <SelectValue placeholder="Eligibility" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All</SelectItem>
-                            <SelectItem value="eligible">Eligible</SelectItem>
-                            <SelectItem value="ineligible">Ineligible</SelectItem>
-                        </SelectContent>
-                    </Select>
-                )}
-
-                <Button variant="ghost" size="sm" className="text-xs text-white/60" onClick={clearFilters}>
-                    Clear
-                </Button>
-
-                <div className="ml-auto flex items-center gap-2">
-                    <Button variant={viewMode === 'card' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('card')}>
-                        <Columns size={14} className="mr-1" /> Cards
-                    </Button>
-                    <Button variant={viewMode === 'table' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('table')}>
-                        <ListIcon size={14} className="mr-1" /> Table
-                    </Button>
-                </div>
-            </div>
-
-
             {/* Scope Filter */}
             <ScopeFilterBanner
                 mode="personal"
@@ -757,24 +700,42 @@ export const EmployeeBidsPage: React.FC = () => {
                 className="mb-6"
             />
 
-            {/* TABS */}
-            <Tabs defaultValue="available" value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)}>
-                <TabsList className="bg-black/20 border border-white/10 mb-6">
-                    <TabsTrigger value="available" className="data-[state=active]:bg-white/10">
-                        Available Shifts ({filteredAvailableShifts.length})
-                    </TabsTrigger>
-                    <TabsTrigger value="myBids" className="data-[state=active]:bg-white/10">
-                        My Bids ({filteredMyBids.length})
-                    </TabsTrigger>
-                </TabsList>
+            {/* Function Bar */}
+            <FunctionBar
+                tabs={[
+                    { id: 'available', label: 'Available Shifts', count: filteredAvailableShifts.length },
+                    { id: 'myBids', label: 'My Bids', count: filteredMyBids.length }
+                ]}
+                activeTab={activeTab}
+                onTabChange={(id) => setActiveTab(id as any)}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+                onRefresh={() => {
+                    queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
+                    queryClient.invalidateQueries({ queryKey: ['myBids'] });
+                }}
+                className="mb-6"
+            />
 
+
+
+
+            {/* NEW: Tabs Wrapper */}
+            <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className="space-y-4">
                 {/* TAB: Available Shifts */}
                 <TabsContent value="available" className="space-y-4">
-                    <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3 flex items-start text-sm">
-                        <Info className="text-blue-400 mr-2 mt-0.5 shrink-0" size={16} />
-                        <p className="text-white/80">
-                            Bid on shifts matching your role and department. Use filters to narrow results.
-                        </p>
+                    <div className="relative mb-6 overflow-hidden rounded-xl border-l-[3px] border-l-blue-500 bg-gradient-to-r from-blue-500/10 via-blue-900/5 to-transparent p-4 backdrop-blur-sm">
+                        <div className="flex items-start gap-3">
+                            <div className="rounded-full bg-blue-500/20 p-1.5 ring-1 ring-blue-500/30">
+                                <Info className="h-4 w-4 text-blue-400" />
+                            </div>
+                            <div className="space-y-1">
+                                <h4 className="text-sm font-medium text-blue-200">Available Shifts</h4>
+                                <p className="text-sm text-blue-200/70 leading-relaxed max-w-2xl">
+                                    Browse and express interest in shifts matching your role and department. Use the global scope to refine your view.
+                                </p>
+                            </div>
+                        </div>
                     </div>
 
                     <div className="flex gap-2 items-center">
@@ -829,8 +790,8 @@ export const EmployeeBidsPage: React.FC = () => {
                                         const canBid = !compResult || compResult.status !== 'fail';
                                         const isBlocked = compResult?.status === 'fail';
 
-                                        // Calculate expired status (logic copied from renderCard)
-                                        const shiftStart = new Date(`${shift.date}T${shift.startTime}:00`);
+                                        // Calculate expired status securely using ZonedDateTime
+                                        const shiftStart = parseZonedDateTime(shift.date, shift.startTime, SYDNEY_TZ);
                                         const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
                                         const now = new Date();
                                         const isExpired = now >= biddingCloses;
@@ -1078,7 +1039,7 @@ export const EmployeeBidsPage: React.FC = () => {
                 }}
                 isPending={placeBidMutation.isPending}
             />
-        </div>
+        </div >
     );
 };
 

@@ -21,14 +21,21 @@ const MyRosterPage: React.FC = () => {
   const { organizationId, departmentId } = useOrgSelection();
   const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
 
-  // Fetch real shifts for the logged-in employee
-  const { shifts, isLoading, error, getShiftsForDate } = useMyRoster(view, selectedDate);
+  // Fetch real shifts for the logged-in employee, filtering by the multi-select scope
+  const { shifts, isLoading, error, getShiftsForDate } = useMyRoster(view, selectedDate, scope);
 
   // My Offers state
   const [showOffersModal, setShowOffersModal] = useState(false);
 
   // React Query: offer count auto-refetches on interval and after invalidation
   const { data: pendingOfferCount = 0 } = usePendingOfferCount(user?.id || null);
+
+  console.log('[MyRosterPage] Debug:', {
+    userId: user?.id,
+    pendingOfferCount,
+    organizationId,
+    departmentId
+  });
 
   // No-op: React Query auto-invalidates via mutation hooks when offers are responded to
   const handleOfferResponded = () => {
@@ -203,10 +210,7 @@ const MyRosterPage: React.FC = () => {
         isOpen={showOffersModal}
         onClose={() => setShowOffersModal(false)}
         onOfferResponded={handleOfferResponded}
-        filters={{
-          organizationId: scope.org_ids[0] || organizationId || undefined,
-          departmentId: scope.dept_ids[0] || departmentId || undefined
-        }}
+      // Offers are global for the user
       />
     </div>
   );

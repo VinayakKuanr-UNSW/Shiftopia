@@ -5,6 +5,7 @@ import {
     ComplianceResult
 } from '../types';
 import { differenceInMinutes, parseISO } from 'date-fns';
+import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 export const MinShiftLengthRule: ComplianceRule = {
     id: 'MIN_SHIFT_LENGTH',
@@ -29,9 +30,9 @@ export const MinShiftLengthRule: ComplianceRule = {
 
         const { candidate_shift } = input;
 
-        // Parse times
-        const start = parseISO(`${candidate_shift.shift_date}T${candidate_shift.start_time}`);
-        const end = parseISO(`${candidate_shift.shift_date}T${candidate_shift.end_time}`);
+        // Parse times using correct timezone to avoid DST calculation errors
+        const start = parseZonedDateTime(candidate_shift.shift_date, candidate_shift.start_time, SYDNEY_TZ);
+        const end = parseZonedDateTime(candidate_shift.shift_date, candidate_shift.end_time, SYDNEY_TZ);
 
         // Handle cross-midnight
         let durationMinutes = differenceInMinutes(end, start);

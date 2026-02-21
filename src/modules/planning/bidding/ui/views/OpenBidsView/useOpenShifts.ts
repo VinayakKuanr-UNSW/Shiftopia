@@ -7,6 +7,7 @@ import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 import { calculateTimeRemaining } from './utils';
 import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
+import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import type { OpenShift, ShiftStatus, GroupType } from './types';
 
 interface UseOpenShiftsReturn {
@@ -49,7 +50,7 @@ export function useOpenShifts(organizationId?: string): UseOpenShiftsReturn {
         const unpaidBreak = s.unpaid_break_minutes || 0;
         const netHours = ((durationMins - unpaidBreak) / 60).toFixed(1);
 
-        const shiftStart = new Date(`${s.shift_date}T${s.start_time}`);
+        const shiftStart = s.start_at ? new Date(s.start_at) : parseZonedDateTime(s.shift_date, s.start_time, s.tz_identifier || SYDNEY_TZ);
         const biddingDeadline = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000).toISOString();
 
         // Consistent urgency logic

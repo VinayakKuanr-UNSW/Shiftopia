@@ -9,6 +9,7 @@ import {
   isSameMonth,
   isToday,
 } from 'date-fns';
+import { getSydneyToday, isSydneyToday } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
 import ShiftDetailsDialog from './ShiftDetailsDialog';
 import { Shift } from '@/modules/rosters';
@@ -96,7 +97,7 @@ const MonthView: React.FC<MonthViewProps> = ({ date, getShiftsForDate }) => {
           {weeks.map((week, weekIndex) =>
             week.map((day, dayIndex) => {
               const isCurrentMonth = isSameMonth(day, date);
-              const isCurrentDay = isToday(day);
+              const isCurrentDay = isSydneyToday(day);
               const shifts = getShiftsForDate(day);
 
               return (
@@ -160,7 +161,7 @@ const MonthView: React.FC<MonthViewProps> = ({ date, getShiftsForDate }) => {
         isOpen={!!selectedShift}
         onClose={() => setSelectedShift(null)}
         shiftData={selectedShift?.data || null}
-        shiftDate={selectedShift?.date || new Date()}
+        shiftDate={selectedShift?.date || getSydneyToday()}
       />
     </div>
   );

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/platform/realtime/client';
 import {
     Template,
+    TemplateBatch,
     Group,
     CreateTemplateInput,
     SaveTemplateResult,
@@ -26,6 +27,8 @@ export const templateKeys = {
     list: (filters?: Record<string, unknown>) => [...templateKeys.lists(), filters] as const,
     details: () => [...templateKeys.all, 'detail'] as const,
     detail: (id: string) => [...templateKeys.details(), id] as const,
+    histories: () => [...templateKeys.all, 'history'] as const,
+    history: (id: string) => [...templateKeys.histories(), id] as const,
 };
 
 /* ============================================================
@@ -73,6 +76,52 @@ export function useTemplateById(id?: string) {
             }
 
             return dbTemplateToFrontend(data);
+        },
+        enabled: !!id,
+    });
+}
+
+/**
+ * Fetch application history for a specific template.
+ */
+export function useTemplateHistory(id?: string) {
+    return useQuery({
+        queryKey: templateKeys.history(id || ''),
+        queryFn: async (): Promise<TemplateBatch[]> => {
+            if (!id) return [];
+
+            const { data, error } = await supabase
+                .from('roster_template_batches')
+                .select(`
+                    id,
+                    template_id,
+                    start_date,
+                    end_date,
+                    source,
+                    applied_by,
+                    applied_at,
+                    profiles:applied_by (
+                        first_name,
+                        last_name
+                    )
+                `)
+                .eq('template_id', id)
+                .order('applied_at', { ascending: false });
+
+            if (error) throw error;
+
+            return (data || []).map((db: any): TemplateBatch => ({
+                id: db.id,
+                templateId: db.template_id,
+                startDate: db.start_date,
+                endDate: db.end_date,
+                source: db.source,
+                appliedBy: db.applied_by,
+                appliedByName: db.profiles
+                    ? `${db.profiles.first_name || ''} ${db.profiles.last_name || ''}`.trim()
+                    : undefined,
+                appliedAt: db.applied_at,
+            }));
         },
         enabled: !!id,
     });
@@ -342,6 +391,42 @@ export function useCheckVersion() {
             if (!result || result.length === 0) return null;
 
             return result[0];
+        },
+    });
+}
+/**
+ * Undo a specific template batch application.
+ */
+export function useUndoTemplateBatch() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({ batchId }: { batchId: string }) => {
+            const { data: auth } = await supabase.auth.getUser();
+            if (!auth?.user) throw new Error('Not authenticated');
+
+            const { data, error } = await supabase.rpc('undo_template_batch', {
+                p_batch_id: batchId,
+                p_user_id: auth.user.id,
+            });
+
+            if (error) throw error;
+            return data;
+        },
+        onSuccess: async (data: any) => {
+            // Invalidate the generic list and the specific history for this template
+            const templateId = data?.template_id;
+            const queries = [
+                queryClient.invalidateQueries({ queryKey: templateKeys.all }),
+            ];
+            if (templateId) {
+                queries.push(queryClient.invalidateQueries({ queryKey: templateKeys.history(templateId) }));
+            }
+            await Promise.all(queries);
+            toast.success('Application undone successfully');
+        },
+        onError: (error: Error) => {
+            toast.error(error.message || 'Failed to undo application');
         },
     });
 }

@@ -39,7 +39,7 @@ const ProviderWrapper: React.FC<ProviderWrapperProps> = ({ children }) => {
                     <Toaster />
                     <Sonner />
                     <RosterUIProvider>
-                      <BrowserRouter>
+                      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                         {children}
                       </BrowserRouter>
                     </RosterUIProvider>

@@ -2,13 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Badge } from '@/modules/core/ui/primitives/badge';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/modules/core/ui/primitives/select';
+
 import {
     Dialog,
     DialogContent,
@@ -24,11 +18,6 @@ import {
 } from '@/modules/core/ui/primitives/tooltip';
 import {
     ArrowLeftRight,
-    Search,
-    Filter,
-    RefreshCw,
-    SortAsc,
-    AlertTriangle,
     Loader2,
     Eye,
     X,
@@ -40,26 +29,23 @@ import {
     Timer,
     UserCheck,
     ShieldCheck,
-    Plus,
-    AlertCircle,
+    AlertTriangle,
 } from 'lucide-react';
-import { Switch } from '@/modules/core/ui/primitives/switch';
-import { Label } from '@/modules/core/ui/primitives/label';
 import { cn } from '@/modules/core/lib/utils';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useSwaps } from '../../state/useSwaps';
 import { ShiftSwap, swapsApi } from '../../api/swaps.api';
-import { format, differenceInMinutes } from 'date-fns';
-import { toZonedTime } from 'date-fns-tz';
+import { format, differenceInMinutes, parse } from 'date-fns';
+import { SYDNEY_TZ, parseZonedDateTime, formatInTimezone } from '@/modules/core/lib/date.utils';
 import { ViewOffersModal } from '../components/ViewOffersModal';
 import { OfferSwapModal } from '../components/OfferSwapModal';
 import { useQuery } from '@tanstack/react-query';
 
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { FunctionBar } from '@/modules/core/ui/components/FunctionBar';
 
-type TabType = 'my-requests' | 'requests-to-review' | 'manager-review';
-type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'cancelled';
+type TabType = 'my-swaps' | 'available-swaps';
 type SortOption = 'date-soonest' | 'date-latest';
 
 // Helper to format time
@@ -71,96 +57,118 @@ const formatTime = (time: string): string => {
     return `${display}:${m?.toString().padStart(2, '0') || '00'} ${period}`;
 };
 
+// Premium Department Color Styling (Badges)
+function getDeptColor(groupType: string | null | undefined, dept: string): string {
+    const base = "font-medium backdrop-blur-sm";
+
+    // Convention Centre (Blue)
+    if (groupType === 'convention_centre' || dept.toLowerCase().includes('convention'))
+        return `${base} bg-blue-500/10 border-blue-400/30 text-blue-200`;
+
+    // Exhibition Centre (Green/Emerald)
+    if (groupType === 'exhibition_centre' || dept.toLowerCase().includes('exhibition'))
+        return `${base} bg-emerald-500/10 border-emerald-400/30 text-emerald-200`;
+
+    // Theatre (Red)
+    if (groupType === 'theatre' || dept.toLowerCase().includes('theatre'))
+        return `${base} bg-red-500/10 border-red-400/30 text-red-200`;
+
+    // Default (Slate/Neutral)
+    return `${base} bg-white/5 border-white/20 text-slate-300`;
+}
+
+// Premium Card Background Styling (Glassmorphism & Gradients)
+function getCardBg(groupType: string | null | undefined, dept: string): string {
+    // Base styles for all cards: Glass effect, subtle border, hover lift + shadow
+    const base = "relative overflow-hidden backdrop-blur-md border shadow-lg transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 hover:border-opacity-50 group";
+
+    // Convention Centre
+    if (groupType === 'convention_centre' || dept.toLowerCase().includes('convention'))
+        return `${base} bg-gradient-to-br from-blue-900/40 via-blue-950/40 to-slate-900/60 border-blue-500/20 hover:border-blue-400/40 hover:shadow-blue-900/20`;
+
+    // Exhibition Centre
+    if (groupType === 'exhibition_centre' || dept.toLowerCase().includes('exhibition'))
+        return `${base} bg-gradient-to-br from-emerald-900/40 via-emerald-950/40 to-slate-900/60 border-emerald-500/20 hover:border-emerald-400/40 hover:shadow-emerald-900/20`;
+
+    // Theatre
+    if (groupType === 'theatre' || dept.toLowerCase().includes('theatre'))
+        return `${base} bg-gradient-to-br from-red-900/40 via-red-950/40 to-slate-900/60 border-red-500/20 hover:border-red-400/40 hover:shadow-red-900/20`;
+
+    // Default
+    return `${base} bg-gradient-to-br from-slate-800/50 via-slate-900/50 to-black/40 border-white/10 hover:border-white/20 hover:shadow-white/5`;
+}
+
 // Status configuration with icons, colors, and labels
 const getStatusConfig = (status: string) => {
     switch (status) {
         case 'OPEN':
             return {
                 icon: Timer,
-                label: 'Open for Offers',
-                helperText: 'Awaiting offers from colleagues',
-                bgColor: 'bg-amber-500/10',
-                borderColor: 'border-amber-500/30',
-                textColor: 'text-amber-500',
-                iconColor: 'text-amber-500',
+                label: 'Open',
+                helperText: 'Awaiting offers',
+                textColor: 'text-amber-400',
             };
         case 'MANAGER_PENDING':
             return {
                 icon: UserCheck,
                 label: 'Pending Manager',
-                helperText: 'Awaiting manager approval',
-                bgColor: 'bg-blue-500/10',
-                borderColor: 'border-blue-500/30',
-                textColor: 'text-blue-500',
-                iconColor: 'text-blue-500',
+                helperText: 'Awaiting approval',
+                textColor: 'text-blue-400',
             };
         case 'APPROVED':
             return {
                 icon: CheckCircle2,
                 label: 'Approved',
-                helperText: 'Swap has been approved',
-                bgColor: 'bg-emerald-500/10',
-                borderColor: 'border-emerald-500/30',
-                textColor: 'text-emerald-500',
-                iconColor: 'text-emerald-500',
+                helperText: 'Approved',
+                textColor: 'text-emerald-400',
             };
         case 'REJECTED':
             return {
                 icon: XCircle,
                 label: 'Rejected',
-                helperText: 'Request was rejected',
-                bgColor: 'bg-red-500/10',
-                borderColor: 'border-red-500/30',
-                textColor: 'text-red-500',
-                iconColor: 'text-red-500',
+                helperText: 'Rejected',
+                textColor: 'text-red-400',
             };
         case 'CANCELLED':
             return {
                 icon: X,
                 label: 'Cancelled',
-                helperText: 'Request was cancelled',
-                bgColor: 'bg-gray-500/10',
-                borderColor: 'border-gray-500/30',
-                textColor: 'text-gray-500',
-                iconColor: 'text-gray-500',
+                helperText: 'Cancelled',
+                textColor: 'text-gray-400',
             };
         case 'EXPIRED':
             return {
                 icon: Clock,
                 label: 'Expired',
-                helperText: 'Request expired',
-                bgColor: 'bg-gray-500/10',
-                borderColor: 'border-gray-500/30',
-                textColor: 'text-gray-500',
-                iconColor: 'text-gray-500',
+                helperText: 'Expired',
+                textColor: 'text-gray-400',
             };
         default:
             return {
                 icon: Clock,
-                label: status.replace('_', ' '),
+                label: status,
                 helperText: '',
-                bgColor: 'bg-gray-500/10',
-                borderColor: 'border-gray-500/30',
-                textColor: 'text-gray-500',
-                iconColor: 'text-gray-500',
+                textColor: 'text-gray-400',
             };
     }
 };
 
 // Calculate countdown to shift close (4h before start) in Sydney timezone
-const SYDNEY_TZ = 'Australia/Sydney';
 
-const getCountdown = (shiftDate: string, startTime: string) => {
-    if (!shiftDate || !startTime) return null;
+const getCountdown = (startAt?: string, shiftDate?: string, startTime?: string, tzIdentifier?: string) => {
+    if (!startAt && (!shiftDate || !startTime)) return null;
 
-    // Parse shift time as Sydney time
-    const shiftStartUtc = new Date(`${shiftDate}T${startTime}`);
-    const nowInSydney = toZonedTime(new Date(), SYDNEY_TZ);
+    // Parse shift time as explicit timezone
+    const shiftStartUtc = startAt
+        ? new Date(startAt)
+        : parseZonedDateTime(shiftDate as string, startTime as string, tzIdentifier || SYDNEY_TZ);
+
     const closeTime = new Date(shiftStartUtc.getTime() - 4 * 60 * 60 * 1000); // 4 hours before
+    const now = new Date(); // Absolute now
 
-    if (nowInSydney >= closeTime) return { text: 'Closed', isUrgent: true, isClosed: true };
+    if (now >= closeTime) return { text: 'Closed', isUrgent: true, isClosed: true };
 
-    const minutesLeft = differenceInMinutes(closeTime, nowInSydney);
+    const minutesLeft = differenceInMinutes(closeTime, now);
     const hoursLeft = Math.floor(minutesLeft / 60);
     const mins = minutesLeft % 60;
 
@@ -180,6 +188,9 @@ const getCountdown = (shiftDate: string, startTime: string) => {
 
 export const EmployeeSwapsPage: React.FC = () => {
     const { toast } = useToast();
+    // Personal scope filter
+    const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
+
     const {
         mySwapRequests,
         availableSwaps,
@@ -196,10 +207,11 @@ export const EmployeeSwapsPage: React.FC = () => {
         isDeclining,
         isCancelling,
         userId,
-    } = useSwaps();
-
-    // Personal scope filter
-    const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
+    } = useSwaps({
+        organizationId: scope.org_ids[0],
+        departmentId: scope.dept_ids[0],
+        subDepartmentId: scope.subdept_ids[0]
+    });
 
     // §2 Combined State helper — derive C1-C7 from swap status
     const getCombinedState = (status: string): string => {
@@ -215,11 +227,9 @@ export const EmployeeSwapsPage: React.FC = () => {
     };
 
     // State
-    const [activeTab, setActiveTab] = useState<TabType>('my-requests');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+    const [activeTab, setActiveTab] = useState<TabType>('my-swaps');
+    const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
     const [sortOption, setSortOption] = useState<SortOption>('date-soonest');
-    const [showHistory, setShowHistory] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [, setTick] = useState(0); // For countdown refresh
 
@@ -272,107 +282,67 @@ export const EmployeeSwapsPage: React.FC = () => {
     // 1. Manager Review Swaps — includes requests I created AND swaps where I offered
     const managerReviewSwaps = mySwapRequests.filter(s => s.status === 'MANAGER_PENDING');
 
-    // 2. Filter my swap requests (Excluding Manager Review items)
-    //    Issue 2 fix: Only show swaps I CREATED in "My Requests" tab.
-    //    Swaps I only offered on stay in Available Swaps with "Offered ✓".
+    // 2. Filter my swap requests (Consolidated View)
+    //    Include: OPEN, MANAGER_PENDING, APPROVED, REJECTED, CANCELLED, EXPIRED
+    //    Where I am the requester.
     const filteredMySwaps = mySwapRequests
         .filter((swap) => {
-            // Only show swaps I created (requester) — offers go to Available tab
-            // Only show swaps I created (requester) — offers to others go to Available tab (while active)
-            // In HISTORY mode, show everything.
-            if (activeTab === 'my-requests' && !showHistory && swap.requester_id !== userId) return false;
+            // Only show swaps I created
+            if (swap.requester_id !== userId) return false;
 
-            // Exclude MANAGER_PENDING from My Requests to avoid duplication with Manager Review tab
-            if (activeTab === 'my-requests' && swap.status === 'MANAGER_PENDING') return false;
-
-            // TOGGLE LOGIC: History vs Active
-            const isHistoryStatus = ['APPROVED', 'REJECTED', 'CANCELLED', 'EXPIRED'].includes(swap.status);
-
-            if (activeTab === 'my-requests') {
-                if (showHistory) {
-                    // Show ONLY history items
-                    if (!isHistoryStatus) return false;
-                } else {
-                    // Show ONLY active items (OPEN)
-                    // Note: MANAGER_PENDING is already excluded above
-                    if (isHistoryStatus) return false;
-                }
-            }
-
-            if (statusFilter === 'all' && swap.status === 'CANCELLED' && !showHistory) return false;
-
-            if (statusFilter === 'pending') {
-                return swap.status === 'OPEN';
-            }
-
-            if (statusFilter !== 'all' && swap.status !== statusFilter) return false;
-
-            if (searchQuery) {
-                const query = searchQuery.toLowerCase();
-                const role = (swap as any).requester_shift?.roles?.name || '';
-                const dept = (swap as any).requester_shift?.departments?.name || '';
-                return role.toLowerCase().includes(query) || dept.toLowerCase().includes(query);
-            }
             return true;
         })
         .sort((a, b) => {
-            const dateA = new Date((a as any).requester_shift?.shift_date || a.created_at);
-            const dateB = new Date((b as any).requester_shift?.shift_date || b.created_at);
+            const dateA = (a as any).requester_shift?.start_at ? new Date((a as any).requester_shift.start_at) : (a.requester_shift?.shift_date ? parse(a.requester_shift.shift_date, 'yyyy-MM-dd', new Date()) : new Date(a.created_at));
+            const dateB = (b as any).requester_shift?.start_at ? new Date((b as any).requester_shift.start_at) : (b.requester_shift?.shift_date ? parse(b.requester_shift.shift_date, 'yyyy-MM-dd', new Date()) : new Date(b.created_at));
             return sortOption === 'date-soonest'
                 ? dateA.getTime() - dateB.getTime()
                 : dateB.getTime() - dateA.getTime();
         });
 
-    // 3. Filter available swaps (Excluding pending_manager)
+    // 3. Filter available swaps
     const filteredAvailableSwaps = availableSwaps.filter((swap) => {
+        // Exclude my own swaps (just safety check, hook likely handles API filter)
+        if (swap.requester_id === userId) return false;
+
+        // Exclude if already pending manager (not open for offers anymore)
         if (swap.status === 'MANAGER_PENDING') return false;
 
-        if (searchQuery) {
-            const query = searchQuery.toLowerCase();
-            const role = (swap as any).requester_shift?.roles?.name || '';
-            const dept = (swap as any).requester_shift?.departments?.name || '';
-            const name = (swap as any).requested_by?.full_name || (swap as any).requested_by?.email || 'Unknown Employee';
-            return role.toLowerCase().includes(query) ||
-                dept.toLowerCase().includes(query) ||
-                name.toLowerCase().includes(query);
-        }
         return true;
+    }).sort((a, b) => {
+        const dateA = (a as any).requester_shift?.start_at ? new Date((a as any).requester_shift.start_at) : ((a as any).requester_shift?.shift_date ? parse((a as any).requester_shift.shift_date, 'yyyy-MM-dd', new Date()) : new Date(0));
+        const dateB = (b as any).requester_shift?.start_at ? new Date((b as any).requester_shift.start_at) : ((b as any).requester_shift?.shift_date ? parse((b as any).requester_shift.shift_date, 'yyyy-MM-dd', new Date()) : new Date(0));
+        return sortOption === 'date-soonest' ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
     });
 
-    const myRequestsCount = mySwapRequests.filter(s => s.requester_id === userId && s.status === 'OPEN').length;
-    const availableCount = availableSwaps.length;
-    const managerReviewCount = managerReviewSwaps.length;
+
 
     // Render swap card for "My Requests" and "Manager Review" tab
     const renderMySwapCard = (swap: ShiftSwap) => {
         const shift = (swap as any).requester_shift;
         const statusConfig = getStatusConfig(swap.status);
         const StatusIcon = statusConfig.icon;
-        const countdown = getCountdown(shift?.shift_date || '', shift?.start_time || '');
+        const countdown = getCountdown(shift?.start_at, shift?.shift_date, shift?.start_time, shift?.tz_identifier);
 
         return (
             <div
                 key={swap.id}
                 className={cn(
-                    "bg-slate-800/50 border rounded-xl overflow-hidden flex flex-col h-full",
-                    statusConfig.borderColor
+                    getCardBg(shift?.group_type, shift?.departments?.name || ''),
+                    "flex flex-col h-full rounded-xl"
                 )}
             >
                 {/* HEADER ZONE */}
-                <div className={cn("px-4 py-3 border-b border-white/5", statusConfig.bgColor)}>
+                <div className="px-4 py-3 border-b border-white/5 bg-black/20 backdrop-blur-sm">
                     <div className="flex items-center justify-between gap-2">
-                        <div className={cn("flex items-center gap-2", statusConfig.textColor)}>
-                            <StatusIcon className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                            <span className="text-sm font-medium">{statusConfig.label}</span>
+                        <div className={cn("flex items-center gap-1.5", statusConfig.textColor)}>
+                            <StatusIcon className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                            <span className="text-xs font-bold uppercase tracking-wide">{statusConfig.label}</span>
                         </div>
-                        <h3 className="font-bold text-base text-foreground truncate">
+                        <h3 className="font-bold text-sm text-white/90 truncate">
                             {shift?.roles?.name || 'Shift'}
                         </h3>
                     </div>
-                    {/* §2 State Debug Label */}
-                    <Badge variant="outline" className="mt-1 text-[10px] font-mono opacity-60">
-                        {getCombinedState(swap.status)}
-                    </Badge>
                 </div>
 
                 {/* BODY ZONE */}
@@ -386,13 +356,13 @@ export const EmployeeSwapsPage: React.FC = () => {
                     {/* Date */}
                     <div className="flex items-center gap-2 text-sm text-foreground">
                         <Calendar className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <span>{shift?.shift_date ? format(new Date(shift.shift_date), 'EEEE, MMM d, yyyy') : 'Unknown date'}</span>
+                        <span>{shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'EEEE, MMM d, yyyy') : (shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEEE, MMM d, yyyy') : 'Unknown date')}</span>
                     </div>
 
                     {/* Time */}
                     <div className="flex items-center gap-2 text-sm text-foreground">
                         <Clock className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <span>{formatTime(shift?.start_time || '')} - {formatTime(shift?.end_time || '')}</span>
+                        <span>{shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : formatTime(shift?.start_time || '')} - {shift?.end_at ? formatInTimezone(new Date(shift.end_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : formatTime(shift?.end_time || '')}</span>
                     </div>
 
                     {/* Countdown Timer */}
@@ -424,7 +394,7 @@ export const EmployeeSwapsPage: React.FC = () => {
 
                     {/* Compliance Indicators */}
                     <div className="flex items-center gap-3 text-xs">
-                        <div className="flex items-center gap-1 text-emerald-500">
+                        <div className="flex items-center gap-1 text-emerald-400">
                             <ShieldCheck className="h-3 w-3" aria-hidden="true" />
                             <span>Compliant</span>
                         </div>
@@ -496,29 +466,28 @@ export const EmployeeSwapsPage: React.FC = () => {
     const renderAvailableSwapCard = (swap: ShiftSwap) => {
         const shift = (swap as any).requester_shift;
         const requesterName = (swap as any).requested_by?.full_name || (swap as any).requested_by?.email || 'Unknown Employee';
-        const countdown = getCountdown(shift?.shift_date || '', shift?.start_time || '');
+        const countdown = getCountdown(shift?.start_at, shift?.shift_date, shift?.start_time, shift?.tz_identifier);
 
         return (
             <div
                 key={swap.id}
-                className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden flex flex-col h-full"
+                className={cn(
+                    getCardBg(shift?.group_type, shift?.departments?.name || ''),
+                    "flex flex-col h-full rounded-xl"
+                )}
             >
                 {/* HEADER ZONE */}
-                <div className="px-4 py-3 border-b border-white/5 bg-slate-700/30">
+                <div className="px-4 py-3 border-b border-white/5 bg-black/20 backdrop-blur-sm">
                     <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" className="text-[10px] bg-white/5 border-white/10 text-white/70">
                                 {myActiveOfferSwapIds.has(swap.id) ? '✓ Offered' : 'Swap Available'}
                             </Badge>
                         </div>
-                        <h3 className="font-bold text-base text-foreground truncate">
+                        <h3 className="font-bold text-sm text-white/90 truncate">
                             {shift?.roles?.name || 'Shift'}
                         </h3>
                     </div>
-                    {/* §2 State Debug Label */}
-                    <Badge variant="outline" className="mt-1 text-[10px] font-mono opacity-60">
-                        {getCombinedState(swap.status)}
-                    </Badge>
                 </div>
 
                 {/* BODY ZONE */}
@@ -532,13 +501,13 @@ export const EmployeeSwapsPage: React.FC = () => {
                     {/* Date */}
                     <div className="flex items-center gap-2 text-sm text-foreground">
                         <Calendar className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <span>{shift?.shift_date ? format(new Date(shift.shift_date), 'EEE, MMM d') : 'Unknown'}</span>
+                        <span>{shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'EEE, MMM d') : (shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE, MMM d') : 'Unknown')}</span>
                     </div>
 
                     {/* Time */}
                     <div className="flex items-center gap-2 text-sm text-foreground">
                         <Clock className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <span>{formatTime(shift?.start_time || '')} - {formatTime(shift?.end_time || '')}</span>
+                        <span>{shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : formatTime(shift?.start_time || '')} - {shift?.end_at ? formatInTimezone(new Date(shift.end_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : formatTime(shift?.end_time || '')}</span>
                     </div>
 
                     {/* Countdown Timer */}
@@ -570,20 +539,9 @@ export const EmployeeSwapsPage: React.FC = () => {
                 {/* FOOTER ZONE */}
                 <div className="px-4 py-3 border-t border-white/5 bg-slate-900/30">
                     {myActiveOfferSwapIds.has(swap.id) ? (
-                        <div className="flex items-center gap-2 w-full">
-                            <div className="flex-1 h-11 flex items-center justify-center bg-slate-800 border border-emerald-500/30 rounded-md text-sm text-emerald-400">
-                                <CheckCircle2 className="h-4 w-4 mr-2" aria-hidden="true" />
-                                Offer Sent
-                            </div>
-                            <Button
-                                variant="outline"
-                                className="h-11 px-4 border-dashed border-slate-600 hover:border-primary hover:text-primary"
-                                onClick={() => setOfferSwapTarget(swap)}
-                                disabled={isMakingOffer || countdown?.isClosed}
-                                title="Make another offer"
-                            >
-                                <Plus className="h-5 w-5" />
-                            </Button>
+                        <div className="w-full h-11 flex items-center justify-center bg-slate-800 border border-emerald-500/30 rounded-md text-sm text-emerald-400">
+                            <CheckCircle2 className="h-4 w-4 mr-2" aria-hidden="true" />
+                            Offer Sent
                         </div>
                     ) : (
                         <Button
@@ -613,120 +571,36 @@ export const EmployeeSwapsPage: React.FC = () => {
                     className="mb-6"
                 />
 
-                {/* Refresh Button */}
-                <div className="flex justify-end mb-4">
-                    <Button
-                        variant="outline"
-                        onClick={handleRefresh}
-                        disabled={isRefreshing}
-                        className="h-11 px-4"
-                    >
-                        <RefreshCw className={cn('h-4 w-4 mr-2', isRefreshing && 'animate-spin')} aria-hidden="true" />
-                        Refresh Data
-                    </Button>
-                </div>
+                {/* Function Bar */}
+                <FunctionBar
+                    tabs={[
+                        { id: 'my-swaps', label: 'My Swaps', count: filteredMySwaps.length },
+                        { id: 'available-swaps', label: 'Available Swaps', count: filteredAvailableSwaps.length }
+                    ]}
+                    activeTab={activeTab}
+                    onTabChange={(id) => setActiveTab(id as any)}
+                    viewMode={viewMode}
+                    onViewModeChange={setViewMode}
+                    onRefresh={handleRefresh}
+                    className="mb-6"
+                />
 
-                {/* Tabs */}
-                <div className="flex flex-wrap items-center gap-2 mb-6">
-                    <button
-                        onClick={() => setActiveTab('my-requests')}
-                        className={cn(
-                            'px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 min-h-[44px]',
-                            activeTab === 'my-requests'
-                                ? 'bg-primary text-primary-foreground shadow-lg'
-                                : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
-                        )}
-                    >
-                        My Swaps
-                        {myRequestsCount > 0 && (
-                            <Badge className="ml-2 bg-primary-foreground/20 text-primary-foreground text-[10px]">
-                                {myRequestsCount}
-                            </Badge>
-                        )}
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('requests-to-review')}
-                        className={cn(
-                            'px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 min-h-[44px]',
-                            activeTab === 'requests-to-review'
-                                ? 'bg-primary text-primary-foreground shadow-lg'
-                                : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
-                        )}
-                    >
-                        Available Swaps
-                        {availableCount > 0 && (
-                            <Badge className="ml-2 bg-primary-foreground/20 text-primary-foreground text-[10px]">
-                                {availableCount}
-                            </Badge>
-                        )}
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('manager-review')}
-                        className={cn(
-                            'px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 min-h-[44px]',
-                            activeTab === 'manager-review'
-                                ? 'bg-primary text-primary-foreground shadow-lg'
-                                : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
-                        )}
-                    >
-                        Manager Review
-                        {managerReviewCount > 0 && (
-                            <Badge className="ml-2 bg-primary-foreground/20 text-primary-foreground text-[10px]">
-                                {managerReviewCount}
-                            </Badge>
-                        )}
-                    </button>
-                </div>
-
-                {/* Filters */}
-                <div className="flex flex-col sm:flex-row gap-3 mb-6">
-                    <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                        <Input
-                            placeholder="Search by role, department..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-10 h-11"
-                            aria-label="Search swaps"
-                        />
+                {/* Info Banner */}
+                {activeTab === 'available-swaps' && (
+                    <div className="relative mb-6 overflow-hidden rounded-xl border-l-[3px] border-l-purple-500 bg-gradient-to-r from-purple-500/10 via-purple-900/5 to-transparent p-4 backdrop-blur-sm">
+                        <div className="flex items-start gap-3">
+                            <div className="rounded-full bg-purple-500/20 p-1.5 ring-1 ring-purple-500/30">
+                                <ArrowLeftRight className="h-4 w-4 text-purple-400" />
+                            </div>
+                            <div className="space-y-1">
+                                <h4 className="text-sm font-medium text-purple-200">Shift Swaps</h4>
+                                <p className="text-sm text-purple-200/70 leading-relaxed max-w-2xl">
+                                    Browse available swaps from colleagues or manage your own swap requests.
+                                </p>
+                            </div>
+                        </div>
                     </div>
-
-                    {activeTab === 'my-requests' && (
-                        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-                            <SelectTrigger className="w-[180px] h-11">
-                                <Filter className="h-4 w-4 mr-2 text-muted-foreground" aria-hidden="true" />
-                                <SelectValue placeholder="Filter by Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Status</SelectItem>
-                                <SelectItem value="pending">Pending</SelectItem>
-                                <SelectItem value="approved">Approved</SelectItem>
-                                <SelectItem value="rejected">Rejected</SelectItem>
-                                <SelectItem value="cancelled">Cancelled</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    )}
-
-                    <div className="flex items-center space-x-2">
-                        <Switch
-                            id="show-history"
-                            checked={showHistory}
-                            onCheckedChange={setShowHistory}
-                        />
-                        <Label htmlFor="show-history" className="whitespace-nowrap">Show History</Label>
-                    </div>
-
-                    <Select value={sortOption} onValueChange={(v) => setSortOption(v as SortOption)}>
-                        <SelectTrigger className="w-[180px] h-11">
-                            <SortAsc className="h-4 w-4 mr-2 text-muted-foreground" aria-hidden="true" />
-                            <SelectValue placeholder="Sort by" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="date-soonest">Date (Soonest)</SelectItem>
-                            <SelectItem value="date-latest">Date (Latest)</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
+                )}
 
                 {/* Content */}
                 {isLoading ? (
@@ -734,33 +608,15 @@ export const EmployeeSwapsPage: React.FC = () => {
                         <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
                         <span className="ml-2 text-muted-foreground">Loading swaps...</span>
                     </div>
-                ) : activeTab === 'manager-review' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {managerReviewSwaps.length === 0 ? (
-                            <div className="col-span-full">
-                                <EmptyState
-                                    icon={UserCheck}
-                                    title="No swaps waiting for approval"
-                                    description="Swaps requiring manager approval will appear here."
-                                />
-                            </div>
-                        ) : (
-                            managerReviewSwaps.map(renderMySwapCard)
-                        )}
-                    </div>
-                ) : activeTab === 'my-requests' ? (
+                ) : activeTab === 'my-swaps' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredMySwaps.length === 0 ? (
-                            <div className="col-span-full">
-                                <EmptyState
-                                    icon={ArrowLeftRight}
-                                    title="No swap requests found"
-                                    description={
-                                        searchQuery || statusFilter !== 'all'
-                                            ? 'Try adjusting your filters. Check "Cancelled" for past requests.'
-                                            : 'Create a swap request from your roster to get started. Check "Cancelled" for past requests.'
-                                    }
-                                />
+                            <div className="col-span-full py-12 text-center">
+                                <div className="mx-auto w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                                    <ArrowLeftRight className="h-6 w-6 text-white/20" />
+                                </div>
+                                <h3 className="text-lg font-medium text-white/50">No swap requests found</h3>
+                                <p className="text-sm text-white/30 mt-1">Create a swap request from your roster to get started.</p>
                             </div>
                         ) : (
                             filteredMySwaps.map(renderMySwapCard)
@@ -769,12 +625,12 @@ export const EmployeeSwapsPage: React.FC = () => {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredAvailableSwaps.length === 0 ? (
-                            <div className="col-span-full">
-                                <EmptyState
-                                    icon={ArrowLeftRight}
-                                    title="No available shifts found"
-                                    description="Check back later for swap opportunities from other employees."
-                                />
+                            <div className="col-span-full py-12 text-center">
+                                <div className="mx-auto w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
+                                    <ArrowLeftRight className="h-6 w-6 text-white/20" />
+                                </div>
+                                <h3 className="text-lg font-medium text-white/50">No available swaps</h3>
+                                <p className="text-sm text-white/30 mt-1">Check back later for opportunities.</p>
                             </div>
                         ) : (
                             filteredAvailableSwaps.map(renderAvailableSwapCard)

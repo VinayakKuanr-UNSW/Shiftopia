@@ -3,7 +3,7 @@ import { DialogHeader, DialogTitle } from '@/modules/core/ui/primitives/dialog';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { CalendarDays, AlertCircle, Lock, CalendarIcon } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parse } from 'date-fns';
 import { ShiftContext } from '../types';
 
 interface ModalHeaderProps {
@@ -40,7 +40,8 @@ export const ModalHeader: React.FC<ModalHeaderProps> = ({
                         {safeContext.date && (
                             <div className="flex items-center gap-1.5 text-white/70">
                                 <CalendarIcon className="h-4 w-4 text-emerald-400" />
-                                <span className="font-medium">{format(new Date(safeContext.date), 'EEE, dd MMM')}</span>
+                                {/* Display date safely without relying on browser time shifting */}
+                                <span className="font-medium">{format(new Date(`${safeContext.date}T12:00:00`), 'EEE, dd MMM')}</span>
                             </div>
                         )}
                         {safeContext.groupName && safeContext.subGroupName && (

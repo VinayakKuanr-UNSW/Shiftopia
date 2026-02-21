@@ -27,6 +27,7 @@ import {
   Users,
   CalendarDays,
   Briefcase,
+  CopyPlus,
 } from 'lucide-react';
 import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
@@ -41,6 +42,8 @@ import { RosterFilterPopover } from './RosterFilterPopover';
 import { useRosterUI, RosterMode } from '@/modules/rosters/contexts/RosterUIContext';
 import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
 import { Separator } from '@/modules/core/ui/primitives/separator';
+import { ApplyTemplateDialog } from '@/modules/rosters/ui/dialogs/ApplyTemplateDialog';
+import { useRosterStructure } from '../../state/useRosterStructure';
 
 /* ============================================================
    TYPES
@@ -212,6 +215,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
   const { data: templates = [] } = useTemplates(selectedSubDepartmentId || undefined, selectedDepartmentId || undefined);
 
   const [isActivateDialogOpen, setIsActivateDialogOpen] = useState(false);
+  const [isApplyTemplateDialogOpen, setIsApplyTemplateDialogOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedRangeIndex, setSelectedRangeIndex] = useState<number>(0);
 
@@ -225,6 +229,20 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
       onTemplateChange?.(baseTemplate.id, undefined);
     }
   }, [templates, selectedTemplateId, onTemplateChange]);
+
+  // Fetch structure for the selected date to know applied templates
+  const { data: structures = [] } = useRosterStructure(
+    selectedOrganizationId || undefined,
+    format(selectedDate, 'yyyy-MM-dd'),
+    format(selectedDate, 'yyyy-MM-dd'),
+    {
+      departmentIds: selectedDepartmentId ? [selectedDepartmentId] : [],
+      subDepartmentIds: selectedSubDepartmentId ? [selectedSubDepartmentId] : (selectedDepartmentId ? [] : undefined)
+    }
+  );
+
+  const currentRosterStructure = structures[0];
+  const appliedCount = currentRosterStructure?.appliedTemplateIds?.length || 0;
 
   const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
 
@@ -315,32 +333,11 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
   };
 
   return (
-    <div className="w-full h-12 flex-shrink-0 z-20 bg-slate-950/40 backdrop-blur-2xl border-b border-white/10 px-3 flex items-center overflow-hidden">
+    <div className="w-full h-12 flex-shrink-0 z-50 bg-slate-950/40 backdrop-blur-2xl border-b border-white/10 px-3 flex items-center">
       <div className="w-full flex items-center justify-between">
 
         {/* Left Section: Context & Modes */}
         <div className="flex items-center gap-2">
-          {/* Template Selector */}
-          <div className="flex items-center gap-1.5 rounded-lg bg-white/5 border border-white/10 pr-2 pl-1.5 h-8">
-            <Calendar className="h-3.5 w-3.5 text-indigo-400" />
-            <Select
-              value={selectedTemplateId || ''}
-              onValueChange={(id) => {
-                setSelectedTemplateId(id);
-                onTemplateChange?.(id, undefined);
-              }}
-              disabled={templates.length === 0}
-            >
-              <SelectTrigger className="h-6 w-auto min-w-[100px] border-0 bg-transparent p-0 text-[11px] font-bold text-white/80 focus:ring-0">
-                <SelectValue placeholder="Select Template" />
-              </SelectTrigger>
-              <SelectContent className="bg-slate-900 border-white/10">
-                {templates.map((t) => (
-                  <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
 
           <ToggleGroup
             type="single"
@@ -440,6 +437,20 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
               variant="success"
               disabled={!selectedDepartmentId}
             />
+            <div className="relative">
+              <IconButton
+                icon={<CopyPlus className="h-3.5 w-3.5" />}
+                tooltip="Apply Template"
+                onClick={() => setIsApplyTemplateDialogOpen(true)}
+                variant="success"
+                disabled={!selectedDepartmentId}
+              />
+              {appliedCount > 0 && (
+                <div className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-blue-500 rounded-full border border-slate-900 flex items-center justify-center pointer-events-none">
+                  <span className="text-[8px] font-bold text-white leading-none">{appliedCount}</span>
+                </div>
+              )}
+            </div>
             <IconButton
               icon={<PanelRight className="h-3.5 w-3.5" />}
               tooltip="Unfilled"
@@ -483,6 +494,20 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
           subDepartmentId={selectedSubDepartmentId}
           startDate={activeRangeBounds.monthStart}
           endDate={activeRangeBounds.monthEnd}
+        />
+      )}
+
+      {/* Apply Template Dialog */}
+      {selectedOrganizationId && selectedDepartmentId && (
+        <ApplyTemplateDialog
+          isOpen={isApplyTemplateDialogOpen}
+          onOpenChange={setIsApplyTemplateDialogOpen}
+          organizationId={selectedOrganizationId}
+          departmentId={selectedDepartmentId}
+          subDepartmentId={selectedSubDepartmentId}
+          selectedDate={selectedDate}
+          appliedTemplateIds={currentRosterStructure?.appliedTemplateIds || []}
+          rosterId={currentRosterStructure?.rosterId || null}
         />
       )}
     </div>

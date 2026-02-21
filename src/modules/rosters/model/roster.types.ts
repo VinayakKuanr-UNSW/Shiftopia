@@ -109,6 +109,7 @@ export interface RosterStructure {
     startDate: string;
     endDate: string;
     groups: RosterGroupStructure[];
+    appliedTemplateIds: string[];
 }
 
 export interface DbRosterShift {

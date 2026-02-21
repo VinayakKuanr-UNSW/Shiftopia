@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/platform/realtime/client';
+import { getSydneyNow, isSydneyPast } from '@/modules/core/lib/date.utils';
 import {
   Plus,
   Check,
@@ -724,6 +725,9 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         const isPublished = shift.lifecycle_status === 'Published';
         const isDraft = shift.lifecycle_status === 'Draft';
 
+        // Lock calculation: Check if shift start time is in the past
+        const isLocked = isShiftLocked(shift.shift_date, shift.start_time, 'roster_management');
+
         sgEntry.shifts[dateKey].push({
           id: shift.id,
           employeeName,
@@ -742,7 +746,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           assignmentOutcome,
           assignedEmployeeId: shift.assigned_employee_id,
           rawShift: shift,
-
+          isLocked: isLocked, // Pass explicit lock status
         });
       });
 
@@ -852,10 +856,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     // 2. If date is today, allow
     // 3. If date > today, allow
 
-    const today = startOfDay(new Date());
-    const targetDate = startOfDay(date);
-
-    if (isBefore(targetDate, today)) {
+    if (isSydneyPast(date)) {
       toast({
         title: 'Past Date',
         description: 'Cannot add shifts on past dates.',
@@ -965,7 +966,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     const shiftStart = parseISO(shiftDateStr);
     shiftStart.setHours(h, m, 0, 0);
 
-    if (new Date() >= shiftStart && shift.rawShift.lifecycle_status !== 'Published') {
+    if (getSydneyNow() >= shiftStart && shift.rawShift.lifecycle_status !== 'Published') {
       console.warn('[handleEditShift] Blocking edit for started shift:', shift.id);
       toast({
         title: 'Shift Locked',
@@ -1089,19 +1090,27 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     const shiftIdsArray = Array.from(selectedShiftIds);
 
     try {
-      await bulkDeleteMutation.mutateAsync(shiftIdsArray);
+      const successCount = await bulkDeleteMutation.mutateAsync(shiftIdsArray);
 
-      toast({
-        title: "Shifts Deleted",
-        description: `Successfully deleted ${shiftIdsArray.length} shift${shiftIdsArray.length !== 1 ? 's' : ''}.`,
-      });
-
-      setSelectedShiftIds(new Set());
+      if (successCount > 0) {
+        toast({
+          title: "Shifts Deleted",
+          description: `Successfully deleted ${successCount} shift${successCount !== 1 ? 's' : ''}.`,
+        });
+        // Only clear selection if something was actually deleted
+        setSelectedShiftIds(new Set());
+      } else {
+        toast({
+          title: "Delete Failed",
+          description: "No shifts were deleted. They may have been locked or already removed.",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
       console.error('[GroupModeView] Bulk delete failed:', error);
       toast({
-        title: "Delete Failed",
-        description: "Failed to delete shifts. Please try again.",
+        title: "Delete Error",
+        description: "An unexpected error occurred while deleting shifts.",
         variant: "destructive"
       });
     }
@@ -1173,7 +1182,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     date: Date
   ) => {
     // Check if this is a past shift (Date-wise)
-    const isPastDate = isBefore(startOfDay(date), startOfDay(new Date()));
+    const isPastDate = isSydneyPast(date);
 
     // Strict Locking Check (Includes past TIME on current day + 4h rule)
     const isLocked = shift.isLocked;
@@ -1182,7 +1191,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     const [h, m] = shift.startTime.split(':').map(Number);
     shiftStart.setHours(h, m, 0, 0);
 
-    const now = new Date();
+    const now = getSydneyNow();
     const hoursToStart = differenceInHours(shiftStart, now);
     const minutesToStart = differenceInMinutes(shiftStart, now);
     const isEmergency = hoursToStart < 4;
@@ -1215,12 +1224,12 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
             let hasStarted = false;
 
             if (shift.rawShift.scheduled_start) {
-              hasStarted = new Date() >= new Date(shift.rawShift.scheduled_start);
+              hasStarted = getSydneyNow() >= new Date(shift.rawShift.scheduled_start);
             } else {
               // Fallback to local parsing if scheduled_start is missing
               const shiftDateObj = parseISO(shift.rawShift.shift_date);
               shiftDateObj.setHours(h, m, 0, 0);
-              hasStarted = new Date() >= shiftDateObj;
+              hasStarted = getSydneyNow() >= shiftDateObj;
             }
 
             if (hasStarted && shift.rawShift.lifecycle_status !== 'Published') { // 'Published' is already readonly by other logic, but this covers Draft/Started
@@ -1309,11 +1318,11 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           let hasStarted = false;
 
           if (shift.rawShift.scheduled_start) {
-            hasStarted = new Date() >= new Date(shift.rawShift.scheduled_start);
+            hasStarted = getSydneyNow() >= new Date(shift.rawShift.scheduled_start);
           } else {
             const shiftDateObj = parseISO(shift.rawShift.shift_date);
             shiftDateObj.setHours(h, m, 0, 0);
-            hasStarted = new Date() >= shiftDateObj;
+            hasStarted = getSydneyNow() >= shiftDateObj;
           }
 
           if (hasStarted && shift.rawShift.lifecycle_status !== 'Published') {
@@ -1456,7 +1465,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                             </th>
                             {dates.map((date, idx) => {
                               const dateIsToday = isToday(date);
-                              const dateIsPast = isBefore(startOfDay(date), startOfDay(new Date()));
+                              const dateIsPast = isSydneyPast(date);
                               const isGhost = !isDateInTemplate(date);
 
                               return (
@@ -1542,7 +1551,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                 const dateKey = format(date, 'yyyy-MM-dd');
                                 const cellShifts = subGroup.shifts[dateKey] || [];
                                 const cellIsToday = isToday(date);
-                                const cellIsPast = isBefore(startOfDay(date), startOfDay(new Date()));
+                                const cellIsPast = isSydneyPast(date);
                                 const isGhost = !isDateInTemplate(date);
 
                                 return (
@@ -1716,10 +1725,11 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
               onDelete={handleBulkDelete}
               onPublish={async (shiftIds) => {
                 try {
-                  await bulkPublishMutation.mutateAsync(shiftIds);
+                  const result = await bulkPublishMutation.mutateAsync(shiftIds);
+                  const count = (result as any).success_count ?? shiftIds.length;
                   toast({
                     title: "Shifts Published",
-                    description: `Successfully published ${shiftIds.length} shift${shiftIds.length !== 1 ? 's' : ''}.`
+                    description: `Successfully published ${count} shift${count !== 1 ? 's' : ''}.`
                   });
                   setSelectedShiftIds(new Set());
                 } catch (error: any) {

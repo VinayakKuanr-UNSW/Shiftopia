@@ -1,5 +1,5 @@
 // src/modules/rosters/api/rosters.api.ts
-import { eachDayOfInterval } from 'date-fns';
+import { eachDayOfInterval, format, parse } from 'date-fns';
 import { supabase } from '@/platform/realtime/client';
 import { Roster, Group } from '@/types';
 import { RosterDay } from '../model/roster.types';
@@ -57,9 +57,10 @@ export const rostersApi = {
             }
 
             // Generate all dates in the range
+            // Use parse to safely create Local Date objects from YYYY-MM-DD strings at midnight
             const dates = eachDayOfInterval({
-                start: new Date(startDate),
-                end: new Date(endDate),
+                start: parse(startDate, 'yyyy-MM-dd', new Date(`${startDate}T12:00:00`)),
+                end: parse(endDate, 'yyyy-MM-dd', new Date(`${endDate}T12:00:00`)),
             });
 
             // Check for existing rosters if not overriding
@@ -76,8 +77,9 @@ export const rostersApi = {
                 );
 
                 // Filter out dates that already have rosters
+                // Use format to get YYYY-MM-DD string from Local Date
                 const datesToCreate = dates.filter(
-                    (date) => !existingDates.has(date.toISOString().split('T')[0])
+                    (date) => !existingDates.has(format(date, 'yyyy-MM-dd'))
                 );
 
                 result.skipped = dates.length - datesToCreate.length;
@@ -89,8 +91,8 @@ export const rostersApi = {
 
                 // Create rosters for remaining dates
                 const rostersToCreate = datesToCreate.map((date) => ({
-                    start_date: date.toISOString().split('T')[0],
-                    end_date: date.toISOString().split('T')[0],
+                    start_date: format(date, 'yyyy-MM-dd'),
+                    end_date: format(date, 'yyyy-MM-dd'),
                     template_id: templateId,
                     department_id: departmentId,
                     sub_department_id: subDepartmentId || null,
@@ -127,8 +129,8 @@ export const rostersApi = {
 
                 // Create new rosters
                 const rostersToCreate = dates.map((date) => ({
-                    start_date: date.toISOString().split('T')[0],
-                    end_date: date.toISOString().split('T')[0],
+                    start_date: format(date, 'yyyy-MM-dd'),
+                    end_date: format(date, 'yyyy-MM-dd'),
                     template_id: templateId,
                     department_id: departmentId,
                     sub_department_id: subDepartmentId || null,

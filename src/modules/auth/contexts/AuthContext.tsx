@@ -64,7 +64,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const queryPromise = supabase
         .from('profiles')
         .select(
-          'id, employee_code, first_name, last_name, full_name, email, system_role, employment_type, is_active'
+          'id, employee_code, first_name, last_name, full_name, email, legacy_system_role, employment_type, is_active'
         )
         .eq('id', userId)
         .single();
@@ -100,7 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         lastName: data.last_name,
         fullName: data.full_name || data.first_name || 'User',
         email: data.email,
-        systemRole: mapRole(data.system_role),
+        systemRole: mapRole(data.legacy_system_role),
         employmentType: data.employment_type || 'casual',
         isActive: data.is_active ?? true,
       };

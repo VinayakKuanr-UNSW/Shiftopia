@@ -8,7 +8,7 @@ import { SmartShiftCard, type ComplianceInfo } from '@/modules/rosters/ui/compon
 import { AvailabilityBar } from '@/modules/rosters/ui/components/AvailabilityBar';
 import { useResolvedAvailability } from '@/modules/rosters/hooks/useResolvedAvailability';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
-import { isShiftLocked } from '@/modules/rosters/domain/policies/canEditShift.policy';
+import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 import { PeopleModeEmployee, PeopleModeShift } from './people-mode.types';
 
 /* ============================================================
@@ -200,7 +200,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                                         onViewShift?.(shift);
                                       }
                                     }}
-                                    isLocked={isShiftLocked(date, shift.endTime)}
+                                    isLocked={isShiftLocked(dateKey, shift.startTime, 'roster_management')}
                                   />
                                 ))
                               ) : (

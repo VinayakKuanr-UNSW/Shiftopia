@@ -12,7 +12,8 @@ import { useQuery } from '@tanstack/react-query';
 import { shiftsApi } from '@/modules/rosters';
 import { swapsApi } from '../../api/swaps.api';
 import { useAuth } from '@/platform/auth/useAuth';
-import { format, addDays } from 'date-fns';
+import { format, addDays, parse } from 'date-fns';
+import { getTodayInTimezone } from '@/modules/core/lib/date.utils';
 import {
     Loader2,
     Clock,
@@ -159,7 +160,8 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
         queryKey: ['myFutureShifts', user?.id],
         queryFn: async () => {
             if (!user?.id) return [];
-            const today = new Date();
+            // Use specific timezone to ensure "today" is correct for the user's location (Sydney default for now)
+            const today = getTodayInTimezone();
             const future = addDays(today, 90);
             return shiftsApi.getEmployeeShifts(
                 user.id,
@@ -288,7 +290,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                         Shift Date
                                     </p>
                                     <p className="text-sm font-bold">
-                                        {format(new Date((selectedShift as any).shift_date), 'EEEE, MMM d, yyyy')}
+                                        {format(parse((selectedShift as any).shift_date, 'yyyy-MM-dd', new Date()), 'EEEE, MMM d, yyyy')}
                                     </p>
                                 </div>
                                 <div className="flex gap-4">
@@ -344,7 +346,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                         Shift Date
                                     </p>
                                     <p className="text-sm font-bold">
-                                        {format(new Date((theirShift as any).shiftDate || (theirShift as any).shift_date), 'EEEE, MMM d, yyyy')}
+                                        {format(parse((theirShift as any).shiftDate || (theirShift as any).shift_date, 'yyyy-MM-dd', new Date()), 'EEEE, MMM d, yyyy')}
                                     </p>
                                 </div>
                                 <div className="flex gap-4">
@@ -426,7 +428,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                                     <div className="flex items-center gap-2">
                                                         <Calendar className="h-3 w-3 text-white/80" />
                                                         <span className="text-sm font-medium text-white">
-                                                            {format(new Date(shift.shift_date), 'EEE, MMM d')}
+                                                            {format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE, MMM d')}
                                                         </span>
                                                     </div>
                                                     <div className="flex items-center gap-2 mt-0.5">

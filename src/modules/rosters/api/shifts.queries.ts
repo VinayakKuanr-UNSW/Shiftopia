@@ -100,7 +100,11 @@ export const shiftsQueries = {
                 console.error('Error fetching shifts:', error);
                 return [];
             }
-            return (data || []) as unknown as Shift[];
+
+            return (data || []).map((shift: any) => ({
+                ...shift,
+                is_trade_requested: !!shift.trade_requested_at || shift.trading_status === 'TradeRequested'
+            })) as unknown as Shift[];
         } catch (error) {
             console.error('Exception in getShiftsForDate:', error);
             return [];
@@ -178,7 +182,11 @@ export const shiftsQueries = {
                 console.error('Error fetching shifts for date range:', error);
                 return [];
             }
-            return (data || []) as unknown as Shift[];
+
+            return (data || []).map((shift: any) => ({
+                ...shift,
+                is_trade_requested: !!shift.trade_requested_at || shift.trading_status === 'TradeRequested'
+            })) as unknown as Shift[];
         } catch (error) {
             console.error('Exception in getShiftsForDateRange:', error);
             return [];
@@ -215,8 +223,7 @@ export const shiftsQueries = {
                 .eq('assigned_employee_id', employeeId)
                 // Only show Published shifts (no drafts)
                 .eq('lifecycle_status', 'Published')
-                // Exclude offers (S3) - they should only appear in My Offers
-                .neq('assignment_outcome', 'offered')
+                // Show all assigned shifts (including offers)
                 .gte('shift_date', startDate)
                 .lte('shift_date', endDate)
                 .is('deleted_at', null)
@@ -227,7 +234,11 @@ export const shiftsQueries = {
                 console.error('Error fetching employee shifts:', error);
                 return [];
             }
-            return (data || []) as unknown as Shift[];
+
+            return (data || []).map((shift: any) => ({
+                ...shift,
+                is_trade_requested: !!shift.trade_requested_at || shift.trading_status === 'TradeRequested'
+            })) as unknown as Shift[];
         } catch (error) {
             console.error('Exception in getEmployeeShifts:', error);
             return [];
@@ -341,29 +352,40 @@ export const shiftsQueries = {
     },
 
     async getTemplates(subDepartmentId?: string, departmentId?: string): Promise<any[]> {
+        console.log('[shiftsQueries.getTemplates] Fetching with:', { subDepartmentId, departmentId });
         try {
-            // Query roster_templates (published templates) not shift_templates
+            // Use v_template_full view which includes applied_count and full metadata
             let query = supabase
-                .from('roster_templates')
-                .select('id, name, description, department_id, sub_department_id, status, published_month, start_date, end_date, organization_id')
-                .eq('status', 'published') // Only show published templates with valid date ranges
+                .from('v_template_full')
+                .select('id, name, description, department_id, sub_department_id, status, published_month, start_date, end_date, organization_id, applied_count')
+                .eq('status', 'published') // Only show published templates for application
                 .order('name');
 
-            if (subDepartmentId && isValidUuid(subDepartmentId)) {
-                query = query.eq('sub_department_id', subDepartmentId);
-            } else if (departmentId && isValidUuid(departmentId)) {
-                query = query.eq('department_id', departmentId);
+            const cleanSubDeptId = subDepartmentId?.trim();
+            const cleanDeptId = departmentId?.trim();
+
+            if (cleanSubDeptId && isValidUuid(cleanSubDeptId)) {
+                // Match templates for this sub-department OR department-level templates (null sub_dept)
+                if (cleanDeptId && isValidUuid(cleanDeptId)) {
+                    query = query.or(`sub_department_id.eq.${cleanSubDeptId},and(department_id.eq.${cleanDeptId},sub_department_id.is.null)`);
+                } else {
+                    query = query.eq('sub_department_id', cleanSubDeptId);
+                }
+            } else if (cleanDeptId && isValidUuid(cleanDeptId)) {
+                query = query.eq('department_id', cleanDeptId);
             }
 
             const { data, error } = await query;
 
             if (error) {
-                console.error('Error fetching templates:', error);
+                console.error('[shiftsQueries.getTemplates] Error:', error);
                 return [];
             }
+
+            console.log('[shiftsQueries.getTemplates] Found:', data?.length || 0, 'templates');
             return data || [];
         } catch (error) {
-            console.error('Exception in getTemplates:', error);
+            console.error('[shiftsQueries.getTemplates] Exception:', error);
             return [];
         }
     },

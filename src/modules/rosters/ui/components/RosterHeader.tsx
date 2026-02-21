@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, Filter, PanelRight, Search, Users, Lock, Unlock } from 'lucide-react';
 import { format } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
+import { SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { Calendar as CalendarComponent } from '@/modules/core/ui/primitives/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -25,9 +27,9 @@ interface RosterHeaderProps {
   hasUnsavedChanges?: boolean;
 }
 
-export const RosterHeader: React.FC<RosterHeaderProps> = ({ 
-  sidebarOpen, 
-  toggleSidebar, 
+export const RosterHeader: React.FC<RosterHeaderProps> = ({
+  sidebarOpen,
+  toggleSidebar,
   selectedDate,
   onDateChange,
   onApplyTemplate,
@@ -41,7 +43,7 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
   hasUnsavedChanges = false
 }) => {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  
+
   // Keyboard shortcuts
   useHotkeys('left', navigatePrevious, [navigatePrevious]);
   useHotkeys('right', navigateNext, [navigateNext]);
@@ -59,27 +61,30 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
 
   // Get date display based on view
   const getDateDisplay = () => {
+    // Convert current selected date to Sydney time for correct "Day of Week" and math
+    const zonedSelected = toZonedTime(selectedDate, SYDNEY_TZ);
+
     switch (view) {
       case 'day':
-        return format(selectedDate, 'EEEE, MMMM d, yyyy');
+        return format(zonedSelected, 'EEEE, MMMM d, yyyy');
       case '3day': {
-        const endDate = new Date(selectedDate);
-        endDate.setDate(selectedDate.getDate() + 2);
-        return `${format(selectedDate, 'MMM d')} - ${format(endDate, 'MMM d, yyyy')}`;
+        const endDate = new Date(zonedSelected);
+        endDate.setDate(zonedSelected.getDate() + 2);
+        return `${format(zonedSelected, 'MMM d')} - ${format(endDate, 'MMM d, yyyy')}`;
       }
       case 'week': {
-        const weekStart = new Date(selectedDate);
-        const day = selectedDate.getDay();
-        const diff = selectedDate.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+        const weekStart = new Date(zonedSelected);
+        const day = zonedSelected.getDay();
+        const diff = zonedSelected.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
         weekStart.setDate(diff);
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekStart.getDate() + 6);
         return `${format(weekStart, 'MMM d')} - ${format(weekEnd, 'MMM d, yyyy')}`;
       }
       case 'month':
-        return format(selectedDate, 'MMMM yyyy');
+        return format(zonedSelected, 'MMMM yyyy');
       default:
-        return format(selectedDate, 'EEEE, MMMM d, yyyy');
+        return format(zonedSelected, 'EEEE, MMMM d, yyyy');
     }
   };
 
@@ -90,16 +95,16 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
           <Users className="mr-2 text-purple-400" size={24} />
           Roster Management
         </h1>
-        
+
         <div className="flex space-x-2">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="icon"
                   className="h-8 w-8 bg-white/5 border-white/10"
-                  onClick={() => {}}
+                  onClick={() => { }}
                 >
                   <Search className="h-4 w-4 text-white/80 hover:text-white" />
                 </Button>
@@ -109,15 +114,15 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          
+
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="icon"
                   className="h-8 w-8 bg-white/5 border-white/10"
-                  onClick={() => {}}
+                  onClick={() => { }}
                 >
                   <Filter className="h-4 w-4 text-white/80 hover:text-white" />
                 </Button>
@@ -127,13 +132,13 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          
+
           {onToggleLock && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="icon"
                     className="h-8 w-8 bg-white/5 border-white/10"
                     onClick={onToggleLock}
@@ -151,14 +156,13 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
               </Tooltip>
             </TooltipProvider>
           )}
-          
+
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button 
-                  className={`p-2 rounded-full transition-all duration-200 ${
-                    sidebarOpen ? 'bg-purple-500/20 text-purple-300' : 'bg-white/5 text-white/80 hover:bg-white/10 hover:text-white'
-                  }`} 
+                <Button
+                  className={`p-2 rounded-full transition-all duration-200 ${sidebarOpen ? 'bg-purple-500/20 text-purple-300' : 'bg-white/5 text-white/80 hover:bg-white/10 hover:text-white'
+                    }`}
                   onClick={toggleSidebar}
                 >
                   <PanelRight className="h-5 w-5" />
@@ -171,13 +175,13 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
           </TooltipProvider>
         </div>
       </div>
-      
+
       <div className="flex flex-wrap justify-between items-center">
         <div className="flex items-center space-x-4">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button 
+                <Button
                   onClick={navigatePrevious}
                   className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-all duration-200"
                 >
@@ -189,7 +193,7 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          
+
           <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
             <PopoverTrigger asChild>
               <Button className="flex items-center space-x-2 px-4 py-2 rounded-md bg-white/5 hover:bg-white/10 transition-all duration-200">
@@ -213,11 +217,11 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
               />
             </PopoverContent>
           </Popover>
-          
+
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button 
+                <Button
                   onClick={navigateNext}
                   className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-all duration-200"
                 >
@@ -230,7 +234,7 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
             </Tooltip>
           </TooltipProvider>
         </div>
-        
+
         <div className="flex mt-2 md:mt-0 space-x-2">
           <ToggleGroup type="single" value={view} onValueChange={(value) => value && onViewChange(value as CalendarView)}>
             <TooltipProvider>
@@ -245,7 +249,7 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            
+
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -258,7 +262,7 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            
+
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -271,7 +275,7 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            
+
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -286,12 +290,12 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
             </TooltipProvider>
           </ToggleGroup>
         </div>
-        
+
         <div className="flex mt-2 md:mt-0 space-x-2">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button 
+                <Button
                   onClick={onApplyTemplate}
                   className="button-outline"
                   disabled={view !== 'day'}
@@ -305,11 +309,11 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          
+
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button 
+                <Button
                   onClick={onSaveRoster}
                   className="button-blue"
                   disabled={!hasUnsavedChanges}

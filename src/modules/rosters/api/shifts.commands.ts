@@ -188,36 +188,43 @@ export const shiftsCommands = {
      * @param shiftIds Array of shift UUIDs to assign
      * @returns Array of updated shifts
      */
-    async bulkAssignShifts(employeeId: string, shiftIds: string[]): Promise<Shift[]> {
+    async bulkAssignShifts(employeeId: string, shiftIds: string[]): Promise<{
+        success: boolean;
+        total_requested: number;
+        success_count: number;
+        failure_count: number;
+        message?: string;
+    }> {
         if (!employeeId || !isValidUuid(employeeId)) {
             throw new Error('Invalid employee ID');
         }
+        if (shiftIds.length === 0) {
+            return { success: true, total_requested: 0, success_count: 0, failure_count: 0, message: 'No shifts selected' };
+        }
 
-        if (shiftIds.length === 0) return [];
-
-        console.log('[shiftsApi] bulkAssignShifts (V3):', { employeeId, shiftIds });
+        console.log('[shiftsApi] bulkAssignShifts (RPC):', { employeeId, count: shiftIds.length });
 
         try {
-            // V3 RPC: sm_bulk_assign
-            // Handles both Draft (update row) and Published (emergency assign + audit) logic internally
-            const { data, error } = await supabase.rpc('sm_bulk_assign', {
+            const { data: { user } } = await supabase.auth.getUser();
+
+            // Use the new set-based RPC
+            // Cast to any to bypass type check for updated RPC signature/return
+            const { data, error } = await supabase.rpc('sm_bulk_assign' as any, {
                 p_shift_ids: shiftIds,
                 p_employee_id: employeeId,
-                p_user_id: (await supabase.auth.getUser()).data.user?.id || ''
+                p_user_id: user?.id
             });
 
             if (error) {
-                console.error('[shiftsApi] sm_bulk_assign error:', error);
+                console.error('[shiftsApi] Bulk assign RPC failed:', error);
                 throw error;
             }
 
-            console.log('[shiftsApi] bulkAssignShifts success:', (data as any[])?.length, 'shifts updated');
-
-            // Return updated shifts
-            const { data: updatedShifts } = await supabase.from('shifts').select('*').in('id', shiftIds);
-            return (updatedShifts || []) as unknown as Shift[];
+            const result = data as any;
+            console.log('[shiftsApi] Bulk assign success:', result.success_count, 'shifts assigned');
+            return result;
         } catch (error) {
-            console.error('Error in bulkAssignShifts:', error);
+            console.error('Error bulk assigning shifts:', error);
             throw error;
         }
     },
@@ -272,16 +279,6 @@ export const shiftsCommands = {
 
 
 
-
-
-
-    /* ============================================================
-       PUBLISH SHIFTS (RPC)
-       ============================================================ */
-
-
-
-
     async publishShift(shiftId: string): Promise<{ success: boolean; new_status: string }> {
         try {
             // Updated to use State Machine v2 RPC
@@ -300,9 +297,11 @@ export const shiftsCommands = {
     },
 
     async bulkPublishShifts(shiftIds: string[]): Promise<{
+        success: boolean;
+        total_requested: number;
         success_count: number;
         failure_count: number;
-        results: Array<{ id: string; status: 'success' | 'failed'; error?: string }>;
+        message?: string;
     }> {
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -429,13 +428,24 @@ export const shiftsCommands = {
             return false;
         }
 
-        // Use server-side RPC function to delete shift + audit events (bypasses RLS)
+        // Use valid RPC function for deletion (bypasses RLS)
+        // 'delete_shift_with_audit' returns boolean
         const { data, error } = await supabase
-            .rpc('delete_shift_cascade', { p_shift_id: shiftId });
+            .rpc('delete_shift_with_audit', {
+                p_shift_id: shiftId,
+                p_deleted_by: (await supabase.auth.getUser()).data.user?.id,
+                p_reason: 'Manual deletion'
+            });
 
-        if (error || data === false) {
-            console.error('[shifts.api] Failed to delete shift via RPC:', error || 'RPC returned false');
+        if (error) {
+            console.error('[shifts.api] Failed to delete shift via RPC:', error);
             throw new Error(error?.message || 'Failed to delete shift');
+        }
+
+        // RPC returns true/false
+        if (data === false) {
+            console.error('[shifts.api] RPC returned false (shift not found or already deleted)');
+            return false;
         }
 
         console.log('[shifts.api] Shift deleted successfully via RPC:', shiftId);
@@ -449,29 +459,44 @@ export const shiftsCommands = {
     async bulkDeleteShifts(shiftIds: string[]): Promise<number> {
         if (!shiftIds || shiftIds.length === 0) return 0;
 
-        console.log(`[shifts.api] Bulk deleting ${shiftIds.length} shifts...`);
-        let successCount = 0;
-        const errors: any[] = [];
+        console.log(`[shifts.api] Bulk deleting ${shiftIds.length} shifts via set-based RPC...`);
 
-        // Execute deletions in parallel batches to avoid overwhelming the server
-        const BATCH_SIZE = 5;
-        for (let i = 0; i < shiftIds.length; i += BATCH_SIZE) {
-            const batch = shiftIds.slice(i, i + BATCH_SIZE);
-            await Promise.all(batch.map(async (id) => {
-                try {
-                    await this.deleteShift(id);
-                    successCount++;
-                } catch (err) {
-                    errors.push({ id, error: err });
-                }
-            }));
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+
+            // Use the new set-based RPC
+            // Cast to any because generated types are not updated
+            const { data, error } = await supabase.rpc('sm_bulk_delete_shifts' as any, {
+                p_shift_ids: shiftIds,
+                p_deleted_by: user?.id,
+                p_reason: 'Bulk manual deletion'
+            });
+
+            if (error) {
+                console.error('[shifts.api] Bulk delete RPC failed:', error);
+                // Return 0 so UI knows nothing happened, or throw if we want to block
+                // For now, let's throw to allow UI to show specific error if needed
+                throw error;
+            }
+
+            // data = { success: true, total_requested: N, success_count: M }
+            const result = data as { success: boolean; success_count: number; error?: string };
+
+            if (!result.success) {
+                console.error('[shifts.api] Bulk delete RPC returned failure:', result.error);
+                throw new Error(result.error);
+            }
+
+            console.log(`[shifts.api] Bulk delete success: ${result.success_count} / ${shiftIds.length}`);
+            return result.success_count;
+        } catch (error) {
+            console.error('[shifts.api] Error in bulkDeleteShifts:', error);
+            // Return 0 or rethrow. The UI expects a number (success count).
+            // If we throw, the UI shows "Unexpected error". 
+            // If we return 0, the UI shows "No shifts deleted".
+            // Let's rethrow to signal a system error vs just "no rows found".
+            throw error;
         }
-
-        if (errors.length > 0) {
-            console.error('[shifts.api] Some shifts failed to delete:', errors);
-        }
-
-        return successCount;
     },
 
     /* ============================================================

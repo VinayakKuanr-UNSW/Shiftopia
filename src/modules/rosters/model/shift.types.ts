@@ -86,6 +86,7 @@ export interface Shift {
     flags?: ShiftFlagType[];
     breakDuration?: number;
     notes?: string;
+    templateBatchId?: string;
 }
 
 export interface Roster {

@@ -31,7 +31,7 @@ export const ScopeFilterBanner: React.FC<ScopeFilterBannerProps> = ({
     mode,
     onScopeChange,
     hidden = false,
-    multiSelect = true,
+    multiSelect,
     className,
 }) => {
     const context = useContext(AuthContext);
@@ -47,6 +47,13 @@ export const ScopeFilterBanner: React.FC<ScopeFilterBannerProps> = ({
         return null;
     }
 
+    // Default multiSelect based on mode if not provided
+    // Personal mode defaults to multi-select (true)
+    // Managerial mode defaults to single-select (false) per business rules
+    const effectiveMultiSelect = multiSelect !== undefined
+        ? multiSelect
+        : mode === 'personal';
+
     return (
         <div className={cn(
             'relative z-30 rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-md p-1',
@@ -55,12 +62,12 @@ export const ScopeFilterBanner: React.FC<ScopeFilterBannerProps> = ({
             {mode === 'personal' ? (
                 <PersonalScopeFilter
                     onScopeChange={onScopeChange}
-                    multiSelect={multiSelect}
+                    multiSelect={effectiveMultiSelect}
                 />
             ) : (
                 <ManagerialScopeFilter
                     onScopeChange={onScopeChange}
-                    multiSelect={multiSelect}
+                    multiSelect={effectiveMultiSelect}
                 />
             )}
         </div>

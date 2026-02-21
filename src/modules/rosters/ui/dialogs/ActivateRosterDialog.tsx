@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { format, eachDayOfInterval, isSameDay, startOfDay } from 'date-fns';
+import { getSydneyToday } from '@/modules/core/lib/date.utils';
 import { Button } from '@/modules/core/ui/primitives/button';
 import {
     Dialog,
@@ -68,7 +69,7 @@ export const ActivateRosterDialog: React.FC<ActivateRosterDialogProps> = ({
     const { daysActive, daysToInject, daysToSkip, allDates } = useMemo(() => {
         if (isLoadingChecks) return { daysActive: [], daysToInject: [], daysToSkip: [], allDates: [] };
 
-        const today = startOfDay(new Date());
+        const today = getSydneyToday();
         const totalDates = eachDayOfInterval({ start: startDate, end: endDate });
 
         const active: Date[] = [];
@@ -95,13 +96,21 @@ export const ActivateRosterDialog: React.FC<ActivateRosterDialogProps> = ({
 
     const handleActivate = async () => {
         if (daysToInject.length === 0) return;
+
+        // Calculate the effective range from the days we actually want to inject
+        // This ensures we don't accidentally ask the backend to create rosters for filtered-out past dates
+        // just because they fall within the selected view range.
+        const sortedInjectDates = [...daysToInject].sort((a, b) => a.getTime() - b.getTime());
+        const effectiveStartDate = sortedInjectDates[0];
+        const effectiveEndDate = sortedInjectDates[sortedInjectDates.length - 1];
+
         try {
             await activateMutation.mutateAsync({
                 organizationId,
                 departmentId,
                 subDepartmentId: subDepartmentId || null,
-                startDate: format(startDate, 'yyyy-MM-dd'),
-                endDate: format(endDate, 'yyyy-MM-dd'),
+                startDate: format(effectiveStartDate, 'yyyy-MM-dd'),
+                endDate: format(effectiveEndDate, 'yyyy-MM-dd'),
             });
             onOpenChange(false);
         } catch (err) {

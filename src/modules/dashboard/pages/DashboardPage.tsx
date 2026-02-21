@@ -175,7 +175,7 @@ const DashboardPage: React.FC = () => {
         <StatCard
           icon={<Clock className="h-6 w-6 text-emerald-400" />}
           title="Hours Logged"
-          value={isLoading ? '-' : stats.hours}
+          value={isLoading ? '-' : String(stats.hours)}
           trend="This Week"
           trendUp={true}
           delay={0.2}

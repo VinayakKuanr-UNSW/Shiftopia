@@ -20,6 +20,9 @@ async function fetchRosterStructure(
             id,
             start_date,
             end_date,
+            roster_template_applications (
+                template_id
+            ),
             roster_groups (
                 id,
                 name,
@@ -63,6 +66,7 @@ async function fetchRosterStructure(
         rosterId: roster.id,
         startDate: roster.start_date,
         endDate: roster.end_date,
+        appliedTemplateIds: (roster.roster_template_applications || []).map((app: any) => app.template_id),
         groups: (roster.roster_groups || [])
             .sort((a: any, b: any) => a.sort_order - b.sort_order)
             .map((group: any) => ({

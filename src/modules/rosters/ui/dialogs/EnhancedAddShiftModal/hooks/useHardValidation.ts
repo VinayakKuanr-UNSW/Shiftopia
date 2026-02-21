@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/platform/realtime/client';
 import { runHardValidation, HardValidationResult, ShiftTimeRange } from '@/modules/compliance';
 import { format, addDays, subDays } from 'date-fns';
+import { getNowInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 interface UseHardValidationProps {
     watchStart: string;
@@ -10,6 +11,7 @@ interface UseHardValidationProps {
     watchEmployeeId: string | null | undefined;
     isTemplateMode: boolean;
     existingShiftId?: string;
+    timezone?: string;
 }
 
 interface UseHardValidationReturn {
@@ -24,6 +26,7 @@ export function useHardValidation({
     watchEmployeeId,
     isTemplateMode,
     existingShiftId,
+    timezone = SYDNEY_TZ,
 }: UseHardValidationProps): UseHardValidationReturn {
     const [hardValidation, setHardValidation] = useState<HardValidationResult>({ passed: true, errors: [] });
     const [employeeExistingShifts, setEmployeeExistingShifts] = useState<ShiftTimeRange[]>([]);
@@ -117,7 +120,7 @@ export function useHardValidation({
             end_time: watchEnd,
             employee_id: watchEmployeeId,
             existing_shifts: employeeExistingShifts,
-            current_time: new Date(),
+            current_time: getNowInTimezone(timezone),
             is_template: isTemplateMode
         });
 
@@ -125,7 +128,7 @@ export function useHardValidation({
         console.debug('[HardValidation] Errors with context:', result.errors);
 
         setHardValidation(result);
-    }, [watchStart, watchEnd, watchShiftDate, watchEmployeeId, employeeExistingShifts, isTemplateMode]);
+    }, [watchStart, watchEnd, watchShiftDate, watchEmployeeId, employeeExistingShifts, isTemplateMode, timezone]);
 
     return { hardValidation, employeeExistingShifts };
 }

@@ -45,6 +45,7 @@ import {
     Circle,
     HelpCircle,
     Lock,
+    CopyPlus,
 } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
@@ -200,6 +201,11 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                     </span>
                 </div>
                 <div className="flex items-center gap-1">
+                    {shift.is_from_template && (
+                        <div className="mr-1" title="From Template">
+                            <CopyPlus className="h-3 w-3 text-white/60" />
+                        </div>
+                    )}
                     {isLocked && <Lock className="h-3 w-3 text-white/70" />}
                     {headerAction || (!isLocked && <MoreHorizontal className="h-3.5 w-3.5 text-white/40" />)}
                 </div>
@@ -336,6 +342,12 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     </span>
                 </div>
                 <div className="flex items-center gap-1.5">
+                    {shift.is_from_template && (
+                        <Badge variant="outline" className="text-[9px] bg-indigo-500/10 border-indigo-500/30 text-indigo-300 h-4 px-1 gap-1">
+                            <CopyPlus className="h-2.5 w-2.5" />
+                            Template
+                        </Badge>
+                    )}
                     {isLocked && <Lock className="h-4 w-4 text-white/70 mr-1" />}
                     {getLifecycleIcon(shift.lifecycle_status)}
                     {headerAction || (!isLocked && <MoreHorizontal className="h-4 w-4 text-white/50" />)}

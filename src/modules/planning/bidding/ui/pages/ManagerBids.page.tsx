@@ -47,6 +47,7 @@ export const ManagerBidsPage: React.FC = () => {
                 mode="managerial"
                 onScopeChange={setScope}
                 hidden={isGammaLocked}
+                multiSelect={true}
             />
             <OpenBidsView />
         </div>

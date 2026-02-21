@@ -27,9 +27,11 @@ export interface DbRosterTemplate {
   created_by: string | null;
   last_edited_by: string | null;
   version: number;
+  applied_count: number;
   created_at: string;
   updated_at: string;
   is_base_template?: boolean;
+  is_active?: boolean;
 }
 
 export interface DbTemplateGroup {
@@ -73,8 +75,11 @@ export interface DbTemplateShift {
   event_tags: string[];
   notes: string | null;
   sort_order: number;
+  assigned_employee_id: string | null;
+  assigned_employee_name: string | null;
   created_at: string;
   updated_at: string;
+  day_of_week: number;
 }
 
 export interface DbTemplateSnapshot {
@@ -115,6 +120,7 @@ export interface TemplateShift {
   // Employee assignment
   assignedEmployeeId?: string | null;
   assignedEmployeeName?: string | null;
+  dayOfWeek?: number;
 }
 
 export interface SubGroup {
@@ -159,9 +165,23 @@ export interface Template {
   createdBy?: string;
   lastEditedBy?: string;
   version: number;
+  appliedCount: number;
   createdAt: string;
   updatedAt: string;
+  isBaseTemplate?: boolean;
+  isActive?: boolean;
   groups: Group[];
+}
+
+export interface TemplateBatch {
+  id: string;
+  templateId: string;
+  startDate: string;
+  endDate: string;
+  source: 'templates_page' | 'roster_modal';
+  appliedBy: string;
+  appliedByName?: string;
+  appliedAt: string;
 }
 
 export interface TemplateConflict {
@@ -283,6 +303,7 @@ export function dbShiftToFrontend(dbShift: any): TemplateShift {
     // Employee assignment
     assignedEmployeeId: dbShift.assignedEmployeeId || dbShift.assigned_employee_id || null,
     assignedEmployeeName: dbShift.assignedEmployeeName || dbShift.assigned_employee_name || null,
+    dayOfWeek: dbShift.dayOfWeek ?? dbShift.day_of_week ?? 0,
   };
 }
 
@@ -343,6 +364,9 @@ export function dbTemplateToFrontend(dbTemplate: any): Template {
     lastEditedBy:
       dbTemplate.last_edited_by || dbTemplate.lastEditedBy || undefined,
     version: dbTemplate.version ?? 1,
+    appliedCount: dbTemplate.applied_count ?? 0,
+    isBaseTemplate: dbTemplate.is_base_template || dbTemplate.isBaseTemplate || false,
+    isActive: dbTemplate.is_active || dbTemplate.isActive || false,
     createdAt:
       dbTemplate.created_at || dbTemplate.createdAt || new Date().toISOString(),
     updatedAt:

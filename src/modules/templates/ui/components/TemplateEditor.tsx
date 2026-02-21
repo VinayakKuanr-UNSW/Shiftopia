@@ -61,7 +61,7 @@ interface TemplateEditorProps {
   onBack: () => void;
   onDiscardChanges: () => void;
   onSaveChanges: () => Promise<boolean>;
-  onPublish: () => void;
+  onUpdateStatus: (id: string, status: string) => Promise<boolean>;
   onUpdateGroup: (groupId: string | number, updates: Partial<Group>) => void;
   onAddSubgroup: (groupId: string | number, name: string) => void;
   onUpdateSubgroup: (
@@ -131,7 +131,6 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
   onBack,
   onDiscardChanges,
   onSaveChanges,
-  onPublish,
   onUpdateGroup,
   onAddSubgroup,
   onUpdateSubgroup,
@@ -140,9 +139,12 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
   onAddShift,
   onUpdateShift,
   onDeleteShift,
+  onUpdateStatus,
 }) => {
   const isPublished = template.status === 'published';
-  const isReadOnly = isPublished;
+  const isArchived = template.status === 'archived';
+  const isDraft = template.status === 'draft';
+  const isReadOnly = isPublished || isArchived;
 
   // Collapse states
   const [expandedGroups, setExpandedGroups] = useState<Set<string | number>>(
@@ -341,14 +343,22 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
 
             {isPublished && (
               <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
-                <Lock className="h-3 w-3 mr-1" />
-                Published (Read-only)
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Ready for Use
+              </Badge>
+            )}
+
+            {isArchived && (
+              <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 font-bold uppercase tracking-widest px-3">
+                <Lock className="h-3.5 w-3.5 mr-2" />
+                ARCHIVED
               </Badge>
             )}
           </div>
 
           <div className="flex items-center gap-3">
-            {!isReadOnly && (
+            {/* DRAFT MODE ACTIONS */}
+            {isDraft && (
               <>
                 <TooltipProvider>
                   <Tooltip>
@@ -358,15 +368,13 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
                         size="sm"
                         onClick={onDiscardChanges}
                         disabled={!hasUnsavedChanges || isSaving}
-                        className="bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:text-white disabled:opacity-30"
                       >
                         <RotateCcw className="h-4 w-4 mr-2" />
                         Discard
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Revert to last saved version</p>
-                    </TooltipContent>
+                    <TooltipContent>Revert to last saved version</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
 
@@ -392,18 +400,12 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
                         ) : (
                           <>
                             <Save className="h-4 w-4 mr-2" />
-                            Save Changes
+                            Save
                           </>
                         )}
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>
-                      <p>
-                        {hasUnsavedChanges
-                          ? 'Save all changes to database'
-                          : 'No changes to save'}
-                      </p>
-                    </TooltipContent>
+                    <TooltipContent>Save changes to library</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
 
@@ -411,14 +413,66 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
 
                 <Button
                   size="sm"
-                  onClick={onPublish}
+                  onClick={() => onUpdateStatus(String(template.id), 'published')}
                   disabled={isSaving || hasUnsavedChanges}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 disabled:opacity-50"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
                 >
-                  <Upload className="h-4 w-4" />
-                  Publish
+                  <CheckCircle className="h-4 w-4" />
+                  Mark as Ready
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onUpdateStatus(String(template.id), 'archived')}
+                  disabled={isSaving}
+                  className="text-white/40 hover:text-purple-400 hover:bg-purple-400/10 gap-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Archive
                 </Button>
               </>
+            )}
+
+            {/* READY (PUBLISHED) MODE ACTIONS */}
+            {isPublished && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onUpdateStatus(String(template.id), 'draft')}
+                  disabled={isSaving}
+                  className="bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:text-white gap-2"
+                >
+                  <Edit2 className="h-4 w-4" />
+                  Unlock to Edit
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onUpdateStatus(String(template.id), 'archived')}
+                  disabled={isSaving}
+                  className="text-white/40 hover:text-purple-400 hover:bg-purple-400/10 gap-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Archive
+                </Button>
+              </>
+            )}
+
+            {/* ARCHIVED MODE ACTIONS */}
+            {isArchived && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onUpdateStatus(String(template.id), 'draft')}
+                disabled={isSaving}
+                className="bg-purple-500/20 border-purple-500/30 text-purple-200 hover:bg-purple-500/30 gap-2"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Restore from Archive
+              </Button>
             )}
           </div>
         </div>
@@ -433,13 +487,19 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
                 </span>
                 <Badge
                   className={cn(
-                    'text-xs px-2 py-0.5',
-                    isPublished
-                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                      : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                    'text-[10px] px-2 py-0 h-4 border-none flex items-center gap-1 uppercase tracking-wider',
+                    isPublished && 'text-emerald-500 bg-emerald-500/10',
+                    isDraft && 'text-amber-500 bg-amber-500/10',
+                    isArchived && 'text-purple-500 bg-purple-500/10'
                   )}
                 >
-                  {isPublished ? 'Published' : 'Draft'}
+                  <div className={cn(
+                    "h-1 w-1 rounded-full",
+                    isPublished && "bg-emerald-500",
+                    isDraft && "bg-amber-500",
+                    isArchived && "bg-purple-500"
+                  )} />
+                  {template.status === 'published' ? 'Ready' : template.status}
                 </Badge>
                 <Badge
                   variant="outline"
@@ -491,7 +551,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
               </Tooltip>
             </TooltipProvider>
 
-            {template.startDate && template.endDate && (
+            {template.startDate && template.endDate === 'NEVER_MIND' && (
               <div className="flex items-center gap-2 text-white/50">
                 <Calendar className="h-4 w-4" />
                 <span>
@@ -502,10 +562,19 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
           </div>
 
           {isPublished && (
-            <div className="flex items-center gap-2 text-emerald-400/70">
+            <div className="flex items-center gap-2 text-emerald-400/90 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
               <Shield className="h-4 w-4" />
-              <span className="text-xs">
-                This template is locked and cannot be modified
+              <span className="text-xs font-medium">
+                GOLD STANDARD: This template is verified and ready for use. Unlock to make adjustments.
+              </span>
+            </div>
+          )}
+
+          {isArchived && (
+            <div className="flex items-center gap-2 text-purple-400/90 bg-purple-500/10 px-3 py-1 rounded-full border border-purple-500/20">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="text-xs font-medium">
+                ARCHIVED: This template is hidden from the library. Restore it to use or edit.
               </span>
             </div>
           )}
@@ -615,32 +684,34 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
         onEditSubGroup={handleEditSubGroup}
       />
 
-      {shiftModalOpen && shiftModalContext && (
-        <EnhancedAddShiftModal
-          isOpen={shiftModalOpen}
-          onClose={() => {
-            setShiftModalOpen(false);
-            setShiftModalContext(null);
-          }}
-          onSuccess={() => { }}
-          context={{
-            mode: 'template',
-            organizationId: template.organizationId || '',
-            departmentId: template.departmentId || '',
-            subDepartmentId: template.subDepartmentId || '',
-            groupId: String(shiftModalContext.groupId),
-            groupName: shiftModalContext.groupName,
-            subGroupId: String(shiftModalContext.subGroupId),
-            subGroupName: shiftModalContext.subGroupName,
-            groupColor: shiftModalContext.groupColor,
-          }}
-          isTemplateMode={true}
-          editMode={!!shiftModalContext.editShift}
-          existingShift={shiftModalContext.editShift}
-          onShiftCreated={handleShiftModalSave}
-        />
-      )}
-    </div>
+      {
+        shiftModalOpen && shiftModalContext && (
+          <EnhancedAddShiftModal
+            isOpen={shiftModalOpen}
+            onClose={() => {
+              setShiftModalOpen(false);
+              setShiftModalContext(null);
+            }}
+            onSuccess={() => { }}
+            context={{
+              mode: 'template',
+              organizationId: template.organizationId || '',
+              departmentId: template.departmentId || '',
+              subDepartmentId: template.subDepartmentId || '',
+              groupId: String(shiftModalContext.groupId),
+              groupName: shiftModalContext.groupName,
+              subGroupId: String(shiftModalContext.subGroupId),
+              subGroupName: shiftModalContext.subGroupName,
+              groupColor: shiftModalContext.groupColor,
+            }}
+            isTemplateMode={true}
+            editMode={!!shiftModalContext.editShift}
+            existingShift={shiftModalContext.editShift}
+            onShiftCreated={handleShiftModalSave}
+          />
+        )
+      }
+    </div >
   );
 };
 

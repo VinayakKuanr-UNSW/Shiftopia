@@ -1,4 +1,5 @@
-import { isBefore, startOfDay, parseISO } from 'date-fns';
+import { isBefore, startOfDay, parseISO, format } from 'date-fns';
+import { isPastInTimezone, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 export const calculateShiftLength = (start: string, end: string): number => {
     if (!start || !end) return 0;
@@ -25,43 +26,44 @@ export const formatTimeDisplay = (time: string): string => {
     return `${hour12.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${period}`;
 };
 
-export const isDateInPast = (date: Date | undefined): boolean => {
+export const isDateInPast = (date: Date | undefined, timezone: string = SYDNEY_TZ): boolean => {
     if (!date) return false;
-    return isBefore(startOfDay(date), startOfDay(new Date()));
+    return isPastInTimezone(date, timezone);
 };
 
-export const isShiftStarted = (date: Date | string | undefined, startTime: string | undefined): boolean => {
+export const isShiftStarted = (date: Date | string | undefined, startTime: string | undefined, timezone: string = SYDNEY_TZ): boolean => {
     if (!date || !startTime) return false;
 
     try {
-        const [h, m] = startTime.split(':').map(Number);
-
-        // Ensure we have a valid Date object for the base day (local day)
-        let baseDate: Date;
+        // 1. Get the date string (YYYY-MM-DD)
+        let dateStr: string;
         if (date instanceof Date) {
-            baseDate = new Date(date);
+            dateStr = format(date, 'yyyy-MM-dd');
         } else {
-            // If it's a "YYYY-MM-DD" string, parseISO handles it locally
-            baseDate = parseISO(date);
+            // Assume string is YYYY-MM-DD
+            dateStr = date.split('T')[0];
         }
 
-        const start = new Date(baseDate);
-        start.setHours(h, m, 0, 0);
+        // 2. Parse into absolute timestamp for the target timezone
+        const shiftStart = parseZonedDateTime(dateStr, startTime, timezone);
 
-        const now = new Date();
-        const started = now >= start;
+        // 3. Compare with absolute "now"
+        const now = new Date(); // Absolute now
+
+        const started = now >= shiftStart;
 
         if (started) {
             console.log('[isShiftStarted] TRUE', {
-                date,
+                dateStr,
                 startTime,
-                parsedBase: baseDate.toISOString(),
-                calculatedStart: start.toString(),
-                now: now.toString()
+                timezone,
+                shiftStart: shiftStart.toISOString(),
+                now: now.toISOString()
             });
         }
 
         return started;
+
     } catch (e) {
         console.error('[isShiftStarted] error', e);
         return false;

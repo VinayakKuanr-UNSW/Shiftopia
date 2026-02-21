@@ -207,6 +207,16 @@ export interface PaginationOptions {
     pageSize: number;
 }
 
+// EMPLOYEE TYPE
+export interface Employee {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    department?: string;
+    avatar?: string;
+}
+
 export interface PaginatedResponse<T> {
     data: T[];
     total: number;

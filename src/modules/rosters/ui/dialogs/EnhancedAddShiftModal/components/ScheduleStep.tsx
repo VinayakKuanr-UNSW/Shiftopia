@@ -30,6 +30,8 @@ import {
     ArrowRight,
     Lock,
 } from 'lucide-react';
+import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { HierarchyColumn } from './HierarchyColumn';
 
 export const ScheduleStep: React.FC<ScheduleStepProps> = ({
     form,
@@ -44,6 +46,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
     isGroupLocked,
     isSubGroupLocked,
     isRosterLocked,
+    context,
 }) => {
     const watchPaidBreak = form.watch('paid_break_minutes');
     const watchUnpaidBreak = form.watch('unpaid_break_minutes');
@@ -85,9 +88,76 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
     // Fallback options if structure is empty (e.g. new roster)
     const showDefaultGroups = !rosterStructure?.length;
 
+    // Handle applying scope from card
+    const handleApplyScope = (scope: { orgId?: string; deptId?: string; subDeptId?: string }) => {
+        if (!rosters.length) return;
+
+        // Find a roster that matches the scope context
+        // Prioritize exact match on sub-dept, then dept
+        let match = rosters.find(r =>
+            (scope.deptId && r.department_id === scope.deptId) &&
+            (!scope.subDeptId || r.sub_department_id === scope.subDeptId)
+        );
+
+        // If no strict sub-dept match, fall back to dept match
+        if (!match && scope.deptId) {
+            match = rosters.find(r => r.department_id === scope.deptId);
+        }
+
+        if (match) {
+            onRosterChange(match.id);
+        }
+    };
+
+    // Current context derived from selected roster
+    const selectedRoster = rosters.find(r => r.id === selectedRosterId);
+
+    // Sync Roster with Global Scope
+    const { scope } = useScopeFilter('managerial');
+
+    React.useEffect(() => {
+        if (!rosters.length) return;
+
+        // Only enforce if we have a department scope
+        const scopeDeptId = scope?.dept_ids?.[0];
+        const scopeSubDeptId = scope?.subdept_ids?.[0];
+
+        if (!scopeDeptId) return;
+
+        // Check if current selection matches scope
+        if (selectedRoster) {
+            const matchesDept = selectedRoster.department_id === scopeDeptId;
+            const matchesSubDept = !scopeSubDeptId || selectedRoster.sub_department_id === scopeSubDeptId;
+
+            if (matchesDept && matchesSubDept) return; // Already valid
+        }
+
+        // Find best match
+        let match = rosters.find(r =>
+            r.department_id === scopeDeptId &&
+            (!scopeSubDeptId || r.sub_department_id === scopeSubDeptId)
+        );
+
+        if (!match) {
+            // Fallback to purely dept match
+            match = rosters.find(r => r.department_id === scopeDeptId);
+        }
+
+        if (match) {
+            console.log('[ScheduleStep] Auto-selecting roster from scope:', match.name);
+            onRosterChange(match.id);
+        }
+    }, [scope, rosters, selectedRoster, onRosterChange]); // Dependencies ensure we react to scope scope/roster changes
+
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-3 gap-6 auto-rows-fr">
+            <div className="grid grid-cols-4 gap-4 auto-rows-fr">
+                {/* COLUMN 1: HIERARCHY (Locked Global Scope) */}
+                <HierarchyColumn
+                    orgId={context?.organizationId}
+                    deptId={context?.departmentId}
+                    subDeptId={context?.subDepartmentId}
+                />
                 {/* COLUMN 1: CONTEXT */}
                 <div className="flex flex-col h-full rounded-2xl bg-[#1e293b]/30 border border-white/5 backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-amber-500/20 group/card">
                     <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center gap-3">

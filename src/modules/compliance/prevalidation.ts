@@ -12,6 +12,7 @@
 
 import { ShiftTimeRange } from './types';
 import { parseTimeToMinutes, doShiftsOverlap } from './utils';
+import { getSydneyNow } from '@/modules/core/lib/date.utils';
 
 // =============================================================================
 // TYPES
@@ -46,7 +47,7 @@ export interface HardValidationInput {
  * Check if start time is in the past for same-day shifts
  */
 function validateFutureTime(input: HardValidationInput): HardValidationError | null {
-    const now = input.current_time || new Date();
+    const now = input.current_time || getSydneyNow();
     const today = now.toISOString().split('T')[0];  // YYYY-MM-DD
 
     // Only validate same-day shifts
@@ -128,7 +129,7 @@ function validateTimeRange(input: HardValidationInput): HardValidationError | nu
  * Check if shift date is in the past
  */
 function validateNotPastDate(input: HardValidationInput): HardValidationError | null {
-    const now = input.current_time || new Date();
+    const now = input.current_time || getSydneyNow();
     const today = now.toISOString().split('T')[0];
 
     if (input.shift_date < today && !input.is_template) {

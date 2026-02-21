@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Edit, Plus, Trash, Copy } from 'lucide-react';
+import { format } from 'date-fns';
+import { getSydneyToday } from '@/modules/core/lib/date.utils';
 import ShiftItem from '@/modules/rosters/ui/components/ShiftItem';
 import { SubGroup } from '@/types';
 import AddShiftDialog from '../dialogs/AddShiftDialog';
@@ -120,7 +122,7 @@ const RosterSubGroup: React.FC<RosterSubGroupProps> = ({
             <AddShiftDialog
               groupId={groupId}
               subGroupId={subGroup.id}
-              date={new Date().toISOString().split('T')[0]}
+              date={format(getSydneyToday(), 'yyyy-MM-dd')}
               onAddShift={handleAddShift}
               trigger={
                 <button
@@ -209,7 +211,7 @@ const RosterSubGroup: React.FC<RosterSubGroupProps> = ({
               <AddShiftDialog
                 groupId={groupId}
                 subGroupId={subGroup.id}
-                date={new Date().toISOString().split('T')[0]}
+                date={format(getSydneyToday(), 'yyyy-MM-dd')}
                 onAddShift={handleAddShift}
                 trigger={
                   <Button variant="ghost" size="sm" className='bg-transparent hover:bg-transparent border-none text-white'>
@@ -225,7 +227,7 @@ const RosterSubGroup: React.FC<RosterSubGroupProps> = ({
             <AddShiftDialog
               groupId={groupId}
               subGroupId={subGroup.id}
-              date={new Date().toISOString().split('T')[0]}
+              date={format(getSydneyToday(), 'yyyy-MM-dd')}
               onAddShift={handleAddShift}
               trigger={
                 <button className="w-full py-1.5 mt-2 rounded-md flex items-center justify-center bg-black/20 hover:bg-black/30 text-white/70 hover:text-white border border-white/5 hover:border-white/10 transition-all duration-200 text-sm">

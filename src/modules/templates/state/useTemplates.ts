@@ -29,6 +29,8 @@ import {
   isTempId,
   formatDateForDb,
 } from '@/modules/templates/model/templates.types';
+import { getDayBoundsInUTC, DEFAULT_TIMEZONE, getZonedNow } from '@/utils/date.utils';
+import { parse, isSameMonth, startOfMonth, endOfMonth, format as formatCb } from 'date-fns';
 
 /* ============================================================
    CONSTANTS
@@ -90,7 +92,13 @@ const log = (level: LogLevel, message: string, data?: any) => {
    HOOK INTERFACE
    ============================================================ */
 
-interface UseTemplatesReturn {
+export interface FetchTemplatesOptions {
+  organizationId?: string;
+  departmentId?: string;
+  subDepartmentId?: string;
+}
+
+export interface UseTemplatesReturn {
   // State
   templates: Template[];
   currentTemplate: Template | null;
@@ -99,15 +107,15 @@ interface UseTemplatesReturn {
   isSaving: boolean;
   error: string | null;
   hasUnsavedChanges: boolean;
-  conflicts: TemplateConflict[];
 
   // Template CRUD
-  fetchTemplates: () => Promise<void>;
+  fetchTemplates: (options?: FetchTemplatesOptions) => Promise<void>;
   fetchTemplate: (id: string) => Promise<Template | null>;
   createTemplate: (input: CreateTemplateInput) => Promise<Template | null>;
   saveTemplate: () => Promise<boolean>;
   deleteTemplate: (id: string) => Promise<boolean>;
   duplicateTemplate: (id: string) => Promise<Template | null>;
+  updateTemplateStatus: (id: string, status: string) => Promise<boolean>;
 
   // Local editing
   setCurrentTemplate: (template: Template | null) => void;
@@ -145,13 +153,6 @@ interface UseTemplatesReturn {
   ) => void;
   discardChanges: () => void;
 
-  // Publishing
-  publishTemplate: () => Promise<boolean>;
-  checkDateConflicts: (
-    startDate: Date,
-    endDate: Date
-  ) => Promise<TemplateConflict[]>;
-
   // Validation
   validateName: (name: string, excludeId?: string) => Promise<ValidationResult>;
   checkVersion: () => Promise<VersionCheckResult | null>;
@@ -172,7 +173,6 @@ export function useTemplates(): UseTemplatesReturn {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [conflicts, setConflicts] = useState<TemplateConflict[]>([]);
 
   const { toast } = useToast();
 
@@ -220,8 +220,8 @@ export function useTemplates(): UseTemplatesReturn {
      FETCH TEMPLATES
      ============================================================ */
 
-  const fetchTemplates = useCallback(async () => {
-    log('network', '📥 Fetching templates...');
+  const fetchTemplates = useCallback(async (options?: FetchTemplatesOptions) => {
+    log('network', '📥 Fetching templates...', options);
     safeSetState(setIsLoading, true);
     safeSetState(setError, null);
 
@@ -230,10 +230,22 @@ export function useTemplates(): UseTemplatesReturn {
 
       const startTime = performance.now();
 
-      const { data, error: err } = await supabase
+      let query = supabase
         .from('v_template_full')
         .select('*')
         .order('updated_at', { ascending: false });
+
+      if (options?.organizationId) {
+        query = query.eq('organization_id', options.organizationId);
+      }
+      if (options?.departmentId) {
+        query = query.eq('department_id', options.departmentId);
+      }
+      if (options?.subDepartmentId) {
+        query = query.eq('sub_department_id', options.subDepartmentId);
+      }
+
+      const { data, error: err } = await query;
 
       const duration = Math.round(performance.now() - startTime);
 
@@ -338,19 +350,16 @@ export function useTemplates(): UseTemplatesReturn {
             p_department_id: input.departmentId,
             p_sub_department_id: input.subDepartmentId,
             p_name: sanitizedName,
-            p_exclude_id: null,
+            p_exclude_id: undefined,
           }
         );
 
         if (rpcError) {
           log('error', 'Validation RPC failed', rpcError);
-          // Optional: decide if we block or warn. For now, we log and proceed or block?
-          // Let's block if it's a real error, but maybe not if it's just a connection blip?
-          // For safety, let's assume valid if checking fails, or block? 
-          // Implementation choice: Block on specific errors, but here we might just log.
         }
 
-        const validationResult = (rpcData && rpcData.length > 0) ? rpcData[0] : null;
+        const rpcArray = rpcData as any[];
+        const validationResult = (rpcArray && rpcArray.length > 0) ? rpcArray[0] : null;
 
         if (validationResult && !validationResult.is_valid) {
           toast({
@@ -371,7 +380,6 @@ export function useTemplates(): UseTemplatesReturn {
             organization_id: input.organizationId,
             department_id: input.departmentId,
             sub_department_id: input.subDepartmentId,
-            published_month: input.month, // YYYY-MM
             status: 'draft',
             created_by: user.id,
             last_edited_by: user.id,
@@ -381,18 +389,32 @@ export function useTemplates(): UseTemplatesReturn {
           .single();
 
         if (templateErr) {
-          if (templateErr.code === '23505') {
-            throw new Error('A template for this month already exists');
-          }
           throw templateErr;
         }
 
         log('success', `✅ Template created: ${templateData.id}`);
 
-        // Note: Default groups are now handled by database trigger trigger_seed_fixed_template_groups
-        log('db', '2️⃣ Default groups seeded via database trigger');
+        log('db', '2️⃣ Seeding default groups manually...');
+        const { error: groupsErr } = await supabase
+          .from('template_groups')
+          .insert(
+            DEFAULT_GROUPS.map((g, i) => ({
+              template_id: templateData.id,
+              name: g.name,
+              color: g.color,
+              icon: g.icon,
+              sort_order: i + 1,
+            }))
+          );
 
-        // Fetch complete template (including groups seeded by trigger)
+        if (groupsErr) {
+          log('error', 'Failed to seed default groups', groupsErr);
+          // Non-fatal, but template will be empty
+        } else {
+          log('success', '✅ Default groups seeded');
+        }
+
+        // Fetch complete template
         const fullTemplate = await fetchTemplate(templateData.id);
 
         if (fullTemplate) {
@@ -1004,13 +1026,13 @@ export function useTemplates(): UseTemplatesReturn {
         }
 
         // Generate unique name
-        let newName = `${original.name} (Copy)`;
+        const baseName = original.name.replace(/\s\((Copy|v)\s?\d*\)$/i, '');
+        let newName = `${baseName} (Copy)`;
         let counter = 1;
-        while (
-          templates.some((t) => t.name.toLowerCase() === newName.toLowerCase())
-        ) {
+
+        while (templates.some((t) => t.name.toLowerCase() === newName.toLowerCase())) {
           counter++;
-          newName = `${original.name} (Copy ${counter})`;
+          newName = `${baseName} (Copy ${counter})`;
         }
 
         // Create template
@@ -1022,6 +1044,13 @@ export function useTemplates(): UseTemplatesReturn {
             organization_id: original.organizationId,
             department_id: original.departmentId,
             sub_department_id: original.subDepartmentId,
+            published_month: null, // Clear month on duplicate
+            start_date: null,      // Clear dates on duplicate
+            end_date: null,        // Clear dates on duplicate
+            published_at: null,    // Clear pub info
+            published_by: null,    // Clear pub info
+            is_base_template: false,
+            is_active: original.isActive,
             status: 'draft',
             created_by: user.id,
             last_edited_by: user.id,
@@ -1083,6 +1112,9 @@ export function useTemplates(): UseTemplatesReturn {
                 event_tags: s.eventTags,
                 notes: s.notes,
                 sort_order: idx,
+                day_of_week: s.dayOfWeek ?? 0,
+                assigned_employee_id: s.assignedEmployeeId || null,
+                assigned_employee_name: s.assignedEmployeeName || null,
               }));
 
               await supabase.from('template_shifts').insert(shiftsToInsert);
@@ -1120,163 +1152,8 @@ export function useTemplates(): UseTemplatesReturn {
   );
 
   /* ============================================================
-     PUBLISH TEMPLATE (ATOMIC VIA RPC)
+     VALIDATION HELPERS
      ============================================================ */
-
-  const checkDateConflicts = useCallback(
-    async (startDate: Date, endDate: Date): Promise<TemplateConflict[]> => {
-      if (!currentTemplate) return [];
-
-      try {
-        const { data } = await supabase.rpc('get_template_conflicts', {
-          p_organization_id: currentTemplate.organizationId,
-          p_start_date: formatDateForDb(startDate),
-          p_end_date: formatDateForDb(endDate),
-          p_exclude_template_id: String(currentTemplate.id),
-        });
-
-        const conflictList = (data || []).map((c: any) => ({
-          id: c.id,
-          name: c.name,
-          startDate: c.start_date,
-          endDate: c.end_date,
-        }));
-
-        safeSetState(setConflicts, conflictList);
-        return conflictList;
-      } catch (err: any) {
-        log('warn', `Conflict check failed: ${err.message}`);
-        return [];
-      }
-    },
-    [currentTemplate, safeSetState]
-  );
-
-  const publishTemplate = useCallback(
-    async (forceOverride: boolean = false): Promise<boolean> => {
-      if (!currentTemplate || !localTemplate) {
-        toast({
-          title: 'No template selected',
-          description: 'Please select a template first',
-          variant: 'destructive',
-        });
-        return false;
-      }
-
-      const month = currentTemplate.publishedMonth;
-      if (!month) {
-        toast({
-          title: 'Invalid template',
-          description: 'This template does not have an assigned month.',
-          variant: 'destructive',
-        });
-        return false;
-      }
-
-      // Save any unsaved changes first
-      if (hasUnsavedChanges) {
-        const saved = await saveTemplate();
-        if (!saved) {
-          return false;
-        }
-      }
-
-      log('network', `📤 Applying template for ${month}...`);
-      safeSetState(setIsSaving, true);
-
-      try {
-        const templateId = String(currentTemplate.id);
-
-        log('db', '1️⃣ Calling apply_monthly_template RPC...', {
-          templateId,
-          organizationId: currentTemplate.organizationId,
-          month,
-        });
-
-        const { data, error: rpcError } = (await (supabase.rpc as any)(
-          'apply_monthly_template',
-          {
-            p_template_id: templateId,
-            p_organization_id: currentTemplate.organizationId,
-            p_month: month,
-          }
-        )) as { data: any; error: any };
-
-        if (rpcError) {
-          log('error', `RPC error: ${rpcError.message}`);
-          throw rpcError;
-        }
-
-        const result = data;
-
-        if (!result || !result.success) {
-          throw new Error(result?.error || 'Failed to apply template');
-        }
-
-        log(
-          'success',
-          `✅ Applied successfully. ${result.shifts_created} shifts added across ${result.days_processed} days.`
-        );
-
-        // Refresh from database
-        log('db', '2️⃣ Refreshing template from DB...');
-        const published = await fetchTemplate(templateId);
-
-        if (published) {
-          setCurrentTemplateState(published);
-          setLocalTemplate(deepClone(published));
-          lastSavedTemplateRef.current = deepClone(published);
-          safeSetState(setTemplates, (prev) =>
-            prev.map((t) => (String(t.id) === templateId ? published : t))
-          );
-          setHasUnsavedChanges(false);
-          safeSetState(setConflicts, []);
-
-          log('db', `✅ Template status: ${published.status}`);
-        }
-
-        // Build user feedback message
-        const created = result.shifts_created || 0;
-        const skipped = result.shifts_skipped?.total || 0;
-
-        let description = `Roster for ${month} updated. ${created} shifts applied.`;
-
-        if (skipped > 0) {
-          const pastDate = result.shifts_skipped?.PAST_DATE || 0;
-          const pastTime = result.shifts_skipped?.PAST_TIME_TODAY || 0;
-          description += ` ${skipped} skipped`;
-          if (pastTime > 0) {
-            description += ` (${pastTime} start time already passed)`;
-          }
-        }
-
-        toast({
-          title: skipped > 0 ? 'Template applied with skips' : 'Template applied',
-          description,
-        });
-
-        return true;
-      } catch (err: any) {
-        log('error', `❌ Failed to apply template: ${err.message}`);
-        toast({
-          title: 'Application failed',
-          description: err.message || 'An unexpected error occurred',
-          variant: 'destructive',
-        });
-        return false;
-      } finally {
-        safeSetState(setIsSaving, false);
-      }
-    },
-    [
-      currentTemplate,
-      localTemplate,
-      hasUnsavedChanges,
-      fetchTemplate,
-      safeSetState,
-      toast,
-    ]
-  );
 
   /* ============================================================
      VALIDATION HELPERS
@@ -1291,18 +1168,21 @@ export function useTemplates(): UseTemplatesReturn {
       }
 
       // Check uniqueness via RPC
-      if (currentTemplate?.organizationId) { // Removed currentTemplate?.subDepartmentId from condition
+      if (currentTemplate?.organizationId && currentTemplate?.departmentId && currentTemplate?.subDepartmentId) {
         try {
           const { data } = await supabase.rpc('validate_template_name', {
-            p_organization_id: currentTemplate.organizationId, // Changed to currentTemplate.organizationId
-            p_name: name.trim(), // Changed to name.trim()
-            p_exclude_id: excludeId || null, // Fixed syntax
+            p_organization_id: currentTemplate.organizationId,
+            p_department_id: currentTemplate.departmentId,
+            p_sub_department_id: currentTemplate.subDepartmentId,
+            p_name: name.trim(),
+            p_exclude_id: excludeId,
           });
 
-          if (data?.[0] && !data[0].is_valid) {
+          const dataArray = data as any[];
+          if (dataArray?.[0] && !dataArray[0].is_valid) {
             return {
               valid: false,
-              errors: [data[0].error_message || 'Name already exists'],
+              errors: [dataArray[0].error_message || 'Name already exists'],
             };
           }
         } catch {
@@ -1315,21 +1195,63 @@ export function useTemplates(): UseTemplatesReturn {
     [currentTemplate?.organizationId]
   );
 
-  const checkVersion =
-    useCallback(async (): Promise<VersionCheckResult | null> => {
-      if (!currentTemplate) return null;
+  const checkVersion = useCallback(async (): Promise<VersionCheckResult | null> => {
+    if (!currentTemplate) return null;
 
+    try {
+      const { data } = await supabase.rpc('check_template_version', {
+        p_template_id: String(currentTemplate.id),
+        p_expected_version: currentTemplate.version,
+      });
+
+      return data?.[0] || null;
+    } catch {
+      return null;
+    }
+  }, [currentTemplate]);
+
+  const updateTemplateStatus = useCallback(
+    async (id: string, status: string): Promise<boolean> => {
+      log('network', `📤 Updating template ${id} status to ${status}...`);
       try {
-        const { data } = await supabase.rpc('check_template_version', {
-          p_template_id: String(currentTemplate.id),
-          p_expected_version: currentTemplate.version,
+        const { error: err } = await supabase
+          .from('roster_templates')
+          .update({ status })
+          .eq('id', id);
+
+        if (err) throw err;
+
+        safeSetState(setTemplates, (prev) =>
+          prev.map((t) => (String(t.id) === id ? { ...t, status: status as any } : t))
+        );
+
+        if (String(currentTemplate?.id) === id) {
+          setCurrentTemplateState((prev) =>
+            prev ? { ...prev, status: status as any } : null
+          );
+          setLocalTemplate((prev) =>
+            prev ? { ...prev, status: status as any } : null
+          );
+        }
+
+        toast({
+          title: 'Status updated',
+          description: `Template status changed to ${status}`,
         });
 
-        return data?.[0] || null;
-      } catch {
-        return null;
+        return true;
+      } catch (err: any) {
+        log('error', `Status update failed: ${err.message}`);
+        toast({
+          title: 'Update failed',
+          description: err.message,
+          variant: 'destructive',
+        });
+        return false;
       }
-    }, [currentTemplate]);
+    },
+    [currentTemplate?.id, safeSetState, toast]
+  );
 
   /* ============================================================
      RETURN
@@ -1344,15 +1266,15 @@ export function useTemplates(): UseTemplatesReturn {
     isSaving,
     error,
     hasUnsavedChanges,
-    conflicts,
 
-    // Template CRUD
+    // CRUD
     fetchTemplates,
     fetchTemplate,
     createTemplate,
     saveTemplate,
     deleteTemplate,
     duplicateTemplate,
+    updateTemplateStatus,
 
     // Local editing
     setCurrentTemplate,
@@ -1366,10 +1288,6 @@ export function useTemplates(): UseTemplatesReturn {
     updateLocalShift,
     deleteLocalShift,
     discardChanges,
-
-    // Publishing
-    publishTemplate,
-    checkDateConflicts,
 
     // Validation
     validateName,

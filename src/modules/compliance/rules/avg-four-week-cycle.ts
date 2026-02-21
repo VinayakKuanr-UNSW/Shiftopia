@@ -5,6 +5,7 @@ import {
     ComplianceResult
 } from '../types';
 import { parseISO, subDays, isWithinInterval, differenceInMinutes, format } from 'date-fns';
+import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 export const AvgFourWeekCycleRule: ComplianceRule = {
     id: 'AVG_FOUR_WEEK_CYCLE',
@@ -37,8 +38,8 @@ export const AvgFourWeekCycleRule: ComplianceRule = {
 
         // Helper to calculate minutes for a shift
         const getShiftMinutes = (s: any) => {
-            const start = parseISO(`${s.shift_date}T${s.start_time}`);
-            const end = parseISO(`${s.shift_date}T${s.end_time}`);
+            const start = parseZonedDateTime(s.shift_date, s.start_time, SYDNEY_TZ);
+            const end = parseZonedDateTime(s.shift_date, s.end_time, SYDNEY_TZ);
             let mins = differenceInMinutes(end, start);
             if (mins < 0) mins += 1440;
             return Math.max(0, mins - (s.unpaid_break_minutes || 0));

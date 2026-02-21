@@ -55,11 +55,11 @@ interface TemplatesSidebarProps {
   onCreateTemplate: () => void;
   onDuplicateTemplate?: (id: string) => void;
   onDeleteTemplate: (id: string) => void;
-  onOpenPublish: (id: string) => void;
+  onArchiveTemplate: (id: string) => void;
   isLoading?: boolean;
 }
 
-type StatusFilter = 'published' | 'draft';
+type StatusFilter = 'published' | 'draft' | 'archived';
 
 /* ============================================================
    HELPERS
@@ -80,7 +80,7 @@ export const TemplatesSidebar: React.FC<TemplatesSidebarProps> = ({
   onCreateTemplate,
   onDuplicateTemplate,
   onDeleteTemplate,
-  onOpenPublish,
+  onArchiveTemplate,
   isLoading = false,
 }) => {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('published');
@@ -117,6 +117,7 @@ export const TemplatesSidebar: React.FC<TemplatesSidebarProps> = ({
     () => ({
       draft: templates.filter((t) => t.status === 'draft').length,
       published: templates.filter((t) => t.status === 'published').length,
+      archived: templates.filter((t) => t.status === 'archived').length,
     }),
     [templates]
   );
@@ -133,39 +134,50 @@ export const TemplatesSidebar: React.FC<TemplatesSidebarProps> = ({
         </div>
 
         {/* Status Toggle */}
-        <div className="flex p-1 bg-muted rounded-lg">
+        <div className="flex p-1 bg-muted rounded-lg overflow-x-auto no-scrollbar">
           <button
             onClick={() => setStatusFilter('published')}
             className={cn(
-              'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-all',
+              'flex-1 px-2 py-2 text-xs font-medium rounded-md transition-all min-w-[80px]',
               statusFilter === 'published'
                 ? 'bg-emerald-500/20 text-emerald-500 shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <div className="flex items-center justify-center gap-2">
-              <Lock className="h-3.5 w-3.5" />
-              Published
-              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
-                {counts.published}
-              </Badge>
+            <div className="flex items-center justify-center gap-1.5">
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              Ready
+              <span className="opacity-50">({counts.published})</span>
             </div>
           </button>
           <button
             onClick={() => setStatusFilter('draft')}
             className={cn(
-              'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-all',
+              'flex-1 px-2 py-2 text-xs font-medium rounded-md transition-all min-w-[80px]',
               statusFilter === 'draft'
                 ? 'bg-amber-500/20 text-amber-500 shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <div className="flex items-center justify-center gap-2">
-              <Unlock className="h-3.5 w-3.5" />
+            <div className="flex items-center justify-center gap-1.5">
+              <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
               Draft
-              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
-                {counts.draft}
-              </Badge>
+              <span className="opacity-50">({counts.draft})</span>
+            </div>
+          </button>
+          <button
+            onClick={() => setStatusFilter('archived')}
+            className={cn(
+              'flex-1 px-2 py-2 text-xs font-medium rounded-md transition-all min-w-[80px]',
+              statusFilter === 'archived'
+                ? 'bg-purple-500/20 text-purple-500 shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <div className="flex items-center justify-center gap-1.5">
+              <div className="h-1.5 w-1.5 rounded-full bg-purple-500" />
+              Archive
+              <span className="opacity-50">({counts.archived})</span>
             </div>
           </button>
         </div>
@@ -212,7 +224,7 @@ export const TemplatesSidebar: React.FC<TemplatesSidebarProps> = ({
                 onClick={() => onSelectTemplate(template.id)}
                 onDuplicate={() => onDuplicateTemplate?.(template.id)}
                 onDelete={() => onDeleteTemplate(template.id)}
-                onPublish={() => onOpenPublish(template.id)}
+                onArchive={() => onArchiveTemplate(template.id)}
               />
             ))
           )}
@@ -238,7 +250,7 @@ interface TemplateCardProps {
   onClick: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
-  onPublish: () => void;
+  onArchive: () => void;
 }
 
 const TemplateCard: React.FC<TemplateCardProps> = ({
@@ -247,9 +259,11 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
   onClick,
   onDuplicate,
   onDelete,
-  onPublish,
+  onArchive,
 }) => {
   const isPublished = template.status === 'published';
+  const isArchived = template.status === 'archived';
+  const isDraft = template.status === 'draft';
 
   const updatedDate = safeDate(template.updatedAt);
   const startDate = safeDate(template.startDate);
@@ -288,18 +302,19 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
           <Badge
             variant="outline"
             className={cn(
-              'text-xs px-2 py-0.5',
-              isPublished
-                ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30'
-                : 'bg-amber-500/15 text-amber-500 border-amber-500/30'
+              'text-[10px] px-1.5 py-0 h-4 border-none flex items-center gap-1',
+              isPublished && 'text-emerald-500 bg-emerald-500/10',
+              isDraft && 'text-amber-500 bg-amber-500/10',
+              isArchived && 'text-purple-500 bg-purple-500/10'
             )}
           >
-            {isPublished ? (
-              <Lock className="h-3 w-3 mr-1" />
-            ) : (
-              <Unlock className="h-3 w-3 mr-1" />
-            )}
-            {isPublished ? 'Published' : 'Draft'}
+            <div className={cn(
+              "h-1 w-1 rounded-full",
+              isPublished && "bg-emerald-500",
+              isDraft && "bg-amber-500",
+              isArchived && "bg-purple-500"
+            )} />
+            {template.status.charAt(0).toUpperCase() + template.status.slice(1)}
           </Badge>
 
           <DropdownMenu>
@@ -314,10 +329,10 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
                 Duplicate
               </DropdownMenuItem>
 
-              {!isPublished && (
-                <DropdownMenuItem onClick={onPublish}>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Publish
+              {!isArchived && (
+                <DropdownMenuItem onClick={onArchive}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Archive
                 </DropdownMenuItem>
               )}
 
@@ -344,20 +359,9 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
         v{template.version}
       </div>
 
-      <div className="text-xs text-muted-foreground mb-2">
+      <div className="text-xs text-muted-foreground mb-1">
         Groups: {template.groupCount} | Subgroups: {template.subgroupCount} |
         Shifts: {template.shiftCount}
-      </div>
-
-      <div className="text-xs">
-        {isPublished && startDate && endDate ? (
-          <span className="text-emerald-500">
-            Applied: {format(startDate, 'dd MMM yyyy')} –{' '}
-            {format(endDate, 'dd MMM yyyy')}
-          </span>
-        ) : (
-          <span className="text-muted-foreground italic">Not applied</span>
-        )}
       </div>
 
       <div className="text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
@@ -401,14 +405,30 @@ const EmptyState: React.FC<EmptyStateProps> = ({
   if (statusFilter === 'published') {
     return (
       <div className="p-8 text-center">
-        <Lock className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
-        <p className="text-sm font-medium mb-1">No published templates</p>
+        <div className="h-10 w-10 mx-auto mb-3 rounded-full bg-emerald-500/10 flex items-center justify-center">
+          <Lock className="h-5 w-5 text-emerald-500/50" />
+        </div>
+        <p className="text-sm font-medium mb-1">No ready templates</p>
         <p className="text-xs text-muted-foreground mb-4">
-          Published templates will appear here
+          Templates marked as 'Ready' will appear here
         </p>
         <Button variant="outline" size="sm" onClick={onSwitchToDraft}>
-          Switch to Drafts
+          View Drafts
         </Button>
+      </div>
+    );
+  }
+
+  if (statusFilter === 'archived') {
+    return (
+      <div className="p-8 text-center">
+        <div className="h-10 w-10 mx-auto mb-3 rounded-full bg-purple-500/10 flex items-center justify-center">
+          <Trash2 className="h-5 w-5 text-purple-500/50" />
+        </div>
+        <p className="text-sm font-medium mb-1">Archive is empty</p>
+        <p className="text-xs text-muted-foreground">
+          Archived templates are stored here
+        </p>
       </div>
     );
   }

@@ -33,6 +33,8 @@ import {
     ChevronDown,
     ChevronUp,
     HelpCircle,
+    CopyPlus,
+    Circle,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 
@@ -96,6 +98,13 @@ const LEGEND_SECTIONS: LegendSection[] = [
         items: [
             { icon: <ArrowLeftRight className="h-4 w-4 text-purple-500" />, label: 'Trade Requested', description: 'Employee requested a shift swap (S9)' },
             { icon: <Minus className="h-4 w-4 text-gray-400" />, label: 'No Trade', description: 'No trade request active' },
+        ],
+    },
+    {
+        title: 'Origin',
+        items: [
+            { icon: <CopyPlus className="h-4 w-4 text-indigo-400" />, label: 'Template', description: 'Generated from a Roster Template' },
+            { icon: <Circle className="h-4 w-4 text-gray-500" />, label: 'Manual', description: 'Manually created by a manager' },
         ],
     },
     {

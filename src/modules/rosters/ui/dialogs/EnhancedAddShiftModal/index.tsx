@@ -7,12 +7,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { shiftsApi as enhancedShiftService } from '@/modules/rosters/api/shifts.api';
 import { supabase } from '@/platform/realtime/client';
-import { format, isBefore, startOfDay } from 'date-fns';
+import { format, isBefore, startOfDay, parse } from 'date-fns';
 import { useCreateShift, useUpdateShift } from '@/modules/rosters/state/useRosterShifts';
 
 // Types and Schema
 import { formSchema, FormValues, EnhancedAddShiftModalProps } from './types';
 import { calculateShiftLength, isDateInPast, isShiftStarted } from './utils';
+import { SYDNEY_TZ, formatInTimezone, isPastInTimezone, getTodayInTimezone } from '@/modules/core/lib/date.utils';
 
 // Hooks
 import { useShiftFormData, useHardValidation, useStepNavigation, useComplianceRunner } from './hooks';
@@ -90,6 +91,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
     const watchEmployeeId = form.watch('assigned_employee_id');
     const watchShiftDate = form.watch('shift_date');
     const watchRemLevel = form.watch('remuneration_level_id');
+    const watchTimezone = form.watch('timezone') || SYDNEY_TZ;
 
     // Load form data
     const {
@@ -172,6 +174,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
         watchEmployeeId,
         isTemplateMode,
         existingShiftId: existingShift?.id,
+        timezone: watchTimezone,
     });
 
     // Calculated values
@@ -267,10 +270,10 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
     }, [isStepValid, hardValidation.passed, hasDepartment, hasRoster, isTemplateMode, derivedRosterId]);
 
     // Read-only checks
-    const isPast = useMemo(() => isDateInPast(watchShiftDate), [watchShiftDate]);
+    const isPast = useMemo(() => isDateInPast(watchShiftDate, watchTimezone), [watchShiftDate, watchTimezone]);
     const isStarted = useMemo(
-        () => isShiftStarted(watchShiftDate, watchStart),
-        [watchShiftDate, watchStart]
+        () => isShiftStarted(watchShiftDate, watchStart, watchTimezone),
+        [watchShiftDate, watchStart, watchTimezone]
     );
     const isPublished = useMemo(
         () => !isTemplateMode && existingShift?.lifecycle_status === 'Published',
@@ -287,11 +290,12 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
                 isReadOnly,
                 watchShiftDate: watchShiftDate?.toISOString(),
                 watchStart,
+                watchTimezone,
                 editMode,
                 existingShiftId: existingShift?.id
             });
         }
-    }, [isOpen, isPast, isStarted, isPublished, isReadOnly, watchShiftDate, watchStart, editMode, existingShift]);
+    }, [isOpen, isPast, isStarted, isPublished, isReadOnly, watchShiftDate, watchStart, watchTimezone, editMode, existingShift]);
 
     // Invalidate compliance when key fields change
     useEffect(() => {
@@ -329,7 +333,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
                 sub_group_name: existingShift.sub_group_name || existingShift.subGroupName || '',
                 role_id: existingShift.role_id || existingShift.roleId || '',
                 remuneration_level_id: existingShift.remuneration_level_id || existingShift.remunerationLevelId || '',
-                shift_date: existingShift.shift_date ? new Date(existingShift.shift_date) : undefined,
+                shift_date: existingShift.shift_date ? startOfDay(parse(existingShift.shift_date, 'yyyy-MM-dd', new Date())) : undefined,
                 start_time: existingShift.start_time || existingShift.startTime || '',
                 end_time: existingShift.end_time || existingShift.endTime || '',
                 paid_break_minutes: existingShift.paid_break_minutes ?? existingShift.paidBreakDuration ?? undefined,
@@ -351,7 +355,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
                 sub_group_name: context?.subGroupName || '',
                 role_id: '',
                 remuneration_level_id: '',
-                shift_date: context?.date ? new Date(context.date) : undefined,
+                shift_date: context?.date ? startOfDay(parse(context.date, 'yyyy-MM-dd', new Date())) : undefined,
                 start_time: '',
                 end_time: '',
                 paid_break_minutes: undefined,
@@ -392,12 +396,12 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
             start_time: watchStart || '',
             end_time: watchEnd || '',
             shift_date: isTemplateMode
-                ? format(new Date(), 'yyyy-MM-dd')
-                : (watchShiftDate ? format(watchShiftDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')),
+                ? formatInTimezone(new Date(), 'yyyy-MM-dd', watchTimezone)
+                : (watchShiftDate ? format(watchShiftDate, 'yyyy-MM-dd') : formatInTimezone(new Date(), 'yyyy-MM-dd', watchTimezone)),
             unpaid_break_minutes: watchUnpaidBreak || 0
         },
         existing_shifts: employeeExistingShifts
-    }), [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchUnpaidBreak, isTemplateMode, employeeExistingShifts]);
+    }), [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchUnpaidBreak, isTemplateMode, employeeExistingShifts, watchTimezone]);
 
     // Compliance Runner
     const { runChecks, isRunning: isComplianceRunning } = useComplianceRunner({
@@ -473,12 +477,8 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
             return;
         }
 
-        if (!isTemplateMode && values.shift_date) {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const shiftDate = new Date(values.shift_date);
-            shiftDate.setHours(0, 0, 0, 0);
-            if (shiftDate < today && !editMode) {
+        if (!isTemplateMode && values.shift_date && !editMode) {
+            if (isPastInTimezone(values.shift_date, watchTimezone)) {
                 toast({
                     title: 'Invalid Date',
                     description: 'Cannot create shifts on past dates.',
@@ -618,7 +618,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent
-                className="sm:max-w-[900px] max-h-[90vh] p-0 gap-0 bg-[#0f172a] border-white/10 overflow-hidden"
+                className="sm:max-w-[1200px] h-[90vh] p-0 gap-0 bg-[#0f172a] border-white/10 overflow-hidden flex flex-col"
                 aria-describedby={undefined}
             >
                 <ModalHeader
@@ -637,7 +637,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
                 />
 
                 <Form {...form}>
-                    <form id="shift-form" onSubmit={form.handleSubmit(handleSubmit)}>
+                    <form id="shift-form" onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col flex-1 min-h-0 overflow-hidden">
                         {/* Step Indicator */}
                         <div className="px-6 pt-4 pb-6 border-b border-white/5">
                             <StepIndicator
@@ -649,7 +649,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
                             />
                         </div>
 
-                        <ScrollArea className="h-[400px]">
+                        <ScrollArea className="flex-1">
                             <div className="px-6 py-6">
                                 {currentStep === 1 && (
                                     <ScheduleStep
@@ -667,6 +667,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
                                         isGroupLocked={isGroupLocked}
                                         isSubGroupLocked={isSubGroupLocked}
                                         isRosterLocked={isRosterLocked}
+                                        context={resolvedContext}
                                     />
                                 )}
 

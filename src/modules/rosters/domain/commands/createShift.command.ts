@@ -85,10 +85,9 @@ export async function executeCreateShift(
                 role_id: roleId || null,
                 remuneration_level_id: finalRemunerationLevelId || null,
                 shift_group_id: shiftGroupId || null,
-                shift_subgroup_id: shiftSubgroupId || null,
+                roster_subgroup_id: shiftSubgroupId || null,
                 assigned_employee_id: assignedEmployeeId || null,
                 is_draft: isDraft,
-                status: 'open',
             })
             .select('id')
             .single();

@@ -153,6 +153,7 @@ export interface ScheduleStepProps extends StepProps {
     isGroupLocked?: boolean;
     isSubGroupLocked?: boolean;
     isRosterLocked?: boolean;
+    context?: ShiftContext; // Added context for hierarchy sync
 }
 
 export interface RoleStepProps extends StepProps {

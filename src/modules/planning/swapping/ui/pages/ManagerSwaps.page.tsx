@@ -13,7 +13,7 @@ import {
     SelectValue,
 } from '@/modules/core/ui/primitives/select';
 import { useToast } from '@/modules/core/hooks/use-toast';
-import { format, differenceInHours, parseISO } from 'date-fns';
+import { format, differenceInHours, parseISO, parse } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { useAuth } from '@/platform/auth/useAuth';
 import { swapsApi } from '../../api/swaps.api';
@@ -292,7 +292,7 @@ const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement =>
             employeeName: apiData.requestorEmployee?.fullName || 'Unknown',
             roleName: apiData.originalShift?.roles?.name || 'Unknown Role',
             date: apiData.originalShift?.shiftDate || '',
-            formattedDate: apiData.originalShift?.shiftDate ? format(parseISO(apiData.originalShift.shiftDate), 'EEE, MMM d') : '',
+            formattedDate: apiData.originalShift?.shiftDate ? format(parse(apiData.originalShift.shiftDate, 'yyyy-MM-dd', new Date()), 'EEE, MMM d') : '',
             time: `${apiData.originalShift?.startTime} - ${apiData.originalShift?.endTime}`,
             duration: `${reqVal.durationHours.toFixed(1)}h`,
             durationNum: reqVal.durationHours,
@@ -303,7 +303,7 @@ const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement =>
             employeeName: apiData.targetEmployee?.fullName || 'Open Swap',
             roleName: apiData.requestedShift?.roles?.name || 'Any Role',
             date: apiData.requestedShift?.shiftDate || '',
-            formattedDate: apiData.requestedShift?.shiftDate ? format(parseISO(apiData.requestedShift.shiftDate), 'EEE, MMM d') : '',
+            formattedDate: apiData.requestedShift?.shiftDate ? format(parse(apiData.requestedShift.shiftDate, 'yyyy-MM-dd', new Date()), 'EEE, MMM d') : '',
             time: `${apiData.requestedShift?.startTime} - ${apiData.requestedShift?.endTime}`,
             duration: `${recVal.durationHours.toFixed(1)}h`,
             durationNum: recVal.durationHours,
@@ -499,6 +499,7 @@ export const ManagerSwapsPage: React.FC = () => {
                     mode="managerial"
                     onScopeChange={setScope}
                     hidden={isGammaLocked}
+                    multiSelect={true}
                     className="mb-4"
                 />
                 <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">

@@ -106,7 +106,7 @@ const NewRostersPage: React.FC = () => {
   // ==================== TOGGLE STATES ====================
   // const [isLocked, setIsLocked] = useState(false); // REMOVED local state
   const [showAvailabilities, setShowAvailabilities] = useState(false);
-  const [showUnfilledPanel, setShowUnfilledPanel] = useState(true);
+  const [showUnfilledPanel, setShowUnfilledPanel] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   // ==================== MODAL & BULK STATE ====================
@@ -351,10 +351,16 @@ const NewRostersPage: React.FC = () => {
 
   const handleBulkPublish = async (shiftIds: string[]) => {
     try {
-      await bulkPublish.mutateAsync(shiftIds);
+      const result = await bulkPublish.mutateAsync(shiftIds);
+
+      // result matches { success_count: number, failure_count: number, results: ... }
+      // but type might be inferred as 'any' or the shape from commands.
+      // We'll safely access it.
+      const count = (result as any).success_count ?? shiftIds.length;
+
       toast({
         title: 'Published',
-        description: `Published ${shiftIds.length} shifts successfully.`,
+        description: `Published ${count} shifts successfully.`,
       });
       setSelectedShifts([]);
       setBulkModeActive(false);
@@ -369,13 +375,22 @@ const NewRostersPage: React.FC = () => {
   const handleBulkDelete = async () => {
     if (selectedShifts.length === 0) return;
     try {
-      await bulkDelete.mutateAsync(selectedShifts);
-      toast({
-        title: 'Deleted',
-        description: `Deleted ${selectedShifts.length} shifts.`,
-      });
-      setSelectedShifts([]);
-      setBulkModeActive(false);
+      const successCount = await bulkDelete.mutateAsync(selectedShifts);
+
+      if (successCount > 0) {
+        toast({
+          title: 'Deleted',
+          description: `Deleted ${successCount} shifts.`,
+        });
+        setSelectedShifts([]);
+        setBulkModeActive(false);
+      } else {
+        toast({
+          title: 'Delete Failed',
+          description: "No shifts were deleted. They may have been lock or already removed.",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
       console.error(error);
       toast({ title: 'Error', description: 'Failed to delete shifts', variant: 'destructive' });

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, isSameDay, isSameMonth, isWithinInterval, getDay, isMonday, startOfDay } from 'date-fns';
+import { isSydneyToday } from '@/modules/core/lib/date.utils';
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
@@ -297,7 +298,7 @@ export const CalendarRangePicker: React.FC<CalendarRangePickerProps> = ({
                                 const isSelected = isSameDay(day, selectedDate);
                                 const isInRange = isInSelectedRange(day);
                                 const canSelect = isSelectable(day);
-                                const isToday = isSameDay(day, new Date());
+                                const isToday = isSydneyToday(day);
                                 const inCurrentMonth = isSameMonth(day, viewingMonth);
 
                                 return (

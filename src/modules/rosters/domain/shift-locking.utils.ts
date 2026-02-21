@@ -1,8 +1,5 @@
-import { toZonedTime } from 'date-fns-tz';
+import { SYDNEY_TZ, parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { Shift } from '@/modules/rosters/api/shifts.api';
-
-// Hardcoded timezone as per business rule
-const SYDNEY_TZ = 'Australia/Sydney';
 
 /**
  * Page context for determining lock rules.
@@ -21,54 +18,37 @@ export type LockContext = 'my_roster' | 'roster_management';
  * @param shiftDateStr The date string from database (YYYY-MM-DD)
  * @param startTimeStr The time string from database (HH:MM or HH:MM:SS)
  * @param context The page context ('my_roster' | 'roster_management') - Defaults to 'my_roster'
+ * @param timezone Timezone identifier (default: SYDNEY_TZ)
  * @returns boolean
  */
 export const isShiftLocked = (
     shiftDateStr: string,
     startTimeStr: string,
-    context: LockContext = 'my_roster'
+    context: LockContext = 'my_roster',
+    timezone: string = SYDNEY_TZ
 ): boolean => {
     try {
-        // 1. Get current time in Sydney
-        const now = new Date();
-
-        const sydneyFormatter = new Intl.DateTimeFormat('en-AU', {
-            timeZone: SYDNEY_TZ,
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        });
-
-        // Get "Now" parts in Sydney
-        const parts = sydneyFormatter.formatToParts(now);
-        const getPart = (type: Intl.DateTimeFormatPartTypes) => parts.find(p => p.type === type)?.value || '00';
-
-        const nowSydneyISO = `${getPart('year')}-${getPart('month')}-${getPart('day')}T${getPart('hour')}:${getPart('minute')}:${getPart('second')}`;
-
-        // Shift Start ISO (It is already in "Sydney Local" format in the DB)
         const cleanStartTime = startTimeStr.length === 5 ? `${startTimeStr}:00` : startTimeStr;
-        const shiftSydneyISO = `${shiftDateStr}T${cleanStartTime}`;
 
-        // Convert both to timestamps
-        const nowTs = new Date(nowSydneyISO + 'Z').getTime();
-        const shiftTs = new Date(shiftSydneyISO + 'Z').getTime();
+        // Get absolute timestamp for shift start (interpreted in Target timezone)
+        const shiftStartAt = parseZonedDateTime(shiftDateStr, cleanStartTime, timezone);
+
+        // Get absolute current time (UTC)
+        const now = new Date();
 
         // ROSTER MANAGEMENT (Manager View): Locked if start time is in the past
         if (context === 'roster_management') {
-            return shiftTs <= nowTs;
+            return now >= shiftStartAt;
         }
 
         // MY ROSTER (Employee Self-Service): Locked if within 4 hours
         // This applies to ALL access levels on this page
-        const diffHours = (shiftTs - nowTs) / (1000 * 60 * 60);
+        // Difference in hours (Shift Start - Now)
+        const diffHours = (shiftStartAt.getTime() - now.getTime()) / (1000 * 60 * 60);
 
         // DEBUG: Temporary logging to diagnose locking issue
-        if (context === 'roster_management' || Math.abs(diffHours) < 24) {
-            console.log(`[isShiftLocked] Context: ${context} | Shift: ${shiftSydneyISO} | Now: ${nowSydneyISO} | Diff: ${diffHours.toFixed(2)}h | Locked: ${shiftTs <= nowTs}`);
+        if (Math.abs(diffHours) < 24) {
+            console.log(`[isShiftLocked] Context: ${context} | Shift: ${shiftStartAt.toISOString()} | Now: ${now.toISOString()} | Diff: ${diffHours.toFixed(2)}h | Locked: ${diffHours < 4}`);
         }
 
         return diffHours < 4;
@@ -84,4 +64,3 @@ export const canEditShiftPolicy = (shift: Shift): boolean => {
     // Manager view - locked only if shift has started
     return !isShiftLocked(shift.shift_date, shift.start_time, 'roster_management');
 };
-

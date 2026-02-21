@@ -18,8 +18,11 @@ interface ShiftWithDetails {
 
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
 
-export const useMyRoster = (view: CalendarView, selectedDate: Date) => {
+import { ScopeSelection } from '@/platform/auth/types';
+
+export const useMyRoster = (view: CalendarView, selectedDate: Date, scope?: ScopeSelection | null) => {
     const { user } = useAuth();
+    // We still use orgSelection for legacy/fallback context if needed, but scope takes precedence for filtering
     const { organizationId, departmentId, subDepartmentId } = useOrgSelection();
 
     // Calculate date range based on the view
@@ -73,24 +76,38 @@ export const useMyRoster = (view: CalendarView, selectedDate: Date) => {
         // Filter from the cached array
         let daysShifts = shifts.filter(s => s.shift_date === dateStr);
 
-        // Apply Global Context Filters
+        // Apply Scope Filters
         if (daysShifts.length > 0) {
-            console.log('[useMyRoster] Filtering shifts:', {
-                total: daysShifts.length,
-                date: dateStr,
-                orgId: organizationId,
-                deptId: departmentId,
-                subDeptId: subDepartmentId
-            });
 
-            if (organizationId) {
-                daysShifts = daysShifts.filter(s => s.organization_id === organizationId);
+            // 1. Priority: Multi-select Scope (from MyRosterPage ScopeFilterBanner)
+            if (scope) {
+                // Filter by Organization (if specific ones selected)
+                if (scope.org_ids && scope.org_ids.length > 0) {
+                    daysShifts = daysShifts.filter(s => scope.org_ids.includes(s.organization_id));
+                }
+
+                // Filter by Department (if specific ones selected)
+                if (scope.dept_ids && scope.dept_ids.length > 0) {
+                    daysShifts = daysShifts.filter(s => scope.dept_ids.includes(s.department_id));
+                }
+
+                // Filter by Sub-Department (if specific ones selected)
+                if (scope.subdept_ids && scope.subdept_ids.length > 0) {
+                    // Note: Shifts might have null sub_department_id (e.g. general dept shifts)
+                    // If the user selects specific sub-depts, we strictly filter matches.
+                    // If the user selects "All" (which is just a list of all), it works naturally.
+                    daysShifts = daysShifts.filter(s => s.sub_department_id && scope.subdept_ids.includes(s.sub_department_id));
+                }
             }
-            if (departmentId) {
-                daysShifts = daysShifts.filter(s => s.department_id === departmentId);
-            }
-            if (subDepartmentId) {
-                daysShifts = daysShifts.filter(s => s.sub_department_id === subDepartmentId);
+            // 2. Fallback: Global Context (Single Select) - only if no explicit scope passed
+            else {
+                if (organizationId) {
+                    daysShifts = daysShifts.filter(s => s.organization_id === organizationId);
+                }
+                // We previously relaxed this, but if no scope is passed, maybe we should respect it? 
+                // However, the user complained it hid things.
+                // For now, let's keep the "Relaxed" behavior for the fallback case to be safe, 
+                // relying on the orgId.
             }
         }
 

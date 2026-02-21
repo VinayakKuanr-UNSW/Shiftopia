@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useAuth } from '@/platform/auth/useAuth';
 import { supabase } from '@/platform/realtime/client';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/modules/core/ui/primitives/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/modules/core/ui/primitives/select';
@@ -11,8 +10,6 @@ import { Label } from '@/modules/core/ui/primitives/label';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { motion } from 'framer-motion';
-import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
-import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 
 // Import section components
 import SkillsSection from '@/modules/users/ui/components/SkillsSection';
@@ -31,8 +28,6 @@ interface Profile {
 }
 
 const UsersPage: React.FC = () => {
-    const { user, activeContract } = useAuth();
-    const { scope, setScope, scopeKey, isGammaLocked } = useScopeFilter('managerial');
 
     // State
     const [selectedUserId, setSelectedUserId] = useState<string>('');
@@ -41,28 +36,28 @@ const UsersPage: React.FC = () => {
 
     // Fetch all profiles
     const { data: profiles, isLoading } = useQuery({
-        queryKey: ['profiles', scopeKey],
+        queryKey: ['profiles', 'all'],
         queryFn: async () => {
-            let query = supabase
+            const { data, error } = await supabase
                 .from('profiles')
                 .select('id, first_name, last_name, full_name, email')
                 .order('full_name');
 
-            // Apply scope filters
-            if (scope.org_ids.length > 0) {
-                query = query.eq('organization_id', scope.org_ids[0]);
-            }
-            if (scope.dept_ids.length > 0) {
-                query = query.eq('department_id', scope.dept_ids[0]);
-            }
-            if (scope.subdept_ids.length > 0) {
-                query = query.eq('sub_department_id', scope.subdept_ids[0]);
+            if (error) {
+                console.error('[UsersPage] Error fetching profiles:', error);
+                throw error;
             }
 
-            const { data, error } = await query;
+            console.log('[UsersPage] Fetched profiles count:', data?.length);
 
-            if (error) throw error;
-            return data as Profile[];
+            // Map the results to ensure we have a clean Profile list
+            return (data || []).map(p => ({
+                id: p.id,
+                first_name: p.first_name,
+                last_name: p.last_name,
+                full_name: p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim(),
+                email: p.email,
+            })) as Profile[];
         },
     });
 
@@ -72,12 +67,6 @@ const UsersPage: React.FC = () => {
 
     return (
         <div className="w-full min-h-screen p-4 md:p-6 lg:p-8 space-y-8">
-            {/* Scope Filter */}
-            <ScopeFilterBanner
-                mode="managerial"
-                onScopeChange={setScope}
-                hidden={isGammaLocked}
-            />
             {/* Header Section */}
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
@@ -91,12 +80,6 @@ const UsersPage: React.FC = () => {
                     <div>
                         <div className="flex items-center gap-3 mb-2">
                             <h1 className="text-3xl font-bold text-white tracking-tight">User Management</h1>
-                            {activeContract?.accessLevel === 'delta' && (
-                                <Badge variant="warning" className="bg-amber-500/10 text-amber-400 border-amber-500/20 px-2 py-0.5">
-                                    <Shield className="w-3 h-3 mr-1" />
-                                    Delta Access
-                                </Badge>
-                            )}
                         </div>
                         <p className="text-blue-200/60 max-w-xl">
                             Comprehensive employee profiles, performance metrics, and compliance management.

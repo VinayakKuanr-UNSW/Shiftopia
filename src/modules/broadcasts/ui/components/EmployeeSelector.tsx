@@ -10,9 +10,15 @@ import { Employee } from '../../model/broadcast.types';
 
 interface EmployeeSelectorProps {
     onSelect: (employeeId: string, isAdmin?: boolean) => void;
+    departmentId?: string;
+    subDepartmentId?: string;
 }
 
-export const EmployeeSelector: React.FC<EmployeeSelectorProps> = ({ onSelect }) => {
+export const EmployeeSelector: React.FC<EmployeeSelectorProps> = ({
+    onSelect,
+    departmentId,
+    subDepartmentId
+}) => {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
@@ -25,7 +31,7 @@ export const EmployeeSelector: React.FC<EmployeeSelectorProps> = ({ onSelect }) 
         const fetchEmployees = async () => {
             try {
                 setIsLoading(true);
-                const data = await BroadcastDbClient.fetchUsers();
+                const data = await BroadcastDbClient.fetchUsers(departmentId, subDepartmentId);
                 setEmployees(data || []);
                 setFilteredEmployees(data || []);
             } catch (error: any) {
@@ -40,7 +46,7 @@ export const EmployeeSelector: React.FC<EmployeeSelectorProps> = ({ onSelect }) 
         };
 
         fetchEmployees();
-    }, []);
+    }, [departmentId, subDepartmentId]);
 
     // Filter employees based on search term
     useEffect(() => {

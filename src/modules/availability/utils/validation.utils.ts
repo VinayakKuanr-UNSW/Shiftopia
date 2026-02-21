@@ -13,6 +13,7 @@
  */
 
 import { RepeatType, AvailabilityFormPayload } from '../model/availability.types';
+import { getTodayInTimezone, SYDNEY_TZ, isPastInTimezone } from '@/modules/core/lib/date.utils';
 
 // ============================================================================
 // ERROR MESSAGES
@@ -94,20 +95,18 @@ export interface ValidationResult {
 /**
  * Validate date range
  */
-export function validateDateRange(startDate: Date, endDate: Date): ValidationResult {
+export function validateDateRange(startDate: Date, endDate: Date, timezone: string = SYDNEY_TZ): ValidationResult {
   const errors: string[] = [];
 
   if (startDate > endDate) {
     errors.push(AVAILABILITY_ERRORS.DATE_RANGE_INVALID);
   }
 
-  // Prevent past dates (allow today)
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Prevent past dates (allow today) using timezone-aware check
   const startCheck = new Date(startDate);
   startCheck.setHours(0, 0, 0, 0);
 
-  if (startCheck < today) {
+  if (isPastInTimezone(startCheck, timezone)) {
     errors.push(AVAILABILITY_ERRORS.START_DATE_PAST);
   }
 
@@ -208,7 +207,7 @@ export function validateAvailabilityForm(
   const allErrors: string[] = [];
 
   // Validate date range
-  const dateValidation = validateDateRange(payload.start_date, payload.end_date);
+  const dateValidation = validateDateRange(payload.start_date, payload.end_date, SYDNEY_TZ);
   allErrors.push(...dateValidation.errors);
 
   // Validate time range

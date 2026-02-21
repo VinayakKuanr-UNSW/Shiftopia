@@ -8,18 +8,18 @@ import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 /**
  * Hook for managing shift swaps with real database data
  */
-export const useSwaps = () => {
+export const useSwaps = (scopeOverrides?: { organizationId?: string; departmentId?: string | null; subDepartmentId?: string | null }) => {
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const { user, activeContract } = useAuth();
     const orgSelection = useOrgSelection();
     const userId = user?.id || '';
 
-    // Hierarchy context from Header selection (fallback to active contract if needed)
+    // Hierarchy context: Use overrides if provided, otherwise fallback to Header selection (then active contract)
     const hierarchy = {
-        organizationId: orgSelection.organizationId || activeContract?.organizationId,
-        departmentId: orgSelection.departmentId || activeContract?.departmentId,
-        subDepartmentId: orgSelection.subDepartmentId || activeContract?.subDepartmentId,
+        organizationId: scopeOverrides?.organizationId || orgSelection.organizationId || activeContract?.organizationId,
+        departmentId: scopeOverrides?.departmentId !== undefined ? scopeOverrides.departmentId : (orgSelection.departmentId || activeContract?.departmentId),
+        subDepartmentId: scopeOverrides?.subDepartmentId !== undefined ? scopeOverrides.subDepartmentId : (orgSelection.subDepartmentId || activeContract?.subDepartmentId),
     };
 
     // Query: Get my swap requests (shifts I've posted for swap)
@@ -32,13 +32,13 @@ export const useSwaps = () => {
     // Query: Get available swaps from other employees (Locked to Org/Dept)
     // IMPORTANT: Available Swaps requires EXPLICIT header selection (no fallback to activeContract)
     const availableSwapsQuery = useQuery({
-        queryKey: ['availableSwaps', userId, orgSelection.organizationId, orgSelection.departmentId, orgSelection.subDepartmentId],
-        queryFn: () => userId && orgSelection.organizationId ? swapsApi.getAvailableSwaps(userId, {
-            organizationId: orgSelection.organizationId,
-            departmentId: orgSelection.departmentId,
-            subDepartmentId: orgSelection.subDepartmentId
+        queryKey: ['availableSwaps', userId, hierarchy.organizationId, hierarchy.departmentId, hierarchy.subDepartmentId],
+        queryFn: () => userId && hierarchy.organizationId ? swapsApi.getAvailableSwaps(userId, {
+            organizationId: hierarchy.organizationId,
+            departmentId: hierarchy.departmentId || undefined,
+            subDepartmentId: hierarchy.subDepartmentId || undefined
         }) : Promise.resolve([]),
-        enabled: !!userId && !!orgSelection.organizationId,
+        enabled: !!userId && !!hierarchy.organizationId,
     });
 
     // Query: Get pending manager approvals (locked to org hierarchy)
@@ -48,8 +48,8 @@ export const useSwaps = () => {
             ? swapsApi.fetchSwapRequests({
                 status: 'MANAGER_PENDING',
                 organizationId: hierarchy.organizationId,
-                departmentId: hierarchy.departmentId,
-                subDepartmentId: hierarchy.subDepartmentId
+                departmentId: hierarchy.departmentId || undefined,
+                subDepartmentId: hierarchy.subDepartmentId || undefined
             })
             : Promise.resolve([]),
         enabled: !!hierarchy.organizationId,

@@ -266,9 +266,9 @@ export class BroadcastDbClient {
     }
   }
 
-  // Employees / Users methods - Try to use employees table, fallback to mock data
-  static async fetchUsers() {
-    console.log('Fetching users from employees table');
+  // Employees / Users methods - Using user_contracts and profiles
+  static async fetchUsers(departmentId?: string, subDepartmentId?: string) {
+    console.log('Fetching users with active contracts', { departmentId, subDepartmentId });
 
     try {
       const isConnected = await this.testConnection();
@@ -281,38 +281,58 @@ export class BroadcastDbClient {
         ] as Employee[];
       }
 
-      const { data, error } = await supabase
-        .from('employees')
-        .select('id, first_name, last_name, email, status')
-        .order('first_name');
+      let query = supabase
+        .from('user_contracts')
+        .select(`
+          user_id,
+          status,
+          profiles:user_id (
+            id,
+            first_name,
+            last_name,
+            email
+          )
+        `)
+        .eq('status', 'active')
+        .lte('start_date', new Date().toISOString())
+        .or(`end_date.is.null,end_date.gte.${new Date().toISOString()}`);
+
+      if (departmentId) {
+        query = query.eq('department_id', departmentId);
+      }
+
+      if (subDepartmentId) {
+        query = query.eq('sub_department_id', subDepartmentId);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error fetching employees:', error);
         throw error;
       }
 
-      // Map employees data to the Employee interface expected by broadcast functionality
-      const mappedEmployees = data.map(emp => {
-        // Fallback or separate fetch could be implemented if department is crucial, 
-        // but for now we fix the crash by omitting the join.
-        return {
-          id: emp.id,
-          name: `${emp.first_name} ${emp.last_name}`,
-          email: emp.email,
-          role: emp.status || 'member',
-          department: 'General'
-        };
-      });
+      // Filter out invalid profiles and map to Employee type
+      const mappedEmployees = data
+        .filter((contract: any) => contract.profiles)
+        .map((contract: any) => ({
+          id: contract.profiles.id,
+          name: `${contract.profiles.first_name} ${contract.profiles.last_name}`,
+          email: contract.profiles.email,
+          role: 'member', // Default role for broadcast purposes
+          department: 'General' // We could fetch this but it's not strictly needed for the UI right now
+        }));
 
-      console.log('Found employees:', mappedEmployees);
-      return mappedEmployees as Employee[];
+      // Deduplicate users (in case of multiple active contracts)
+      const uniqueEmployees = Array.from(
+        new Map(mappedEmployees.map(emp => [emp.id, emp])).values()
+      );
+
+      console.log(`Found ${uniqueEmployees.length} active employees`);
+      return uniqueEmployees as Employee[];
     } catch (error) {
       console.error('Error in fetchUsers:', error);
-      return [
-        { id: '1', name: 'John Doe', email: 'john@example.com', role: 'admin', department: 'IT' },
-        { id: '2', name: 'Jane Smith', email: 'jane@example.com', role: 'member', department: 'HR' },
-        { id: '3', name: 'Bob Johnson', email: 'bob@example.com', role: 'manager', department: 'Sales' }
-      ] as Employee[];
+      return [];
     }
   }
 }

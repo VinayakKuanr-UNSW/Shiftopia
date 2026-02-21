@@ -1,5 +1,6 @@
 
 import { useState, useMemo, useEffect } from 'react';
+import { parse } from 'date-fns';
 import { BidWithEmployee, GroupedBids } from '@/modules/planning/ui/components/types/bid-types';
 import { DateRange } from 'react-day-picker';
 
@@ -75,7 +76,8 @@ export const useShiftFiltering = (bids: BidWithEmployee[], initialDateRange?: Da
 
             // Date range filter
             if (dateRange?.from && dateRange?.to) {
-                const bidDate = new Date(shiftDetails.date);
+                // Construct strict local midnight Date to compare with DateRange picking
+                const bidDate = new Date(`${shiftDetails.date}T00:00:00`);
                 if (bidDate < dateRange.from || bidDate > dateRange.to) {
                     return false;
                 }
@@ -165,9 +167,9 @@ export const useShiftFiltering = (bids: BidWithEmployee[], initialDateRange?: Da
 
             switch (sortOption) {
                 case 'date-asc':
-                    return new Date(detailsA.date).getTime() - new Date(detailsB.date).getTime();
+                    return detailsA.date.localeCompare(detailsB.date);
                 case 'date-desc':
-                    return new Date(detailsB.date).getTime() - new Date(detailsA.date).getTime();
+                    return detailsB.date.localeCompare(detailsA.date);
                 case 'time-asc': {
                     const timeA = detailsA.startTime;
                     const timeB = detailsB.startTime;
@@ -211,9 +213,9 @@ export const useShiftFiltering = (bids: BidWithEmployee[], initialDateRange?: Da
     const sortedDates = useMemo(() => {
         return Object.keys(groupedBids).sort((a, b) => {
             if (sortOption.startsWith('date-desc')) {
-                return new Date(b).getTime() - new Date(a).getTime();
+                return b.localeCompare(a);
             }
-            return new Date(a).getTime() - new Date(b).getTime();
+            return a.localeCompare(b);
         });
     }, [groupedBids, sortOption]);
 

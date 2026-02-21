@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { format, isToday } from 'date-fns';
+import { getSydneyNow, isSydneyToday } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
 
 export const HOUR_HEIGHT = 48;
@@ -13,11 +14,11 @@ interface TimeGridProps {
 
 const TimeGrid: React.FC<TimeGridProps> = ({ days, renderShifts }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [now, setNow] = useState(new Date());
+  const [now, setNow] = useState(getSydneyNow());
 
   // Update time every minute
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 60000);
+    const id = setInterval(() => setNow(getSydneyNow()), 60000);
     return () => clearInterval(id);
   }, []);
 
@@ -30,7 +31,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ days, renderShifts }) => {
   }, []);
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
-  const hasToday = days.some(isToday);
+  const hasToday = days.some(isSydneyToday);
   const nowTop = (now.getHours() + now.getMinutes() / 60) * HOUR_HEIGHT;
 
   const formatHour = (h: number) => {
@@ -56,7 +57,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ days, renderShifts }) => {
 
           {/* Day headers */}
           {days.map((day, index) => {
-            const isTodayCol = isToday(day);
+            const isTodayCol = isSydneyToday(day);
             return (
               <div
                 key={day.toISOString()}
@@ -112,7 +113,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ days, renderShifts }) => {
 
             {/* Day columns with grid cells */}
             {days.map((day) => {
-              const isTodayCol = isToday(day);
+              const isTodayCol = isSydneyToday(day);
               return (
                 <div
                   key={day.toISOString()}
@@ -170,7 +171,7 @@ const TimeGrid: React.FC<TimeGridProps> = ({ days, renderShifts }) => {
                   key={day.toISOString()}
                   className="flex-1 flex items-center"
                 >
-                  {isToday(day) ? (
+                  {isSydneyToday(day) ? (
                     <>
                       <div className="w-2.5 h-2.5 rounded-full bg-red-500 -ml-1 shadow-lg shadow-red-500/50" />
                       <div className="flex-1 h-0.5 bg-red-500 shadow-sm shadow-red-500/50" />

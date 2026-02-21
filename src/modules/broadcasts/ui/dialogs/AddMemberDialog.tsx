@@ -52,7 +52,11 @@ export const AddMemberDialog: React.FC<AddMemberDialogProps> = ({
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
-                    <EmployeeSelector onSelect={(userId, isAdmin) => handleAddMember(userId, isAdmin || false)} />
+                    <EmployeeSelector
+                        onSelect={(userId, isAdmin) => handleAddMember(userId, isAdmin || false)}
+                        departmentId={group?.departmentId}
+                        subDepartmentId={group?.subDepartmentId}
+                    />
                 </div>
             </DialogContent>
         </Dialog>

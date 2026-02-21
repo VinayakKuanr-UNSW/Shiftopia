@@ -4,6 +4,7 @@
  */
 
 import { isShiftLocked as isShiftLockedUtil } from '../shift-locking.utils';
+import { getSydneyNow } from '@/modules/core/lib/date.utils';
 
 export interface CanEditShiftInput {
     shiftId: string;
@@ -49,7 +50,7 @@ export function canEditShift(input: CanEditShiftInput): CanEditShiftOutput {
     // Check if the shift end time is in the past
     // Using simple Date comparison as a robust default
     // In a real app, you'd want to handle timezones carefully, but this covers 99% of cases
-    const now = new Date();
+    const now = getSydneyNow();
     // Use end_time if available, otherwise start_time
     // We need to fetch the time from the shift object but the current input interface is limited.
     // For now, let's assume the caller will start passing the shift object or times.

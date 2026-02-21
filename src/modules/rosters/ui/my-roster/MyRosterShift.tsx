@@ -2,6 +2,7 @@ import React from 'react';
 import { Shift } from '@/modules/rosters';
 import { cn } from '@/modules/core/lib/utils';
 import { ArrowRightLeft, CheckCircle2 } from 'lucide-react';
+import { formatInTimezone } from '@/modules/core/lib/date.utils';
 
 interface MyRosterShiftProps {
   shift: Shift;
@@ -22,18 +23,24 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
   onClick,
   style,
 }) => {
-  // Format time helper
-  const formatTime = (timeString: string) => {
+  // Format time helper using UTC-at-Rest where possible
+  const formatTime = (utcTime?: string | null, localTimeString?: string, tzIdentifier?: string) => {
+    if (utcTime) {
+      return formatInTimezone(new Date(utcTime), tzIdentifier || 'Australia/Sydney', 'h:mm a');
+    }
+
+    // Fallback to local time strings if no UTC available yet
+    if (!localTimeString) return '';
     try {
-      const time = timeString.includes('T')
-        ? timeString.split('T')[1].substring(0, 5)
-        : timeString;
+      const time = localTimeString.includes('T')
+        ? localTimeString.split('T')[1].substring(0, 5)
+        : localTimeString;
       const [hours, minutes] = time.split(':').map(Number);
       const period = hours >= 12 ? 'PM' : 'AM';
       const displayHours = hours % 12 || 12;
       return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
     } catch {
-      return timeString;
+      return localTimeString;
     }
   };
 
@@ -87,7 +94,7 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
           {shift.roles?.name || 'Shift'}
         </div>
         <div className="opacity-80 text-[10px] truncate text-center leading-tight mt-0.5">
-          {formatTime(shift.start_time)}
+          {formatTime(shift.start_at, shift.start_time, shift.tz_identifier)}
         </div>
       </div>
     );
@@ -132,7 +139,7 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
 
       {/* Time */}
       <div className="text-xs opacity-90 leading-tight mt-2">
-        {formatTime(shift.start_time)} - {formatTime(shift.end_time)}
+        {formatTime(shift.start_at, shift.start_time, shift.tz_identifier)} - {formatTime(shift.end_at, shift.end_time, shift.tz_identifier)}
       </div>
 
       {/* Optional: Break indicator */}

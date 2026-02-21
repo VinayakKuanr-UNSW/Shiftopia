@@ -1,7 +1,8 @@
 // src/components/templates/CreateTemplateDialog.tsx
 import React, { useState, useEffect, useMemo } from 'react';
+import { cn } from '@/modules/core/lib/utils';
 import { useAuth } from '@/platform/auth/useAuth';
-import { Plus, FileText, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, FileText, Loader2, AlertCircle, Building2, Factory, Network, ArrowRight } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
@@ -32,29 +33,21 @@ interface CreateTemplateDialogProps {
   onCreateTemplate: (input: {
     name: string;
     description: string;
-    month: string;
     organizationId: string;
     departmentId: string;
     subDepartmentId: string;
   }) => Promise<void>;
-  existingMonths?: string[];
+  initialScope?: { organizationId?: string; departmentId?: string; subDepartmentId?: string };
 }
-
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
-];
 
 const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
   isOpen,
   onOpenChange,
   onCreateTemplate,
-  existingMonths = [],
+  initialScope,
 }) => {
-  const [name, setName] = useState('');
+  const [name, setName] = useState('New Template');
   const [description, setDescription] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState('');
   const [nameError, setNameError] = useState('');
@@ -78,9 +71,6 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
     const currentYear = new Date().getFullYear();
     return [currentYear, currentYear + 1, currentYear + 2];
   }, []);
-
-  const monthString = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
-  const isExistingMonth = existingMonths.includes(monthString);
 
   const { activeContract, user } = useAuth();
 
@@ -121,7 +111,7 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
       // Treating Admin contract as Epsilon equivalent for legacy support
       if (activeContract.userId === 'admin') return { type: 'epsilon', scope: null };
       // Treat Delta contract
-      if (activeContract.accessLevel === 'delta' || activeContract.accessLevel === 'Delta') {
+      if (activeContract.accessLevel === 'delta') {
         return {
           type: 'delta',
           scope: {
@@ -133,7 +123,7 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
       }
       // Determine other contract levels if needed, but usually they don't create templates?
       // Actually Gamma contracts CAN create templates.
-      if (activeContract.accessLevel === 'gamma' || activeContract.accessLevel === 'Gamma') {
+      if (activeContract.accessLevel === 'gamma') {
         return {
           type: 'gamma',
           scope: {
@@ -149,151 +139,102 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
   }, [user, activeContract]);
 
   const lockedScope = useMemo(() => {
+    // User priority binding: If a complete initialScope is provided, use it to permanently lock down form
+    if (initialScope) {
+      return {
+        organizationId: initialScope.organizationId || '',
+        departmentId: initialScope.departmentId || '',
+        subDepartmentId: initialScope.subDepartmentId || ''
+      };
+    }
+
+    // Fallback to strict certification checks
     if (!effectiveScope || effectiveScope.type === 'epsilon') return null;
-    return effectiveScope.scope;
-  }, [effectiveScope]);
+    return {
+      organizationId: effectiveScope.scope?.organizationId || '',
+      departmentId: effectiveScope.scope?.departmentId || '',
+      subDepartmentId: effectiveScope.scope?.subDepartmentId || ''
+    };
+  }, [effectiveScope, initialScope?.organizationId, initialScope?.departmentId, initialScope?.subDepartmentId]);
 
   // Reset state when dialog opens - SAFE MODE
   // Only resets form fields. Does NOT touch IDs or Lists to prevent race conditions with Unified Loader.
   useEffect(() => {
     if (isOpen) {
-      const now = new Date();
-      setName((prev) => prev || `${format(now, 'MMMM yyyy')} Template`);
+      if (!name || name === 'New Template') setName('New Template');
       if (!description) setDescription('');
-      setSelectedMonth(now.getMonth());
-      setSelectedYear(now.getFullYear());
       setError('');
       setNameError('');
       setIsCreating(false);
     }
   }, [isOpen]);
 
-  // Unified Data Loading Logic
+  // 1. Initial Load: Organizations & Locked Scope Initialization
   useEffect(() => {
     if (!isOpen) return;
 
-    const loadData = async () => {
-      console.log('[CreateTemplateDialog] Loading Data...', { lockedScope, activeContract });
-
-      // 1. Always load Organizations
+    const initializeData = async () => {
+      console.log('[CreateTemplateDialog] 🚀 Initializing Data...', { lockedScope });
       setIsLoadingOrgs(true);
-      try {
-        let orgs = await enhancedShiftService.getOrganizations();
-        console.log('[CreateTemplateDialog] Fetched Orgs:', orgs);
 
-        // FALLBACK: If locked scope exists but org is missing (likely RLS), fetch it specifically
+      try {
+        // Fetch Orgs
+        let orgs = await enhancedShiftService.getOrganizations();
+
+        // Handle Locked Org missing from list (RLS)
         if (lockedScope && !orgs.find(o => o.id === lockedScope.organizationId)) {
-          console.log('[CreateTemplateDialog] Locked Org missing from list, fetching directly...');
-          const { data: specificOrg, error: specificOrgError } = await supabase
+          console.log('[CreateTemplateDialog] Locked Org missing, fetching directly...');
+          const { data: specificOrg } = await supabase
             .from('organizations')
             .select('id, name')
             .eq('id', lockedScope.organizationId)
             .single();
-
-          if (specificOrg) {
-            console.log('[CreateTemplateDialog] Fetched specific org:', specificOrg);
-            orgs = [...orgs, specificOrg];
-          } else if (specificOrgError) {
-            console.error('[CreateTemplateDialog] Failed to fetch specific org:', specificOrgError);
-          }
+          if (specificOrg) orgs = [...orgs, specificOrg as any];
         }
 
         setOrganizations(orgs);
 
-        // Handle Auto-Selection for Non-Locked (Default to first)
-        if (!lockedScope && orgs.length > 0 && !selectedOrgId) {
+        // If locked, initialize the whole hierarchy at once
+        if (lockedScope) {
+          console.log('[CreateTemplateDialog] Phase 1: Applying Locked Scope');
+          setSelectedOrgId(lockedScope.organizationId);
+
+          setIsLoadingDepts(true);
+          const depts = await enhancedShiftService.getDepartments(lockedScope.organizationId);
+          setDepartments(depts);
+          setSelectedDeptId(lockedScope.departmentId);
+
+          setIsLoadingSubDepts(true);
+          const subDepts = await enhancedShiftService.getSubDepartments(lockedScope.departmentId);
+          setSubDepartments(subDepts);
+          setSelectedSubDeptId(lockedScope.subDepartmentId);
+        } else if (orgs.length > 0 && !selectedOrgId) {
           setSelectedOrgId(orgs[0].id);
         }
       } catch (err) {
-        console.error('Failed to load organizations:', err);
+        console.error('[CreateTemplateDialog] Initialization failed:', err);
       } finally {
         setIsLoadingOrgs(false);
-      }
-
-      // 2. Locked Scope: Pre-load Department and Sub-Department data
-      if (lockedScope) {
-        console.log('[CreateTemplateDialog] Applying Locked Scope:', lockedScope);
-        // Set State Immediately
-        setSelectedOrgId(lockedScope.organizationId);
-        setSelectedDeptId(lockedScope.departmentId);
-        setSelectedSubDeptId(lockedScope.subDepartmentId);
-
-        // Load Departments for Locked Org
-        setIsLoadingDepts(true);
-        try {
-          const depts = await enhancedShiftService.getDepartments(lockedScope.organizationId);
-          console.log('[CreateTemplateDialog] Fetched Depts:', depts);
-          setDepartments(depts);
-
-          // Re-assert selection to ensure UI captures it (prevents race condition clearing)
-          setTimeout(() => setSelectedDeptId(lockedScope.departmentId), 0);
-
-        } catch (err) {
-          console.error('Failed to load locked departments:', err);
-        } finally {
-          setIsLoadingDepts(false);
-        }
-
-        // Load Sub-Departments for Locked Dept
-        setIsLoadingSubDepts(true);
-        try {
-          const subDepts = await enhancedShiftService.getSubDepartments(lockedScope.departmentId);
-          console.log('[CreateTemplateDialog] Fetched SubDepts:', subDepts);
-          setSubDepartments(subDepts);
-
-          // Re-assert selection
-          setTimeout(() => setSelectedSubDeptId(lockedScope.subDepartmentId), 0);
-
-        } catch (err) {
-          console.error('Failed to load locked sub-departments:', err);
-        } finally {
-          setIsLoadingSubDepts(false);
-        }
+        setIsLoadingDepts(false);
+        setIsLoadingSubDepts(false);
       }
     };
 
-    loadData();
-  }, [isOpen, lockedScope]); // Re-run if dialog opens or permissions change
+    initializeData();
+  }, [isOpen]); // Only run once on mount/open
 
-  // CRITICAL SYNCHRONIZATION: Enforce Locked Scope
-  // If the component state drifts (e.g. Select unmounting/remounting or race conditions),
-  // this ensures the Organization ID always snaps back to the locked value.
+  // 2. Cascading Load: Departments (Only for Non-Locked users)
   useEffect(() => {
-    if (lockedScope && selectedOrgId !== lockedScope.organizationId) {
-      console.log('[CreateTemplateDialog] Enforcing Locked Org ID:', lockedScope.organizationId);
-      setSelectedOrgId(lockedScope.organizationId);
-    }
-  }, [lockedScope, selectedOrgId]);
-
-  // Cascading Loaders for NON-LOCKED interactions (Manual Selection)
-  // Only validation: ensure we don't double-fetch if lockedScope is active, 
-  // as the unified effect handles that.
-
-  // Load departments when organization changes (User Action)
-  useEffect(() => {
-    // CRITICAL FIX: Do NOT run this if lockedScope is active.
-    // The unified loader handles all data fetching for locked users.
-    // Running this will clear the state because it sees the initial "change"
-    if (lockedScope) return;
-
-    if (!selectedOrgId) {
-      setDepartments([]);
-      setSelectedDeptId('');
-      setSubDepartments([]);
-      setSelectedSubDeptId('');
-      return;
-    }
+    if (!isOpen || !!lockedScope || !selectedOrgId) return;
 
     const loadDepts = async () => {
+      console.log('[CreateTemplateDialog] 🌳 Loading Departments for Org:', selectedOrgId);
       setIsLoadingDepts(true);
       try {
         const depts = await enhancedShiftService.getDepartments(selectedOrgId);
         setDepartments(depts);
-        if (depts.length > 0) {
-          setSelectedDeptId(depts[0].id);
-        } else {
-          setSelectedDeptId('');
-        }
+        if (depts.length > 0) setSelectedDeptId(depts[0].id);
+        else setSelectedDeptId('');
       } catch (err) {
         console.error('Failed to load departments:', err);
       } finally {
@@ -301,29 +242,20 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
       }
     };
     loadDepts();
-  }, [selectedOrgId, lockedScope]);
+  }, [selectedOrgId, isOpen, lockedScope]); // lockedScope is in dependencies via the guard
 
-  // Load sub-departments when department changes (User Action)
+  // 3. Cascading Load: Sub-Departments (Only for Non-Locked users)
   useEffect(() => {
-    // CRITICAL FIX: Do NOT run this if lockedScope is active.
-    if (lockedScope) return;
-
-    if (!selectedDeptId) {
-      setSubDepartments([]);
-      setSelectedSubDeptId('');
-      return;
-    }
+    if (!isOpen || !!lockedScope || !selectedDeptId) return;
 
     const loadSubDepts = async () => {
+      console.log('[CreateTemplateDialog] 🌿 Loading Sub-Departments for Dept:', selectedDeptId);
       setIsLoadingSubDepts(true);
       try {
         const subDepts = await enhancedShiftService.getSubDepartments(selectedDeptId);
         setSubDepartments(subDepts);
-        if (subDepts.length > 0) {
-          setSelectedSubDeptId(subDepts[0].id);
-        } else {
-          setSelectedSubDeptId('');
-        }
+        if (subDepts.length > 0) setSelectedSubDeptId(subDepts[0].id);
+        else setSelectedSubDeptId('');
       } catch (err) {
         console.error('Failed to load sub-departments:', err);
       } finally {
@@ -331,28 +263,10 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
       }
     };
     loadSubDepts();
-  }, [selectedDeptId, lockedScope]);
-
-  // Update name when month/year changes if name was default
-  useEffect(() => {
-    const date = new Date(selectedYear, selectedMonth);
-    const defaultName = `${format(date, 'MMMM yyyy')} Template`;
-    setName(defaultName);
-  }, [selectedMonth, selectedYear]);
-
-  // Validation: Check if selected is in the past
-  const isPast = useMemo(() => {
-    const selected = startOfMonth(new Date(selectedYear, selectedMonth));
-    const current = startOfMonth(new Date());
-    return selected < current;
-  }, [selectedMonth, selectedYear]);
+  }, [selectedDeptId, isOpen, lockedScope]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isPast) {
-      setError('Cannot create templates for past months.');
-      return;
-    }
     setError('');
 
     const sanitizedName = sanitizeTemplateName(name);
@@ -410,7 +324,6 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
       await onCreateTemplate({
         name: sanitizedName,
         description: description.trim(),
-        month: monthString,
         organizationId: selectedOrgId,
         departmentId: selectedDeptId,
         subDepartmentId: selectedSubDeptId,
@@ -428,253 +341,180 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
     }
   };
 
-  const canSubmit = name.trim().length >= 3 && !nameError && !isCreating && !isPast && !!selectedSubDeptId;
+  const canSubmit = name.trim().length >= 3 && !nameError && !isCreating && !!selectedSubDeptId;
+
+  // Helper to get name from ID in list
+  const getOrgName = () => organizations.find(o => o.id === selectedOrgId)?.name || '...';
+  const getDeptName = () => departments.find(d => d.id === selectedDeptId)?.name || '...';
+  const getSubDeptName = () => subDepartments.find(sd => sd.id === selectedSubDeptId)?.name || '...';
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="bg-[#0d1829] border-white/10 sm:max-w-[500px]">
-        <DialogHeader>
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-              <Plus className="h-5 w-5 text-emerald-400" />
-            </div>
-            <div>
-              <DialogTitle className="text-xl text-white">
-                Create New Template
-              </DialogTitle>
-              <DialogDescription className="text-white/50 text-sm">
-                Start with 3 default groups: Convention Centre, Exhibition
-                Centre, Theatre
-              </DialogDescription>
+      <DialogContent className="bg-[#020617] border-white/5 p-0 overflow-hidden sm:max-w-[760px] shadow-2xl shadow-blue-500/10">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_1.4fr]">
+          {/* Left Column: Hierarchy (Locked) */}
+          <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600/20 via-slate-900 to-slate-900 p-8 flex flex-col justify-between border-r border-white/5">
+            {/* Background Decoration */}
+            <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative z-10 flex flex-col h-full">
+              <div className="mb-8">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-bold text-indigo-300 uppercase tracking-widest mb-4">
+                  Scope Context
+                </div>
+                <h3 className="text-2xl font-bold text-white tracking-tight">Hierarchy</h3>
+                <p className="text-slate-400 text-sm mt-1">This template will be bound to the selected context.</p>
+              </div>
+
+              <div className="space-y-4 flex-1">
+                {[
+                  { label: 'Organization', value: getOrgName(), icon: Building2, color: 'text-blue-400', bg: 'bg-blue-400/10' },
+                  { label: 'Department', value: getDeptName(), icon: Factory, color: 'text-indigo-400', bg: 'bg-indigo-400/10' },
+                  { label: 'Sub-Department', value: getSubDeptName(), icon: Network, color: 'text-violet-400', bg: 'bg-violet-400/10' },
+                ].map((item, i) => (
+                  <div key={item.label} className="relative group">
+                    <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/[0.03] border border-white/5 backdrop-blur-sm group-hover:bg-white/[0.05] group-hover:border-white/10 transition-all duration-300">
+                      <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0", item.bg)}>
+                        <item.icon className={cn("h-6 w-6", item.color)} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-0.5">
+                          {item.label}
+                        </Label>
+                        <div className="text-sm font-semibold text-white truncate pr-2">
+                          {item.value}
+                        </div>
+                      </div>
+                    </div>
+                    {i < 2 && (
+                      <div className="ml-10 h-6 w-px bg-gradient-to-b from-slate-700/50 to-transparent my-1" />
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-8 flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+                <div className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                Prefilled & Locked from Global Scope
+              </div>
             </div>
           </div>
-        </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-5 py-4">
-          {/* Organization / Department / Sub-Department */}
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-white/70">
-                Organization <span className="text-red-400">*</span>
-              </Label>
-              <Select
-                value={selectedOrgId}
-                onValueChange={setSelectedOrgId}
-                disabled={isLoadingOrgs || !!lockedScope}
-              >
-                <SelectTrigger className="bg-[#1a2744] border-white/10 text-white">
-                  <SelectValue placeholder={isLoadingOrgs ? 'Loading...' : 'Select organization'} />
-                </SelectTrigger>
-                <SelectContent className="bg-[#1a2744] border-white/10 text-white">
-                  {organizations.map(org => (
-                    <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-white/70">
-                  Department <span className="text-red-400">*</span>
-                </Label>
-                <Select
-                  value={selectedDeptId}
-                  onValueChange={setSelectedDeptId}
-                  disabled={(!selectedOrgId || isLoadingDepts) || !!lockedScope}
+          {/* Right Column: Form Inputs */}
+          <div className="p-8 bg-slate-950 flex flex-col justify-between">
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h3 className="text-xl font-bold text-white tracking-tight">Template Details</h3>
+                  <p className="text-slate-500 text-sm mt-1">Configure your new template skeleton.</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleClose}
+                  className="rounded-full text-slate-500 hover:text-white hover:bg-white/5 -mt-8 -mr-4"
                 >
-                  <SelectTrigger className="bg-[#1a2744] border-white/10 text-white">
-                    <SelectValue placeholder={isLoadingDepts ? 'Loading...' : 'Select department'} />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#1a2744] border-white/10 text-white">
-                    {departments.map(dept => (
-                      <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <Plus className="h-5 w-5 rotate-45" />
+                </Button>
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-white/70">
-                  Sub-Department <span className="text-red-400">*</span>
-                </Label>
-                <Select
-                  value={selectedSubDeptId}
-                  onValueChange={setSelectedSubDeptId}
-                  disabled={(!selectedDeptId || isLoadingSubDepts) || !!lockedScope}
-                >
-                  <SelectTrigger className="bg-[#1a2744] border-white/10 text-white">
-                    <SelectValue placeholder={isLoadingSubDepts ? 'Loading...' : 'Select sub-department'} />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#1a2744] border-white/10 text-white">
-                    {subDepartments.map(subDept => (
-                      <SelectItem key={subDept.id} value={subDept.id}>{subDept.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="name" className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Template Name <span className="text-indigo-500 font-black">*</span>
+                  </Label>
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g., January Performance Spike"
+                    autoFocus
+                    className={cn(
+                      "bg-slate-900/50 border-white/5 text-white h-12 px-4 rounded-xl focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-slate-600 font-medium",
+                      nameError && "border-red-500/50 focus:ring-red-500/20 focus:border-red-500"
+                    )}
+                  />
+                  {nameError ? (
+                    <p className="text-[11px] text-red-400 flex items-center gap-1.5 font-medium">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      {nameError}
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                      Must be unique within the sub-department. Min 3 characters.
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="description" className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Description <span className="text-slate-600">(optional)</span>
+                  </Label>
+                  <Textarea
+                    id="description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Identify the specific peaks and roles this template addresses..."
+                    className="bg-slate-900/50 border-white/5 text-white min-h-[120px] p-4 rounded-xl focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all resize-none placeholder:text-slate-600 font-medium text-sm leading-relaxed"
+                  />
+                </div>
+
+                <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 group overflow-hidden relative">
+                  <div className="absolute top-0 right-0 -mr-4 -mt-4 w-16 h-16 bg-indigo-500/10 rounded-full blur-xl animate-pulse" />
+                  <div className="flex gap-4 relative z-10">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center shrink-0">
+                      <FileText className="h-5 w-5 text-indigo-400" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest block">
+                        Auto-Seeding
+                      </Label>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        Created with core shifts for <span className="text-slate-200">Convention</span>, <span className="text-slate-200">Exhibition</span>, and <span className="text-slate-200">Theatre</span>.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-[13px] text-red-400 font-medium text-center">
+                    {error}
+                  </div>
+                )}
+              </form>
             </div>
-          </div>
 
-          {/* Month & Year Selection */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="month" className="text-sm font-medium text-white/70">
-                Target Month <span className="text-red-400">*</span>
-              </Label>
-              <Select
-                value={String(selectedMonth)}
-                onValueChange={(val) => setSelectedMonth(parseInt(val))}
+            <div className="mt-8 pt-6 border-t border-white/5 flex gap-3">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleClose}
+                disabled={isCreating}
+                className="flex-1 h-12 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 font-bold tracking-wide"
               >
-                <SelectTrigger className="bg-[#1a2744] border-white/10 text-white">
-                  <SelectValue placeholder="Select month" />
-                </SelectTrigger>
-                <SelectContent className="bg-[#1a2744] border-white/10 text-white">
-                  {MONTHS.map((m, idx) => (
-                    <SelectItem key={m} value={String(idx)}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="year" className="text-sm font-medium text-white/70">
-                Target Year <span className="text-red-400">*</span>
-              </Label>
-              <Select
-                value={String(selectedYear)}
-                onValueChange={(val) => setSelectedYear(parseInt(val))}
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                onClick={handleSubmit}
+                disabled={!canSubmit}
+                className="flex-[1.5] h-12 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black tracking-widest shadow-lg shadow-indigo-600/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100 uppercase text-xs"
               >
-                <SelectTrigger className="bg-[#1a2744] border-white/10 text-white">
-                  <SelectValue placeholder="Select year" />
-                </SelectTrigger>
-                <SelectContent className="bg-[#1a2744] border-white/10 text-white">
-                  {years.map(y => (
-                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {isCreating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Forging...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create!
+                  </>
+                )}
+              </Button>
             </div>
           </div>
-
-          {/* Validation Warnings */}
-          {isPast && (
-            <div className="p-2 rounded bg-red-500/10 border border-red-500/20 flex items-center gap-2 text-xs text-red-400">
-              <AlertCircle className="h-3.5 w-3.5" />
-              <span>Cannot create templates for past months.</span>
-            </div>
-          )}
-
-          {isExistingMonth && (
-            <div className="p-3 rounded bg-amber-500/10 border border-amber-500/20 flex items-start gap-2 text-xs text-amber-300">
-              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-              <div>
-                <p className="font-semibold mb-1">Template Already Exists</p>
-                <p>A template for {MONTHS[selectedMonth]} {selectedYear} already exists.
-                  Any new sub-groups or shifts you define will be **appended** to the existing roster when applied.</p>
-              </div>
-            </div>
-          )}
-
-          {/* Template Name */}
-          <div className="space-y-2">
-            <Label htmlFor="name" className="text-sm font-medium text-white/70">
-              Template Name <span className="text-red-400">*</span>
-            </Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., January 2025 Template"
-              disabled={isCreating}
-              className={`bg-[#1a2744] border-white/10 text-white placeholder:text-white/40 focus:border-white/20 ${nameError ? 'border-red-500/50 focus:border-red-500' : ''
-                }`}
-              autoFocus
-            />
-            {nameError && (
-              <p className="text-xs text-red-400 flex items-center gap-1">
-                <AlertCircle className="h-3 w-3" />
-                {nameError}
-              </p>
-            )}
-            <p className="text-xs text-white/40">
-              Must be at least 3 characters. Must be unique within your
-              Sub-Department.
-            </p>
-          </div>
-
-          {/* Description */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="description"
-              className="text-sm font-medium text-white/70"
-            >
-              Description <span className="text-white/40">(optional)</span>
-            </Label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief description of this template..."
-              disabled={isCreating}
-              className="bg-[#1a2744] border-white/10 text-white placeholder:text-white/40 focus:border-white/20 min-h-[80px] resize-none"
-            />
-          </div>
-
-          {/* Info Box */}
-          <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-            <div className="flex items-start gap-2">
-              <FileText className="h-4 w-4 text-blue-400 mt-0.5 shrink-0" />
-              <div className="text-sm text-blue-300/80">
-                <p className="font-medium text-blue-300 mb-1">Default Groups</p>
-                <p>
-                  Your template will be created with three fixed groups:
-                  <span className="text-blue-400"> Convention Centre</span>,
-                  <span className="text-emerald-400"> Exhibition Centre</span>,
-                  and
-                  <span className="text-red-400"> Theatre</span>.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Error Display */}
-          {error && (
-            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-              <p className="text-sm text-red-400">{error}</p>
-            </div>
-          )}
-        </form>
-
-        <DialogFooter className="gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleClose}
-            disabled={isCreating}
-            className="bg-white/5 border-white/10 text-white hover:bg-white/10 hover:text-white"
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[120px] disabled:opacity-50"
-          >
-            {isCreating ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Creating...
-              </>
-            ) : (
-              <>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Template
-              </>
-            )}
-          </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

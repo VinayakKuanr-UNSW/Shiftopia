@@ -11,7 +11,21 @@ export const employeeService = {
     getAllEmployees: async (): Promise<Employee[]> => {
         const { data, error } = await supabase
             .from('profiles')
-            .select('id, first_name, last_name, full_name, email, avatar_url')
+            .select(`
+                id, 
+                first_name, 
+                last_name, 
+                full_name, 
+                email, 
+                avatar_url,
+                user_contracts (
+                    id,
+                    organization_id,
+                    department_id,
+                    sub_department_id,
+                    status
+                )
+            `)
             .order('full_name');
 
         if (error) {
@@ -29,7 +43,8 @@ export const employeeService = {
             avatarUrl: p.avatar_url,
             is_active: true,
             createdAt: now,
-            updatedAt: now
+            updatedAt: now,
+            contracts: p.user_contracts as any
         }));
     },
 

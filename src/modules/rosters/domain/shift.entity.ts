@@ -80,6 +80,11 @@ export interface Shift {
     total_hours: number | null;
     timezone: string;
 
+    // New UTC-at-Rest fields
+    start_at?: string | null;
+    end_at?: string | null;
+    tz_identifier?: string | null;
+
     assigned_employee_id: string | null;
     assignment_id: string | null;
 

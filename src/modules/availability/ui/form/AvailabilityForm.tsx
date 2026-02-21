@@ -14,7 +14,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, parse, startOfDay } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -205,7 +205,7 @@ export function AvailabilityForm({
                 id="start-date"
                 type="date"
                 value={format(startDate, 'yyyy-MM-dd')}
-                onChange={(e) => setStartDate(new Date(e.target.value))}
+                onChange={(e) => setStartDate(startOfDay(parse(e.target.value, 'yyyy-MM-dd', new Date())))}
               />
             </div>
             <div className="space-y-2">
@@ -214,7 +214,7 @@ export function AvailabilityForm({
                 id="end-date"
                 type="date"
                 value={format(endDate, 'yyyy-MM-dd')}
-                onChange={(e) => setEndDate(new Date(e.target.value))}
+                onChange={(e) => setEndDate(startOfDay(parse(e.target.value, 'yyyy-MM-dd', new Date())))}
               />
             </div>
           </div>

@@ -4,19 +4,29 @@ import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 
 import { shiftsApi } from '@/modules/rosters';
 import { checkCompliance, ComplianceCheckInput, ShiftTimeRange } from '@/modules/compliance';
-import { addDays, subDays, format, parseISO, differenceInHours } from 'date-fns';
+import { addDays, subDays, format, parseISO, differenceInHours, parse } from 'date-fns';
 
 // Type assertion helper for Supabase queries with tables not in generated types
 const db = supabase as any;
 
 // §9 Time Lock: Swap actions are forbidden if shift starts within 4 hours
 const TIME_LOCK_HOURS = 4;
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
+
 const assertNotTimeLocked = (shiftDate: string, startTime: string) => {
-    const shiftStart = new Date(`${shiftDate}T${startTime}`);
+    // Use centralized date utilities to handle timezone parsing correctly
+    const shiftStart = parseZonedDateTime(shiftDate, startTime);
     const now = new Date();
+
+    // Calculate absolute difference in hours
     const hoursUntilStart = differenceInHours(shiftStart, now);
+
     if (hoursUntilStart < TIME_LOCK_HOURS) {
         throw new Error(`Time locked: shift starts in ${hoursUntilStart}h (< ${TIME_LOCK_HOURS}h). Swap actions are forbidden.`);
+    }
+    // Also block if shift is in the past
+    if (hoursUntilStart < 0) {
+        throw new Error(`Time locked: shift has already started. Swap actions are forbidden.`);
     }
 };
 
@@ -27,10 +37,10 @@ const validateSwapCompliance = async (
     offererId: string,
     offeredShift: any | null // Shift object or null
 ) => {
-    // 1. Define date range for roster fetch (surrounding the shifts)
+    // 3. Define date range for roster fetch (surrounding the shifts)
     // We need rosters for BOTH employees to check compliance for receiving the new shift.
     // Range: +/- 30 days from the earliest shift date involved.
-    const dateRef = parseISO(requesterShift.shift_date);
+    const dateRef = parse(requesterShift.shift_date, 'yyyy-MM-dd', new Date());
     const start = format(subDays(dateRef, 30), 'yyyy-MM-dd');
     const end = format(addDays(dateRef, 30), 'yyyy-MM-dd');
 
@@ -295,8 +305,6 @@ export const swapsApi = {
             subDepartmentId?: string;
         }
     ): Promise<ShiftSwapRelations[]> {
-        console.log('[API] Fetching available swaps for:', currentEmployeeId, filters);
-
         const { organizationId, departmentId, subDepartmentId } = filters;
         const shiftJoinType = '!inner'; // Mandatory to filter by org
 
@@ -338,6 +346,7 @@ export const swapsApi = {
             throw error;
         }
 
+        console.log('[API LOG] Fetched swaps count:', data?.length || 0);
         return data || [];
     },
 
