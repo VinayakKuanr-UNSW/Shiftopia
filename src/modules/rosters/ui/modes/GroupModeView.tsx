@@ -872,65 +872,14 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     const specificRoster = rosterStructures.find(r => r.startDate === dateKey); // rosterStructures has 'startDate'
     let specificRosterId = specificRoster?.rosterId; // Use .rosterId (mapped from id)
 
-    // Lazy Initialization: If roster doesn't exist for this date, create it.
-    if (!specificRosterId && organizationIdRef.current) {
-      try {
-        console.log('[GroupModeView] No roster found for date:', dateKey, '. Attempting lazy creation...');
-        toast({
-          title: 'Initializing Roster...',
-          description: `Creating a daily roster for ${format(date, 'd MMM')}.`,
-          duration: 2000,
-        });
-
-        // 1. Check if it exists in DB (maybe not in our current fetch window?)
-        const { data: existingRoster, error: fetchError } = await supabase
-          .from('rosters')
-          .select('id')
-          .eq('organization_id', organizationIdRef.current)
-          .eq('start_date', dateKey)
-          .maybeSingle();
-
-        if (fetchError) throw fetchError;
-
-        if (existingRoster) {
-          specificRosterId = existingRoster.id;
-        } else {
-          // 2. Create it
-          console.log('[GroupModeView] Creating new roster for:', dateKey);
-          const { data: newRoster, error: createError } = await supabase
-            .from('rosters')
-            .insert({
-              organization_id: organizationIdRef.current,
-              department_id: departmentIdRef.current,
-              sub_department_id: subDepartmentIdRef.current,
-              description: `Daily Roster - ${format(date, 'dd MMM yyyy')}`,
-              start_date: dateKey,
-              end_date: dateKey,
-              status: 'draft',
-              created_by: (await supabase.auth.getUser()).data.user?.id
-            })
-            .select('id')
-            .single();
-
-          if (createError) throw createError;
-          if (newRoster) {
-            specificRosterId = newRoster.id;
-            // Invalidate queries to refresh the view AND the modal's lookup
-            await Promise.all([
-              queryClient.invalidateQueries({ queryKey: ['rosterStructure'] }),
-              queryClient.invalidateQueries({ queryKey: ['rosters'] })
-            ]);
-          }
-        }
-      } catch (error: any) {
-        console.error('Failed to lazy create roster:', error);
-        toast({
-          title: 'Error',
-          description: 'Could not initialize roster. Please try again.',
-          variant: 'destructive',
-        });
-        return; // Stop if we failed to ensure a roster
-      }
+    // Strict Policy: Blocking shift addition if roster is not activated
+    if (!specificRosterId) {
+      toast({
+        title: 'Roster Not Activated',
+        description: `The roster for ${format(date, 'd MMM')} must be activated before adding shifts.`,
+        variant: 'destructive',
+      });
+      return;
     }
 
     if (onAddShift) {
@@ -1118,9 +1067,17 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
   const handleAddSubGroup = (group: VisualGroup, dateContext?: Date) => {
     const targetDate = dateContext || selectedDate;
+    const dateKey = format(targetDate, 'yyyy-MM-dd');
+    const specificRoster = rosterStructures.find(r => r.startDate === dateKey);
 
-    // We don't need to check for roster existence here anymore because the RPC handles it!
-    // We just need the group definition to set the context for the dialog.
+    if (!specificRoster && !dateContext) {
+      toast({
+        title: 'Roster Not Activated',
+        description: `The roster for ${format(targetDate, 'd MMM')} must be activated before adding subgroups.`,
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setSelectedGroupForSubGroup(group);
 

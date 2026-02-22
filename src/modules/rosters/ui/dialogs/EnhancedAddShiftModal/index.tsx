@@ -14,6 +14,7 @@ import { useCreateShift, useUpdateShift } from '@/modules/rosters/state/useRoste
 import { formSchema, FormValues, EnhancedAddShiftModalProps } from './types';
 import { calculateShiftLength, isDateInPast, isShiftStarted } from './utils';
 import { SYDNEY_TZ, formatInTimezone, isPastInTimezone, getTodayInTimezone } from '@/modules/core/lib/date.utils';
+import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 
 // Hooks
 import { useShiftFormData, useHardValidation, useStepNavigation, useComplianceRunner } from './hooks';
@@ -49,6 +50,9 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
     const [selectedRosterId, setSelectedRosterId] = useState<string>(safeContext.rosterId || '');
 
+    // Scope filter for global hierarchy
+    const { scope, scopeTree } = useScopeFilter('managerial');
+
     // Mutations
     const createShiftMutation = useCreateShift();
     const updateShiftMutation = useUpdateShift();
@@ -65,11 +69,11 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
         defaultValues: {
             group_type: (safeContext.groupName?.toLowerCase().replace(/\s+/g, '_') as any) || undefined,
             sub_group_name: safeContext.subGroupName || '',
-            role_id: '',
-            remuneration_level_id: '',
-            shift_date: undefined,
-            start_time: '',
-            end_time: '',
+            role_id: safeContext.roleId || '',
+            remuneration_level_id: safeContext.remunerationLevelId || '',
+            shift_date: safeContext.date ? new Date(safeContext.date) : undefined,
+            start_time: safeContext.eventStartTime || '',
+            end_time: safeContext.eventEndTime || '',
             paid_break_minutes: undefined,
             unpaid_break_minutes: undefined,
             timezone: 'Australia/Sydney',
@@ -103,6 +107,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
         events,
         rosters,
         rosterStructure,
+        activeSubGroups,
         isLoadingData,
     } = useShiftFormData({
         isOpen,
@@ -113,16 +118,68 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
         setSelectedRosterId,
     });
 
+    // Reset form when modal opens with new context
+    useEffect(() => {
+        if (isOpen && !editMode) {
+            console.log('[EnhancedAddShiftModal] Resetting form with context:', safeContext);
+            form.reset({
+                group_type: (safeContext.groupName?.toLowerCase().replace(/\s+/g, '_') as any) || undefined,
+                sub_group_name: safeContext.subGroupName || '',
+                role_id: safeContext.roleId || '',
+                remuneration_level_id: safeContext.remunerationLevelId || '',
+                shift_date: safeContext.date ? new Date(safeContext.date) : undefined,
+                start_time: safeContext.eventStartTime || '',
+                end_time: safeContext.eventEndTime || '',
+                paid_break_minutes: undefined,
+                unpaid_break_minutes: undefined,
+                timezone: 'Australia/Sydney',
+                assigned_employee_id: safeContext.employeeId || null,
+                required_skills: [],
+                required_licenses: [],
+                event_ids: [],
+                notes: '',
+            });
+        }
+    }, [isOpen, safeContext, editMode, form]);
+
+    // Force sync of Role/Level if they are in context but not yet set in form (e.g. data loaded late)
+    useEffect(() => {
+        if (isOpen && !editMode && safeContext.roleId && !watchRoleId && roles.length > 0) {
+            const match = roles.find(r => r.id === safeContext.roleId);
+            if (match) {
+                console.log('[EnhancedAddShiftModal] late-sync match found:', match.name, match.id);
+                form.setValue('role_id', match.id);
+                if (match.remuneration_level_id) {
+                    form.setValue('remuneration_level_id', match.remuneration_level_id);
+                }
+            } else {
+                console.warn('[EnhancedAddShiftModal] late-sync: safeContext.roleId not found in roles array!', {
+                    contextRoleId: safeContext.roleId,
+                    availableRoles: roles.map(r => ({ id: r.id, name: r.name }))
+                });
+            }
+        }
+    }, [isOpen, editMode, safeContext.roleId, watchRoleId, roles, form]);
+
 
 
     // Resolve UUIDs for Group/SubGroup from Roster Data
     // Context only has Names (strings) from the Grid View, but DB needs UUIDs.
     const resolvedContext = useMemo(() => {
+        // 1. Resolve IDs from context (which comes from page banner/grid launch)
+        // RostersPlannerPage syncs banner scope to selectedDepartmentIds/selectedSubDepartmentIds
+        const orgId = safeContext.organizationId;
+        const deptId = safeContext.departmentId || safeContext.departmentIds?.[0];
+        const subDeptId = safeContext.subDepartmentId || safeContext.subDepartmentIds?.[0];
+
+        // 2. Resolve names from scopeTree (for display in HierarchyColumn)
+        // If IDs are missing (All Departments), info will be undefined, falling back to 'All...' labels
+        const orgInfo = scopeTree?.organizations?.find(o => o.id === orgId);
+        const deptInfo = orgInfo?.departments?.find(d => d.id === deptId);
+        const subDeptInfo = deptInfo?.subdepartments?.find(sd => sd.id === subDeptId);
+
         const roster = rosters.find(r => r.id === (selectedRosterId || safeContext.rosterId));
 
-        // Start with provided IDs, then fallback to Roster's defaults if missing
-        let departmentId = safeContext.departmentId || roster?.department_id;
-        let subDepartmentId = safeContext.subDepartmentId || roster?.sub_department_id;
         let groupId = safeContext.groupId;
         let subGroupId = safeContext.subGroupId;
 
@@ -156,15 +213,28 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
             }
         }
 
-        // Ensure we always return the most complete IDs possible
+        // 3. IMPORTANT: Sync hierarchy with roster scope if roster is found
+        // If the found roster is "Global" (null department), we should reflect that in the hierarchy
+        // instead of sticking to the restrictive launch context.
+        const effectiveDeptId = roster ? (roster.department_id || null) : deptId;
+        const effectiveSubDeptId = roster ? (roster.sub_department_id || null) : subDeptId;
+
+        // Re-resolve names based on effective IDs
+        const effectiveDeptInfo = orgInfo?.departments?.find(d => d.id === effectiveDeptId);
+        const effectiveSubDeptInfo = effectiveDeptInfo?.subdepartments?.find(sd => sd.id === effectiveSubDeptId);
+
         return {
             ...safeContext,
-            departmentId: departmentId || safeContext.departmentId,
-            subDepartmentId: subDepartmentId || safeContext.subDepartmentId,
+            organizationId: orgId,
+            organizationName: orgInfo?.name || safeContext.organizationName,
+            departmentId: effectiveDeptId,
+            departmentName: effectiveDeptInfo?.name || (effectiveDeptId === null ? 'All Departments' : safeContext.departmentName),
+            subDepartmentId: effectiveSubDeptId,
+            subDepartmentName: effectiveSubDeptInfo?.name || (effectiveSubDeptId === null ? 'All Sub-Departments' : safeContext.subDepartmentName),
             groupId: groupId || safeContext.groupId,
             subGroupId: subGroupId || safeContext.subGroupId
         };
-    }, [rosters, selectedRosterId, safeContext]);
+    }, [scope, scopeTree, rosters, selectedRosterId, safeContext]);
 
     // Hard validation
     const { hardValidation, employeeExistingShifts } = useHardValidation({
@@ -191,17 +261,55 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
     const selectedRemLevel = remunerationLevels.find((r) => r.id === watchRemLevel);
     const isNetLengthValid = netLength > 0 && netLength <= 12;
 
+    // Read-only checks
+    const isPast = useMemo(() => isDateInPast(watchShiftDate, watchTimezone), [watchShiftDate, watchTimezone]);
+    const isStarted = useMemo(
+        () => isShiftStarted(watchShiftDate, watchStart, watchTimezone),
+        [watchShiftDate, watchStart, watchTimezone]
+    );
+    const isPublished = useMemo(
+        () => !isTemplateMode && existingShift?.lifecycle_status === 'Published',
+        [isTemplateMode, existingShift]
+    );
+    const isReadOnly = isPast || isStarted || isPublished;
+
+    const isGridLaunch = safeContext.launchSource === 'grid';
+    const isEditModeSource = safeContext.launchSource === 'edit';
+
+    // Context checks
+    const hasDepartment = !!resolvedContext.departmentId;
+    // In edit mode, fall back to the existing shift's roster ID if context is missing
+    const derivedRosterId = selectedRosterId || safeContext.rosterId || (editMode ? existingShift?.roster_id : null);
+    const hasRoster = !!derivedRosterId;
+    const selectedRoster = useMemo(() => rosters.find(r => r.id === derivedRosterId), [rosters, derivedRosterId]);
+    // Managers must be able to add to draft rosters!
+    const isRosterActive = selectedRoster?.status === 'published' || selectedRoster?.status === 'draft';
+    const watchGroup = form.watch('group_type');
+    const watchSubGroupName = form.watch('sub_group_name');
+
     // Tab completion state
-    const tabCompletion = useMemo(() => ({
-        schedule: isTemplateMode
-            ? !!(watchStart && watchEnd)
-            : !!(watchStart && watchEnd && watchShiftDate),
-        role: !!watchRoleId,
-        requirements: (watchSkills?.length || 0) > 0 || (watchLicenses?.length || 0) > 0,
-        notes: !!form.watch('notes'),
-        system: true,
-        audit: true,
-    }), [watchStart, watchEnd, watchRoleId, watchSkills, watchLicenses, watchShiftDate, form, isTemplateMode]);
+    const tabCompletion = useMemo(() => {
+        if (isReadOnly) {
+            return {
+                schedule: true,
+                role: true,
+                requirements: true,
+                notes: true,
+                system: true,
+                audit: true,
+            };
+        }
+        return {
+            schedule: isTemplateMode
+                ? !!(watchStart && watchEnd)
+                : !!(watchStart && watchEnd && watchShiftDate && hasRoster && isRosterActive && watchGroup && watchSubGroupName),
+            role: !!watchRoleId,
+            requirements: (watchSkills?.length || 0) > 0 || (watchLicenses?.length || 0) > 0,
+            notes: !!form.watch('notes'),
+            system: true,
+            audit: true,
+        };
+    }, [isReadOnly, watchStart, watchEnd, watchRoleId, watchSkills, watchLicenses, watchShiftDate, form, isTemplateMode, hasRoster]);
 
     // Step navigation
     const {
@@ -216,36 +324,27 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
     } = useStepNavigation({
         isTemplateMode,
         tabCompletion,
-        isNetLengthValid,
-        watchRoleId,
-        complianceHasRun,
+        isNetLengthValid: isReadOnly ? true : isNetLengthValid,
+        watchRoleId: isReadOnly ? 'read-only' : watchRoleId,
+        complianceHasRun: isReadOnly ? true : complianceHasRun,
         hardValidation,
         complianceResults,
     });
 
-    const isGridLaunch = safeContext.launchSource === 'grid';
-    const isEditModeSource = safeContext.launchSource === 'edit';
 
-    // Context checks
-    const hasDepartment = !!resolvedContext.departmentId;
-    // In edit mode, fall back to the existing shift's roster ID if context is missing
-    const derivedRosterId = selectedRosterId || safeContext.rosterId || (editMode ? existingShift?.roster_id : null);
-    const hasRoster = !!derivedRosterId;
-
-    // Lock logic: Roster, Group, and Sub-Group should be locked if they come from Grid context or are being edited
-    // This ensures consistency within the selected view/context.
+    // Lock logic: Hierarchy is ALWAYS locked. Roster is locked if in grid/edit context.
+    // Group/Sub-group are locked ONLY in Group Mode.
     const isContextInherited = isGridLaunch || isEditModeSource;
     const isRosterLocked = isContextInherited && !!derivedRosterId;
-    const isGroupLocked = isContextInherited && (!!resolvedContext.groupId || !!resolvedContext.groupName || !!resolvedContext.group_type);
-    const isSubGroupLocked = isContextInherited && (!!resolvedContext.subGroupId || !!resolvedContext.subGroupName);
 
-    // Auto-select first available roster if none from context
-    useEffect(() => {
-        if (!derivedRosterId && !isTemplateMode && rosters.length > 0 && !selectedRosterId) {
-            console.log('[EnhancedAddShiftModal] Auto-selecting first available roster:', rosters[0].id);
-            setSelectedRosterId(rosters[0].id);
-        }
-    }, [derivedRosterId, isTemplateMode, rosters, selectedRosterId]);
+    // Strict Mode Locking as per User Requirements:
+    // Group Mode: Locked Group/SubGroup
+    // People Mode: Locked Employee
+    // Roles Mode: Locked Role
+    const isGroupLocked = isContextInherited && (!!resolvedContext.groupId || !!resolvedContext.groupName || !!resolvedContext.group_type) && safeContext.mode === 'group';
+    const isSubGroupLocked = isContextInherited && (!!resolvedContext.subGroupId || !!resolvedContext.subGroupName) && safeContext.mode === 'group';
+    const isRoleLocked = isContextInherited && safeContext.mode === 'roles' && !!safeContext.roleId;
+    const isEmployeeLocked = isContextInherited && safeContext.mode === 'people' && !!safeContext.employeeId;
 
     // Can user save the shift?
     // Only gate on core data steps (1-4), NOT compliance step.
@@ -269,17 +368,6 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
         return result;
     }, [isStepValid, hardValidation.passed, hasDepartment, hasRoster, isTemplateMode, derivedRosterId]);
 
-    // Read-only checks
-    const isPast = useMemo(() => isDateInPast(watchShiftDate, watchTimezone), [watchShiftDate, watchTimezone]);
-    const isStarted = useMemo(
-        () => isShiftStarted(watchShiftDate, watchStart, watchTimezone),
-        [watchShiftDate, watchStart, watchTimezone]
-    );
-    const isPublished = useMemo(
-        () => !isTemplateMode && existingShift?.lifecycle_status === 'Published',
-        [isTemplateMode, existingShift]
-    );
-    const isReadOnly = isPast || isStarted || isPublished;
 
     useEffect(() => {
         if (isOpen) {
@@ -450,7 +538,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
             } else {
                 toast({
                     title: 'Validation Error',
-                    description: `Please check all required fields. Department: ${hasDepartment}, Roster: ${hasRoster}`,
+                    description: `Please check all required fields: ${!hasDepartment ? 'Department ' : ''}${!hasRoster ? 'Roster ' : ''}${!watchRoleId ? 'Role ' : ''}`.trim(),
                     variant: 'destructive',
                 });
             }
@@ -668,6 +756,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
                                         isSubGroupLocked={isSubGroupLocked}
                                         isRosterLocked={isRosterLocked}
                                         context={resolvedContext}
+                                        activeSubGroups={activeSubGroups}
                                     />
                                 )}
 
@@ -683,7 +772,8 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = ({
                                         netLength={netLength}
                                         selectedRemLevel={selectedRemLevel}
                                         safeContext={resolvedContext}
-                                        isRoleLocked={!!resolvedContext.roleId}
+                                        isRoleLocked={isRoleLocked}
+                                        isEmployeeLocked={isEmployeeLocked}
                                     />
                                 )}
 

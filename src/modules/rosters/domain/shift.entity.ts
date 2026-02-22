@@ -144,8 +144,14 @@ export interface Shift {
     roles?: { id: string; name: string } | null;
     remuneration_levels?: {
         id: string;
+        level_number: number;
         level_name: string;
         hourly_rate_min: number;
+        hourly_rate_max?: number;
+    } | null;
+    assigned_profiles?: {
+        first_name: string;
+        last_name: string;
     } | null;
     roster_subgroup?: {
         name: string;

@@ -471,51 +471,53 @@ const NewRostersPage: React.FC = () => {
 
   // ==================== RENDER ====================
   return (
-    <div className="flex flex-col h-full min-h-0 bg-transparent">
+    <div className="flex flex-col h-full min-h-0 bg-[#030405] overflow-hidden">
       {/* Scope Filter */}
       <ScopeFilterBanner
         mode="managerial"
         onScopeChange={setScope}
         hidden={isGammaLocked}
         multiSelect={false}
-        className="m-3 mb-0"
+        className="m-4 mb-2 relative z-[20]"
       />
 
       {/* Function Bar */}
-      <RosterFunctionBar
-        // Context state
-        selectedOrganizationId={selectedOrganizationId}
-        selectedRosterId={selectedRosterId}
-        selectedDepartmentId={selectedDepartmentIds[0] || null}
-        selectedSubDepartmentId={selectedSubDepartmentIds[0] || null}
-        // Context callbacks
-        onRosterChange={setSelectedRosterId}
-        // Ghost Cell Navigation - receive template date bounds
-        onTemplateDatesChange={(startDate, endDate) => {
-          setTemplateStartDate(startDate);
-          setTemplateEndDate(endDate);
-        }}
-        // Date & View
-        selectedDate={selectedDate}
-        viewType={viewType}
-        onDateChange={setSelectedDate}
-        onViewTypeChange={handleViewTypeChange}
-        // Toggle states
-        showAvailabilities={showAvailabilities}
-        showUnfilledPanel={showUnfilledPanel}
-        isRefreshing={isRefreshing}
-        // Toggle callbacks
-        onAvailabilitiesToggle={() => setShowAvailabilities(!showAvailabilities)}
-        onUnfilledPanelToggle={() => setShowUnfilledPanel(!showUnfilledPanel)}
-        onRefresh={handleRefresh}
-        onFiltersClick={() => setShowFilters(!showFilters)}
-        // Actions
-        onPublishRoster={handlePublishRoster}
-        canEdit={canEdit}
-        // Bulk Mode
-        isBulkMode={bulkModeActive}
-        onBulkModeToggle={() => setBulkModeActive(!bulkModeActive)}
-      />
+      <div className="relative z-[10]">
+        <RosterFunctionBar
+          // Context state
+          selectedOrganizationId={selectedOrganizationId}
+          selectedRosterId={selectedRosterId}
+          selectedDepartmentId={selectedDepartmentIds[0] || null}
+          selectedSubDepartmentId={selectedSubDepartmentIds[0] || null}
+          // Context callbacks
+          onRosterChange={setSelectedRosterId}
+          // Ghost Cell Navigation - receive template date bounds
+          onTemplateDatesChange={(startDate, endDate) => {
+            setTemplateStartDate(startDate);
+            setTemplateEndDate(endDate);
+          }}
+          // Date & View
+          selectedDate={selectedDate}
+          viewType={viewType}
+          onDateChange={setSelectedDate}
+          onViewTypeChange={handleViewTypeChange}
+          // Toggle states
+          showAvailabilities={showAvailabilities}
+          showUnfilledPanel={showUnfilledPanel}
+          isRefreshing={isRefreshing}
+          // Toggle callbacks
+          onAvailabilitiesToggle={() => setShowAvailabilities(!showAvailabilities)}
+          onUnfilledPanelToggle={() => setShowUnfilledPanel(!showUnfilledPanel)}
+          onRefresh={handleRefresh}
+          onFiltersClick={() => setShowFilters(!showFilters)}
+          // Actions
+          onPublishRoster={handlePublishRoster}
+          canEdit={canEdit}
+          // Bulk Mode
+          isBulkMode={bulkModeActive}
+          onBulkModeToggle={() => setBulkModeActive(!bulkModeActive)}
+        />
+      </div>
 
       {/* Mode Selector row REMOVED - now integrated into FunctionBar */}
 
@@ -612,10 +614,13 @@ const NewRostersPage: React.FC = () => {
 
           {activeMode === 'roles' && (
             <RolesModeView
-
               selectedDate={selectedDate}
               viewType={viewType}
               canEdit={canEdit}
+              organizationId={selectedOrganizationId || undefined}
+              departmentIds={selectedDepartmentIds}
+              subDepartmentIds={selectedSubDepartmentIds}
+              rosterId={selectedRosterId || undefined}
             />
           )}
         </div>

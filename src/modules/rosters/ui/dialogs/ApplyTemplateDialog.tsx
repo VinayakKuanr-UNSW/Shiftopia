@@ -1,25 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     Dialog,
     DialogContent,
-    DialogHeader,
     DialogTitle,
-    DialogFooter,
-    DialogDescription
+    DialogDescription,
 } from '@/modules/core/ui/primitives/dialog';
 import { Button } from '@/modules/core/ui/primitives/button';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { useTemplates } from '@/modules/rosters/state/useRosterShifts';
-import { useApplyTemplate, useClearTemplate } from '../../state/useRosterMutations';
-import { useTemplateHistory } from '@/modules/templates/hooks/queries/useTemplateQueries';
-import { format, isWithinInterval, startOfMonth, endOfMonth, differenceInDays, parseISO } from 'date-fns';
-import { Check, CopyPlus, Info, AlertTriangle, Loader2, Trash2, History, User, Calendar as CalendarIcon, RotateCcw } from 'lucide-react';
+import { useApplyTemplate } from '@/modules/rosters/state/useRosterMutations';
+import { useTemplateHistory, useUndoTemplateBatch } from '@/modules/templates/hooks/queries/useTemplateQueries';
+import { useRostersByDateRange } from '@/modules/rosters/state/useEnhancedRosters';
+import { format, isWithinInterval, startOfMonth, endOfMonth, differenceInDays, parseISO, addDays } from 'date-fns';
+import {
+    Check,
+    CopyPlus,
+    Info,
+    AlertTriangle,
+    Loader2,
+    History,
+    User,
+    Calendar as CalendarIcon,
+    RotateCcw,
+    LayoutGrid,
+    ChevronRight,
+    ArrowRight,
+    Search,
+    Clock,
+    X,
+    Layers,
+    Sparkles
+} from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { useAuth } from '@/platform/auth/useAuth';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
-import { Switch } from '@/modules/core/ui/primitives/switch';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Separator } from '@/modules/core/ui/primitives/separator';
+import { toast } from 'sonner';
 
 interface ApplyTemplateDialogProps {
     isOpen: boolean;
@@ -32,106 +51,75 @@ interface ApplyTemplateDialogProps {
     rosterId: string | null;
 }
 
-import { useUndoTemplateBatch } from '@/modules/templates/hooks/queries/useTemplateQueries';
-
-const UndoButton: React.FC<{ batchId: string }> = ({ batchId }) => {
+const HistoryItem: React.FC<{ batch: any }> = ({ batch }) => {
     const undo = useUndoTemplateBatch();
-    const [confirming, setConfirming] = useState(false);
+    const [isConfirming, setIsConfirming] = useState(false);
 
-    const handleUndo = async (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (!confirming) {
-            setConfirming(true);
-            setTimeout(() => setConfirming(false), 3000);
+    const handleUndo = async () => {
+        if (!isConfirming) {
+            setIsConfirming(true);
+            setTimeout(() => setIsConfirming(false), 3000);
             return;
         }
-        await undo.mutateAsync({ batchId });
+        try {
+            await undo.mutateAsync({ batchId: batch.id });
+            toast.success('Sequence reversed successfully');
+        } catch (err) {
+            toast.error('Failed to undo application');
+        }
     };
 
     return (
-        <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-                "h-6 w-6 rounded-md transition-all",
-                confirming
-                    ? "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 hover:text-amber-300"
-                    : "text-slate-600 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover/item:opacity-100"
-            )}
-            onClick={handleUndo}
-            disabled={undo.isPending}
+        <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="group relative bg-white/[0.02] border border-white/5 rounded-2xl p-4 hover:bg-white/[0.04] transition-all"
         >
-            {undo.isPending ? (
-                <Loader2 className="h-2.5 w-2.5 animate-spin" />
-            ) : confirming ? (
-                <RotateCcw className="h-2.5 w-2.5" />
-            ) : (
-                <RotateCcw className="h-2.5 w-2.5" />
-            )}
-        </Button>
-    );
-};
-
-const HistoryList: React.FC<{ templateId: string }> = ({ templateId }) => {
-    const { data: history = [], isLoading } = useTemplateHistory(templateId);
-
-    if (isLoading) {
-        return (
-            <div className="flex items-center gap-2 py-4 pl-12 text-[10px] text-slate-500">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>Loading history...</span>
-            </div>
-        );
-    }
-
-    if (history.length === 0) {
-        return (
-            <div className="py-3 pl-12 text-[10px] text-slate-600 italic">
-                No previous applications recorded.
-            </div>
-        );
-    }
-
-    return (
-        <div className="mt-3 pl-12 space-y-2 border-l border-white/5 ml-4">
-            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                <History className="h-3 w-3" />
-                Application History
-            </div>
-            <div className="max-h-[120px] overflow-y-auto pr-2 space-y-2 custom-scrollbar">
-                {history.map((batch) => (
-                    <div key={batch.id} className="bg-white/[0.02] border border-white/5 rounded-lg p-2.5 relative group/item hover:bg-white/[0.04] transition-colors">
-                        <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2">
-                                <div className="h-4.5 w-4.5 rounded-full bg-slate-800 flex items-center justify-center border border-white/10 flex-shrink-0">
-                                    <User className="h-2.5 w-2.5 text-slate-400" />
-                                </div>
-                                <span className="text-[10px] font-bold text-slate-300">
-                                    {batch.appliedByName || 'Unknown User'}
-                                </span>
-                            </div>
-                            <span className="text-[9px] text-slate-500 font-medium">
-                                {format(new Date(batch.appliedAt), 'MMM d, h:mm a')}
-                            </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <div className="text-[10px] text-slate-400 flex items-center gap-1.5 pl-0.5">
-                                <CalendarIcon className="h-3 w-3 opacity-40" />
-                                <span className="font-medium">{format(new Date(batch.startDate), 'MMM d')}</span>
-                                <span className="opacity-30">→</span>
-                                <span className="font-medium">{format(new Date(batch.endDate), 'MMM d')}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-[8px] h-4 px-1.5 py-0 leading-none bg-white/5 border-white/10 text-slate-500 font-bold uppercase tracking-tighter">
-                                    {batch.source === 'templates_page' ? 'Direct' : 'Modal'}
-                                </Badge>
-                                <UndoButton batchId={batch.id} />
-                            </div>
-                        </div>
+            <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2.5">
+                    <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500/20 to-indigo-500/20 flex items-center justify-center border border-blue-500/30">
+                        <User className="h-3.5 w-3.5 text-blue-400" />
                     </div>
-                ))}
+                    <div className="flex flex-col">
+                        <span className="text-[11px] font-bold text-slate-200 leading-none">{batch.appliedByName || 'System'}</span>
+                        <span className="text-[9px] text-slate-500 font-medium uppercase tracking-tighter mt-1">
+                            {format(new Date(batch.appliedAt), 'MMM d, HH:mm')}
+                        </span>
+                    </div>
+                </div>
             </div>
-        </div>
+
+            <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono bg-black/40 px-2 py-1 rounded-md border border-white/5">
+                    <CalendarIcon className="h-3 w-3 opacity-50" />
+                    <span>{format(new Date(batch.startDate), 'MM/dd')}</span>
+                    <ArrowRight className="h-2.5 w-2.5 opacity-30 px-0.5" />
+                    <span>{format(new Date(batch.endDate), 'MM/dd')}</span>
+                </div>
+
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleUndo}
+                    disabled={undo.isPending}
+                    className={cn(
+                        "h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                        isConfirming
+                            ? "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/30"
+                            : "text-slate-500 hover:text-red-400 hover:bg-red-500/10 border border-transparent"
+                    )}
+                >
+                    {undo.isPending ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                        <div className="flex items-center gap-1.5">
+                            <RotateCcw className="h-3 w-3" />
+                            <span>{isConfirming ? 'Confirm?' : 'Undo'}</span>
+                        </div>
+                    )}
+                </Button>
+            </div>
+        </motion.div>
     );
 };
 
@@ -151,302 +139,374 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
         departmentId || undefined
     );
     const applyTemplate = useApplyTemplate();
-    const clearTemplate = useClearTemplate();
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     const [startDate, setStartDate] = useState<string>(format(selectedDate, 'yyyy-MM-dd'));
     const [endDate, setEndDate] = useState<string>(format(selectedDate, 'yyyy-MM-dd'));
-    const [forceStack, setForceStack] = useState(false);
 
-    const monthStart = startOfMonth(selectedDate);
-    const monthEnd = endOfMonth(selectedDate);
+    const parsedStart = useMemo(() => parseISO(startDate), [startDate]);
+    const parsedEnd = useMemo(() => parseISO(endDate), [endDate]);
 
-    const parsedStart = parseISO(startDate);
-    const parsedEnd = parseISO(endDate);
+    const isRangeValid = useMemo(() => parsedStart <= parsedEnd, [parsedStart, parsedEnd]);
+    const daysCount = useMemo(() => isRangeValid ? differenceInDays(parsedEnd, parsedStart) + 1 : 0, [isRangeValid, parsedStart, parsedEnd]);
 
-    const isRangeValid = parsedStart <= parsedEnd;
-    const isWithinMonth =
-        isWithinInterval(parsedStart, { start: monthStart, end: monthEnd }) &&
-        isWithinInterval(parsedEnd, { start: monthStart, end: monthEnd });
+    const { data: existingRostersByRange = [] } = useRostersByDateRange(
+        startDate,
+        endDate,
+        departmentId || ''
+    );
 
-    const daysCount = isRangeValid ? differenceInDays(parsedEnd, parsedStart) + 1 : 0;
+    const { data: history = [], isLoading: isLoadingHistory } = useTemplateHistory(selectedId || undefined);
 
-    const error = !isRangeValid ? "End date cannot be before start date" :
-        !isWithinMonth ? `Dates must be within ${format(selectedDate, 'MMMM yyyy')}` :
-            null;
+    const activatedDays = useMemo(() => new Set(existingRostersByRange?.map(r => r.startDate)), [existingRostersByRange]);
+    const isFullyActivated = useMemo(() => {
+        if (!isRangeValid || daysCount <= 0) return false;
+        return Array.from({ length: daysCount }).every((_, i) => {
+            const d = format(addDays(parsedStart, i), 'yyyy-MM-dd');
+            return activatedDays.has(d);
+        });
+    }, [isRangeValid, daysCount, parsedStart, activatedDays]);
+
+    const isRangeOverMonth = daysCount > 31;
+    const error = !isRangeValid ? "End date precedes start date" :
+        !isFullyActivated ? "Range contains unactivated rosters" : null;
+
+    const filteredTemplates = useMemo(() =>
+        templates.filter(t =>
+            t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            t.description?.toLowerCase().includes(searchQuery.toLowerCase())
+        ), [templates, searchQuery]
+    );
 
     const handleApply = async () => {
-        if (!selectedId || !user || !isRangeValid || !isWithinMonth) return;
+        if (!selectedId || !user || !isRangeValid) return;
 
-        await applyTemplate.mutateAsync({
-            templateId: selectedId,
-            startDate,
-            endDate,
-            userId: user.id,
-            forceStack,
-            source: 'roster_modal'
-        });
-
-        onOpenChange(false);
-        setSelectedId(null);
+        try {
+            await applyTemplate.mutateAsync({
+                templateId: selectedId,
+                startDate,
+                endDate,
+                userId: user.id,
+                source: 'roster_modal',
+                targetDepartmentId: departmentId || undefined,
+                targetSubDepartmentId: subDepartmentId || undefined
+            });
+            toast.success('Template sequence injected successfully');
+            onOpenChange(false);
+            setSelectedId(null);
+        } catch (err) {
+            toast.error('Failed to apply template');
+        }
     };
 
-    const handleUnapply = async (tId: string) => {
-        if (!rosterId || !user) return;
-        await clearTemplate.mutateAsync({
-            rosterId,
-            templateId: tId,
-            userId: user.id
-        });
-    };
+    const selectedTemplate = templates.find(t => t.id === selectedId);
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-hidden flex flex-col bg-slate-950 border-white/10 text-white p-0">
-                <DialogHeader className="p-6 pb-0">
-                    <div className="flex items-center gap-3 mb-1">
-                        <div className="h-10 w-10 rounded-xl bg-blue-500/20 flex items-center justify-center border border-blue-500/30">
-                            <CopyPlus className="h-5 w-5 text-blue-400" />
-                        </div>
-                        <div>
-                            <DialogTitle className="text-xl font-bold tracking-tight text-white">Apply Template</DialogTitle>
-                            <DialogDescription className="text-slate-400 text-sm">
-                                Apply template shifts across a custom date range
-                            </DialogDescription>
-                        </div>
-                    </div>
-                </DialogHeader>
+            <DialogContent
+                className="sm:max-w-[1040px] h-[720px] max-h-[85vh] bg-[#0A0C0E] border border-white/10 p-0 overflow-hidden shadow-[0_0_80px_-15px_rgba(0,0,0,0.8)] flex flex-col rounded-[2.5rem] [&>button]:hidden z-[150]"
+            >
+                <VisuallyHidden>
+                    <DialogTitle>Apply Template to Roster</DialogTitle>
+                    <DialogDescription>
+                        Select a template sequence from the library, configure the date range, and inject it into your roster.
+                    </DialogDescription>
+                </VisuallyHidden>
 
-                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 custom-scrollbar">
-                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 flex gap-3 text-xs text-blue-200/80 leading-relaxed">
-                        <Info className="h-4 w-4 text-blue-400 flex-shrink-0" />
-                        <p>
-                            Applying a template will <strong>append</strong> its defined shifts to the current day.
-                            Existing shifts and structure will be preserved.
-                        </p>
-                    </div>
+                <div className="flex flex-1 h-full min-h-0">
 
-                    <div className="space-y-2">
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="start-date" className="text-[11px] font-bold text-slate-400 uppercase tracking-tight">Start Date</Label>
-                                    <Input
-                                        id="start-date"
-                                        type="date"
-                                        value={startDate}
-                                        onChange={(e) => setStartDate(e.target.value)}
-                                        className="bg-white/5 border-white/10 text-xs h-10 focus:ring-blue-500/50 rounded-xl"
-                                    />
+                    {/* LEFT PANE: LIBRARY */}
+                    <div className="w-[280px] border-r border-white/5 flex flex-col bg-[#0D0F12]">
+                        <div className="p-10 pb-8">
+                            <div className="flex items-center gap-4 mb-10">
+                                <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-600/20 to-blue-400/10 flex items-center justify-center border border-blue-500/20 shadow-lg shadow-blue-500/5">
+                                    <Layers className="h-5 w-5 text-blue-400" />
                                 </div>
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="end-date" className="text-[11px] font-bold text-slate-400 uppercase tracking-tight">End Date</Label>
-                                    <Input
-                                        id="end-date"
-                                        type="date"
-                                        value={endDate}
-                                        onChange={(e) => setEndDate(e.target.value)}
-                                        className="bg-white/5 border-white/10 text-xs h-10 focus:ring-blue-500/50 rounded-xl"
-                                    />
+                                <div className="flex flex-col">
+                                    <h2 className="text-lg font-black text-white tracking-tight leading-none">Library</h2>
+                                    <p className="text-[9px] text-slate-500 uppercase font-black tracking-[0.15em] mt-1.5 opacity-60">
+                                        Published Assets
+                                    </p>
                                 </div>
                             </div>
 
-                            {daysCount > 0 && !error && (
-                                <div className="flex items-center gap-2 px-1">
-                                    <Check className="h-3 w-3 text-emerald-400" />
-                                    <span className="text-[11px] font-medium text-slate-300">Applying to {daysCount} {daysCount === 1 ? 'day' : 'days'}</span>
-                                </div>
-                            )}
+                            <div className="relative group">
+                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-600 group-focus-within:text-blue-400 transition-colors" />
+                                <Input
+                                    placeholder="Search sequences..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="bg-black/40 border-white/10 pl-10 text-xs h-10 focus:ring-1 focus:ring-blue-500/40 rounded-xl placeholder:text-slate-700 font-medium"
+                                />
+                            </div>
+                        </div>
 
-                            {error && (
-                                <div className="flex items-center gap-1.5 px-1 text-[11px] text-red-400 font-medium bg-red-500/5 border border-red-500/10 p-2 rounded-lg">
-                                    <AlertTriangle className="h-3.5 w-3.5" />
-                                    {error}
+                        <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-2.5 custom-scrollbar">
+                            {isLoadingTemplates ? (
+                                <div className="flex flex-col items-center justify-center py-24 gap-4 opacity-50">
+                                    <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Indexing...</span>
                                 </div>
+                            ) : filteredTemplates.length === 0 ? (
+                                <div className="text-center py-24">
+                                    <div className="h-12 w-12 rounded-full border border-dashed border-white/10 flex items-center justify-center mx-auto mb-4 scale-75 opacity-20">
+                                        <Search className="h-6 w-6" />
+                                    </div>
+                                    <p className="text-[11px] text-slate-600 font-bold uppercase tracking-widest">No Matches</p>
+                                </div>
+                            ) : (
+                                filteredTemplates.map((t) => (
+                                    <button
+                                        key={t.id}
+                                        onClick={() => setSelectedId(t.id)}
+                                        className={cn(
+                                            "w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between group relative overflow-hidden active:scale-[0.98]",
+                                            selectedId === t.id
+                                                ? "bg-blue-600/10 border-blue-500/40 shadow-[0_0_20px_-5px_rgba(59,130,246,0.2)]"
+                                                : "bg-[#121418] border-white/5 hover:border-white/10 hover:bg-[#16191D]"
+                                        )}
+                                    >
+                                        <div className="flex items-center gap-4 relative z-10">
+                                            <div className={cn(
+                                                "h-10 w-10 rounded-xl flex items-center justify-center border transition-all shadow-sm",
+                                                selectedId === t.id
+                                                    ? "bg-blue-600 border-blue-400 text-white"
+                                                    : "bg-black/40 border-white/5 text-slate-500 group-hover:text-slate-300"
+                                            )}>
+                                                <CopyPlus className="h-4.5 w-4.5" />
+                                            </div>
+                                            <div>
+                                                <div className={cn(
+                                                    "text-[14px] font-black tracking-tight transition-colors",
+                                                    selectedId === t.id ? "text-white" : "text-slate-400 group-hover:text-slate-200"
+                                                )}>{t.name}</div>
+                                                <div className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mt-0.5">
+                                                    {t.appliedCount ?? 0} Uses
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <ChevronRight className={cn(
+                                            "h-4 w-4 transition-all duration-300",
+                                            selectedId === t.id ? "text-blue-400 translate-x-1 opacity-100" : "text-slate-800 opacity-0 group-hover:opacity-100"
+                                        )} />
+                                    </button>
+                                ))
                             )}
                         </div>
                     </div>
 
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
-                        <div className="space-y-0.5">
-                            <Label htmlFor="stack-shifts" className="text-sm font-semibold text-white/90">Stack Shifts</Label>
-                            <p className="text-[11px] text-slate-400">Inject shifts even if they already exist</p>
-                        </div>
-                        <Switch
-                            id="stack-shifts"
-                            checked={forceStack}
-                            onCheckedChange={setForceStack}
-                            className="data-[state=checked]:bg-blue-600"
-                        />
-                    </div>
+                    {/* MIDDLE PANE: EDITOR */}
+                    <div className="flex-1 flex flex-col bg-[#0A0C0E] relative overflow-hidden">
 
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 pl-1">
-                            Available Templates
-                        </label>
+                        {/* Static background flare */}
+                        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/5 blur-[120px] rounded-full pointer-events-none" />
+                        <div className="absolute bottom-[-5%] right-[-5%] w-[30%] h-[30%] bg-indigo-600/5 blur-[100px] rounded-full pointer-events-none" />
 
-                        <div className="space-y-2.5 pr-1">
-                            <AnimatePresence mode="popLayout">
-                                {isLoadingTemplates ? (
-                                    <motion.div
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        className="flex flex-col items-center justify-center py-10 text-slate-500 gap-2"
-                                    >
-                                        <Loader2 className="h-6 w-6 animate-spin" />
-                                        <span className="text-xs">Gathering available templates...</span>
-                                    </motion.div>
-                                ) : templates.length === 0 ? (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        className="text-center py-8 border border-dashed border-white/10 rounded-xl text-slate-500 text-sm"
-                                    >
-                                        No templates found for this department.
-                                    </motion.div>
-                                ) : (
-                                    templates.map((t, index) => {
-                                        const isApplied = appliedTemplateIds.includes(t.id);
-                                        const isSelected = selectedId === t.id;
+                        <AnimatePresence mode="wait">
+                            {selectedTemplate ? (
+                                <motion.div
+                                    key={selectedTemplate.id}
+                                    initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.98, y: -10 }}
+                                    transition={{ duration: 0.3, ease: "easeOut" }}
+                                    className="flex-1 flex flex-col p-10 relative z-10"
+                                >
+                                    <div className="max-w-[480px] mx-auto w-full flex flex-col h-full">
+                                        {/* Selection Header */}
+                                        <div className="mb-12 text-center">
+                                            <div className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full bg-blue-600/10 border border-blue-500/20 shadow-inner shadow-blue-500/5">
+                                                <Sparkles className="h-3 w-3 text-blue-400" />
+                                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400">
+                                                    Injection Sequence
+                                                </span>
+                                            </div>
+                                            <h2 className="text-3xl font-black text-white tracking-tighter leading-none mb-4">
+                                                {selectedTemplate.name}
+                                            </h2>
+                                            <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-[400px] mx-auto">
+                                                {selectedTemplate.description || 'Professional workforce distribution pattern calibrated for this department.'}
+                                            </p>
+                                        </div>
 
-                                        return (
-                                            <div key={t.id} className="space-y-1">
-                                                <motion.div
-                                                    initial={{ opacity: 0, x: -10 }}
-                                                    animate={{ opacity: 1, x: 0 }}
-                                                    transition={{ delay: index * 0.05 }}
-                                                    onClick={() => setSelectedId(isSelected ? null : t.id)}
+                                        <div className="flex-1 flex flex-col justify-center gap-10">
+                                            {/* Date Config */}
+                                            <div className="space-y-6 bg-white/[0.02] border border-white/5 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
+                                                {/* Card inner flare */}
+                                                <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/5 blur-3xl rounded-full" />
+
+                                                <div className="flex items-center gap-2.5 opacity-60">
+                                                    <Clock className="h-4 w-4 text-blue-400" />
+                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-200">Execution Range</span>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-8 relative z-10">
+                                                    <div className="space-y-3">
+                                                        <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Start Point</Label>
+                                                        <Input
+                                                            type="date"
+                                                            value={startDate}
+                                                            onChange={(e) => setStartDate(e.target.value)}
+                                                            className="bg-black/60 border-white/5 text-white focus:ring-blue-500/40 rounded-2xl font-mono text-sm h-12 shadow-inner px-4"
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-3">
+                                                        <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">End Point</Label>
+                                                        <Input
+                                                            type="date"
+                                                            value={endDate}
+                                                            onChange={(e) => setEndDate(e.target.value)}
+                                                            className="bg-black/60 border-white/5 text-white focus:ring-blue-500/40 rounded-2xl font-mono text-sm h-12 shadow-inner px-4"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <AnimatePresence>
+                                                    {error ? (
+                                                        <motion.div
+                                                            initial={{ height: 0, opacity: 0 }}
+                                                            animate={{ height: "auto", opacity: 1 }}
+                                                            exit={{ height: 0, opacity: 0 }}
+                                                            className="flex items-center gap-3 p-4 bg-red-500/5 border border-red-500/20 rounded-2xl text-red-500"
+                                                        >
+                                                            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                                                            <span className="text-[11px] font-black uppercase tracking-tight">{error}</span>
+                                                        </motion.div>
+                                                    ) : (
+                                                        <motion.div
+                                                            initial={{ opacity: 0 }}
+                                                            animate={{ opacity: 1 }}
+                                                            className="flex items-center gap-3 px-2 py-1"
+                                                        >
+                                                            <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_10px_rgba(59,130,246,0.8)]" />
+                                                            <span className="text-[11px] font-bold text-slate-400">
+                                                                Ready to inject <span className="text-white text-xs px-1.5 py-0.5 bg-white/5 rounded-md border border-white/5 mx-0.5">{daysCount}</span> shifts instances
+                                                            </span>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
+
+                                            {/* Action Button */}
+                                            <div className="flex items-center gap-4">
+                                                <Button
+                                                    variant="ghost"
+                                                    onClick={() => onOpenChange(false)}
+                                                    className="h-16 px-8 rounded-[1.5rem] font-black text-xs uppercase tracking-widest text-slate-500 hover:text-white hover:bg-white/5 transition-all"
+                                                >
+                                                    Cancel
+                                                </Button>
+                                                <Button
+                                                    onClick={handleApply}
+                                                    disabled={!selectedId || applyTemplate.isPending || !isRangeValid || !isFullyActivated}
                                                     className={cn(
-                                                        "w-full text-left p-3.5 rounded-2xl border transition-all flex items-center justify-between group relative overflow-hidden cursor-pointer",
-                                                        isSelected
-                                                            ? "bg-blue-500/10 border-blue-500/40 ring-1 ring-blue-500/20 shadow-lg shadow-blue-500/5"
-                                                            : "bg-white/5 border-white/5 hover:border-white/20 hover:bg-white/10"
+                                                        "flex-1 h-16 rounded-[1.5rem] font-black text-md uppercase tracking-[0.2em] transition-all relative overflow-hidden active:scale-[0.97]",
+                                                        !selectedId || !isFullyActivated
+                                                            ? "bg-[#1A1D21] text-slate-700 cursor-not-allowed border-white/5"
+                                                            : "bg-blue-600 hover:bg-blue-500 text-white shadow-[0_20px_40px_-10px_rgba(37,99,235,0.3)] border-b-4 border-blue-800"
                                                     )}
                                                 >
-                                                    {/* Selection Glow */}
-                                                    {isSelected && (
-                                                        <motion.div
-                                                            layoutId="glow"
-                                                            className="absolute inset-0 bg-blue-500/5 pointer-events-none"
-                                                        />
+                                                    {applyTemplate.isPending ? (
+                                                        <div className="flex items-center gap-3">
+                                                            <Loader2 className="h-5 w-5 animate-spin" />
+                                                            <span>Executing...</span>
+                                                        </div>
+                                                    ) : !selectedId ? (
+                                                        "Select Template to Continue"
+                                                    ) : !isFullyActivated ? (
+                                                        "Roster Activation Required"
+                                                    ) : (
+                                                        <div className="flex items-center gap-3">
+                                                            <span>Inject</span>
+                                                            <Check className="h-5 w-5" />
+                                                        </div>
                                                     )}
-
-                                                    <div className="flex items-center gap-3.5 relative z-10 w-full">
-                                                        <div className={cn(
-                                                            "h-9 w-9 rounded-xl flex items-center justify-center border transition-all shadow-inner",
-                                                            isSelected
-                                                                ? "bg-blue-600 border-blue-400 text-white shadow-blue-500/20"
-                                                                : "bg-slate-800 border-white/5 text-slate-400 group-hover:border-white/10 group-hover:text-slate-300"
-                                                        )}>
-                                                            <CopyPlus className="h-4.5 w-4.5" />
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="text-sm font-bold tracking-tight text-white/95 truncate">{t.name}</div>
-                                                                {t.appliedCount > 0 && (
-                                                                    <Badge variant="secondary" className="bg-slate-800 text-slate-400 border-white/5 text-[8px] h-4 px-1.5 flex items-center gap-1 font-bold">
-                                                                        <History className="h-2.5 w-2.5" />
-                                                                        {t.appliedCount}
-                                                                    </Badge>
-                                                                )}
-                                                            </div>
-                                                            <div className="text-[10px] font-medium text-slate-500 uppercase tracking-widest truncate">{t.description || 'Standard Sequence'}</div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="flex items-center gap-2 relative z-10">
-                                                        {isApplied && (
-                                                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[9px] font-bold uppercase tracking-wider h-5 px-1.5">
-                                                                Active
-                                                            </Badge>
-                                                        )}
-                                                        <div
-                                                            className={cn(
-                                                                "h-8 w-8 rounded-lg transition-all flex items-center justify-center",
-                                                                isSelected
-                                                                    ? "bg-blue-500/20 text-blue-400"
-                                                                    : "text-slate-500 hover:text-white hover:bg-white/10"
-                                                            )}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setSelectedId(isSelected ? null : t.id);
-                                                            }}
-                                                        >
-                                                            <History className={cn("h-4 w-4", isSelected && "animate-pulse")} />
-                                                        </div>
-                                                    </div>
-                                                </motion.div>
-
-                                                {isSelected && (
-                                                    <motion.div
-                                                        initial={{ opacity: 0, height: 0 }}
-                                                        animate={{ opacity: 1, height: 'auto' }}
-                                                        exit={{ opacity: 0, height: 0 }}
-                                                        className="overflow-hidden"
-                                                    >
-                                                        <HistoryList templateId={t.id.toString()} />
-                                                    </motion.div>
-                                                )}
+                                                </Button>
                                             </div>
-                                        );
-                                    })
-                                )}
-                            </AnimatePresence>
+
+                                            <div className="flex items-center gap-4 px-2 opacity-40 hover:opacity-100 transition-opacity">
+                                                <Info className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                                                <p className="text-[10px] font-semibold text-slate-500 leading-relaxed uppercase tracking-widest">
+                                                    Injecting will append shifts to existing data for the selected range.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            ) : (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    className="h-full flex flex-col items-center justify-center text-center p-12"
+                                >
+                                    <div className="h-32 w-32 rounded-[2.5rem] bg-gradient-to-br from-white/[0.03] to-white/[0.01] border border-white/5 flex items-center justify-center mb-10 shadow-2xl">
+                                        <Layers className="h-12 w-12 text-slate-700 animate-pulse" />
+                                    </div>
+                                    <h3 className="text-2xl font-black text-white mb-3 tracking-tighter">System Idle</h3>
+                                    <p className="text-sm text-slate-500 max-w-[280px] font-medium leading-relaxed">
+                                        Select an distribution asset from the library to configure deployment.
+                                    </p>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
+                    {/* RIGHT PANE: HISTORY */}
+                    <div className="w-[300px] border-l border-white/5 flex flex-col bg-[#0D0F12]">
+                        <div className="p-10 pb-8">
+                            <div className="flex items-center justify-between mb-10">
+                                <div className="flex items-center gap-4">
+                                    <div className="h-10 w-10 rounded-2xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
+                                        <History className="h-5 w-5 text-amber-500" />
+                                    </div>
+                                    <h2 className="text-md font-black text-white tracking-tight leading-none uppercase tracking-widest text-xs opacity-80">History</h2>
+                                </div>
+                                <Badge variant="outline" className="text-[9px] font-black border-white/5 bg-white/[0.03] text-slate-500 px-2 py-0.5 rounded-full">
+                                    {history.length} LOGS
+                                </Badge>
+                            </div>
+
+                            <Separator className="bg-white/5" />
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto px-8 pb-10 space-y-5 custom-scrollbar">
+                            {!selectedId ? (
+                                <div className="h-full flex flex-col items-center justify-center opacity-10 py-20">
+                                    <Clock className="h-10 w-10 mb-4" />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">Select Item</span>
+                                </div>
+                            ) : isLoadingHistory ? (
+                                <div className="py-24 text-center opacity-30">
+                                    <Loader2 className="h-6 w-6 animate-spin mx-auto mb-4" />
+                                    <span className="text-[10px] uppercase font-black tracking-widest">Reading logs...</span>
+                                </div>
+                            ) : history.length === 0 ? (
+                                <div className="py-24 text-center border-2 border-dashed border-white/[0.02] rounded-[2rem] flex flex-col items-center justify-center overflow-hidden relative">
+                                    <div className="absolute inset-0 bg-gradient-to-b from-transparent to-white/[0.01]" />
+                                    <p className="text-[10px] uppercase font-black tracking-widest text-slate-700 relative z-10 italic">No usage records</p>
+                                </div>
+                            ) : (
+                                history.map(batch => (
+                                    <HistoryItem key={batch.id} batch={batch} />
+                                ))
+                            )}
+                        </div>
+
+                        {/* Visual Footer for Right Pane */}
+                        <div className="p-8 pt-4 border-t border-white/5 bg-black/20">
+                            <div className="p-4 rounded-2xl bg-amber-500/[0.02] border border-amber-500/5">
+                                <div className="flex gap-3">
+                                    <Info className="h-3.5 w-3.5 text-amber-500/40 flex-shrink-0 mt-0.5" />
+                                    <p className="text-[10px] font-bold text-slate-600 leading-tight uppercase tracking-tight">
+                                        Undo operations will selectively remove shifts created in the specific batch.
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    {selectedId && !forceStack && (
-                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 flex gap-3 text-xs text-amber-200/80 leading-relaxed animate-in fade-in slide-in-from-top-2">
-                            <AlertTriangle className="h-4 w-4 text-amber-400 flex-shrink-0" />
-                            <p>
-                                Shifts that already exist in this range from this template will be skipped to prevent duplicates.
-                                <strong>Enable "Stack Shifts"</strong> to inject them anyway.
-                            </p>
-                        </div>
-                    )}
-
-                    {selectedId && forceStack && (
-                        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 flex gap-3 text-xs text-blue-200/80 leading-relaxed animate-in fade-in slide-in-from-top-2">
-                            <Info className="h-4 w-4 text-blue-400 flex-shrink-0" />
-                            <p>
-                                <strong>Stacking Enabled</strong>: Duplicate shifts will be created if they already exist in the target range.
-                            </p>
-                        </div>
-                    )}
                 </div>
-
-                <DialogFooter className="p-6 border-t border-white/10 flex sm:justify-between items-center gap-4 bg-slate-900/50">
-                    <Button
-                        variant="ghost"
-                        onClick={() => onOpenChange(false)}
-                        className="text-slate-400 hover:text-white"
-                        disabled={applyTemplate.isPending}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={handleApply}
-                        disabled={!selectedId || applyTemplate.isPending || !!error}
-                        className={cn(
-                            "min-w[(140px)] rounded-2xl h-11 font-bold text-sm transition-all shadow-lg",
-                            !selectedId || !!error
-                                ? "bg-slate-800 text-slate-500 cursor-not-allowed border-white/5"
-                                : "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20 active:scale-95"
-                        )}
-                    >
-                        {applyTemplate.isPending ? (
-                            <div className="flex items-center gap-2">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                <span>Processing...</span>
-                            </div>
-                        ) : (
-                            <div className="flex items-center gap-2">
-                                <span>Apply to Roster</span>
-                                <Check className="h-4 w-4 opacity-70" />
-                            </div>
-                        )}
-                    </Button>
-                </DialogFooter>
             </DialogContent>
         </Dialog>
     );

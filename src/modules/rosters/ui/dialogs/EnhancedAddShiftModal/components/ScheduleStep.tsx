@@ -11,7 +11,7 @@ import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { Separator } from '@/modules/core/ui/primitives/separator';
 import { cn } from '@/modules/core/lib/utils';
-import { formatHours } from '../utils';
+import { formatHours, formatTimeDisplay } from '../utils';
 import type { ScheduleStepProps } from '../types';
 import {
     Select,
@@ -28,10 +28,15 @@ import {
     AlertCircle,
     AlertTriangle,
     ArrowRight,
+    CheckCircle2,
+    Calendar,
+    Users,
+    ClipboardList,
     Lock,
 } from 'lucide-react';
-import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-import { HierarchyColumn } from './HierarchyColumn';
+import {
+    HierarchyColumn
+} from './HierarchyColumn';
 
 export const ScheduleStep: React.FC<ScheduleStepProps> = ({
     form,
@@ -47,13 +52,12 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
     isSubGroupLocked,
     isRosterLocked,
     context,
+    activeSubGroups = {},
 }) => {
     const watchPaidBreak = form.watch('paid_break_minutes');
     const watchUnpaidBreak = form.watch('unpaid_break_minutes');
     const watchGroupType = form.watch('group_type');
-
-    // State for toggling between dropdown and text input for Sub-Group
-    const [isCustomSubGroup, setIsCustomSubGroup] = React.useState(false);
+    const watchSubGroup = form.watch('sub_group_name');
 
     // Reset custom mode when group changes, unless locked
     React.useEffect(() => {
@@ -66,27 +70,39 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
             // If availableSubGroups becomes available, we might want to show them.
             // But if user was in custom mode, maybe they want to stay? 
             // Defaulting to false (show list) is safer standard behavior.
-            setIsCustomSubGroup(false);
+            // setIsCustomSubGroup(false); // This state is no longer used for custom input
         }
     }, [watchGroupType, isGroupLocked]);
 
-    // Derive available groups and subgroups
+    // Derived Logic
     const availableGroups = React.useMemo(() => {
         if (!rosterStructure?.length) return [];
         return Array.from(new Set(rosterStructure.map(x => x.groupType))).filter(Boolean);
     }, [rosterStructure]);
 
     const availableSubGroups = React.useMemo(() => {
-        if (!rosterStructure?.length || !watchGroupType) return [];
-        return Array.from(new Set(
-            rosterStructure
-                .filter(x => x.groupType === watchGroupType)
-                .map(x => x.subGroupName)
-        )).filter(Boolean);
-    }, [rosterStructure, watchGroupType]);
+        // 1. Get subgroups from the official roster structure for the selected group
+        const structureSubGroups = !rosterStructure?.length || !watchGroupType
+            ? []
+            : Array.from(new Set(
+                rosterStructure
+                    .filter(x => x.groupType === watchGroupType)
+                    .map(x => x.subGroupName)
+            )).filter(Boolean);
 
-    // Fallback options if structure is empty (e.g. new roster)
-    const showDefaultGroups = !rosterStructure?.length;
+        // 2. Get active subgroups for the selected group on this day
+        const activeForGroup = (activeSubGroups && watchGroupType)
+            ? activeSubGroups[watchGroupType] || []
+            : [];
+
+        // 3. Merge and deduplicate
+        const merged = Array.from(new Set([...structureSubGroups, ...activeForGroup]));
+
+        return merged;
+    }, [rosterStructure, watchGroupType, activeSubGroups]);
+
+    const showDefaultGroups = !availableGroups.length;
+    const isCustomSubGroup = React.useState(false)[0]; // Placeholder for state if needed later, but we'll stick to simple logic
 
     // Handle applying scope from card
     const handleApplyScope = (scope: { orgId?: string; deptId?: string; subDeptId?: string }) => {
@@ -111,43 +127,22 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
 
     // Current context derived from selected roster
     const selectedRoster = rosters.find(r => r.id === selectedRosterId);
+    // Managers MUST be able to add shifts to draft rosters. 
+    // "Active" in the context of the Planner means the roster exists and is not archive/locked.
+    const isRosterActive = selectedRoster?.status === 'published' || selectedRoster?.status === 'draft';
 
     // Sync Roster with Global Scope
-    const { scope } = useScopeFilter('managerial');
-
     React.useEffect(() => {
-        if (!rosters.length) return;
+        if (!rosters.length || !context?.date) return;
 
-        // Only enforce if we have a department scope
-        const scopeDeptId = scope?.dept_ids?.[0];
-        const scopeSubDeptId = scope?.subdept_ids?.[0];
-
-        if (!scopeDeptId) return;
-
-        // Check if current selection matches scope
-        if (selectedRoster) {
-            const matchesDept = selectedRoster.department_id === scopeDeptId;
-            const matchesSubDept = !scopeSubDeptId || selectedRoster.sub_department_id === scopeSubDeptId;
-
-            if (matchesDept && matchesSubDept) return; // Already valid
-        }
-
-        // Find best match
-        let match = rosters.find(r =>
-            r.department_id === scopeDeptId &&
-            (!scopeSubDeptId || r.sub_department_id === scopeSubDeptId)
-        );
-
-        if (!match) {
-            // Fallback to purely dept match
-            match = rosters.find(r => r.department_id === scopeDeptId);
-        }
+        // Find a roster that matches the current date
+        const match = rosters.find(r => r.start_date === context.date);
 
         if (match) {
-            console.log('[ScheduleStep] Auto-selecting roster from scope:', match.name);
+            console.log('[ScheduleStep] Auto-selecting roster matching date:', match.name);
             onRosterChange(match.id);
         }
-    }, [scope, rosters, selectedRoster, onRosterChange]); // Dependencies ensure we react to scope scope/roster changes
+    }, [rosters, selectedRoster, onRosterChange, context?.date]);
 
     return (
         <div className="space-y-6">
@@ -157,6 +152,9 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                     orgId={context?.organizationId}
                     deptId={context?.departmentId}
                     subDeptId={context?.subDepartmentId}
+                    orgName={context?.organizationName}
+                    deptName={context?.departmentName}
+                    subDeptName={context?.subDepartmentName}
                 />
                 {/* COLUMN 1: CONTEXT */}
                 <div className="flex flex-col h-full rounded-2xl bg-[#1e293b]/30 border border-white/5 backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-amber-500/20 group/card">
@@ -182,7 +180,10 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                             value={selectedRosterId}
                                             onValueChange={onRosterChange}
                                         >
-                                            <SelectTrigger className="h-11 bg-white/[0.03] border-white/5 text-white text-sm hover:bg-white/10 hover:border-white/10 transition-all rounded-xl focus:ring-2 focus:ring-amber-500/30">
+                                            <SelectTrigger className={cn(
+                                                "h-11 bg-white/[0.03] border-white/5 text-white text-sm hover:bg-white/10 hover:border-white/10 transition-all rounded-xl focus:ring-2 focus:ring-amber-500/30",
+                                                !selectedRosterId && "border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.1)]"
+                                            )}>
                                                 <SelectValue placeholder="Select roster" />
                                             </SelectTrigger>
                                             <SelectContent className="bg-[#1e293b] border-white/10 backdrop-blur-xl">
@@ -196,139 +197,149 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                     ) : (
                                         <div className="flex items-center gap-2 p-3 text-amber-400 rounded-xl border border-amber-500/10 bg-amber-500/5 text-xs">
                                             <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                                            <span>No rosters found.</span>
+                                            <span>No rosters present, ask to activate first.</span>
                                         </div>
                                     )}
                                 </div>
                             ) : (
                                 <div className="space-y-1">
                                     <Label className="text-[11px] font-bold text-white/40 uppercase tracking-[0.1em]">Roster</Label>
-                                    <div className="text-sm text-white/60 font-medium px-1">Selected View Only</div>
+                                    <div className="text-sm text-white/60 font-medium px-1">
+                                        {selectedRoster ? (selectedRoster.name || selectedRoster.description || (selectedRoster.start_date ? format(parseISO(selectedRoster.start_date), 'dd MMM yyyy') : 'Unknown Roster')) : 'No roster selected'}
+                                    </div>
                                 </div>
                             )}
                         </div>
 
                         {/* Slot 2: Group */}
                         <div className="min-h-[70px] flex flex-col justify-center">
-                            <FormField
-                                control={form.control}
-                                name="group_type"
-                                render={({ field }) => (
-                                    <FormItem className="space-y-2">
-                                        <FormLabel className="text-[11px] font-bold text-white/40 uppercase tracking-[0.1em]">Group</FormLabel>
-                                        <Select
-                                            disabled={isReadOnly || isGroupLocked}
-                                            onValueChange={(val) => {
-                                                field.onChange(val);
-                                                form.setValue('sub_group_name', '');
-                                            }}
-                                            defaultValue={field.value}
-                                            value={field.value}
-                                        >
-                                            <FormControl>
-                                                <SelectTrigger className={cn(
-                                                    "h-11 bg-white/[0.03] border-white/5 text-white text-sm hover:bg-white/10 hover:border-white/10 transition-all rounded-xl",
-                                                    isGroupLocked && "opacity-50 cursor-not-allowed bg-white/[0.01]"
-                                                )}>
-                                                    <SelectValue placeholder="Select group" />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent className="bg-[#1e293b] border-white/10 backdrop-blur-xl">
-                                                {showDefaultGroups ? (
-                                                    <>
-                                                        <SelectItem value="convention_centre">Convention Centre</SelectItem>
-                                                        <SelectItem value="exhibition_centre">Exhibition Centre</SelectItem>
-                                                        <SelectItem value="theatre">Theatre</SelectItem>
-                                                    </>
-                                                ) : (
-                                                    availableGroups.map(g => (
-                                                        <SelectItem key={g} value={g} className="focus:bg-amber-500/10 focus:text-amber-400">
-                                                            {g?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                                        </SelectItem>
-                                                    ))
-                                                )}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage className="text-[10px] text-amber-400/80" />
-                                    </FormItem>
-                                )}
-                            />
+                            {!isReadOnly ? (
+                                <FormField
+                                    control={form.control}
+                                    name="group_type"
+                                    render={({ field }) => (
+                                        <FormItem className="space-y-2">
+                                            <FormLabel className="text-[11px] font-bold text-white/40 uppercase tracking-[0.1em]">Group</FormLabel>
+                                            {!isRosterActive ? (
+                                                <div className="flex items-center gap-2 p-3 text-amber-400 rounded-xl border border-amber-500/10 bg-amber-500/5 text-xs animate-pulse">
+                                                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                                                    <span>No active rosters present. Please activate a roster to continue.</span>
+                                                </div>
+                                            ) : availableGroups.length === 0 ? (
+                                                <div className="flex items-center gap-2 p-3 text-amber-400 rounded-xl border border-amber-500/10 bg-amber-500/5 text-xs">
+                                                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                                                    <span>No groups available for this roster day. Please activate a roster first!</span>
+                                                </div>
+                                            ) : (
+                                                <Select
+                                                    disabled={isReadOnly || isGroupLocked || !isRosterActive}
+                                                    onValueChange={(val) => {
+                                                        field.onChange(val);
+                                                        form.setValue('sub_group_name', '');
+                                                    }}
+                                                    defaultValue={field.value}
+                                                    value={field.value}
+                                                >
+                                                    <FormControl>
+                                                        <SelectTrigger className={cn(
+                                                            "h-11 bg-white/[0.03] border-white/5 text-white text-sm hover:bg-white/10 hover:border-white/10 transition-all rounded-xl",
+                                                            (isGroupLocked || !isRosterActive) && "opacity-50 cursor-not-allowed bg-white/[0.01]"
+                                                        )}>
+                                                            <SelectValue placeholder="Select group" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent className="bg-[#1e293b] border-white/10 backdrop-blur-xl">
+                                                        {showDefaultGroups ? (
+                                                            <>
+                                                                <SelectItem value="convention_centre">Convention Centre</SelectItem>
+                                                                <SelectItem value="exhibition_centre">Exhibition Centre</SelectItem>
+                                                                <SelectItem value="theatre">Theatre</SelectItem>
+                                                            </>
+                                                        ) : (
+                                                            availableGroups.map(g => (
+                                                                <SelectItem key={g} value={g} className="focus:bg-amber-500/10 focus:text-amber-400">
+                                                                    {g?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                                                </SelectItem>
+                                                            ))
+                                                        )}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                            <FormMessage className="text-[10px] text-amber-400/80" />
+                                        </FormItem>
+                                    )}
+                                />
+                            ) : (
+                                <div className="space-y-1">
+                                    <Label className="text-[11px] font-bold text-white/40 uppercase tracking-[0.1em]">Group</Label>
+                                    <div className="text-sm text-white/60 font-medium px-1">
+                                        {watchGroupType ? watchGroupType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not specified'}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Slot 3: Subgroup */}
                         <div className="min-h-[70px] flex flex-col justify-center">
-                            <FormField
-                                control={form.control}
-                                name="sub_group_name"
-                                render={({ field }) => (
-                                    <FormItem className="space-y-2">
-                                        <FormLabel className="text-[11px] font-bold text-white/40 uppercase tracking-[0.1em]">Sub-Group</FormLabel>
-                                        {isSubGroupLocked ? (
-                                            <FormControl>
-                                                <Input
-                                                    {...field}
-                                                    disabled={true}
-                                                    className="h-11 bg-white/[0.02] border-white/5 text-white/60 text-sm rounded-xl cursor-not-allowed"
-                                                />
-                                            </FormControl>
-                                        ) : (!isCustomSubGroup && availableSubGroups.length > 0) ? (
-                                            <Select
-                                                disabled={isReadOnly || !watchGroupType}
-                                                onValueChange={(val) => {
-                                                    if (val === '__NEW__') {
-                                                        setIsCustomSubGroup(true);
-                                                        field.onChange('');
-                                                    } else {
-                                                        field.onChange(val);
-                                                    }
-                                                }}
-                                                value={field.value}
-                                            >
-                                                <FormControl>
-                                                    <SelectTrigger className="h-11 bg-white/[0.03] border-white/5 text-white text-sm hover:bg-white/10 hover:border-white/10 transition-all rounded-xl">
-                                                        <SelectValue placeholder="Select sub-group" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent className="bg-[#1e293b] border-white/10 backdrop-blur-xl">
-                                                    {availableSubGroups.map(sg => (
-                                                        <SelectItem key={sg} value={sg} className="focus:bg-amber-500/10 focus:text-amber-400">
-                                                            {sg?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                                        </SelectItem>
-                                                    ))}
-                                                    <div className="h-px bg-white/5 my-1" />
-                                                    <SelectItem value="__NEW__" className="text-emerald-400 font-bold">
-                                                        + Create New
-                                                    </SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        ) : (
-                                            <div className="flex gap-2">
+                            {!isReadOnly ? (
+                                <FormField
+                                    control={form.control}
+                                    name="sub_group_name"
+                                    render={({ field }) => (
+                                        <FormItem className="space-y-2">
+                                            <FormLabel className="text-[11px] font-bold text-white/40 uppercase tracking-[0.1em]">Sub-Group</FormLabel>
+                                            {isSubGroupLocked ? (
                                                 <FormControl>
                                                     <Input
-                                                        placeholder="Name..."
-                                                        className="h-11 bg-white/[0.03] border-white/5 text-white text-sm placeholder:text-white/20 rounded-xl focus:border-amber-500/50 transition-all"
-                                                        disabled={isReadOnly}
                                                         {...field}
+                                                        disabled={true}
+                                                        className="h-11 bg-white/[0.02] border-white/5 text-white/60 text-sm rounded-xl cursor-not-allowed"
                                                     />
                                                 </FormControl>
-                                                {!isReadOnly && availableSubGroups.length > 0 && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setIsCustomSubGroup(false);
-                                                            field.onChange('');
-                                                        }}
-                                                        className="px-4 h-11 text-xs font-bold text-white/40 hover:text-white bg-white/5 rounded-xl border border-white/5 hover:border-white/20 transition-all uppercase tracking-tighter"
-                                                    >
-                                                        List
-                                                    </button>
-                                                )}
-                                            </div>
-                                        )}
-                                        <FormMessage className="text-[10px] text-amber-400/80" />
-                                    </FormItem>
-                                )}
-                            />
+                                            ) : !isRosterActive || !watchGroupType ? (
+                                                <div className="flex items-center gap-2 p-3 text-white/30 rounded-xl border border-white/5 bg-white/[0.01] text-xs italic">
+                                                    <Lock className="w-3.5 h-3.5 opacity-50" />
+                                                    <span>Select an active group first</span>
+                                                </div>
+                                            ) : availableSubGroups.length === 0 ? (
+                                                <div className="flex items-center gap-2 p-3 text-amber-400/70 rounded-xl border border-amber-500/10 bg-amber-500/5 text-xs">
+                                                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                                                    <span>No subgroups found. Ensure the parent group and roster are active.</span>
+                                                </div>
+                                            ) : (
+                                                <Select
+                                                    disabled={isReadOnly || !watchGroupType || !isRosterActive}
+                                                    onValueChange={(val) => {
+                                                        field.onChange(val);
+                                                    }}
+                                                    value={field.value}
+                                                >
+                                                    <FormControl>
+                                                        <SelectTrigger className="h-11 bg-white/[0.03] border-white/5 text-white text-sm hover:bg-white/10 hover:border-white/10 transition-all rounded-xl">
+                                                            <SelectValue placeholder="Select sub-group" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent className="bg-[#1e293b] border-white/10 backdrop-blur-xl">
+                                                        {availableSubGroups.map((sg) => (
+                                                            <SelectItem key={sg} value={sg} className="focus:bg-amber-500/10 focus:text-amber-400">
+                                                                {sg}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                            <FormMessage className="text-[10px] text-amber-400/80" />
+                                        </FormItem>
+                                    )}
+                                />
+                            ) : (
+                                <div className="space-y-1">
+                                    <Label className="text-[11px] font-bold text-white/40 uppercase tracking-[0.1em]">Sub-Group</Label>
+                                    <div className="text-sm text-white/60 font-medium px-1">
+                                        {watchSubGroup || 'Not specified'}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -355,18 +366,24 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                     <FormItem className="space-y-2">
                                         <FormLabel className="text-[11px] font-bold text-white/40 uppercase tracking-[0.1em]">Start Time</FormLabel>
                                         <FormControl>
-                                            <div className="relative group/input">
-                                                <Input
-                                                    type="time"
-                                                    step="900"
-                                                    className="h-11 text-lg font-black bg-white/[0.03] border-white/5 text-white focus:bg-white/[0.05] focus:border-emerald-500/50 transition-all rounded-xl pl-4"
-                                                    disabled={isReadOnly}
-                                                    {...field}
-                                                />
-                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/10 group-focus-within/input:text-emerald-500/40 transition-colors uppercase">
-                                                    15m
+                                            {!isReadOnly ? (
+                                                <div className="relative group/input">
+                                                    <Input
+                                                        type="time"
+                                                        step="900"
+                                                        className="h-11 text-lg font-black bg-white/[0.03] border-white/5 text-white focus:bg-white/[0.05] focus:border-emerald-500/50 transition-all rounded-xl pl-4"
+                                                        disabled={isReadOnly}
+                                                        {...field}
+                                                    />
+                                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/10 group-focus-within/input:text-emerald-500/40 transition-colors uppercase">
+                                                        15m
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            ) : (
+                                                <div className="text-xl font-bold text-white px-1">
+                                                    {formatTimeDisplay(field.value)}
+                                                </div>
+                                            )}
                                         </FormControl>
                                         <FormMessage className="text-[10px] text-emerald-500/80" />
                                     </FormItem>
@@ -383,18 +400,24 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                     <FormItem className="space-y-2">
                                         <FormLabel className="text-[11px] font-bold text-white/40 uppercase tracking-[0.1em]">End Time</FormLabel>
                                         <FormControl>
-                                            <div className="relative group/input">
-                                                <Input
-                                                    type="time"
-                                                    step="900"
-                                                    className="h-11 text-lg font-black bg-white/[0.03] border-white/5 text-white focus:bg-white/[0.05] focus:border-emerald-500/50 transition-all rounded-xl pl-4"
-                                                    disabled={isReadOnly}
-                                                    {...field}
-                                                />
-                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/10 group-focus-within/input:text-emerald-500/40 transition-colors uppercase">
-                                                    15m
+                                            {!isReadOnly ? (
+                                                <div className="relative group/input">
+                                                    <Input
+                                                        type="time"
+                                                        step="900"
+                                                        className="h-11 text-lg font-black bg-white/[0.03] border-white/5 text-white focus:bg-white/[0.05] focus:border-emerald-500/50 transition-all rounded-xl pl-4"
+                                                        disabled={isReadOnly}
+                                                        {...field}
+                                                    />
+                                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/10 group-focus-within/input:text-emerald-500/40 transition-colors uppercase">
+                                                        15m
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            ) : (
+                                                <div className="text-xl font-bold text-white px-1">
+                                                    {formatTimeDisplay(field.value)}
+                                                </div>
+                                            )}
                                         </FormControl>
                                         <FormMessage className="text-[10px] text-emerald-500/80" />
                                     </FormItem>

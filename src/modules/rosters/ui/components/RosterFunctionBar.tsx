@@ -333,7 +333,10 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
   };
 
   return (
-    <div className="w-full h-12 flex-shrink-0 z-50 bg-slate-950/40 backdrop-blur-2xl border-b border-white/10 px-3 flex items-center">
+    <div className="w-full h-16 flex-shrink-0 z-50 bg-slate-950/40 backdrop-blur-2xl border-b border-white/10 px-8 flex items-center shadow-2xl relative">
+      {/* Subtle top highlight for premium feel */}
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
       <div className="w-full flex items-center justify-between">
 
         {/* Left Section: Context & Modes */}
@@ -343,20 +346,20 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
             type="single"
             value={activeMode}
             onValueChange={(v) => v && setActiveMode(v as RosterMode)}
-            className="bg-black/20 border border-white/5 rounded-lg p-0.5"
+            className="bg-black/20 border border-white/5 rounded-xl p-1"
           >
             {[
-              { id: 'group', icon: <Box className="h-3.5 w-3.5" />, label: 'Group' },
-              { id: 'people', icon: <Users className="h-3.5 w-3.5" />, label: 'People' },
-              { id: 'events', icon: <CalendarDays className="h-3.5 w-3.5" />, label: 'Events' },
-              { id: 'roles', icon: <Briefcase className="h-3.5 w-3.5" />, label: 'Roles' },
+              { id: 'group', icon: <Box className="h-4 w-4" />, label: 'Group' },
+              { id: 'people', icon: <Users className="h-4 w-4" />, label: 'People' },
+              { id: 'events', icon: <CalendarDays className="h-4 w-4" />, label: 'Events' },
+              { id: 'roles', icon: <Briefcase className="h-4 w-4" />, label: 'Roles' },
             ].map((m) => (
               <ToggleGroupItem
                 key={m.id}
                 value={m.id}
-                className="h-7 px-2.5 text-[11px] font-bold rounded-md data-[state=on]:bg-white/10 data-[state=on]:text-white text-white/40 hover:text-white/60 transition-all"
+                className="h-8 px-4 text-[11px] font-black uppercase tracking-wider rounded-lg data-[state=on]:bg-white/10 data-[state=on]:text-white text-white/40 hover:text-white/60 transition-all"
               >
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   {m.icon}
                   <span className="hidden xl:inline">{m.label}</span>
                 </div>
@@ -366,8 +369,8 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
         </div>
 
         {/* Center Section: Navigation & View */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center bg-black/40 border border-white/10 rounded-lg p-0.5 h-8">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center bg-black/40 border border-white/10 rounded-lg p-0.5 h-9">
             {[
               { id: 'day', label: 'D' },
               { id: '3day', label: '3D' },
@@ -418,20 +421,20 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
         </div>
 
         {/* Right Section: Actions */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-lg px-1 py-1 h-8">
-            <IconButton icon={<RefreshCw className="h-3.5 w-3.5" />} tooltip="Reload" onClick={onRefresh} isLoading={isRefreshing} />
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-xl px-2 py-1 h-10">
+            <IconButton icon={<RefreshCw className="h-4 w-4" />} tooltip="Reload" onClick={onRefresh} isLoading={isRefreshing} />
             <RosterFilterPopover />
-            <Separator orientation="vertical" className="h-4 bg-white/10 mx-0.5" />
+            <Separator orientation="vertical" className="h-5 bg-white/10 mx-1" />
             <IconButton
-              icon={<CalendarCheck className="h-3.5 w-3.5" />}
+              icon={<CalendarCheck className="h-4 w-4" />}
               tooltip="Avail"
               onClick={onAvailabilitiesToggle}
               isActive={showAvailabilities}
               variant="success"
             />
             <IconButton
-              icon={<Zap className="h-3.5 w-3.5" />}
+              icon={<Zap className="h-4 w-4" />}
               tooltip="Activate"
               onClick={() => setIsActivateDialogOpen(true)}
               variant="success"
@@ -439,35 +442,35 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
             />
             <div className="relative">
               <IconButton
-                icon={<CopyPlus className="h-3.5 w-3.5" />}
+                icon={<CopyPlus className="h-4 w-4" />}
                 tooltip="Apply Template"
                 onClick={() => setIsApplyTemplateDialogOpen(true)}
                 variant="success"
                 disabled={!selectedDepartmentId}
               />
               {appliedCount > 0 && (
-                <div className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-blue-500 rounded-full border border-slate-900 flex items-center justify-center pointer-events-none">
-                  <span className="text-[8px] font-bold text-white leading-none">{appliedCount}</span>
+                <div className="absolute -top-1 -right-1 h-4 w-4 bg-blue-500 rounded-full border border-slate-900 flex items-center justify-center pointer-events-none shadow-lg">
+                  <span className="text-[9px] font-black text-white leading-none">{appliedCount}</span>
                 </div>
               )}
             </div>
             <IconButton
-              icon={<PanelRight className="h-3.5 w-3.5" />}
+              icon={<PanelRight className="h-4 w-4" />}
               tooltip="Unfilled"
               onClick={onUnfilledPanelToggle}
               isActive={showUnfilledPanel}
             />
-            <Separator orientation="vertical" className="h-4 bg-white/10 mx-0.5" />
+            <Separator orientation="vertical" className="h-5 bg-white/10 mx-1" />
             {activeMode === 'group' && (
               <IconButton
-                icon={<Box className="h-3.5 w-3.5" />}
+                icon={<Box className="h-4 w-4" />}
                 tooltip="Buckets"
                 onClick={() => setIsBucketView(!isBucketView)}
                 isActive={isBucketView}
               />
             )}
             <IconButton
-              icon={<Layers className="h-3.5 w-3.5" />}
+              icon={<Layers className="h-4 w-4" />}
               tooltip="Bulk"
               onClick={onBulkModeToggle || (() => { })}
               isActive={isBulkMode}
@@ -475,11 +478,11 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
           </div>
 
           <IconButton
-            icon={<Send className="h-3.5 w-3.5" />}
+            icon={<Send className="h-4 w-4" />}
             tooltip="Publish Roster"
             onClick={onPublishRoster}
             disabled={!canEdit}
-            className="h-8 w-8 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-glow-blue/20"
+            className="h-10 w-10 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-[0_4px_12px_rgba(37,99,235,0.3)] transition-all active:scale-95"
           />
         </div>
       </div>

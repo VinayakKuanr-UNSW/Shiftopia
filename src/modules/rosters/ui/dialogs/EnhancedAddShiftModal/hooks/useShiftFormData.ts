@@ -8,6 +8,7 @@ import {
     useEvents,
     useRostersLookup,
     useRosterStructure,
+    useShiftsByDate,
 } from '@/modules/rosters/state/useRosterShifts';
 import type {
     Role,
@@ -38,6 +39,7 @@ interface UseShiftFormDataReturn {
     events: Event[];
     rosters: Roster[];
     rosterStructure: { groupType: string; subGroupName: string }[];
+    activeSubGroups: Record<string, string[]>;
     isLoadingData: boolean;
 }
 
@@ -74,8 +76,8 @@ export function useShiftFormData({
     }, [isOpen, context, contextDeptId, contextSubDeptId, rosters]);
 
     // 3. Metadata Hooks (Restored)
+    // 3. Metadata Hooks (Restored)
     const { data: remunerationLevels = [], isLoading: isLoadingRem } = useRemunerationLevels();
-    const { data: employees = [], isLoading: isLoadingEmps } = useEmployees();
     const { data: skills = [], isLoading: isLoadingSkills } = useSkills();
     const { data: licenses = [], isLoading: isLoadingLicenses } = useLicenses();
     const { data: events = [], isLoading: isLoadingEvents } = useEvents();
@@ -88,12 +90,49 @@ export function useShiftFormData({
     const roleDeptId = contextDeptId || selectedRoster?.department_id;
     const roleSubDeptId = contextSubDeptId || selectedRoster?.sub_department_id;
 
+    const { data: employees = [], isLoading: isLoadingEmps } = useEmployees(
+        isOpen ? context.organizationId : undefined,
+        isOpen ? roleDeptId : undefined,
+        isOpen ? roleSubDeptId : undefined
+    );
+
     // All queries are enabled only when the modal is open
     const { data: roles = [] } = useRoles(
         isOpen ? roleDeptId : undefined,
         isOpen ? roleSubDeptId : undefined
     );
     const { data: rosterStructure = [] } = useRosterStructure(selectedRosterId || context.rosterId);
+
+    // 5. Active Sub-Groups Detection
+    // Fetch all shifts for this day and roster to see what groups/subgroups are currently active
+    // We fetch ALL shifts for the org/date to have the full picture
+    const { data: existingShifts = [] } = useShiftsByDate(
+        isOpen ? context.organizationId : undefined,
+        isOpen ? context.date || null : null
+    );
+
+    // activeSubGroups is now a mapping of groupType -> uniqueSubGroupNames[]
+    const activeSubGroups = React.useMemo(() => {
+        if (!existingShifts.length) return {};
+
+        const mapping: Record<string, Set<string>> = {};
+
+        existingShifts
+            .filter(s => s.roster_id === (selectedRosterId || context.rosterId) && s.sub_group_name && (s.group_type || (s as any).group_name))
+            .forEach(s => {
+                const groupType = s.group_type || (s as any).group_name!;
+                if (!mapping[groupType]) mapping[groupType] = new Set();
+                mapping[groupType].add(s.sub_group_name!);
+            });
+
+        // Convert Sets to Arrays
+        const result: Record<string, string[]> = {};
+        Object.keys(mapping).forEach(key => {
+            result[key] = Array.from(mapping[key]);
+        });
+
+        return result;
+    }, [existingShifts, selectedRosterId, context.rosterId]);
 
     // Auto-select roster matching the date
     React.useEffect(() => {
@@ -146,6 +185,7 @@ export function useShiftFormData({
         events: events as Event[],
         rosters: rosters as Roster[],
         rosterStructure,
+        activeSubGroups,
         isLoadingData,
     };
 }

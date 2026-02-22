@@ -1,5 +1,42 @@
 import { supabase } from '@/platform/realtime/client';
 import { Shift, ShiftStatus, TemplateGroupType, isValidUuid } from '../domain/shift.entity';
+import { callAuthenticatedRpc } from '@/lib/rpc/client';
+import { OfferActionResponseSchema } from './contracts';
+
+// ── Lookup types ──────────────────────────────────────────────────────────────
+
+export interface OrgSummary            { id: string; name: string }
+export interface DeptSummary           { id: string; name: string; organization_id: string }
+export interface SubDeptSummary        { id: string; name: string; department_id: string }
+export interface RoleSummary           { id: string; name: string; department_id: string | null; sub_department_id: string | null; remuneration_level_id: string | null }
+export interface RemunerationLevel     { id: string; level_number: number; level_name: string; hourly_rate_min: number; hourly_rate_max: number; description: string | null }
+export interface SkillSummary          { id: string; name: string; description: string | null; category: string | null }
+export interface LicenseSummary        { id: string; name: string; description: string | null; category: string | null; issuing_authority: string | null }
+export interface ProfileSummary        { id: string; first_name: string; last_name: string }
+export interface TemplateSummary       { id: string; name: string; description: string | null; department_id: string; sub_department_id: string | null; status: string; organization_id: string; applied_count: number | null }
+export interface RosterSlot            { groupType: string; subGroupName: string }
+
+// ── Shared select fragment for shift rows ─────────────────────────────────────
+
+const SHIFT_SELECT = `
+  *,
+  assignment_outcome,
+  organizations(id, name),
+  departments(id, name),
+  sub_departments(id, name),
+  roles(id, name),
+  remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max),
+  assigned_profiles:profiles!assigned_employee_id(first_name, last_name)
+` as const;
+
+/** Normalise a raw supabase row into our Shift interface shape */
+function normalizeShiftRow(row: Record<string, unknown>): Shift {
+    return {
+        ...row,
+        is_trade_requested:
+            !!row['trade_requested_at'] || row['trading_status'] === 'TradeRequested',
+    } as unknown as Shift;
+}
 
 export const shiftsQueries = {
     /* ============================================================
@@ -9,18 +46,7 @@ export const shiftsQueries = {
     async getShiftById(shiftId: string): Promise<Shift | null> {
         const { data, error } = await supabase
             .from('shifts')
-            .select(
-                `
-        *,
-        assignment_outcome,
-        organizations(id, name),
-        departments(id, name),
-        sub_departments(id, name),
-        roles(id, name),
-        remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max),
-        assigned_profiles:profiles!assigned_employee_id(first_name, last_name)
-      `
-            )
+            .select(SHIFT_SELECT)
             .eq('id', shiftId)
             .is('deleted_at', null)
             .single();
@@ -29,7 +55,7 @@ export const shiftsQueries = {
             console.error('Error fetching shift:', error);
             return null;
         }
-        return data as unknown as Shift;
+        return data ? normalizeShiftRow(data as Record<string, unknown>) : null;
     },
 
     /* ============================================================
@@ -49,62 +75,46 @@ export const shiftsQueries = {
         }
     ): Promise<Shift[]> {
         if (!isValidUuid(organizationId)) {
-            console.warn(
-                'Invalid organization ID for getShiftsForDate:',
-                organizationId
-            );
+            console.warn('Invalid organization ID for getShiftsForDate:', organizationId);
             return [];
         }
 
         try {
+            // Build filter chain — all filters must come BEFORE .order() (transforms)
             let query = supabase
                 .from('shifts')
-                .select(
-                    `
-          *,
-        assignment_outcome,
-          organizations(id, name),
-          departments(id, name),
-          sub_departments(id, name),
-        roles(id, name),
-        remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max),
-        assigned_profiles:profiles!assigned_employee_id(first_name, last_name)
-        `
-                )
+                .select(SHIFT_SELECT)
                 .eq('organization_id', organizationId)
                 .eq('shift_date', date)
-                .is('deleted_at', null)
-                .order('display_order')
-                .order('start_time');
+                .is('deleted_at', null);
 
             if (filters?.departmentId && isValidUuid(filters.departmentId)) {
                 query = query.eq('department_id', filters.departmentId);
             } else if (filters?.departmentIds && filters.departmentIds.length > 0) {
-                query = query.in('department_id', filters.departmentIds.filter(id => isValidUuid(id)));
+                query = query.in('department_id', filters.departmentIds.filter(isValidUuid));
             }
             if (filters?.subDepartmentId && isValidUuid(filters.subDepartmentId)) {
                 query = query.eq('sub_department_id', filters.subDepartmentId);
             } else if (filters?.subDepartmentIds && filters.subDepartmentIds.length > 0) {
-                query = query.in('sub_department_id', filters.subDepartmentIds.filter(id => isValidUuid(id)));
+                query = query.in('sub_department_id', filters.subDepartmentIds.filter(isValidUuid));
             }
             if (filters?.groupType) {
-                query = (query as any).eq('group_type', filters.groupType);
+                query = query.eq('group_type', filters.groupType);
             }
             if (filters?.status) {
-                query = (query as any).eq('status', filters.status);
+                query = query.eq('status', filters.status);
             }
 
-            const { data, error } = await query;
+            const { data, error } = await query
+                .order('display_order')
+                .order('start_time');
 
             if (error) {
                 console.error('Error fetching shifts:', error);
                 return [];
             }
 
-            return (data || []).map((shift: any) => ({
-                ...shift,
-                is_trade_requested: !!shift.trade_requested_at || shift.trading_status === 'TradeRequested'
-            })) as unknown as Shift[];
+            return (data || []).map(row => normalizeShiftRow(row as Record<string, unknown>));
         } catch (error) {
             console.error('Exception in getShiftsForDate:', error);
             return [];
@@ -129,64 +139,47 @@ export const shiftsQueries = {
         }
     ): Promise<Shift[]> {
         if (!isValidUuid(organizationId)) {
-            console.warn(
-                'Invalid organization ID for getShiftsForDateRange:',
-                organizationId
-            );
+            console.warn('Invalid organization ID for getShiftsForDateRange:', organizationId);
             return [];
         }
 
         try {
             let query = supabase
                 .from('shifts')
-                .select(
-                    `
-          *,
-        assignment_outcome,
-          organizations(id, name),
-          departments(id, name),
-          sub_departments(id, name),
-        roles(id, name),
-        remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max),
-        assigned_profiles:profiles!assigned_employee_id(first_name, last_name)
-        `
-                )
+                .select(SHIFT_SELECT)
                 .eq('organization_id', organizationId)
                 .gte('shift_date', startDate)
                 .lte('shift_date', endDate)
-                .is('deleted_at', null)
-                .order('shift_date')
-                .order('display_order')
-                .order('start_time');
+                .is('deleted_at', null);
 
             if (filters?.departmentId && isValidUuid(filters.departmentId)) {
                 query = query.eq('department_id', filters.departmentId);
             } else if (filters?.departmentIds && filters.departmentIds.length > 0) {
-                query = query.in('department_id', filters.departmentIds.filter(id => isValidUuid(id)));
+                query = query.in('department_id', filters.departmentIds.filter(isValidUuid));
             }
             if (filters?.subDepartmentId && isValidUuid(filters.subDepartmentId)) {
                 query = query.eq('sub_department_id', filters.subDepartmentId);
             } else if (filters?.subDepartmentIds && filters.subDepartmentIds.length > 0) {
-                query = query.in('sub_department_id', filters.subDepartmentIds.filter(id => isValidUuid(id)));
+                query = query.in('sub_department_id', filters.subDepartmentIds.filter(isValidUuid));
             }
             if (filters?.groupType) {
-                query = (query as any).eq('group_type', filters.groupType);
+                query = query.eq('group_type', filters.groupType);
             }
             if (filters?.status) {
-                query = (query as any).eq('status', filters.status);
+                query = query.eq('status', filters.status);
             }
 
-            const { data, error } = await query;
+            const { data, error } = await query
+                .order('shift_date')
+                .order('display_order')
+                .order('start_time');
 
             if (error) {
                 console.error('Error fetching shifts for date range:', error);
                 return [];
             }
 
-            return (data || []).map((shift: any) => ({
-                ...shift,
-                is_trade_requested: !!shift.trade_requested_at || shift.trading_status === 'TradeRequested'
-            })) as unknown as Shift[];
+            return (data || []).map(row => normalizeShiftRow(row as Record<string, unknown>));
         } catch (error) {
             console.error('Exception in getShiftsForDateRange:', error);
             return [];
@@ -207,23 +200,19 @@ export const shiftsQueries = {
         try {
             const { data, error } = await supabase
                 .from('shifts')
-                .select(
-                    `
-          *,
-          assignment_outcome,
-          organizations(id, name),
-          departments(id, name),
-          sub_departments(id, name),
-          roles(id, name),
-          remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max),
-          assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
-          roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name, external_id))
-        `
-                )
+                .select(`
+                  *,
+                  assignment_outcome,
+                  organizations(id, name),
+                  departments(id, name),
+                  sub_departments(id, name),
+                  roles(id, name),
+                  remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max),
+                  assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
+                  roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name, external_id))
+                `)
                 .eq('assigned_employee_id', employeeId)
-                // Only show Published shifts (no drafts)
                 .eq('lifecycle_status', 'Published')
-                // Show all assigned shifts (including offers)
                 .gte('shift_date', startDate)
                 .lte('shift_date', endDate)
                 .is('deleted_at', null)
@@ -235,10 +224,7 @@ export const shiftsQueries = {
                 return [];
             }
 
-            return (data || []).map((shift: any) => ({
-                ...shift,
-                is_trade_requested: !!shift.trade_requested_at || shift.trading_status === 'TradeRequested'
-            })) as unknown as Shift[];
+            return (data || []).map(row => normalizeShiftRow(row as Record<string, unknown>));
         } catch (error) {
             console.error('Exception in getEmployeeShifts:', error);
             return [];
@@ -249,7 +235,7 @@ export const shiftsQueries = {
        LOOKUPS
        ============================================================ */
 
-    async getOrganizations(): Promise<any[]> {
+    async getOrganizations(): Promise<OrgSummary[]> {
         try {
             const { data, error } = await supabase
                 .from('organizations')
@@ -260,14 +246,14 @@ export const shiftsQueries = {
                 console.error('Error fetching organizations:', error);
                 return [];
             }
-            return data || [];
+            return (data || []) as OrgSummary[];
         } catch (error) {
             console.error('Exception in getOrganizations:', error);
             return [];
         }
     },
 
-    async getDepartments(organizationId?: string): Promise<any[]> {
+    async getDepartments(organizationId?: string): Promise<DeptSummary[]> {
         try {
             let query = supabase
                 .from('departments')
@@ -284,20 +270,17 @@ export const shiftsQueries = {
                 console.error('Error fetching departments:', error);
                 return [];
             }
-            return data || [];
+            return (data || []) as DeptSummary[];
         } catch (error) {
             console.error('Exception in getDepartments:', error);
             return [];
         }
     },
 
-    async getSubDepartments(departmentId?: string): Promise<any[]> {
+    async getSubDepartments(departmentId?: string): Promise<SubDeptSummary[]> {
         try {
             if (departmentId && !isValidUuid(departmentId)) {
-                console.warn(
-                    'Invalid department ID for getSubDepartments:',
-                    departmentId
-                );
+                console.warn('Invalid department ID for getSubDepartments:', departmentId);
                 return [];
             }
 
@@ -316,14 +299,14 @@ export const shiftsQueries = {
                 console.error('Error fetching sub_departments:', error);
                 return [];
             }
-            return data || [];
+            return (data || []) as SubDeptSummary[];
         } catch (error) {
             console.error('Exception in getSubDepartments:', error);
             return [];
         }
     },
 
-    async getRoles(departmentId?: string, subDepartmentId?: string): Promise<any[]> {
+    async getRoles(departmentId?: string, subDepartmentId?: string): Promise<RoleSummary[]> {
         try {
             let query = supabase
                 .from('roles')
@@ -331,10 +314,9 @@ export const shiftsQueries = {
                 .order('name');
 
             if (subDepartmentId && isValidUuid(subDepartmentId)) {
-                // STRICT SCOPING: Only fetch roles for this specific sub-department
-                query = query.eq('sub_department_id', subDepartmentId);
+                query = query.or(`sub_department_id.eq.${subDepartmentId},department_id.eq.${departmentId}`);
             } else if (departmentId && isValidUuid(departmentId)) {
-                query = query.eq('department_id', departmentId);
+                query = query.or(`department_id.eq.${departmentId},department_id.is.null`);
             }
 
             const { data, error } = await query;
@@ -344,28 +326,26 @@ export const shiftsQueries = {
                 return [];
             }
 
-            return data || [];
+            return (data || []) as RoleSummary[];
         } catch (error) {
             console.error('Exception in getRoles:', error);
             return [];
         }
     },
 
-    async getTemplates(subDepartmentId?: string, departmentId?: string): Promise<any[]> {
+    async getTemplates(subDepartmentId?: string, departmentId?: string): Promise<TemplateSummary[]> {
         console.log('[shiftsQueries.getTemplates] Fetching with:', { subDepartmentId, departmentId });
         try {
-            // Use v_template_full view which includes applied_count and full metadata
             let query = supabase
                 .from('v_template_full')
                 .select('id, name, description, department_id, sub_department_id, status, published_month, start_date, end_date, organization_id, applied_count')
-                .eq('status', 'published') // Only show published templates for application
+                .eq('status', 'published')
                 .order('name');
 
             const cleanSubDeptId = subDepartmentId?.trim();
             const cleanDeptId = departmentId?.trim();
 
             if (cleanSubDeptId && isValidUuid(cleanSubDeptId)) {
-                // Match templates for this sub-department OR department-level templates (null sub_dept)
                 if (cleanDeptId && isValidUuid(cleanDeptId)) {
                     query = query.or(`sub_department_id.eq.${cleanSubDeptId},and(department_id.eq.${cleanDeptId},sub_department_id.is.null)`);
                 } else {
@@ -382,66 +362,81 @@ export const shiftsQueries = {
                 return [];
             }
 
-            console.log('[shiftsQueries.getTemplates] Found:', data?.length || 0, 'templates');
-            return data || [];
+            console.log('[shiftsQueries.getTemplates] Found:', data?.length ?? 0, 'templates');
+            return (data || []) as TemplateSummary[];
         } catch (error) {
             console.error('[shiftsQueries.getTemplates] Exception:', error);
             return [];
         }
     },
 
-    async getRemunerationLevels(): Promise<any[]> {
+    async getRemunerationLevels(): Promise<RemunerationLevel[]> {
         try {
             const { data, error } = await supabase
                 .from('remuneration_levels')
-                .select(
-                    'id, level_number, level_name, hourly_rate_min, hourly_rate_max, description'
-                )
+                .select('id, level_number, level_name, hourly_rate_min, hourly_rate_max, description')
                 .order('level_number');
 
             if (error) {
                 console.error('Error fetching remuneration_levels:', error);
                 return [];
             }
-            return data || [];
+            return (data || []) as RemunerationLevel[];
         } catch (error) {
             console.error('Exception in getRemunerationLevels:', error);
             return [];
         }
     },
 
-    async getEmployees(organizationId?: string): Promise<any[]> {
+    async getEmployees(organizationId?: string, departmentId?: string, subDepartmentId?: string): Promise<ProfileSummary[]> {
         try {
-            // Try 'profiles' table first
-            const { data: profilesData, error: profilesError } = await supabase
-                .from('profiles')
-                .select('id, first_name, last_name')
-                .order('last_name');
+            let query = supabase
+                .from('user_contracts')
+                .select(`
+                    user_id,
+                    profiles:profiles!user_id (
+                        id,
+                        first_name,
+                        last_name
+                    )
+                `)
+                .eq('status', 'Active');
 
-            if (!profilesError && profilesData && profilesData.length > 0) {
-                let result = profilesData;
-                if (organizationId && isValidUuid(organizationId)) {
-                    // Client-side filter if organization_id exists on profile, otherwise return all (or specific logic)
-                    // Since specific column fetch failed, we assume profiles are restricted by RLS to the user's org anyway
-                    result = result.filter(
-                        (p: any) => !p.organization_id || p.organization_id === organizationId
-                    );
-                }
-                return result;
+            if (organizationId && isValidUuid(organizationId)) {
+                query = query.eq('organization_id', organizationId);
             }
 
-            console.warn('No profiles found');
-            return [];
+            if (subDepartmentId && isValidUuid(subDepartmentId)) {
+                query = query.eq('department_id', departmentId)
+                    .or(`sub_department_id.eq.${subDepartmentId},sub_department_id.is.null`);
+            } else if (departmentId && isValidUuid(departmentId)) {
+                query = query.eq('department_id', departmentId);
+            }
 
-            console.warn('No employee/profile/user table found');
-            return [];
+            const { data, error } = await query;
+
+            if (error) {
+                console.error('[getEmployees] Error fetching contracts:', error);
+                return [];
+            }
+
+            const profilesMap = new Map<string, ProfileSummary>();
+            data?.forEach(row => {
+                const profile = (row as { profiles?: ProfileSummary | null }).profiles;
+                if (profile?.id) {
+                    profilesMap.set(profile.id, profile);
+                }
+            });
+
+            return Array.from(profilesMap.values())
+                .sort((a, b) => a.last_name.localeCompare(b.last_name));
         } catch (error) {
             console.error('Exception in getEmployees:', error);
             return [];
         }
     },
 
-    async getSkills(): Promise<any[]> {
+    async getSkills(): Promise<SkillSummary[]> {
         try {
             const { data, error } = await supabase
                 .from('skills')
@@ -454,14 +449,14 @@ export const shiftsQueries = {
                 console.error('Error fetching skills:', error);
                 return [];
             }
-            return data || [];
+            return (data || []) as SkillSummary[];
         } catch (error) {
             console.error('Exception in getSkills:', error);
             return [];
         }
     },
 
-    async getLicenses(): Promise<any[]> {
+    async getLicenses(): Promise<LicenseSummary[]> {
         try {
             const { data, error } = await supabase
                 .from('licenses')
@@ -474,20 +469,22 @@ export const shiftsQueries = {
                 console.error('Error fetching licenses:', error);
                 return [];
             }
-            return data || [];
+            return (data || []) as LicenseSummary[];
         } catch (error) {
             console.error('Exception in getLicenses:', error);
             return [];
         }
     },
 
-    async getEvents(organizationId?: string): Promise<any[]> {
+    async getEvents(organizationId?: string): Promise<{
+        id: string; name: string; description: string | null;
+        event_type: string; venue: string | null;
+        start_date: string; end_date: string; status: string;
+    }[]> {
         try {
             let query = supabase
                 .from('events')
-                .select(
-                    'id, name, description, event_type, venue, start_date, end_date, status'
-                )
+                .select('id, name, description, event_type, venue, start_date, end_date, status')
                 .eq('is_active', true)
                 .order('start_date', { ascending: true });
 
@@ -512,12 +509,16 @@ export const shiftsQueries = {
         departmentId?: string;
         departmentIds?: string[];
         subDepartmentId?: string;
-        subDepartmentIds?: string[]
-    }): Promise<any[]> {
+        subDepartmentIds?: string[];
+    }): Promise<{
+        id: string; start_date: string; end_date: string;
+        organization_id: string; department_id: string | null;
+        sub_department_id: string | null; status: string | null;
+        description: string | null; is_locked: boolean | null;
+        groups: { id: string; name: string; subGroups: { id: string; name: string }[] }[];
+    }[]> {
         try {
-            if (!isValidUuid(organizationId)) {
-                return [];
-            }
+            if (!isValidUuid(organizationId)) return [];
 
             let query = supabase
                 .from('rosters')
@@ -537,25 +538,24 @@ export const shiftsQueries = {
                     subGroups: roster_subgroups(id, name)
                 )
             `)
+                .eq('organization_id', organizationId)
                 .order('start_date', { ascending: false });
 
-            if (isValidUuid(organizationId)) {
-                query = query.eq('organization_id', organizationId);
-            }
-
             if (filters?.departmentId && isValidUuid(filters.departmentId)) {
-                query = query.eq('department_id', filters.departmentId);
+                query = query.or(`department_id.eq.${filters.departmentId},department_id.is.null`);
             } else if (filters?.departmentIds && filters.departmentIds.length > 0) {
-                query = query.in('department_id', filters.departmentIds.filter(id => isValidUuid(id)));
+                const deptIds = filters.departmentIds.filter(isValidUuid);
+                if (deptIds.length > 0) {
+                    query = query.or(`department_id.in.(${deptIds.join(',')}),department_id.is.null`);
+                }
             }
 
             if (filters?.subDepartmentId && isValidUuid(filters.subDepartmentId)) {
                 query = query.eq('sub_department_id', filters.subDepartmentId);
             } else if (filters?.subDepartmentIds !== undefined) {
                 if (filters.subDepartmentIds.length > 0) {
-                    query = query.in('sub_department_id', filters.subDepartmentIds.filter(id => isValidUuid(id)));
+                    query = query.in('sub_department_id', filters.subDepartmentIds.filter(isValidUuid));
                 } else {
-                    // Explicitly empty array means "Global only" (sub_department_id is null)
                     query = query.is('sub_department_id', null);
                 }
             }
@@ -577,7 +577,7 @@ export const shiftsQueries = {
     /**
      * Get the full structure for a specific roster (groups and subgroups)
      */
-    async getRosterStructure(rosterId: string): Promise<any[]> {
+    async getRosterStructure(rosterId: string): Promise<RosterSlot[]> {
         try {
             if (!isValidUuid(rosterId)) return [];
 
@@ -601,22 +601,15 @@ export const shiftsQueries = {
 
             if (!data) return [];
 
-            // Flatten the structure for the UI which expects { groupType: string, subGroupName: string }
-            const flattened: any[] = [];
-            data.forEach((group: any) => {
+            const flattened: RosterSlot[] = [];
+            (data as { name: string; subGroups: { name: string }[] }[]).forEach(group => {
                 const normalizedGroup = group.name.toLowerCase().replace(/\s+/g, '_');
                 if (group.subGroups && group.subGroups.length > 0) {
-                    group.subGroups.forEach((sub: any) => {
-                        flattened.push({
-                            groupType: normalizedGroup,
-                            subGroupName: sub.name
-                        });
+                    group.subGroups.forEach(sub => {
+                        flattened.push({ groupType: normalizedGroup, subGroupName: sub.name });
                     });
                 } else {
-                    flattened.push({
-                        groupType: normalizedGroup,
-                        subGroupName: ''
-                    });
+                    flattened.push({ groupType: normalizedGroup, subGroupName: '' });
                 }
             });
 
@@ -626,8 +619,6 @@ export const shiftsQueries = {
             return [];
         }
     },
-
-
 
     /**
      * Get count of pending shift offers (S3 - Published + Offered) for an employee
@@ -648,7 +639,7 @@ export const shiftsQueries = {
                 console.error('Error fetching pending offer count:', error);
                 return 0;
             }
-            return count || 0;
+            return count ?? 0;
         } catch (error) {
             console.error('Exception in getPendingOfferCount:', error);
             return 0;
@@ -657,7 +648,6 @@ export const shiftsQueries = {
 
     /**
      * Get shift offers for an employee (S3 - Published + Offered status)
-     * Returns shifts that have been offered to this employee and are pending response
      */
     async getMyOffers(employeeId: string, filters?: { organizationId?: string; departmentId?: string }) {
         try {
@@ -682,39 +672,38 @@ export const shiftsQueries = {
                 .eq('assigned_employee_id', employeeId)
                 .eq('lifecycle_status', 'Published')
                 .eq('assignment_outcome', 'offered')
-                .is('deleted_at', null)
-                .order('shift_date', { ascending: true });
+                .is('deleted_at', null);
 
             if (filters?.organizationId && isValidUuid(filters.organizationId)) {
                 query = query.eq('organization_id', filters.organizationId);
             }
             if (filters?.departmentId && isValidUuid(filters.departmentId)) {
-                query = query.eq('department_id', filters.departmentId);
+                query = query.or(`department_id.eq.${filters.departmentId},department_id.is.null`);
             }
 
-            const { data, error } = await query;
+            const { data, error } = await query
+                .order('shift_date', { ascending: true });
 
             if (error) {
                 console.error('Error fetching my offers:', error);
                 throw error;
             }
 
-            // Transform to match OfferData interface expected by MyOffersModal
             return (data || []).map(shift => ({
                 id: shift.id,
                 shift_id: shift.id,
                 status: 'Pending' as const,
                 offered_at: shift.published_at,
                 shift: {
-                    id: shift.id,
-                    shift_date: shift.shift_date,
-                    start_time: shift.start_time,
-                    end_time: shift.end_time,
-                    roles: shift.roles,
-                    departments: shift.departments,
-                    sub_departments: shift.sub_departments,
-                    organizations: shift.organizations,
-                    notes: shift.notes,
+                    id:                  shift.id,
+                    shift_date:          shift.shift_date,
+                    start_time:          shift.start_time,
+                    end_time:            shift.end_time,
+                    roles:               shift.roles,
+                    departments:         shift.departments,
+                    sub_departments:     shift.sub_departments,
+                    organizations:       shift.organizations,
+                    notes:               shift.notes,
                     remuneration_levels: shift.remuneration_levels,
                 },
             }));
@@ -731,27 +720,22 @@ export const shiftsQueries = {
         try {
             if (!isValidUuid(employeeId)) return [];
 
-            if (status === 'Accepted') {
-                // For Accepted: specific logic - assigned to me and confirmed
-                // We might want to filter strictly by ones that WERE offers, but 'confirmed' is usually the end state.
-                // Simpler approach: Show all confirmed future shifts? Or check audit log?
-                // Checking audit log for 'offer_accepted' is most accurate if we want strictly "Accepted Offers".
+            const eventType = status === 'Accepted' ? 'offer_accepted' : 'offer_declined';
 
-                // Let's use audit log to find shift IDs, then fetch details.
-                const { data: events } = await supabase
-                    .from('shift_audit_events')
-                    .select('shift_id')
-                    .eq('performed_by_id', employeeId)
-                    .eq('event_type', 'offer_accepted')
-                    .order('created_at', { ascending: false })
-                    .limit(50); // Limit usage history
+            const { data: events } = await supabase
+                .from('shift_audit_events')
+                .select('shift_id, created_at')
+                .eq('performed_by_id', employeeId)
+                .eq('event_type', eventType)
+                .order('created_at', { ascending: false })
+                .limit(50);
 
-                const shiftIds = events?.map(e => e.shift_id) || [];
-                if (shiftIds.length === 0) return [];
+            const shiftIds = events?.map(e => e.shift_id) ?? [];
+            if (shiftIds.length === 0) return [];
 
-                let query = supabase
-                    .from('shifts')
-                    .select(`
+            let query = supabase
+                .from('shifts')
+                .select(`
                 id,
                 shift_date,
                 start_time,
@@ -765,101 +749,39 @@ export const shiftsQueries = {
                 organizations(id, name),
                 remuneration_levels(level_name, hourly_rate_min)
             `)
-                    .in('id', shiftIds)
-                    .is('deleted_at', null)
-                    .order('shift_date', { ascending: false }); // Show recent first
+                .in('id', shiftIds)
+                .is('deleted_at', null);
 
-                if (filters?.organizationId && isValidUuid(filters.organizationId)) {
-                    query = query.eq('organization_id', filters.organizationId);
-                }
-                if (filters?.departmentId && isValidUuid(filters.departmentId)) {
-                    query = query.eq('department_id', filters.departmentId);
-                }
-
-                const { data, error } = await query;
-                if (error) throw error;
-
-                return (data || []).map(shift => ({
-                    id: shift.id,
-                    shift_id: shift.id,
-                    status: 'Accepted' as const,
-                    offered_at: shift.created_at, // Approximate
-                    shift: {
-                        id: shift.id,
-                        shift_date: shift.shift_date,
-                        start_time: shift.start_time,
-                        end_time: shift.end_time,
-                        roles: shift.roles,
-                        departments: shift.departments,
-                        sub_departments: shift.sub_departments,
-                        organizations: shift.organizations,
-                        notes: shift.notes,
-                        remuneration_levels: shift.remuneration_levels,
-                    },
-                }));
-
-            } else {
-                // Declined: Check audit events for 'offer_declined'
-                const { data: events } = await supabase
-                    .from('shift_audit_events')
-                    .select('shift_id, created_at')
-                    .eq('performed_by_id', employeeId)
-                    .eq('event_type', 'offer_declined')
-                    .order('created_at', { ascending: false })
-                    .limit(50);
-
-                const shiftIds = events?.map(e => e.shift_id) || [];
-                if (shiftIds.length === 0) return [];
-
-                let query = supabase
-                    .from('shifts')
-                    .select(`
-                id,
-                shift_date,
-                start_time,
-                end_time,
-                notes,
-                assignment_outcome,
-                roles(name),
-                departments(id, name),
-                sub_departments(name),
-                organizations(id, name),
-                remuneration_levels(level_name, hourly_rate_min)
-            `)
-                    .in('id', shiftIds)
-                    // Deleted shifts might still be relevant in history, but safer to hide if deleted
-                    .is('deleted_at', null)
-                    .order('shift_date', { ascending: false });
-
-                if (filters?.organizationId && isValidUuid(filters.organizationId)) {
-                    query = query.eq('organization_id', filters.organizationId);
-                }
-                if (filters?.departmentId && isValidUuid(filters.departmentId)) {
-                    query = query.eq('department_id', filters.departmentId);
-                }
-
-                const { data, error } = await query;
-                if (error) throw error;
-
-                return (data || []).map(shift => ({
-                    id: shift.id,
-                    shift_id: shift.id,
-                    status: 'Declined' as const,
-                    offered_at: events?.find(e => e.shift_id === shift.id)?.created_at || new Date().toISOString(),
-                    shift: {
-                        id: shift.id,
-                        shift_date: shift.shift_date,
-                        start_time: shift.start_time,
-                        end_time: shift.end_time,
-                        roles: shift.roles,
-                        departments: shift.departments,
-                        sub_departments: shift.sub_departments,
-                        organizations: shift.organizations,
-                        notes: shift.notes,
-                        remuneration_levels: shift.remuneration_levels,
-                    },
-                }));
+            if (filters?.organizationId && isValidUuid(filters.organizationId)) {
+                query = query.eq('organization_id', filters.organizationId);
             }
+            if (filters?.departmentId && isValidUuid(filters.departmentId)) {
+                query = query.eq('department_id', filters.departmentId);
+            }
+
+            const { data, error } = await query.order('shift_date', { ascending: false });
+            if (error) throw error;
+
+            return (data || []).map(shift => ({
+                id:         shift.id,
+                shift_id:   shift.id,
+                status,
+                offered_at: events?.find(e => e.shift_id === shift.id)?.created_at
+                            ?? shift.created_at
+                            ?? new Date().toISOString(),
+                shift: {
+                    id:                  shift.id,
+                    shift_date:          shift.shift_date,
+                    start_time:          shift.start_time,
+                    end_time:            shift.end_time,
+                    roles:               shift.roles,
+                    departments:         shift.departments,
+                    sub_departments:     shift.sub_departments,
+                    organizations:       shift.organizations,
+                    notes:               shift.notes,
+                    remuneration_levels: shift.remuneration_levels,
+                },
+            }));
         } catch (error) {
             console.error('Exception in getMyOfferHistory:', error);
             throw error;
@@ -867,59 +789,29 @@ export const shiftsQueries = {
     },
 
     /**
-     * Accept a shift offer (S3 -> S4: Published + Offered -> Published + Confirmed)
+     * Accept a shift offer — delegates to the typed RPC client.
+     * Prefer shiftsCommands.acceptOffer() for new code; this alias is kept
+     * for backward compatibility with components that import from shiftsQueries.
      */
     async acceptOffer(shiftId: string) {
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            const { data, error } = await supabase
-                .rpc('sm_accept_offer', {
-                    p_shift_id: shiftId,
-                    p_user_id: user?.id
-                });
-
-            if (error) {
-                console.error('Error accepting offer:', error);
-                throw error;
-            }
-
-            return data;
-
-            return data;
-        } catch (error) {
-            console.error('Exception in acceptOffer:', error);
-            throw error;
-        }
+        return callAuthenticatedRpc(
+            'sm_accept_offer',
+            (userId) => ({ p_shift_id: shiftId, p_user_id: userId }),
+            OfferActionResponseSchema,
+        );
     },
 
     /**
-     * Decline a shift offer (S3 -> S5/S6: Published + Offered -> On Bidding)
+     * Decline a shift offer — delegates to the typed RPC client.
      */
     async declineOffer(shiftId: string) {
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            const { data, error } = await supabase
-                .rpc('sm_decline_offer', {
-                    p_shift_id: shiftId,
-                    p_user_id: user?.id
-                });
-
-            if (error) {
-                console.error('Error declining offer:', error);
-                throw error;
-            }
-
-            return data;
-
-            return data;
-        } catch (error) {
-            console.error('Exception in declineOffer:', error);
-            throw error;
-        }
+        return callAuthenticatedRpc(
+            'sm_decline_offer',
+            (userId) => ({ p_shift_id: shiftId, p_user_id: userId }),
+            OfferActionResponseSchema,
+        );
     },
-    /**
-     * Get all open shifts available for bidding (S5/S6)
-     */
+
     /**
      * Get all open shifts available for bidding (S5/S6)
      * Enforces Access Control: Org -> Dept -> SubDept
@@ -928,7 +820,7 @@ export const shiftsQueries = {
         organizationId: string;
         departmentId?: string;
         subDepartmentId?: string;
-    }): Promise<any[]> {
+    }): Promise<Shift[]> {
         try {
             const { organizationId, departmentId, subDepartmentId } = filters;
 
@@ -945,29 +837,27 @@ export const shiftsQueries = {
                 departments(name),
                 sub_departments(name),
                 roles(name),
-                remuneration_levels(level_name, hourly_rate_min),
-                profiles: assigned_employee_id(first_name, last_name)
+                remuneration_levels(level_name, hourly_rate_min)
             `)
                 .eq('organization_id', organizationId)
                 .in('bidding_status', ['on_bidding_normal', 'on_bidding_urgent'])
                 .is('deleted_at', null)
-                .eq('is_cancelled', false)
-                .order('shift_date', { ascending: true });
+                .eq('is_cancelled', false);
 
-            // Apply Hierarchical Filters
             if (subDepartmentId && isValidUuid(subDepartmentId)) {
                 query = query.eq('sub_department_id', subDepartmentId);
             } else if (departmentId && isValidUuid(departmentId)) {
                 query = query.eq('department_id', departmentId);
             }
 
-            const { data, error } = await query;
+            const { data, error } = await query
+                .order('shift_date', { ascending: true });
 
             if (error) {
                 console.error('Error fetching open shifts:', error);
                 return [];
             }
-            return data || [];
+            return (data || []) as unknown as Shift[];
         } catch (error) {
             console.error('Exception in getOpenShifts:', error);
             return [];
@@ -977,7 +867,14 @@ export const shiftsQueries = {
     /**
      * Get all bids for a specific shift
      */
-    async getShiftBids(shiftId: string): Promise<any[]> {
+    async getShiftBids(shiftId: string): Promise<{
+        id: string;
+        shift_id: string;
+        employee_id: string;
+        status: string;
+        created_at: string;
+        profiles: { id: string; full_name: string | null; first_name: string | null; last_name: string | null; employment_type: string | null } | null;
+    }[]> {
         try {
             if (!isValidUuid(shiftId)) return [];
 

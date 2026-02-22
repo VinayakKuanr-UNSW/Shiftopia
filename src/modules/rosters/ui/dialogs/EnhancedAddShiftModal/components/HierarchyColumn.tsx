@@ -8,32 +8,23 @@ interface HierarchyColumnProps {
     orgId?: string;
     deptId?: string;
     subDeptId?: string;
+    orgName?: string;
+    deptName?: string;
+    subDeptName?: string;
 }
 
 export const HierarchyColumn: React.FC<HierarchyColumnProps> = ({
     orgId,
     deptId,
     subDeptId,
+    orgName,
+    deptName,
+    subDeptName,
 }) => {
-    // Use hook ONLY for tree structure/names, NOT for selection state
-    const { scopeTree } = useScopeFilter('managerial');
-
-    // Use passed props for selection
-    const selectedOrgId = orgId;
-    const selectedDeptId = deptId;
-    const selectedSubDeptId = subDeptId;
-
-    console.log('[HierarchyColumn] Debug Scope:', {
-        selectedOrgId,
-        selectedDeptId,
-        selectedSubDeptId,
-        treeOrgs: scopeTree?.organizations?.length
-    });
-
-    // Find names
-    const org = scopeTree?.organizations?.find(o => o.id === selectedOrgId);
-    const dept = org?.departments?.find(d => d.id === selectedDeptId);
-    const subDept = dept?.subdepartments?.find(sd => sd.id === selectedSubDeptId);
+    // Resolve names from props. Resolution from tree happens in the parent (index.tsx)
+    const displayNameOrg = orgName || 'All Organizations';
+    const displayNameDept = deptName || 'All Departments';
+    const displayNameSubDept = subDeptName || 'All Sub-Departments';
 
     return (
         <div className="flex flex-col h-full rounded-2xl bg-[#1e293b]/30 border border-white/5 backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-violet-500/20 group/card">
@@ -54,7 +45,7 @@ export const HierarchyColumn: React.FC<HierarchyColumnProps> = ({
                         <Label className="text-[11px] font-bold text-white/40 uppercase tracking-[0.1em]">Organization</Label>
                         <div className="relative">
                             <Input
-                                value={org?.name || 'All Organizations'}
+                                value={displayNameOrg}
                                 disabled
                                 className="h-11 bg-white/[0.02] border-white/5 text-white/60 text-sm rounded-xl cursor-not-allowed pl-10"
                             />
@@ -69,7 +60,7 @@ export const HierarchyColumn: React.FC<HierarchyColumnProps> = ({
                         <Label className="text-[11px] font-bold text-white/40 uppercase tracking-[0.1em]">Department</Label>
                         <div className="relative">
                             <Input
-                                value={dept?.name || 'All Departments'}
+                                value={displayNameDept}
                                 disabled
                                 className="h-11 bg-white/[0.02] border-white/5 text-white/60 text-sm rounded-xl cursor-not-allowed pl-10"
                             />
@@ -84,7 +75,7 @@ export const HierarchyColumn: React.FC<HierarchyColumnProps> = ({
                         <Label className="text-[11px] font-bold text-white/40 uppercase tracking-[0.1em]">Sub-Department</Label>
                         <div className="relative">
                             <Input
-                                value={subDept?.name || 'All Sub-Departments'}
+                                value={displayNameSubDept}
                                 disabled
                                 className="h-11 bg-white/[0.02] border-white/5 text-white/60 text-sm rounded-xl cursor-not-allowed pl-10"
                             />

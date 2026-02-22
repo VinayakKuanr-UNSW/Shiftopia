@@ -1,4 +1,5 @@
 import React from 'react';
+import { cn } from '@/modules/core/lib/utils';
 import {
     FormControl,
     FormField,
@@ -29,7 +30,8 @@ export const RoleStep: React.FC<RoleStepProps> = ({
     netLength,
     selectedRemLevel,
     safeContext,
-    isRoleLocked
+    isRoleLocked,
+    isEmployeeLocked
 }) => {
     const watchRoleId = form.watch('role_id');
     const estimatedCost = netLength * (selectedRemLevel?.hourly_rate_min || 0);
@@ -43,20 +45,41 @@ export const RoleStep: React.FC<RoleStepProps> = ({
                     render={({ field }) => (
                         <FormItem>
                             <FormLabel className="text-white/70">Role *</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || ''} disabled={isReadOnly || isRoleLocked}>
-                                <FormControl>
-                                    <SelectTrigger className="bg-[#1e293b] border-white/10 text-white h-11">
-                                        <SelectValue placeholder={isLoadingData ? 'Loading...' : 'Select role'} />
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent className="bg-[#1e293b] border-white/10">
-                                    {roles.map((role) => (
-                                        <SelectItem key={role.id} value={role.id} className="text-white">
-                                            {role.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            {!isReadOnly && !isRoleLocked ? (
+                                <Select onValueChange={field.onChange} value={field.value || ''} disabled={isReadOnly || isRoleLocked}>
+                                    <FormControl>
+                                        <SelectTrigger className={cn(
+                                            "bg-[#1e293b] border-white/10 text-white h-11 transition-all",
+                                            !field.value && "border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.1)]"
+                                        )}>
+                                            <SelectValue placeholder={isLoadingData ? 'Loading...' : 'Select role'} />
+                                        </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent className="bg-[#1e293b] border-white/10">
+                                        {roles.map((role) => (
+                                            <SelectItem key={role.id} value={role.id} className="text-white">
+                                                {role.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            ) : (
+                                <div className="text-sm font-medium text-white px-1">
+                                    {(() => {
+                                        const match = roles.find(r => r.id === field.value);
+                                        console.log('[RoleStep] Locked View Render:', {
+                                            fieldValue: field.value,
+                                            rolesCount: roles.length,
+                                            matchFound: !!match
+                                        });
+                                        return isLoadingData ? (
+                                            <span className="text-white/40 italic">Loading role...</span>
+                                        ) : (
+                                            match?.name || 'No role selected'
+                                        );
+                                    })()}
+                                </div>
+                            )}
                             <FormMessage />
                         </FormItem>
                     )}
@@ -72,20 +95,26 @@ export const RoleStep: React.FC<RoleStepProps> = ({
                                 <Lock className="h-3 w-3 text-amber-400" />
                                 <span className="text-xs text-white/40 font-normal">(from role)</span>
                             </FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || ''} disabled>
-                                <FormControl>
-                                    <SelectTrigger className="bg-[#1e293b] border-white/10 text-white h-11 opacity-70 cursor-not-allowed">
-                                        <SelectValue placeholder={watchRoleId ? 'Loading...' : 'Select a role first'} />
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent className="bg-[#1e293b] border-white/10">
-                                    {remunerationLevels.map((level) => (
-                                        <SelectItem key={level.id} value={level.id} className="text-white">
-                                            {level.level_name} - ${level.hourly_rate_min}/hr
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            {!isReadOnly ? (
+                                <Select onValueChange={field.onChange} value={field.value || ''} disabled>
+                                    <FormControl>
+                                        <SelectTrigger className="bg-[#1e293b] border-white/10 text-white h-11 opacity-70 cursor-not-allowed">
+                                            <SelectValue placeholder={watchRoleId ? 'Loading...' : 'Select a role first'} />
+                                        </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent className="bg-[#1e293b] border-white/10">
+                                        {remunerationLevels.map((level) => (
+                                            <SelectItem key={level.id} value={level.id} className="text-white">
+                                                {level.level_name} - ${level.hourly_rate_min}/hr
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            ) : (
+                                <div className="text-sm font-medium text-white/60 px-1">
+                                    {remunerationLevels.find(l => l.id === field.value)?.level_name || '—'}
+                                </div>
+                            )}
                         </FormItem>
                     )}
                 />
@@ -132,25 +161,35 @@ export const RoleStep: React.FC<RoleStepProps> = ({
                     render={({ field }) => (
                         <FormItem>
                             <FormLabel className="text-white/70">Assigned Employee</FormLabel>
-                            <Select
-                                onValueChange={(v) => field.onChange(v === '__none__' ? null : v)}
-                                value={field.value || '__none__'}
-                                disabled={isReadOnly || !!safeContext?.employeeId}
-                            >
-                                <FormControl>
-                                    <SelectTrigger className="bg-[#1e293b] border-white/10 text-white h-11">
-                                        <SelectValue placeholder="Unassigned" />
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent className="bg-[#1e293b] border-white/10">
-                                    <SelectItem value="__none__" className="text-white/50">Unassigned</SelectItem>
-                                    {employees.map((emp) => (
-                                        <SelectItem key={emp.id} value={emp.id} className="text-white">
-                                            {emp.first_name} {emp.last_name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            {!isReadOnly && !isEmployeeLocked ? (
+                                <Select
+                                    onValueChange={(v) => field.onChange(v === '__none__' ? null : v)}
+                                    value={field.value || '__none__'}
+                                    disabled={isReadOnly || isEmployeeLocked}
+                                >
+                                    <FormControl>
+                                        <SelectTrigger className="bg-[#1e293b] border-white/10 text-white h-11">
+                                            <SelectValue placeholder="Unassigned" />
+                                        </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent className="bg-[#1e293b] border-white/10">
+                                        <SelectItem value="__none__" className="text-white/50">Unassigned</SelectItem>
+                                        {employees.map((emp) => (
+                                            <SelectItem key={emp.id} value={emp.id} className="text-white">
+                                                {emp.first_name} {emp.last_name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            ) : (
+                                <div className="text-sm font-medium text-white px-1">
+                                    {field.value ? (
+                                        employees.find(e => e.id === field.value) ? (
+                                            `${employees.find(e => e.id === field.value).first_name} ${employees.find(e => e.id === field.value).last_name}`
+                                        ) : 'Employee records not found'
+                                    ) : 'Unassigned'}
+                                </div>
+                            )}
                         </FormItem>
                     )}
                 />

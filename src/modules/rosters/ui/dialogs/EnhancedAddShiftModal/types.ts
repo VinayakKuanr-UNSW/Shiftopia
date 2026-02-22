@@ -47,6 +47,7 @@ export interface ShiftContext {
     group_type?: string;
     employeeId?: string;
     roleId?: string;
+    remunerationLevelId?: string;
     rosterId?: string;
     eventStartTime?: string;
     eventEndTime?: string;
@@ -109,6 +110,7 @@ export interface Roster {
     start_date: string;
     end_date: string;
     department_id?: string;
+    status?: string;
     sub_department_id?: string;
     groups?: {
         id: string;
@@ -154,6 +156,7 @@ export interface ScheduleStepProps extends StepProps {
     isSubGroupLocked?: boolean;
     isRosterLocked?: boolean;
     context?: ShiftContext; // Added context for hierarchy sync
+    activeSubGroups?: Record<string, string[]>;
 }
 
 export interface RoleStepProps extends StepProps {
@@ -162,9 +165,10 @@ export interface RoleStepProps extends StepProps {
     employees: Employee[];
     existingShift?: any;
     netLength: number;
-    selectedRemLevel?: RemunerationLevel;
+    selectedRemLevel?: any;
     safeContext?: ShiftContext;
     isRoleLocked?: boolean;
+    isEmployeeLocked?: boolean;
 }
 
 export interface RequirementsStepProps extends StepProps {

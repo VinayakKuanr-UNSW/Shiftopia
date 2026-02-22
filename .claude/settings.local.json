@@ -13,7 +13,16 @@
       "Bash(wc:*)",
       "Bash(dir:*)",
       "Bash(findstr:*)",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Bash(npx:*)",
+      "mcp__supabase__list_projects",
+      "mcp__supabase__list_tables",
+      "Bash(python3:*)",
+      "mcp__supabase__get_advisors",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__list_migrations",
+      "mcp__supabase__apply_migration",
+      "Bash(npm install:*)"
     ]
   }
 }
