@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 import { Clock, MoreHorizontal, Gavel, ArrowLeftRight, Ban, X, Check, Flame, Edit, Megaphone, Hourglass, CheckCircle, XCircle, UserPlus, UserCheck, Users, MailOpen, BadgeCheck, Zap, Circle, Lock, Minus, Handshake } from 'lucide-react';
@@ -111,7 +111,21 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
 
   // State Debug Info
   const rawShift = shift.rawShift || shift;
-  const stateId = determineShiftState(rawShift as unknown as Shift);
+
+  // Memoized on the six fields determineShiftState reads — prevents recomputation
+  // when other shift properties (e.g. employee data) update.
+  const stateId = useMemo(
+    () => determineShiftState(rawShift as unknown as Shift),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      rawShift.lifecycle_status,
+      rawShift.is_cancelled,
+      rawShift.assignment_status,
+      rawShift.assignment_outcome,
+      rawShift.bidding_status,
+      rawShift.trade_requested_at,
+    ],
+  );
 
   return (
     <div

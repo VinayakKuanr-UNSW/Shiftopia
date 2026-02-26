@@ -29,7 +29,7 @@ import {
   Briefcase,
   CopyPlus,
 } from 'lucide-react';
-import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths } from 'date-fns';
+import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, isSameMonth } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import {
@@ -203,6 +203,8 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
     setIsBucketView,
     selectedDepartmentIds,
     selectedSubDepartmentIds,
+    navigateNext,
+    navigatePrevious,
   } = useRosterUI();
 
   const { data: rosters = [] } = useRostersLookup(
@@ -217,7 +219,6 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
   const [isActivateDialogOpen, setIsActivateDialogOpen] = useState(false);
   const [isApplyTemplateDialogOpen, setIsApplyTemplateDialogOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  const [selectedRangeIndex, setSelectedRangeIndex] = useState<number>(0);
 
   // Auto-select template
   React.useEffect(() => {
@@ -247,16 +248,12 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
   const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
 
   const activeRangeBounds = React.useMemo(() => {
-    if (selectedTemplate?.start_date && selectedTemplate?.end_date) {
-      return {
-        monthStart: new Date(selectedTemplate.start_date),
-        monthEnd: new Date(selectedTemplate.end_date)
-      };
-    }
-    const monthStart = startOfMonth(selectedDate);
-    const monthEnd = endOfMonth(selectedDate);
+    // Broaden bounds to allow navigation within a 2-year window
+    const now = new Date();
+    const monthStart = startOfMonth(addMonths(now, -12));
+    const monthEnd = endOfMonth(addMonths(now, 12));
     return { monthStart, monthEnd };
-  }, [selectedTemplate, selectedDate]);
+  }, []);
 
   React.useEffect(() => {
     if (onTemplateDatesChange) {
@@ -264,73 +261,26 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
     }
   }, [activeRangeBounds, onTemplateDatesChange]);
 
-  const rangeOptions: RangeOption[] = React.useMemo(() => {
-    const { monthStart, monthEnd } = activeRangeBounds;
-    const options: RangeOption[] = [];
-
+  const displayLabel = React.useMemo(() => {
     switch (viewType) {
-      case 'day': {
-        const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
-        days.forEach(day => {
-          options.push({ label: format(day, 'MMM d'), startDate: day, endDate: day });
-        });
-        break;
-      }
+      case 'day': return format(selectedDate, 'MMM d, yyyy');
       case '3day': {
-        const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
-        days.forEach(day => {
-          let rangeEnd = addDays(day, 2);
-          if (rangeEnd > monthEnd) rangeEnd = monthEnd;
-          options.push({ label: `${format(day, 'MMM d')} – ${format(rangeEnd, 'd')}`, startDate: day, endDate: rangeEnd });
-        });
-        break;
+        const end = addDays(selectedDate, 2);
+        return `${format(selectedDate, 'MMM d')} – ${format(end, isSameMonth(selectedDate, end) ? 'd' : 'MMM d')}`;
       }
       case 'week': {
-        const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
-        days.forEach(day => {
-          let rangeEnd = addDays(day, 6);
-          if (rangeEnd > monthEnd) rangeEnd = monthEnd;
-          options.push({ label: `${format(day, 'MMM d')} – ${format(rangeEnd, 'd')}`, startDate: day, endDate: rangeEnd });
-        });
-        break;
+        // Assume selectedDate is start of week
+        const end = addDays(selectedDate, 6);
+        return `${format(selectedDate, 'MMM d')} – ${format(end, isSameMonth(selectedDate, end) ? 'd' : 'MMM d')}`;
       }
-      case 'month': {
-        options.push({ label: format(monthStart, 'MMMM yyyy'), startDate: monthStart, endDate: monthEnd });
-        break;
-      }
+      case 'month': return format(selectedDate, 'MMMM yyyy');
+      default: return 'Select Date';
     }
-    return options;
-  }, [viewType, activeRangeBounds]);
+  }, [viewType, selectedDate]);
 
-  React.useEffect(() => {
-    const currentIdx = rangeOptions.findIndex(opt => isSameDay(opt.startDate, selectedDate));
-    if (currentIdx !== -1 && currentIdx !== selectedRangeIndex) {
-      setSelectedRangeIndex(currentIdx);
-    }
-  }, [selectedDate, rangeOptions]);
-
-  // FIX: Navigation logic that actually works across months
-  const handlePrevious = () => {
-    if (viewType === 'month') {
-      onDateChange(addMonths(selectedDate, -1));
-    } else if (selectedRangeIndex > 0) {
-      setSelectedRangeIndex(selectedRangeIndex - 1);
-      onDateChange(rangeOptions[selectedRangeIndex - 1].startDate);
-    } else {
-      onDateChange(addMonths(selectedDate, -1));
-    }
-  };
-
-  const handleNext = () => {
-    if (viewType === 'month') {
-      onDateChange(addMonths(selectedDate, 1));
-    } else if (selectedRangeIndex < rangeOptions.length - 1) {
-      setSelectedRangeIndex(selectedRangeIndex + 1);
-      onDateChange(rangeOptions[selectedRangeIndex + 1].startDate);
-    } else {
-      onDateChange(addMonths(selectedDate, 1));
-    }
-  };
+  // Navigation use store actions now for consistency
+  const handlePrevious = () => navigatePrevious();
+  const handleNext = () => navigateNext();
 
   return (
     <div className="w-full h-16 flex-shrink-0 z-50 bg-slate-950/40 backdrop-blur-2xl border-b border-white/10 px-8 flex items-center shadow-2xl relative">
@@ -370,27 +320,29 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
 
         {/* Center Section: Navigation & View */}
         <div className="flex items-center gap-6">
-          <div className="flex items-center bg-black/40 border border-white/10 rounded-lg p-0.5 h-9">
+          <ToggleGroup
+            type="single"
+            value={viewType}
+            onValueChange={(v) => v && onViewTypeChange(v as ViewType)}
+            className="bg-black/40 border border-white/10 rounded-lg p-0.5 h-9"
+          >
             {[
               { id: 'day', label: 'D' },
               { id: '3day', label: '3D' },
               { id: 'week', label: 'W' },
               { id: 'month', label: 'M' }
             ].map((v) => (
-              <button
+              <ToggleGroupItem
                 key={v.id}
-                onClick={() => onViewTypeChange(v.id as ViewType)}
+                value={v.id}
                 className={cn(
-                  'px-2.5 py-1 text-[10px] uppercase font-black rounded-md transition-all h-6 min-w-[24px]',
-                  viewType === v.id
-                    ? 'bg-blue-600 text-white'
-                    : 'text-white/20 hover:text-white/40 hover:bg-white/5'
+                  'px-2.5 py-1 text-[10px] uppercase font-black rounded-md transition-all h-7 grow min-w-[32px] data-[state=on]:bg-blue-600 data-[state=on]:text-white text-white/20 hover:text-white/40',
                 )}
               >
                 {v.label}
-              </button>
+              </ToggleGroupItem>
             ))}
-          </div>
+          </ToggleGroup>
 
           <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-lg px-1 h-8">
             <IconButton
@@ -404,10 +356,18 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
             <CalendarRangePicker
               selectedDate={selectedDate}
               viewType={viewType}
-              monthStart={activeRangeBounds.monthStart}
-              monthEnd={activeRangeBounds.monthEnd}
-              onRangeSelect={onDateChange}
-              displayLabel={rangeOptions[selectedRangeIndex]?.label || 'Select Date'}
+              minDate={activeRangeBounds.monthStart}
+              maxDate={activeRangeBounds.monthEnd}
+              onRangeSelect={(date) => {
+                if (viewType === 'week') {
+                  onDateChange(startOfWeek(date, { weekStartsOn: 1 }));
+                } else if (viewType === 'month') {
+                  onDateChange(startOfMonth(date));
+                } else {
+                  onDateChange(date);
+                }
+              }}
+              displayLabel={displayLabel}
             />
 
             <IconButton
@@ -495,8 +455,8 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
           organizationId={selectedOrganizationId}
           departmentId={selectedDepartmentId}
           subDepartmentId={selectedSubDepartmentId}
-          startDate={activeRangeBounds.monthStart}
-          endDate={activeRangeBounds.monthEnd}
+          startDate={startOfMonth(selectedDate)}
+          endDate={endOfMonth(selectedDate)}
         />
       )}
 

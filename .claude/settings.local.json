@@ -22,7 +22,9 @@
       "mcp__supabase__execute_sql",
       "mcp__supabase__list_migrations",
       "mcp__supabase__apply_migration",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(xargs:*)",
+      "Bash(grep:*)"
     ]
   }
 }

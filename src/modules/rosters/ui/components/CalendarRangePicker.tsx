@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, isSameDay, isSameMonth, isWithinInterval, getDay, isMonday, startOfDay } from 'date-fns';
-import { isSydneyToday } from '@/modules/core/lib/date.utils';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, isSameDay, isSameMonth, isWithinInterval, getDay, isMonday, startOfDay, addDays } from 'date-fns';
+import { isSydneyToday, isPublicHoliday } from '@/modules/core/lib/date.utils';
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
@@ -14,9 +14,10 @@ interface CalendarRangePickerProps {
     selectedDate: Date;
     /** View type determines the range size */
     viewType: ViewType;
-    /** Month boundaries from template */
-    monthStart: Date;
-    monthEnd: Date;
+    /** Minimum navigable date (optional) */
+    minDate?: Date;
+    /** Maximum navigable date (optional) */
+    maxDate?: Date;
     /** Callback when a new range is selected */
     onRangeSelect: (startDate: Date) => void;
     /** Current display label */
@@ -26,17 +27,24 @@ interface CalendarRangePickerProps {
 export const CalendarRangePicker: React.FC<CalendarRangePickerProps> = ({
     selectedDate,
     viewType,
-    monthStart,
-    monthEnd,
+    minDate,
+    maxDate,
     onRangeSelect,
     displayLabel,
 }) => {
     const { isDark } = useTheme();
     const [isOpen, setIsOpen] = useState(false);
-    const [viewingMonth, setViewingMonth] = useState(monthStart);
+    const [viewingMonth, setViewingMonth] = useState(selectedDate);
 
-    // Days of the week header
-    const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    // Sync viewingMonth when selectedDate or isOpen changes
+    React.useEffect(() => {
+        if (isOpen) {
+            setViewingMonth(selectedDate);
+        }
+    }, [selectedDate, isOpen]);
+
+    // Days of the week header — Australian style (Monday start)
+    const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
     // Get all days in the viewing month
     const calendarDays = useMemo(() => {
@@ -44,37 +52,46 @@ export const CalendarRangePicker: React.FC<CalendarRangePickerProps> = ({
         const end = endOfMonth(viewingMonth);
         const days = eachDayOfInterval({ start, end });
 
-        // Pad start with empty slots for proper day alignment
-        const startDayOfWeek = getDay(start);
-        const paddedDays: (Date | null)[] = [];
-        for (let i = 0; i < startDayOfWeek; i++) {
-            paddedDays.push(null);
+        // Pad start with previous month's final days (Monday start)
+        const startDayOfWeek = (getDay(start) + 6) % 7;
+        const paddedDays: Date[] = [];
+        for (let i = startDayOfWeek; i > 0; i--) {
+            paddedDays.push(new Date(start.getFullYear(), start.getMonth(), 1 - i));
         }
         paddedDays.push(...days);
+
+        // Pad end with next month's starting days to fill 6 weeks (42 cells)
+        const remaining = 42 - paddedDays.length;
+        for (let i = 1; i <= remaining; i++) {
+            paddedDays.push(new Date(end.getFullYear(), end.getMonth(), end.getDate() + i));
+        }
 
         return paddedDays;
     }, [viewingMonth]);
 
     // Calculate range end based on view type
     const getRangeEnd = (start: Date): Date => {
+        const normalizedStart = startOfDay(start);
         switch (viewType) {
             case 'day':
-                return start;
+                return normalizedStart;
             case '3day':
-                return new Date(Math.min(new Date(start).setDate(start.getDate() + 2), monthEnd.getTime()));
+                return addDays(normalizedStart, 2);
             case 'week':
-                return new Date(Math.min(new Date(start).setDate(start.getDate() + 6), monthEnd.getTime()));
+                return addDays(normalizedStart, 6);
             case 'month':
-                return monthEnd;
+                return endOfMonth(normalizedStart);
             default:
-                return start;
+                return normalizedStart;
         }
     };
 
     // Check if a day is within the current selection
     const isInSelectedRange = (day: Date): boolean => {
-        const rangeEnd = getRangeEnd(selectedDate);
-        return isWithinInterval(day, { start: selectedDate, end: rangeEnd });
+        const start = startOfDay(selectedDate);
+        const end = startOfDay(getRangeEnd(start));
+        const current = startOfDay(day);
+        return isWithinInterval(current, { start, end });
     };
 
     // Get required days for the view type
@@ -100,17 +117,17 @@ export const CalendarRangePicker: React.FC<CalendarRangePickerProps> = ({
             return true;
         }
 
-        // WEEK VIEW: Only Mondays selectable - allow ALL Mondays (ghost cells handle overflow)
+        // WEEK VIEW: Allow selecting any day, snapping handled by parent
         if (viewType === 'week') {
-            return isMonday(day); // All Mondays in template range are valid
+            return true;
         }
 
-        // For day and 3day views, check if there's enough room for the range
+        // For day and 3day views, check if there's enough room for the range relative to maxDate
         const requiredSize = getRequiredRangeSize();
-        const dayOfMonth = day.getDate();
-        const lastDayOfMonth = monthEnd.getDate();
-        const remainingDays = lastDayOfMonth - dayOfMonth + 1;
-        return remainingDays >= requiredSize;
+        if (!maxDate) return true;
+
+        const rangeEnd = addDays(day, requiredSize - 1);
+        return startOfDay(rangeEnd) <= startOfDay(maxDate);
     };
 
     // Handle day click
@@ -125,8 +142,9 @@ export const CalendarRangePicker: React.FC<CalendarRangePickerProps> = ({
     const goToNextMonth = () => setViewingMonth(addMonths(viewingMonth, 1));
 
     // Can navigate to previous/next month?
-    const canGoPrevious = startOfMonth(viewingMonth) > startOfMonth(monthStart);
-    const canGoNext = endOfMonth(viewingMonth) < endOfMonth(monthEnd);
+    // Can navigate to previous/next month?
+    const canGoPrevious = !minDate || startOfMonth(viewingMonth) > startOfMonth(minDate);
+    const canGoNext = !maxDate || endOfMonth(viewingMonth) < endOfMonth(maxDate);
 
     return (
         <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -167,46 +185,40 @@ export const CalendarRangePicker: React.FC<CalendarRangePickerProps> = ({
                         <div className="flex gap-2">
                             {/* Month Dropdown */}
                             <select
-                                value={monthStart.getMonth()}
+                                value={selectedDate.getMonth()}
                                 onChange={(e) => {
                                     const newMonth = parseInt(e.target.value);
-                                    const year = monthStart.getFullYear();
+                                    const year = selectedDate.getFullYear();
                                     const firstOfMonth = new Date(year, newMonth, 1);
                                     onRangeSelect(firstOfMonth);
                                     setIsOpen(false);
                                 }}
                                 className={cn(
-                                    "flex-1 px-3 py-2 rounded-lg border text-sm cursor-pointer",
+                                    "flex-1 px-3 py-2 rounded-lg border text-sm cursor-pointer font-medium",
                                     isDark
                                         ? "bg-gray-800 border-gray-700 text-white"
                                         : "bg-white border-gray-300 text-gray-900"
                                 )}
                             >
-                                {Array.from({ length: 12 }, (_, i) => {
-                                    const isTemplateMonth = i === monthStart.getMonth();
-                                    return (
-                                        <option
-                                            key={i}
-                                            value={i}
-                                        >
-                                            {format(new Date(2026, i, 1), 'MMMM')}
-                                        </option>
-                                    );
-                                })}
+                                {Array.from({ length: 12 }, (_, i) => (
+                                    <option key={i} value={i}>
+                                        {format(new Date(2026, i, 1), 'MMMM')}
+                                    </option>
+                                ))}
                             </select>
 
                             {/* Year Dropdown */}
                             <select
-                                value={monthStart.getFullYear()}
+                                value={selectedDate.getFullYear()}
                                 onChange={(e) => {
                                     const newYear = parseInt(e.target.value);
-                                    const month = monthStart.getMonth();
+                                    const month = selectedDate.getMonth();
                                     const firstOfMonth = new Date(newYear, month, 1);
                                     onRangeSelect(firstOfMonth);
                                     setIsOpen(false);
                                 }}
                                 className={cn(
-                                    "w-24 px-3 py-2 rounded-lg border text-sm cursor-pointer",
+                                    "w-28 px-3 py-2 rounded-lg border text-sm cursor-pointer font-medium",
                                     isDark
                                         ? "bg-gray-800 border-gray-700 text-white"
                                         : "bg-white border-gray-300 text-gray-900"
@@ -214,12 +226,8 @@ export const CalendarRangePicker: React.FC<CalendarRangePickerProps> = ({
                             >
                                 {Array.from({ length: 5 }, (_, i) => {
                                     const year = 2024 + i;
-                                    const isTemplateYear = year === monthStart.getFullYear();
                                     return (
-                                        <option
-                                            key={year}
-                                            value={year}
-                                        >
+                                        <option key={year} value={year}>
                                             {year}
                                         </option>
                                     );
@@ -228,10 +236,10 @@ export const CalendarRangePicker: React.FC<CalendarRangePickerProps> = ({
                         </div>
 
                         <div className={cn(
-                            "text-xs text-center",
+                            "text-xs text-center font-medium",
                             isDark ? "text-white/40" : "text-gray-400"
                         )}>
-                            Full month will be selected ({format(monthStart, 'MMMM yyyy')})
+                            Full month will be selected ({format(selectedDate, 'MMMM yyyy')})
                         </div>
                     </div>
                 ) : (
@@ -288,18 +296,15 @@ export const CalendarRangePicker: React.FC<CalendarRangePickerProps> = ({
                             ))}
                         </div>
 
-                        {/* Calendar Grid */}
                         <div className="grid grid-cols-7 gap-1">
                             {calendarDays.map((day, idx) => {
-                                if (day === null) {
-                                    return <div key={`empty-${idx}`} className="h-9" />;
-                                }
-
-                                const isSelected = isSameDay(day, selectedDate);
-                                const isInRange = isInSelectedRange(day);
+                                const isSelected = isInSelectedRange(day);
                                 const canSelect = isSelectable(day);
                                 const isToday = isSydneyToday(day);
-                                const inCurrentMonth = isSameMonth(day, viewingMonth);
+                                const isCurrentViewingMonth = isSameMonth(day, viewingMonth);
+                                const dayOfWeek = getDay(day); // Sunday - 0, Monday - 1, ..., Saturday - 6
+                                const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                                const isHoliday = isPublicHoliday(day);
 
                                 return (
                                     <button
@@ -307,18 +312,21 @@ export const CalendarRangePicker: React.FC<CalendarRangePickerProps> = ({
                                         onClick={() => handleDayClick(day)}
                                         disabled={!canSelect}
                                         className={cn(
-                                            "h-9 w-full rounded-md text-sm font-medium transition-all",
+                                            "h-9 w-9 rounded-full text-sm font-medium transition-all flex items-center justify-center",
                                             // Base styles
                                             !canSelect && "opacity-30 cursor-not-allowed",
-                                            canSelect && "cursor-pointer hover:bg-emerald-500/20",
+                                            canSelect && "cursor-pointer hover:bg-emerald-500/10",
                                             // Selected range styles
-                                            isInRange && "bg-emerald-500 text-white hover:bg-emerald-600",
-                                            isSelected && "ring-2 ring-emerald-300",
+                                            isSelected && "bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]",
                                             // Today indicator
-                                            isToday && !isInRange && (isDark ? "text-purple-400" : "text-purple-600"),
+                                            isToday && !isSelected && (isDark ? "text-blue-400" : "text-blue-600"),
                                             // Default text color
-                                            !isInRange && inCurrentMonth && (isDark ? "text-white" : "text-gray-900"),
-                                            !isInRange && !inCurrentMonth && (isDark ? "text-white/30" : "text-gray-400")
+                                            !isSelected && isCurrentViewingMonth && !isWeekend && !isHoliday && (isDark ? "text-white" : "text-gray-900"),
+                                            !isSelected && !isCurrentViewingMonth && (isDark ? "text-white/30" : "text-gray-400"),
+                                            // Weekend styling (Text only)
+                                            isWeekend && !isSelected && (isDark ? "text-rose-400" : "text-rose-600"),
+                                            // Holiday styling (Text only)
+                                            isHoliday && !isSelected && (isDark ? "text-yellow-400" : "text-yellow-600")
                                         )}
                                     >
                                         {format(day, 'd')}

@@ -1,132 +1,166 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Check, X, ChevronRight, ArrowLeftRight, Clock, CheckCircle, XCircle, Calendar, AlertTriangle } from 'lucide-react';
+import { Check, X, ChevronRight, ArrowLeftRight, Clock, CheckCircle, XCircle, Calendar, AlertTriangle, Shield, Gavel, RefreshCw } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
 import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/modules/core/ui/primitives/select';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { format, differenceInHours, parseISO, parse } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { useAuth } from '@/platform/auth/useAuth';
 import { swapsApi } from '../../api/swaps.api';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import { SwapRequestWithDetails, SwapStatus } from '../../model/swap.types';
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-// UI Types
-// ... imports ...
-
-/* ... */
 
 /* ============================================================
-   HELPER COMPONENTS
+   DESIGN TOKENS
    ============================================================ */
 
-interface SwapStatusPillsProps {
-    activeStatus: string;
-    counts: Record<string, number>;
-    onStatusChange: (status: any) => void;
-}
+const CANVAS = '#080B12';
+const SURFACE = '#0D1118';
+const SURFACE_RAISED = '#121820';
+const BORDER_SUBTLE = 'rgba(255,255,255,0.06)';
 
-const StatusFilterPills: React.FC<SwapStatusPillsProps> = ({ activeStatus, counts, onStatusChange }) => {
-    const statuses = [
-        { id: 'MANAGER_PENDING', label: 'Pending Approval', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
-        { id: 'OPEN', label: 'Pending Employee', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-        { id: 'APPROVED', label: 'Approved', color: 'bg-green-500/10 text-green-400 border-green-500/20' },
-        { id: 'REJECTED', label: 'Rejected', color: 'bg-red-500/10 text-red-400 border-red-500/20' },
-        { id: 'all', label: 'All Requests', color: 'bg-slate-500/10 text-slate-400 border-slate-500/20' }
-    ];
+/* ============================================================
+   HELPERS
+   ============================================================ */
 
-    return (
-        <div className="flex flex-wrap gap-2">
-            {statuses.map(status => (
-                <button
-                    key={status.id}
-                    onClick={() => onStatusChange(status.id)}
-                    className={cn(
-                        "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
-                        activeStatus === status.id
-                            ? status.color + " ring-1 ring-white/10"
-                            : "bg-transparent border-white/5 text-white/50 hover:bg-white/5 hover:text-white/70"
-                    )}
-                >
-                    {status.label}
-                    <Badge className={cn(
-                        "ml-1 h-5 min-w-[1.25rem] px-1 bg-black/20 text-[10px] flex items-center justify-center rounded-full",
-                        activeStatus !== status.id && "bg-white/10 text-white/50"
-                    )}>
-                        {counts[status.id] || 0}
-                    </Badge>
-                </button>
-            ))}
-        </div>
-    );
+const formatTime = (time: string): string => {
+    if (!time) return '';
+    const [h, m] = time.split(':').map(Number);
+    const period = h >= 12 ? 'PM' : 'AM';
+    const display = h % 12 || 12;
+    return `${display}:${m?.toString().padStart(2, '0') || '00'} ${period}`;
 };
 
-const EmployeeShiftCard: React.FC<{ data: any, label?: string, variant?: 'red' | 'green' | 'default' }> = ({ data, label, variant = 'default' }) => {
-    if (!data) return <div className="p-4 bg-white/5 rounded-lg text-white/30 text-xs text-center border border-dashed border-white/10">No Offer Selected</div>;
+const getInitials = (name: string): string => {
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+};
 
-    // Auto-detect role for UX
+// Department-coded gradient cards
+function getCardGradient(dept?: string | null): string {
+    const d = (dept || '').toLowerCase();
+    if (d.includes('convention')) return 'from-blue-900/30 via-blue-950/20 to-transparent border-blue-500/15 hover:border-blue-400/30';
+    if (d.includes('exhibition')) return 'from-emerald-900/30 via-emerald-950/20 to-transparent border-emerald-500/15 hover:border-emerald-400/30';
+    if (d.includes('theatre')) return 'from-rose-900/30 via-rose-950/20 to-transparent border-rose-500/15 hover:border-rose-400/30';
+    return 'from-slate-800/30 via-slate-900/20 to-transparent border-white/8 hover:border-white/15';
+}
+
+function getDeptAccent(dept?: string | null): string {
+    const d = (dept || '').toLowerCase();
+    if (d.includes('convention')) return 'text-blue-400';
+    if (d.includes('exhibition')) return 'text-emerald-400';
+    if (d.includes('theatre')) return 'text-rose-400';
+    return 'text-slate-400';
+}
+
+function getDeptGlow(dept?: string | null): string {
+    const d = (dept || '').toLowerCase();
+    if (d.includes('convention')) return 'shadow-blue-500/10';
+    if (d.includes('exhibition')) return 'shadow-emerald-500/10';
+    if (d.includes('theatre')) return 'shadow-rose-500/10';
+    return 'shadow-white/5';
+}
+
+/* ============================================================
+   STATUS TABS
+   ============================================================ */
+
+const STATUS_TABS = [
+    { id: 'MANAGER_PENDING', label: 'Pending', icon: Clock, accent: 'amber' },
+    { id: 'OPEN', label: 'Open', icon: ArrowLeftRight, accent: 'blue' },
+    { id: 'APPROVED', label: 'Approved', icon: CheckCircle, accent: 'emerald' },
+    { id: 'REJECTED', label: 'Rejected', icon: XCircle, accent: 'red' },
+    { id: 'all', label: 'All', icon: Shield, accent: 'slate' },
+] as const;
+
+const accentMap: Record<string, { bg: string; text: string; ring: string; glow: string }> = {
+    amber: { bg: 'bg-amber-500/10', text: 'text-amber-400', ring: 'ring-amber-500/20', glow: 'shadow-amber-500/20' },
+    blue: { bg: 'bg-blue-500/10', text: 'text-blue-400', ring: 'ring-blue-500/20', glow: 'shadow-blue-500/20' },
+    emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', ring: 'ring-emerald-500/20', glow: 'shadow-emerald-500/20' },
+    red: { bg: 'bg-red-500/10', text: 'text-red-400', ring: 'ring-red-500/20', glow: 'shadow-red-500/20' },
+    slate: { bg: 'bg-slate-500/10', text: 'text-slate-400', ring: 'ring-slate-500/20', glow: 'shadow-slate-500/20' },
+};
+
+/* ============================================================
+   EMPLOYEE SHIFT PANE (within card)
+   ============================================================ */
+
+const ShiftPane: React.FC<{ data: any; label: string }> = ({ data, label }) => {
+    if (!data) {
+        return (
+            <div className="flex-1 min-w-[200px] rounded-2xl border border-dashed border-white/8 p-5 flex flex-col items-center justify-center gap-2">
+                <div className="h-10 w-10 rounded-full bg-white/[0.03] flex items-center justify-center">
+                    <ArrowLeftRight className="h-4 w-4 text-white/15" />
+                </div>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-[0.2em] text-white/20">Open Market</span>
+            </div>
+        );
+    }
+
     const isRequester = label === 'REQUESTER';
-    const borderColor = isRequester ? 'border-indigo-500/30' : 'border-emerald-500/30';
-    const labelColor = isRequester ? 'text-indigo-400 bg-indigo-500/10' : 'text-emerald-400 bg-emerald-500/10';
 
     return (
-        <div className={cn(
-            "flex-1 bg-black/20 rounded-lg p-3 border relative overflow-hidden",
-            borderColor,
-            // variant === 'red' && "bg-red-500/5",
-            // variant === 'green' && "bg-green-500/5"
-        )}>
-            {label && (
-                <div className={cn("absolute top-0 right-0 px-2 py-0.5 text-[9px] font-bold uppercase rounded-bl-lg border-b border-l border-white/5", labelColor)}>
+        <div className="flex-1 min-w-[200px]">
+            {/* Label */}
+            <div className="flex items-center gap-2 mb-3">
+                <div className={cn(
+                    "h-1 w-6 rounded-full",
+                    isRequester ? "bg-indigo-500" : "bg-emerald-500"
+                )} />
+                <span className={cn(
+                    "text-[9px] font-mono font-black uppercase tracking-[0.25em]",
+                    isRequester ? "text-indigo-400/70" : "text-emerald-400/70"
+                )}>
                     {label}
-                </div>
-            )}
+                </span>
+            </div>
 
-            <div className="flex items-center gap-3 mb-3 mt-1">
-                <div className="h-9 w-9 rounded-full bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center text-xs font-bold text-white border border-white/10">
-                    <Avatar className="h-full w-full">
-                        <AvatarImage src={data.avatar} />
-                        <AvatarFallback>{data.employeeName?.charAt(0) || '?'}</AvatarFallback>
-                    </Avatar>
-                </div>
+            {/* Employee Row */}
+            <div className="flex items-center gap-3 mb-4">
+                <Avatar className="h-9 w-9 ring-1 ring-white/10">
+                    <AvatarImage src={data.avatar} />
+                    <AvatarFallback className={cn(
+                        "text-[10px] font-black",
+                        isRequester
+                            ? "bg-gradient-to-br from-indigo-600 to-indigo-800 text-white"
+                            : "bg-gradient-to-br from-emerald-600 to-emerald-800 text-white"
+                    )}>
+                        {getInitials(data.employeeName || '?')}
+                    </AvatarFallback>
+                </Avatar>
                 <div>
-                    <div className="text-sm font-medium text-white leading-tight">{data.employeeName}</div>
-                    <div className="text-[10px] text-white/50 uppercase tracking-wider">{data.roleName}</div>
+                    <div className="text-[13px] font-bold text-white leading-tight tracking-tight">{data.employeeName}</div>
+                    <div className="text-[10px] text-white/35 font-mono uppercase tracking-wider">{data.roleName}</div>
                 </div>
             </div>
 
-            <div className="space-y-2 bg-black/20 p-2 rounded border border-white/5">
-                <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5 text-white/70">
-                        <Calendar className="h-3.5 w-3.5 opacity-50" />
-                        <span className="font-mono opacity-80">{data.formattedDate || 'N/A'}</span>
+            {/* Shift Details */}
+            <div className="bg-black/30 rounded-xl p-3 border border-white/[0.04] space-y-2">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-[11px] text-white/60">
+                        <Calendar className="h-3 w-3 opacity-50" />
+                        <span className="font-mono font-medium">{data.formattedDate || 'N/A'}</span>
                     </div>
                 </div>
-                <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5 text-white/70">
-                        <Clock className="h-3.5 w-3.5 opacity-50" />
-                        <span className="font-mono opacity-80">{data.time}</span>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-[11px] text-white/60">
+                        <Clock className="h-3 w-3 opacity-50" />
+                        <span className="font-mono font-medium">{data.time}</span>
                     </div>
-                    <Badge variant="outline" className="text-[10px] h-4 px-1 text-white/40 border-white/10">
-                        {data.duration}
-                    </Badge>
+                    <span className="text-[10px] font-mono text-white/25 bg-white/[0.03] px-2 py-0.5 rounded-md">{data.duration}</span>
                 </div>
-                {/* Pay Rate Visibility - Optional */}
                 {data.hourlyRate > 0 && (
-                    <div className="flex items-center justify-between text-xs pt-1 border-t border-white/5">
-                        <span className="text-white/30 text-[10px]">EST. VALUE</span>
-                        <span className="font-mono text-white/60">${(data.hourlyRate * data.durationNum).toFixed(2)}</span>
+                    <div className="flex items-center justify-between pt-1.5 border-t border-white/[0.04]">
+                        <span className="text-[9px] font-mono text-white/20 uppercase tracking-wider">Value</span>
+                        <span className="text-[11px] font-mono font-bold text-white/50">${(data.hourlyRate * data.durationNum).toFixed(0)}</span>
                     </div>
                 )}
             </div>
@@ -134,31 +168,35 @@ const EmployeeShiftCard: React.FC<{ data: any, label?: string, variant?: 'red' |
     );
 };
 
-const SwapArrow: React.FC<{ hoursDiff: number, payDiff: number, compliance: boolean | null }> = ({ hoursDiff, payDiff, compliance }) => {
-    const hoursColor = hoursDiff > 0 ? 'text-green-400' : hoursDiff < 0 ? 'text-red-400' : 'text-white/30';
-    const payColor = payDiff > 0 ? 'text-green-400' : payDiff < 0 ? 'text-red-400' : 'text-white/30';
+/* ============================================================
+   SWAP ARROW (center divider)
+   ============================================================ */
+
+const SwapDivider: React.FC<{ hoursDiff: number; payDiff: number; compliance: boolean | null }> = ({ hoursDiff, payDiff, compliance }) => {
+    const hoursColor = hoursDiff > 0 ? 'text-emerald-400' : hoursDiff < 0 ? 'text-red-400' : 'text-white/20';
+    const payColor = payDiff > 0 ? 'text-emerald-400' : payDiff < 0 ? 'text-red-400' : 'text-white/20';
 
     return (
-        <div className="flex flex-col items-center justify-center px-4 z-10">
-            <div className="text-[10px] font-mono mb-1 text-white/30">SWAP</div>
-            <ArrowLeftRight className="h-5 w-5 text-white/50 mb-2" />
-
-            <div className="flex flex-col gap-1 items-center">
-                <Badge variant="outline" className={cn("text-[9px] h-4 px-1 border-white/10 font-mono", hoursColor)}>
+        <div className="flex flex-col items-center justify-center px-5 py-2 gap-2 flex-shrink-0">
+            <div className="h-8 w-8 rounded-full bg-white/[0.03] border border-white/[0.06] flex items-center justify-center">
+                <ArrowLeftRight className="h-3.5 w-3.5 text-white/30" />
+            </div>
+            <div className="flex flex-col items-center gap-1">
+                <span className={cn("text-[10px] font-mono font-bold", hoursColor)}>
                     {hoursDiff > 0 ? '+' : ''}{hoursDiff.toFixed(1)}h
-                </Badge>
+                </span>
                 {payDiff !== 0 && (
-                    <Badge variant="outline" className={cn("text-[9px] h-4 px-1 border-white/10 font-mono", payColor)}>
+                    <span className={cn("text-[10px] font-mono font-bold", payColor)}>
                         {payDiff > 0 ? '+' : ''}${payDiff.toFixed(0)}
-                    </Badge>
+                    </span>
                 )}
                 {compliance !== null && (
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger>
-                                {compliance ?
-                                    <CheckCircle className="h-3 w-3 text-green-500 mt-1" /> :
-                                    <AlertTriangle className="h-3 w-3 text-amber-500 mt-1" />
+                                {compliance
+                                    ? <CheckCircle className="h-3 w-3 text-emerald-500" />
+                                    : <AlertTriangle className="h-3 w-3 text-amber-500" />
                                 }
                             </TooltipTrigger>
                             <TooltipContent>
@@ -172,55 +210,10 @@ const SwapArrow: React.FC<{ hoursDiff: number, payDiff: number, compliance: bool
     );
 };
 
-const InfoPanel: React.FC<{ request: any, isPending: boolean, onApprove: () => void, onReject: () => void }> = ({ request, isPending, onApprove, onReject }) => {
-    return (
-        <div className="h-full flex flex-col justify-between">
-            <div>
-                <div className="flex justify-between items-start mb-2">
-                    <h4 className="text-sm font-medium text-white">Request Details</h4>
-                    <span className="text-xs text-white/30">{format(parseISO(request.requestedAt), 'MMM d, h:mm a')}</span>
-                </div>
-                <p className="text-xs text-white/60 mb-4 line-clamp-2">
-                    {request.reason || "No reason provided."}
-                </p>
-                <div className="flex gap-2 mb-4">
-                    {request.tags?.map((tag: string) => (
-                        <Badge key={tag} variant="secondary" className="text-[10px] bg-white/5 text-white/50 border-white/10 hover:bg-white/10">
-                            {tag}
-                        </Badge>
-                    ))}
-                </div>
-            </div>
+/* ============================================================
+   UI TYPES & MAPPER
+   ============================================================ */
 
-            {isPending ? (
-                <div className="flex gap-2">
-                    <Button onClick={onReject} variant="outline" size="sm" className="flex-1 bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20">
-                        <X className="h-3.5 w-3.5 mr-1.5" /> Reject
-                    </Button>
-                    <Button onClick={onApprove} size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-900/20">
-                        <Check className="h-3.5 w-3.5 mr-1.5" /> Approve
-                    </Button>
-                </div>
-            ) : (
-                <div className={cn(
-                    "flex items-center justify-center p-2 rounded-lg text-xs font-medium border",
-                    request.status === 'APPROVED'
-                        ? "bg-green-500/10 text-green-400 border-green-500/20"
-                        : "bg-red-500/10 text-red-400 border-red-500/20"
-                )}>
-                    {request.status === 'APPROVED' ? (
-                        <><CheckCircle className="h-3.5 w-3.5 mr-2" /> Approved</>
-                    ) : (
-                        <><XCircle className="h-3.5 w-3.5 mr-2" /> Rejected</>
-                    )}
-                </div>
-            )
-            }
-        </div >
-    );
-};
-
-// UI Types
 interface SwapRequestManagement {
     id: string;
     requestor: {
@@ -249,21 +242,18 @@ interface SwapRequestManagement {
     reason: string;
     requestedAt: string;
     tags: string[];
-    // Computed Diffs
     hoursDiff: number;
     payDiff: number;
     compliancePassed: boolean | null;
-    // State IDs (per skill_trades.md §2)
-    shiftStateId: string; // S4, S9, S10
-    combinedStateId: string; // C1-C7
+    shiftStateId: string;
+    combinedStateId: string;
+    deptName: string;
 }
 
-// Mapper
 const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement => {
-    // Helper to calculate rate and value
     const getShiftValue = (shift?: any) => {
         const rate = shift?.roles?.remuneration_levels?.hourly_rate_min || 0;
-        const netLength = shift?.netLength || 0; // minutes
+        const netLength = shift?.netLength || 0;
         const durationHours = netLength / 60;
         return { rate, durationHours, value: rate * durationHours };
     };
@@ -271,18 +261,12 @@ const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement =>
     const reqVal = getShiftValue(apiData.originalShift);
     const recVal = getShiftValue(apiData.requestedShift);
 
-    // Compliance
-    // If trade target is set, find the offer that matches this trade
     const activeOffer = apiData.swap_offers?.find(o =>
         (o.offered_shift_id === apiData.offered_shift_id) ||
         (o.status === 'SELECTED')
     );
     const compliancePassed = activeOffer?.compliance_snapshot?.passed ?? null;
 
-    // Diffs (Recipient - Requester) (e.g. if I get a longer shift, diff is +)
-    // Wait, context:
-    // Requester gives X, gets Y.
-    // So for Requester, delta is Y - X.
     const hoursDiff = apiData.requestedShift ? (recVal.durationHours - reqVal.durationHours) : -reqVal.durationHours;
     const payDiff = apiData.requestedShift ? (recVal.value - reqVal.value) : -reqVal.value;
 
@@ -317,12 +301,11 @@ const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement =>
         hoursDiff,
         payDiff,
         compliancePassed,
-        // Derive state IDs per skill_trades.md §2
+        deptName: apiData.originalShift?.departments?.name || 'General',
         ...deriveStateIds(apiData.status),
     };
 };
 
-// Derive Combined State ID and Shift State from swap status (skill_trades.md §2)
 const deriveStateIds = (status: string): { shiftStateId: string; combinedStateId: string } => {
     switch (status) {
         case 'OPEN': return { shiftStateId: 'S9', combinedStateId: 'C2' };
@@ -345,10 +328,9 @@ export const ManagerSwapsPage: React.FC = () => {
     const orgSelection = useOrgSelection();
     const { scope, setScope, scopeKey, isGammaLocked } = useScopeFilter('managerial');
 
-    // Use scope filter values, falling back to OrgSelectionContext
     const currentOrgId = scope.org_ids[0] || orgSelection.organizationId;
-    const currentDeptId = scope.dept_ids[0] || orgSelection.departmentId;
-    const currentSubDeptId = scope.subdept_ids[0] || orgSelection.subDepartmentId;
+    const currentDeptId = scope.dept_ids.length === 1 ? scope.dept_ids[0] : undefined;
+    const currentSubDeptId = scope.subdept_ids.length === 1 ? scope.subdept_ids[0] : undefined;
 
     // ==================== STATE ====================
     const [statusFilter, setStatusFilter] = useState<SwapStatus | 'all'>('MANAGER_PENDING');
@@ -362,11 +344,10 @@ export const ManagerSwapsPage: React.FC = () => {
 
     // ==================== DATA FETCHING ====================
     const fetchData = async () => {
-        if (!currentOrgId) return; // Wait for org selection
+        if (!currentOrgId) return;
 
         setIsLoading(true);
         try {
-            // Pass organizationId from selection
             const apiData = await swapsApi.fetchSwapRequests({
                 status: statusFilter === 'all' ? undefined : statusFilter,
                 organizationId: currentOrgId,
@@ -387,37 +368,25 @@ export const ManagerSwapsPage: React.FC = () => {
         }
     };
 
+    // Use scopeKey to stabilize deps and prevent infinite re-fetching
     useEffect(() => {
         if (currentOrgId) {
             fetchData();
         }
-        // Poll every 30s
         const interval = setInterval(() => {
             if (currentOrgId) fetchData();
         }, 30000);
         return () => clearInterval(interval);
-    }, [statusFilter, currentOrgId, currentDeptId, currentSubDeptId]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [statusFilter, scopeKey]);
 
     // ==================== COMPUTED ====================
-    const filteredRequests = swapRequests; // Already filtered by API request in this simple logic
+    const filteredRequests = swapRequests;
 
-    // Calculate counts (This needs separate API aggregation ideally, but for now filtering locally if we fetch all)
-    // For this impl, assume counts are dynamic or hidden if not fetched
     const statusCounts = useMemo(() => {
         const counts: Record<string, number> = {
-            pending: 0,
-            pending_employee: 0,
-            pending_manager: 0,
-            approved: 0,
-            rejected: 0,
-            cancelled: 0,
-            completed: 0,
-            all: 0
+            MANAGER_PENDING: 0, OPEN: 0, APPROVED: 0, REJECTED: 0, all: 0
         };
-        // We only have the requested status loaded, so counts might be inaccurate unless we fetch all metadata
-        // For prototype, just use length of current loaded if "all", else unknowns.
-        // Let's hide counts for 'other' tabs to avoid confusion or fetch all one time.
-        // Simple fallback:
         if (statusFilter === 'all') {
             swapRequests.forEach(r => {
                 if (counts[r.status] !== undefined) counts[r.status]++;
@@ -429,7 +398,6 @@ export const ManagerSwapsPage: React.FC = () => {
         return counts;
     }, [swapRequests, statusFilter]);
 
-
     // ==================== HANDLERS ====================
     const handleAction = (ids: string[], status: 'approved' | 'rejected') => {
         setActionConfirm({ ids, status });
@@ -439,8 +407,6 @@ export const ManagerSwapsPage: React.FC = () => {
         if (!actionConfirm) return;
 
         const { ids, status } = actionConfirm;
-
-        // Optimistic Update
         const previousState = [...swapRequests];
         setSwapRequests(prev => prev.map(r => ids.includes(r.id) ? { ...r, status: status === 'approved' ? 'APPROVED' : 'REJECTED' } : r));
 
@@ -450,21 +416,14 @@ export const ManagerSwapsPage: React.FC = () => {
             } else {
                 await Promise.all(ids.map(id => swapsApi.rejectSwapRequest(id, 'Manager Action')));
             }
-
-            toast({
-                title: 'Success',
-                description: `Request(s) ${status} successfully`,
-            });
-
-            // Refresh data
+            toast({ title: 'Success', description: `Request(s) ${status} successfully` });
             fetchData();
         } catch (error) {
-            console.error('Failed to approve swap:', error);
-            // Revert on error
+            console.error('Failed to process swap:', error);
             setSwapRequests(previousState);
             toast({
                 title: 'Operation Failed',
-                description: error instanceof Error ? error.message : 'Could not complete the action. Please try again.',
+                description: error instanceof Error ? error.message : 'Could not complete the action.',
                 variant: 'destructive',
             });
         }
@@ -474,7 +433,6 @@ export const ManagerSwapsPage: React.FC = () => {
     };
 
     const toggleSelection = (id: string) => {
-        // ... existing toggle logic ...
         setSelectedIds((prev) => {
             const newSet = new Set(prev);
             if (newSet.has(id)) newSet.delete(id);
@@ -488,121 +446,357 @@ export const ManagerSwapsPage: React.FC = () => {
         else setSelectedIds(new Set(filteredRequests.map(r => r.id)));
     };
 
-
     // ==================== RENDER ====================
     return (
-        <div className="flex flex-col h-full bg-[#0a0f1e] min-h-screen">
-            {/* Header */}
-            <div className="sticky top-0 z-20 bg-[#0d1424]/98 backdrop-blur-md border-b border-white/10 p-4 sm:p-6">
+        <div className="flex flex-col h-full min-h-screen" style={{ background: `linear-gradient(180deg, ${CANVAS} 0%, #0A0E16 50%, ${CANVAS} 100%)` }}>
+            {/* Ambient glow */}
+            <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-indigo-600/[0.03] blur-[150px] rounded-full pointer-events-none" />
 
-                <ScopeFilterBanner
-                    mode="managerial"
-                    onScopeChange={setScope}
-                    hidden={isGammaLocked}
-                    multiSelect={true}
-                    className="mb-4"
-                />
-                <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-                    <StatusFilterPills
-                        activeStatus={statusFilter}
-                        counts={statusCounts}
-                        onStatusChange={setStatusFilter}
+            {/* ── HEADER ── */}
+            <div className="sticky top-0 z-50 backdrop-blur-xl border-b" style={{ borderColor: BORDER_SUBTLE, background: `${SURFACE}ee` }}>
+                <div className="max-w-[1400px] mx-auto px-6 py-5">
+                    {/* Scope Filter */}
+                    <ScopeFilterBanner
+                        mode="managerial"
+                        onScopeChange={setScope}
+                        hidden={isGammaLocked}
+                        multiSelect={false}
+                        className="mb-5"
                     />
-                    <Button variant="outline" size="sm" onClick={fetchData} className="text-white border-white/20">
-                        Refresh
-                    </Button>
+
+                    {/* Title + Status Tabs */}
+                    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                        <div>
+                            <h1 className="text-2xl font-black text-white tracking-tight leading-none mb-1">
+                                Swap Requests
+                            </h1>
+                            <p className="text-[11px] font-mono text-white/25 uppercase tracking-[0.2em]">
+                                Manager Review Console
+                            </p>
+                        </div>
+
+                        {/* Status Tabs */}
+                        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-white/[0.02] border border-white/[0.04]">
+                            {STATUS_TABS.map(tab => {
+                                const isActive = statusFilter === tab.id;
+                                const colors = accentMap[tab.accent];
+                                const TabIcon = tab.icon;
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setStatusFilter(tab.id as any)}
+                                        className={cn(
+                                            "relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-bold transition-all duration-300",
+                                            isActive
+                                                ? `${colors.bg} ${colors.text} shadow-lg ${colors.glow}`
+                                                : "text-white/30 hover:text-white/50 hover:bg-white/[0.03]"
+                                        )}
+                                    >
+                                        <TabIcon className="h-3.5 w-3.5" />
+                                        <span className="hidden sm:inline">{tab.label}</span>
+                                        <span className={cn(
+                                            "min-w-[18px] h-[18px] rounded-full text-[9px] font-black flex items-center justify-center px-1",
+                                            isActive ? `${colors.bg} ${colors.text} ring-1 ${colors.ring}` : "bg-white/5 text-white/20"
+                                        )}>
+                                            {statusCounts[tab.id] || 0}
+                                        </span>
+                                        {isActive && (
+                                            <motion.div
+                                                layoutId="activeSwapTab"
+                                                className={`absolute inset-0 rounded-xl ring-1 ${colors.ring}`}
+                                                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                                            />
+                                        )}
+                                    </button>
+                                );
+                            })}
+
+                            {/* Refresh */}
+                            <button
+                                onClick={fetchData}
+                                className="ml-1 h-8 w-8 rounded-xl flex items-center justify-center text-white/20 hover:text-white/50 hover:bg-white/[0.03] transition-all"
+                                title="Refresh"
+                            >
+                                <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-                {isLoading ? (
-                    <div className="text-white/50 text-center py-20">Loading requests...</div>
-                ) : filteredRequests.length === 0 ? (
-                    <div className="text-center py-20 text-white/50">
-                        <ArrowLeftRight className="h-12 w-12 mx-auto mb-4 opacity-30" />
-                        <p>No {statusFilter} requests found</p>
-                    </div>
-                ) : (
-                    <div className="space-y-4">
-                        {filteredRequests.map(request => (
-                            <div key={request.id} className="bg-[#0d1424] rounded-xl border border-white/10 p-4">
-                                <div className="flex flex-col lg:flex-row gap-4">
-                                    <div className="flex items-center gap-4">
-                                        {statusFilter === 'MANAGER_PENDING' && (
-                                            <Checkbox
-                                                checked={selectedIds.has(request.id)}
-                                                onCheckedChange={() => toggleSelection(request.id)}
-                                                className="border-white/30"
-                                            />
-                                        )}
-                                        {/* State ID Badges (per skill_trades.md §2) */}
-                                        <div className="flex flex-col gap-1">
-                                            <Badge variant="outline" className="text-[10px] text-cyan-400/70 border-cyan-500/20 font-mono">
-                                                {request.shiftStateId}
-                                            </Badge>
-                                            <Badge variant="outline" className="text-[10px] text-white/30 border-white/10 font-mono">
-                                                {request.combinedStateId}
-                                            </Badge>
-                                        </div>
-
-                                        <EmployeeShiftCard data={request.requestor} label="REQUESTER" />
-                                        <SwapArrow
-                                            hoursDiff={request.hoursDiff}
-                                            payDiff={request.payDiff}
-                                            compliance={request.compliancePassed}
-                                        />
-                                        <EmployeeShiftCard data={request.recipient} label="OFFERER" />
-                                    </div>
-                                    <div className="flex-1 border-l border-white/10 pl-4">
-                                        <InfoPanel
-                                            request={request}
-                                            isPending={request.status === 'MANAGER_PENDING'}
-                                            onApprove={() => handleAction([request.id], 'approved')}
-                                            onReject={() => handleAction([request.id], 'rejected')}
-                                        />
-                                    </div>
+            {/* ── CONTENT ── */}
+            <div className="flex-1 overflow-y-auto">
+                <div className="max-w-[1400px] mx-auto px-6 py-6">
+                    {isLoading ? (
+                        <div className="flex flex-col items-center justify-center py-32 gap-4">
+                            <div className="h-10 w-10 rounded-full border-2 border-white/10 border-t-indigo-500 animate-spin" />
+                            <span className="text-[10px] font-mono text-white/20 uppercase tracking-[0.3em]">Loading requests</span>
+                        </div>
+                    ) : filteredRequests.length === 0 ? (
+                        /* Empty State */
+                        <div className="flex flex-col items-center justify-center py-32 gap-6">
+                            <div className="relative">
+                                <div className="h-20 w-20 rounded-3xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-center">
+                                    <ArrowLeftRight className="h-8 w-8 text-white/10" />
                                 </div>
+                                <div className="absolute -inset-4 bg-indigo-500/5 rounded-full blur-2xl animate-pulse" />
                             </div>
-                        ))}
-                    </div>
-                )}
+                            <div className="text-center">
+                                <p className="text-sm font-bold text-white/30 mb-1">No {statusFilter === 'all' ? '' : statusFilter.replace('_', ' ').toLowerCase()} requests</p>
+                                <p className="text-[11px] text-white/15 font-mono">Check back later or adjust your filters</p>
+                            </div>
+                        </div>
+                    ) : (
+                        /* Request Cards */
+                        <div className="space-y-3">
+                            {/* Select All (for pending) */}
+                            {statusFilter === 'MANAGER_PENDING' && filteredRequests.length > 1 && (
+                                <div className="flex items-center gap-3 px-4 py-2">
+                                    <Checkbox
+                                        checked={selectedIds.size === filteredRequests.length}
+                                        onCheckedChange={handleSelectAll}
+                                        className="border-white/20"
+                                    />
+                                    <span className="text-[10px] font-mono text-white/30 uppercase tracking-wider">
+                                        Select All ({filteredRequests.length})
+                                    </span>
+                                </div>
+                            )}
+
+                            <AnimatePresence mode="popLayout">
+                                {filteredRequests.map((request, idx) => (
+                                    <motion.div
+                                        key={request.id}
+                                        initial={{ opacity: 0, y: 12 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.96 }}
+                                        transition={{ delay: idx * 0.05, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                                        className={cn(
+                                            "group rounded-2xl border bg-gradient-to-r backdrop-blur-sm transition-all duration-300 hover:shadow-xl overflow-hidden",
+                                            getCardGradient(request.deptName),
+                                            getDeptGlow(request.deptName),
+                                            selectedIds.has(request.id) && "ring-1 ring-indigo-500/30"
+                                        )}
+                                    >
+                                        <div className="flex flex-col lg:flex-row">
+                                            {/* Left: Checkbox + State Badges */}
+                                            {statusFilter === 'MANAGER_PENDING' && (
+                                                <div className="flex lg:flex-col items-center justify-center gap-3 p-4 lg:px-5 lg:border-r border-white/[0.04]">
+                                                    <Checkbox
+                                                        checked={selectedIds.has(request.id)}
+                                                        onCheckedChange={() => toggleSelection(request.id)}
+                                                        className="border-white/20 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
+                                                    />
+                                                    <div className="flex lg:flex-col gap-1">
+                                                        <Badge variant="outline" className="text-[8px] text-cyan-400/50 border-cyan-500/15 font-mono px-1.5 py-0">
+                                                            {request.shiftStateId}
+                                                        </Badge>
+                                                        <Badge variant="outline" className="text-[8px] text-white/20 border-white/8 font-mono px-1.5 py-0">
+                                                            {request.combinedStateId}
+                                                        </Badge>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Center: Swap Comparison */}
+                                            <div className="flex-1 flex flex-col sm:flex-row items-stretch gap-0 p-5">
+                                                <ShiftPane data={request.requestor} label="REQUESTER" />
+                                                <SwapDivider
+                                                    hoursDiff={request.hoursDiff}
+                                                    payDiff={request.payDiff}
+                                                    compliance={request.compliancePassed}
+                                                />
+                                                <ShiftPane data={request.recipient} label="OFFERER" />
+                                            </div>
+
+                                            {/* Right: Action Panel */}
+                                            <div className="flex flex-row lg:flex-col items-center justify-between gap-3 p-5 lg:pl-0 lg:border-l border-white/[0.04] min-w-[180px]">
+                                                {/* Meta */}
+                                                <div className="lg:flex-1 flex flex-col items-start lg:items-end gap-1.5 w-full">
+                                                    <span className="text-[9px] font-mono text-white/20 uppercase tracking-wider">
+                                                        {format(parseISO(request.requestedAt), 'MMM d, h:mm a')}
+                                                    </span>
+                                                    {request.reason && (
+                                                        <p className="text-[10px] text-white/30 line-clamp-2 lg:text-right leading-relaxed max-w-[160px]">
+                                                            "{request.reason}"
+                                                        </p>
+                                                    )}
+                                                    <div className="flex gap-1.5 flex-wrap">
+                                                        {request.tags.map(tag => (
+                                                            <Badge key={tag} variant="outline" className={cn(
+                                                                "text-[8px] font-mono px-1.5 py-0 border-white/8",
+                                                                getDeptAccent(tag)
+                                                            )}>
+                                                                {tag}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Actions */}
+                                                {request.status === 'MANAGER_PENDING' ? (
+                                                    <div className="flex lg:flex-col gap-2 w-full">
+                                                        <Button
+                                                            onClick={() => handleAction([request.id], 'rejected')}
+                                                            size="sm"
+                                                            className="flex-1 h-9 rounded-xl bg-red-500/8 hover:bg-red-500/15 text-red-400 border border-red-500/15 hover:border-red-500/30 text-[10px] font-bold uppercase tracking-wider transition-all"
+                                                        >
+                                                            <X className="h-3 w-3 mr-1.5" />
+                                                            Reject
+                                                        </Button>
+                                                        <Button
+                                                            onClick={() => handleAction([request.id], 'approved')}
+                                                            size="sm"
+                                                            className="flex-1 h-9 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/30 text-[10px] font-bold uppercase tracking-wider transition-all"
+                                                        >
+                                                            <Check className="h-3 w-3 mr-1.5" />
+                                                            Approve
+                                                        </Button>
+                                                    </div>
+                                                ) : (
+                                                    <div className={cn(
+                                                        "flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border",
+                                                        request.status === 'APPROVED'
+                                                            ? "bg-emerald-500/8 text-emerald-400 border-emerald-500/15"
+                                                            : request.status === 'REJECTED'
+                                                                ? "bg-red-500/8 text-red-400 border-red-500/15"
+                                                                : "bg-white/5 text-white/30 border-white/8"
+                                                    )}>
+                                                        {request.status === 'APPROVED' && <CheckCircle className="h-3.5 w-3.5" />}
+                                                        {request.status === 'REJECTED' && <XCircle className="h-3.5 w-3.5" />}
+                                                        {request.status}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </AnimatePresence>
+                        </div>
+                    )}
+                </div>
             </div>
 
-            {/* Footer Actions */}
-            {
-                selectedIds.size > 0 && (
-                    <div className="sticky bottom-0 z-20 bg-[#1a1f2e] border-t border-white/10 p-4 shadow-lg flex justify-between items-center">
-                        <div className="text-white text-sm">{selectedIds.size} selected</div>
-                        <div className="flex gap-2">
-                            <Button variant="destructive" size="sm" onClick={() => handleAction(Array.from(selectedIds), 'rejected')}>Reject Selected</Button>
-                            <Button className="bg-green-600 hover:bg-green-700" size="sm" onClick={() => handleAction(Array.from(selectedIds), 'approved')}>Approve Selected</Button>
-                        </div>
-                    </div>
-                )
-            }
-
-            {/* Confirmation Dialog */}
-            {
-                actionConfirm && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                        <div className="bg-[#1a1f2e] border border-white/10 p-6 rounded-xl max-w-md w-full">
-                            <h3 className="text-xl font-bold text-white mb-2">Confirm {actionConfirm.status === 'approved' ? 'Approval' : 'Rejection'}</h3>
-                            <p className="text-white/70 mb-6">Are you sure you want to {actionConfirm.status} {actionConfirm.ids.length} request(s)?</p>
-                            <div className="flex justify-end gap-3">
-                                <Button variant="outline" onClick={() => setActionConfirm(null)}>Cancel</Button>
+            {/* ── BULK ACTION BAR ── */}
+            <AnimatePresence>
+                {selectedIds.size > 0 && (
+                    <motion.div
+                        initial={{ y: 80, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: 80, opacity: 0 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                        className="sticky bottom-0 z-20 backdrop-blur-xl border-t shadow-2xl shadow-black/50"
+                        style={{ borderColor: BORDER_SUBTLE, background: `${SURFACE_RAISED}f0` }}
+                    >
+                        <div className="max-w-[1400px] mx-auto px-6 py-4 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                                    <span className="text-[11px] font-black text-indigo-400">{selectedIds.size}</span>
+                                </div>
+                                <span className="text-[11px] font-mono text-white/40 uppercase tracking-wider">
+                                    Selected
+                                </span>
+                            </div>
+                            <div className="flex gap-2">
                                 <Button
-                                    className={actionConfirm.status === 'approved' ? 'bg-green-600' : 'bg-red-600'}
-                                    onClick={handleConfirmAction}
+                                    onClick={() => handleAction(Array.from(selectedIds), 'rejected')}
+                                    size="sm"
+                                    className="h-9 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-[10px] font-bold uppercase tracking-wider"
                                 >
-                                    Confirm
+                                    <X className="h-3 w-3 mr-1.5" />
+                                    Reject Selected
+                                </Button>
+                                <Button
+                                    onClick={() => handleAction(Array.from(selectedIds), 'approved')}
+                                    size="sm"
+                                    className="h-9 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/30 text-[10px] font-bold uppercase tracking-wider"
+                                >
+                                    <Check className="h-3 w-3 mr-1.5" />
+                                    Approve Selected
                                 </Button>
                             </div>
                         </div>
-                    </div>
-                )
-            }
-        </div >
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ── CONFIRMATION DIALOG ── */}
+            <AnimatePresence>
+                {actionConfirm && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                            className="relative max-w-md w-full rounded-3xl border overflow-hidden"
+                            style={{ background: SURFACE_RAISED, borderColor: BORDER_SUBTLE }}
+                        >
+                            {/* Status stripe */}
+                            <div className={cn(
+                                "h-1",
+                                actionConfirm.status === 'approved' ? "bg-emerald-500" : "bg-red-500"
+                            )} />
+
+                            <div className="p-8">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className={cn(
+                                        "h-10 w-10 rounded-xl flex items-center justify-center border",
+                                        actionConfirm.status === 'approved'
+                                            ? "bg-emerald-500/10 border-emerald-500/20"
+                                            : "bg-red-500/10 border-red-500/20"
+                                    )}>
+                                        <Gavel className={cn(
+                                            "h-5 w-5",
+                                            actionConfirm.status === 'approved' ? "text-emerald-400" : "text-red-400"
+                                        )} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-black text-white tracking-tight">
+                                            Confirm {actionConfirm.status === 'approved' ? 'Approval' : 'Rejection'}
+                                        </h3>
+                                        <p className="text-[11px] font-mono text-white/30 uppercase tracking-wider">
+                                            {actionConfirm.ids.length} request{actionConfirm.ids.length > 1 ? 's' : ''}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <p className="text-sm text-white/50 mb-8 leading-relaxed">
+                                    This action will {actionConfirm.status === 'approved' ? 'approve and execute' : 'reject'} the
+                                    selected swap {actionConfirm.ids.length > 1 ? 'requests' : 'request'}. This cannot be undone.
+                                </p>
+
+                                <div className="flex justify-end gap-3">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setActionConfirm(null)}
+                                        className="rounded-xl text-white/60 border-white/10 hover:bg-white/5 text-[11px] font-bold uppercase tracking-wider"
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        onClick={handleConfirmAction}
+                                        className={cn(
+                                            "rounded-xl text-white text-[11px] font-bold uppercase tracking-wider shadow-lg",
+                                            actionConfirm.status === 'approved'
+                                                ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/30"
+                                                : "bg-red-600 hover:bg-red-500 shadow-red-900/30"
+                                        )}
+                                    >
+                                        {actionConfirm.status === 'approved' ? 'Approve' : 'Reject'}
+                                    </Button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
     );
 };
 

@@ -3,20 +3,24 @@ import { Shift, isValidUuid, safeUuid, calculateMinutesBetweenTimes } from '../d
 import { CreateShiftData, UpdateShiftData } from './shifts.dto';
 import { complianceService } from '../services/compliance.service';
 import { callRpc, callAuthenticatedRpc, callAuthenticatedVoidRpc, requireUser } from '@/lib/rpc/client';
+import { shiftsQueries } from './shifts.queries';
 import { ComplianceError } from '@/lib/rpc/errors';
 import {
-  CreateShiftResponseSchema,
-  UpdateShiftResponseSchema,
-  PublishShiftResponseSchema,
-  BulkPublishResponseSchema,
-  BulkAssignResponseSchema,
-  BulkDeleteResponseSchema,
-  DeleteShiftResponseSchema,
-  CancelShiftResponseSchema,
-  OfferActionResponseSchema,
-  RequestTradeResponseSchema,
-  EmployeeDropResponseSchema,
-  CloseBiddingResponseSchema,
+    CreateShiftResponseSchema,
+    UpdateShiftResponseSchema,
+    PublishShiftResponseSchema,
+    BulkPublishResponse,
+    BulkPublishResponseSchema,
+    BulkAssignResponse,
+    BulkAssignResponseSchema,
+    BulkDeleteResponse,
+    BulkDeleteResponseSchema,
+    DeleteShiftResponseSchema,
+    CancelShiftResponseSchema,
+    OfferActionResponseSchema,
+    RequestTradeResponseSchema,
+    EmployeeDropResponseSchema,
+    CloseBiddingResponseSchema,
 } from './contracts';
 
 export const shiftsCommands = {
@@ -47,47 +51,52 @@ export const shiftsCommands = {
         }
 
         const payload = {
-            roster_id:             shiftData.roster_id,
-            department_id:         safeUuid(shiftData.department_id)!,
-            shift_date:            shiftData.shift_date,
-            roster_date:           shiftData.shift_date,
-            start_time:            shiftData.start_time,
-            end_time:              shiftData.end_time,
-            organization_id:       safeUuid(shiftData.organization_id),
-            sub_department_id:     safeUuid(shiftData.sub_department_id),
-            group_type:            shiftData.group_type || null,
-            sub_group_name:        shiftData.sub_group_name || null,
-            display_order:         shiftData.display_order || 0,
-            shift_group_id:        safeUuid(shiftData.shift_group_id),
-            shift_subgroup_id:     safeUuid(shiftData.shift_subgroup_id),
-            role_id:               safeUuid(shiftData.role_id),
+            roster_id: shiftData.roster_id,
+            department_id: safeUuid(shiftData.department_id)!,
+            shift_date: shiftData.shift_date,
+            roster_date: shiftData.shift_date,
+            start_time: shiftData.start_time,
+            end_time: shiftData.end_time,
+            organization_id: safeUuid(shiftData.organization_id),
+            sub_department_id: safeUuid(shiftData.sub_department_id),
+            group_type: shiftData.group_type || null,
+            sub_group_name: shiftData.sub_group_name || null,
+            display_order: shiftData.display_order || 0,
+            shift_group_id: safeUuid(shiftData.shift_group_id),
+            shift_subgroup_id: safeUuid(shiftData.shift_subgroup_id),
+            role_id: safeUuid(shiftData.role_id),
             remuneration_level_id: safeUuid(shiftData.remuneration_level_id),
-            paid_break_minutes:    shiftData.paid_break_minutes || 0,
-            unpaid_break_minutes:  shiftData.unpaid_break_minutes || 0,
-            break_minutes:         (shiftData.paid_break_minutes || 0) + (shiftData.unpaid_break_minutes || 0),
-            timezone:              shiftData.timezone || 'Australia/Sydney',
-            assigned_employee_id:  safeUuid(shiftData.assigned_employee_id),
-            required_skills:       shiftData.required_skills || [],
-            required_licenses:     shiftData.required_licenses || [],
-            event_ids:             shiftData.event_ids || [],
-            tags:                  shiftData.tags || [],
-            notes:                 shiftData.notes || null,
-            template_id:           safeUuid(shiftData.template_id),
-            template_group:        shiftData.template_group || null,
-            template_sub_group:    shiftData.template_sub_group || null,
-            is_from_template:      shiftData.is_from_template || false,
-            template_instance_id:  safeUuid(shiftData.template_instance_id),
-            lifecycle_status:      'Draft',
-            is_draft:              true,
-            created_by_user_id:    user.id,
+            paid_break_minutes: shiftData.paid_break_minutes || 0,
+            unpaid_break_minutes: shiftData.unpaid_break_minutes || 0,
+            break_minutes: (shiftData.paid_break_minutes || 0) + (shiftData.unpaid_break_minutes || 0),
+            timezone: shiftData.timezone || 'Australia/Sydney',
+            assigned_employee_id: safeUuid(shiftData.assigned_employee_id),
+            required_skills: shiftData.required_skills || [],
+            required_licenses: shiftData.required_licenses || [],
+            event_ids: shiftData.event_ids || [],
+            tags: shiftData.tags || [],
+            notes: shiftData.notes || null,
+            template_id: safeUuid(shiftData.template_id),
+            template_group: shiftData.template_group || null,
+            template_sub_group: shiftData.template_sub_group || null,
+            is_from_template: shiftData.is_from_template || false,
+            template_instance_id: safeUuid(shiftData.template_instance_id),
+            lifecycle_status: 'Draft',
+            is_draft: true,
+            created_by_user_id: user.id,
         };
 
-        const result = await callRpc('sm_create_shift', {
+        const newShiftId = await callRpc('sm_create_shift', {
             p_shift_data: payload,
-            p_user_id:    user.id,
+            p_user_id: user.id,
         }, CreateShiftResponseSchema);
 
-        return result as unknown as Shift;
+        const newShift = await shiftsQueries.getShiftById(newShiftId);
+        if (!newShift) {
+            throw new Error('Shift created but could not be retrieved');
+        }
+
+        return newShift;
     },
 
     /* ============================================================
@@ -149,13 +158,22 @@ export const shiftsCommands = {
             if (updates.cancellation_reason !== undefined)
                 payload.cancellation_reason = updates.cancellation_reason;
 
-            const result = await callRpc('sm_update_shift', {
-                p_shift_id:   shiftId,
+            const success = await callRpc('sm_update_shift', {
+                p_shift_id: shiftId,
                 p_shift_data: payload,
-                p_user_id:    user.id,
+                p_user_id: user.id,
             }, UpdateShiftResponseSchema);
 
-            return result as unknown as Shift;
+            if (!success) {
+                throw new Error('Shift update failed in database');
+            }
+
+            const updatedShift = await shiftsQueries.getShiftById(shiftId);
+            if (!updatedShift) {
+                throw new Error('Shift updated but could not be retrieved');
+            }
+
+            return updatedShift;
         }
     },
 
@@ -169,13 +187,7 @@ export const shiftsCommands = {
      * @param shiftIds Array of shift UUIDs to assign
      * @returns Array of updated shifts
      */
-    async bulkAssignShifts(employeeId: string, shiftIds: string[]): Promise<{
-        success: boolean;
-        total_requested: number;
-        success_count: number;
-        failure_count: number;
-        message?: string;
-    }> {
+    async bulkAssignShifts(employeeId: string, shiftIds: string[]): Promise<BulkAssignResponse> {
         if (!employeeId || !isValidUuid(employeeId)) {
             throw new Error('Invalid employee ID');
         }
@@ -208,9 +220,9 @@ export const shiftsCommands = {
             .from('shifts')
             .update({
                 assigned_employee_id: null,
-                assigned_at:          null,
-                last_modified_by:     user.id,
-                updated_at:           new Date().toISOString(),
+                assigned_at: null,
+                last_modified_by: user.id,
+                updated_at: new Date().toISOString(),
             })
             .in('id', shiftIds)
             .is('deleted_at', null)
@@ -225,19 +237,39 @@ export const shiftsCommands = {
 
 
     async publishShift(shiftId: string) {
-        return callAuthenticatedRpc(
+        const result = await callAuthenticatedRpc(
             'sm_publish_shift',
             (userId) => ({ p_shift_id: shiftId, p_user_id: userId }),
             PublishShiftResponseSchema,
         );
+
+        if (!result.success) {
+            throw new Error(result.error ?? 'Failed to publish shift');
+        }
+
+        return result;
     },
 
-    async bulkPublishShifts(shiftIds: string[]) {
+    async bulkPublishShifts(shiftIds: string[]): Promise<BulkPublishResponse> {
         return callAuthenticatedRpc(
             'sm_bulk_publish_shifts',
             (userId) => ({ p_shift_ids: shiftIds, p_actor_id: userId }),
             BulkPublishResponseSchema,
         );
+    },
+
+    async unpublishShift(shiftId: string, reason?: string) {
+        const result = await callAuthenticatedRpc(
+            'sm_unpublish_shift',
+            (userId) => ({ p_shift_id: shiftId, p_user_id: userId, p_reason: reason ?? 'Unpublished' }),
+            PublishShiftResponseSchema,
+        );
+
+        if (!result.success) {
+            throw new Error(result.error ?? 'Failed to unpublish shift');
+        }
+
+        return result;
     },
 
     /* ============================================================
@@ -247,20 +279,26 @@ export const shiftsCommands = {
     async checkIn(shiftId: string, location?: { lat: number; lon: number }): Promise<void> {
         await callAuthenticatedVoidRpc('check_in_shift', (userId) => ({
             p_shift_id: shiftId,
-            p_user_id:  userId,
-            p_lat:      location?.lat ?? null,
-            p_lon:      location?.lon ?? null,
+            p_user_id: userId,
+            p_lat: location?.lat ?? null,
+            p_lon: location?.lon ?? null,
         }));
     },
 
 
 
     async withdrawShiftFromBidding(shiftId: string) {
-        return callAuthenticatedRpc(
+        const result = await callAuthenticatedRpc(
             'sm_close_bidding',
             (userId) => ({ p_shift_id: shiftId, p_user_id: userId, p_reason: 'User declined offer' }),
             CloseBiddingResponseSchema,
         );
+
+        if (!result.success) {
+            throw new Error(result.error ?? 'Failed to withdraw shift from bidding');
+        }
+
+        return result;
     },
 
     /* ============================================================
@@ -298,14 +336,14 @@ export const shiftsCommands = {
             const user = await requireUser();
 
             await supabase.from('shift_audit_events').insert({
-                shift_id:          shiftId,
-                event_type:        action,
-                event_category:    'MANUAL_LOG',
-                field_changed:     fieldName ?? null,
-                old_value:         oldValue  ?? null,
-                new_value:         newValue  ?? null,
-                metadata:          reason ? { reason } : null,
-                performed_by_id:   user.id,
+                shift_id: shiftId,
+                event_type: action,
+                event_category: 'MANUAL_LOG',
+                field_changed: fieldName ?? null,
+                old_value: oldValue ?? null,
+                new_value: newValue ?? null,
+                metadata: reason ? { reason } : null,
+                performed_by_id: user.id,
                 performed_by_name: user.email ?? 'System',
                 performed_by_role: 'system',
             });

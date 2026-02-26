@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
-import { Plus } from 'lucide-react';
+import { Plus, MoreHorizontal, Undo2, Edit2 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { format } from 'date-fns';
 import { SmartShiftCard, type ComplianceInfo } from '@/modules/rosters/ui/components/SmartShiftCard';
@@ -10,6 +10,13 @@ import { useResolvedAvailability } from '@/modules/rosters/hooks/useResolvedAvai
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 import { PeopleModeEmployee, PeopleModeShift } from './people-mode.types';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/modules/core/ui/primitives/dropdown-menu';
 
 /* ============================================================
    INTERFACES
@@ -18,6 +25,11 @@ import { PeopleModeEmployee, PeopleModeShift } from './people-mode.types';
 // Re-export for backward compatibility if needed, or just use the imported ones
 export type EmployeeShift = PeopleModeShift;
 export type Employee = PeopleModeEmployee;
+
+// ── canUnpublish — any Published shift can be unpublished (→ S1 or S2) ───────
+function canUnpublish(shift: PeopleModeShift): boolean {
+  return shift.lifecycleStatus === 'published';
+}
 
 interface PeopleModeGridProps {
   employees: PeopleModeEmployee[];
@@ -37,6 +49,7 @@ interface PeopleModeGridProps {
   onBidShift?: (shiftId: string) => void;
   onSwapShift?: (shiftId: string) => void;
   onCancelShift?: (shiftId: string) => void;
+  onUnpublishShift?: (shiftId: string) => void;
 }
 
 /* ============================================================
@@ -57,7 +70,42 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   onBidShift,
   onSwapShift,
   onCancelShift,
+  onUnpublishShift,
 }) => {
+  const buildShiftMenu = (shift: PeopleModeShift) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="h-4 w-4 flex items-center justify-center hover:bg-white/20 rounded transition-colors"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MoreHorizontal className="h-3 w-3 text-white/60" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="bg-[#1a2744] border-white/10 min-w-[160px] z-50">
+        <DropdownMenuItem
+          onClick={() => onViewShift?.(shift)}
+          className="text-white hover:bg-white/10 cursor-pointer"
+        >
+          <Edit2 className="h-4 w-4 mr-2" />
+          Edit Shift
+        </DropdownMenuItem>
+
+        {canUnpublish(shift) && onUnpublishShift && (
+          <>
+            <DropdownMenuSeparator className="bg-white/10" />
+            <DropdownMenuItem
+              onClick={() => onUnpublishShift(shift.id)}
+              className="text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+            >
+              <Undo2 className="h-4 w-4 mr-2" />
+              Unpublish Shift
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
   // Get all profile IDs for availability lookup
   const profileIds = useMemo(() => employees.map(e => e.id), [employees]);
 
@@ -75,7 +123,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
           {/* ==================== TABLE CONTAINER ==================== */}
           <div className="border border-border rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
+              <table className="w-full min-w-max border-collapse relative">
                 {/* ==================== HEADER ROW ==================== */}
                 <thead>
                   <tr className="bg-muted/30">
@@ -115,7 +163,12 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                       {/* ========== EMPLOYEE INFO CELL ========== */}
                       <td className="sticky left-0 z-10 bg-background border-r border-border px-4 py-3 align-top">
                         <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10 shrink-0">
+                          <Avatar className={cn(
+                            'h-10 w-10 shrink-0 ring-2 ring-offset-1',
+                            employee.overHoursWarning
+                              ? 'ring-amber-400/70'
+                              : 'ring-transparent'
+                          )}>
                             <AvatarImage src={employee.avatar} alt={employee.name} />
                             <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
                               {employee.name
@@ -126,15 +179,44 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                             </AvatarFallback>
                           </Avatar>
 
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <div className="text-sm font-medium truncate">
                               {employee.name}
                             </div>
-                            <div className="text-xs text-muted-foreground">
-                              ID: {employee.employeeId}
+                            <div className="text-[10px] tracking-[0.08em] uppercase font-mono text-muted-foreground/70">
+                              {employee.employeeId}
                             </div>
-                            <div className="text-xs text-muted-foreground">
-                              {employee.currentHours}h / {employee.contractedHours}h
+                            {/* Hours capacity strip */}
+                            <div className="mt-1.5 space-y-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className={cn(
+                                  'text-[10px] font-mono tabular-nums',
+                                  employee.overHoursWarning ? 'text-amber-400' : 'text-muted-foreground'
+                                )}>
+                                  {employee.currentHours.toFixed(1)}h
+                                  <span className="text-muted-foreground/50"> / {employee.contractedHours}h</span>
+                                </span>
+                                {employee.overHoursWarning && (
+                                  <span className="text-[9px] font-mono tracking-wider text-amber-400 uppercase">
+                                    OT
+                                  </span>
+                                )}
+                              </div>
+                              {/* Progress bar */}
+                              <div className="h-[3px] w-full bg-white/10 rounded-full overflow-hidden">
+                                <div
+                                  className={cn(
+                                    'h-full rounded-full transition-all duration-500',
+                                    employee.overHoursWarning ? 'bg-amber-400' : 'bg-primary/60'
+                                  )}
+                                  style={{
+                                    width: `${Math.min(100, employee.contractedHours > 0
+                                      ? (employee.currentHours / employee.contractedHours) * 100
+                                      : 0
+                                    )}%`
+                                  }}
+                                />
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -175,6 +257,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                                 shifts.map((shift) => (
                                   <SmartShiftCard
                                     key={shift.id}
+                                    headerAction={canEdit && !bulkModeActive ? buildShiftMenu(shift) : undefined}
                                     shift={shift.rawShift || ({
                                       id: shift.id,
                                       start_time: shift.startTime,
@@ -204,33 +287,33 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                                   />
                                 ))
                               ) : (
-                                /* Empty state - show Add Shift button */
+                                /* Empty state — Data Ops dashed ring */
                                 !bulkModeActive &&
                                 canEdit && (
                                   <button
-                                    className="w-full text-xs text-primary hover:underline flex items-center justify-center gap-1 py-4"
+                                    className="w-full flex items-center justify-center gap-1 py-4 rounded border border-dashed border-white/10 text-[11px] font-mono text-white/25 transition-all hover:border-white/25 hover:text-white/50 hover:bg-white/[0.02]"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       onAddShift(employee, date);
                                     }}
                                   >
                                     <Plus className="h-3 w-3" />
-                                    Add Shift
+                                    add
                                   </button>
                                 )
                               )}
 
-                              {/* Add Shift button when there are existing shifts */}
+                              {/* Add another shift when cell already has shifts */}
                               {shifts.length > 0 && canEdit && !bulkModeActive && (
                                 <button
-                                  className="w-full text-xs text-primary/70 hover:text-primary hover:underline flex items-center justify-center gap-1 py-1"
+                                  className="w-full flex items-center justify-center gap-1 py-1 rounded border border-dashed border-white/[0.07] text-[10px] font-mono text-white/20 transition-all hover:border-white/20 hover:text-white/40"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     onAddShift(employee, date);
                                   }}
                                 >
-                                  <Plus className="h-3 w-3" />
-                                  Add Shift
+                                  <Plus className="h-2.5 w-2.5" />
+                                  add
                                 </button>
                               )}
 

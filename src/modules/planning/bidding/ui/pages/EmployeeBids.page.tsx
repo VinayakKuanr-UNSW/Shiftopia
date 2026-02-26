@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO, parse } from 'date-fns';
 import { SYDNEY_TZ, parseZonedDateTime, formatInTimezone } from '@/modules/core/lib/date.utils';
 import { biddingApi } from '../../api/bidding.api';
-import { complianceService, ComplianceValidationResult } from '@/modules/rosters/services/compliance.service';
+import { validateCompliance, type ComplianceResult } from '@/modules/rosters/services/compliance.service';
 import {
     Info, User,
     Calendar, Clock, ThumbsUp, ShieldAlert, Ban, Flame,
@@ -84,7 +84,7 @@ interface BidData {
     unpaidBreak: number;
     netLength: number;
     remunerationLevel: string;
-    status: 'pending' | 'approved' | 'rejected' | 'withdrawn';
+    status: 'pending' | 'accepted' | 'rejected' | 'withdrawn';
     bidTime: string;
     notes: string | null;
     groupType?: string | null;
@@ -153,6 +153,7 @@ export const EmployeeBidsPage: React.FC = () => {
     const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState<'available' | 'myBids'>('available');
     const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
+    const [myBidsSubToggle, setMyBidsSubToggle] = useState<'pending' | 'accepted' | 'rejected'>('pending');
 
 
     // Selection
@@ -160,7 +161,7 @@ export const EmployeeBidsPage: React.FC = () => {
 
     // Compliance Check State
     const [checkingShiftId, setCheckingShiftId] = useState<string | null>(null);
-    const [complianceResult, setComplianceResult] = useState<ComplianceValidationResult | null>(null);
+    const [complianceResult, setComplianceResult] = useState<ComplianceResult | null>(null);
     const [showComplianceDialog, setShowComplianceDialog] = useState(false);
     const [pendingBidShift, setPendingBidShift] = useState<ShiftData | null>(null);
 
@@ -340,7 +341,14 @@ export const EmployeeBidsPage: React.FC = () => {
     // FILTERS
     // ========================================================================
     const filteredAvailableShifts = shiftsTableSort.sortedData;
-    const filteredMyBids = bidsTableSort.sortedData;
+    const filteredMyBids = React.useMemo(() => {
+        return bidsTableSort.sortedData.filter(bid => {
+            if (myBidsSubToggle === 'pending') return bid.status === 'pending';
+            if (myBidsSubToggle === 'accepted') return bid.status === 'accepted';
+            if (myBidsSubToggle === 'rejected') return bid.status === 'rejected';
+            return true;
+        });
+    }, [bidsTableSort.sortedData, myBidsSubToggle]);
 
     // ========================================================================
     // SELECTION HANDLERS
@@ -366,21 +374,21 @@ export const EmployeeBidsPage: React.FC = () => {
         if (!user) return;
         setCheckingShiftId(shift.id);
         try {
-            const result = await complianceService.validateShiftCompliance(
-                user.id,
-                shift.date,
-                shift.startTime + ':00',
-                shift.endTime + ':00',
-                shift.netLength
-            );
+            const result = await validateCompliance({
+                employeeId: user.id,
+                shiftDate: shift.date,
+                startTime: shift.startTime + ':00',
+                endTime: shift.endTime + ':00',
+                netLengthMinutes: shift.netLength
+            });
             setCheckingShiftId(null);
 
-            if (!result.isValid) {
+            if (result.status === 'violated') {
                 // Blocking violation
                 setComplianceResult(result);
                 setPendingBidShift(shift);
                 setShowComplianceDialog(true);
-            } else if (result.warnings.length > 0) {
+            } else if (result.status === 'warned') {
                 // Soft warning - show dialog but allow proceed
                 setComplianceResult(result);
                 setPendingBidShift(shift);
@@ -466,7 +474,7 @@ export const EmployeeBidsPage: React.FC = () => {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
-                className={`p - 4 rounded - lg border ${getCardBg(shift.groupType, shift.department)} transition - all duration - 300`}
+                className={`p-4 rounded-lg border relative ${getCardBg(shift.groupType, shift.department)} transition-all duration-300`}
             >
                 {/* CHECKBOX + COMPLIANCE BADGE */}
                 <div className="flex items-center mb-3">
@@ -576,52 +584,76 @@ export const EmployeeBidsPage: React.FC = () => {
                     </div>
                 )}
 
-                {/* ICONS GRID (3x2) */}
-                <div className="bg-[#0f172a] rounded-lg border border-white/10 p-2 mb-4">
-                    <div className="grid grid-cols-3 gap-y-2 gap-x-1 text-center">
-                        {/* ID */}
-                        <div className="flex flex-col items-center gap-0.5">
-                            <div className="w-4 h-4 flex items-center justify-center font-mono text-[10px] text-white/40 border border-white/20 rounded">#</div>
-                            <span className="text-[9px] font-bold text-blue-400">{shift.stateId || 'S?'}</span>
+                {/* STATUS INDICATORS ROW (Consolidated from 3x2 to single row) */}
+                <div className="bg-[#0f172a]/50 rounded-lg border border-white/5 p-2 mb-4">
+                    <div className="grid grid-cols-6 gap-1 items-center">
+                        {/* 1. ID */}
+                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-white/5 transition-colors" title={`State Code: ${shift.stateId || 'Unknown'}`}>
+                            <div className="w-3.5 h-3.5 flex items-center justify-center font-mono text-[9px] font-bold text-white/40 border border-white/20 rounded mb-0.5">#</div>
+                            <span className="text-[10px] font-bold text-blue-400 leading-none">{shift.stateId || 'S?'}</span>
                         </div>
-                        {/* LIFECYCLE */}
-                        <div className="flex flex-col items-center gap-0.5">
-                            <Megaphone className="w-4 h-4 text-blue-500" />
-                            <span className="text-[9px] text-gray-400">Published</span>
+
+                        {/* 2. LIFECYCLE (Set to Published) */}
+                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-white/5 transition-colors" title="Lifecycle: Published">
+                            <Megaphone className="w-3.5 h-3.5 text-blue-500 mb-0.5" />
+                            <span className="text-[8px] text-gray-500 font-bold uppercase tracking-tighter">PUB</span>
                         </div>
-                        {/* ASSIGNMENT */}
-                        <div className="flex flex-col items-center gap-0.5">
-                            {shift.assignedTo ? <UserCheck className="w-4 h-4 text-green-500" /> : <UserPlus className="w-4 h-4 text-amber-500" />}
-                            <span className="text-[9px] text-gray-400">{shift.assignedTo ? 'Assigned' : 'Unassigned'}</span>
+
+                        {/* 3. ASSIGNMENT */}
+                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-white/5 transition-colors" title={shift.assignedTo ? `Assigned to ${shift.assignedTo}` : 'Unassigned'}>
+                            {shift.assignedTo ? (
+                                <UserCheck className="w-3.5 h-3.5 text-green-500 mb-0.5" />
+                            ) : (
+                                <UserPlus className="w-3.5 h-3.5 text-amber-500 mb-0.5" />
+                            )}
+                            <span className="text-[8px] text-gray-500 font-bold uppercase tracking-tighter">{shift.assignedTo ? 'ASN' : 'VAC'}</span>
                         </div>
-                        {/* OFFER */}
-                        <div className="flex flex-col items-center gap-0.5">
-                            <Circle className="w-4 h-4 text-gray-400" />
-                            <span className="text-[9px] text-gray-400">-</span>
+
+                        {/* 4. OFFER (Status Indicator) */}
+                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-white/5 transition-colors" title="Offer Status: None">
+                            <Circle className="w-3.5 h-3.5 text-gray-600 mb-0.5" />
+                            <span className="text-[8px] text-gray-600 font-bold uppercase tracking-tighter">OFF</span>
                         </div>
-                        {/* BIDDING */}
-                        <div className="flex flex-col items-center gap-0.5">
-                            {shift.isUrgent ? <Flame className="w-4 h-4 text-red-500" /> : <Gavel className="w-4 h-4 text-blue-500" />}
-                            <span className="text-[9px] text-gray-400">{shift.isUrgent ? 'Urgent' : 'Normal'}</span>
+
+                        {/* 5. BIDDING (Priority) */}
+                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-white/5 transition-colors" title={`Bidding: ${shift.isUrgent ? 'Urgent' : 'Normal'}`}>
+                            {shift.isUrgent ? (
+                                <Flame className="w-3.5 h-3.5 text-red-500 mb-0.5" />
+                            ) : (
+                                <Gavel className="w-3.5 h-3.5 text-blue-500 mb-0.5" />
+                            )}
+                            <span className={cn(
+                                "text-[8px] font-bold uppercase tracking-tighter",
+                                shift.isUrgent ? "text-red-500" : "text-blue-500"
+                            )}>
+                                {shift.isUrgent ? 'URG' : 'NRM'}
+                            </span>
                         </div>
-                        {/* TRADE */}
-                        <div className="flex flex-col items-center gap-0.5">
-                            <Minus className="w-4 h-4 text-gray-400" />
-                            <span className="text-[9px] text-gray-400">NoTrade</span>
+
+                        {/* 6. TRADE */}
+                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-white/5 transition-colors" title="Trade: None">
+                            <Minus className="w-3.5 h-3.5 text-gray-600 mb-0.5" />
+                            <span className="text-[8px] text-gray-600 font-bold uppercase tracking-tighter">TRD</span>
                         </div>
                     </div>
                 </div>
 
                 {/* ACTION BUTTONS - Two-button layout */}
                 {isBidCard ? (
-                    // My Bids tab: just show Withdraw
-                    <Button
-                        variant="outline"
-                        className="w-full border-white/10 hover:bg-red-500/10 hover:text-red-400"
-                        onClick={() => handleWithdrawBid(shift.id)}
-                    >
-                        Withdraw Bid
-                    </Button>
+                    // My Bids tab: Show log status instead of buttons
+                    bidStatus === 'pending' ? (
+                        <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm font-medium">
+                            <Clock className="h-4 w-4" /> Awaiting Manager Review
+                        </div>
+                    ) : bidStatus === 'accepted' ? (
+                        <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-sm font-medium">
+                            <CheckCircle className="h-4 w-4" /> Shift Won — Assigned to You
+                        </div>
+                    ) : (
+                        <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-white/5 border border-white/10 text-white/40 text-sm">
+                            <Ban className="h-4 w-4" /> Bid Not Selected
+                        </div>
+                    )
                 ) : isExpired ? (
                     // Bidding closed
                     <Button disabled className="w-full bg-white/10 text-white/50">
@@ -704,7 +736,32 @@ export const EmployeeBidsPage: React.FC = () => {
             <FunctionBar
                 tabs={[
                     { id: 'available', label: 'Available Shifts', count: filteredAvailableShifts.length },
-                    { id: 'myBids', label: 'My Bids', count: filteredMyBids.length }
+                    {
+                        id: 'myBids',
+                        label: 'My Bids',
+                        count: filteredMyBids.length,
+                        subContent: (
+                            <div className="flex bg-white/5 p-1 rounded-lg border border-white/10">
+                                {['pending', 'accepted', 'rejected'].map(status => (
+                                    <button
+                                        key={status}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setMyBidsSubToggle(status as any);
+                                        }}
+                                        className={cn(
+                                            "px-3 py-1 text-[11px] font-medium rounded-md capitalize transition-colors",
+                                            myBidsSubToggle === status
+                                                ? "bg-blue-500/20 text-blue-400"
+                                                : "text-white/50 hover:text-white/80 hover:bg-white/5"
+                                        )}
+                                    >
+                                        {status}
+                                    </button>
+                                ))}
+                            </div>
+                        )
+                    }
                 ]}
                 activeTab={activeTab}
                 onTabChange={(id) => setActiveTab(id as any)}
@@ -885,21 +942,6 @@ export const EmployeeBidsPage: React.FC = () => {
 
                 {/* TAB: My Bids */}
                 <TabsContent value="myBids" className="space-y-4">
-                    <div className="flex gap-2 items-center">
-                        <div className="flex items-center bg-white/5 px-2 py-1 rounded border border-white/10">
-                            <input
-                                type="checkbox"
-                                checked={filteredMyBids.length > 0 && filteredMyBids.every(b => selectedBidIds.includes(b.id))}
-                                onChange={(e) => handleSelectAllMyBids(e.target.checked)}
-                                className="mr-2 h-3 w-3"
-                            />
-                            <span className="text-xs text-white/70">Select All</span>
-                        </div>
-                        <Button size="sm" variant="destructive" onClick={handleBulkWithdraw} disabled={selectedBidIds.length === 0}>
-                            Withdraw ({selectedBidIds.length})
-                        </Button>
-                    </div>
-
                     {viewMode === 'card' ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                             {filteredMyBids.map(bid => {
@@ -923,8 +965,7 @@ export const EmployeeBidsPage: React.FC = () => {
                             <table className="w-full text-sm text-white">
                                 <thead className="bg-black/40 text-xs">
                                     <tr>
-                                        <th className="p-3 text-left">
-                                            <input type="checkbox" checked={filteredMyBids.length > 0 && filteredMyBids.every(b => selectedBidIds.includes(b.id))} onChange={(e) => handleSelectAllMyBids(e.target.checked)} />
+                                        <th className="p-3 text-left w-[40px]">
                                         </th>
                                         <th className="p-3 text-left">Bid Time</th>
                                         <th className="p-3 text-left">Details</th>
@@ -935,7 +976,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                 <tbody>
                                     {filteredMyBids.map(bid => (
                                         <tr key={bid.id} className="border-t border-white/10 hover:bg-white/5">
-                                            <td className="p-3"><input type="checkbox" checked={selectedBidIds.includes(bid.id)} onChange={() => handleSelectBid(bid.id)} /></td>
+                                            <td className="p-3"></td>
                                             <td className="p-3 text-xs">{bid.bidTime}</td>
                                             <td className="p-3">
                                                 <div className="font-medium">{bid.role}</div>
@@ -943,9 +984,13 @@ export const EmployeeBidsPage: React.FC = () => {
                                             </td>
                                             <td className="p-3"><BidStatusBadge status={bid.status} /></td>
                                             <td className="p-3">
-                                                <Button size="sm" variant="ghost" className="text-red-400 hover:text-red-300" onClick={() => handleWithdrawBid(bid.id)}>
-                                                    Withdraw
-                                                </Button>
+                                                {bid.status === 'pending' ? (
+                                                    <span className="text-xs text-amber-400 flex items-center gap-1"><Clock size={14} /> Pending review</span>
+                                                ) : bid.status === 'accepted' ? (
+                                                    <span className="text-xs text-emerald-400 flex items-center gap-1"><CheckCircle size={14} /> Won</span>
+                                                ) : (
+                                                    <span className="text-xs text-white/40 flex items-center gap-1"><Ban size={14} /> Failed</span>
+                                                )}
                                             </td>
                                         </tr>
                                     ))}
@@ -960,7 +1005,7 @@ export const EmployeeBidsPage: React.FC = () => {
             <AlertDialog open={showComplianceDialog} onOpenChange={setShowComplianceDialog}>
                 <AlertDialogContent className="bg-[#0f172a] border-white/10 text-white max-w-md">
                     <AlertDialogHeader>
-                        {complianceResult && !complianceResult.isValid ? (
+                        {complianceResult && complianceResult.status === 'violated' ? (
                             <>
                                 <AlertDialogTitle className="flex items-center gap-2 text-red-400">
                                     <XCircle className="h-5 w-5" />
@@ -1004,7 +1049,7 @@ export const EmployeeBidsPage: React.FC = () => {
                         ) : null}
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        {complianceResult && !complianceResult.isValid ? (
+                        {complianceResult && complianceResult.status === 'violated' ? (
                             <AlertDialogAction onClick={handleCancelBid} className="bg-white/10 hover:bg-white/20">
                                 Understood
                             </AlertDialogAction>

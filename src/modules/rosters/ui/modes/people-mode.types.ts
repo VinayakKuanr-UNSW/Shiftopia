@@ -31,5 +31,7 @@ export interface PeopleModeEmployee {
     avatar: string;
     contractedHours: number;
     currentHours: number;
+    /** True when scheduledHours > contractedHours */
+    overHoursWarning?: boolean;
     shifts: Record<string, PeopleModeShift[]>;
 }

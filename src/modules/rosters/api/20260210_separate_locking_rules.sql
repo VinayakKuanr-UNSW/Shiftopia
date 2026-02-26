@@ -71,6 +71,8 @@ DECLARE
     v_start_sydney timestamptz;
     v_hours_until_start numeric;
     v_result jsonb;
+    v_user_name text;
+    v_user_role text;
 BEGIN
     -- 1. Get Shift Info
     SELECT * INTO v_shift FROM shifts WHERE id = p_shift_id;
@@ -93,21 +95,40 @@ BEGIN
         );
     END IF;
 
-    -- 4. Proceed with Drop Logic (Simplified for this migration - mimicking existing logic)
-    -- In a real scenario, this would call the actual drop logic or update tables.
-    -- Assuming this RPC wraps the update:
-    
+    -- 4. Proceed with Drop Logic
     UPDATE shifts 
     SET 
         assigned_employee_id = NULL,
         assignment_outcome = NULL,
-        assignment_status = 'open', -- or whatever the enum is
+        assignment_status = 'unassigned',
+        bidding_status = 'on_bidding_urgent',  -- Re-open for urgent bidding so it appears on Available Bids
         updated_at = NOW()
     WHERE id = p_shift_id;
     
-    -- Log Audit (Optional/simplified)
-    INSERT INTO shift_audit_log (shift_id, action, changed_by_user_id, change_reason)
-    VALUES (p_shift_id, 'EMPLOYEE_DROP', p_employee_id, p_reason);
+    -- Invalidate the employee's existing bid since they dropped the shift
+    UPDATE shift_bids
+    SET status = 'withdrawn'
+    WHERE shift_id = p_shift_id AND employee_id = p_employee_id;
+    
+    -- Get user details for audit logs
+    SELECT 
+        COALESCE(first_name || ' ' || COALESCE(last_name, ''), 'Unknown'),
+        COALESCE(legacy_system_role::text, 'employee')
+    INTO v_user_name, v_user_role
+    FROM profiles WHERE id = p_employee_id;
+    
+    -- 5. Log Audit to the correct generic table
+    INSERT INTO shift_audit_events (
+        shift_id, event_type, event_category,
+        performed_by_id, performed_by_name, performed_by_role,
+        old_data, metadata
+    )
+    VALUES (
+        p_shift_id, 'employee_dropped', 'modification',
+        p_employee_id, v_user_name, v_user_role,
+        to_jsonb(v_shift),
+        jsonb_build_object('reason', p_reason)
+    );
     
     RETURN jsonb_build_object(
         'success', true,

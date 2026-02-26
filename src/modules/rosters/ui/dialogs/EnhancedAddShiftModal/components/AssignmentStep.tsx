@@ -1,0 +1,344 @@
+/**
+ * AssignmentStep — Two-pane layout for Employee Assignment + Compliance Inspector
+ *
+ * Left Pane: Employee Pool — searchable list of employees with hover/select
+ * Right Pane: Compliance Inspector — dynamic compliance checks per employee
+ */
+
+import React, { useState, useMemo } from 'react';
+import { cn } from '@/modules/core/lib/utils';
+import {
+    FormControl,
+    FormField,
+    FormItem,
+    FormLabel,
+} from '@/modules/core/ui/primitives/form';
+import { Input } from '@/modules/core/ui/primitives/input';
+import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
+import { ComplianceTabContent } from '@/modules/rosters/ui/components/ComplianceTabContent';
+import {
+    Users,
+    Shield,
+    Search,
+    UserCircle,
+    CheckCircle2,
+    AlertTriangle,
+    Gavel,
+    X,
+} from 'lucide-react';
+import type { AssignmentStepProps } from '../types';
+
+/* ═══════════════════════════════════════════════════════════════════════
+   EMPLOYEE CARD — compact card for the employee list
+   ═══════════════════════════════════════════════════════════════════════ */
+const EmployeeCard = ({
+    employee,
+    isSelected,
+    isHovered,
+    onSelect,
+    onHover,
+    onLeave,
+}: {
+    employee: { id: string; first_name: string; last_name: string; full_name?: string; profiles?: { full_name?: string } };
+    isSelected: boolean;
+    isHovered: boolean;
+    onSelect: () => void;
+    onHover: () => void;
+    onLeave: () => void;
+}) => {
+    const displayName = employee.profiles?.full_name || employee.full_name || `${employee.first_name} ${employee.last_name}`;
+    const initials = `${employee.first_name?.[0] || ''}${employee.last_name?.[0] || ''}`.toUpperCase();
+
+    return (
+        <button
+            type="button"
+            onClick={onSelect}
+            onMouseEnter={onHover}
+            onMouseLeave={onLeave}
+            className={cn(
+                'w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left group/emp',
+                isSelected
+                    ? 'bg-emerald-500/10 border-emerald-500/40 shadow-[0_0_20px_-5px_rgba(16,185,129,0.2)]'
+                    : isHovered
+                        ? 'bg-white/[0.04] border-white/15 shadow-md'
+                        : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.04] hover:border-white/10'
+            )}
+        >
+            {/* Avatar */}
+            <div className={cn(
+                'h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-all',
+                isSelected
+                    ? 'bg-emerald-500/20 text-emerald-400 ring-2 ring-emerald-500/30'
+                    : 'bg-white/5 text-white/50 group-hover/emp:bg-white/10 group-hover/emp:text-white/70'
+            )}>
+                {initials}
+            </div>
+
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+                <p className={cn(
+                    'text-sm font-semibold truncate transition-colors',
+                    isSelected ? 'text-emerald-300' : 'text-white/80 group-hover/emp:text-white'
+                )}>
+                    {displayName}
+                </p>
+                <p className="text-[10px] text-white/30 truncate">
+                    ID: {employee.id.slice(0, 8)}…
+                </p>
+            </div>
+
+            {/* Selected indicator */}
+            {isSelected && (
+                <CheckCircle2 className="h-5 w-5 text-emerald-400 flex-shrink-0 drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
+            )}
+        </button>
+    );
+};
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ASSIGNMENT STEP MAIN COMPONENT
+   ═══════════════════════════════════════════════════════════════════════ */
+
+export const AssignmentStep: React.FC<AssignmentStepProps> = ({
+    form,
+    isReadOnly,
+    isLoadingData,
+    isTemplateMode,
+    employees,
+    isEmployeeLocked,
+    existingShift,
+    // Compliance
+    watchEmployeeId,
+    hardValidation,
+    complianceResults,
+    setComplianceResults,
+    buildComplianceInput,
+    complianceNeedsRerun,
+    onChecksComplete,
+}) => {
+    const [searchQuery, setSearchQuery] = useState('');
+    const [hoveredEmployeeId, setHoveredEmployeeId] = useState<string | null>(null);
+
+    const selectedEmployeeId = form.watch('assigned_employee_id');
+
+    // Filtered employees
+    const filteredEmployees = useMemo(() => {
+        if (!searchQuery.trim()) return employees;
+        const q = searchQuery.toLowerCase();
+        return employees.filter(emp => {
+            const name = `${emp.first_name} ${emp.last_name}`.toLowerCase();
+            const fullName = (emp.profiles?.full_name || emp.full_name || '').toLowerCase();
+            return name.includes(q) || fullName.includes(q);
+        });
+    }, [employees, searchQuery]);
+
+    const handleSelectEmployee = (employeeId: string | null) => {
+        if (isReadOnly || isEmployeeLocked) return;
+        form.setValue('assigned_employee_id', employeeId, { shouldDirty: true });
+    };
+
+    // Active employee for the compliance pane (hovered or selected)
+    const inspectedEmployeeId = hoveredEmployeeId || selectedEmployeeId;
+    const inspectedEmployee = employees.find(e => e.id === inspectedEmployeeId);
+
+    return (
+        <div className="flex gap-4 h-[calc(100%-1rem)]" style={{ minHeight: '480px' }}>
+            {/* ═══════ LEFT PANE: EMPLOYEE POOL ═══════ */}
+            <div className="w-[45%] flex flex-col rounded-2xl bg-[#1e293b]/30 border border-white/5 backdrop-blur-md overflow-hidden">
+                {/* Header */}
+                <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                        <Users className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1">
+                        <h3 className="text-sm font-bold text-white tracking-tight uppercase">Employee Pool</h3>
+                        <p className="text-[10px] text-white/30 font-medium">
+                            {filteredEmployees.length} available · Hover to inspect
+                        </p>
+                    </div>
+                </div>
+
+                {/* Search */}
+                <div className="px-4 py-3 border-b border-white/5">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                        <Input
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search employees..."
+                            className="h-9 pl-9 bg-white/[0.03] border-white/5 text-white text-sm rounded-xl focus:border-cyan-500/30"
+                        />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery('')}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white"
+                            >
+                                <X className="h-3.5 w-3.5" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Bidding Warning */}
+                {existingShift?.is_on_bidding && (
+                    <div className="mx-4 mt-3 p-2.5 rounded-lg bg-indigo-500/10 border border-indigo-500/30">
+                        <div className="flex items-start gap-2">
+                            <Gavel className="h-4 w-4 text-indigo-400 flex-shrink-0 mt-0.5" />
+                            <div>
+                                <p className="text-[11px] font-medium text-indigo-300">On Bidding</p>
+                                <p className="text-[10px] text-white/50 mt-0.5">
+                                    Assigning will close bidding and assign directly.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Template Mode Warning */}
+                {isTemplateMode && (
+                    <div className="mx-4 mt-3 p-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5">
+                        <div className="flex items-start gap-2">
+                            <AlertTriangle className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                            <div>
+                                <p className="text-[11px] font-medium text-amber-300">Templates Only</p>
+                                <p className="text-[10px] text-white/50 mt-0.5">
+                                    Assign employees when applying the template to a roster.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Employee List */}
+                <ScrollArea className="flex-1 px-4 py-3">
+                    <div className="space-y-2">
+                        {/* Unassigned Option */}
+                        <button
+                            type="button"
+                            onClick={() => handleSelectEmployee(null)}
+                            disabled={isReadOnly || isEmployeeLocked || isTemplateMode}
+                            className={cn(
+                                'w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left',
+                                !selectedEmployeeId
+                                    ? 'bg-white/[0.06] border-white/15 shadow-md'
+                                    : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.04] hover:border-white/10',
+                                (isReadOnly || isEmployeeLocked || isTemplateMode) && 'opacity-50 cursor-not-allowed'
+                            )}
+                        >
+                            <div className="h-9 w-9 rounded-full bg-white/5 flex items-center justify-center">
+                                <UserCircle className="h-5 w-5 text-white/30" />
+                            </div>
+                            <div>
+                                <p className={cn(
+                                    'text-sm font-semibold',
+                                    !selectedEmployeeId ? 'text-white' : 'text-white/50'
+                                )}>
+                                    Unassigned
+                                </p>
+                                <p className="text-[10px] text-white/30">Leave shift open</p>
+                            </div>
+                            {!selectedEmployeeId && (
+                                <CheckCircle2 className="h-5 w-5 text-white/40 ml-auto flex-shrink-0" />
+                            )}
+                        </button>
+
+                        {/* Employee Cards */}
+                        {!isTemplateMode && filteredEmployees.map(emp => (
+                            <EmployeeCard
+                                key={emp.id}
+                                employee={emp}
+                                isSelected={selectedEmployeeId === emp.id}
+                                isHovered={hoveredEmployeeId === emp.id}
+                                onSelect={() => handleSelectEmployee(emp.id)}
+                                onHover={() => setHoveredEmployeeId(emp.id)}
+                                onLeave={() => setHoveredEmployeeId(null)}
+                            />
+                        ))}
+
+                        {!isTemplateMode && filteredEmployees.length === 0 && (
+                            <div className="text-center py-8 text-white/30 text-sm">
+                                No employees match your search.
+                            </div>
+                        )}
+                    </div>
+                </ScrollArea>
+
+                {/* Notes under employee list */}
+                {selectedEmployeeId && !isTemplateMode && (
+                    <div className="px-4 py-3 border-t border-white/5 bg-white/[0.01]">
+                        <p className="text-[10px] text-white/40 uppercase tracking-wide font-bold mb-1">Selected</p>
+                        <p className="text-sm text-emerald-400 font-semibold">
+                            {inspectedEmployee
+                                ? (inspectedEmployee.profiles?.full_name || inspectedEmployee.full_name || `${inspectedEmployee.first_name} ${inspectedEmployee.last_name}`)
+                                : 'Unknown'}
+                        </p>
+                    </div>
+                )}
+            </div>
+
+            {/* ═══════ RIGHT PANE: COMPLIANCE INSPECTOR ═══════ */}
+            <div className="w-[55%] flex flex-col rounded-2xl bg-[#1e293b]/30 border border-white/5 backdrop-blur-md overflow-hidden">
+                {/* Header */}
+                <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                        <Shield className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1">
+                        <h3 className="text-sm font-bold text-white tracking-tight uppercase">Compliance Inspector</h3>
+                        <p className="text-[10px] text-white/30 font-medium">
+                            {inspectedEmployee
+                                ? `Inspecting: ${inspectedEmployee.profiles?.full_name || inspectedEmployee.full_name || `${inspectedEmployee.first_name} ${inspectedEmployee.last_name}`}`
+                                : hoveredEmployeeId
+                                    ? 'Loading...'
+                                    : 'Select or hover over an employee'}
+                        </p>
+                    </div>
+
+                    {/* Compliance status indicator */}
+                    {hardValidation.passed && Object.keys(complianceResults).length > 0 && (
+                        <div className={cn(
+                            "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border",
+                            Object.values(complianceResults).some(r => r?.status === 'fail' && r?.blocking)
+                                ? "bg-red-500/10 border-red-500/30 text-red-400"
+                                : Object.values(complianceResults).some(r => r?.status === 'fail')
+                                    ? "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                                    : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                        )}>
+                            {Object.values(complianceResults).some(r => r?.status === 'fail' && r?.blocking)
+                                ? '⛔ Blocked'
+                                : Object.values(complianceResults).some(r => r?.status === 'fail')
+                                    ? '⚠ Warnings'
+                                    : '✓ Clear'}
+                        </div>
+                    )}
+                </div>
+
+                {/* Compliance Content */}
+                <ScrollArea className="flex-1">
+                    <div className="p-4">
+                        {isTemplateMode && !watchEmployeeId ? (
+                            <div className="text-center py-16 border border-white/5 rounded-xl bg-white/[0.02]">
+                                <Shield className="h-12 w-12 text-emerald-500 mx-auto mb-4 opacity-60" />
+                                <h3 className="text-base font-semibold text-white mb-2">Compliance Checks Passed</h3>
+                                <p className="text-white/40 max-w-sm mx-auto text-sm">
+                                    Templated shifts are validated when assigned to an employee.
+                                    You can proceed without further checks.
+                                </p>
+                            </div>
+                        ) : (
+                            <ComplianceTabContent
+                                hardValidation={hardValidation}
+                                ruleResults={complianceResults}
+                                setRuleResults={setComplianceResults}
+                                buildComplianceInput={buildComplianceInput}
+                                needsRerun={complianceNeedsRerun}
+                                onChecksComplete={onChecksComplete}
+                            />
+                        )}
+                    </div>
+                </ScrollArea>
+            </div>
+        </div>
+    );
+};

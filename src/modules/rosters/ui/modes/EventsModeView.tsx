@@ -1,17 +1,35 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar, Users, DollarSign, AlertTriangle, Plus, ChevronDown, ChevronRight } from 'lucide-react';
+import { Calendar, Users, AlertTriangle, Plus, ChevronDown, ChevronRight, MoreHorizontal, Undo2, Edit2 } from 'lucide-react';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { Badge } from '@/modules/core/ui/primitives/badge';
-import { Progress } from '@/modules/core/ui/primitives/progress';
 import { Card } from '@/modules/core/ui/primitives/card';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { format, differenceInHours, parseISO } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { EnhancedAddShiftModal } from '@/modules/rosters/ui/dialogs/EnhancedAddShiftModal';
 import { Shift } from '@/modules/rosters/api/shifts.api';
-import { useEvents } from '@/modules/rosters/state/useRosterShifts';
+import { useEvents, useUnpublishShift } from '@/modules/rosters/state/useRosterShifts';
 import { SmartShiftCard, ComplianceInfo } from '@/modules/rosters/ui/components/SmartShiftCard';
 import { cn } from '@/modules/core/lib/utils';
 import { isShiftLocked } from '@/modules/rosters/domain/policies/canEditShift.policy';
+import type { EventsProjection } from '@/modules/rosters/domain/projections/types';
+import { coverageVariant } from '@/modules/rosters/domain/projections/utils/coverage';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/modules/core/ui/primitives/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/modules/core/ui/primitives/alert-dialog';
 
 interface EventsModeViewProps {
   selectedDate: Date;
@@ -24,7 +42,12 @@ interface EventsModeViewProps {
   organizationId?: string;
   /** Compliance data map */
   complianceMap?: Record<string, ComplianceInfo>;
+  /** Phase-2: typed projection snapshot from useRosterProjections */
+  projection?: EventsProjection;
+  onEditShift?: (shift: any) => void;
 }
+
+// ── Normalised render structure (same shape from both data sources) ────────────
 
 interface EventGroup {
   eventId: string;
@@ -37,6 +60,43 @@ interface EventGroup {
   totalHours: number;
   assignedCount: number;
   unassignedCount: number;
+  /** Coverage ratio 0–1 (null when no projection available) */
+  coverageRatio: number;
+}
+
+// ── Coverage LED bar (8-segment version for event cards) ─────────────────────
+
+const EventCoverageBar: React.FC<{ pct: number; variant: string }> = ({ pct, variant }) => {
+  const segments = 8;
+  const filled = Math.round((pct / 100) * segments);
+  const colorMap: Record<string, string> = {
+    default: 'bg-emerald-400',
+    secondary: 'bg-amber-400',
+    destructive: 'bg-red-400',
+    outline: 'bg-slate-400',
+  };
+  const barColor = colorMap[variant] ?? 'bg-slate-400';
+  return (
+    <div className="flex items-center gap-[2px]" aria-label={`${pct}% staffed`}>
+      {Array.from({ length: segments }).map((_, i) => (
+        <div
+          key={i}
+          style={{ animationDelay: `${i * 30}ms` }}
+          className={cn(
+            'h-[4px] w-[10px] rounded-sm transition-all',
+            i < filled ? cn(barColor, 'opacity-90') : 'bg-white/10'
+          )}
+        />
+      ))}
+    </div>
+  );
+};
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+// ── canUnpublish — any Published shift can be unpublished (→ S1 or S2) ───────
+function canUnpublish(shift: Shift): boolean {
+  return shift.lifecycle_status === 'Published';
 }
 
 export const EventsModeView: React.FC<EventsModeViewProps> = ({
@@ -46,80 +106,143 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
   isShiftsLoading = false,
   organizationId,
   complianceMap,
+  projection,
+  onEditShift,
 }) => {
   const [isAddShiftOpen, setIsAddShiftOpen] = useState(false);
   const [shiftContext, setShiftContext] = useState<any>({});
   const [collapsedEvents, setCollapsedEvents] = useState<Set<string>>(new Set());
 
-  // Fetch events from the organization
+  // ── Unpublish ────────────────────────────────────────────────────────────────
+  const unpublishMutation = useUnpublishShift();
+  const [confirmShiftId, setConfirmShiftId] = useState<string | null>(null);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+
+  const handleRequestUnpublish = (shiftId: string) => {
+    setConfirmShiftId(shiftId);
+    setIsConfirmOpen(true);
+  };
+
+  const handleConfirmUnpublish = async () => {
+    if (!confirmShiftId) return;
+    try {
+      await unpublishMutation.mutateAsync({ shiftId: confirmShiftId, reason: 'Unpublished via Events view' });
+    } catch {
+      // mutation onError handles rollback; toast not needed here
+    } finally {
+      setIsConfirmOpen(false);
+      setConfirmShiftId(null);
+    }
+  };
+
+  const buildShiftMenu = (shift: Shift) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="h-4 w-4 flex items-center justify-center hover:bg-white/20 rounded transition-colors"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MoreHorizontal className="h-3 w-3 text-white/60" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="bg-[#1a2744] border-white/10 min-w-[160px] z-50">
+        <DropdownMenuItem
+          onClick={() => onEditShift?.(shift)}
+          className="text-white hover:bg-white/10 cursor-pointer"
+        >
+          <Edit2 className="h-4 w-4 mr-2" />
+          Edit Shift
+        </DropdownMenuItem>
+
+        {canUnpublish(shift) && (
+          <>
+            <DropdownMenuSeparator className="bg-white/10" />
+            <DropdownMenuItem
+              onClick={() => handleRequestUnpublish(shift.id)}
+              className="text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+            >
+              <Undo2 className="h-4 w-4 mr-2" />
+              Unpublish Shift
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  // Keep for modal context (event name / date for new shift creation)
   const { data: events = [] } = useEvents(organizationId);
 
-  // Group shifts by event_ids
+  // ── Normalise to EventGroup[] from whichever source is active ──────────────
   const eventGroups = useMemo((): EventGroup[] => {
+    if (projection) {
+      // Phase-2 path: map from typed projection snapshot
+      return projection.events.map(pe => ({
+        eventId: pe.eventId,
+        eventName: pe.eventName,
+        eventDate: pe.eventDate ? parseISO(pe.eventDate) : null,
+        startTime: pe.startTime,
+        endTime: pe.endTime,
+        location: pe.location,
+        shifts: pe.shifts.map(ps => ps.raw),
+        totalHours: pe.totalHours,
+        assignedCount: pe.assignedCount,
+        unassignedCount: pe.totalCount - pe.assignedCount,
+        coverageRatio: pe.coverage.ratio,
+      }));
+    }
+
+    // Legacy fallback: derive from raw shifts + events lookup
     const groupMap = new Map<string, Shift[]>();
     const noEventShifts: Shift[] = [];
 
-    // Group shifts by their event IDs
     shifts.forEach(shift => {
       const eventIds = shift.event_ids || [];
       if (eventIds.length === 0) {
         noEventShifts.push(shift);
       } else {
         eventIds.forEach(eventId => {
-          if (!groupMap.has(eventId)) {
-            groupMap.set(eventId, []);
-          }
+          if (!groupMap.has(eventId)) groupMap.set(eventId, []);
           groupMap.get(eventId)!.push(shift);
         });
       }
     });
 
-    // Build EventGroup objects
     const groups: EventGroup[] = [];
 
     groupMap.forEach((groupShifts, eventId) => {
       const eventData = events.find((e: any) => e.id === eventId);
-
       let totalHours = 0;
       let assignedCount = 0;
       let unassignedCount = 0;
 
       groupShifts.forEach(shift => {
-        // Calculate hours
         if (shift.start_time && shift.end_time) {
           const [sh, sm] = shift.start_time.split(':').map(Number);
           const [eh, em] = shift.end_time.split(':').map(Number);
           const hours = (eh * 60 + em - sh * 60 - sm) / 60;
           totalHours += hours > 0 ? hours : 0;
         }
-        // Count assigned vs unassigned
-        if (shift.assigned_employee_id) {
-          assignedCount++;
-        } else {
-          unassignedCount++;
-        }
+        if (shift.assigned_employee_id) assignedCount++; else unassignedCount++;
       });
 
       groups.push({
         eventId,
-        eventName: eventData?.name || `Event ${eventId.slice(0, 8)}...`,
-        eventDate: eventData?.event_date ? parseISO(eventData.event_date) : null,
-        startTime: eventData?.start_time || groupShifts[0]?.start_time || '00:00',
-        endTime: eventData?.end_time || groupShifts[0]?.end_time || '00:00',
-        location: eventData?.location || 'Unknown Location',
+        eventName: eventData?.name || `Event ${eventId.slice(0, 8)}…`,
+        eventDate: eventData?.start_date ? parseISO(eventData.start_date) : null,
+        startTime: groupShifts[0]?.start_time || '00:00',
+        endTime: groupShifts[0]?.end_time || '00:00',
+        location: eventData?.venue || 'Unknown Location',
         shifts: groupShifts,
         totalHours,
         assignedCount,
         unassignedCount,
+        coverageRatio: groupShifts.length > 0 ? assignedCount / groupShifts.length : 1,
       });
     });
 
-    // Add "Unassigned to Event" group if there are orphan shifts
     if (noEventShifts.length > 0) {
-      let totalHours = 0;
-      let assignedCount = 0;
-      let unassignedCount = 0;
-
+      let totalHours = 0; let assignedCount = 0; let unassignedCount = 0;
       noEventShifts.forEach(shift => {
         if (shift.start_time && shift.end_time) {
           const [sh, sm] = shift.start_time.split(':').map(Number);
@@ -127,61 +250,55 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
           const hours = (eh * 60 + em - sh * 60 - sm) / 60;
           totalHours += hours > 0 ? hours : 0;
         }
-        if (shift.assigned_employee_id) {
-          assignedCount++;
-        } else {
-          unassignedCount++;
-        }
+        if (shift.assigned_employee_id) assignedCount++; else unassignedCount++;
       });
-
       groups.push({
         eventId: '_no_event_',
         eventName: 'Unassigned to Event',
         eventDate: null,
-        startTime: '',
-        endTime: '',
-        location: 'General Roster',
+        startTime: '', endTime: '', location: 'General Roster',
         shifts: noEventShifts,
         totalHours,
         assignedCount,
         unassignedCount,
+        coverageRatio: noEventShifts.length > 0 ? assignedCount / noEventShifts.length : 1,
       });
     }
 
-    // Sort by event date, then name
     return groups.sort((a, b) => {
       if (a.eventId === '_no_event_') return 1;
       if (b.eventId === '_no_event_') return -1;
-      if (a.eventDate && b.eventDate) {
-        return a.eventDate.getTime() - b.eventDate.getTime();
-      }
+      if (a.eventDate && b.eventDate) return a.eventDate.getTime() - b.eventDate.getTime();
       return a.eventName.localeCompare(b.eventName);
     });
-  }, [shifts, events]);
+  }, [projection, shifts, events]);
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   const toggleEventCollapse = (eventId: string) => {
     setCollapsedEvents(prev => {
       const next = new Set(prev);
-      if (next.has(eventId)) {
-        next.delete(eventId);
-      } else {
-        next.add(eventId);
-      }
+      if (next.has(eventId)) next.delete(eventId); else next.add(eventId);
       return next;
     });
   };
 
-  const getStaffingPercentage = (group: EventGroup) => {
-    const total = group.assignedCount + group.unassignedCount;
-    if (total === 0) return 100;
-    return (group.assignedCount / total) * 100;
+  const getCoveragePct = (group: EventGroup) =>
+    Math.min(100, Math.round(group.coverageRatio * 100));
+
+  const getBadgeVariant = (group: EventGroup) => {
+    const r = group.coverageRatio;
+    if (r >= 1) return 'default' as const;
+    if (r >= 0.8) return 'secondary' as const;
+    return 'destructive' as const;
   };
 
-  const getStatusBadge = (group: EventGroup) => {
-    const pct = getStaffingPercentage(group);
-    if (pct === 100) return { label: 'Fully Staffed', variant: 'default' as const };
-    if (pct >= 80) return { label: 'Nearly Staffed', variant: 'secondary' as const };
-    return { label: 'Understaffed', variant: 'destructive' as const };
+  const getBadgeLabel = (group: EventGroup) => {
+    const r = group.coverageRatio;
+    if (r >= 1) return 'Fully Staffed';
+    if (r >= 0.8) return 'Nearly Staffed';
+    if (r >= 0.5) return 'Low Coverage';
+    return 'Critical';
   };
 
   const handleAddShiftClick = (group: EventGroup) => {
@@ -195,114 +312,152 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
     setIsAddShiftOpen(true);
   };
 
+  // ── Loading ────────────────────────────────────────────────────────────────
+
   if (isShiftsLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center text-muted-foreground">
-          Loading events...
-        </div>
+      <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+        Loading events…
       </div>
     );
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  const totalShifts = projection?.stats.totalShifts ?? shifts.length;
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-6 py-3 border-b border-border/40">
-        <div className="text-sm text-muted-foreground">
-          {eventGroups.length} event{eventGroups.length !== 1 ? 's' : ''} • {shifts.length} total shifts
+    <div className="flex flex-col h-full bg-[#0B0F1A]">
+      {/* Header strip */}
+      <div className="px-6 py-3 border-b border-white/5 bg-[#0B0F1A]/80 backdrop-blur-md">
+        <div className="text-[10px] font-mono tracking-[0.12em] uppercase text-slate-500">
+          <span className="text-slate-300 tabular-nums">{eventGroups.length}</span> event{eventGroups.length !== 1 ? 's' : ''}
+          <span className="mx-2 text-slate-700">·</span>
+          <span className="text-slate-300 tabular-nums">{totalShifts}</span> shifts
+          {projection && (
+            <>
+              <span className="mx-2 text-slate-700">·</span>
+              <span className="text-emerald-500/70 tabular-nums">{(projection.stats.totalNetMinutes / 60).toFixed(1)}h</span>
+            </>
+          )}
         </div>
       </div>
 
       <ScrollArea className="flex-1">
         <div className="p-6 space-y-4">
-          {eventGroups.map(group => {
+          {eventGroups.map((group, groupIdx) => {
             const isCollapsed = collapsedEvents.has(group.eventId);
-            const status = getStatusBadge(group);
+            const badgeVariant = getBadgeVariant(group);
+            const badgeLabel = getBadgeLabel(group);
+            const coveragePct = getCoveragePct(group);
 
             return (
-              <Card key={group.eventId} className="overflow-hidden">
+              <Card
+                key={group.eventId}
+                className={cn(
+                  'overflow-hidden border border-white/5 bg-[#0D121F]',
+                  group.eventId === '_no_event_' && 'border-dashed border-white/[0.07]'
+                )}
+              >
                 {/* Event Header */}
                 <button
                   onClick={() => toggleEventCollapse(group.eventId)}
                   className={cn(
-                    "w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors",
-                    group.eventId === '_no_event_' && "bg-muted/30"
+                    'w-full px-5 py-4 flex items-start justify-between hover:bg-white/[0.02] transition-colors text-left border-t border-white/5',
+                    group.eventId === '_no_event_' && 'bg-white/[0.01]'
                   )}
                 >
-                  <div className="flex items-center gap-3">
-                    {isCollapsed ? (
-                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                    ) : (
-                      <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                    )}
-                    <div className="text-left">
-                      <h3 className="font-semibold text-lg">{group.eventName}</h3>
-                      <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-                        {group.eventDate && (
-                          <>
-                            <Calendar className="h-4 w-4" />
-                            {format(group.eventDate, 'MMM d, yyyy')}
-                            {group.startTime && ` • ${group.startTime} - ${group.endTime}`}
-                          </>
-                        )}
-                        <span>• {group.location}</span>
+                  <div className="flex items-start gap-3">
+                    <div className="mt-1 text-slate-500">
+                      {isCollapsed
+                        ? <ChevronRight className="h-4 w-4" />
+                        : <ChevronDown className="h-4 w-4" />}
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-100 tracking-wide uppercase">
+                        {group.eventName}
+                      </h3>
+                      {/* Coverage LED bar + label */}
+                      <div className="flex items-center gap-3 mt-1.5">
+                        <EventCoverageBar pct={coveragePct} variant={badgeVariant} />
+                        <span className="text-[10px] font-mono tracking-[0.12em] text-slate-500">
+                          {group.assignedCount}/{group.shifts.length} filled
+                        </span>
                       </div>
+                      {group.eventDate && (
+                        <div className="flex items-center gap-2 mt-1.5 text-[10px] font-mono text-slate-500 uppercase tracking-[0.1em]">
+                          <Calendar className="h-3 w-3" />
+                          {format(group.eventDate, 'MMM d, yyyy')}
+                          {group.startTime && (
+                            <span className="tabular-nums">· {group.startTime}–{group.endTime}</span>
+                          )}
+                          <span>· {group.location}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4">
-                    <div className="text-right text-sm">
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        <span>{group.assignedCount}/{group.shifts.length} assigned</span>
+                  <div className="flex items-center gap-3 shrink-0 ml-4">
+                    <div className="text-right text-[10px] font-mono text-slate-500 tabular-nums">
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <Users className="h-3 w-3" />
+                        <span>{group.assignedCount}/{group.shifts.length}</span>
                       </div>
-                      <div className="text-muted-foreground">
-                        {group.totalHours.toFixed(1)}h total
-                      </div>
+                      <div>{group.totalHours.toFixed(1)}h</div>
                     </div>
-                    <Badge variant={status.variant}>{status.label}</Badge>
+                    <Badge
+                      variant={badgeVariant}
+                      className="text-[9px] tracking-[0.12em] uppercase font-mono px-2 py-0.5"
+                    >
+                      {badgeLabel}
+                    </Badge>
                   </div>
                 </button>
 
-                {/* Staffing Progress */}
-                <div className="px-4 pb-2">
-                  <Progress value={getStaffingPercentage(group)} className="h-1.5" />
-                </div>
-
-                {/* Shift Cards (Collapsible) */}
+                {/* Shift grid (collapsible) */}
                 {!isCollapsed && (
-                  <div className="p-4 pt-2 border-t border-border/40">
+                  <div className="px-5 pb-5 pt-2 border-t border-white/5">
                     {group.unassignedCount > 0 && (
-                      <div className="mb-3 p-2 bg-destructive/10 border border-destructive/20 rounded-md flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-destructive" />
-                        <span className="text-sm text-destructive">
+                      <div className="mb-3 px-3 py-2 bg-red-500/5 border border-red-500/20 rounded-md flex items-center gap-2">
+                        <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                        <span className="text-[10px] font-mono tracking-[0.12em] uppercase text-red-400">
                           {group.unassignedCount} unfilled shift{group.unassignedCount !== 1 ? 's' : ''}
                         </span>
                       </div>
                     )}
 
                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                      {group.shifts.map(shift => (
-                        <SmartShiftCard
+                      {group.shifts.map((shift, shiftIdx) => (
+                        <div
                           key={shift.id}
-                          shift={shift}
-                          variant="compact"
-                          groupColor="blue"
-                          compliance={complianceMap?.[shift.id]}
-                          isLocked={isShiftLocked(shift.shift_date, shift.end_time || shift.start_time)}
-                        />
+                          style={{ animationDelay: `calc(${shiftIdx} * 35ms)` }}
+                          className="animate-[slideUpFade_0.2s_ease_forwards]"
+                        >
+                          <SmartShiftCard
+                            shift={shift}
+                            variant="compact"
+                            groupColor="blue"
+                            compliance={complianceMap?.[shift.id]}
+                            isLocked={isShiftLocked(shift.shift_date, shift.end_time || shift.start_time)}
+                            headerAction={buildShiftMenu(shift)}
+                            onClick={() => onEditShift?.(shift)}
+                          />
+                        </div>
                       ))}
                     </div>
 
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full mt-3"
+                    <button
+                      className={cn(
+                        'w-full mt-3 h-9 flex items-center justify-center rounded-lg',
+                        'border border-dashed border-white/10 hover:border-white/25 hover:bg-white/[0.02]',
+                        'text-[10px] font-mono tracking-[0.12em] uppercase text-white/30 hover:text-white/60',
+                        'transition-all gap-1.5'
+                      )}
                       onClick={() => handleAddShiftClick(group)}
                     >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Shift to Event
-                    </Button>
+                      <Plus className="h-3 w-3" />
+                      Add shift to event
+                    </button>
                   </div>
                 )}
               </Card>
@@ -310,7 +465,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
           })}
 
           {eventGroups.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
+            <div className="text-center py-12 text-[10px] font-mono tracking-[0.12em] uppercase text-slate-600">
               No events or shifts for this period
             </div>
           )}
@@ -322,6 +477,28 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
         onClose={() => setIsAddShiftOpen(false)}
         context={shiftContext}
       />
+
+      <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+        <AlertDialogContent className="bg-[#0f172a] border-white/10">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Unpublish Shift</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-300">
+              This shift will be reverted to Draft and removed from all employee-facing surfaces immediately.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-white/10 text-white/70 hover:bg-white/5">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmUnpublish}
+              className="bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30"
+            >
+              Unpublish
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

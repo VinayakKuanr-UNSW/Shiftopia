@@ -45,6 +45,7 @@ export interface ShiftContext {
     subGroupName?: string;
     groupColor?: string;
     group_type?: string;
+    sub_group_name?: string;
     employeeId?: string;
     roleId?: string;
     remunerationLevelId?: string;
@@ -155,8 +156,16 @@ export interface ScheduleStepProps extends StepProps {
     isGroupLocked?: boolean;
     isSubGroupLocked?: boolean;
     isRosterLocked?: boolean;
-    context?: ShiftContext; // Added context for hierarchy sync
+    context?: ShiftContext;
     activeSubGroups?: Record<string, string[]>;
+    // Column 5: Assignment Criteria
+    roles: Role[];
+    remunerationLevels: RemunerationLevel[];
+    skills: Skill[];
+    licenses: License[];
+    events: Event[];
+    selectedRemLevel?: RemunerationLevel;
+    isRoleLocked?: boolean;
 }
 
 export interface RoleStepProps extends StepProps {
@@ -188,6 +197,24 @@ export interface ComplianceStepProps {
     onChecksComplete: () => void;
 }
 
+export interface AssignmentStepProps {
+    form: any;
+    isReadOnly: boolean;
+    isLoadingData: boolean;
+    isTemplateMode: boolean;
+    employees: Employee[];
+    isEmployeeLocked?: boolean;
+    existingShift?: any;
+    // Compliance
+    watchEmployeeId: string | null | undefined;
+    hardValidation: HardValidationResult;
+    complianceResults: Record<string, ComplianceResult | null>;
+    setComplianceResults: (results: Record<string, any>) => void;
+    buildComplianceInput: () => any;
+    complianceNeedsRerun: boolean;
+    onChecksComplete: () => void;
+}
+
 export interface ReviewLogsStepProps {
     form: any;
     editMode: boolean;
@@ -197,3 +224,4 @@ export interface ReviewLogsStepProps {
     shiftLength: number;
     netLength: number;
 }
+

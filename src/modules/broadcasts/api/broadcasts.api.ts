@@ -106,11 +106,15 @@ export const broadcastGroupService = {
     /**
      * Get all groups (manager view with full stats)
      */
-    async getAll(filters?: { departmentId?: string; subDepartmentId?: string }): Promise<BroadcastGroupWithStats[]> {
+    async getAll(filters?: { organizationId?: string; departmentId?: string; subDepartmentId?: string }): Promise<BroadcastGroupWithStats[]> {
         let query = supabase
             .from('v_broadcast_groups_with_stats')
             .select('*')
             .order('name');
+
+        if (filters?.organizationId) {
+            query = query.eq('organization_id', filters.organizationId);
+        }
 
         if (filters?.departmentId) {
             query = query.eq('department_id', filters.departmentId);

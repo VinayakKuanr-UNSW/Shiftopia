@@ -39,7 +39,7 @@ import { BroadcastAnalytics } from '../views/BroadcastAnalytics.view';
 import { ControlRoom } from '../views/ControlRoom.view';
 import { CreateGroupDialog } from '../dialogs/CreateGroupDialog';
 import { EditGroupDialog } from '../dialogs/EditGroupDialog';
-import { OrgDeptSelector } from '@/modules/core/ui/components/OrgDeptSelector';
+
 
 // ============================================================================
 // TYPES
@@ -96,6 +96,7 @@ export function BroadcastsManagerScreen({ layout, scope }: BroadcastsManagerScre
     updateGroup,
     refetch,
   } = useBroadcastGroups({
+    organizationId: selectedOrgId || undefined,
     departmentId: selectedDeptId || undefined,
     subDepartmentId: selectedSubDeptId || undefined,
   });
@@ -151,16 +152,6 @@ export function BroadcastsManagerScreen({ layout, scope }: BroadcastsManagerScre
 
   const renderHeader = () => (
     <div className="flex-shrink-0 border-b bg-background">
-      {/* Hierarchy Filter */}
-      <OrgDeptSelector
-        selectedOrganizationId={selectedOrgId}
-        selectedDepartmentId={selectedDeptId}
-        selectedSubDepartmentId={selectedSubDeptId}
-        onOrganizationChange={setSelectedOrgId}
-        onDepartmentChange={setSelectedDeptId}
-        onSubDepartmentChange={setSelectedSubDeptId}
-        className="bg-muted/30 border-b px-4 md:px-8 py-3"
-      />
 
       {/* Title & Actions */}
       <div className="p-4 md:p-8">

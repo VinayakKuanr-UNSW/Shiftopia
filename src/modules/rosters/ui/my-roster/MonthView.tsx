@@ -136,6 +136,7 @@ const MonthView: React.FC<MonthViewProps> = ({ date, getShiftsForDate }) => {
                         className={cn(
                           'text-[9px] text-white px-1 py-0.5 rounded cursor-pointer',
                           'hover:opacity-80 transition-opacity truncate',
+                          shiftData.shift.assignment_outcome === 'offered' && 'opacity-60 border-dashed border',
                           getGradientClass(shiftData.groupColor)
                         )}
                       >

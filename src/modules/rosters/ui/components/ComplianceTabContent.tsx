@@ -39,7 +39,16 @@ import {
     HardValidationResult,
     ComplianceRule
 } from '@/modules/compliance';
+import { validateCompliance } from '@/modules/rosters/services/compliance.service';
 import { format, parseISO } from 'date-fns';
+
+/** Net minutes between two HH:MM times (handles overnight). */
+function calcNetMinutes(s: { start_time: string; end_time: string; unpaid_break_minutes?: number }): number {
+    const parse = (t: string) => { const [h, m] = (t || '00:00').split(':').map(Number); return h * 60 + (m || 0); };
+    let gross = parse(s.end_time) - parse(s.start_time);
+    if (gross < 0) gross += 24 * 60;
+    return Math.max(0, gross - (s.unpaid_break_minutes ?? 0));
+}
 
 // =============================================================================
 // TYPES
@@ -92,18 +101,61 @@ export function ComplianceTabContent({
         }));
     }, [buildComplianceInput, setRuleResults]);
 
-    const handleRunAll = useCallback(() => {
+    const handleRunAll = useCallback(async () => {
         setIsRunningAll(true);
-        setTimeout(() => {
+        // Slight delay for visual feedback
+        await new Promise(resolve => setTimeout(resolve, 300));
+        try {
             const input = buildComplianceInput();
             const newResults: Record<string, ComplianceResult | null> = {};
+
+            // Client-side rules (fast, local data)
             rules.forEach(rule => {
                 newResults[rule.id] = runRule(rule.id, input);
             });
+
+            // Server-side authoritative overlap check (SECURITY DEFINER — sees all
+            // shifts regardless of RLS scope, preventing false PASS on overlap).
+            if (input.employee_id && input.employee_id !== 'preview') {
+                try {
+                    const serverResult = await validateCompliance({
+                        employeeId: input.employee_id,
+                        shiftDate: input.candidate_shift.shift_date,
+                        startTime: input.candidate_shift.start_time,
+                        endTime: input.candidate_shift.end_time,
+                        netLengthMinutes: calcNetMinutes(input.candidate_shift),
+                        excludeShiftId: input.exclude_shift_id,
+                    });
+
+                    if (serverResult.checksPerformed.includes('overlap')) {
+                        const hasOverlap = serverResult.violations.some(v =>
+                            v.toLowerCase().includes('overlap')
+                        );
+                        newResults['NO_OVERLAP'] = {
+                            rule_id: 'NO_OVERLAP',
+                            rule_name: 'No Overlapping Shifts',
+                            status: hasOverlap ? 'fail' : 'pass',
+                            summary: hasOverlap
+                                ? 'Employee already has a shift at this time'
+                                : 'No overlapping shifts found',
+                            details: hasOverlap
+                                ? (serverResult.violations.find(v => v.toLowerCase().includes('overlap'))
+                                    ?? 'Shift overlap detected in database')
+                                : 'No overlapping shifts found.',
+                            calculation: { existing_hours: 0, candidate_hours: 0, total_hours: 0, limit: 0 },
+                            blocking: true,
+                        };
+                    }
+                } catch {
+                    // Server unavailable — keep client-side result as best-effort
+                }
+            }
+
             setRuleResults(newResults);
-            setIsRunningAll(false);
             onChecksComplete?.();
-        }, 300); // Slight delay for visual feedback
+        } finally {
+            setIsRunningAll(false);
+        }
     }, [buildComplianceInput, rules, setRuleResults, onChecksComplete]);
 
     const canProceed = hardValidation.passed &&
@@ -505,10 +557,22 @@ function OverlapVisualization({ error }: { error: { code?: string; message: stri
     };
 
     const parsedFromMsg = parseTimesFromMessage(error.message);
-    const existingStart = normalizeTime(error.context?.existing_start || parsedFromMsg?.existingStart || '06:00');
-    const existingEnd = normalizeTime(error.context?.existing_end || parsedFromMsg?.existingEnd || '19:00');
-    const newStart = normalizeTime(error.context?.new_start || parsedFromMsg?.newStart || '16:00');
-    const newEnd = normalizeTime(error.context?.new_end || parsedFromMsg?.newEnd || '21:00');
+    const existingStart = normalizeTime(error.context?.existing_start || parsedFromMsg?.existingStart || '');
+    const existingEnd = normalizeTime(error.context?.existing_end || parsedFromMsg?.existingEnd || '');
+    const newStart = normalizeTime(error.context?.new_start || parsedFromMsg?.newStart || '');
+    const newEnd = normalizeTime(error.context?.new_end || parsedFromMsg?.newEnd || '');
+
+    // If we have no valid time data, show a text-only fallback
+    if (!existingStart || !existingEnd || !newStart || !newEnd) {
+        return (
+            <div className="space-y-3">
+                <div className="text-sm font-medium text-red-300 flex items-center gap-2">
+                    <Layers className="h-4 w-4" />
+                    {error.message || 'The new shift overlaps with an existing shift.'}
+                </div>
+            </div>
+        );
+    }
 
     // Calculate positions (24hr scale)
     const timeToPercent = (time: string) => {

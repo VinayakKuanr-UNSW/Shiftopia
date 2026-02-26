@@ -1,40 +1,24 @@
-// src/modules/planning/ui/views/OpenBidsView/components/FunctionBar.tsx
+// src/modules/planning/bidding/ui/views/OpenBidsView/FunctionBar.tsx
 
 import React from 'react';
-import { Search, Layers } from 'lucide-react';
+import { Search, CheckSquare, Square, XCircle, Flame, Clock, CheckCircle } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/modules/core/ui/primitives/select';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { cn } from '@/modules/core/lib/utils';
-import type {
-  FilterState,
-  Organization,
-  Department,
-  SubDepartment,
-  ShiftStatus,
-  StatusCounts
-} from './types';
+import type { FilterState, ShiftStatus, StatusCounts } from './types';
 
 interface FunctionBarProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   filters: FilterState;
   setFilters: (filters: FilterState) => void;
-  organizations: Organization[];
-  departments: Department[];
-  subDepartments: SubDepartment[];
   isBulkMode: boolean;
   toggleBulkMode: () => void;
   counts: StatusCounts;
-  isOrgLocked?: boolean;
-  isDeptLocked?: boolean;
-  isSubDeptLocked?: boolean;
+  selectedCount: number;
+  totalCount: number;
+  onSelectAll: () => void;
+  onBulkWithdraw: () => void;
 }
 
 export const FunctionBar: React.FC<FunctionBarProps> = ({
@@ -42,165 +26,144 @@ export const FunctionBar: React.FC<FunctionBarProps> = ({
   setSearchQuery,
   filters,
   setFilters,
-  organizations,
-  departments,
-  subDepartments,
   isBulkMode,
   toggleBulkMode,
   counts,
-  isOrgLocked = false,
-  isDeptLocked = false,
-  isSubDeptLocked = false,
+  selectedCount,
+  totalCount,
+  onSelectAll,
+  onBulkWithdraw,
 }) => {
-  // Filter departments and sub-departments based on selection
-  const filteredDepts = filters.orgId
-    ? departments.filter((d) => d.organization_id === filters.orgId)
-    : departments;
-
-  const filteredSubDepts = filters.deptId
-    ? subDepartments.filter((s) => s.department_id === filters.deptId)
-    : [];
-
-  const statusButtons: Array<{ status: ShiftStatus; label: string }> = [
-    { status: 'urgent', label: 'urgent' },
-    { status: 'pending', label: 'pending' },
-    { status: 'resolved', label: 'resolved' },
+  const statusButtons: Array<{ status: ShiftStatus; label: string; icon: React.ReactNode; activeClass: string }> = [
+    {
+      status: 'urgent',
+      label: 'Urgent',
+      icon: <Flame className="h-3 w-3" />,
+      activeClass: 'bg-red-500/15 text-red-400 border-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.1)]',
+    },
+    {
+      status: 'pending',
+      label: 'Pending',
+      icon: <Clock className="h-3 w-3" />,
+      activeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.1)]',
+    },
+    {
+      status: 'resolved',
+      label: 'Resolved',
+      icon: <CheckCircle className="h-3 w-3" />,
+      activeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.1)]',
+    },
   ];
 
-  const getStatusButtonClass = (status: ShiftStatus, isActive: boolean) => {
-    if (!isActive) return 'text-white/40 hover:text-white/60';
-    switch (status) {
-      case 'urgent':
-        return 'bg-red-500/20 text-red-400';
-      case 'pending':
-        return 'bg-amber-500/20 text-amber-400';
-      case 'resolved':
-        return 'bg-green-500/20 text-green-400';
-    }
-  };
-
   return (
-    <div className="h-16 px-4 border-b border-white/10 bg-[#0d1424] flex items-center justify-between gap-4 shrink-0 z-20 relative">
-      {/* LEFT: Hierarchy Filters */}
-      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar mask-gradient-r">
-        <Select
-          value={filters.orgId || 'all'}
-          onValueChange={(v) =>
-            setFilters({ ...filters, orgId: v === 'all' ? '' : v, deptId: '', subDeptId: '' })
-          }
-          disabled={isOrgLocked}
-        >
-          <SelectTrigger className="w-[180px] h-9 bg-[#1a1f2e] border-white/10 text-xs">
-            <SelectValue placeholder="All Organizations" />
-          </SelectTrigger>
-          <SelectContent className="bg-[#1a1f2e] border-white/10">
-            <SelectItem value="all">All Organizations</SelectItem>
-            {organizations.map((o) => (
-              <SelectItem key={o.id} value={o.id}>
-                {o.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <span className="text-white/20">/</span>
-
-        <Select
-          value={filters.deptId || 'all'}
-          onValueChange={(v) =>
-            setFilters({ ...filters, deptId: v === 'all' ? '' : v, subDeptId: '' })
-          }
-          disabled={isDeptLocked}
-        >
-          <SelectTrigger className="w-[160px] h-9 bg-[#1a1f2e] border-white/10 text-xs">
-            <SelectValue placeholder="All Departments" />
-          </SelectTrigger>
-          <SelectContent className="bg-[#1a1f2e] border-white/10">
-            <SelectItem value="all">All Departments</SelectItem>
-            {filteredDepts.map((d) => (
-              <SelectItem key={d.id} value={d.id}>
-                {d.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <span className="text-white/20">/</span>
-
-        <Select
-          value={filters.subDeptId || 'all'}
-          onValueChange={(v) => setFilters({ ...filters, subDeptId: v === 'all' ? '' : v })}
-          disabled={!filters.deptId || isSubDeptLocked}
-        >
-          <SelectTrigger className="w-[160px] h-9 bg-[#1a1f2e] border-white/10 text-xs disabled:opacity-50">
-            <SelectValue placeholder="All Sub-Depts" />
-          </SelectTrigger>
-          <SelectContent className="bg-[#1a1f2e] border-white/10">
-            <SelectItem value="all">All Sub-Depts</SelectItem>
-            {filteredSubDepts.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* RIGHT: Search, Bulk, Status */}
-      <div className="flex items-center gap-3 ml-auto">
-        <div className="relative w-64">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search roles, locations..."
-            className="h-9 pl-9 bg-[#1a1f2e] border-white/10 text-xs focus:ring-1 focus:ring-purple-500/50"
-          />
+    <div className="shrink-0 z-20 relative">
+      {/* Main Bar */}
+      <div className="h-14 px-5 border-b border-white/[0.06] bg-[#0a0f1a]/80 backdrop-blur-xl flex items-center justify-between gap-4">
+        {/* LEFT: Search */}
+        <div className="flex items-center gap-3">
+          <div className="relative w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search roles, departments…"
+              className="h-9 pl-9 bg-white/[0.03] border-white/[0.06] text-sm text-white/80 placeholder:text-white/25 rounded-lg focus:ring-1 focus:ring-cyan-500/30 focus:border-cyan-500/20 transition-all"
+            />
+          </div>
         </div>
 
-        <div className="h-6 w-px bg-white/10 mx-1" />
-
-        <Button
-          variant={isBulkMode ? 'default' : 'outline'}
-          size="sm"
-          onClick={toggleBulkMode}
-          className={cn(
-            'h-9 text-xs gap-2 border-white/10',
-            isBulkMode ? 'bg-purple-600 hover:bg-purple-700' : 'bg-[#1a1f2e] hover:bg-[#252b3d]'
-          )}
-        >
-          <Layers className="h-3.5 w-3.5" />
-          {isBulkMode ? 'Bulk Mode' : 'Bulk Actions'}
-        </Button>
-
-        <div className="flex bg-[#1a1f2e] rounded-lg p-1 border border-white/10">
-          {statusButtons.map(({ status, label }) => (
-            <button
-              key={status}
-              onClick={() =>
-                setFilters({
-                  ...filters,
-                  status: filters.status === status ? 'all' : status,
-                })
-              }
-              className={cn(
-                'px-3 py-1 rounded text-[10px] font-bold uppercase transition-all flex items-center gap-1.5',
-                getStatusButtonClass(status, filters.status === status)
-              )}
-            >
-              {label}
-              <span
+        {/* CENTER: Status Chips */}
+        <div className="flex items-center gap-1.5">
+          {statusButtons.map(({ status, label, icon, activeClass }) => {
+            const isActive = filters.status === status;
+            return (
+              <button
+                key={status}
+                onClick={() =>
+                  setFilters({ status: filters.status === status ? 'all' : status })
+                }
                 className={cn(
-                  'rounded-full px-1.5 min-w-[16px] text-center',
-                  filters.status === status ? 'bg-white/10 text-white' : 'bg-white/5 text-white/30'
+                  'px-3 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-wider transition-all duration-200 flex items-center gap-1.5 border',
+                  isActive
+                    ? activeClass
+                    : 'text-white/35 border-transparent hover:text-white/55 hover:bg-white/[0.03]'
                 )}
               >
-                {counts[status]}
-              </span>
-            </button>
-          ))}
+                {icon}
+                {label}
+                <span
+                  className={cn(
+                    'rounded-full px-1.5 min-w-[18px] text-center text-[10px] font-bold',
+                    isActive ? 'bg-white/10 text-inherit' : 'bg-white/[0.04] text-white/25'
+                  )}
+                >
+                  {counts[status]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* RIGHT: Bulk Mode Toggle */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleBulkMode}
+            className={cn(
+              'h-9 w-9 flex items-center justify-center rounded-lg border transition-all duration-200',
+              isBulkMode
+                ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-400 shadow-[0_0_16px_rgba(6,182,212,0.15)]'
+                : 'bg-white/[0.03] border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.05]'
+            )}
+            title={isBulkMode ? 'Exit Bulk Mode' : 'Enter Bulk Mode'}
+          >
+            {isBulkMode ? (
+              <CheckSquare className="h-4 w-4" />
+            ) : (
+              <Square className="h-4 w-4" />
+            )}
+          </button>
         </div>
       </div>
+
+      {/* Bulk Action Bar — appears when in bulk mode with selections */}
+      {isBulkMode && (
+        <div className="h-11 px-5 border-b border-cyan-500/10 bg-gradient-to-r from-cyan-950/40 via-cyan-900/20 to-transparent backdrop-blur-xl flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onSelectAll}
+              className="text-[11px] font-medium text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1.5"
+            >
+              {selectedCount === totalCount && totalCount > 0 ? (
+                <CheckSquare className="h-3.5 w-3.5" />
+              ) : (
+                <Square className="h-3.5 w-3.5" />
+              )}
+              {selectedCount === totalCount && totalCount > 0 ? 'Deselect All' : 'Select All'}
+            </button>
+            <span className="text-[11px] text-white/30">
+              {selectedCount} of {totalCount} selected
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={selectedCount === 0}
+              onClick={onBulkWithdraw}
+              className={cn(
+                'h-7 text-[11px] gap-1.5 rounded-lg border transition-all',
+                selectedCount > 0
+                  ? 'border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300'
+                  : 'border-white/[0.06] text-white/25 cursor-not-allowed'
+              )}
+            >
+              <XCircle className="h-3 w-3" />
+              Withdraw ({selectedCount})
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

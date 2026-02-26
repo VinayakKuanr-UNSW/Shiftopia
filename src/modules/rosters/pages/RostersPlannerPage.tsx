@@ -13,6 +13,7 @@ import {
   ViewType,
 } from '@/modules/rosters/ui/components/RosterFunctionBar';
 import PeopleModeGrid, { EmployeeShift } from '@/modules/rosters/ui/modes/PeopleModeGrid';
+import type { PeopleModeEmployee, PeopleModeShift } from '@/modules/rosters/ui/modes/people-mode.types';
 import UnfilledShiftsPanel, {
   UnfilledShift,
 } from '@/modules/rosters/ui/modes/UnfilledShiftsPanel';
@@ -29,13 +30,12 @@ import { BulkActionsToolbar } from '@/modules/rosters/ui/components/BulkActionsT
 import { useAuth } from '@/platform/auth/useAuth';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
-import { useRosterUI, RosterMode, CalendarView } from '@/modules/rosters/contexts/RosterUIContext';
-import {
-  Shift,
-} from '@/modules/rosters/api/shifts.api';
 import {
   useShiftsByDateRange,
   useEmployees,
+  useRoles,
+  useRemunerationLevels,
+  useEvents,
   useCreateShift,
   useUpdateShift,
   useDeleteShift,
@@ -45,7 +45,14 @@ import {
   useAcceptOffer,
   useRequestTrade,
   useCancelShift,
+  useUnpublishShift,
 } from '@/modules/rosters/state/useRosterShifts';
+import { useRosterUI, RosterMode, CalendarView } from '@/modules/rosters/contexts/RosterUIContext';
+import {
+  Shift,
+} from '@/modules/rosters/api/shifts.api';
+import { useRosterProjections } from '@/modules/rosters/hooks/useRosterProjections';
+import { useRosterStructure } from '@/modules/rosters/state/useRosterStructure';
 import { useRostersByDateRange } from '@/modules/rosters/state/useEnhancedRosters';
 import { usePublishRoster } from '@/modules/rosters/state/useRosterMutations';
 import { usePeopleModeData } from '@/modules/rosters/hooks/usePeopleModeData';
@@ -112,6 +119,11 @@ const NewRostersPage: React.FC = () => {
   // ==================== MODAL & BULK STATE ====================
   const [isAddShiftOpen, setIsAddShiftOpen] = useState(false);
   const [addShiftContext, setAddShiftContext] = useState<ShiftContext | null>(null);
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editShiftData, setEditShiftData] = useState<any>(null);
+  const [editShiftContext, setEditShiftContext] = useState<ShiftContext | null>(null);
+
   const [bulkModeActive, setBulkModeActive] = useState(false);
   const [selectedShifts, setSelectedShifts] = useState<string[]>([]);
 
@@ -199,6 +211,7 @@ const NewRostersPage: React.FC = () => {
   const bidShiftMutation = useAcceptOffer();
   const swapShiftMutation = useRequestTrade();
   const cancelShiftMutation = useCancelShift();
+  const unpublishShiftMutation = useUnpublishShift();
 
   // Roster Actions
 
@@ -207,6 +220,32 @@ const NewRostersPage: React.FC = () => {
 
   // Employees lookup
   const { data: employees = [] } = useEmployees(selectedOrganizationId || undefined);
+
+  // Roster structures for Group mode projection
+  const { data: rosterStructures = [] } = useRosterStructure(
+    selectedOrganizationId,
+    startDate,
+    endDate,
+    {
+      departmentIds: selectedDepartmentIds,
+      subDepartmentIds: selectedSubDepartmentIds,
+    }
+  );
+
+  // Lookup data for projections (stable TanStack Query cache refs)
+  const { data: roles = [] } = useRoles(selectedOrganizationId || undefined, selectedDepartmentIds[0], selectedSubDepartmentIds[0]);
+  const { data: levels = [] } = useRemunerationLevels();
+  const { data: eventsData = [] } = useEvents(selectedOrganizationId || undefined);
+
+  // ==================== PROJECTION ENGINE ====================
+  const projection = useRosterProjections({
+    shifts,
+    employees,
+    roles,
+    levels,
+    events: eventsData,
+    rosterStructures,
+  });
 
   // Derive unfilled shifts from cached query data
   const unfilledShifts: UnfilledShift[] = useMemo(() => {
@@ -237,7 +276,7 @@ const NewRostersPage: React.FC = () => {
       setViewType(nextView);
       return;
     }
-    // No change to date for other views
+    // For day/3day, no change needed to selectedDate
     setViewType(nextView);
   };
 
@@ -398,45 +437,64 @@ const NewRostersPage: React.FC = () => {
   };
 
   // ==================== EMPLOYEES WITH SHIFTS ====================
-  const employeesWithShifts = usePeopleModeData({
-    employees,
-    shifts,
-  });
+  // Legacy derivation (always called — hooks cannot be conditional)
+  const legacyEmployeesWithShifts = usePeopleModeData({ employees, shifts });
 
-  // ==================== COMPUTED STATS ====================
+  // When projection.people is available, adapt ProjectedEmployee → PeopleModeEmployee
+  const GROUP_ACCENT: Record<string, string> = {
+    convention_centre: 'blue',
+    exhibition_centre: 'emerald',
+    theatre: 'red',
+  };
+  const employeesWithShifts = useMemo((): PeopleModeEmployee[] => {
+    if (projection.people) {
+      return projection.people.employees.map((pe): PeopleModeEmployee => ({
+        id: pe.id,
+        name: pe.name,
+        employeeId: pe.id.slice(0, 8),
+        avatar: pe.avatarUrl,
+        contractedHours: pe.contractedHours,
+        currentHours: pe.scheduledHours,
+        overHoursWarning: pe.overHoursWarning,
+        shifts: Object.fromEntries(
+          Object.entries(pe.shiftsByDate).map(([date, pShifts]) => [
+            date,
+            pShifts.map((ps): PeopleModeShift => ({
+              id: ps.id,
+              role: ps.roleName,
+              remunerationLevel: ps.raw.remuneration_levels?.level_name ?? 'L1',
+              startTime: ps.startTime,
+              endTime: ps.endTime,
+              department: ps.raw.group_type ?? 'General',
+              subGroup: ps.subGroupName ?? '',
+              group: ps.groupType ?? 'convention_centre',
+              groupColor: GROUP_ACCENT[ps.groupType ?? ''] ?? 'blue',
+              hours: ps.netMinutes / 60,
+              pay: (ps.netMinutes / 60) * (ps.raw.remuneration_rate ?? 25),
+              status: ps.employeeId ? (ps.isDraft ? 'Draft' : 'Assigned') : 'Open',
+              lifecycleStatus: ps.isPublished ? 'published' : 'draft',
+              assignmentStatus: ps.employeeId ? 'assigned' : 'unassigned',
+              fulfillmentStatus: ps.raw.fulfillment_status,
+              isTradeRequested: ps.isTrading,
+              isCancelled: ps.isCancelled,
+              rawShift: ps.raw,
+            })),
+          ])
+        ),
+      }));
+    }
+    return legacyEmployeesWithShifts;
+  }, [projection.people, legacyEmployeesWithShifts]);
+
+  // ==================== COMPUTED STATS (from projection engine) ====================
   const {
-    totalAssignedShifts,
-    totalUnfilledShifts,
+    assignedShifts: totalAssignedShifts,
+    openShifts: totalUnfilledShifts,
     totalShifts,
     estimatedCost,
-    budget,
-    remainingBudget,
-  } = useMemo(() => {
-    const assigned = shifts.filter((s) => s.assigned_employee_id && !s.is_cancelled).length;
-    const unfilled = shifts.filter((s) => !s.assigned_employee_id && !s.is_cancelled).length;
-    const total = shifts.filter((s) => !s.is_cancelled).length;
-
-    let estCost = 0;
-    shifts.forEach((s) => {
-      if (!s.is_cancelled) {
-        const hours = (s.net_length_minutes || 0) / 60;
-        const rate = s.remuneration_rate || 25;
-        estCost += hours * rate;
-      }
-    });
-
-    const budgetValue = 15000;
-    const remaining = budgetValue - estCost;
-
-    return {
-      totalAssignedShifts: assigned,
-      totalUnfilledShifts: unfilled,
-      totalShifts: total,
-      estimatedCost: estCost,
-      budget: budgetValue,
-      remainingBudget: remaining,
-    };
-  }, [shifts]);
+  } = projection.stats;
+  const budget = 15000;
+  const remainingBudget = budget - estimatedCost;
 
   // ==================== SINGLE SHIFT HANDLERS (via mutation hooks) ====================
   const handleBidShift = async (shiftId: string) => {
@@ -469,6 +527,37 @@ const NewRostersPage: React.FC = () => {
     }
   };
 
+  const handleUnpublishShift = async (shiftId: string) => {
+    try {
+      await unpublishShiftMutation.mutateAsync({ shiftId, reason: 'Unpublished via Roster' });
+      toast({ title: 'Shift Unpublished', description: 'Shift reverted to Draft.' });
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Error', description: 'Failed to unpublish shift', variant: 'destructive' });
+    }
+  };
+
+  const handleEditShift = (shift: any) => {
+    if (!canEdit) return;
+    const rawShift = shift.rawShift || shift;
+
+    setEditShiftContext({
+      mode: activeMode,
+      launchSource: 'edit',
+      date: rawShift.shift_date,
+      organizationId: rawShift.organization_id || selectedOrganizationId || undefined,
+      departmentIds: selectedDepartmentIds,
+      subDepartmentIds: selectedSubDepartmentIds,
+      rosterId: rawShift.roster_id || selectedRosterId || undefined,
+      roleId: rawShift.role_id || undefined,
+      employeeId: rawShift.assigned_employee_id || undefined,
+      group_type: rawShift.group_type || undefined,
+      sub_group_name: rawShift.sub_group_name || undefined,
+    });
+    setEditShiftData(rawShift);
+    setIsEditModalOpen(true);
+  };
+
   // ==================== RENDER ====================
   return (
     <div className="flex flex-col h-full min-h-0 bg-[#030405] overflow-hidden">
@@ -478,7 +567,7 @@ const NewRostersPage: React.FC = () => {
         onScopeChange={setScope}
         hidden={isGammaLocked}
         multiSelect={false}
-        className="m-4 mb-2 relative z-[20]"
+        className="m-4 mb-2 relative z-[40]"
       />
 
       {/* Function Bar */}
@@ -565,11 +654,12 @@ const NewRostersPage: React.FC = () => {
                 setIsAddShiftOpen(true);
               }}
               onViewShift={(shift: EmployeeShift) => {
-                // TODO: Open shift details
+                handleEditShift(shift);
               }}
               onBidShift={handleBidShift}
               onSwapShift={handleSwapShift}
               onCancelShift={handleCancelSingleShift}
+              onUnpublishShift={handleUnpublishShift}
             />
           )}
 
@@ -598,6 +688,7 @@ const NewRostersPage: React.FC = () => {
               shifts={shifts}
               isShiftsLoading={isLoading}
               showLegend={true}
+              projection={projection.group ?? undefined}
             />
           )}
 
@@ -609,6 +700,8 @@ const NewRostersPage: React.FC = () => {
               shifts={shifts}
               isShiftsLoading={isLoading}
               organizationId={selectedOrganizationId || undefined}
+              projection={projection.events ?? undefined}
+              onEditShift={handleEditShift}
             />
           )}
 
@@ -621,6 +714,9 @@ const NewRostersPage: React.FC = () => {
               departmentIds={selectedDepartmentIds}
               subDepartmentIds={selectedSubDepartmentIds}
               rosterId={selectedRosterId || undefined}
+              shifts={shifts}
+              projection={projection.roles ?? undefined}
+              onEditShift={handleEditShift}
             />
           )}
         </div>
@@ -652,6 +748,15 @@ const NewRostersPage: React.FC = () => {
         onClose={() => setIsAddShiftOpen(false)}
         onSuccess={handleShiftCreated}
         context={addShiftContext}
+      />
+
+      <EnhancedAddShiftModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSuccess={handleShiftCreated}
+        context={editShiftContext}
+        editMode={true}
+        existingShift={editShiftData}
       />
 
       {/* Bulk Toolbar */}

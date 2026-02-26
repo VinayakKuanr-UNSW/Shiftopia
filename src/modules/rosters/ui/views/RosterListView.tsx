@@ -25,15 +25,15 @@ interface RosterListViewProps {
   readOnly?: boolean;
 }
 
-export const RosterListView: React.FC<RosterListViewProps> = ({ 
-  roster, 
+export const RosterListView: React.FC<RosterListViewProps> = ({
+  roster,
   selectedDate,
   readOnly
 }) => {
   const [sortField, setSortField] = useState<string>('startTime');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  
-  const allShifts: Array<{ 
+
+  const allShifts: Array<{
     id: string;
     role: string;
     startTime: string;
@@ -46,7 +46,7 @@ export const RosterListView: React.FC<RosterListViewProps> = ({
     breakDuration: string;
     remunerationLevel: string;
   }> = [];
-  
+
   if (roster) {
     roster.groups.forEach(group => {
       group.subGroups.forEach(subGroup => {
@@ -63,7 +63,7 @@ export const RosterListView: React.FC<RosterListViewProps> = ({
       });
     });
   }
-  
+
   const sortedShifts = [...allShifts].sort((a, b) => {
     if (sortField === 'startTime') {
       const dateA = new Date(a.startTime || '');
@@ -71,25 +71,25 @@ export const RosterListView: React.FC<RosterListViewProps> = ({
       return sortDirection === 'asc' ? dateA.getTime() - dateB.getTime() : dateB.getTime() - dateA.getTime();
     }
     if (sortField === 'role') {
-      return sortDirection === 'asc' 
-        ? a.role.localeCompare(b.role) 
+      return sortDirection === 'asc'
+        ? a.role.localeCompare(b.role)
         : b.role.localeCompare(a.role);
     }
     if (sortField === 'group') {
-      return sortDirection === 'asc' 
-        ? a.groupName.localeCompare(b.groupName) 
+      return sortDirection === 'asc'
+        ? a.groupName.localeCompare(b.groupName)
         : b.groupName.localeCompare(a.groupName);
     }
     if (sortField === 'employee') {
       const nameA = a.employee?.name || 'Unassigned';
       const nameB = b.employee?.name || 'Unassigned';
-      return sortDirection === 'asc' 
-        ? nameA.localeCompare(nameB) 
+      return sortDirection === 'asc'
+        ? nameA.localeCompare(nameB)
         : nameB.localeCompare(nameA);
     }
     return 0;
   });
-  
+
   const toggleSort = (field: string) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -98,7 +98,7 @@ export const RosterListView: React.FC<RosterListViewProps> = ({
       setSortDirection('asc');
     }
   };
-  
+
   if (!roster) {
     return (
       <div className="p-8 text-center">
@@ -106,7 +106,7 @@ export const RosterListView: React.FC<RosterListViewProps> = ({
       </div>
     );
   }
-  
+
   return (
     <div className="overflow-x-auto">
       <div className="mb-4 flex items-center">
@@ -115,7 +115,7 @@ export const RosterListView: React.FC<RosterListViewProps> = ({
           Showing shifts for {format(selectedDate, 'EEEE, MMMM d, yyyy')}
         </span>
       </div>
-      
+
       <Table>
         <TableHeader>
           <TableRow>
@@ -141,11 +141,11 @@ export const RosterListView: React.FC<RosterListViewProps> = ({
               const employeeObj = shift.employee ? {
                 id: shift.employee.id,
                 name: shift.employee.name || `${shift.employee.firstName || ''} ${shift.employee.lastName || ''}`.trim()
-              } : shift.employeeId ? { 
-                id: shift.employeeId, 
-                name: "Unknown Employee" 
+              } : shift.employeeId ? {
+                id: shift.employeeId,
+                name: "Unknown Employee"
               } : undefined;
-              
+
               return (
                 <TableRow key={shift.id}>
                   <TableCell>
@@ -172,7 +172,7 @@ export const RosterListView: React.FC<RosterListViewProps> = ({
                     <div className="flex items-center">
                       <Clock size={14} className="mr-2 text-white/60" />
                       <span>
-                        {shift.startTime ? format(parseISO(shift.startTime), 'HH:mm') : '--'} - 
+                        {shift.startTime ? format(parseISO(shift.startTime), 'HH:mm') : '--'} -
                         {shift.endTime ? format(parseISO(shift.endTime), 'HH:mm') : '--'}
                       </span>
                     </div>

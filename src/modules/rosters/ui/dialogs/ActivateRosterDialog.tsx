@@ -121,7 +121,7 @@ export const ActivateRosterDialog: React.FC<ActivateRosterDialogProps> = ({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[550px] bg-[#0c1015]/95 backdrop-blur-2xl border-white/10 text-white shadow-2xl p-0 overflow-hidden ring-1 ring-white/10">
-                <div className="p-6 space-y-6">
+                <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto custom-scrollbar">
                     <DialogHeader className="space-y-3">
                         <div className="flex items-center justify-between">
                             <DialogTitle className="text-xl font-semibold tracking-tight">

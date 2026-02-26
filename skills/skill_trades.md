@@ -273,6 +273,7 @@ Failure blocks transition.
 | Now ≥ start − 4h | Swap → EXPIRED |
 | Time locked | All buttons disabled |
 | Approval after lock | Forbidden |
+| Expired Lifecycle | Visible for context, but non-actionable (greyed out) |
 
 ---
 

@@ -98,6 +98,7 @@ export function useShiftFormData({
 
     // All queries are enabled only when the modal is open
     const { data: roles = [] } = useRoles(
+        isOpen ? context.organizationId : undefined,
         isOpen ? roleDeptId : undefined,
         isOpen ? roleSubDeptId : undefined
     );

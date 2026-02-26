@@ -484,7 +484,10 @@ export const swapsApi = {
             return [];
         }
 
-        return data || [];
+        return (data || []).map(offer => ({
+            ...offer,
+            offered_shift: mapDbShift(offer.offered_shift)
+        }));
     },
 
     /**
@@ -867,7 +870,8 @@ function mapDbShift(shift: any): any {
         // Relations explicitly requested in SwapRequestWithDetails
         roles: shift.roles,
         departments: shift.departments,
-        sub_departments: shift.sub_departments
+        sub_departments: shift.sub_departments,
+        tz_identifier: shift.tz_identifier // Keep raw for utils if needed
     };
 }
 

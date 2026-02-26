@@ -13,7 +13,7 @@ export const BidStatusBadge = React.memo(({ status }: BidStatusBadgeProps) => {
         switch (s) {
             case 'pending':
                 return 'bg-yellow-500 hover:bg-yellow-600';
-            case 'approved':
+            case 'accepted':
                 return 'bg-green-500 hover:bg-green-600';
             case 'confirmed':
                 return 'bg-blue-500 hover:bg-blue-600';

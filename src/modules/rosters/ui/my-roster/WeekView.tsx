@@ -83,6 +83,7 @@ const WeekView: React.FC<WeekViewProps> = ({ date, getShiftsForDate }) => {
                     'border border-white/20 shadow-md',
                     'hover:scale-[1.02] active:scale-[0.98] transition-transform',
                     'focus:outline-none focus:ring-2 focus:ring-white/30',
+                    shift.assignment_outcome === 'offered' && 'opacity-60 border-dashed border-2',
                     getGradientClass(groupColor)
                   )}
                 >

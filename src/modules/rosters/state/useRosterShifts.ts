@@ -58,13 +58,13 @@ function patchLists(
 
 export function useShiftsByDate(
   organizationId: string | null,
-  date:           string | null,
-  filters?:       ShiftFilters,
+  date: string | null,
+  filters?: ShiftFilters,
 ) {
   return useQuery({
     queryKey: shiftKeys.byDate(organizationId ?? '', date ?? '', filters),
-    queryFn:  () => shiftsQueries.getShiftsForDate(organizationId!, date!, filters),
-    enabled:  !!organizationId && !!date,
+    queryFn: () => shiftsQueries.getShiftsForDate(organizationId!, date!, filters),
+    enabled: !!organizationId && !!date,
     staleTime: 30_000,
     refetchOnWindowFocus: true,
   });
@@ -72,14 +72,14 @@ export function useShiftsByDate(
 
 export function useShiftsByDateRange(
   organizationId: string | null,
-  startDate:      string | null,
-  endDate:        string | null,
-  filters?:       ShiftFilters,
+  startDate: string | null,
+  endDate: string | null,
+  filters?: ShiftFilters,
 ) {
   return useQuery({
     queryKey: shiftKeys.byDateRange(organizationId ?? '', startDate ?? '', endDate ?? '', filters),
-    queryFn:  () => shiftsQueries.getShiftsForDateRange(organizationId!, startDate!, endDate!, filters),
-    enabled:  !!organizationId && !!startDate && !!endDate,
+    queryFn: () => shiftsQueries.getShiftsForDateRange(organizationId!, startDate!, endDate!, filters),
+    enabled: !!organizationId && !!startDate && !!endDate,
     staleTime: 30_000,
     refetchOnWindowFocus: true,
   });
@@ -87,13 +87,13 @@ export function useShiftsByDateRange(
 
 export function useEmployeeShifts(
   employeeId: string | null,
-  startDate:  string | null,
-  endDate:    string | null,
+  startDate: string | null,
+  endDate: string | null,
 ) {
   return useQuery({
     queryKey: shiftKeys.byEmployee(employeeId ?? '', startDate ?? '', endDate ?? ''),
-    queryFn:  () => shiftsQueries.getEmployeeShifts(employeeId!, startDate!, endDate!),
-    enabled:  !!employeeId && !!startDate && !!endDate,
+    queryFn: () => shiftsQueries.getEmployeeShifts(employeeId!, startDate!, endDate!),
+    enabled: !!employeeId && !!startDate && !!endDate,
     staleTime: 30_000,
   });
 }
@@ -101,43 +101,43 @@ export function useEmployeeShifts(
 export function useShiftDetail(shiftId: string | null) {
   return useQuery({
     queryKey: shiftKeys.detail(shiftId ?? ''),
-    queryFn:  () => shiftsQueries.getShiftById(shiftId!),
-    enabled:  !!shiftId,
+    queryFn: () => shiftsQueries.getShiftById(shiftId!),
+    enabled: !!shiftId,
     staleTime: 15_000,
   });
 }
 
 export function usePendingOfferCount(employeeId: string | null) {
   return useQuery({
-    queryKey:       shiftKeys.offerCount(employeeId ?? ''),
-    queryFn:        () => shiftsQueries.getPendingOfferCount(employeeId!),
-    enabled:        !!employeeId,
-    staleTime:      60_000,
+    queryKey: shiftKeys.offerCount(employeeId ?? ''),
+    queryFn: () => shiftsQueries.getPendingOfferCount(employeeId!),
+    enabled: !!employeeId,
+    staleTime: 60_000,
     refetchInterval: 60_000,
   });
 }
 
 export function useMyOffers(
   employeeId: string | null,
-  filters?:   { organizationId?: string; departmentId?: string },
+  filters?: { organizationId?: string; departmentId?: string },
 ) {
   return useQuery({
     queryKey: [...shiftKeys.offers(employeeId ?? ''), filters ?? null],
-    queryFn:  () => shiftsQueries.getMyOffers(employeeId!, filters),
-    enabled:  !!employeeId,
+    queryFn: () => shiftsQueries.getMyOffers(employeeId!, filters),
+    enabled: !!employeeId,
     staleTime: 5 * 60_000,
   });
 }
 
 export function useMyOffersHistory(
   employeeId: string | null,
-  status:     'Accepted' | 'Declined',
-  filters?:   { organizationId?: string; departmentId?: string },
+  status: 'Accepted' | 'Declined',
+  filters?: { organizationId?: string; departmentId?: string },
 ) {
   return useQuery({
     queryKey: [...shiftKeys.offers(employeeId ?? ''), 'history', status, filters ?? null],
-    queryFn:  () => shiftsQueries.getMyOfferHistory(employeeId!, status, filters),
-    enabled:  !!employeeId,
+    queryFn: () => shiftsQueries.getMyOfferHistory(employeeId!, status, filters),
+    enabled: !!employeeId,
     staleTime: 5 * 60_000,
   });
 }
@@ -147,7 +147,7 @@ export function useMyOffersHistory(
 export function useOrganizations() {
   return useQuery({
     queryKey: shiftKeys.lookups.organizations(),
-    queryFn:  () => shiftsQueries.getOrganizations(),
+    queryFn: () => shiftsQueries.getOrganizations(),
     staleTime: 5 * 60_000,
   });
 }
@@ -155,7 +155,7 @@ export function useOrganizations() {
 export function useDepartments(organizationId?: string) {
   return useQuery({
     queryKey: shiftKeys.lookups.departments(organizationId),
-    queryFn:  () => shiftsQueries.getDepartments(organizationId),
+    queryFn: () => shiftsQueries.getDepartments(organizationId),
     staleTime: 5 * 60_000,
   });
 }
@@ -163,28 +163,28 @@ export function useDepartments(organizationId?: string) {
 export function useSubDepartments(departmentId?: string) {
   return useQuery({
     queryKey: shiftKeys.lookups.subDepartments(departmentId),
-    queryFn:  () => shiftsQueries.getSubDepartments(departmentId),
-    enabled:  !!departmentId,
+    queryFn: () => shiftsQueries.getSubDepartments(departmentId),
+    enabled: !!departmentId,
     staleTime: 5 * 60_000,
   });
 }
 
-export function useRoles(departmentId?: string, subDepartmentId?: string) {
+export function useRoles(organizationId?: string, departmentId?: string, subDepartmentId?: string) {
   return useQuery({
-    queryKey: shiftKeys.lookups.roles(departmentId, subDepartmentId),
-    queryFn:  () => shiftsQueries.getRoles(departmentId, subDepartmentId),
+    queryKey: shiftKeys.lookups.roles(organizationId, departmentId, subDepartmentId),
+    queryFn: () => shiftsQueries.getRoles(organizationId, departmentId, subDepartmentId),
     staleTime: 5 * 60_000,
   });
 }
 
 export function useEmployees(
   organizationId?: string,
-  departmentId?:   string,
+  departmentId?: string,
   subDepartmentId?: string,
 ) {
   return useQuery({
     queryKey: shiftKeys.lookups.employees(organizationId, departmentId, subDepartmentId),
-    queryFn:  () => shiftsQueries.getEmployees(organizationId, departmentId, subDepartmentId),
+    queryFn: () => shiftsQueries.getEmployees(organizationId, departmentId, subDepartmentId),
     staleTime: 2 * 60_000,
   });
 }
@@ -192,7 +192,7 @@ export function useEmployees(
 export function useTemplates(subDepartmentId?: string, departmentId?: string) {
   return useQuery({
     queryKey: shiftKeys.lookups.templates(subDepartmentId, departmentId),
-    queryFn:  () => shiftsQueries.getTemplates(subDepartmentId, departmentId),
+    queryFn: () => shiftsQueries.getTemplates(subDepartmentId, departmentId),
     staleTime: 5 * 60_000,
   });
 }
@@ -200,7 +200,7 @@ export function useTemplates(subDepartmentId?: string, departmentId?: string) {
 export function useRemunerationLevels() {
   return useQuery({
     queryKey: shiftKeys.lookups.remunerationLevels(),
-    queryFn:  () => shiftsQueries.getRemunerationLevels(),
+    queryFn: () => shiftsQueries.getRemunerationLevels(),
     staleTime: 10 * 60_000,
   });
 }
@@ -208,7 +208,7 @@ export function useRemunerationLevels() {
 export function useSkills() {
   return useQuery({
     queryKey: shiftKeys.lookups.skills(),
-    queryFn:  () => shiftsQueries.getSkills(),
+    queryFn: () => shiftsQueries.getSkills(),
     staleTime: 10 * 60_000,
   });
 }
@@ -216,7 +216,7 @@ export function useSkills() {
 export function useLicenses() {
   return useQuery({
     queryKey: shiftKeys.lookups.licenses(),
-    queryFn:  () => shiftsQueries.getLicenses(),
+    queryFn: () => shiftsQueries.getLicenses(),
     staleTime: 10 * 60_000,
   });
 }
@@ -224,7 +224,7 @@ export function useLicenses() {
 export function useEvents(organizationId?: string) {
   return useQuery({
     queryKey: shiftKeys.lookups.events(organizationId),
-    queryFn:  () => shiftsQueries.getEvents(organizationId),
+    queryFn: () => shiftsQueries.getEvents(organizationId),
     staleTime: 2 * 60_000,
   });
 }
@@ -232,16 +232,16 @@ export function useEvents(organizationId?: string) {
 export function useRostersLookup(
   organizationId?: string,
   filters?: {
-    departmentId?:     string;
-    departmentIds?:    string[];
-    subDepartmentId?:  string;
+    departmentId?: string;
+    departmentIds?: string[];
+    subDepartmentId?: string;
     subDepartmentIds?: string[];
   },
 ) {
   return useQuery({
     queryKey: shiftKeys.lookups.rosters(organizationId, filters),
-    queryFn:  () => shiftsQueries.getRosters(organizationId!, filters),
-    enabled:  !!organizationId,
+    queryFn: () => shiftsQueries.getRosters(organizationId!, filters),
+    enabled: !!organizationId,
     staleTime: 5 * 60_000,
   });
 }
@@ -249,8 +249,8 @@ export function useRostersLookup(
 export function useRosterStructure(rosterId?: string) {
   return useQuery({
     queryKey: shiftKeys.lookups.rosterStructure(rosterId),
-    queryFn:  () => shiftsQueries.getRosterStructure(rosterId!),
-    enabled:  !!rosterId,
+    queryFn: () => shiftsQueries.getRosterStructure(rosterId!),
+    enabled: !!rosterId,
     staleTime: 5 * 60_000,
   });
 }
@@ -455,6 +455,40 @@ export function usePublishShift() {
   });
 }
 
+/** Unpublish a single shift. Reverts lifecycle_status to Draft. */
+export function useUnpublishShift() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ shiftId, reason }: { shiftId: string; reason?: string }) =>
+      shiftsCommands.unpublishShift(shiftId, reason),
+
+    onMutate: async ({ shiftId }) => {
+      await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
+      const snapshot = snapshotLists(queryClient);
+
+      patchLists(queryClient, (old) =>
+        old.map(s =>
+          s.id === shiftId
+            ? { ...s, lifecycle_status: 'Draft' as const, is_published: false, is_draft: true }
+            : s,
+        ),
+      );
+
+      return { snapshot };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
+    },
+
+    onSettled: (_data, _err, { shiftId }) => {
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      queryClient.invalidateQueries({ queryKey: shiftKeys.detail(shiftId) });
+    },
+  });
+}
+
 /**
  * Bulk publish shifts.
  * Instant lifecycle_status update for all selected IDs — the UI responds
@@ -549,11 +583,11 @@ export function useDropShift() {
         old.map(s =>
           s.id === shiftId
             ? {
-                ...s,
-                assigned_employee_id: null,
-                assignment_status:    'unassigned'      as const,
-                bidding_status:       'on_bidding_urgent' as const,
-              }
+              ...s,
+              assigned_employee_id: null,
+              assignment_status: 'unassigned' as const,
+              bidding_status: 'on_bidding_urgent' as const,
+            }
             : s,
         ),
       );
@@ -595,7 +629,8 @@ export function useAcceptOffer() {
 
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
-      queryClient.invalidateQueries({ queryKey: shiftKeys.all.concat(['offerCount']) as unknown as typeof shiftKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['shifts', 'offers'] });
+      queryClient.invalidateQueries({ queryKey: ['shifts', 'offerCount'] });
     },
   });
 }
@@ -614,11 +649,11 @@ export function useDeclineOffer() {
         old.map(s =>
           s.id === shiftId
             ? {
-                ...s,
-                assignment_status:  'unassigned' as const,
-                assignment_outcome: null,
-                assigned_employee_id: null,
-              }
+              ...s,
+              assignment_status: 'unassigned' as const,
+              assignment_outcome: null,
+              assigned_employee_id: null,
+            }
             : s,
         ),
       );
@@ -631,6 +666,8 @@ export function useDeclineOffer() {
 
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      queryClient.invalidateQueries({ queryKey: ['shifts', 'offers'] });
+      queryClient.invalidateQueries({ queryKey: ['shifts', 'offerCount'] });
     },
   });
 }
@@ -702,12 +739,12 @@ export function useRequestTrade() {
 export function useComplianceValidation() {
   return useMutation({
     mutationFn: (params: {
-      employeeId:       string;
-      shiftDate:        string;
-      startTime:        string;
-      endTime:          string;
+      employeeId: string;
+      shiftDate: string;
+      startTime: string;
+      endTime: string;
       netLengthMinutes: number;
-      excludeShiftId?:  string;
+      excludeShiftId?: string;
     }) =>
       complianceService.validateShiftCompliance(
         params.employeeId,
@@ -728,18 +765,18 @@ export function useComplianceValidation() {
  */
 export function useRosterShifts(
   organizationId: string | null,
-  date:           string | null,
-  filters?:       ShiftFilters,
+  date: string | null,
+  filters?: ShiftFilters,
 ) {
-  const queryClient  = useQueryClient();
-  const shiftsQuery  = useShiftsByDate(organizationId, date, filters);
-  const createShift  = useCreateShift();
-  const updateShift  = useUpdateShift();
-  const deleteShift  = useDeleteShift();
-  const bulkAssign   = useBulkAssignShifts();
+  const queryClient = useQueryClient();
+  const shiftsQuery = useShiftsByDate(organizationId, date, filters);
+  const createShift = useCreateShift();
+  const updateShift = useUpdateShift();
+  const deleteShift = useDeleteShift();
+  const bulkAssign = useBulkAssignShifts();
   const bulkUnassign = useBulkUnassignShifts();
-  const bulkPublish  = useBulkPublishShifts();
-  const bulkDelete   = useBulkDeleteShifts();
+  const bulkPublish = useBulkPublishShifts();
+  const bulkDelete = useBulkDeleteShifts();
 
   /** Hard-invalidate all shift list queries (use sparingly). */
   const invalidateAll = useCallback(() => {
@@ -748,11 +785,11 @@ export function useRosterShifts(
   }, [queryClient]);
 
   return {
-    shifts:       shiftsQuery.data    ?? [],
-    isLoading:    shiftsQuery.isLoading,
-    isFetching:   shiftsQuery.isFetching,
-    error:        shiftsQuery.error,
-    refetch:      shiftsQuery.refetch,
+    shifts: shiftsQuery.data ?? [],
+    isLoading: shiftsQuery.isLoading,
+    isFetching: shiftsQuery.isFetching,
+    error: shiftsQuery.error,
+    refetch: shiftsQuery.refetch,
     createShift,
     updateShift,
     deleteShift,

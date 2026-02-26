@@ -64,7 +64,6 @@ export const BroadcastsManagerPage: React.FC = () => {
         mode="managerial"
         onScopeChange={setScope}
         hidden={isGammaLocked}
-        multiSelect={true}
         className="m-4 md:m-6"
       />
       {breakpoint === 'desktop' ? (

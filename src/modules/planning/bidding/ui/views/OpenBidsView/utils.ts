@@ -1,6 +1,6 @@
-// src/modules/planning/ui/views/OpenBidsView/utils.ts
+// src/modules/planning/bidding/ui/views/OpenBidsView/utils.ts
 
-import type { GroupType, TimeRemaining, OpenShift, StatusCounts } from './types';
+import type { GroupType, TimeRemaining, OpenShift, StatusCounts, FilterState } from './types';
 
 /**
  * Calculate time remaining until deadline
@@ -84,17 +84,14 @@ export const getStatusCounts = (shifts: OpenShift[]): StatusCounts => {
 };
 
 /**
- * Filter shifts based on search query and filters
+ * Filter shifts based on search query and status filter.
+ * Hierarchy filtering is no longer done here — the global ScopeFilterBanner
+ * controls which shifts are fetched from the API.
  */
 export const filterShifts = (
   shifts: OpenShift[],
   searchQuery: string,
-  filters: {
-    orgId: string;
-    deptId: string;
-    subDeptId: string;
-    status: string;
-  }
+  filters: FilterState
 ): OpenShift[] => {
   let result = shifts;
 
@@ -104,13 +101,12 @@ export const filterShifts = (
       (s) =>
         s.role.toLowerCase().includes(q) ||
         s.location.toLowerCase().includes(q) ||
+        s.department.toLowerCase().includes(q) ||
+        s.subDepartment.toLowerCase().includes(q) ||
         s.shiftIdDisplay.toLowerCase().includes(q)
     );
   }
 
-  if (filters.orgId) result = result.filter((s) => s.organizationId === filters.orgId);
-  if (filters.deptId) result = result.filter((s) => s.departmentId === filters.deptId);
-  if (filters.subDeptId) result = result.filter((s) => s.subDepartmentId === filters.subDeptId);
   if (filters.status !== 'all') result = result.filter((s) => s.status === filters.status);
 
   return result;

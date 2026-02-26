@@ -5,16 +5,16 @@ import { OfferActionResponseSchema } from './contracts';
 
 // ── Lookup types ──────────────────────────────────────────────────────────────
 
-export interface OrgSummary            { id: string; name: string }
-export interface DeptSummary           { id: string; name: string; organization_id: string }
-export interface SubDeptSummary        { id: string; name: string; department_id: string }
-export interface RoleSummary           { id: string; name: string; department_id: string | null; sub_department_id: string | null; remuneration_level_id: string | null }
-export interface RemunerationLevel     { id: string; level_number: number; level_name: string; hourly_rate_min: number; hourly_rate_max: number; description: string | null }
-export interface SkillSummary          { id: string; name: string; description: string | null; category: string | null }
-export interface LicenseSummary        { id: string; name: string; description: string | null; category: string | null; issuing_authority: string | null }
-export interface ProfileSummary        { id: string; first_name: string; last_name: string }
-export interface TemplateSummary       { id: string; name: string; description: string | null; department_id: string; sub_department_id: string | null; status: string; organization_id: string; applied_count: number | null }
-export interface RosterSlot            { groupType: string; subGroupName: string }
+export interface OrgSummary { id: string; name: string }
+export interface DeptSummary { id: string; name: string; organization_id: string }
+export interface SubDeptSummary { id: string; name: string; department_id: string }
+export interface RoleSummary { id: string; name: string; department_id: string | null; sub_department_id: string | null; remuneration_level_id: string | null }
+export interface RemunerationLevel { id: string; level_number: number; level_name: string; hourly_rate_min: number; hourly_rate_max: number; description: string | null }
+export interface SkillSummary { id: string; name: string; description: string | null; category: string | null }
+export interface LicenseSummary { id: string; name: string; description: string | null; category: string | null; issuing_authority: string | null }
+export interface ProfileSummary { id: string; first_name: string; last_name: string }
+export interface TemplateSummary { id: string; name: string; description: string | null; department_id: string; sub_department_id: string | null; status: string; organization_id: string; applied_count: number | null }
+export interface RosterSlot { groupType: string; subGroupName: string }
 
 // ── Shared select fragment for shift rows ─────────────────────────────────────
 
@@ -306,7 +306,7 @@ export const shiftsQueries = {
         }
     },
 
-    async getRoles(departmentId?: string, subDepartmentId?: string): Promise<RoleSummary[]> {
+    async getRoles(organizationId?: string, departmentId?: string, subDepartmentId?: string): Promise<RoleSummary[]> {
         try {
             let query = supabase
                 .from('roles')
@@ -314,9 +314,57 @@ export const shiftsQueries = {
                 .order('name');
 
             if (subDepartmentId && isValidUuid(subDepartmentId)) {
-                query = query.or(`sub_department_id.eq.${subDepartmentId},department_id.eq.${departmentId}`);
+                // To avoid complex nested OR/AND string parsing issues in Supabase JS:
+                // Fetch roles that match the explicit sub_department_id
+                // PLUS roles that match the parent department_id AND have is.null sub_department_id
+                // PLUS global roles that have is.null department_id
+
+                // We execute two queries and merge to ensure correct hierarchy mapping
+                const [explicitSubDeptRes, parentDeptAndGlobalRes] = await Promise.all([
+                    supabase
+                        .from('roles')
+                        .select('id, name, department_id, sub_department_id, remuneration_level_id')
+                        .eq('sub_department_id', subDepartmentId), // Explicit to this node
+                    supabase
+                        .from('roles')
+                        .select('id, name, department_id, sub_department_id, remuneration_level_id')
+                        .is('sub_department_id', null)             // Must NOT be mapped to another subdept
+                        .or(`department_id.eq.${departmentId},department_id.is.null`) // Parent dept OR Global
+                ]);
+
+                if (explicitSubDeptRes.error) console.error(explicitSubDeptRes.error);
+                if (parentDeptAndGlobalRes.error) console.error(parentDeptAndGlobalRes.error);
+
+                const mergedRoles = [
+                    ...(explicitSubDeptRes.data || []),
+                    ...(parentDeptAndGlobalRes.data || [])
+                ];
+
+                // Sort and return early since we bypassed the single query flow
+                return mergedRoles.sort((a, b) => a.name.localeCompare(b.name)) as RoleSummary[];
+
             } else if (departmentId && isValidUuid(departmentId)) {
-                query = query.or(`department_id.eq.${departmentId},department_id.is.null`);
+                // Dept level:
+                // 1. Roles explicitly mapped to this Dept with NO SubDept
+                // 2. Global roles (NO Dept AND NO SubDept)
+                query = query
+                    .is('sub_department_id', null)
+                    .or(`department_id.eq.${departmentId},department_id.is.null`);
+            } else if (organizationId && isValidUuid(organizationId)) {
+                // Org level: all roles for this Org (not mapped to a sub-dept)
+                const { data: orgDepts } = await supabase
+                    .from('departments')
+                    .select('id')
+                    .eq('organization_id', organizationId);
+
+                const deptIds = orgDepts?.map(d => d.id) || [];
+                query = query.is('sub_department_id', null);
+
+                if (deptIds.length > 0) {
+                    query = query.or(`department_id.in.(${deptIds.join(',')}),department_id.is.null`);
+                } else {
+                    query = query.is('department_id', null);
+                }
             }
 
             const { data, error } = await query;
@@ -663,11 +711,17 @@ export const shiftsQueries = {
                 notes,
                 assignment_outcome,
                 published_at,
+                paid_break_minutes,
+                unpaid_break_minutes,
+                break_minutes,
+                timezone,
+                group_type,
+                sub_group_name,
                 roles(name),
                 departments(id, name),
                 sub_departments(name),
                 organizations(id, name),
-                remuneration_levels(level_name, hourly_rate_min)
+                remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max)
             `)
                 .eq('assigned_employee_id', employeeId)
                 .eq('lifecycle_status', 'Published')
@@ -689,21 +743,32 @@ export const shiftsQueries = {
                 throw error;
             }
 
+            // Join with events to get the performer
+            const { data: events } = await supabase
+                .from('shift_audit_events')
+                .select('shift_id, performed_by_name')
+                .in('event_type', ['offer_sent', 'shift_published'])
+                .in('shift_id', (data || []).map(s => s.id));
+
             return (data || []).map(shift => ({
                 id: shift.id,
                 shift_id: shift.id,
                 status: 'Pending' as const,
                 offered_at: shift.published_at,
+                offered_by_name: events?.find(e => e.shift_id === shift.id)?.performed_by_name ?? 'Admin',
                 shift: {
-                    id:                  shift.id,
-                    shift_date:          shift.shift_date,
-                    start_time:          shift.start_time,
-                    end_time:            shift.end_time,
-                    roles:               shift.roles,
-                    departments:         shift.departments,
-                    sub_departments:     shift.sub_departments,
-                    organizations:       shift.organizations,
-                    notes:               shift.notes,
+                    id: shift.id,
+                    shift_date: shift.shift_date,
+                    start_time: shift.start_time,
+                    end_time: shift.end_time,
+                    roles: shift.roles,
+                    departments: shift.departments,
+                    sub_departments: shift.sub_departments,
+                    organizations: shift.organizations,
+                    notes: shift.notes,
+                    break_minutes: shift.break_minutes,
+                    paid_break_minutes: shift.paid_break_minutes,
+                    unpaid_break_minutes: shift.unpaid_break_minutes,
                     remuneration_levels: shift.remuneration_levels,
                 },
             }));
@@ -720,11 +785,11 @@ export const shiftsQueries = {
         try {
             if (!isValidUuid(employeeId)) return [];
 
-            const eventType = status === 'Accepted' ? 'offer_accepted' : 'offer_declined';
+            const eventType = status === 'Accepted' ? 'offer_accepted' : 'offer_rejected';
 
             const { data: events } = await supabase
                 .from('shift_audit_events')
-                .select('shift_id, created_at')
+                .select('shift_id, created_at, performed_by_name')
                 .eq('performed_by_id', employeeId)
                 .eq('event_type', eventType)
                 .order('created_at', { ascending: false })
@@ -743,11 +808,17 @@ export const shiftsQueries = {
                 notes,
                 assignment_outcome,
                 created_at,
+                paid_break_minutes,
+                unpaid_break_minutes,
+                break_minutes,
+                timezone,
+                group_type,
+                sub_group_name,
                 roles(name),
                 departments(id, name),
                 sub_departments(name),
                 organizations(id, name),
-                remuneration_levels(level_name, hourly_rate_min)
+                remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max)
             `)
                 .in('id', shiftIds)
                 .is('deleted_at', null);
@@ -763,22 +834,26 @@ export const shiftsQueries = {
             if (error) throw error;
 
             return (data || []).map(shift => ({
-                id:         shift.id,
-                shift_id:   shift.id,
+                id: shift.id,
+                shift_id: shift.id,
                 status,
                 offered_at: events?.find(e => e.shift_id === shift.id)?.created_at
-                            ?? shift.created_at
-                            ?? new Date().toISOString(),
+                    ?? shift.created_at
+                    ?? new Date().toISOString(),
+                offered_by_name: events?.find(e => e.shift_id === shift.id)?.performed_by_name ?? 'Admin',
                 shift: {
-                    id:                  shift.id,
-                    shift_date:          shift.shift_date,
-                    start_time:          shift.start_time,
-                    end_time:            shift.end_time,
-                    roles:               shift.roles,
-                    departments:         shift.departments,
-                    sub_departments:     shift.sub_departments,
-                    organizations:       shift.organizations,
-                    notes:               shift.notes,
+                    id: shift.id,
+                    shift_date: shift.shift_date,
+                    start_time: shift.start_time,
+                    end_time: shift.end_time,
+                    roles: shift.roles,
+                    departments: shift.departments,
+                    sub_departments: shift.sub_departments,
+                    organizations: shift.organizations,
+                    notes: shift.notes,
+                    break_minutes: shift.break_minutes,
+                    paid_break_minutes: shift.paid_break_minutes,
+                    unpaid_break_minutes: shift.unpaid_break_minutes,
                     remuneration_levels: shift.remuneration_levels,
                 },
             }));
@@ -899,4 +974,66 @@ export const shiftsQueries = {
             return [];
         }
     },
+
+    /**
+     * Get shifts for manager bid management across all three categories:
+     * - Urgent: bidding_status = 'on_bidding_urgent'
+     * - Normal: bidding_status = 'on_bidding_normal'
+     * - Resolved: assigned_employee_id IS NOT NULL (winner assigned)
+     */
+    async getManagerBidShifts(filters: {
+        organizationId: string;
+        departmentId?: string;
+        subDepartmentId?: string;
+    }): Promise<Shift[]> {
+        try {
+            const { organizationId, departmentId, subDepartmentId } = filters;
+
+            if (!isValidUuid(organizationId)) {
+                console.warn('Invalid organization ID for getManagerBidShifts:', organizationId);
+                return [];
+            }
+
+            // Fetch all shifts that have ever been on bidding (normal or urgent)
+            // OR are currently assigned after bidding
+            let query = supabase
+                .from('shifts')
+                .select(`
+                    *,
+                    organizations(name),
+                    departments(name),
+                    sub_departments(name),
+                    roles(name),
+                    remuneration_levels(level_name, hourly_rate_min),
+                    assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
+                    shift_bids(id)
+                `)
+                .eq('organization_id', organizationId)
+                .is('deleted_at', null)
+                .eq('is_cancelled', false)
+                // Shifts that are/were in bidding OR have been assigned from bidding
+                .or('bidding_status.in.(on_bidding_normal,on_bidding_urgent),assigned_employee_id.not.is.null');
+
+            if (subDepartmentId && isValidUuid(subDepartmentId)) {
+                query = query.eq('sub_department_id', subDepartmentId);
+            } else if (departmentId && isValidUuid(departmentId)) {
+                query = query.eq('department_id', departmentId);
+            }
+
+            const { data, error } = await query
+                .order('shift_date', { ascending: true });
+
+            if (error) {
+                console.error('[getManagerBidShifts] Supabase error:', error);
+                return [];
+            }
+
+            console.log(`[getManagerBidShifts] Fetched ${data?.length || 0} shifts using filters:`, filters);
+            return (data || []) as unknown as Shift[];
+        } catch (error) {
+            console.error('[getManagerBidShifts] Exception:', error);
+            return [];
+        }
+    },
 };
+

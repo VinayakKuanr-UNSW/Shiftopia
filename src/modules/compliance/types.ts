@@ -29,6 +29,8 @@ export interface ComplianceCheckInput {
     action_type: ActionType;
     candidate_shift: ShiftTimeRange;
     existing_shifts: ShiftTimeRange[];
+    // Optional: exclude this shift ID from overlap checks (when editing)
+    exclude_shift_id?: string;
     // Optional context for swap operations
     swap_context?: {
         other_employee_id: string;

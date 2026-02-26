@@ -11,6 +11,7 @@ import {
   Trash2,
   Gavel,
   Send,
+  Undo2,
   Ban,
   ArrowLeftRight,
   ChevronDown,
@@ -56,6 +57,7 @@ import {
   useBulkDeleteShifts,
   useBulkPublishShifts,
   usePublishShift,
+  useUnpublishShift,
   useEmployees,
 } from '@/modules/rosters/state/useRosterShifts';
 import { useAddSubGroup, useAddSubGroupRange } from '@/modules/rosters/state/useRosterMutations';
@@ -78,6 +80,8 @@ import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils'
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 import { groupShiftsIntoBuckets, type ShiftBucket as ShiftBucketType } from '@/modules/rosters/utils/bucket.utils';
 import { ShiftBucket, type BucketShiftData } from '@/modules/rosters/ui/components/ShiftBucket';
+import type { GroupProjection } from '@/modules/rosters/domain/projections/types';
+import type { CoverageHealth } from '@/modules/rosters/domain/projections/utils/coverage';
 
 // ============================================================================
 // DRAG & DROP TYPE
@@ -223,6 +227,8 @@ interface GroupModeViewProps {
   departmentName?: string;
   subDepartmentId?: string;
   subDepartmentName?: string;
+  /** Phase-2: typed projection snapshot from useRosterProjections */
+  projection?: import('@/modules/rosters/domain/projections/types').GroupProjection;
   // Ghost Cell Navigation - template date bounds
   templateStartDate?: Date;
   templateEndDate?: Date;
@@ -250,9 +256,13 @@ interface GroupModeViewProps {
 interface VisualGroup {
   id: string;
   name: string;
-  type: TemplateGroupType;
+  type: TemplateGroupType | 'unassigned';
   color: string;
   subGroups: VisualSubGroup[];
+  /** Phase-2: staffing coverage from projection (used by CoverageSignalBar) */
+  coverage?: CoverageHealth;
+  /** Phase-2: total scheduled hours across all subgroups */
+  totalHours?: number;
 }
 
 interface VisualSubGroup {
@@ -364,6 +374,43 @@ const GROUP_DISPLAY_NAMES: Record<TemplateGroupType | 'unassigned', string> = {
 };
 
 /* ============================================================
+   COVERAGE SIGNAL BAR — segmented LED strip for group headers
+   ============================================================ */
+
+interface CoverageSignalBarProps {
+  pct: number;      // 0-100
+  accent: string;   // 'blue' | 'emerald' | 'red' | 'gray'
+  segments?: number;
+}
+
+const CoverageSignalBar: React.FC<CoverageSignalBarProps> = ({ pct, accent, segments = 10 }) => {
+  const filled = Math.round((pct / 100) * segments);
+  const colorMap: Record<string, string> = {
+    blue: 'bg-blue-400',
+    emerald: 'bg-emerald-400',
+    red: 'bg-red-400',
+    gray: 'bg-slate-400',
+  };
+  const barColor = colorMap[accent] ?? 'bg-white/40';
+  return (
+    <div className="flex items-center gap-[2px]" aria-label={`${pct}% staffed`}>
+      {Array.from({ length: segments }).map((_, i) => (
+        <div
+          key={i}
+          style={{ animationDelay: `${i * 40}ms` }}
+          className={cn(
+            'h-[5px] w-[14px] rounded-sm transition-all duration-300',
+            i < filled
+              ? cn(barColor, 'opacity-90 animate-[signalFill_0.3s_ease_forwards]')
+              : 'bg-white/10'
+          )}
+        />
+      ))}
+    </div>
+  );
+};
+
+/* ============================================================
    MAIN COMPONENT
    ============================================================ */
 export const GroupModeView: React.FC<GroupModeViewProps> = ({
@@ -389,6 +436,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   isShiftsLoading = false,
   complianceMap,
   showLegend = false,
+  projection,
 }) => {
   const { toast } = useToast();
   const { isDark } = useTheme();
@@ -404,6 +452,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   const bulkDeleteMutation = useBulkDeleteShifts();
   const bulkPublishMutation = useBulkPublishShifts();
   const publishShiftMutation = usePublishShift();
+  const unpublishShiftMutation = useUnpublishShift();
   const addSubGroupMutation = useAddSubGroup();
   const addSubGroupRangeMutation = useAddSubGroupRange();
 
@@ -497,7 +546,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
   // ==================== PUBLISH/UNPUBLISH CONFIRMATION ====================
   const [confirmActionOpen, setConfirmActionOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState<{ type: 'publish'; shift: ShiftDisplay } | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ type: 'publish' | 'unpublish'; shift: ShiftDisplay } | null>(null);
   const [isProcessingAction, setIsProcessingAction] = useState(false);
 
   // ==================== BULK MODE STATE ====================
@@ -725,8 +774,9 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         const isPublished = shift.lifecycle_status === 'Published';
         const isDraft = shift.lifecycle_status === 'Draft';
 
-        // Lock calculation: Check if shift start time is in the past
-        const isLocked = isShiftLocked(shift.shift_date, shift.start_time, 'roster_management');
+        // Lock calculation: Check if shift start time is in the past, OR if it's published
+        const isTimeLocked = isShiftLocked(shift.shift_date, shift.start_time, 'roster_management');
+        const isLocked = isTimeLocked || isPublished;
 
         sgEntry.shifts[dateKey].push({
           id: shift.id,
@@ -787,7 +837,50 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   };
 
   // ==================== DERIVE VISUAL GROUPS VIA MEMO ====================
-  const visualGroups = useMemo(() => {
+  const visualGroups = useMemo((): VisualGroup[] => {
+    // Phase-2: when projection snapshot is available, map directly from it.
+    // Filtering is already applied upstream by useRosterProjections/applyAdvancedFilters.
+    if (projection) {
+      return projection.groups.map((pg): VisualGroup => ({
+        id: pg.id,
+        name: pg.name,
+        type: pg.type,
+        color: pg.colors.accent,
+        coverage: pg.stats.totalShifts > 0 ? { ratio: pg.stats.assignedShifts / pg.stats.totalShifts, pct: Math.min(100, Math.round((pg.stats.assignedShifts / pg.stats.totalShifts) * 100)), label: '', colorClass: '', bgClass: '' } : undefined,
+        totalHours: pg.stats.totalHours,
+        subGroups: pg.subGroups.map((psg): VisualSubGroup => ({
+          id: psg.id,
+          name: psg.name,
+          shifts: Object.fromEntries(
+            Object.entries(psg.shiftsByDate).map(([date, pShifts]) => [
+              date,
+              pShifts.map((ps): ShiftDisplay => ({
+                id: ps.id,
+                role: ps.roleName,
+                startTime: ps.startTime,
+                endTime: ps.endTime,
+                employeeName: ps.employeeName ?? undefined,
+                status: ps.isPublished ? 'Published' : ps.isDraft ? 'Draft' : ps.employeeId ? 'Assigned' : 'Open',
+                isPublished: ps.isPublished,
+                isDraft: ps.isDraft,
+                isOnBidding: ps.isOnBidding,
+                isTrading: ps.isTrading,
+                isCancelled: ps.isCancelled,
+                // groupColor stores the TemplateGroupType key so renderShiftCard can look up GROUP_COLORS
+                groupColor: ps.groupType ?? 'convention_centre',
+                subGroup: ps.subGroupName ?? undefined,
+                assignedEmployeeId: ps.employeeId,
+                rawShift: ps.raw,
+                isUrgent: ps.isUrgent,
+                isLocked: ps.isLocked,
+              })),
+            ])
+          ),
+        })),
+      }));
+    }
+
+    // Legacy fallback (unchanged) — used when projection is not yet available
     if (!externalShifts) return buildVisualGroupsFromShifts([]);
 
     const filteredShifts = externalShifts.filter(shift => {
@@ -814,8 +907,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     });
 
     return buildVisualGroupsFromShifts(filteredShifts);
-  }, [externalShifts, rosterStructures, advancedFilters, hasActiveFilters, profileMap]);
-  // Added rosterStructures dependency
+  }, [projection, externalShifts, rosterStructures, advancedFilters, hasActiveFilters, profileMap]);
 
   // ==================== CONTEXT BUILDER ====================
   const buildShiftContext = (
@@ -837,8 +929,10 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       subDepartmentId: subDepartmentIdRef.current,
       subDepartmentName: subDepartmentNameRef.current,
       group_type: group.type,
+      groupId: group.id,
       groupName: group.name,
       groupColor: group.color,
+      subGroupId: subGroup.id,
       subGroupName: subGroup.name,
     };
   };
@@ -928,6 +1022,17 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     console.log('[handleEditShift] Opening edit modal for shift:', shift.id);
 
     const context = buildShiftContext(group, subGroup, date, 'edit');
+
+    // ENRICH CONTEXT WITH REAL SHIFT DATA TO ENSURE REFERENCE DATA LOADS (Roles, etc)
+    // If we only rely on the current visual grid grouping, we might miss the actual
+    // department or organization ID, causing roles or remuneration queries to skip.
+    context.organizationId = shift.rawShift.organization_id || context.organizationId;
+    context.departmentId = shift.rawShift.department_id || context.departmentId;
+    context.subDepartmentId = shift.rawShift.sub_department_id || context.subDepartmentId;
+    context.rosterId = shift.rawShift.roster_id || context.rosterId;
+    context.roleId = shift.rawShift.role_id || undefined;
+    context.employeeId = shift.rawShift.assigned_employee_id || undefined;
+
     setShiftContext(context);
     setIsEditMode(true);
     setEditingShift(shift.rawShift); // Pass the raw shift for ID reference
@@ -965,6 +1070,11 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     setConfirmActionOpen(true);
   };
 
+  const handleRequestUnpublish = (shift: ShiftDisplay) => {
+    setPendingAction({ type: 'unpublish', shift });
+    setConfirmActionOpen(true);
+  };
+
   const executePendingAction = async () => {
     if (!pendingAction) return;
 
@@ -976,6 +1086,9 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           throw new Error((result as any).error || (result as any).message || 'Publish failed. This shift might be in an invalid state for publishing (e.g. already started or conflicting).');
         }
         toast({ title: 'Shift Published', description: 'Action completed successfully.' });
+      } else if (pendingAction.type === 'unpublish') {
+        await unpublishShiftMutation.mutateAsync({ shiftId: pendingAction.shift.id });
+        toast({ title: 'Shift Unpublished', description: 'Action completed successfully.' });
       }
       // setRefreshKey not needed as mutation invalidates queries
       // setRefreshKey((k) => k + 1);
@@ -1099,7 +1212,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
     // Call the range mutation
     // We pass the external_id (group.type) to the RPC
-    if (!selectedGroupForSubGroup) return;
+    if (!selectedGroupForSubGroup || selectedGroupForSubGroup.type === 'unassigned') return;
 
     try {
       await addSubGroupRangeMutation.mutateAsync({
@@ -1248,6 +1361,16 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                       </DropdownMenuItem>
                     )}
 
+                    {shift.rawShift.lifecycle_status === 'Published' && (
+                      <DropdownMenuItem
+                        onClick={() => handleRequestUnpublish(shift)}
+                        className="text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+                      >
+                        <Undo2 className="h-4 w-4 mr-2" />
+                        Unpublish Shift
+                      </DropdownMenuItem>
+                    )}
+
                     <DropdownMenuSeparator className="bg-white/10" />
 
                     <DropdownMenuItem
@@ -1342,11 +1465,18 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
           <div className="p-4 space-y-6">
             {visualGroups.map((group) => {
-              const glassStyle = GLASS_STYLES[group.type];
+              const glassStyle = group.type === 'unassigned'
+                ? UNASSIGNED_GLASS_STYLE
+                : GLASS_STYLES[group.type as TemplateGroupType] ?? UNASSIGNED_GLASS_STYLE;
               const totalShifts = group.subGroups.reduce(
                 (acc, sg) => acc + Object.values(sg.shifts).reduce((a, s) => a + s.length, 0),
                 0
               );
+              const assignedShifts = group.subGroups.reduce(
+                (acc, sg) => acc + Object.values(sg.shifts).reduce((a, s) => a + s.filter(sh => sh.assignedEmployeeId).length, 0),
+                0
+              );
+              const coveragePct = totalShifts > 0 ? Math.min(100, Math.round((assignedShifts / totalShifts) * 100)) : 100;
 
               return (
                 <div
@@ -1354,7 +1484,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                   className={cn('rounded-2xl overflow-hidden', glassStyle.container)}
                 >
                   {/* Group Header with Collapse Toggle + Stats */}
-                  <div className={cn('px-5 py-4', glassStyle.header)}>
+                  <div className={cn('px-5 py-3', glassStyle.header)}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         {/* Collapse Toggle Button */}
@@ -1370,9 +1500,21 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                           )}
                         </button>
                         <div className="w-3 h-3 rounded-full bg-white/80 shadow-lg" />
-                        <h3 className={cn('text-lg font-bold tracking-wide', glassStyle.headerText)}>
-                          {group.name}
-                        </h3>
+                        <div>
+                          <h3 className={cn('text-lg font-bold tracking-wide leading-tight', glassStyle.headerText)}>
+                            {group.name}
+                          </h3>
+                          {/* Data Ops label row */}
+                          <div className="flex items-center gap-3 mt-1">
+                            <CoverageSignalBar pct={coveragePct} accent={glassStyle.accent} />
+                            <span className="text-[10px] tracking-[0.12em] uppercase font-mono text-white/50">
+                              {assignedShifts}/{totalShifts} filled
+                              {group.totalHours !== undefined && group.totalHours > 0 && (
+                                <> · <span className="tabular-nums">{group.totalHours.toFixed(1)}h</span></>
+                              )}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                       <div className="flex items-center gap-3">
                         {/* Inline Group Stats */}
@@ -1381,11 +1523,11 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                           compact
                           className="text-white/70"
                         />
-                        <Badge className="bg-white/20 border-white/30 text-white backdrop-blur-sm">
+                        <Badge className="bg-white/20 border-white/30 text-white backdrop-blur-sm font-mono tabular-nums">
                           {totalShifts} shift{totalShifts !== 1 ? 's' : ''}
                         </Badge>
-                        {/* Add Subgroup Button (Header) */}
-                        {canEdit && (
+                        {/* Add Subgroup Button (Header) — only for canonical groups, not 'unassigned' */}
+                        {canEdit && group.type !== 'unassigned' && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1411,7 +1553,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                   {/* Collapsible Content */}
                   {!collapsedGroups.has(group.id) && (
                     <div className="overflow-auto">
-                      <table className="w-full border-collapse">
+                      <table className="w-full min-w-max border-collapse relative">
                         <thead>
                           <tr className="bg-black/20 sticky top-0 z-20">
                             <th className={cn(
@@ -1594,19 +1736,29 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                             );
                                           });
                                         })() : (
-                                          cellShifts.map((shift) =>
-                                            renderShiftCard(shift, group, subGroup, date)
-                                          )
+                                          cellShifts.map((shift, shiftIdx) => (
+                                            <div
+                                              key={shift.id}
+                                              style={{ '--i': shiftIdx, animationDelay: `calc(${shiftIdx} * 40ms)` } as React.CSSProperties}
+                                              className="animate-[slideUpFade_0.25s_ease_forwards]"
+                                            >
+                                              {renderShiftCard(shift, group, subGroup, date)}
+                                            </div>
+                                          ))
                                         )}
 
-                                        {/* Add Shift Button - Hidden for past dates and ghost cells */}
+                                        {/* Add Shift Button — dashed ring with + icon (Data Ops style) */}
                                         {!isBulkMode && canEdit && !cellIsPast && (
                                           <button
                                             onClick={() => handleAddShift(group, subGroup, date)}
-                                            className="w-full h-8 flex items-center justify-center rounded-lg border border-dashed border-white/10 hover:border-white/30 hover:bg-white/5 transition-all text-white/30 hover:text-white group/add"
+                                            className={cn(
+                                              "w-full h-8 flex items-center justify-center rounded-lg",
+                                              "border border-dashed border-white/10 hover:border-white/25 hover:bg-white/[0.02]",
+                                              "transition-all text-white/20 hover:text-white/60 group/add"
+                                            )}
                                             title="Add Shift"
                                           >
-                                            <Plus className="h-4 w-4 opacity-50 group-hover/add:opacity-100 transition-opacity" />
+                                            <Plus className="h-3.5 w-3.5 transition-transform group-hover/add:scale-110" />
                                           </button>
                                         )}
                                       </div>
@@ -1683,7 +1835,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
               onPublish={async (shiftIds) => {
                 try {
                   const result = await bulkPublishMutation.mutateAsync(shiftIds);
-                  const count = (result as any).success_count ?? shiftIds.length;
+                  const count = (result as any).success_count || shiftIds.length;
                   toast({
                     title: "Shifts Published",
                     description: `Successfully published ${count} shift${count !== 1 ? 's' : ''}.`
@@ -1693,24 +1845,37 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                   console.error('[GroupModeView] Publish failed:', error);
                   toast({
                     title: "Publish Failed",
-                    description: error.message || "An unexpected error occurred.",
+                    description: "Some shifts could not be published.",
+                    variant: "destructive"
+                  });
+                }
+              }}
+              onUnpublish={async (shiftIds) => {
+                try {
+                  await Promise.all(shiftIds.map(id => unpublishShiftMutation.mutateAsync({ shiftId: id })));
+                  toast({
+                    title: "Shifts Unpublished",
+                    description: `Successfully unpublished ${shiftIds.length} shift${shiftIds.length !== 1 ? 's' : ''}.`
+                  });
+                  setSelectedShiftIds(new Set());
+                } catch (error: any) {
+                  console.error('[GroupModeView] Unpublish failed:', error);
+                  toast({
+                    title: "Unpublish Failed",
+                    description: "Some shifts could not be unpublished.",
                     variant: "destructive"
                   });
                 }
               }}
               allowedActions={(() => {
                 const selected = externalShifts.filter(s => selectedShiftIds.has(s.id));
-                const actions = getAllowedActions(selected);
-                if (selectedShiftIds.size > 0 && process.env.NODE_ENV === 'development') {
-                  console.log('[GroupModeView] Selected Shifts:', selected.map(s => ({
-                    id: s.id,
-                    assigned_id: s.assigned_employee_id,
-                    bidding: s.bidding_status !== 'not_on_bidding',
-                    cancelled: s.is_cancelled
-                  })));
-                  console.log('[GroupModeView] Allowed Actions:', actions);
-                }
-                return actions;
+                const canUnpublish = selected.length > 0 && selected.every(s => s.lifecycle_status === 'Published');
+
+                return {
+                  canPublish: selected.length > 0 && selected.every(s => !s.is_published),
+                  canUnpublish,
+                  canUnpublishReason: canUnpublish ? undefined : 'Only Published shifts can be unpublished',
+                };
               })()}
             />
           )
@@ -1718,19 +1883,20 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       </div >
 
       {/* Confirmation Dialog */}
-      < AlertDialog open={confirmActionOpen} onOpenChange={setConfirmActionOpen} >
+      <AlertDialog open={confirmActionOpen} onOpenChange={setConfirmActionOpen}>
         <AlertDialogContent className="bg-[#1a2744] border-white/10">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white flex items-center gap-2">
-              <Send className="h-5 w-5 text-emerald-400" />
-              Publish Shift
+              {pendingAction?.type === 'publish' && 'Publish Shift'}
+              {pendingAction?.type === 'unpublish' && 'Unpublish Shift'}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-white/70">
-              {pendingAction?.shift.rawShift.assigned_employee_id ? (
-                "This shift is assigned. Publishing will send a job offer to the employee. They must accept it to confirm."
-              ) : (
-                "This shift is unassigned. Publishing will open it for bidding to eligible employees."
+            <AlertDialogDescription className="text-slate-300">
+              {pendingAction?.type === 'publish' && (
+                pendingAction.shift.rawShift.assigned_employee_id
+                  ? "This shift is assigned. Publishing will send a job offer to the employee. They must accept it to confirm."
+                  : "This shift is unassigned. Publishing will open it for bidding to eligible employees."
               )}
+              {pendingAction?.type === 'unpublish' && "This shift will be unpublished and reverted to Draft."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1749,7 +1915,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                 "text-white",
                 pendingAction?.type === 'publish'
                   ? "bg-emerald-600 hover:bg-emerald-700"
-                  : "bg-indigo-600 hover:bg-indigo-700"
+                  : "bg-amber-600 hover:bg-amber-700"
               )}
               disabled={isProcessingAction}
             >
@@ -1758,10 +1924,10 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog >
+      </AlertDialog>
 
       {/* Emergency Cover Alert */}
-      < AlertDialog open={isEmergencyAlertOpen} onOpenChange={setIsEmergencyAlertOpen} >
+      <AlertDialog open={isEmergencyAlertOpen} onOpenChange={setIsEmergencyAlertOpen}>
         <AlertDialogContent className="bg-red-950 border-red-500/50 backdrop-blur-xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-red-400 flex items-center gap-2">
@@ -1776,7 +1942,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
             <AlertDialogCancel className="bg-white/10 text-white hover:bg-white/20 border-white/10">Close</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog >
+      </AlertDialog>
 
       {/* Add SubGroup Dialog */}
       {selectedGroupForSubGroup && (
@@ -1789,7 +1955,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         />
       )}
 
-    </DndProvider >
+    </DndProvider>
   );
 };
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
-import { X, Trash2, TrendingUp, Loader2 } from 'lucide-react';
+import { X, Trash2, TrendingUp, Loader2, Undo2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,8 +27,12 @@ interface BulkActionsToolbarProps {
   onDelete: () => Promise<void>;
   onSelectAll?: () => void;
   onPublish?: (shiftIds: string[]) => Promise<void>;
+  onUnpublish?: (shiftIds: string[]) => Promise<void>;
   allowedActions?: {
     canPublish: boolean;
+    canUnpublish: boolean;
+    /** Override tooltip when canUnpublish is false */
+    canUnpublishReason?: string;
   };
 }
 
@@ -39,12 +43,15 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
   onSelectAll,
   onDelete,
   onPublish,
+  onUnpublish,
   allowedActions,
 }) => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showPublishDialog, setShowPublishDialog] = useState(false);
+  const [showUnpublishDialog, setShowUnpublishDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isUnpublishing, setIsUnpublishing] = useState(false);
   const { toast } = useToast();
 
   const handleDelete = async () => {
@@ -87,6 +94,28 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
       });
     } finally {
       setIsPublishing(false);
+    }
+  };
+
+  const handleUnpublish = async () => {
+    if (!onUnpublish) return;
+    setIsUnpublishing(true);
+    try {
+      await onUnpublish(selectedShiftIds);
+      toast({
+        title: 'Shifts Unpublished',
+        description: `Successfully unpublished ${selectedCount} shift${selectedCount > 1 ? 's' : ''}.`,
+      });
+      setShowUnpublishDialog(false);
+      onClearSelection();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to unpublish shifts. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUnpublishing(false);
     }
   };
 
@@ -138,6 +167,36 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                 {!allowedActions?.canPublish && (
                   <TooltipContent>
                     <p>Requires Draft shifts</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            )}
+
+            {/* Unpublish Button */}
+            {onUnpublish && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0}>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      disabled={!allowedActions?.canUnpublish}
+                      onClick={() => setShowUnpublishDialog(true)}
+                      className={cn(
+                        "gap-2 rounded-full",
+                        allowedActions?.canUnpublish
+                          ? "bg-transparent border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 shadow-glow"
+                          : "bg-white/5 text-white/30"
+                      )}
+                    >
+                      <Undo2 className="h-4 w-4" />
+                      Unpublish
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!allowedActions?.canUnpublish && (
+                  <TooltipContent>
+                    <p>{allowedActions?.canUnpublishReason ?? 'Only Offered or Bidding shifts can be unpublished'}</p>
                   </TooltipContent>
                 )}
               </Tooltip>
@@ -226,6 +285,38 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                 </>
               ) : (
                 'Confirm Publish'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Unpublish Confirmation Dialog */}
+      <AlertDialog open={showUnpublishDialog} onOpenChange={setShowUnpublishDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unpublish {selectedCount} Shift{selectedCount > 1 ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will unpublish the shifts and revert them to Draft status.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isUnpublishing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-600 hover:bg-amber-700 text-white border-amber-500/50"
+              onClick={(e) => {
+                e.preventDefault();
+                handleUnpublish();
+              }}
+              disabled={isUnpublishing}
+            >
+              {isUnpublishing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Unpublishing...
+                </>
+              ) : (
+                'Confirm Unpublish'
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

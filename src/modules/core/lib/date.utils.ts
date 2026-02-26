@@ -70,10 +70,10 @@ export const parseZonedDateTime = (dateStr: string, timeStr: string, timezone: s
 /**
  * Formats a Date object into a string using the target timezone.
  * @param date The date to format
- * @param formatStr The format string (e.g. 'yyyy-MM-dd')
- * @param timezone The IANA timezone identifier
+ * @param timezone The IANA timezone identifier (e.g. 'Australia/Sydney')
+ * @param formatStr The format string (e.g. 'yyyy-MM-dd', 'HH:mm', 'EEE')
  */
-export const formatInTimezone = (date: Date, formatStr: string, timezone: string = SYDNEY_TZ): string => {
+export const formatInTimezone = (date: Date, timezone: string = SYDNEY_TZ, formatStr: string = 'yyyy-MM-dd'): string => {
     return formatZoned(date, formatStr, { timeZone: timezone });
 };
 
@@ -102,4 +102,43 @@ export const isSydneyFuture = (date: Date): boolean => isFutureInTimezone(date, 
 /**
  * @deprecated Use isTodayInTimezone(date, timezone) instead
  */
+/**
+ * @deprecated Use isTodayInTimezone(date, timezone) instead
+ */
 export const isSydneyToday = (date: Date): boolean => isTodayInTimezone(date, SYDNEY_TZ);
+
+/**
+ * Checks if a given date is an Australian Public Holiday (2026)
+ * @param date The date to check
+ */
+export const isPublicHoliday = (date: Date): boolean => {
+    const month = date.getMonth(); // 0-indexed
+    const d = date.getDate();
+    const year = date.getFullYear();
+
+    if (year !== 2026) {
+        // Basic fixed-date fallback for other years
+        if (month === 0 && d === 1) return true;   // New Year
+        if (month === 0 && d === 26) return true;  // Australia Day
+        if (month === 11 && d === 25) return true; // Christmas
+        if (month === 11 && d === 26) return true; // Boxing Day
+        return false;
+    }
+
+    // 2026 Specifics (NSW context)
+    const holidays = [
+        { m: 0, d: 1 },   // New Year
+        { m: 0, d: 26 },  // Australia Day
+        { m: 3, d: 3 },   // Good Friday (Apr 3)
+        { m: 3, d: 4 },   // Easter Saturday
+        { m: 3, d: 5 },   // Easter Sunday
+        { m: 3, d: 6 },   // Easter Monday
+        { m: 3, d: 25 },  // Anzac Day (Apr 25)
+        { m: 5, d: 8 },   // King's Birthday (Jun 8)
+        { m: 9, d: 5 },   // Labour Day (Oct 5)
+        { m: 11, d: 25 }, // Christmas
+        { m: 11, d: 26 }, // Boxing Day
+    ];
+
+    return holidays.some(h => h.m === month && h.d === d);
+};

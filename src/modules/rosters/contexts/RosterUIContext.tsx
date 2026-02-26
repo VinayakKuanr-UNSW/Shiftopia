@@ -19,7 +19,6 @@ import React, { useCallback, useMemo, useEffect } from 'react';
 import { useAuth } from '@/platform/auth/useAuth';
 import {
   useRosterStore,
-  selectSelectedDate,
   selectDepartmentId,
   selectSubDepartmentId,
   selectHasActiveFilters,
@@ -78,14 +77,12 @@ interface RosterUIProviderProps { children: React.ReactNode }
 export const RosterUIProvider: React.FC<RosterUIProviderProps> = ({ children }) => {
   const { activeContract, accessScope } = useAuth();
 
-  const {
-    selectedOrganizationId,
-    selectedDepartmentIds,
-    selectedSubDepartmentIds,
-    setSelectedOrganizationId,
-    setSelectedDepartmentIds,
-    setSelectedSubDepartmentIds,
-  } = useRosterStore();
+  const selectedOrganizationId      = useRosterStore(s => s.selectedOrganizationId);
+  const selectedDepartmentIds       = useRosterStore(s => s.selectedDepartmentIds);
+  const selectedSubDepartmentIds    = useRosterStore(s => s.selectedSubDepartmentIds);
+  const setSelectedOrganizationId   = useRosterStore(s => s.setSelectedOrganizationId);
+  const setSelectedDepartmentIds    = useRosterStore(s => s.setSelectedDepartmentIds);
+  const setSelectedSubDepartmentIds = useRosterStore(s => s.setSelectedSubDepartmentIds);
 
   useEffect(() => {
     if (!activeContract) return;
@@ -134,7 +131,11 @@ export const useRosterUI = (): RosterUIContextValue => {
   const isBucketView           = useRosterStore(s => s.isBucketView);
 
   // Derived selectors (computed, not stored)
-  const selectedDate           = useRosterStore(selectSelectedDate);
+  // NOTE: selectSelectedDate returns `new Date(...)` — always a new object reference.
+  // Subscribe to the raw ISO string (a primitive) and memoize the Date so that
+  // useSyncExternalStore's Object.is comparison stays stable.
+  const _selectedDateISO       = useRosterStore(s => s._selectedDateISO);
+  const selectedDate           = useMemo(() => new Date(_selectedDateISO), [_selectedDateISO]);
   const selectedDepartmentId   = useRosterStore(selectDepartmentId);
   const selectedSubDepartmentId = useRosterStore(selectSubDepartmentId);
   const hasActiveFilters       = useRosterStore(selectHasActiveFilters);

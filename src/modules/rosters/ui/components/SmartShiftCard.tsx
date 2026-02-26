@@ -169,8 +169,20 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     const roleName = shift.roles?.name || 'No Role';
     const hasComplianceIssue = compliance && compliance.status !== 'compliant';
 
-    // Calculate state ID
-    const stateId = determineShiftState(shift);
+    // Calculate state ID — memoized on the six fields determineShiftState reads,
+    // so hover/selection/compliance re-renders don't rerun the state machine.
+    const stateId = useMemo(
+        () => determineShiftState(shift),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [
+            shift.lifecycle_status,
+            shift.is_cancelled,
+            shift.assignment_status,
+            shift.assignment_outcome,
+            shift.bidding_status,
+            shift.trade_requested_at,
+        ],
+    );
 
     return (
         <div

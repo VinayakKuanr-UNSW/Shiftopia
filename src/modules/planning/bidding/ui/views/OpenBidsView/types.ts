@@ -1,44 +1,31 @@
-// src/modules/planning/ui/views/OpenBidsView/types.ts
+// src/modules/planning/bidding/ui/views/OpenBidsView/types.ts
 
-export type ShiftStatus = 'urgent' | 'pending' | 'resolved';
-export type GroupType = 'convention' | 'exhibition' | 'concert' | 'sports' | 'corporate';
-export type FatigueRisk = 'low' | 'medium' | 'high';
+export type BidToggle = 'urgent' | 'normal' | 'resolved';
 
-export interface OpenShift {
+export interface ManagerBidShift {
   id: string;
-  title: string;
-  group: GroupType;
-  groupLabel: string;
+  role: string;
   date: string;
   dayLabel: string;
   startTime: string;
   endTime: string;
-  netHours: number | string;
+  netHours: string;
   paidBreak: number;
   unpaidBreak: number;
-  location: string;
   department: string;
   subDepartment: string;
-  role: string;
+  organization: string;
   remunerationLevel?: string;
-  hourlyRate?: string;
-  status: ShiftStatus;
   bidCount: number;
   biddingDeadline: string;
-  shiftIdDisplay: string;
+  stateId: string;
+  toggle: BidToggle;
+  isUrgent: boolean;
+  assignedEmployeeName?: string;
+  assignedEmployeeId?: string;
   organizationId?: string;
   departmentId?: string;
   subDepartmentId?: string;
-  // Extended fields for ShiftCardCompact
-  lifecycleStatus: 'draft' | 'published' | 'completed' | 'cancelled';
-  assignmentStatus: 'assigned' | 'unassigned';
-  fulfillmentStatus?: 'scheduled' | 'bidding' | 'offered' | 'none';
-  assignmentOutcome?: 'pending' | 'offered' | 'confirmed' | 'emergency_assigned';
-  groupColor?: string;
-  subGroup?: string;
-  employeeName?: string;
-  isUrgent?: boolean;
-  stateId?: string;
 }
 
 export interface EmployeeBid {
@@ -47,14 +34,9 @@ export interface EmployeeBid {
   employeeId: string;
   employeeName: string;
   employmentType: string;
-  pool: string;
-  department: string;
   status: string;
   submittedAt: string;
-  fatigueRisk: FatigueRisk;
-  fatigueLabel: string;
-  fatigueReason: string;
-  isBestMatch: boolean;
+  isWinner: boolean;
 }
 
 export interface TimeRemaining {
@@ -63,32 +45,8 @@ export interface TimeRemaining {
   isExpired: boolean;
 }
 
-export interface FilterState {
-  orgId: string;
-  deptId: string;
-  subDeptId: string;
-  status: ShiftStatus | 'all';
-}
-
-export interface Organization {
-  id: string;
-  name: string;
-}
-
-export interface Department {
-  id: string;
-  name: string;
-  organization_id: string;
-}
-
-export interface SubDepartment {
-  id: string;
-  name: string;
-  department_id: string;
-}
-
-export interface StatusCounts {
+export interface ToggleCounts {
   urgent: number;
-  pending: number;
+  normal: number;
   resolved: number;
 }

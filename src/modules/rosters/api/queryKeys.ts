@@ -36,31 +36,31 @@ import type { TemplateGroupType, ShiftStatus } from '../domain/shift.entity';
 // ── Filter shape ──────────────────────────────────────────────────────────────
 
 export interface ShiftFilters {
-  departmentId?:      string;
-  subDepartmentId?:   string;
-  departmentIds?:     string[];
-  subDepartmentIds?:  string[];
-  groupType?:         TemplateGroupType;
-  status?:            ShiftStatus;
-  roleId?:            string;
-  skillIds?:          string[];
-  complianceStatus?:  'compliant' | 'warning' | 'violation';
+  departmentId?: string;
+  subDepartmentId?: string;
+  departmentIds?: string[];
+  subDepartmentIds?: string[];
+  groupType?: TemplateGroupType;
+  status?: ShiftStatus;
+  roleId?: string;
+  skillIds?: string[];
+  complianceStatus?: 'compliant' | 'warning' | 'violation';
 }
 
 // ── Template query keys ───────────────────────────────────────────────────────
 
 export const templateKeys = {
-  all:     ['templates'] as const,
+  all: ['templates'] as const,
   history: () => ['templates', 'history'] as const,
-  detail:  (id: string) => ['templates', 'detail', id] as const,
+  detail: (id: string) => ['templates', 'detail', id] as const,
 };
 
 // ── Roster-level query keys ───────────────────────────────────────────────────
 
 export const rosterKeys = {
-  all:       ['rosters'] as const,
+  all: ['rosters'] as const,
   structure: (rosterId?: string) => ['rosters', 'structure', rosterId ?? null] as const,
-  lookup:    (orgId?: string, filters?: object) =>
+  lookup: (orgId?: string, filters?: object) =>
     ['rosters', 'lookup', orgId ?? null, filters ?? null] as const,
 };
 
@@ -83,10 +83,10 @@ export const shiftKeys = {
     ['shifts', 'list', 'byDate', orgId, date, filters ?? null] as const,
 
   byDateRange: (
-    orgId:     string,
+    orgId: string,
     startDate: string,
-    endDate:   string,
-    filters?:  ShiftFilters | null,
+    endDate: string,
+    filters?: ShiftFilters | null,
   ) => ['shifts', 'list', 'byRange', orgId, startDate, endDate, filters ?? null] as const,
 
   byEmployee: (empId: string, startDate: string, endDate: string) =>
@@ -97,36 +97,37 @@ export const shiftKeys = {
   detail: (shiftId: string) => ['shifts', 'detail', shiftId] as const,
 
   // ── Level 1: offers — employee offer inbox / history ─────────────────────
-  offers:     (empId: string) => ['shifts', 'offers', empId]    as const,
+  offers: (empId: string) => ['shifts', 'offers', empId] as const,
   offerCount: (empId: string) => ['shifts', 'offerCount', empId] as const,
 
   // ── Level 1: open / bidding ───────────────────────────────────────────────
   openShifts: (orgId?: string) => ['shifts', 'open', orgId ?? null] as const,
-  bids:       (shiftId: string) => ['shifts', 'bids', shiftId]     as const,
+  managerBidShifts: (orgId?: string) => ['shifts', 'managerBids', orgId ?? null] as const,
+  bids: (shiftId: string) => ['shifts', 'bids', shiftId] as const,
 
   // ── Level 1: lookups — reference / master data ───────────────────────────
   // Lookup data changes rarely; invalidate this family independently.
   lookups: {
-    _root:              ['shifts', 'lookup'] as const,
-    organizations:      () => ['shifts', 'lookup', 'organizations']                          as const,
-    departments:        (orgId?: string) =>
-      ['shifts', 'lookup', 'departments',        orgId    ?? null]                           as const,
-    subDepartments:     (deptId?: string) =>
-      ['shifts', 'lookup', 'subDepartments',     deptId   ?? null]                           as const,
-    roles:              (deptId?: string, subDeptId?: string) =>
-      ['shifts', 'lookup', 'roles',              deptId   ?? null, subDeptId  ?? null]        as const,
-    employees:          (orgId?: string, deptId?: string, subDeptId?: string) =>
-      ['shifts', 'lookup', 'employees',          orgId    ?? null, deptId     ?? null, subDeptId ?? null] as const,
-    templates:          (subDeptId?: string, deptId?: string) =>
-      ['shifts', 'lookup', 'templates',          subDeptId ?? null, deptId    ?? null]        as const,
-    remunerationLevels: () => ['shifts', 'lookup', 'remunerationLevels']                     as const,
-    skills:             () => ['shifts', 'lookup', 'skills']                                 as const,
-    licenses:           () => ['shifts', 'lookup', 'licenses']                               as const,
-    events:             (orgId?: string) =>
-      ['shifts', 'lookup', 'events',             orgId    ?? null]                           as const,
-    rosters:            (orgId?: string, filters?: object) =>
-      ['shifts', 'lookup', 'rosters',            orgId    ?? null, filters    ?? null]        as const,
-    rosterStructure:    (rosterId?: string) =>
-      ['shifts', 'lookup', 'rosterStructure',    rosterId ?? null]                           as const,
+    _root: ['shifts', 'lookup'] as const,
+    organizations: () => ['shifts', 'lookup', 'organizations'] as const,
+    departments: (orgId?: string) =>
+      ['shifts', 'lookup', 'departments', orgId ?? null] as const,
+    subDepartments: (deptId?: string) =>
+      ['shifts', 'lookup', 'subDepartments', deptId ?? null] as const,
+    roles: (orgId?: string, deptId?: string, subDeptId?: string) =>
+      ['shifts', 'lookup', 'roles', orgId ?? null, deptId ?? null, subDeptId ?? null] as const,
+    employees: (orgId?: string, deptId?: string, subDeptId?: string) =>
+      ['shifts', 'lookup', 'employees', orgId ?? null, deptId ?? null, subDeptId ?? null] as const,
+    templates: (subDeptId?: string, deptId?: string) =>
+      ['shifts', 'lookup', 'templates', subDeptId ?? null, deptId ?? null] as const,
+    remunerationLevels: () => ['shifts', 'lookup', 'remunerationLevels'] as const,
+    skills: () => ['shifts', 'lookup', 'skills'] as const,
+    licenses: () => ['shifts', 'lookup', 'licenses'] as const,
+    events: (orgId?: string) =>
+      ['shifts', 'lookup', 'events', orgId ?? null] as const,
+    rosters: (orgId?: string, filters?: object) =>
+      ['shifts', 'lookup', 'rosters', orgId ?? null, filters ?? null] as const,
+    rosterStructure: (rosterId?: string) =>
+      ['shifts', 'lookup', 'rosterStructure', rosterId ?? null] as const,
   },
 } as const;

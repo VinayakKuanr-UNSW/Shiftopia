@@ -241,22 +241,36 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
                     <span>{shift.sub_departments?.name || subGroupName}</span>
                   </motion.div>
 
-                  <Badge className="mb-2 bg-black/20 text-white border-white/20 hover:bg-black/30">
-                    {subGroupName || shift.sub_group_name || 'General'}
-                  </Badge>
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <Badge className="bg-black/20 text-white border-white/20 hover:bg-black/30">
+                      {subGroupName || shift.sub_group_name || 'General'}
+                    </Badge>
+                    {shift.assignment_outcome === 'offered' && (
+                      <Badge className="bg-amber-500 text-black border-amber-400 font-bold animate-pulse">
+                        Offer Pending
+                      </Badge>
+                    )}
+                  </div>
 
                   <div className="flex items-center justify-between mb-1">
                     <h2 className="text-2xl font-bold">{shift.roles?.name || 'No Role Assigned'}</h2>
-                    {shift.remuneration_levels?.level_name && (
-                      <Badge
-                        className={cn(
-                          'text-xs font-bold',
-                          getRemunerationColor(shift.remuneration_levels.level_name)
-                        )}
-                      >
-                        {shift.remuneration_levels.level_name}
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {shift.remuneration_levels?.level_name && (
+                        <Badge
+                          className={cn(
+                            'text-xs font-bold',
+                            getRemunerationColor(shift.remuneration_levels.level_name)
+                          )}
+                        >
+                          {shift.remuneration_levels.level_name}
+                        </Badge>
+                      )}
+                      {shift.remuneration_levels?.hourly_rate_min && (
+                        <span className="text-xs font-medium text-white/80 bg-white/10 px-2 py-0.5 rounded-full">
+                          ${shift.remuneration_levels.hourly_rate_min}/hr
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <p className="text-sm text-white/70 mb-4">
@@ -300,7 +314,11 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
                   <div className="flex items-center gap-3 p-3 rounded-xl bg-black/20">
                     <CalendarDays className="h-5 w-5 text-white/70 flex-shrink-0" />
                     <div className="font-medium">
-                      {shift.is_cancelled ? 'Cancelled' : shift.status || 'Assigned'}
+                      {shift.is_cancelled
+                        ? 'Cancelled'
+                        : shift.assignment_outcome === 'offered'
+                          ? 'Offer Pending'
+                          : 'Assigned'}
                     </div>
                   </div>
                 </div>
@@ -317,18 +335,18 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
                     </Button>
                     <Button
                       onClick={handleSwapShift}
-                      disabled={shift.is_cancelled || !!existingSwapRequest || isWithinLockoutPeriod}
+                      disabled={shift.is_cancelled || !!existingSwapRequest || isWithinLockoutPeriod || shift.assignment_outcome === 'offered'}
                       className={cn(
                         "flex-1 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed",
                         isWithinLockoutPeriod ? "bg-slate-600" : "bg-purple-600 hover:bg-purple-700 shadow-purple-500/30"
                       )}
                     >
                       <ArrowLeftRight size={16} className="mr-2" />
-                      {existingSwapRequest ? 'Requested' : isWithinLockoutPeriod ? 'Locked' : 'Swap'}
+                      {existingSwapRequest ? 'Requested' : isWithinLockoutPeriod ? 'Locked' : shift.assignment_outcome === 'offered' ? 'Pending' : 'Swap'}
                     </Button>
                     <Button
                       onClick={handleDropShift}
-                      disabled={isWithinLockoutPeriod || !!existingSwapRequest}
+                      disabled={isWithinLockoutPeriod || !!existingSwapRequest || shift.assignment_outcome === 'offered'}
                       className={cn(
                         "flex-1 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed",
                         isWithinLockoutPeriod ? "bg-slate-600" : "bg-red-600 hover:bg-red-500 shadow-red-500/30"
@@ -399,7 +417,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
             </Button>
             <Button
               variant="destructive"
-              onClick={() => handleDropShift(cancelReason)}
+              onClick={confirmDrop}
               disabled={isDropping || !cancelReason.trim()}
             >
               {isDropping ? (

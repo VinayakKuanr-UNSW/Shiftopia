@@ -78,16 +78,12 @@ const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
   const { createSwap } = useSwaps();
 
   const [reason, setReason] = useState('');
-  const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>('medium');
-  const [swapType, setSwapType] = useState<'open' | 'direct' | 'specific'>('open');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
       setReason('');
-      setPriority('medium');
-      setSwapType('open');
       setIsSubmitting(false);
     }
   }, [isOpen]);
@@ -114,15 +110,12 @@ const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
 
     setIsSubmitting(true);
 
-    // Combine priority into reason since API doesn't support it yet
-    const enrichedReason = `[Priority: ${priority.toUpperCase()}] ${reason}`;
-
     try {
       createSwap({
         requesterShiftId: shift.id,
         requestedByEmployeeId: user.id || shift.assigned_employee_id!,
-        swapWithEmployeeId: null, // Always open for now as UI for direct swap selection is missing
-        reason: enrichedReason,
+        swapWithEmployeeId: null, // Always open for now
+        reason: reason.trim(),
       }, {
         onSuccess: () => {
           setIsSubmitting(false);
@@ -138,15 +131,6 @@ const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
     }
   };
 
-  const getPriorityDescription = (p: string) => {
-    switch (p) {
-      case 'urgent': return 'Needs immediate attention (within 24 hours)';
-      case 'high': return 'Important request (within 3 days)';
-      case 'medium': return 'Standard request (within 1 week)';
-      case 'low': return 'Flexible timing (no rush)';
-      default: return '';
-    }
-  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -206,75 +190,6 @@ const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
               </div>
             </motion.div>
 
-            {/* Priority Selection */}
-            <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-              className="space-y-2"
-            >
-              <Label className="text-white/80">Priority Level</Label>
-              <Select value={priority} onValueChange={(value) => setPriority(value as any)}>
-                <SelectTrigger className="bg-[#1a1f2e] border-white/10 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-[#1a1f2e] border-white/10">
-                  <SelectItem value="urgent" className="text-white">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-red-500" />
-                      Urgent
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="high" className="text-white">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-orange-500" />
-                      High
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="medium" className="text-white">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-blue-500" />
-                      Medium
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="low" className="text-white">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-gray-500" />
-                      Low
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-[10px] text-white/50">{getPriorityDescription(priority)}</p>
-            </motion.div>
-
-            {/* Swap Type Selection - Disabled/Hidden if not fully supported but keeping for UI consistency */}
-            <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.25 }}
-              className="space-y-2"
-            >
-              <Label className="text-white/80">Swap Type</Label>
-              <Select value={swapType} onValueChange={(value) => setSwapType(value as any)}>
-                <SelectTrigger className="bg-[#1a1f2e] border-white/10 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-[#1a1f2e] border-white/10">
-                  <SelectItem value="open" className="text-white">
-                    Open Swap - Any eligible employee
-                  </SelectItem>
-                  {/* Temporarily hidden or can be kept if we treat all as open for now */}
-                  <SelectItem value="specific" className="text-white">
-                    Specific Shift - Looking for particular shift (Unavailable)
-                  </SelectItem>
-                  <SelectItem value="direct" className="text-white">
-                    Direct Swap - Specific person (Unavailable)
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              {(swapType !== 'open') && <p className="text-[10px] text-amber-400">Advanced swap types coming soon. Request will be posted as Open.</p>}
-            </motion.div>
 
             {/* Reason */}
             <motion.div

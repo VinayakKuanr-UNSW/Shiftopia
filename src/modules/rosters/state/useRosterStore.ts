@@ -23,38 +23,39 @@ import {
   startOfWeek, endOfWeek,
   startOfMonth, endOfMonth,
   eachDayOfInterval,
+  format,
 } from 'date-fns';
 
 // ── Re-exported types (match what was exported from RosterUIContext) ──────────
 
 export type CalendarView = 'day' | '3day' | 'week' | 'month';
-export type RosterMode   = 'group' | 'people' | 'events' | 'roles';
+export type RosterMode = 'group' | 'people' | 'events' | 'roles';
 export type ComplianceFilterStatus = 'all' | 'compliant' | 'warning' | 'violation';
 
 export interface AdvancedFilters {
-  roleId:            string | null;
-  skillIds:          string[];
-  complianceStatus:  ComplianceFilterStatus;
-  assignmentStatus:  'all' | 'assigned' | 'unassigned' | 'on_bidding';
-  lifecycleStatus:   'all' | 'draft' | 'published' | 'cancelled';
-  stateId:           string | null;
+  roleId: string | null;
+  skillIds: string[];
+  complianceStatus: ComplianceFilterStatus;
+  assignmentStatus: 'all' | 'assigned' | 'unassigned' | 'on_bidding';
+  lifecycleStatus: 'all' | 'draft' | 'published' | 'cancelled';
+  stateId: string | null;
   assignmentOutcome: 'all' | 'pending' | 'offered' | 'confirmed' | 'emergency_assigned' | 'none';
-  biddingStatus:     'all' | 'not_on_bidding' | 'on_bidding_normal' | 'on_bidding_urgent' | 'bidding_closed_no_winner';
-  tradingStatus:     'all' | 'requested' | 'none';
-  searchQuery:       string;
+  biddingStatus: 'all' | 'not_on_bidding' | 'on_bidding_normal' | 'on_bidding_urgent' | 'bidding_closed_no_winner';
+  tradingStatus: 'all' | 'requested' | 'none';
+  searchQuery: string;
 }
 
 export const DEFAULT_ADVANCED_FILTERS: AdvancedFilters = {
-  roleId:            null,
-  skillIds:          [],
-  complianceStatus:  'all',
-  assignmentStatus:  'all',
-  lifecycleStatus:   'all',
-  stateId:           null,
+  roleId: null,
+  skillIds: [],
+  complianceStatus: 'all',
+  assignmentStatus: 'all',
+  lifecycleStatus: 'all',
+  stateId: null,
   assignmentOutcome: 'all',
-  biddingStatus:     'all',
-  tradingStatus:     'all',
-  searchQuery:       '',
+  biddingStatus: 'all',
+  tradingStatus: 'all',
+  searchQuery: '',
 };
 
 export interface DateRange { from: Date; to: Date }
@@ -63,36 +64,36 @@ export interface DateRange { from: Date; to: Date }
 
 interface RosterState {
   // ── Persisted UI preferences ───────────────────────────────────────────────
-  viewType:                  CalendarView;
-  activeMode:                RosterMode;
-  selectedOrganizationId:    string | null;
-  selectedDepartmentIds:     string[];
-  selectedSubDepartmentIds:  string[];
-  advancedFilters:           AdvancedFilters;
-  isBucketView:              boolean;
+  viewType: CalendarView;
+  activeMode: RosterMode;
+  selectedOrganizationId: string | null;
+  selectedDepartmentIds: string[];
+  selectedSubDepartmentIds: string[];
+  advancedFilters: AdvancedFilters;
+  isBucketView: boolean;
 
   // ── Session state (not persisted — resets each tab/reload) ────────────────
   /** ISO date string 'YYYY-MM-DD', restored as Date in getters */
   _selectedDateISO: string;
 
   // ── Actions ───────────────────────────────────────────────────────────────
-  setViewType:               (view: CalendarView) => void;
-  setSelectedDate:           (date: Date) => void;
-  setActiveMode:             (mode: RosterMode) => void;
+  setViewType: (view: CalendarView) => void;
+  setSelectedDate: (date: Date) => void;
+  setActiveMode: (mode: RosterMode) => void;
   setSelectedOrganizationId: (id: string | null) => void;
-  setSelectedDepartmentIds:  (ids: string[]) => void;
+  setSelectedDepartmentIds: (ids: string[]) => void;
   setSelectedSubDepartmentIds: (ids: string[]) => void;
   /** Backward-compat single-value setters */
-  setSelectedDepartmentId:   (id: string | null) => void;
-  setSelectedSubDepartmentId:(id: string | null) => void;
-  setAdvancedFilters:        (partial: Partial<AdvancedFilters>) => void;
-  resetAdvancedFilters:      () => void;
-  setIsBucketView:           (value: boolean) => void;
+  setSelectedDepartmentId: (id: string | null) => void;
+  setSelectedSubDepartmentId: (id: string | null) => void;
+  setAdvancedFilters: (partial: Partial<AdvancedFilters>) => void;
+  resetAdvancedFilters: () => void;
+  setIsBucketView: (value: boolean) => void;
 
   // ── Navigation ────────────────────────────────────────────────────────────
-  navigatePrevious:  () => void;
-  navigateNext:      () => void;
-  navigateToToday:   () => void;
+  navigatePrevious: () => void;
+  navigateNext: () => void;
+  navigateToToday: () => void;
 }
 
 // ── Custom storage with Date serialisation ────────────────────────────────────
@@ -108,24 +109,24 @@ export const useRosterStore = create<RosterState>()(
   persist(
     (set, get) => ({
       // ── Persisted defaults ─────────────────────────────────────────────────
-      viewType:                 'day',
-      activeMode:               'group',
-      selectedOrganizationId:   null,
-      selectedDepartmentIds:    [],
+      viewType: 'day',
+      activeMode: 'group',
+      selectedOrganizationId: null,
+      selectedDepartmentIds: [],
       selectedSubDepartmentIds: [],
-      advancedFilters:          DEFAULT_ADVANCED_FILTERS,
-      isBucketView:             false,
+      advancedFilters: DEFAULT_ADVANCED_FILTERS,
+      isBucketView: false,
 
       // ── Session-only (today, not persisted) ────────────────────────────────
-      _selectedDateISO: new Date().toISOString().split('T')[0],
+      _selectedDateISO: format(new Date(), 'yyyy-MM-dd'),
 
       // ── Actions ────────────────────────────────────────────────────────────
-      setViewType:  (view)  => set({ viewType: view }),
-      setActiveMode:(mode)  => set({ activeMode: mode }),
-      setIsBucketView: (v)  => set({ isBucketView: v }),
+      setViewType: (view) => set({ viewType: view }),
+      setActiveMode: (mode) => set({ activeMode: mode }),
+      setIsBucketView: (v) => set({ isBucketView: v }),
 
       setSelectedDate: (date) =>
-        set({ _selectedDateISO: date.toISOString().split('T')[0] }),
+        set({ _selectedDateISO: format(date, 'yyyy-MM-dd') }),
 
       setSelectedOrganizationId: (id) =>
         set({ selectedOrganizationId: id }),
@@ -154,9 +155,9 @@ export const useRosterStore = create<RosterState>()(
         const date = new Date(_selectedDateISO);
         const next = (() => {
           switch (viewType) {
-            case 'day':   return subDays(date, 1);
-            case '3day':  return subDays(date, 3);
-            case 'week':  return subDays(date, 7);
+            case 'day': return subDays(date, 1);
+            case '3day': return subDays(date, 3);
+            case 'week': return subDays(date, 7);
             case 'month': {
               const d = new Date(date);
               d.setMonth(d.getMonth() - 1);
@@ -165,7 +166,7 @@ export const useRosterStore = create<RosterState>()(
             default: return date;
           }
         })();
-        set({ _selectedDateISO: next.toISOString().split('T')[0] });
+        set({ _selectedDateISO: format(next, 'yyyy-MM-dd') });
       },
 
       navigateNext: () => {
@@ -173,9 +174,9 @@ export const useRosterStore = create<RosterState>()(
         const date = new Date(_selectedDateISO);
         const next = (() => {
           switch (viewType) {
-            case 'day':   return addDays(date, 1);
-            case '3day':  return addDays(date, 3);
-            case 'week':  return addDays(date, 7);
+            case 'day': return addDays(date, 1);
+            case '3day': return addDays(date, 3);
+            case 'week': return addDays(date, 7);
             case 'month': {
               const d = new Date(date);
               d.setMonth(d.getMonth() + 1);
@@ -184,25 +185,25 @@ export const useRosterStore = create<RosterState>()(
             default: return date;
           }
         })();
-        set({ _selectedDateISO: next.toISOString().split('T')[0] });
+        set({ _selectedDateISO: format(next, 'yyyy-MM-dd') });
       },
 
       navigateToToday: () =>
-        set({ _selectedDateISO: new Date().toISOString().split('T')[0] }),
+        set({ _selectedDateISO: format(new Date(), 'yyyy-MM-dd') }),
     }),
 
     {
-      name:    'roster-ui-v2',     // 'v2' avoids collisions with old localStorage keys
+      name: 'roster-ui-v2',     // 'v2' avoids collisions with old localStorage keys
       storage: rosterStorage,
       // Only persist preferences — selectedDate is a session-only concept
       partialize: (s) => ({
-        viewType:                 s.viewType,
-        activeMode:               s.activeMode,
-        selectedOrganizationId:   s.selectedOrganizationId,
-        selectedDepartmentIds:    s.selectedDepartmentIds,
+        viewType: s.viewType,
+        activeMode: s.activeMode,
+        selectedOrganizationId: s.selectedOrganizationId,
+        selectedDepartmentIds: s.selectedDepartmentIds,
         selectedSubDepartmentIds: s.selectedSubDepartmentIds,
-        advancedFilters:          s.advancedFilters,
-        isBucketView:             s.isBucketView,
+        advancedFilters: s.advancedFilters,
+        isBucketView: s.isBucketView,
       }),
     },
   ),
@@ -246,7 +247,7 @@ export const selectDateRange = (s: RosterState): DateRange => {
       return { from: date, to: addDays(date, 2) };
     case 'week': {
       const from = startOfWeek(date, { weekStartsOn: 1 });
-      const to   = endOfWeek(date,   { weekStartsOn: 1 });
+      const to = endOfWeek(date, { weekStartsOn: 1 });
       return { from, to };
     }
     case 'month':
@@ -265,8 +266,8 @@ export const selectDaysInRange = (s: RosterState): Date[] => {
 // ── Static view options (stable reference, never recreated) ──────────────────
 
 export const VIEW_OPTIONS = [
-  { label: 'Day',   value: 'day'   as CalendarView },
-  { label: '3-Day', value: '3day'  as CalendarView },
-  { label: 'Week',  value: 'week'  as CalendarView },
+  { label: 'Day', value: 'day' as CalendarView },
+  { label: '3-Day', value: '3day' as CalendarView },
+  { label: 'Week', value: 'week' as CalendarView },
   { label: 'Month', value: 'month' as CalendarView },
 ] as const;

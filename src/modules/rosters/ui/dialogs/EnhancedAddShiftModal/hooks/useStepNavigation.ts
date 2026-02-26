@@ -37,39 +37,31 @@ export function useStepNavigation({
         return Object.values(complianceResults).some(r => r?.status === 'fail' && r?.blocking);
     }, [hardValidation.passed, complianceResults]);
 
+    /**
+     * New 3-step validation:
+     *  Step 1 (Schedule & Details): Schedule + Role + (optional requirements/notes)
+     *  Step 2 (Assignment & Compliance): Compliance must pass
+     *  Step 3 (Review Logs): Always valid
+     */
     const isStepValid = (step: number): boolean => {
         let isValid = false;
         switch (step) {
-            case 1: // Schedule
-                isValid = tabCompletion.schedule && isNetLengthValid;
+            case 1: // Schedule & Details (merged old steps 1-4)
+                isValid = tabCompletion.schedule && isNetLengthValid && !!watchRoleId;
                 break;
-            case 2: // Role
-                isValid = !!watchRoleId;
-                break;
-            case 3: // Requirements
-                isValid = true; // Optional
-                break;
-            case 4: // Notes
-                isValid = true; // Optional
-                break;
-            case 5: // Compliance
+            case 2: // Assignment & Compliance (merged old steps 2 employee + 5 compliance)
                 if (isTemplateMode) {
                     isValid = true;
                 } else {
-                    // Detailed logging for step 5 failure
-                    if (!complianceHasRun) console.debug('[useStepNavigation] Step 5 Invalid: Compliance has not run');
-                    if (hasBlockingComplianceFailures) console.debug('[useStepNavigation] Step 5 Invalid: Blocking failures present', hardValidation, complianceResults);
-
                     isValid = complianceHasRun && !hasBlockingComplianceFailures;
                 }
                 break;
-            case 6: // Review Logs
+            case 3: // Review Logs
                 isValid = true;
                 break;
             default:
                 isValid = false;
         }
-        // console.debug(`[useStepNavigation] Step ${step} valid?`, isValid);
         return isValid;
     };
 

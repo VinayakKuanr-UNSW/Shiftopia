@@ -346,11 +346,11 @@ export function useTemplates(): UseTemplatesReturn {
         const { data: rpcData, error: rpcError } = await supabase.rpc(
           'validate_template_name',
           {
+            p_name: sanitizedName,
             p_organization_id: input.organizationId,
             p_department_id: input.departmentId,
             p_sub_department_id: input.subDepartmentId,
-            p_name: sanitizedName,
-            p_exclude_id: undefined,
+            p_exclude_id: null,
           }
         );
 
@@ -358,13 +358,14 @@ export function useTemplates(): UseTemplatesReturn {
           log('error', 'Validation RPC failed', rpcError);
         }
 
-        const rpcArray = rpcData as any[];
-        const validationResult = (rpcArray && rpcArray.length > 0) ? rpcArray[0] : null;
+        // RPC returns a JSONB scalar with { valid, is_valid, message, error_message }
+        const validationResult = rpcData as { valid?: boolean; is_valid?: boolean; message?: string; error_message?: string } | null;
+        log('info', 'Validation result:', validationResult);
 
-        if (validationResult && !validationResult.is_valid) {
+        if (validationResult && (validationResult.valid === false || validationResult.is_valid === false)) {
           toast({
             title: 'Template name exists',
-            description: validationResult.error_message || 'A template with this name already exists',
+            description: validationResult.error_message || validationResult.message || 'A template with this name already exists',
             variant: 'destructive',
           });
           return null;
@@ -389,6 +390,15 @@ export function useTemplates(): UseTemplatesReturn {
           .single();
 
         if (templateErr) {
+          // Handle duplicate key constraint violations with a user-friendly message
+          if (templateErr.code === '23505' || (templateErr as any).status === 409) {
+            toast({
+              title: 'Template name exists',
+              description: 'A template with this name already exists in this sub-department. Please choose a different name.',
+              variant: 'destructive',
+            });
+            return null;
+          }
           throw templateErr;
         }
 

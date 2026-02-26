@@ -26,7 +26,6 @@ import {
     Building2,
     CheckCircle2,
     XCircle,
-    Timer,
     UserCheck,
     ShieldCheck,
     AlertTriangle,
@@ -44,6 +43,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { FunctionBar } from '@/modules/core/ui/components/FunctionBar';
+import { useMinuteTick } from '@/modules/core/hooks/useMinuteTick';
 
 type TabType = 'my-swaps' | 'available-swaps';
 type SortOption = 'date-soonest' | 'date-latest';
@@ -103,7 +103,7 @@ const getStatusConfig = (status: string) => {
     switch (status) {
         case 'OPEN':
             return {
-                icon: Timer,
+                icon: Clock,
                 label: 'Open',
                 helperText: 'Awaiting offers',
                 textColor: 'text-amber-400',
@@ -155,38 +155,45 @@ const getStatusConfig = (status: string) => {
 
 // Calculate countdown to shift close (4h before start) in Sydney timezone
 
-const getCountdown = (startAt?: string, shiftDate?: string, startTime?: string, tzIdentifier?: string) => {
+// Helper to check if a swap is expired (4h before start)
+export const getSwapTimer = (now: Date, startAt?: string, shiftDate?: string, startTime?: string, tzIdentifier?: string) => {
     if (!startAt && (!shiftDate || !startTime)) return null;
 
-    // Parse shift time as explicit timezone
+    // Safety: ensure startTime is only HH:mm if it contains seconds
+    const cleanStartTime = startTime?.includes(':') ? startTime.split(':').slice(0, 2).join(':') : startTime;
+
     const shiftStartUtc = startAt
         ? new Date(startAt)
-        : parseZonedDateTime(shiftDate as string, startTime as string, tzIdentifier || SYDNEY_TZ);
+        : parseZonedDateTime(shiftDate as string, cleanStartTime as string, tzIdentifier || SYDNEY_TZ);
 
-    const closeTime = new Date(shiftStartUtc.getTime() - 4 * 60 * 60 * 1000); // 4 hours before
-    const now = new Date(); // Absolute now
-
-    if (now >= closeTime) return { text: 'Closed', isUrgent: true, isClosed: true };
-
-    const minutesLeft = differenceInMinutes(closeTime, now);
-    const hoursLeft = Math.floor(minutesLeft / 60);
-    const mins = minutesLeft % 60;
-
-    const isUrgent = minutesLeft <= 30;
-
-    if (hoursLeft > 24) {
-        const days = Math.floor(hoursLeft / 24);
-        return { text: `Closes in ${days}d ${hoursLeft % 24}h`, isUrgent: false, isClosed: false };
+    if (isNaN(shiftStartUtc.getTime())) {
+        console.warn('[Timer] Invalid shift start date/time:', { shiftDate, startTime, cleanStartTime });
+        return null;
     }
 
-    return {
-        text: `Closes in ${hoursLeft}h ${mins}m`,
-        isUrgent,
-        isClosed: false
-    };
+    const closeTime = new Date(shiftStartUtc.getTime() - 4 * 60 * 60 * 1000); // 4 hours before
+    const diffMs = closeTime.getTime() - now.getTime();
+
+    if (diffMs <= 0) return 'Expired';
+
+    const totalMinutes = Math.floor(diffMs / (1000 * 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (hours > 0) {
+        return `Expires in ${hours}h ${minutes}m`;
+    }
+    return `Expires in ${minutes}m`;
+};
+
+// Simplified check for styling
+const isSwapExpired = (now: Date, startAt?: string, shiftDate?: string, startTime?: string, tzIdentifier?: string): boolean => {
+    const timer = getSwapTimer(now, startAt, shiftDate, startTime, tzIdentifier);
+    return timer === 'Expired';
 };
 
 export const EmployeeSwapsPage: React.FC = () => {
+    const now = useMinuteTick();
     const { toast } = useToast();
     // Personal scope filter
     const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
@@ -231,7 +238,6 @@ export const EmployeeSwapsPage: React.FC = () => {
     const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
     const [sortOption, setSortOption] = useState<SortOption>('date-soonest');
     const [isRefreshing, setIsRefreshing] = useState(false);
-    const [, setTick] = useState(0); // For countdown refresh
 
     // Modal State
     const [offerSwapTarget, setOfferSwapTarget] = useState<ShiftSwap | null>(null);
@@ -245,12 +251,6 @@ export const EmployeeSwapsPage: React.FC = () => {
         isOpen: false,
         swap: null,
     });
-
-    // Refresh countdown every minute
-    useEffect(() => {
-        const interval = setInterval(() => setTick(t => t + 1), 60000);
-        return () => clearInterval(interval);
-    }, []);
 
     // Handle refresh
     const handleRefresh = useCallback(async () => {
@@ -322,14 +322,17 @@ export const EmployeeSwapsPage: React.FC = () => {
         const shift = (swap as any).requester_shift;
         const statusConfig = getStatusConfig(swap.status);
         const StatusIcon = statusConfig.icon;
-        const countdown = getCountdown(shift?.start_at, shift?.shift_date, shift?.start_time, shift?.tz_identifier);
+        const timerText = getSwapTimer(now, shift?.start_at, shift?.shift_date, shift?.start_time, shift?.tz_identifier);
+
+        const isExpired = timerText === 'Expired';
 
         return (
             <div
                 key={swap.id}
                 className={cn(
                     getCardBg(shift?.group_type, shift?.departments?.name || ''),
-                    "flex flex-col h-full rounded-xl"
+                    "flex flex-col h-full rounded-xl transition-all duration-300",
+                    isExpired && "opacity-60 grayscale-[0.8] hover:grayscale-0 hover:opacity-90"
                 )}
             >
                 {/* HEADER ZONE */}
@@ -365,30 +368,13 @@ export const EmployeeSwapsPage: React.FC = () => {
                         <span>{shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : formatTime(shift?.start_time || '')} - {shift?.end_at ? formatInTimezone(new Date(shift.end_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : formatTime(shift?.end_time || '')}</span>
                     </div>
 
-                    {/* Countdown Timer */}
-                    {countdown && !countdown.isClosed && (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className={cn(
-                                    "flex items-center gap-2 text-xs px-2 py-1 rounded-md w-fit",
-                                    countdown.isUrgent
-                                        ? "bg-red-500/10 text-red-400"
-                                        : "bg-muted text-muted-foreground"
-                                )}>
-                                    <Timer className="h-3 w-3" aria-hidden="true" />
-                                    <span>{countdown.text}</span>
-                                </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Swaps close 4 hours before shift start</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    )}
-
-                    {countdown?.isClosed && (
-                        <div className="flex items-center gap-2 text-xs px-2 py-1 rounded-md w-fit bg-red-500/10 text-red-400">
-                            <XCircle className="h-3 w-3" aria-hidden="true" />
-                            <span>Swap window closed</span>
+                    {timerText && (
+                        <div className={cn(
+                            "flex items-center gap-2 text-xs px-2 py-1 rounded-md w-fit font-bold",
+                            isExpired ? "bg-red-500/20 text-red-400 border border-red-500/30" : "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                        )}>
+                            <Clock className="h-3 w-3" aria-hidden="true" />
+                            <span>{timerText}</span>
                         </div>
                     )}
 
@@ -466,14 +452,16 @@ export const EmployeeSwapsPage: React.FC = () => {
     const renderAvailableSwapCard = (swap: ShiftSwap) => {
         const shift = (swap as any).requester_shift;
         const requesterName = (swap as any).requested_by?.full_name || (swap as any).requested_by?.email || 'Unknown Employee';
-        const countdown = getCountdown(shift?.start_at, shift?.shift_date, shift?.start_time, shift?.tz_identifier);
+        const timerText = getSwapTimer(now, shift?.start_at, shift?.shift_date, shift?.start_time, shift?.tz_identifier);
+        const isExpired = timerText === 'Expired';
 
         return (
             <div
                 key={swap.id}
                 className={cn(
                     getCardBg(shift?.group_type, shift?.departments?.name || ''),
-                    "flex flex-col h-full rounded-xl"
+                    "flex flex-col h-full rounded-xl transition-all duration-300",
+                    isExpired && "opacity-60 grayscale-[0.8] hover:grayscale-0 hover:opacity-90"
                 )}
             >
                 {/* HEADER ZONE */}
@@ -510,30 +498,20 @@ export const EmployeeSwapsPage: React.FC = () => {
                         <span>{shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : formatTime(shift?.start_time || '')} - {shift?.end_at ? formatInTimezone(new Date(shift.end_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : formatTime(shift?.end_time || '')}</span>
                     </div>
 
-                    {/* Countdown Timer */}
-                    {countdown && !countdown.isClosed && (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className={cn(
-                                    "flex items-center gap-2 text-xs px-2 py-1 rounded-md w-fit",
-                                    countdown.isUrgent
-                                        ? "bg-red-500/10 text-red-400"
-                                        : "bg-muted text-muted-foreground"
-                                )}>
-                                    <Timer className="h-3 w-3" aria-hidden="true" />
-                                    <span>{countdown.text}</span>
-                                </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Swaps close 4 hours before shift start</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    )}
-
                     {/* Posted By */}
                     <div className="text-xs text-muted-foreground">
                         Posted by <span className="text-foreground">{requesterName}</span>
                     </div>
+
+                    {timerText && (
+                        <div className={cn(
+                            "flex items-center gap-2 text-xs px-2 py-1 rounded-md w-fit font-bold",
+                            isExpired ? "bg-red-500/20 text-red-400 border border-red-500/30" : "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                        )}>
+                            <Clock className="h-3 w-3" aria-hidden="true" />
+                            <span>{timerText}</span>
+                        </div>
+                    )}
                 </div>
 
                 {/* FOOTER ZONE */}
@@ -547,10 +525,20 @@ export const EmployeeSwapsPage: React.FC = () => {
                         <Button
                             className="w-full h-11"
                             onClick={() => setOfferSwapTarget(swap)}
-                            disabled={isMakingOffer || countdown?.isClosed}
+                            disabled={isMakingOffer || isExpired}
+                            variant={isExpired ? "outline" : "default"}
                         >
-                            <ArrowLeftRight className="h-4 w-4 mr-2" aria-hidden="true" />
-                            Make Offer
+                            {isExpired ? (
+                                <>
+                                    <Clock className="h-4 w-4 mr-2" aria-hidden="true" />
+                                    Expired
+                                </>
+                            ) : (
+                                <>
+                                    <ArrowLeftRight className="h-4 w-4 mr-2" aria-hidden="true" />
+                                    Make Offer
+                                </>
+                            )}
                         </Button>
                     )}
                 </div>

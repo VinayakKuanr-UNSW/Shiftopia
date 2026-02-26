@@ -49,7 +49,7 @@ interface UseBroadcastGroupsReturn {
     deleteGroup: (groupId: string) => Promise<void>;
 }
 
-export function useBroadcastGroups(filters?: { departmentId?: string; subDepartmentId?: string }): UseBroadcastGroupsReturn {
+export function useBroadcastGroups(filters?: { organizationId?: string; departmentId?: string; subDepartmentId?: string }): UseBroadcastGroupsReturn {
     const { user } = useAuth();
     const { toast } = useToast();
     const [groups, setGroups] = useState<BroadcastGroupWithStats[]>([]);
@@ -72,7 +72,7 @@ export function useBroadcastGroups(filters?: { departmentId?: string; subDepartm
         } finally {
             setIsLoading(false);
         }
-    }, [toast, filters?.departmentId, filters?.subDepartmentId]);
+    }, [toast, filters?.organizationId, filters?.departmentId, filters?.subDepartmentId]);
 
     useEffect(() => {
         fetchGroups();
