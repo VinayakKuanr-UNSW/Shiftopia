@@ -1,4 +1,6 @@
 import { supabase } from '@/platform/realtime/client';
+import { checkCompliance } from '@/modules/compliance/engine';
+import { ShiftTimeRange } from '@/modules/compliance/types';
 
 // ── State Machine ──────────────────────────────────────────────────────────────
 
@@ -56,12 +58,19 @@ export interface SimulationAssignment {
     shiftId: string;
     employeeId: string;
     employeeName: string;
+    /** Time fields returned by v5 edge function — used by the compliance gate. */
+    shiftDate?: string;
+    startTime?: string | null;
+    endTime?: string | null;
+    unpaidBreakMinutes?: number;
 }
 
 export interface SimulationConflict {
     shiftId: string;
     description: string;
-    type: 'ROLE_MISMATCH' | 'CAPACITY' | 'UNASSIGNABLE';
+    type: 'ROLE_MISMATCH' | 'CAPACITY' | 'UNASSIGNABLE' | 'COMPLIANCE_BLOCKED';
+    /** Rule names that caused the compliance block (populated for COMPLIANCE_BLOCKED only). */
+    blockedBy?: string[];
 }
 
 export interface SimulationSummary {
@@ -106,10 +115,8 @@ async function invokeEdgeFunction<T>(
     const { data, error } = await supabase.functions.invoke<T>(functionName, { body });
 
     if (error) {
-        // Attempt to extract error payload from the HTTP response
         let errorPayload: { error?: string; message?: string } = {};
         try {
-            // FunctionsHttpError exposes `.context` as the Response object
             const ctx = (error as unknown as { context?: Response }).context;
             if (ctx?.json) {
                 errorPayload = await ctx.json();
@@ -131,7 +138,7 @@ async function invokeEdgeFunction<T>(
     return data as T;
 }
 
-// ── Snapshot hash helper (Web Crypto API — available in all modern browsers) ──
+// ── Snapshot hash helper (Web Crypto API) ─────────────────────────────────────
 
 async function buildSnapshotHash(
     rows: Array<{ id: string; version: number; assignment_status: string }>
@@ -144,6 +151,146 @@ async function buildSnapshotHash(
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input || 'empty'));
     const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
     return `snap_${hex.slice(0, 16)}`;
+}
+
+// ── Compliance Gate ───────────────────────────────────────────────────────────
+//
+// After the greedy solver in the edge function proposes assignments, this gate
+// runs every proposed assignment through the existing Compliance Engine
+// (checkCompliance / NoOverlapRule, MinRestGapRule, MaxDailyHoursRule, …).
+//
+// This is the authoritative compliance check — the edge function's overlap
+// detection is a performance optimisation; the Compliance Engine is the
+// source of truth.
+//
+// Process:
+//   1. Fetch each proposed employee's existing committed shifts from DB
+//   2. For each assignment (in greedy-solver order), run checkCompliance()
+//      against DB-committed shifts PLUS any earlier session assignments for
+//      that employee (so within-session double-bookings are also caught)
+//   3. Assignments that pass → validAssignments
+//      Assignments that fail → complianceConflicts (type COMPLIANCE_BLOCKED)
+//   4. The corrected result is written back to the session in Supabase so
+//      autoschedule-save-draft and autoschedule-commit operate on clean data.
+
+async function runComplianceGate(
+    raw: SimulationResult
+): Promise<{
+    validAssignments: SimulationAssignment[];
+    allConflicts: SimulationConflict[];
+    correctedSummary: SimulationSummary;
+}> {
+    const { assignments, conflicts: solverConflicts, summary, sessionId } = raw;
+
+    // Nothing to validate
+    if (assignments.length === 0) {
+        return { validAssignments: [], allConflicts: solverConflicts, correctedSummary: summary };
+    }
+
+    // 1. Batch-fetch existing committed shifts for all proposed employees
+    const uniqueEmployeeIds = [...new Set(assignments.map(a => a.employeeId))];
+
+    const { data: existingRows } = await supabase
+        .from('shifts')
+        .select('assigned_employee_id, shift_date, start_time, end_time, unpaid_break_minutes')
+        .in('assigned_employee_id', uniqueEmployeeIds)
+        .eq('assignment_status', 'assigned')
+        .eq('is_cancelled', false)
+        .is('deleted_at', null);
+
+    // Group by employee — normalise HH:MM:SS → HH:MM (PostgreSQL time type)
+    const existingByEmp = new Map<string, ShiftTimeRange[]>();
+    for (const row of (existingRows ?? [])) {
+        if (!row.assigned_employee_id || !row.start_time || !row.end_time) continue;
+        const list = existingByEmp.get(row.assigned_employee_id) ?? [];
+        list.push({
+            shift_date:            row.shift_date as string,
+            start_time:            (row.start_time as string).slice(0, 5),
+            end_time:              (row.end_time as string).slice(0, 5),
+            unpaid_break_minutes:  (row.unpaid_break_minutes as number) ?? 0,
+        });
+        existingByEmp.set(row.assigned_employee_id, list);
+    }
+
+    // 2. Run compliance check for each proposed assignment in order
+    const validAssignments: SimulationAssignment[] = [];
+    const complianceConflicts: SimulationConflict[] = [];
+    // session-level tracking: shifts already approved in this gate pass
+    const sessionByEmp = new Map<string, ShiftTimeRange[]>();
+
+    for (const assignment of assignments) {
+        // If edge function didn't return time details (shouldn't happen with v5),
+        // pass the assignment through to avoid silently dropping it.
+        if (!assignment.startTime || !assignment.endTime || !assignment.shiftDate) {
+            validAssignments.push(assignment);
+            continue;
+        }
+
+        const candidateShift: ShiftTimeRange = {
+            shift_date:           assignment.shiftDate,
+            start_time:           assignment.startTime.slice(0, 5),
+            end_time:             assignment.endTime.slice(0, 5),
+            unpaid_break_minutes: assignment.unpaidBreakMinutes ?? 0,
+        };
+
+        const existingShifts: ShiftTimeRange[] = [
+            ...(existingByEmp.get(assignment.employeeId) ?? []),
+            ...(sessionByEmp.get(assignment.employeeId) ?? []),
+        ];
+
+        const result = checkCompliance({
+            employee_id:    assignment.employeeId,
+            action_type:    'assign',
+            candidate_shift: candidateShift,
+            existing_shifts: existingShifts,
+        });
+
+        if (result.passed) {
+            validAssignments.push(assignment);
+            // Track for within-session overlap detection
+            const sessionList = sessionByEmp.get(assignment.employeeId) ?? [];
+            sessionList.push(candidateShift);
+            sessionByEmp.set(assignment.employeeId, sessionList);
+        } else {
+            const blockerNames = result.blockers.map(b => b.rule_name);
+            const primaryBlocker = result.blockers[0];
+            complianceConflicts.push({
+                shiftId:     assignment.shiftId,
+                description: `${primaryBlocker?.rule_name ?? 'Compliance'}: ${primaryBlocker?.summary ?? 'violation detected'}`,
+                type:        'COMPLIANCE_BLOCKED',
+                blockedBy:   blockerNames,
+            });
+        }
+    }
+
+    const allConflicts = [...solverConflicts, ...complianceConflicts];
+    const correctedSummary: SimulationSummary = {
+        ...summary,
+        assigned_shifts:   validAssignments.length,
+        unassigned_shifts: allConflicts.length,
+    };
+
+    // 3. Persist the compliance-filtered result back to the session so that
+    //    autoschedule-save-draft and autoschedule-commit use the clean list.
+    if (sessionId) {
+        await supabase
+            .from('autoschedule_sessions')
+            .update({
+                simulation_result: {
+                    // Strip time fields — commit only needs shiftId/employeeId/employeeName
+                    assignments: validAssignments.map(a => ({
+                        shiftId:      a.shiftId,
+                        employeeId:   a.employeeId,
+                        employeeName: a.employeeName,
+                    })),
+                    conflicts: allConflicts,
+                    summary:   correctedSummary,
+                },
+            })
+            .eq('id', sessionId);
+    }
+
+    return { validAssignments, allConflicts, correctedSummary };
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -174,7 +321,7 @@ export async function fetchBaseline(context: AutoScheduleContext): Promise<Basel
         .lte('shift_date', dateEnd)
         .eq('is_cancelled', false)
         .is('deleted_at', null)
-        .not('lifecycle_status', 'eq', 'Cancelled');   // guard against lifecycle-cancelled shifts
+        .not('lifecycle_status', 'eq', 'Cancelled');
 
     if (departmentId)    shiftsQ = shiftsQ.eq('department_id', departmentId);
     if (subDepartmentId) shiftsQ = shiftsQ.eq('sub_department_id', subDepartmentId);
@@ -182,7 +329,7 @@ export async function fetchBaseline(context: AutoScheduleContext): Promise<Basel
     const { data: shifts, error: shiftsError } = await shiftsQ;
     if (shiftsError) throw new Error(shiftsError.message);
 
-    const allShifts = shifts ?? [];
+    const allShifts       = shifts ?? [];
     const unassignedShifts = allShifts.filter(s => s.assignment_status === 'unassigned');
     const assignedShifts   = allShifts.filter(s => s.assignment_status === 'assigned');
 
@@ -194,7 +341,7 @@ export async function fetchBaseline(context: AutoScheduleContext): Promise<Basel
         .from('user_contracts')
         .select('user_id, role_id')
         .eq('organization_id', organizationId)
-        .eq('status', 'Active');            // ← capital A — verified against live data
+        .eq('status', 'Active');
 
     if (departmentId)    staffQ = staffQ.eq('department_id', departmentId);
     if (subDepartmentId) staffQ = staffQ.eq('sub_department_id', subDepartmentId);
@@ -205,18 +352,6 @@ export async function fetchBaseline(context: AutoScheduleContext): Promise<Basel
     const activeContracts = contracts ?? [];
 
     // ── 4. Available staff pool + potential conflicts ──────────────────────
-    //
-    // "Available staff" = distinct staff who can fill AT LEAST ONE unassigned
-    // shift by role.  A staff member qualifies for a shift when:
-    //   • the shift has no role requirement (role_id IS NULL), OR
-    //   • their contract role_id matches the shift's role_id
-    //
-    // This is intentionally role-scoped so the count reflects actionable
-    // capacity, not headcount of the whole department.
-    //
-    // "Potential conflict" = an unassigned shift for which zero active
-    // contracts can fill the role requirement.
-
     const eligibleStaffIds = new Set<string>();
     let potentialConflicts = 0;
 
@@ -243,36 +378,59 @@ export async function fetchBaseline(context: AutoScheduleContext): Promise<Basel
     }
     let overtimeExposure = 0;
     for (const [, mins] of minutesByEmp) {
-        if (mins > 2100) overtimeExposure++;   // 35h in minutes
+        if (mins > 2100) overtimeExposure++;
     }
 
     return {
-        snapshot_version:     snapshotVersion,
-        unassigned_count:     unassignedShifts.length,
-        assigned_count:       assignedShifts.length,
+        snapshot_version:      snapshotVersion,
+        unassigned_count:      unassignedShifts.length,
+        assigned_count:        assignedShifts.length,
         available_staff_count: eligibleStaffIds.size,
-        potential_conflicts:  potentialConflicts,
-        overtime_exposure:    overtimeExposure,
-        eligible_shifts:      unassignedShifts.map(s => s.id),
+        potential_conflicts:   potentialConflicts,
+        overtime_exposure:     overtimeExposure,
+        eligible_shifts:       unassignedShifts.map(s => s.id),
     };
 }
 
+/**
+ * Phase 2 — Run greedy simulation then validate every proposed assignment
+ * through the existing Compliance Engine before returning results.
+ *
+ * Flow:
+ *   1. Call autoschedule-simulate edge function (greedy solver, v5)
+ *   2. Run runComplianceGate() — filters out any assignment that violates
+ *      NO_OVERLAP, MIN_REST_GAP, MAX_DAILY_HOURS, or any other registered rule
+ *   3. Persist compliance-filtered result back to the DB session so that
+ *      save-draft and commit operate on the verified assignment list
+ */
 export async function runSimulation(
     context: AutoScheduleContext,
     config: SimulationConfig
 ): Promise<SimulationResult> {
-    return invokeEdgeFunction<SimulationResult>('autoschedule-simulate', {
-        organizationId: context.organizationId,
-        departmentId: context.departmentId,
+    // Step 1: greedy solver
+    const raw = await invokeEdgeFunction<SimulationResult>('autoschedule-simulate', {
+        organizationId:  context.organizationId,
+        departmentId:    context.departmentId,
         subDepartmentId: context.subDepartmentId,
-        dateStart: context.dateStart,
-        dateEnd: context.dateEnd,
-        scope: config.scope,
+        dateStart:       context.dateStart,
+        dateEnd:         context.dateEnd,
+        scope:           config.scope,
         selectedShiftIds: config.selectedShiftIds ?? [],
-        strategy: config.strategy,
+        strategy:        config.strategy,
         softConstraints: config.softConstraints,
         snapshotVersion: config.snapshotVersion,
     });
+
+    // Step 2 & 3: compliance gate + session update
+    const { validAssignments, allConflicts, correctedSummary } =
+        await runComplianceGate(raw);
+
+    return {
+        ...raw,
+        assignments: validAssignments,
+        conflicts:   allConflicts,
+        summary:     correctedSummary,
+    };
 }
 
 export async function saveAsDraft(
