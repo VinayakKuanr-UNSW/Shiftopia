@@ -336,7 +336,11 @@ export function useDeleteShift() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (shiftId: string) => shiftsCommands.deleteShift(shiftId),
+    mutationFn: async (shiftId: string) => {
+      const success = await shiftsCommands.deleteShift(shiftId);
+      if (!success) throw new Error('Failed to delete shift on the server.');
+      return success;
+    },
 
     onMutate: async (shiftId) => {
       await queryClient.cancelQueries({ queryKey: shiftKeys.lists });

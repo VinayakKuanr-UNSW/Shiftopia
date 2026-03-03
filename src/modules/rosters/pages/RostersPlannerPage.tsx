@@ -770,6 +770,7 @@ const NewRostersPage: React.FC = () => {
           onPublish={handleBulkPublish}
           allowedActions={{
             canPublish: true,
+            canUnpublish: false,
           }}
         />
       )}
