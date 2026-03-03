@@ -112,6 +112,7 @@ export function useShiftFormOrchestrator({
         existingShift,
         selectedRosterId,
         setSelectedRosterId,
+        selectedRoleId: watchRoleId,
     });
 
     // ── Context resolution ───────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { supabase } from '@/platform/realtime/client';
 import { checkCompliance } from '@/modules/compliance/engine';
 import { ShiftTimeRange } from '@/modules/compliance/types';
+import { EligibilityService } from '../services/eligibility.service';
 
 // ── State Machine ──────────────────────────────────────────────────────────────
 
@@ -204,10 +205,10 @@ async function runComplianceGate(
         if (!row.assigned_employee_id || !row.start_time || !row.end_time) continue;
         const list = existingByEmp.get(row.assigned_employee_id) ?? [];
         list.push({
-            shift_date:            row.shift_date as string,
-            start_time:            (row.start_time as string).slice(0, 5),
-            end_time:              (row.end_time as string).slice(0, 5),
-            unpaid_break_minutes:  (row.unpaid_break_minutes as number) ?? 0,
+            shift_date: row.shift_date as string,
+            start_time: (row.start_time as string).slice(0, 5),
+            end_time: (row.end_time as string).slice(0, 5),
+            unpaid_break_minutes: (row.unpaid_break_minutes as number) ?? 0,
         });
         existingByEmp.set(row.assigned_employee_id, list);
     }
@@ -227,9 +228,9 @@ async function runComplianceGate(
         }
 
         const candidateShift: ShiftTimeRange = {
-            shift_date:           assignment.shiftDate,
-            start_time:           assignment.startTime.slice(0, 5),
-            end_time:             assignment.endTime.slice(0, 5),
+            shift_date: assignment.shiftDate,
+            start_time: assignment.startTime.slice(0, 5),
+            end_time: assignment.endTime.slice(0, 5),
             unpaid_break_minutes: assignment.unpaidBreakMinutes ?? 0,
         };
 
@@ -239,8 +240,8 @@ async function runComplianceGate(
         ];
 
         const result = checkCompliance({
-            employee_id:    assignment.employeeId,
-            action_type:    'assign',
+            employee_id: assignment.employeeId,
+            action_type: 'assign',
             candidate_shift: candidateShift,
             existing_shifts: existingShifts,
         });
@@ -255,10 +256,10 @@ async function runComplianceGate(
             const blockerNames = result.blockers.map(b => b.rule_name);
             const primaryBlocker = result.blockers[0];
             complianceConflicts.push({
-                shiftId:     assignment.shiftId,
+                shiftId: assignment.shiftId,
                 description: `${primaryBlocker?.rule_name ?? 'Compliance'}: ${primaryBlocker?.summary ?? 'violation detected'}`,
-                type:        'COMPLIANCE_BLOCKED',
-                blockedBy:   blockerNames,
+                type: 'COMPLIANCE_BLOCKED',
+                blockedBy: blockerNames,
             });
         }
     }
@@ -266,7 +267,7 @@ async function runComplianceGate(
     const allConflicts = [...solverConflicts, ...complianceConflicts];
     const correctedSummary: SimulationSummary = {
         ...summary,
-        assigned_shifts:   validAssignments.length,
+        assigned_shifts: validAssignments.length,
         unassigned_shifts: allConflicts.length,
     };
 
@@ -279,12 +280,12 @@ async function runComplianceGate(
                 simulation_result: {
                     // Strip time fields — commit only needs shiftId/employeeId/employeeName
                     assignments: validAssignments.map(a => ({
-                        shiftId:      a.shiftId,
-                        employeeId:   a.employeeId,
+                        shiftId: a.shiftId,
+                        employeeId: a.employeeId,
                         employeeName: a.employeeName,
                     })),
                     conflicts: allConflicts,
-                    summary:   correctedSummary,
+                    summary: correctedSummary,
                 },
             })
             .eq('id', sessionId);
@@ -323,33 +324,25 @@ export async function fetchBaseline(context: AutoScheduleContext): Promise<Basel
         .is('deleted_at', null)
         .not('lifecycle_status', 'eq', 'Cancelled');
 
-    if (departmentId)    shiftsQ = shiftsQ.eq('department_id', departmentId);
+    if (departmentId) shiftsQ = shiftsQ.eq('department_id', departmentId);
     if (subDepartmentId) shiftsQ = shiftsQ.eq('sub_department_id', subDepartmentId);
 
     const { data: shifts, error: shiftsError } = await shiftsQ;
     if (shiftsError) throw new Error(shiftsError.message);
 
-    const allShifts       = shifts ?? [];
+    const allShifts = shifts ?? [];
     const unassignedShifts = allShifts.filter(s => s.assignment_status === 'unassigned');
-    const assignedShifts   = allShifts.filter(s => s.assignment_status === 'assigned');
+    const assignedShifts = allShifts.filter(s => s.assignment_status === 'assigned');
 
     // ── 2. Deterministic snapshot hash ────────────────────────────────────
     const snapshotVersion = await buildSnapshotHash(allShifts as Parameters<typeof buildSnapshotHash>[0]);
 
-    // ── 3. Active staff contracts (note: 'Active', capital A) ─────────────
-    let staffQ = supabase
-        .from('user_contracts')
-        .select('user_id, role_id')
-        .eq('organization_id', organizationId)
-        .eq('status', 'Active');
-
-    if (departmentId)    staffQ = staffQ.eq('department_id', departmentId);
-    if (subDepartmentId) staffQ = staffQ.eq('sub_department_id', subDepartmentId);
-
-    const { data: contracts, error: contractsError } = await staffQ;
-    if (contractsError) throw new Error(contractsError.message);
-
-    const activeContracts = contracts ?? [];
+    // ── 3. Active staff contracts — via shared EligibilityService ───────────
+    const activeContracts = await EligibilityService.getEligibleContracts({
+        organizationId,
+        departmentId,
+        subDepartmentId,
+    });
 
     // ── 4. Available staff pool + potential conflicts ──────────────────────
     const eligibleStaffIds = new Set<string>();
@@ -382,13 +375,13 @@ export async function fetchBaseline(context: AutoScheduleContext): Promise<Basel
     }
 
     return {
-        snapshot_version:      snapshotVersion,
-        unassigned_count:      unassignedShifts.length,
-        assigned_count:        assignedShifts.length,
+        snapshot_version: snapshotVersion,
+        unassigned_count: unassignedShifts.length,
+        assigned_count: assignedShifts.length,
         available_staff_count: eligibleStaffIds.size,
-        potential_conflicts:   potentialConflicts,
-        overtime_exposure:     overtimeExposure,
-        eligible_shifts:       unassignedShifts.map(s => s.id),
+        potential_conflicts: potentialConflicts,
+        overtime_exposure: overtimeExposure,
+        eligible_shifts: unassignedShifts.map(s => s.id),
     };
 }
 
@@ -409,14 +402,14 @@ export async function runSimulation(
 ): Promise<SimulationResult> {
     // Step 1: greedy solver
     const raw = await invokeEdgeFunction<SimulationResult>('autoschedule-simulate', {
-        organizationId:  context.organizationId,
-        departmentId:    context.departmentId,
+        organizationId: context.organizationId,
+        departmentId: context.departmentId,
         subDepartmentId: context.subDepartmentId,
-        dateStart:       context.dateStart,
-        dateEnd:         context.dateEnd,
-        scope:           config.scope,
+        dateStart: context.dateStart,
+        dateEnd: context.dateEnd,
+        scope: config.scope,
         selectedShiftIds: config.selectedShiftIds ?? [],
-        strategy:        config.strategy,
+        strategy: config.strategy,
         softConstraints: config.softConstraints,
         snapshotVersion: config.snapshotVersion,
     });
@@ -428,8 +421,8 @@ export async function runSimulation(
     return {
         ...raw,
         assignments: validAssignments,
-        conflicts:   allConflicts,
-        summary:     correctedSummary,
+        conflicts: allConflicts,
+        summary: correctedSummary,
     };
 }
 

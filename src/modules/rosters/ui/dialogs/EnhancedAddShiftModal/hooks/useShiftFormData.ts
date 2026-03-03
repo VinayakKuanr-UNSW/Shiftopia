@@ -28,6 +28,7 @@ interface UseShiftFormDataProps {
     existingShift?: any;
     selectedRosterId: string;
     setSelectedRosterId: (id: string) => void;
+    selectedRoleId?: string;
 }
 
 interface UseShiftFormDataReturn {
@@ -50,6 +51,7 @@ export function useShiftFormData({
     existingShift,
     selectedRosterId,
     setSelectedRosterId,
+    selectedRoleId,
 }: UseShiftFormDataProps): UseShiftFormDataReturn {
     // Determine correct IDs for fetching roles
     // 1. Context IDs (from props/existing shift) - used for fetching generic data
@@ -93,7 +95,8 @@ export function useShiftFormData({
     const { data: employees = [], isLoading: isLoadingEmps } = useEmployees(
         isOpen ? context.organizationId : undefined,
         isOpen ? roleDeptId : undefined,
-        isOpen ? roleSubDeptId : undefined
+        isOpen ? roleSubDeptId : undefined,
+        isOpen ? selectedRoleId : undefined
     );
 
     // All queries are enabled only when the modal is open

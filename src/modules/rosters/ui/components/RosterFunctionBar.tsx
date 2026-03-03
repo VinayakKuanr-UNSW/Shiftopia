@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/modules/core/ui/primitives/button';
 import {
   Select,
@@ -28,6 +29,8 @@ import {
   CalendarDays,
   Briefcase,
   CopyPlus,
+  Wand2,
+  Activity,
 } from 'lucide-react';
 import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, isSameMonth } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
@@ -37,6 +40,7 @@ import {
   useRostersLookup,
 } from '@/modules/rosters/state/useRosterShifts';
 import { ActivateRosterDialog } from '../dialogs/ActivateRosterDialog';
+import { AutoScheduleModal } from '@/modules/rosters/ui/dialogs/AutoScheduleModal';
 import { CalendarRangePicker } from './CalendarRangePicker';
 import { RosterFilterPopover } from './RosterFilterPopover';
 import { useRosterUI, RosterMode } from '@/modules/rosters/contexts/RosterUIContext';
@@ -99,8 +103,6 @@ export interface RosterFunctionBarProps {
   onUnfilledPanelToggle: () => void;
   onRefresh: () => void;
   onFiltersClick: () => void;
-
-  onPublishRoster: () => void;
 
   canEdit?: boolean;
 
@@ -191,7 +193,6 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
   onAvailabilitiesToggle,
   onUnfilledPanelToggle,
   onRefresh,
-  onPublishRoster,
   canEdit = true,
   isBulkMode = false,
   onBulkModeToggle,
@@ -207,6 +208,8 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
     navigatePrevious,
   } = useRosterUI();
 
+  const queryClient = useQueryClient();
+
   const { data: rosters = [] } = useRostersLookup(
     selectedOrganizationId || undefined,
     {
@@ -218,6 +221,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
 
   const [isActivateDialogOpen, setIsActivateDialogOpen] = useState(false);
   const [isApplyTemplateDialogOpen, setIsApplyTemplateDialogOpen] = useState(false);
+  const [isAutoScheduleOpen, setIsAutoScheduleOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
   // Auto-select template
@@ -388,15 +392,31 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
             <Separator orientation="vertical" className="h-5 bg-white/10 mx-1" />
             <IconButton
               icon={<CalendarCheck className="h-4 w-4" />}
-              tooltip="Avail"
+              tooltip={activeMode === 'people' ? "Availabilities" : "Availabilities (People Mode Only)"}
               onClick={onAvailabilitiesToggle}
               isActive={showAvailabilities}
               variant="success"
+              disabled={activeMode !== 'people'}
+            />
+            <IconButton
+              icon={<Activity className="h-4 w-4" />}
+              tooltip={activeMode === 'people' ? "Fatigue Score Placeholder" : "Fatigue Score (People Mode Only)"}
+              onClick={() => { }}
+              isActive={false}
+              variant="success"
+              disabled={activeMode !== 'people'}
             />
             <IconButton
               icon={<Zap className="h-4 w-4" />}
               tooltip="Activate"
               onClick={() => setIsActivateDialogOpen(true)}
+              variant="success"
+              disabled={!selectedDepartmentId}
+            />
+            <IconButton
+              icon={<Wand2 className="h-4 w-4" />}
+              tooltip="AutoSchedule"
+              onClick={() => setIsAutoScheduleOpen(true)}
               variant="success"
               disabled={!selectedDepartmentId}
             />
@@ -437,13 +457,6 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
             />
           </div>
 
-          <IconButton
-            icon={<Send className="h-4 w-4" />}
-            tooltip="Publish Roster"
-            onClick={onPublishRoster}
-            disabled={!canEdit}
-            className="h-10 w-10 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-[0_4px_12px_rgba(37,99,235,0.3)] transition-all active:scale-95"
-          />
         </div>
       </div>
 
@@ -473,6 +486,23 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
           rosterId={currentRosterStructure?.rosterId || null}
         />
       )}
+
+      {/* AutoSchedule Modal */}
+      <AutoScheduleModal
+        isOpen={isAutoScheduleOpen}
+        onOpenChange={setIsAutoScheduleOpen}
+        context={{
+          organizationId: selectedOrganizationId,
+          departmentId: selectedDepartmentId,
+          subDepartmentId: selectedSubDepartmentId,
+          dateStart: activeRangeBounds.monthStart ? format(activeRangeBounds.monthStart, 'yyyy-MM-dd') : undefined,
+          dateEnd: activeRangeBounds.monthEnd ? format(activeRangeBounds.monthEnd, 'yyyy-MM-dd') : undefined
+        }}
+        onAssignmentsApplied={() => {
+          queryClient.invalidateQueries({ queryKey: ['shifts'] });
+          onRefresh();
+        }}
+      />
     </div>
   );
 };

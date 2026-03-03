@@ -436,52 +436,14 @@ export const shiftsQueries = {
         }
     },
 
-    async getEmployees(organizationId?: string, departmentId?: string, subDepartmentId?: string): Promise<ProfileSummary[]> {
-        try {
-            let query = supabase
-                .from('user_contracts')
-                .select(`
-                    user_id,
-                    profiles:profiles!user_id (
-                        id,
-                        first_name,
-                        last_name
-                    )
-                `)
-                .eq('status', 'Active');
-
-            if (organizationId && isValidUuid(organizationId)) {
-                query = query.eq('organization_id', organizationId);
-            }
-
-            if (subDepartmentId && isValidUuid(subDepartmentId)) {
-                query = query.eq('department_id', departmentId)
-                    .or(`sub_department_id.eq.${subDepartmentId},sub_department_id.is.null`);
-            } else if (departmentId && isValidUuid(departmentId)) {
-                query = query.eq('department_id', departmentId);
-            }
-
-            const { data, error } = await query;
-
-            if (error) {
-                console.error('[getEmployees] Error fetching contracts:', error);
-                return [];
-            }
-
-            const profilesMap = new Map<string, ProfileSummary>();
-            data?.forEach(row => {
-                const profile = (row as { profiles?: ProfileSummary | null }).profiles;
-                if (profile?.id) {
-                    profilesMap.set(profile.id, profile);
-                }
-            });
-
-            return Array.from(profilesMap.values())
-                .sort((a, b) => a.last_name.localeCompare(b.last_name));
-        } catch (error) {
-            console.error('Exception in getEmployees:', error);
-            return [];
-        }
+    async getEmployees(organizationId?: string, departmentId?: string, subDepartmentId?: string, roleId?: string): Promise<ProfileSummary[]> {
+        const { EligibilityService } = await import('../services/eligibility.service');
+        return EligibilityService.getEligibleEmployees({
+            organizationId,
+            departmentId,
+            subDepartmentId,
+            roleId,
+        });
     },
 
     async getSkills(): Promise<SkillSummary[]> {

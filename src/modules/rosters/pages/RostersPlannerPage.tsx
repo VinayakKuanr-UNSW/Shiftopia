@@ -68,6 +68,7 @@ const NewRostersPage: React.FC = () => {
   const { hasPermission } = useAuth();
   const { isDark } = useTheme();
   const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
+  const queryClient = useQueryClient();
 
   // ==================== SESSION-SCOPED STATE FROM CONTEXT ====================
   // These persist across navigation but reset on browser refresh
@@ -213,10 +214,6 @@ const NewRostersPage: React.FC = () => {
   const cancelShiftMutation = useCancelShift();
   const unpublishShiftMutation = useUnpublishShift();
 
-  // Roster Actions
-
-  const publishRosterMutation = usePublishRoster();
-
 
   // Employees lookup
   const { data: employees = [] } = useEmployees(selectedOrganizationId || undefined);
@@ -341,30 +338,13 @@ const NewRostersPage: React.FC = () => {
   };
 
   const handleRefresh = () => {
-    refetch();
+    queryClient.invalidateQueries({ queryKey: [shiftKeys.all[0]] });
+    toast({
+      title: 'Refreshed',
+      description: 'Roster data has been refreshed.',
+    });
   };
 
-  const handlePublishRoster = async () => {
-    if (!startDate || !endDate || !selectedOrganizationId || !selectedDepartmentIds[0]) {
-      toast({ title: "Error", description: "Missing required selection details", variant: "destructive" });
-      return;
-    }
-
-    try {
-      await publishRosterMutation.mutateAsync({
-        organizationId: selectedOrganizationId,
-        departmentId: selectedDepartmentIds[0],
-        subDepartmentId: selectedSubDepartmentIds[0] || null,
-        startDate,
-        endDate
-      });
-      // Toast is handled in mutation onSuccess
-    } catch (error) {
-      // Error handled in mutation onError
-    }
-  };
-
-  // Lock toggle handler removed
 
   // ==================== GHOST CELL NAVIGATION ====================
   // When user clicks a ghost cell, navigate to that month (reset to 1st of month)
@@ -599,8 +579,6 @@ const NewRostersPage: React.FC = () => {
           onUnfilledPanelToggle={() => setShowUnfilledPanel(!showUnfilledPanel)}
           onRefresh={handleRefresh}
           onFiltersClick={() => setShowFilters(!showFilters)}
-          // Actions
-          onPublishRoster={handlePublishRoster}
           canEdit={canEdit}
           // Bulk Mode
           isBulkMode={bulkModeActive}

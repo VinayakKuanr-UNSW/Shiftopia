@@ -116,8 +116,8 @@ export const shiftKeys = {
       ['shifts', 'lookup', 'subDepartments', deptId ?? null] as const,
     roles: (orgId?: string, deptId?: string, subDeptId?: string) =>
       ['shifts', 'lookup', 'roles', orgId ?? null, deptId ?? null, subDeptId ?? null] as const,
-    employees: (orgId?: string, deptId?: string, subDeptId?: string) =>
-      ['shifts', 'lookup', 'employees', orgId ?? null, deptId ?? null, subDeptId ?? null] as const,
+    employees: (orgId?: string, deptId?: string, subDeptId?: string, roleId?: string) =>
+      ['shifts', 'lookup', 'employees', orgId ?? null, deptId ?? null, subDeptId ?? null, roleId ?? null] as const,
     templates: (subDeptId?: string, deptId?: string) =>
       ['shifts', 'lookup', 'templates', subDeptId ?? null, deptId ?? null] as const,
     remunerationLevels: () => ['shifts', 'lookup', 'remunerationLevels'] as const,
