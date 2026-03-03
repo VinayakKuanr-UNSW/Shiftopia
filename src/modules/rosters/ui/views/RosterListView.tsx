@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Roster, Employee } from '@/types';
+import { Roster, Employee } from '@/modules/core/types';
 import { format, parseISO } from 'date-fns';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Clock, Calendar, User, MapPin, Building } from 'lucide-react';

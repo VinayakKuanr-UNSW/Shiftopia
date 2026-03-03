@@ -1,5 +1,5 @@
 import React from 'react';
-import { Roster } from '@/types';
+import { Roster } from '@/modules/core/types';
 import {
   format,
   startOfMonth,

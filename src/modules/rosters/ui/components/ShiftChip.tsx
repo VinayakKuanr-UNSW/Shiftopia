@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shift } from '@/types';
+import { Shift } from '@/modules/core/types';
 import { ShiftCardCompact } from './ShiftCardCompact';
 
 interface ShiftChipProps {

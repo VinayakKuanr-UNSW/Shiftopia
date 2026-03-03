@@ -43,7 +43,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { useToast } from '@/modules/core/hooks/use-toast';
-import { useEmployees } from '@/api/hooks';
+import { useEmployees } from '@/modules/users/hooks/useEmployees';
 import { supabase } from '@/platform/realtime/client';
 import {
     checkBulkCompliance,

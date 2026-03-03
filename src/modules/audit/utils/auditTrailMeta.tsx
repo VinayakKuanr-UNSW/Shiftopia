@@ -1,6 +1,6 @@
 
 import { LucideIcon, CheckCircle, Clock, Play, UserCheck, FileText, AlertCircle } from 'lucide-react';
-import { AuditStatus } from '@/types';
+import { AuditStatus } from '@/modules/core/types';
 
 interface EventMeta {
   Icon: LucideIcon;

@@ -1,6 +1,6 @@
 import { supabase } from '@/platform/realtime/client';
 import { Shift, ShiftStatus, TemplateGroupType, isValidUuid } from '../domain/shift.entity';
-import { callAuthenticatedRpc } from '@/lib/rpc/client';
+import { callAuthenticatedRpc } from '@/platform/supabase/rpc/client';
 import { OfferActionResponseSchema } from './contracts';
 
 // ── Lookup types ──────────────────────────────────────────────────────────────

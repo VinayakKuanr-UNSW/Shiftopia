@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { Employee, Shift, Roster } from '@/types';
-import { useEmployees } from '@/api/hooks';
+import { Employee, Shift, Roster } from '@/modules/core/types';
+import { useEmployees } from '@/modules/users/hooks/useEmployees';
 import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
 import { Button } from '@/modules/core/ui/primitives/button';
 import {

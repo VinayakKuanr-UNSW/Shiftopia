@@ -11,7 +11,7 @@ import {
   Plus,
   X as XIcon,
 } from 'lucide-react';
-import { Group } from '@/types';
+import { Group } from '@/modules/core/types';
 import { cn } from '@/modules/core/lib/utils';
 
 interface Props {

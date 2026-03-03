@@ -17,7 +17,7 @@ import {
 } from '@/modules/core/ui/primitives/select';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Clock, User, Calendar, X, AlertTriangle } from 'lucide-react';
-import { Shift, Employee } from '@/types';
+import { Shift, Employee } from '@/modules/core/types';
 import { cn } from '@/modules/core/lib/utils';
 import { supabase } from '@/platform/realtime/client';
 

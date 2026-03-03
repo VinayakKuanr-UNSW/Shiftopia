@@ -1,5 +1,5 @@
 
-import { Employee, Shift } from '@/types';
+import { Employee, Shift } from '@/modules/core/types';
 
 // ==========================================
 // DB / DOMAIN TYPES

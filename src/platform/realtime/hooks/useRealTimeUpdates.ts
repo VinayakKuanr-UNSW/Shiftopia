@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/platform/realtime/client';
 import { useQueryClient } from '@tanstack/react-query';
-import { ErrorHandler } from '@/utils/error-handler';
+import { ErrorHandler } from '@/modules/core/lib/error-handler';
 
 export const useRealTimeUpdates = () => {
   const [isConnected, setIsConnected] = useState(false);

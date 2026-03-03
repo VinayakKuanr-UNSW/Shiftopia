@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Role, RemunerationLevel } from '@/types';
+import { Role, RemunerationLevel } from '@/modules/core/types';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 

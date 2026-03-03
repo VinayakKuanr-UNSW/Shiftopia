@@ -19,7 +19,7 @@ import {
   PopoverTrigger,
 } from '@/modules/core/ui/primitives/popover';
 import { Calendar } from '@/modules/core/ui/primitives/calendar';
-import { CalendarView } from '@/hooks/useRosterView';
+import { CalendarView } from '@/modules/rosters/hooks/useRosterView';
 import { cn } from '@/modules/core/lib/utils';
 import DayView from './DayView';
 import ThreeDayView from './ThreeDayView';

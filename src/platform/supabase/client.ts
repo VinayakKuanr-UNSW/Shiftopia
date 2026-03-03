@@ -1,6 +1,6 @@
 
 import { supabase } from '@/platform/realtime/client';
-import type { BroadcastGroup, GroupMember, Broadcast, Notification, Employee } from '@/types/broadcast';
+import type { BroadcastGroup, GroupMember, Broadcast, Notification, Employee } from '@/platform/types/broadcast';
 import { MockStorage } from './mock-storage';
 
 // Helper class to provide typed methods for accessing broadcast tables

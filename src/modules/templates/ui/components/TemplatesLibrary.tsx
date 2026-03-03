@@ -21,7 +21,7 @@ import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
-import { Template, Shift } from '@/types';
+import { Template, Shift } from '@/modules/core/types';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useToast } from '@/modules/core/hooks/use-toast';

@@ -9,7 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/modules/core/ui/prim
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { RosterGroup } from '@/modules/rosters';
-import { Template, Group } from '@/types';
+import { Template, Group } from '@/modules/core/types';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
 

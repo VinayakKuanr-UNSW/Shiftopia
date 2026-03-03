@@ -29,7 +29,7 @@ import {
   isTempId,
   formatDateForDb,
 } from '@/modules/templates/model/templates.types';
-import { getDayBoundsInUTC, DEFAULT_TIMEZONE, getZonedNow } from '@/utils/date.utils';
+import { getDayBoundsInUTC, DEFAULT_TIMEZONE, getZonedNow } from '@/modules/core/lib/date.utils';
 import { parse, isSameMonth, startOfMonth, endOfMonth, format as formatCb } from 'date-fns';
 
 /* ============================================================

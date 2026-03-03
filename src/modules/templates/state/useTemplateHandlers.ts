@@ -1,6 +1,6 @@
 // src/hooks/useTemplateHandlers.ts
 import { useCallback } from 'react';
-import { Template, Group, SubGroup, Shift } from '@/types';
+import { Template, Group, SubGroup, Shift } from '@/modules/core/types';
 
 interface UseTemplateHandlersProps {
   templates: Template[];

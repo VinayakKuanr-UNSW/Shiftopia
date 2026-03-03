@@ -2,9 +2,9 @@ import { supabase } from '@/platform/realtime/client';
 import { Shift, isValidUuid, safeUuid, calculateMinutesBetweenTimes } from '../domain/shift.entity';
 import { CreateShiftData, UpdateShiftData } from './shifts.dto';
 import { complianceService } from '../services/compliance.service';
-import { callRpc, callAuthenticatedRpc, callAuthenticatedVoidRpc, requireUser } from '@/lib/rpc/client';
+import { callRpc, callAuthenticatedRpc, callAuthenticatedVoidRpc, requireUser } from '@/platform/supabase/rpc/client';
 import { shiftsQueries } from './shifts.queries';
-import { ComplianceError } from '@/lib/rpc/errors';
+import { ComplianceError } from '@/platform/supabase/rpc/errors';
 import {
     CreateShiftResponseSchema,
     UpdateShiftResponseSchema,

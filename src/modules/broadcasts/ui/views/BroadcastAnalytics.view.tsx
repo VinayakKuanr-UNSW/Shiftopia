@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/modules/core/ui/prim
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
 import { useAuth } from '@/platform/auth/useAuth';
-import { BroadcastDbClient } from '@/utils/db-client';
+import { BroadcastDbClient } from '@/platform/supabase/client';
 
 interface AnalyticsData {
     totalGroups: number;

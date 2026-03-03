@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Roster } from '@/types';
+import { Roster } from '@/modules/core/types';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'date-fns';
 import { isSydneyToday, isSydneyPast } from '@/modules/core/lib/date.utils';
 import { Clock, ChevronDown, ChevronUp, Lock } from 'lucide-react';

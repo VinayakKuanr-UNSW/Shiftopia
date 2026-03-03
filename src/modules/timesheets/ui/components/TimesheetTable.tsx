@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { useTheme } from "@/modules/core/contexts/ThemeContext";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/modules/core/hooks/use-toast";
 import { Button } from '@/modules/core/ui/primitives/button';
 import {
     Tabs,

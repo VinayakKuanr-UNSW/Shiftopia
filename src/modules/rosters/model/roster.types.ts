@@ -1,5 +1,5 @@
 // src/modules/rosters/model/roster.types.ts
-import { Employee, Shift } from '@/types';
+import { Employee, Shift } from '@/modules/core/types';
 
 // ============================================================
 // ENUMS

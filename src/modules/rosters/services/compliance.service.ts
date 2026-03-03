@@ -17,8 +17,8 @@
 
 import { supabase } from '@/platform/realtime/client';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
-import { ok, err, type Result } from '@/lib/rpc/result';
-import { AppError } from '@/lib/rpc/errors';
+import { ok, err, type Result } from '@/platform/supabase/rpc/result';
+import { AppError } from '@/platform/supabase/rpc/errors';
 import {
   OverlapCheckSchema,
   WeeklyHoursSchema,

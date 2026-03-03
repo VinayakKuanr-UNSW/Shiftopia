@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Edit, Trash, Clock, User, Award } from 'lucide-react';
-import { Employee, ShiftStatus } from '@/types';
+import { Employee, ShiftStatus } from '@/modules/core/types';
 
 interface ShiftProps {
   id: string;

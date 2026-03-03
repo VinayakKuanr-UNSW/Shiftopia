@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Roster, DepartmentName, DepartmentColor } from '@/types';
+import { Roster, DepartmentName, DepartmentColor } from '@/modules/core/types';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { ShiftChip } from '../ShiftChip';
 import { cn } from '@/modules/core/lib/utils';

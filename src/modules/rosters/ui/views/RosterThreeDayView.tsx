@@ -1,5 +1,5 @@
 import React from 'react';
-import { Roster } from '@/types';
+import { Roster } from '@/modules/core/types';
 import { addDays, format } from 'date-fns';
 import { Clock } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';

@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primi
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
-import { CalendarView } from '@/hooks/useRosterView';
+import { CalendarView } from '@/modules/rosters/hooks/useRosterView';
 import { useHotkeys } from 'react-hotkeys-hook';
 
 interface RosterHeaderProps {

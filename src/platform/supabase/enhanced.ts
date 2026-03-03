@@ -3,7 +3,7 @@ import { supabase } from '@/platform/realtime/client';
 import { BroadcastDbClient } from './db-client';
 import { ErrorHandler } from './error-handler';
 import { SchemaValidator } from './schema-validator';
-import type { BroadcastGroup, GroupMember, Broadcast, Employee } from '@/types/broadcast';
+import type { BroadcastGroup, GroupMember, Broadcast, Employee } from '@/platform/types/broadcast';
 import { MockStorage } from './mock-storage';
 
 export class EnhancedBroadcastDbClient extends BroadcastDbClient {

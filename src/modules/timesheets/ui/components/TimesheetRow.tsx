@@ -13,7 +13,7 @@ import {
 import { ShiftStatusBadge } from "./ShiftStatusBadge";
 import { TimesheetStatusBadge } from "./TimesheetStatusBadge";
 import { AuditTrailModal } from "./audit/AuditTrailModal";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/modules/core/hooks/use-toast";
 import { Button } from '@/modules/core/ui/primitives/button';
 import {
     Tooltip,

@@ -11,8 +11,8 @@ import {
   DialogFooter,
 } from '@/modules/core/ui/primitives/dialog';
 import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
-import { Employee, Shift } from '@/types';
-import { useEmployees } from '@/api/hooks';
+import { Employee, Shift } from '@/modules/core/types';
+import { useEmployees } from '@/modules/users/hooks/useEmployees';
 import { format, parseISO } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';

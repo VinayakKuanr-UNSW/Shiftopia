@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Roster, Group, DepartmentName, DepartmentColor } from '@/types';
+import { Roster, Group, DepartmentName, DepartmentColor } from '@/modules/core/types';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isToday } from 'date-fns';
 import { RosterDayView } from './views/RosterDayView';
 import { RosterThreeDayView } from './views/RosterThreeDayView';
@@ -13,11 +13,11 @@ import AddGroupDialog from './dialogs/AddGroupDialog';
 import { Clock, Filter, Plus, Calendar as CalendarIcon, List, Grid2X2, Users } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
-import { FilterCategory } from '@/types/roster';
+import { FilterCategory } from '@/modules/rosters/model/roster.types';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useDrop } from 'react-dnd';
-import { CalendarView } from '@/hooks/useRosterView';
+import { CalendarView } from '@/modules/rosters/hooks/useRosterView';
 
 interface RosterCalendarProps {
   selectedDate: Date;

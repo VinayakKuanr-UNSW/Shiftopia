@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp, Edit, Plus, Trash, Copy } from 'lucide-react';
 import { format } from 'date-fns';
 import { getSydneyToday } from '@/modules/core/lib/date.utils';
 import ShiftItem from '@/modules/rosters/ui/components/ShiftItem';
-import { SubGroup } from '@/types';
+import { SubGroup } from '@/modules/core/types';
 import AddShiftDialog from '../dialogs/AddShiftDialog';
 import { EditSubGroupDialog } from '../dialogs/EditSubGroupDialog';
 import { useToast } from '@/modules/core/hooks/use-toast';

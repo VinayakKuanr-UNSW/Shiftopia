@@ -6,7 +6,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { Badge } from '@/modules/core/ui/primitives/badge';
-import { Template } from '@/types';
+import { Template } from '@/modules/core/types';
 import { useDrag, useDrop } from 'react-dnd';
 
 export interface TemplateSummary {
