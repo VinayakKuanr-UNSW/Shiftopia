@@ -49,7 +49,7 @@ export const shiftsQueries = {
             .select(SHIFT_SELECT)
             .eq('id', shiftId)
             .is('deleted_at', null)
-            .single();
+            .maybeSingle();
 
         if (error) {
             console.error('Error fetching shift:', error);

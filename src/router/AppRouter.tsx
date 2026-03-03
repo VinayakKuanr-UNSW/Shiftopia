@@ -32,6 +32,7 @@ const MyBroadcastsPage = lazy(() => import('@/modules/broadcasts/ui/pages/MyBroa
 // Rostering
 const TemplatesPage = lazy(() => import('@/modules/templates/pages/TemplatesPage'));
 const RostersPlannerPage = lazy(() => import('@/modules/rosters/pages/RostersPlannerPage'));
+const LaborDemandForecastingPage = lazy(() => import('@/modules/rosters/pages/LaborDemandForecastingPage'));
 const TimesheetPage = lazy(() => import('@/modules/timesheets/ui/TimesheetPage'));
 const AuditTrailPage = lazy(() => import('@/modules/audit/pages/AuditTrailPage'));
 
@@ -185,6 +186,15 @@ const AppRouter: React.FC = () => {
                 element={
                     <ProtectedRouteWithLayout requiredFeature="rosters" noPadding>
                         <RostersPlannerPage />
+                    </ProtectedRouteWithLayout>
+                }
+            />
+
+            <Route
+                path="/labor-demand"
+                element={
+                    <ProtectedRouteWithLayout requiredFeature="rosters">
+                        <LaborDemandForecastingPage />
                     </ProtectedRouteWithLayout>
                 }
             />

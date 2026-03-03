@@ -27,6 +27,7 @@ import {
   ClipboardList,
   FileText,
   LogOut,
+  Activity,
 } from 'lucide-react';
 import { useAuth } from '@/platform/auth/useAuth';
 import { cn } from '@/modules/core/lib/utils';
@@ -66,7 +67,8 @@ type IconColorKey =
   | 'logo'
   | 'help'
   | 'audit'
-  | 'contracts';
+  | 'contracts'
+  | 'laborDemand';
 
 const iconColorMap: Record<IconColorKey, string> = {
   dashboard: 'text-blue-400',
@@ -93,6 +95,7 @@ const iconColorMap: Record<IconColorKey, string> = {
   help: 'text-blue-400',
   audit: 'text-emerald-400',
   contracts: 'text-violet-400',
+  laborDemand: 'text-fuchsia-400',
 };
 
 /* ============================================================
@@ -368,6 +371,17 @@ const AppSidebar: React.FC = () => {
                   label="Rosters"
                   isActive={isRouteActive('/rosters')}
                   description="Manage schedules"
+                />
+              )}
+
+              {hasPermission('rosters') && (
+                <NavigationItem
+                  to="/labor-demand"
+                  icon={Activity}
+                  iconColor={iconColorMap.laborDemand}
+                  label="Labor Demand"
+                  isActive={isRouteActive('/labor-demand')}
+                  description="Demand forecasting"
                 />
               )}
 

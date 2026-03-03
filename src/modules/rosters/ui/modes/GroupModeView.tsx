@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Zap,
   Lock,
+  Wand2,
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
@@ -82,6 +83,8 @@ import { groupShiftsIntoBuckets, type ShiftBucket as ShiftBucketType } from '@/m
 import { ShiftBucket, type BucketShiftData } from '@/modules/rosters/ui/components/ShiftBucket';
 import type { GroupProjection } from '@/modules/rosters/domain/projections/types';
 import type { CoverageHealth } from '@/modules/rosters/domain/projections/utils/coverage';
+import { AutoScheduleModal } from '@/modules/rosters/ui/dialogs/AutoScheduleModal';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 
 // ============================================================================
 // DRAG & DROP TYPE
@@ -568,6 +571,48 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   // ==================== EMERGENCY ALERT STATE ====================
   const [isEmergencyAlertOpen, setIsEmergencyAlertOpen] = useState(false);
   const [emergencyAlertMessage, setEmergencyAlertMessage] = useState('');
+
+  // ==================== AUTO SCHEDULE MODAL STATE ====================
+  const [isAutoScheduleOpen, setIsAutoScheduleOpen] = useState(false);
+
+  // ==================== AUTO SCHEDULE HELPERS ====================
+  // Disable if: No unassigned or draft shifts in current context, or fully published/locked
+  const { canAutoSchedule, autoScheduleReason } = useMemo(() => {
+    return { canAutoSchedule: true, autoScheduleReason: "" };
+    /*
+    let unassignedOrDraftCount = 0;
+    let allLocked = true;
+
+    // Check if there's at least one external shift to even consider
+    if (!externalShifts || externalShifts.length === 0) {
+      return { canAutoSchedule: false, autoScheduleReason: "No shifts exist in this view." };
+    }
+
+    externalShifts.forEach(shift => {
+      const isUnassigned = !shift.assigned_employee_id;
+      const isDraft = shift.lifecycle_status === 'Draft' || shift.is_draft;
+
+      if (isUnassigned || isDraft) {
+        unassignedOrDraftCount++;
+      }
+
+      const isLocked = shift.lifecycle_status === 'Published' || isShiftLocked(shift.shift_date, shift.start_time, 'roster_management');
+      if (!isLocked) {
+        allLocked = false;
+      }
+    });
+
+    if (unassignedOrDraftCount === 0) {
+      return { canAutoSchedule: false, autoScheduleReason: "No eligible (unassigned or draft) shifts to auto-schedule." };
+    }
+
+    if (allLocked) {
+      return { canAutoSchedule: false, autoScheduleReason: "All shifts in this view are locked or published." };
+    }
+
+    return { canAutoSchedule: true, autoScheduleReason: "" };
+    */
+  }, [externalShifts]);
 
   // ==================== PROFILE DATA (via React Query) ====================
   const { data: employeeProfiles = [] } = useEmployees(organizationId);
@@ -1464,6 +1509,37 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           )}
 
           <div className="p-4 space-y-6">
+            {/* Context Actions Header */}
+            <div className="flex justify-end px-2 -mb-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsAutoScheduleOpen(true)}
+                        disabled={!canAutoSchedule}
+                        className={cn(
+                          "transition-all duration-200 border-indigo-200 dark:border-indigo-800/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 shadow-sm",
+                          canAutoSchedule
+                            ? "text-indigo-600 dark:text-indigo-400 font-semibold"
+                            : "opacity-60 cursor-not-allowed text-indigo-400/50"
+                        )}
+                      >
+                        <Wand2 className="w-4 h-4 mr-2" />
+                        AutoSchedule
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {!canAutoSchedule && (
+                    <TooltipContent className="bg-slate-900 text-white border-slate-800">
+                      <p>{autoScheduleReason}</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
             {visualGroups.map((group) => {
               const glassStyle = group.type === 'unassigned'
                 ? UNASSIGNED_GLASS_STYLE
@@ -1955,6 +2031,20 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         />
       )}
 
+      <AutoScheduleModal
+        isOpen={isAutoScheduleOpen}
+        onOpenChange={setIsAutoScheduleOpen}
+        context={{
+          organizationId: organizationIdRef.current,
+          departmentId: departmentIdRef.current,
+          subDepartmentId: subDepartmentIdRef.current,
+          dateStart: dateRangeStart || undefined,
+          dateEnd: dateRangeEnd || undefined
+        }}
+        onAssignmentsApplied={() => {
+          queryClient.invalidateQueries({ queryKey: ['shifts'] });
+        }}
+      />
     </DndProvider>
   );
 };
