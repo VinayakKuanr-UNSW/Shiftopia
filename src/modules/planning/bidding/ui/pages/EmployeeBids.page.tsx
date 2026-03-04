@@ -95,45 +95,27 @@ interface BidData {
 // ============================================================================
 // HELPERS
 // ============================================================================
-// Premium Department Color Styling (Badges)
+// Department badge classes — uses CSS defined in index.css (light + dark adaptive)
 function getDeptColor(groupType: string | null | undefined, dept: string): string {
-    const base = "font-medium backdrop-blur-sm";
-
-    // Convention Centre (Blue)
     if (groupType === 'convention_centre' || dept.toLowerCase().includes('convention'))
-        return `${base} bg - blue - 500 / 10 border - blue - 400 / 30 text - blue - 200`;
-
-    // Exhibition Centre (Green/Emerald)
+        return 'dept-badge-convention';
     if (groupType === 'exhibition_centre' || dept.toLowerCase().includes('exhibition'))
-        return `${base} bg - emerald - 500 / 10 border - emerald - 400 / 30 text - emerald - 200`;
-
-    // Theatre (Red)
+        return 'dept-badge-exhibition';
     if (groupType === 'theatre' || dept.toLowerCase().includes('theatre'))
-        return `${base} bg - red - 500 / 10 border - red - 400 / 30 text - red - 200`;
-
-    // Default (Slate/Neutral)
-    return `${base} bg - white / 5 border - white / 20 text - slate - 300`;
+        return 'dept-badge-theatre';
+    return 'dept-badge-default';
 }
 
-// Premium Card Background Styling (Glassmorphism & Gradients)
+// Department card classes — uses CSS defined in index.css (light + dark adaptive)
 function getCardBg(groupType: string | null | undefined, dept: string): string {
-    // Base styles for all cards: Glass effect, subtle border, hover lift + shadow
-    const base = "relative overflow-hidden backdrop-blur-md border shadow-lg transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 hover:border-opacity-50 group";
-
-    // Convention Centre
+    const base = 'dept-card-base';
     if (groupType === 'convention_centre' || dept.toLowerCase().includes('convention'))
-        return `${base} bg - gradient - to - br from - blue - 900 / 40 via - blue - 950 / 40 to - slate - 900 / 60 border - blue - 500 / 20 hover: border - blue - 400 / 40 hover: shadow - blue - 900 / 20`;
-
-    // Exhibition Centre
+        return `${base} dept-card-convention`;
     if (groupType === 'exhibition_centre' || dept.toLowerCase().includes('exhibition'))
-        return `${base} bg - gradient - to - br from - emerald - 900 / 40 via - emerald - 950 / 40 to - slate - 900 / 60 border - emerald - 500 / 20 hover: border - emerald - 400 / 40 hover: shadow - emerald - 900 / 20`;
-
-    // Theatre
+        return `${base} dept-card-exhibition`;
     if (groupType === 'theatre' || dept.toLowerCase().includes('theatre'))
-        return `${base} bg - gradient - to - br from - red - 900 / 40 via - red - 950 / 40 to - slate - 900 / 60 border - red - 500 / 20 hover: border - red - 400 / 40 hover: shadow - red - 900 / 20`;
-
-    // Default
-    return `${base} bg - gradient - to - br from - slate - 800 / 50 via - slate - 900 / 50 to - black / 40 border - white / 10 hover: border - white / 20 hover: shadow - white / 5`;
+        return `${base} dept-card-theatre`;
+    return `${base} dept-card-default`;
 }
 
 function toSeconds(t: string): number {
@@ -485,7 +467,7 @@ export const EmployeeBidsPage: React.FC = () => {
                         disabled={!isBidCard && !shift.isEligible}
                         className="mr-2 h-4 w-4"
                     />
-                    <span className="text-xs text-white/60">Select</span>
+                    <span className="text-xs text-slate-500 dark:text-white/60">Select</span>
 
                     {/* Compliance Badge - only for available shifts */}
                     {!isBidCard && (
@@ -520,14 +502,14 @@ export const EmployeeBidsPage: React.FC = () => {
                 {/* SUB-GROUP BADGE */}
                 {shift.subGroup && shift.subGroup !== 'General' && (
                     <div className="mb-2">
-                        <Badge variant="outline" className={`text - [10px] px - 2 py - 0.5 font - medium border ${shift.subGroupColor} `}>
+                        <Badge variant="outline" className={`text-[10px] px-2 py-0.5 font-medium border ${shift.subGroupColor}`}>
                             {shift.subGroup}
                         </Badge>
                     </div>
                 )}
 
                 {/* BREADCRUMB: Org → Dept → SubDept */}
-                <div className="text-[10px] text-white/50 mb-1 flex items-center gap-1">
+                <div className="text-[10px] text-slate-500 dark:text-white/50 mb-1 flex items-center gap-1">
                     <span>{shift.organization}</span>
                     <span>→</span>
                     <span>{shift.department}</span>
@@ -540,83 +522,83 @@ export const EmployeeBidsPage: React.FC = () => {
                 </div>
 
                 {/* ROLE */}
-                <h3 className="font-semibold text-white text-base mb-3">{shift.role}</h3>
+                <h3 className="font-semibold text-slate-900 dark:text-white text-base mb-3">{shift.role}</h3>
 
                 {/* DATE */}
-                <div className="flex items-center text-sm text-white/80 mb-2">
-                    <Calendar size={14} className="text-white/50 mr-2" />
+                <div className="flex items-center text-sm text-slate-700 dark:text-white/80 mb-2">
+                    <Calendar size={14} className="text-slate-400 dark:text-white/50 mr-2" />
                     <span>{shift.date} ({shift.weekday})</span>
                 </div>
 
                 {/* TIMINGS */}
-                <div className="flex items-center text-sm text-white/80 mb-2">
-                    <Clock size={14} className="text-white/50 mr-2" />
+                <div className="flex items-center text-sm text-slate-700 dark:text-white/80 mb-2">
+                    <Clock size={14} className="text-slate-400 dark:text-white/50 mr-2" />
                     <span>{shift.startTime} - {shift.endTime}</span>
                 </div>
 
                 {/* BREAKS */}
-                <div className="flex items-center text-sm text-white/80 mb-2">
-                    <Coffee size={14} className="text-white/50 mr-2" />
+                <div className="flex items-center text-sm text-slate-700 dark:text-white/80 mb-2">
+                    <Coffee size={14} className="text-slate-400 dark:text-white/50 mr-2" />
                     <span>Paid: {shift.paidBreak}m | Unpaid: {shift.unpaidBreak}m</span>
                 </div>
 
                 {/* NET LENGTH */}
-                <div className="bg-white/5 rounded px-2 py-1 mb-2 text-xs text-white/70">
-                    Net Length: <span className="font-bold text-white">{Math.round(shift.netLength)}m</span> ({(shift.netLength / 60).toFixed(1)}h)
+                <div className="bg-slate-100 dark:bg-white/5 rounded px-2 py-1 mb-2 text-xs text-slate-500 dark:text-white/70">
+                    Net Length: <span className="font-bold text-slate-800 dark:text-white">{Math.round(shift.netLength)}m</span> ({(shift.netLength / 60).toFixed(1)}h)
                 </div>
 
                 {/* BIDDING WINDOW COUNTDOWN */}
                 {msUntilClose > 0 && (
-                    <div className="bg-amber-900/20 border border-amber-500/30 rounded px-2 py-1 mb-3 text-xs text-amber-300 flex items-center gap-1">
+                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-500/30 rounded px-2 py-1 mb-3 text-xs text-amber-700 dark:text-amber-300 flex items-center gap-1">
                         <Clock size={12} />
                         <span>Closes in {(() => {
                             const hours = Math.floor(msUntilClose / (1000 * 60 * 60));
                             const mins = Math.floor((msUntilClose % (1000 * 60 * 60)) / (1000 * 60));
-                            if (hours > 0) return `${hours}h ${mins} m`;
-                            return `${mins} m`;
+                            if (hours > 0) return `${hours}h ${mins}m`;
+                            return `${mins}m`;
                         })()}</span>
                     </div>
                 )}
                 {isExpired && (
-                    <div className="bg-red-900/20 border border-red-500/30 rounded px-2 py-1 mb-3 text-xs text-red-300 flex items-center gap-1">
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-500/30 rounded px-2 py-1 mb-3 text-xs text-red-700 dark:text-red-300 flex items-center gap-1">
                         <Ban size={12} />
                         <span>Bidding Closed</span>
                     </div>
                 )}
 
-                {/* STATUS INDICATORS ROW (Consolidated from 3x2 to single row) */}
-                <div className="bg-[#0f172a]/50 rounded-lg border border-white/5 p-2 mb-4">
+                {/* STATUS INDICATORS ROW */}
+                <div className="bg-slate-50 dark:bg-[#0f172a]/50 rounded-lg border border-slate-200 dark:border-white/5 p-2 mb-4">
                     <div className="grid grid-cols-6 gap-1 items-center">
                         {/* 1. ID */}
-                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-white/5 transition-colors" title={`State Code: ${shift.stateId || 'Unknown'}`}>
-                            <div className="w-3.5 h-3.5 flex items-center justify-center font-mono text-[9px] font-bold text-white/40 border border-white/20 rounded mb-0.5">#</div>
-                            <span className="text-[10px] font-bold text-blue-400 leading-none">{shift.stateId || 'S?'}</span>
+                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-slate-100 dark:hover:bg-white/5 transition-colors" title={`State Code: ${shift.stateId || 'Unknown'}`}>
+                            <div className="w-3.5 h-3.5 flex items-center justify-center font-mono text-[9px] font-bold text-slate-400 dark:text-white/40 border border-slate-300 dark:border-white/20 rounded mb-0.5">#</div>
+                            <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 leading-none">{shift.stateId || 'S?'}</span>
                         </div>
 
                         {/* 2. LIFECYCLE (Set to Published) */}
-                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-white/5 transition-colors" title="Lifecycle: Published">
+                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-slate-100 dark:hover:bg-white/5 transition-colors" title="Lifecycle: Published">
                             <Megaphone className="w-3.5 h-3.5 text-blue-500 mb-0.5" />
-                            <span className="text-[8px] text-gray-500 font-bold uppercase tracking-tighter">PUB</span>
+                            <span className="text-[8px] text-slate-400 dark:text-gray-500 font-bold uppercase tracking-tighter">PUB</span>
                         </div>
 
                         {/* 3. ASSIGNMENT */}
-                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-white/5 transition-colors" title={shift.assignedTo ? `Assigned to ${shift.assignedTo}` : 'Unassigned'}>
+                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-slate-100 dark:hover:bg-white/5 transition-colors" title={shift.assignedTo ? `Assigned to ${shift.assignedTo}` : 'Unassigned'}>
                             {shift.assignedTo ? (
                                 <UserCheck className="w-3.5 h-3.5 text-green-500 mb-0.5" />
                             ) : (
                                 <UserPlus className="w-3.5 h-3.5 text-amber-500 mb-0.5" />
                             )}
-                            <span className="text-[8px] text-gray-500 font-bold uppercase tracking-tighter">{shift.assignedTo ? 'ASN' : 'VAC'}</span>
+                            <span className="text-[8px] text-slate-400 dark:text-gray-500 font-bold uppercase tracking-tighter">{shift.assignedTo ? 'ASN' : 'VAC'}</span>
                         </div>
 
                         {/* 4. OFFER (Status Indicator) */}
-                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-white/5 transition-colors" title="Offer Status: None">
-                            <Circle className="w-3.5 h-3.5 text-gray-600 mb-0.5" />
-                            <span className="text-[8px] text-gray-600 font-bold uppercase tracking-tighter">OFF</span>
+                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-slate-100 dark:hover:bg-white/5 transition-colors" title="Offer Status: None">
+                            <Circle className="w-3.5 h-3.5 text-slate-400 dark:text-gray-600 mb-0.5" />
+                            <span className="text-[8px] text-slate-400 dark:text-gray-600 font-bold uppercase tracking-tighter">OFF</span>
                         </div>
 
                         {/* 5. BIDDING (Priority) */}
-                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-white/5 transition-colors" title={`Bidding: ${shift.isUrgent ? 'Urgent' : 'Normal'}`}>
+                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-slate-100 dark:hover:bg-white/5 transition-colors" title={`Bidding: ${shift.isUrgent ? 'Urgent' : 'Normal'}`}>
                             {shift.isUrgent ? (
                                 <Flame className="w-3.5 h-3.5 text-red-500 mb-0.5" />
                             ) : (
@@ -631,9 +613,9 @@ export const EmployeeBidsPage: React.FC = () => {
                         </div>
 
                         {/* 6. TRADE */}
-                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-white/5 transition-colors" title="Trade: None">
-                            <Minus className="w-3.5 h-3.5 text-gray-600 mb-0.5" />
-                            <span className="text-[8px] text-gray-600 font-bold uppercase tracking-tighter">TRD</span>
+                        <div className="flex flex-col items-center justify-center p-1 rounded hover:bg-slate-100 dark:hover:bg-white/5 transition-colors" title="Trade: None">
+                            <Minus className="w-3.5 h-3.5 text-slate-400 dark:text-gray-600 mb-0.5" />
+                            <span className="text-[8px] text-slate-400 dark:text-gray-600 font-bold uppercase tracking-tighter">TRD</span>
                         </div>
                     </div>
                 </div>
@@ -642,15 +624,15 @@ export const EmployeeBidsPage: React.FC = () => {
                 {isBidCard ? (
                     // My Bids tab: Show log status instead of buttons
                     bidStatus === 'pending' ? (
-                        <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm font-medium">
+                        <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm font-medium">
                             <Clock className="h-4 w-4" /> Awaiting Manager Review
                         </div>
                     ) : bidStatus === 'accepted' ? (
-                        <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-sm font-medium">
+                        <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-sm font-medium">
                             <CheckCircle className="h-4 w-4" /> Shift Won — Assigned to You
                         </div>
                     ) : (
-                        <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-white/5 border border-white/10 text-white/40 text-sm">
+                        <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40 text-sm">
                             <Ban className="h-4 w-4" /> Bid Not Selected
                         </div>
                     )
@@ -694,7 +676,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                         "flex-1",
                                         canBid
                                             ? "bg-purple-600 hover:bg-purple-700 text-white"
-                                            : "bg-white/10 text-white/50 cursor-not-allowed"
+                                            : "bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-white/50 cursor-not-allowed"
                                     )}
                                     disabled={isBlocked || placeBidMutation.isPending}
                                     onClick={() => {
@@ -722,7 +704,7 @@ export const EmployeeBidsPage: React.FC = () => {
     // RENDER
     // ========================================================================
     return (
-        <div className="min-h-screen w-full p-4 md:p-8">
+        <div className="w-full text-foreground">
             {/* FILTER BAR */}
             {/* Scope Filter */}
             <ScopeFilterBanner
@@ -741,7 +723,7 @@ export const EmployeeBidsPage: React.FC = () => {
                         label: 'My Bids',
                         count: filteredMyBids.length,
                         subContent: (
-                            <div className="flex bg-white/5 p-1 rounded-lg border border-white/10">
+                            <div className="flex bg-slate-100 dark:bg-white/5 p-1 rounded-lg border border-slate-200 dark:border-white/10">
                                 {['pending', 'accepted', 'rejected'].map(status => (
                                     <button
                                         key={status}
@@ -752,8 +734,8 @@ export const EmployeeBidsPage: React.FC = () => {
                                         className={cn(
                                             "px-3 py-1 text-[11px] font-medium rounded-md capitalize transition-colors",
                                             myBidsSubToggle === status
-                                                ? "bg-blue-500/20 text-blue-400"
-                                                : "text-white/50 hover:text-white/80 hover:bg-white/5"
+                                                ? "bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400"
+                                                : "text-slate-500 dark:text-white/50 hover:text-slate-800 dark:hover:text-white/80 hover:bg-slate-200 dark:hover:bg-white/5"
                                         )}
                                     >
                                         {status}
@@ -781,14 +763,14 @@ export const EmployeeBidsPage: React.FC = () => {
             <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className="space-y-4">
                 {/* TAB: Available Shifts */}
                 <TabsContent value="available" className="space-y-4">
-                    <div className="relative mb-6 overflow-hidden rounded-xl border-l-[3px] border-l-blue-500 bg-gradient-to-r from-blue-500/10 via-blue-900/5 to-transparent p-4 backdrop-blur-sm">
+                    <div className="relative mb-6 overflow-hidden rounded-xl border-l-[3px] border-l-blue-500 bg-gradient-to-r from-blue-50 dark:from-blue-500/10 via-blue-50/50 dark:via-blue-900/5 to-transparent p-4 backdrop-blur-sm">
                         <div className="flex items-start gap-3">
-                            <div className="rounded-full bg-blue-500/20 p-1.5 ring-1 ring-blue-500/30">
-                                <Info className="h-4 w-4 text-blue-400" />
+                            <div className="rounded-full bg-blue-100 dark:bg-blue-500/20 p-1.5 ring-1 ring-blue-200 dark:ring-blue-500/30">
+                                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                             </div>
                             <div className="space-y-1">
-                                <h4 className="text-sm font-medium text-blue-200">Available Shifts</h4>
-                                <p className="text-sm text-blue-200/70 leading-relaxed max-w-2xl">
+                                <h4 className="text-sm font-medium text-blue-700 dark:text-blue-200">Available Shifts</h4>
+                                <p className="text-sm text-blue-600/80 dark:text-blue-200/70 leading-relaxed max-w-2xl">
                                     Browse and express interest in shifts matching your role and department. Use the global scope to refine your view.
                                 </p>
                             </div>
@@ -796,14 +778,14 @@ export const EmployeeBidsPage: React.FC = () => {
                     </div>
 
                     <div className="flex gap-2 items-center">
-                        <div className="flex items-center bg-white/5 px-2 py-1 rounded border border-white/10">
+                        <div className="flex items-center bg-slate-100 dark:bg-white/5 px-2 py-1 rounded border border-slate-200 dark:border-white/10">
                             <input
                                 type="checkbox"
                                 checked={filteredAvailableShifts.length > 0 && filteredAvailableShifts.every(s => selectedBidIds.includes(s.id))}
                                 onChange={(e) => handleSelectAllAvailable(e.target.checked)}
                                 className="mr-2 h-3 w-3"
                             />
-                            <span className="text-xs text-white/70">Select All</span>
+                            <span className="text-xs text-slate-600 dark:text-white/70">Select All</span>
                         </div>
                         <Button size="sm" onClick={handleBulkExpressInterest} disabled={selectedBidIds.length === 0}>
                             Express Interest ({selectedBidIds.length})
@@ -814,13 +796,13 @@ export const EmployeeBidsPage: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                             {filteredAvailableShifts.map(shift => renderShiftCard(shift, false))}
                             {filteredAvailableShifts.length === 0 && (
-                                <div className="col-span-full text-center py-8 text-white/50">No shifts match filters.</div>
+                                <div className="col-span-full text-center py-8 text-slate-400 dark:text-white/50">No shifts match filters.</div>
                             )}
                         </div>
                     ) : (
-                        <div className="overflow-x-auto border border-white/10 rounded-lg">
-                            <table className="w-full text-sm text-white">
-                                <thead className="bg-black/40 text-xs">
+                        <div className="overflow-x-auto border border-slate-200 dark:border-white/10 rounded-lg">
+                            <table className="w-full text-sm text-slate-800 dark:text-white">
+                                <thead className="bg-slate-100 dark:bg-black/40 text-xs">
                                     <tr>
                                         <th className="p-3 text-left w-[40px]">
                                             <input
@@ -854,7 +836,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                         const isExpired = now >= biddingCloses;
 
                                         return (
-                                            <tr key={shift.id} className="border-t border-white/10 hover:bg-white/5">
+                                            <tr key={shift.id} className="border-t border-slate-100 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5">
                                                 <td className="p-3"><input type="checkbox" checked={selectedBidIds.includes(shift.id)} onChange={() => handleSelectBid(shift.id)} disabled={!shift.isEligible} /></td>
                                                 <td className="p-3">{shift.department}</td>
                                                 <td className="p-3">{shift.subGroup}</td>
@@ -877,7 +859,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                                 </td>
                                                 <td className="p-3">
                                                     {isExpired ? (
-                                                        <Button disabled size="sm" className="w-full bg-white/10 text-white/50 h-8 text-xs">
+                                                        <Button disabled size="sm" className="w-full bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-white/50 h-8 text-xs">
                                                             <Ban className="mr-1.5 h-3 w-3" /> Closed
                                                         </Button>
                                                     ) : (
@@ -886,7 +868,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                                             <Button
                                                                 size="sm"
                                                                 variant="outline"
-                                                                className="h-8 text-xs flex-1 border-white/10 hover:bg-purple-500/10 hover:text-purple-400"
+                                                                className="h-8 text-xs flex-1 border-slate-200 dark:border-white/10 hover:bg-purple-50 dark:hover:bg-purple-500/10 hover:text-purple-600 dark:hover:text-purple-400"
                                                                 onClick={() => {
                                                                     setComplianceModalShift(shift);
                                                                     setIsComplianceModalOpen(true);
@@ -900,7 +882,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
-                                                                    className="h-8 text-xs flex-1 border-white/10 hover:bg-red-500/10 hover:text-red-400"
+                                                                    className="h-8 text-xs flex-1 border-slate-200 dark:border-white/10 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
                                                                     onClick={() => handleWithdrawBid(existingBid!.id)}
                                                                 >
                                                                     <XCircle className="mr-1 h-3 w-3" /> Withdraw
@@ -912,7 +894,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                                                         "h-8 text-xs flex-1",
                                                                         canBid
                                                                             ? "bg-purple-600 hover:bg-purple-700 text-white"
-                                                                            : "bg-white/10 text-white/50 cursor-not-allowed"
+                                                                            : "bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-white/50 cursor-not-allowed"
                                                                     )}
                                                                     disabled={isBlocked || placeBidMutation.isPending}
                                                                     onClick={() => {
@@ -957,13 +939,13 @@ export const EmployeeBidsPage: React.FC = () => {
                                 return renderShiftCard(shiftData, true, bid.status);
                             })}
                             {filteredMyBids.length === 0 && (
-                                <div className="col-span-full text-center py-8 text-white/50">No bids yet.</div>
+                                <div className="col-span-full text-center py-8 text-slate-400 dark:text-white/50">No bids yet.</div>
                             )}
                         </div>
                     ) : (
-                        <div className="overflow-x-auto border border-white/10 rounded-lg">
-                            <table className="w-full text-sm text-white">
-                                <thead className="bg-black/40 text-xs">
+                        <div className="overflow-x-auto border border-slate-200 dark:border-white/10 rounded-lg">
+                            <table className="w-full text-sm text-slate-800 dark:text-white">
+                                <thead className="bg-slate-100 dark:bg-black/40 text-xs">
                                     <tr>
                                         <th className="p-3 text-left w-[40px]">
                                         </th>
@@ -975,12 +957,12 @@ export const EmployeeBidsPage: React.FC = () => {
                                 </thead>
                                 <tbody>
                                     {filteredMyBids.map(bid => (
-                                        <tr key={bid.id} className="border-t border-white/10 hover:bg-white/5">
+                                        <tr key={bid.id} className="border-t border-slate-100 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5">
                                             <td className="p-3"></td>
                                             <td className="p-3 text-xs">{bid.bidTime}</td>
                                             <td className="p-3">
                                                 <div className="font-medium">{bid.role}</div>
-                                                <div className="text-xs text-white/50">{bid.department} • {bid.date}</div>
+                                                <div className="text-xs text-slate-500 dark:text-white/50">{bid.department} • {bid.date}</div>
                                             </td>
                                             <td className="p-3"><BidStatusBadge status={bid.status} /></td>
                                             <td className="p-3">
@@ -989,7 +971,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                                 ) : bid.status === 'accepted' ? (
                                                     <span className="text-xs text-emerald-400 flex items-center gap-1"><CheckCircle size={14} /> Won</span>
                                                 ) : (
-                                                    <span className="text-xs text-white/40 flex items-center gap-1"><Ban size={14} /> Failed</span>
+                                                    <span className="text-xs text-slate-400 dark:text-white/40 flex items-center gap-1"><Ban size={14} /> Failed</span>
                                                 )}
                                             </td>
                                         </tr>
@@ -1003,18 +985,18 @@ export const EmployeeBidsPage: React.FC = () => {
 
             {/* COMPLIANCE CHECK DIALOG */}
             <AlertDialog open={showComplianceDialog} onOpenChange={setShowComplianceDialog}>
-                <AlertDialogContent className="bg-[#0f172a] border-white/10 text-white max-w-md">
+                <AlertDialogContent className="bg-background border-border text-foreground max-w-md">
                     <AlertDialogHeader>
                         {complianceResult && complianceResult.status === 'violated' ? (
                             <>
-                                <AlertDialogTitle className="flex items-center gap-2 text-red-400">
+                                <AlertDialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
                                     <XCircle className="h-5 w-5" />
                                     Cannot Place Bid
                                 </AlertDialogTitle>
                                 <AlertDialogDescription asChild>
-                                    <div className="text-white/70">
+                                    <div className="text-muted-foreground">
                                         <span>This shift cannot be accepted due to compliance violations:</span>
-                                        <ul className="mt-2 space-y-1 text-red-300">
+                                        <ul className="mt-2 space-y-1 text-red-600 dark:text-red-300">
                                             {complianceResult.violations.map((v, i) => (
                                                 <li key={i} className="flex items-start gap-2">
                                                     <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
@@ -1027,14 +1009,14 @@ export const EmployeeBidsPage: React.FC = () => {
                             </>
                         ) : complianceResult && complianceResult.warnings.length > 0 ? (
                             <>
-                                <AlertDialogTitle className="flex items-center gap-2 text-amber-400">
+                                <AlertDialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
                                     <AlertTriangle className="h-5 w-5" />
                                     Compliance Warnings
                                 </AlertDialogTitle>
                                 <AlertDialogDescription asChild>
-                                    <div className="text-white/70">
+                                    <div className="text-muted-foreground">
                                         <span>There are potential issues with this shift:</span>
-                                        <ul className="mt-2 space-y-1 text-amber-300">
+                                        <ul className="mt-2 space-y-1 text-amber-600 dark:text-amber-300">
                                             {complianceResult.warnings.map((w, i) => (
                                                 <li key={i} className="flex items-start gap-2">
                                                     <Shield className="h-4 w-4 shrink-0 mt-0.5" />
@@ -1042,7 +1024,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                                 </li>
                                             ))}
                                         </ul>
-                                        <p className="mt-3 text-white/60">Do you want to proceed anyway?</p>
+                                        <p className="mt-3 text-muted-foreground">Do you want to proceed anyway?</p>
                                     </div>
                                 </AlertDialogDescription>
                             </>
@@ -1050,12 +1032,12 @@ export const EmployeeBidsPage: React.FC = () => {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         {complianceResult && complianceResult.status === 'violated' ? (
-                            <AlertDialogAction onClick={handleCancelBid} className="bg-white/10 hover:bg-white/20">
+                            <AlertDialogAction onClick={handleCancelBid} className="bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-foreground">
                                 Understood
                             </AlertDialogAction>
                         ) : (
                             <>
-                                <AlertDialogCancel onClick={handleCancelBid} className="bg-white/10 hover:bg-white/20 border-white/10">
+                                <AlertDialogCancel onClick={handleCancelBid} className="bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 border-slate-200 dark:border-white/10">
                                     Cancel
                                 </AlertDialogCancel>
                                 <AlertDialogAction onClick={handleConfirmBidWithWarning} className="bg-amber-600 hover:bg-amber-700">

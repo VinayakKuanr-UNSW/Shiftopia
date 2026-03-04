@@ -107,8 +107,8 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                     "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
                     "border min-w-[180px] justify-between",
                     isDisabled
-                        ? "bg-white/[0.02] border-white/[0.06] text-white/40 cursor-not-allowed"
-                        : "bg-white/[0.04] border-white/[0.08] text-white/80 hover:bg-white/[0.08] hover:border-white/[0.12] cursor-pointer"
+                        ? "bg-slate-100 dark:bg-white/[0.02] border-slate-200 dark:border-white/[0.06] text-slate-400 dark:text-white/40 cursor-not-allowed"
+                        : "bg-white dark:bg-white/[0.04] border-slate-200 dark:border-white/[0.08] text-slate-700 dark:text-white/80 hover:bg-slate-50 dark:hover:bg-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.12] cursor-pointer"
                 )}
                 disabled={isDisabled}
                 type="button"
@@ -118,10 +118,10 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                     <span className="truncate max-w-[140px]">{displayText}</span>
                 </span>
                 {locked ? (
-                    <Lock className="w-3.5 h-3.5 text-amber-400/60 flex-shrink-0" />
+                    <Lock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400/60 flex-shrink-0" />
                 ) : (
                     <ChevronDown className={cn(
-                        "w-3.5 h-3.5 text-white/40 flex-shrink-0 transition-transform",
+                        "w-3.5 h-3.5 text-slate-400 dark:text-white/40 flex-shrink-0 transition-transform",
                         isOpen && "rotate-180"
                     )} />
                 )}
@@ -130,26 +130,26 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
             {isOpen && !isDisabled && (
                 <>
                     <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-                    <div className="absolute top-full mt-1 left-0 z-50 min-w-[220px] max-h-[280px] overflow-y-auto rounded-lg border border-white/10 bg-[#1a2744] shadow-xl backdrop-blur-xl">
+                    <div className="absolute top-full mt-1 left-0 z-50 min-w-[220px] max-h-[280px] overflow-y-auto rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1a2744] shadow-xl backdrop-blur-xl">
                         {/* Select All — only in multi-select mode */}
                         {multiSelect && options.length > 1 && (
                             <>
                                 <button
                                     onClick={toggleAll}
-                                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-white/70 hover:bg-white/[0.06] transition-colors"
+                                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-600 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors"
                                     type="button"
                                 >
                                     <div className={cn(
                                         "w-4 h-4 rounded border flex items-center justify-center text-[10px] font-bold",
                                         allSelected
                                             ? "bg-primary border-primary text-white"
-                                            : "border-white/20"
+                                            : "border-slate-300 dark:border-white/20"
                                     )}>
                                         {allSelected && '✓'}
                                     </div>
                                     <span className="font-medium">Select All</span>
                                 </button>
-                                <div className="border-t border-white/[0.06]" />
+                                <div className="border-t border-slate-100 dark:border-white/[0.06]" />
                             </>
                         )}
                         {/* Options */}
@@ -157,7 +157,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                             <button
                                 key={opt.id}
                                 onClick={() => toggleOption(opt.id)}
-                                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-white/80 hover:bg-white/[0.06] transition-colors"
+                                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 dark:text-white/80 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors"
                                 type="button"
                             >
                                 <div className={cn(
@@ -167,7 +167,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                                         ? multiSelect
                                             ? "bg-primary border-primary text-white"
                                             : "text-primary"
-                                        : "border-white/20"
+                                        : "border-slate-300 dark:border-white/20"
                                 )}>
                                     {selected.includes(opt.id) && (multiSelect ? '✓' : '●')}
                                 </div>
@@ -175,7 +175,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                             </button>
                         ))}
                         {options.length === 0 && (
-                            <div className="px-3 py-2 text-sm text-white/40 italic">
+                            <div className="px-3 py-2 text-sm text-slate-400 dark:text-white/40 italic">
                                 No options available
                             </div>
                         )}
@@ -307,15 +307,15 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
     return (
         <div className={cn(
             "flex items-center gap-3 p-3 rounded-xl relative z-30",
-            "bg-white/[0.02] border border-white/[0.06] backdrop-blur-sm",
+            "bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.06] backdrop-blur-sm",
             className
         )}>
             {mode && (
                 <span className={cn(
                     "px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider",
                     mode === 'personal'
-                        ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-                        : "bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                        ? "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-500/20"
+                        : "bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-300 dark:border-purple-500/20"
                 )}>
                     {mode}
                 </span>
@@ -323,7 +323,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
 
             <MultiSelect
                 label="Organization"
-                icon={<Building2 className="w-4 h-4 text-blue-400/70" />}
+                icon={<Building2 className="w-4 h-4 text-blue-500 dark:text-blue-400/70" />}
                 options={orgs.map(o => ({ id: o.id, name: o.name }))}
                 selected={selectedOrgIds}
                 onChange={setSelectedOrgIds}
@@ -333,7 +333,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
 
             <MultiSelect
                 label="Department"
-                icon={<Layers className="w-4 h-4 text-emerald-400/70" />}
+                icon={<Layers className="w-4 h-4 text-emerald-600 dark:text-emerald-400/70" />}
                 options={availableDepts}
                 selected={selectedDeptIds}
                 onChange={setSelectedDeptIds}
@@ -344,7 +344,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
 
             <MultiSelect
                 label="Sub-Department"
-                icon={<Users2 className="w-4 h-4 text-amber-400/70" />}
+                icon={<Users2 className="w-4 h-4 text-amber-600 dark:text-amber-400/70" />}
                 options={availableSubDepts}
                 selected={selectedSubDeptIds}
                 onChange={setSelectedSubDeptIds}

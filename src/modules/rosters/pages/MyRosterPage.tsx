@@ -44,17 +44,17 @@ const MyRosterPage: React.FC = () => {
 
   if (!user) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-transparent">
+      <div className="flex flex-col items-center justify-center h-screen bg-background">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="text-center p-8 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-xl"
+          className="text-center p-8 rounded-3xl bg-card border border-border shadow-sm backdrop-blur-xl"
         >
-          <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
             <CalendarDays className="h-8 w-8 text-primary" />
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">Authentication Required</h2>
-          <p className="text-blue-200/60">Please log in to view your personal roster.</p>
+          <h2 className="text-2xl font-bold text-foreground mb-2">Authentication Required</h2>
+          <p className="text-muted-foreground">Please log in to view your personal roster.</p>
         </motion.div>
       </div>
     );
@@ -68,7 +68,7 @@ const MyRosterPage: React.FC = () => {
   ];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-2rem)] md:h-[calc(100vh-3rem)] overflow-hidden bg-transparent p-4 md:p-6 space-y-6">
+    <div className="flex flex-col h-[calc(100vh-2rem)] md:h-[calc(100vh-3rem)] overflow-hidden bg-background p-4 md:p-6 space-y-6">
 
       {/* Scope Filter */}
       <ScopeFilterBanner
@@ -92,7 +92,7 @@ const MyRosterPage: React.FC = () => {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.2 }}
-              className="flex items-center bg-[#1a2744]/40 backdrop-blur-md rounded-xl p-1 border border-white/10"
+              className="flex items-center bg-muted/50 backdrop-blur-md rounded-xl p-1 border border-border"
             >
               {viewOptions.map((option, index) => (
                 <motion.button
@@ -106,12 +106,12 @@ const MyRosterPage: React.FC = () => {
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300',
                     view === option.value
-                      ? 'bg-primary text-white shadow-glow'
-                      : 'text-blue-200/60 hover:text-white hover:bg-white/5'
+                      ? 'bg-primary text-primary-foreground shadow-md'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                   )}
                 >
                   {React.cloneElement(option.icon as React.ReactElement, {
-                    className: cn("h-4 w-4 transition-colors", view === option.value ? "text-white" : "text-current opacity-70")
+                    className: cn("h-4 w-4 transition-colors", view === option.value ? "text-primary-foreground" : "text-current opacity-70")
                   })}
                   <span className="hidden sm:inline">{option.label}</span>
                 </motion.button>
@@ -128,8 +128,8 @@ const MyRosterPage: React.FC = () => {
                 <Button
                   variant="outline"
                   className={cn(
-                    "relative gap-2 h-11 px-5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 bg-amber-950/20 backdrop-blur-md transition-all shadow-[0_0_15px_rgba(245,158,11,0.1)]",
-                    pendingOfferCount > 0 && "animate-pulse border-amber-500/60"
+                    "relative gap-2 h-11 px-5 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 hover:text-amber-700 dark:hover:text-amber-300 bg-amber-50 dark:bg-amber-950/20 backdrop-blur-md transition-all shadow-[0_0_15px_rgba(245,158,11,0.1)]",
+                    pendingOfferCount > 0 && "animate-pulse border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
                   )}
                   onClick={() => setShowOffersModal(true)}
                 >
@@ -152,7 +152,7 @@ const MyRosterPage: React.FC = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
-        className="flex-grow overflow-hidden bg-[#1a2744]/30 backdrop-blur-2xl rounded-3xl border border-white/5 shadow-2xl relative"
+        className="flex-grow overflow-hidden bg-card/80 backdrop-blur-2xl rounded-3xl border border-border shadow-sm relative"
       >
         {/* Background decorative glow */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
@@ -160,16 +160,16 @@ const MyRosterPage: React.FC = () => {
         {isLoading ? (
           <div className="h-full flex flex-col items-center justify-center gap-4">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <span className="text-blue-200/60 font-medium">Synchronizing roster...</span>
+            <span className="text-muted-foreground font-medium">Synchronizing roster...</span>
           </div>
         ) : error ? (
           <div className="h-full flex flex-col items-center justify-center gap-4 text-center p-8">
-            <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center">
-              <Info className="h-8 w-8 text-red-500" />
+            <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
+              <Info className="h-8 w-8 text-destructive" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-white">Synchronization Error</h3>
-              <p className="text-red-300/80 mt-1">Failed to load shifts. Please try refreshing.</p>
+              <h3 className="text-xl font-bold text-foreground">Synchronization Error</h3>
+              <p className="text-destructive/80 mt-1">Failed to load shifts. Please try refreshing.</p>
             </div>
           </div>
         ) : (
@@ -196,8 +196,8 @@ const MyRosterPage: React.FC = () => {
           <Info size={18} />
         </div>
         <div>
-          <h3 className="text-white font-medium mb-1 text-sm">Roster Status</h3>
-          <p className="text-blue-200/60 text-sm leading-relaxed">
+          <h3 className="text-foreground font-medium mb-1 text-sm">Roster Status</h3>
+          <p className="text-muted-foreground text-sm leading-relaxed">
             {shifts && shifts.length > 0
               ? `You have ${shifts.length} shift(s) scheduled for this period. Select a shift to view details, swap, or offer it to others.`
               : 'No shifts assigned to you in this viewing period. Contact your manager if you believe this is an error.'}

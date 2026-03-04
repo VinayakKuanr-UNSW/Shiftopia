@@ -203,7 +203,7 @@ export const ControlRoom: React.FC<ControlRoomProps> = ({ groupId, onBack }) => 
                             {/* Content Background Accent */}
                             <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none opacity-50" />
 
-                            <div className="max-w-5xl mx-auto space-y-8 relative z-10">
+                            <div className="w-full space-y-8 relative z-10">
                                 {canBroadcast && (
                                     <div className="shadow-lg shadow-primary/5 rounded-2xl">
                                         <ComposeSection

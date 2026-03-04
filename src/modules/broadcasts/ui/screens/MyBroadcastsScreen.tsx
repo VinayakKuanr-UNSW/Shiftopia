@@ -132,10 +132,17 @@ const GROUP_ICONS: Record<string, React.ReactNode> = {
 };
 
 const GROUP_COLORS: Record<string, string> = {
-  blue: 'from-blue-600/20 to-blue-900/40 border-blue-500/20 hover:border-blue-500/40',
-  green: 'from-emerald-600/20 to-emerald-900/40 border-emerald-500/20 hover:border-emerald-500/40',
-  purple: 'from-purple-600/20 to-purple-900/40 border-purple-500/20 hover:border-purple-500/40',
-  red: 'from-red-600/20 to-red-900/40 border-red-500/20 hover:border-red-500/40',
+  blue: 'from-blue-50 via-blue-50/60 to-slate-50 border-blue-200 hover:border-blue-300 dark:from-blue-600/20 dark:via-transparent dark:to-blue-900/40 dark:border-blue-500/20 dark:hover:border-blue-500/40',
+  green: 'from-emerald-50 via-emerald-50/60 to-slate-50 border-emerald-200 hover:border-emerald-300 dark:from-emerald-600/20 dark:via-transparent dark:to-emerald-900/40 dark:border-emerald-500/20 dark:hover:border-emerald-500/40',
+  purple: 'from-purple-50 via-purple-50/60 to-slate-50 border-purple-200 hover:border-purple-300 dark:from-purple-600/20 dark:via-transparent dark:to-purple-900/40 dark:border-purple-500/20 dark:hover:border-purple-500/40',
+  red: 'from-red-50 via-red-50/60 to-slate-50 border-red-200 hover:border-red-300 dark:from-red-600/20 dark:via-transparent dark:to-red-900/40 dark:border-red-500/20 dark:hover:border-red-500/40',
+};
+
+const GROUP_ICON_BG: Record<string, string> = {
+  blue: 'from-blue-100 to-blue-200/60 border-blue-200 dark:from-blue-500/20 dark:to-blue-600/10 dark:border-white/10',
+  green: 'from-emerald-100 to-emerald-200/60 border-emerald-200 dark:from-emerald-500/20 dark:to-emerald-600/10 dark:border-white/10',
+  purple: 'from-purple-100 to-purple-200/60 border-purple-200 dark:from-purple-500/20 dark:to-purple-600/10 dark:border-white/10',
+  red: 'from-red-100 to-red-200/60 border-red-200 dark:from-red-500/20 dark:to-red-600/10 dark:border-white/10',
 };
 
 const ROLE_ICONS: Record<BroadcastParticipantRole, React.ReactNode> = {
@@ -188,24 +195,25 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, compact }) => {
         'flex flex-col group'
       )}
     >
-      <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+      <div className="absolute inset-0 bg-black/5 dark:bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
 
       <div className={cn('p-4 md:p-6 flex-1 flex flex-col relative z-10', compact && 'p-4')}>
         {/* Header */}
         <div className="flex items-start justify-between mb-3 md:mb-4">
           <div className="flex items-center gap-3 md:gap-4">
             <div className={cn(
-              'rounded-xl md:rounded-2xl bg-white/10 flex items-center justify-center border border-white/10 shadow-inner',
+              'rounded-xl md:rounded-2xl bg-gradient-to-br flex items-center justify-center border shadow-inner',
+              GROUP_ICON_BG[group.color || 'blue'],
               compact ? 'w-10 h-10' : 'w-12 h-12 md:w-14 md:h-14'
             )}>
-              <div className="text-white drop-shadow-md">
+              <div className="text-slate-700 dark:text-white drop-shadow-md">
                 {icon}
               </div>
             </div>
             <div className="min-w-0 flex-1">
               {/* Hierarchy Context */}
               {(group.departmentName || group.organizationName) && (
-                <div className="flex items-center gap-1.5 text-[9px] md:text-[10px] uppercase tracking-wider font-bold text-blue-200/50 mb-1 truncate">
+                <div className="flex items-center gap-1.5 text-[9px] md:text-[10px] uppercase tracking-wider font-bold text-slate-400 dark:text-blue-200/50 mb-1 truncate">
                   {group.organizationName && <span className="truncate">{group.organizationName}</span>}
                   {group.organizationName && group.departmentName && <span>•</span>}
                   {group.departmentName && <span className="truncate">{group.departmentName}</span>}
@@ -218,13 +226,13 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, compact }) => {
                 </div>
               )}
               <h3 className={cn(
-                'font-bold text-white tracking-tight truncate',
+                'font-bold text-slate-900 dark:text-white tracking-tight truncate',
                 compact ? 'text-base' : 'text-lg md:text-xl'
               )}>
                 {group.name}
               </h3>
               {!compact && (
-                <p className="text-xs md:text-sm text-blue-200/60 line-clamp-1 mt-1 font-medium">
+                <p className="text-xs md:text-sm text-slate-500 dark:text-blue-200/60 line-clamp-1 mt-1 font-medium">
                   {group.description}
                 </p>
               )}
@@ -238,12 +246,12 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, compact }) => {
         </div>
 
         {/* Footer */}
-        <div className="mt-auto pt-3 md:pt-4 border-t border-white/10 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 md:gap-2 text-[10px] md:text-sm text-blue-200/40 font-medium">
+        <div className="mt-auto pt-3 md:pt-4 border-t border-slate-200 dark:border-white/10 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 md:gap-2 text-[10px] md:text-sm text-slate-400 dark:text-blue-200/40 font-medium">
             <Hash className="h-3 w-3 md:h-4 md:w-4" />
             <span>{group.channels?.length || 0} channels</span>
           </div>
-          <div className="flex items-center gap-1.5 md:gap-2 text-[10px] md:text-sm text-blue-200/40 font-medium">
+          <div className="flex items-center gap-1.5 md:gap-2 text-[10px] md:text-sm text-slate-400 dark:text-blue-200/40 font-medium">
             <Clock className="h-3 w-3 md:h-4 md:w-4" />
             <span className="truncate max-w-[80px] md:max-w-none">
               {group.lastBroadcastAt
@@ -274,13 +282,13 @@ const ChannelItem: React.FC<ChannelItemProps> = ({ channel, isActive, onClick, c
     className={cn(
       'flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-3.5 rounded-lg md:rounded-xl cursor-pointer transition-all duration-200 group',
       isActive
-        ? 'bg-primary/20 text-white border border-primary/30 shadow-glow/20'
-        : 'text-blue-200/60 hover:bg-white/5 hover:text-white border border-transparent'
+        ? 'bg-primary/20 text-slate-900 dark:text-white border border-primary/30'
+        : 'text-slate-500 dark:text-blue-200/60 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white border border-transparent'
     )}
   >
     <div className={cn(
       'p-1.5 md:p-2 rounded-md md:rounded-lg transition-colors',
-      isActive ? 'bg-primary/20' : 'bg-white/5 group-hover:bg-white/10'
+      isActive ? 'bg-primary/20' : 'bg-slate-100 dark:bg-white/5 group-hover:bg-slate-200 dark:group-hover:bg-white/10'
     )}>
       <Hash className="h-3.5 w-3.5 md:h-4 md:w-4 shrink-0" />
     </div>
@@ -288,7 +296,7 @@ const ChannelItem: React.FC<ChannelItemProps> = ({ channel, isActive, onClick, c
     <div className="flex-1 min-w-0">
       <p className={cn('font-semibold truncate', compact ? 'text-xs' : 'text-sm')}>{channel.name}</p>
       {!compact && channel.description && (
-        <p className="text-[10px] md:text-xs text-white/40 truncate mt-0.5">
+        <p className="text-[10px] md:text-xs text-slate-400 dark:text-white/40 truncate mt-0.5">
           {channel.description}
         </p>
       )}
@@ -319,14 +327,14 @@ const MessageItem: React.FC<MessageItemProps> = ({ message, compact }) => {
       className={cn(
         'rounded-2xl md:rounded-3xl border transition-all duration-300 overflow-hidden relative',
         message.isPinned
-          ? 'bg-[#1a2744]/60 backdrop-blur-xl border-amber-500/20 shadow-lg'
-          : 'bg-[#1a2744]/40 backdrop-blur-md border-white/5 hover:bg-[#1a2744]/50',
+          ? 'bg-amber-50/80 dark:bg-[#1a2744]/60 backdrop-blur-xl border-amber-200 dark:border-amber-500/20 shadow-lg'
+          : 'bg-white dark:bg-[#1a2744]/40 backdrop-blur-md border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-[#1a2744]/50',
         message.priority === 'urgent' && !message.isPinned && 'border-red-500/30 bg-red-900/10'
       )}
     >
       {/* Pinned indicator */}
       {message.isPinned && (
-        <div className="px-4 md:px-6 py-1.5 md:py-2 bg-amber-500/10 border-b border-amber-500/10 flex items-center gap-2 text-amber-300 text-[10px] md:text-xs font-bold uppercase tracking-wider backdrop-blur-sm">
+        <div className="px-4 md:px-6 py-1.5 md:py-2 bg-amber-50 dark:bg-amber-500/10 border-b border-amber-200 dark:border-amber-500/10 flex items-center gap-2 text-amber-700 dark:text-amber-300 text-[10px] md:text-xs font-bold uppercase tracking-wider backdrop-blur-sm">
           <Pin className="h-3 w-3 md:h-3.5 md:w-3.5" />
           <span>Pinned Message</span>
         </div>
@@ -336,14 +344,14 @@ const MessageItem: React.FC<MessageItemProps> = ({ message, compact }) => {
         {/* Author & Meta */}
         <div className="flex items-start justify-between mb-4 md:mb-6">
           <div className="flex items-center gap-3 md:gap-4">
-            <Avatar className={cn('border-2 border-white/10 shadow-lg', compact ? 'h-10 w-10' : 'h-10 w-10 md:h-12 md:w-12')}>
+            <Avatar className={cn('border-2 border-slate-200 dark:border-white/10 shadow-lg', compact ? 'h-10 w-10' : 'h-10 w-10 md:h-12 md:w-12')}>
               <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold text-sm md:text-lg">
                 {message.author?.name?.split(' ').map((n) => n[0]).join('') || '?'}
               </AvatarFallback>
             </Avatar>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className={cn('font-bold text-white', compact ? 'text-base' : 'text-base md:text-lg')}>
+                <span className={cn('font-bold text-slate-900 dark:text-white', compact ? 'text-base' : 'text-base md:text-lg')}>
                   {message.author?.name || 'Unknown'}
                 </span>
                 {roleIcon && (
@@ -364,7 +372,7 @@ const MessageItem: React.FC<MessageItemProps> = ({ message, compact }) => {
                   <span className="ml-1">{priorityConfig.label}</span>
                 </Badge>
               </div>
-              <p className="text-xs md:text-sm text-blue-200/40 mt-0.5 md:mt-1 font-medium">
+              <p className="text-xs md:text-sm text-slate-400 dark:text-blue-200/40 mt-0.5 md:mt-1 font-medium">
                 {format(new Date(message.createdAt), compact ? "MMM d, h:mm a" : "EEEE, MMM d, yyyy 'at' h:mm a")}
               </p>
             </div>
@@ -375,7 +383,7 @@ const MessageItem: React.FC<MessageItemProps> = ({ message, compact }) => {
 
         {/* Subject */}
         {message.subject && (
-          <h4 className={cn('font-bold text-white mb-3 md:mb-4 tracking-tight', compact ? 'text-base' : 'text-lg md:text-xl')}>
+          <h4 className={cn('font-bold text-slate-900 dark:text-white mb-3 md:mb-4 tracking-tight', compact ? 'text-base' : 'text-lg md:text-xl')}>
             {message.subject}
           </h4>
         )}
@@ -383,7 +391,7 @@ const MessageItem: React.FC<MessageItemProps> = ({ message, compact }) => {
         {/* Content */}
         <div
           className={cn(
-            'text-blue-100/90 leading-relaxed mb-4 md:mb-6 prose prose-invert max-w-none prose-p:text-blue-100/90 prose-headings:text-white prose-strong:text-white prose-a:text-primary',
+            'text-slate-700 dark:text-blue-100/90 leading-relaxed mb-4 md:mb-6 prose dark:prose-invert max-w-none prose-p:text-slate-700 dark:prose-p:text-blue-100/90 prose-headings:text-slate-900 dark:prose-headings:text-white prose-strong:text-slate-900 dark:prose-strong:text-white prose-a:text-primary',
             compact ? 'text-sm' : 'text-sm md:text-base'
           )}
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(message.content) }}
@@ -391,8 +399,8 @@ const MessageItem: React.FC<MessageItemProps> = ({ message, compact }) => {
 
         {/* Attachments */}
         {message.attachments && message.attachments.length > 0 && (
-          <div className="mb-4 md:mb-6 space-y-2 md:space-y-3 p-3 md:p-4 rounded-xl bg-white/5 border border-white/5">
-            <p className="text-[10px] md:text-xs text-blue-200/60 uppercase tracking-widest font-bold flex items-center gap-2 mb-2 md:mb-3">
+          <div className="mb-4 md:mb-6 space-y-2 md:space-y-3 p-3 md:p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5">
+            <p className="text-[10px] md:text-xs text-slate-500 dark:text-blue-200/60 uppercase tracking-widest font-bold flex items-center gap-2 mb-2 md:mb-3">
               <Paperclip className="h-3 w-3 md:h-3.5 md:w-3.5" />
               Attachments ({message.attachments.length})
             </p>
@@ -400,22 +408,22 @@ const MessageItem: React.FC<MessageItemProps> = ({ message, compact }) => {
               {message.attachments.map((att) => (
                 <div
                   key={att.id}
-                  className="flex items-center gap-2 md:gap-3 px-2 md:px-3 py-2 md:py-2.5 rounded-lg bg-black/20 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer group w-full sm:w-auto min-w-[160px] md:min-w-[200px]"
+                  className="flex items-center gap-2 md:gap-3 px-2 md:px-3 py-2 md:py-2.5 rounded-lg bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 hover:border-slate-300 dark:hover:border-white/20 transition-all cursor-pointer group w-full sm:w-auto min-w-[160px] md:min-w-[200px]"
                   onClick={() => handleDownload(att)}
                 >
-                  <div className="p-1.5 md:p-2 rounded-md bg-white/5">
+                  <div className="p-1.5 md:p-2 rounded-md bg-slate-100 dark:bg-white/5">
                     {FILE_ICONS[att.fileType] || FILE_ICONS.other}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs md:text-sm font-medium text-white truncate max-w-[100px] md:max-w-[140px]">
+                    <p className="text-xs md:text-sm font-medium text-slate-800 dark:text-white truncate max-w-[100px] md:max-w-[140px]">
                       {att.fileName}
                     </p>
-                    <p className="text-[9px] md:text-[10px] text-blue-200/40 font-mono">
+                    <p className="text-[9px] md:text-[10px] text-slate-400 dark:text-blue-200/40 font-mono">
                       {formatFileSize(att.fileSize)}
                     </p>
                   </div>
-                  <div className="p-1 md:p-1.5 rounded-full bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Download className="h-3 w-3 md:h-3.5 md:w-3.5 text-white" />
+                  <div className="p-1 md:p-1.5 rounded-full bg-slate-100 dark:bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Download className="h-3 w-3 md:h-3.5 md:w-3.5 text-slate-600 dark:text-white" />
                   </div>
                 </div>
               ))}
@@ -432,12 +440,12 @@ const MessageItem: React.FC<MessageItemProps> = ({ message, compact }) => {
 // Empty States
 const EmptyGroups: React.FC = () => (
   <div className="flex flex-col items-center justify-center h-[50vh] md:h-[60vh] p-6 md:p-8 text-center">
-    <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-white/5 flex items-center justify-center mb-4 md:mb-6 border border-white/10 shadow-2xl relative">
-      <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full" />
-      <Radio className="h-10 w-10 md:h-12 md:w-12 text-blue-200/60 relative z-10" />
+    <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center mb-4 md:mb-6 border border-slate-200 dark:border-white/10 shadow-2xl relative">
+      <div className="absolute inset-0 bg-primary/10 blur-3xl rounded-full" />
+      <Radio className="h-10 w-10 md:h-12 md:w-12 text-slate-400 dark:text-blue-200/60 relative z-10" />
     </div>
-    <h3 className="text-xl md:text-2xl font-bold text-white mb-2">No Broadcast Groups</h3>
-    <p className="text-blue-200/60 max-w-sm leading-relaxed text-sm md:text-base">
+    <h3 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white mb-2">No Broadcast Groups</h3>
+    <p className="text-slate-500 dark:text-blue-200/60 max-w-sm leading-relaxed text-sm md:text-base">
       You haven't been added to any broadcast groups yet. Contact your manager if you believe this is an error.
     </p>
   </div>
@@ -445,11 +453,11 @@ const EmptyGroups: React.FC = () => (
 
 const EmptyMessages: React.FC = () => (
   <div className="flex flex-col items-center justify-center h-full p-6 md:p-8 text-center min-h-[300px] md:min-h-[400px]">
-    <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-white/5 flex items-center justify-center mb-4 md:mb-6 border border-white/10">
-      <MessageSquare className="h-8 w-8 md:h-10 md:w-10 text-white/20" />
+    <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center mb-4 md:mb-6 border border-slate-200 dark:border-white/10">
+      <MessageSquare className="h-8 w-8 md:h-10 md:w-10 text-slate-300 dark:text-white/20" />
     </div>
-    <h3 className="text-lg md:text-xl font-bold text-white mb-2">No Messages</h3>
-    <p className="text-blue-200/40 max-w-xs mx-auto text-sm">
+    <h3 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white mb-2">No Messages</h3>
+    <p className="text-slate-400 dark:text-blue-200/40 max-w-xs mx-auto text-sm">
       No broadcasts have been sent to this channel yet.
     </p>
   </div>
@@ -457,11 +465,11 @@ const EmptyMessages: React.FC = () => (
 
 const EmptyChannels: React.FC = () => (
   <div className="flex flex-col items-center justify-center h-full p-6 md:p-8 text-center">
-    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-white/5 flex items-center justify-center mb-4 md:mb-5 border border-white/10">
-      <Hash className="h-6 w-6 md:h-8 md:w-8 text-white/20" />
+    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center mb-4 md:mb-5 border border-slate-200 dark:border-white/10">
+      <Hash className="h-6 w-6 md:h-8 md:w-8 text-slate-300 dark:text-white/20" />
     </div>
-    <h3 className="text-base md:text-lg font-bold text-white mb-2">No Channels</h3>
-    <p className="text-blue-200/40 text-sm">This group doesn't have any channels configured.</p>
+    <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-white mb-2">No Channels</h3>
+    <p className="text-slate-400 dark:text-blue-200/40 text-sm">This group doesn't have any channels configured.</p>
   </div>
 );
 
@@ -519,21 +527,21 @@ const ChannelView: React.FC<ChannelViewProps> = ({
   return (
     <>
       {/* Channel Header */}
-      <div className="bg-[#1a2744]/40 backdrop-blur-xl border-b border-white/5 px-4 md:px-8 py-4 md:py-5 sticky top-0 z-20">
+      <div className="bg-white/90 dark:bg-[#1a2744]/40 backdrop-blur-xl border-b border-slate-200 dark:border-white/5 px-4 md:px-8 py-4 md:py-5 sticky top-0 z-20">
         <div className="flex items-center justify-between gap-3 md:gap-4">
           <div className="flex items-center gap-3 md:gap-4 min-w-0">
-            <div className="p-2 md:p-2.5 rounded-lg md:rounded-xl bg-primary/20 text-white shadow-glow">
+            <div className="p-2 md:p-2.5 rounded-lg md:rounded-xl bg-primary/20 text-primary dark:text-white shadow-sm">
               <Hash className="h-5 w-5 md:h-6 md:w-6" />
             </div>
 
             <div className="min-w-0">
               <div className="flex items-center gap-2 md:gap-3">
-                <h2 className="font-bold text-lg md:text-xl text-white tracking-tight truncate">
+                <h2 className="font-bold text-lg md:text-xl text-slate-900 dark:text-white tracking-tight truncate">
                   {channelName}
                 </h2>
                 {/* Badges removed */}
               </div>
-              <p className="text-xs md:text-sm text-blue-200/60 truncate">
+              <p className="text-xs md:text-sm text-slate-500 dark:text-blue-200/60 truncate">
                 {channelDescription || 'Company broadcast channel'}
               </p>
             </div>
@@ -541,17 +549,17 @@ const ChannelView: React.FC<ChannelViewProps> = ({
 
           {/* Search */}
           <div className="relative w-40 md:w-64 hidden sm:block">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-white/40" />
             <Input
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => onSearch(e.target.value)}
-              className="pl-9 md:pl-10 bg-black/20 border-white/10 text-white focus:border-primary/50 h-9 md:h-10 rounded-lg md:rounded-xl text-sm"
+              className="pl-9 md:pl-10 bg-slate-100 dark:bg-black/20 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white focus:border-primary/50 h-9 md:h-10 rounded-lg md:rounded-xl text-sm"
             />
             {searchQuery && (
               <button
                 onClick={() => onSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-white/40 hover:text-slate-700 dark:hover:text-white"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -566,13 +574,13 @@ const ChannelView: React.FC<ChannelViewProps> = ({
           {sortedBroadcasts.length === 0 ? (
             searchQuery ? (
               <div className="text-center py-16 md:py-20">
-                <p className="text-blue-200/60 text-base md:text-lg">No messages match your search.</p>
+                <p className="text-slate-500 dark:text-blue-200/60 text-base md:text-lg">No messages match your search.</p>
               </div>
             ) : (
               <EmptyMessages />
             )
           ) : (
-            <div className="space-y-4 md:space-y-6 max-w-5xl mx-auto">
+            <div className="space-y-4 md:space-y-6 w-full">
               {sortedBroadcasts.map((message) => (
                 <MessageItem
                   key={message.id}
@@ -588,7 +596,7 @@ const ChannelView: React.FC<ChannelViewProps> = ({
                     variant="outline"
                     onClick={() => loadMore()}
                     disabled={isLoadingMore}
-                    className="text-blue-200/60 hover:text-white border-white/10 hover:bg-white/5 bg-black/20"
+                    className="text-slate-500 dark:text-blue-200/60 hover:text-slate-900 dark:hover:text-white border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/5 bg-white dark:bg-black/20"
                   >
                     {isLoadingMore ? (
                       <>
@@ -606,7 +614,7 @@ const ChannelView: React.FC<ChannelViewProps> = ({
 
           {/* Read-only notice */}
           <div className="mt-8 md:mt-12 mb-4 md:mb-6 flex justify-center">
-            <div className="px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-white/5 border border-white/5 text-[10px] md:text-xs font-medium text-white/40 flex items-center gap-2">
+            <div className="px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-[10px] md:text-xs font-medium text-slate-400 dark:text-white/40 flex items-center gap-2">
               <Shield className="h-3 w-3" />
               <span>Broadcast Channel - Read Only Access</span>
             </div>
@@ -700,11 +708,11 @@ export function MyBroadcastsScreen({ layout }: MyBroadcastsScreenProps) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen w-full">
-        <div className="flex flex-col items-center gap-4 md:gap-6 p-6 md:p-8 rounded-2xl md:rounded-3xl bg-white/5 border border-white/10 backdrop-blur-3xl">
+        <div className="flex flex-col items-center gap-4 md:gap-6 p-6 md:p-8 rounded-2xl md:rounded-3xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 backdrop-blur-3xl shadow-sm dark:shadow-none">
           <Loader2 className="h-12 w-12 md:h-16 md:w-16 text-primary animate-spin" />
           <div className="text-center">
-            <h3 className="text-lg md:text-xl font-bold text-white mb-1">Loading System</h3>
-            <p className="text-blue-200/60 text-sm md:text-base">Retrieving broadcast frequencies...</p>
+            <h3 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white mb-1">Loading System</h3>
+            <p className="text-slate-500 dark:text-blue-200/60 text-sm md:text-base">Retrieving broadcast frequencies...</p>
           </div>
         </div>
       </div>
@@ -720,8 +728,8 @@ export function MyBroadcastsScreen({ layout }: MyBroadcastsScreenProps) {
             <AlertTriangle className="h-8 w-8 md:h-10 md:w-10 text-red-500" />
           </div>
           <div>
-            <h3 className="text-lg md:text-xl font-bold text-white mb-2">Connection Error</h3>
-            <p className="text-red-200/80 mb-4 md:mb-6 text-sm md:text-base">{error.message}</p>
+            <h3 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white mb-2">Connection Error</h3>
+            <p className="text-red-700 dark:text-red-200/80 mb-4 md:mb-6 text-sm md:text-base">{error.message}</p>
             <Button onClick={() => refetch()} className="gap-2 bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20">
               <RefreshCw className="h-4 w-4" />
               Retry Connection
@@ -740,7 +748,7 @@ export function MyBroadcastsScreen({ layout }: MyBroadcastsScreenProps) {
     <motion.div
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-[#1a2744]/40 backdrop-blur-2xl border border-white/10 rounded-2xl md:rounded-3xl px-4 md:px-8 py-6 md:py-8 mb-6 md:mb-8 relative overflow-hidden"
+      className="bg-white/80 dark:bg-[#1a2744]/40 backdrop-blur-2xl border border-slate-200 dark:border-white/10 rounded-2xl md:rounded-3xl px-4 md:px-8 py-6 md:py-8 mb-6 md:mb-8 relative overflow-hidden shadow-sm dark:shadow-none"
     >
       <div className="absolute top-0 right-0 w-64 md:w-96 h-64 md:h-96 bg-primary/10 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
 
@@ -751,8 +759,8 @@ export function MyBroadcastsScreen({ layout }: MyBroadcastsScreenProps) {
               <Radio className="h-6 w-6 md:h-8 md:w-8 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Broadcasts</h1>
-              <p className="text-blue-200/60 mt-1 font-medium text-sm md:text-base">
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Broadcasts</h1>
+              <p className="text-slate-500 dark:text-blue-200/60 mt-1 font-medium text-sm md:text-base">
                 Company announcements and updates
               </p>
             </div>
@@ -776,7 +784,7 @@ export function MyBroadcastsScreen({ layout }: MyBroadcastsScreenProps) {
         </div>
 
         {/* Hierarchy Filter */}
-        <div className="w-full pt-4 border-t border-white/10">
+        <div className="w-full pt-4 border-t border-slate-200 dark:border-white/10">
           <OrgDeptSelector
             selectedOrganizationId={selectedOrgId}
             selectedDepartmentId={selectedDeptId}
@@ -796,11 +804,11 @@ export function MyBroadcastsScreen({ layout }: MyBroadcastsScreenProps) {
   // ========================================
 
   const renderChannelSidebar = (compact?: boolean) => (
-    <div className={cn('flex flex-col h-full', !compact && 'bg-[#0d1424]/90 backdrop-blur-xl border-r border-white/5')}>
-      <div className={cn('p-4 md:p-6 border-b border-white/5', compact && 'p-4')}>
+    <div className={cn('flex flex-col h-full', !compact && 'bg-slate-50 dark:bg-[#0d1424]/90 backdrop-blur-xl border-r border-slate-200 dark:border-white/5')}>
+      <div className={cn('p-4 md:p-6 border-b border-slate-200 dark:border-white/5', compact && 'p-4')}>
         <Button
           variant="ghost"
-          className="w-full justify-start text-blue-200/60 hover:text-white hover:bg-white/5 mb-4 -ml-2"
+          className="w-full justify-start text-slate-500 dark:text-blue-200/60 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 mb-4 -ml-2"
           onClick={handleBack}
         >
           <ChevronLeft className="h-4 w-4 mr-2" />
@@ -810,23 +818,23 @@ export function MyBroadcastsScreen({ layout }: MyBroadcastsScreenProps) {
         <div className="flex items-center gap-3 mb-2">
           <div
             className={cn(
-              'p-2 rounded-xl bg-gradient-to-br border border-white/10',
-              GROUP_COLORS[selectedGroup?.color || 'blue'].split(' ')[0]
+              'p-2 rounded-xl bg-gradient-to-br border',
+              GROUP_ICON_BG[selectedGroup?.color || 'blue']
             )}
           >
-            {GROUP_ICONS[selectedGroup?.icon || 'megaphone']}
+            <div className="text-slate-700 dark:text-white">{GROUP_ICONS[selectedGroup?.icon || 'megaphone']}</div>
           </div>
-          <h2 className="font-bold text-lg text-white truncate">{selectedGroup?.name}</h2>
+          <h2 className="font-bold text-lg text-slate-900 dark:text-white truncate">{selectedGroup?.name}</h2>
         </div>
       </div>
 
       <ScrollArea className="flex-1 px-3 md:px-4 py-4">
         <div className="space-y-1">
-          <p className="px-3 md:px-4 text-[10px] md:text-xs font-bold text-blue-200/40 uppercase tracking-widest mb-2 md:mb-3">
+          <p className="px-3 md:px-4 text-[10px] md:text-xs font-bold text-slate-400 dark:text-blue-200/40 uppercase tracking-widest mb-2 md:mb-3">
             Channels
           </p>
           {selectedGroup?.channels?.length === 0 ? (
-            <div className="px-4 py-6 md:py-8 text-center text-xs md:text-sm text-white/30 italic">
+            <div className="px-4 py-6 md:py-8 text-center text-xs md:text-sm text-slate-400 dark:text-white/30 italic">
               No channels
             </div>
           ) : (
@@ -849,16 +857,16 @@ export function MyBroadcastsScreen({ layout }: MyBroadcastsScreenProps) {
 
       {/* User Profile Mini */}
       {user && (
-        <div className="p-3 md:p-4 border-t border-white/5 bg-black/20">
+        <div className="p-3 md:p-4 border-t border-slate-200 dark:border-white/5 bg-slate-100/60 dark:bg-black/20">
           <div className="flex items-center gap-2 md:gap-3">
-            <Avatar className="h-8 w-8 md:h-9 md:w-9 border border-white/10">
+            <Avatar className="h-8 w-8 md:h-9 md:w-9 border border-slate-200 dark:border-white/10">
               <AvatarFallback className="bg-primary text-white text-[10px] md:text-xs">
                 {user?.name?.substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0">
-              <p className="text-xs md:text-sm font-bold text-white truncate">{user?.name}</p>
-              <p className="text-[10px] md:text-xs text-blue-200/40 truncate">{user?.role}</p>
+              <p className="text-xs md:text-sm font-bold text-slate-900 dark:text-white truncate">{user?.name}</p>
+              <p className="text-[10px] md:text-xs text-slate-400 dark:text-blue-200/40 truncate">{user?.role}</p>
             </div>
           </div>
         </div>
@@ -917,7 +925,7 @@ export function MyBroadcastsScreen({ layout }: MyBroadcastsScreenProps) {
         <div className="w-[280px] lg:w-[300px] shrink-0 z-20">{renderChannelSidebar()}</div>
 
         {/* Main Content - Messages */}
-        <div className="flex-1 flex flex-col min-w-0 relative bg-[#0d1424]/50">
+        <div className="flex-1 flex flex-col min-w-0 relative bg-white dark:bg-[#0d1424]/50">
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
 
           {selectedChannel ? (
@@ -947,7 +955,7 @@ export function MyBroadcastsScreen({ layout }: MyBroadcastsScreenProps) {
         <div className="w-[220px] shrink-0 z-20">{renderChannelSidebar(true)}</div>
 
         {/* Main Content - Messages */}
-        <div className="flex-1 flex flex-col min-w-0 relative bg-[#0d1424]/50">
+        <div className="flex-1 flex flex-col min-w-0 relative bg-white dark:bg-[#0d1424]/50">
           {selectedChannel ? (
             <ChannelView
               channelId={selectedChannel.id}
@@ -972,38 +980,40 @@ export function MyBroadcastsScreen({ layout }: MyBroadcastsScreenProps) {
   return (
     <div className="flex flex-col h-screen w-full bg-transparent overflow-hidden">
       {/* Mobile Header */}
-      <div className="flex-shrink-0 bg-[#1a2744]/60 backdrop-blur-xl border-b border-white/5 px-4 py-3">
+      <div className="flex-shrink-0 bg-white/90 dark:bg-[#1a2744]/60 backdrop-blur-xl border-b border-slate-200 dark:border-white/5 px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={handleBack} className="text-white/60 hover:text-white">
+            <Button variant="ghost" size="icon" onClick={handleBack} className="text-slate-500 dark:text-white/60 hover:text-slate-900 dark:hover:text-white">
               <ChevronLeft className="h-5 w-5" />
             </Button>
             <div className="flex items-center gap-2">
               <div
                 className={cn(
-                  'p-1.5 rounded-lg bg-gradient-to-br border border-white/10',
-                  GROUP_COLORS[selectedGroup?.color || 'blue'].split(' ')[0]
+                  'p-1.5 rounded-lg bg-gradient-to-br border',
+                  GROUP_ICON_BG[selectedGroup?.color || 'blue']
                 )}
               >
-                {React.cloneElement(GROUP_ICONS[selectedGroup?.icon || 'megaphone'] as React.ReactElement, {
-                  className: 'h-4 w-4',
-                })}
+                <div className="text-slate-700 dark:text-white">
+                  {React.cloneElement(GROUP_ICONS[selectedGroup?.icon || 'megaphone'] as React.ReactElement, {
+                    className: 'h-4 w-4',
+                  })}
+                </div>
               </div>
-              <h2 className="font-bold text-base text-white truncate max-w-[150px]">{selectedGroup?.name}</h2>
+              <h2 className="font-bold text-base text-slate-900 dark:text-white truncate max-w-[150px]">{selectedGroup?.name}</h2>
             </div>
           </div>
 
           {/* Channel Selector Sheet */}
           <Sheet open={channelSheetOpen} onOpenChange={setChannelSheetOpen}>
             <SheetTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2 border-white/10 text-white">
+              <Button variant="outline" size="sm" className="gap-2 border-slate-200 dark:border-white/10 text-slate-700 dark:text-white">
                 <Hash className="h-4 w-4" />
                 <span className="truncate max-w-[80px]">{selectedChannel?.name || 'Select'}</span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="bottom" className="bg-[#0d1424] border-white/10 h-[60vh]">
+            <SheetContent side="bottom" className="bg-white dark:bg-[#0d1424] border-slate-200 dark:border-white/10 h-[60vh]">
               <SheetHeader>
-                <SheetTitle className="text-white">Select Channel</SheetTitle>
+                <SheetTitle className="text-slate-900 dark:text-white">Select Channel</SheetTitle>
               </SheetHeader>
               <ScrollArea className="h-full py-4">
                 <div className="space-y-1">
@@ -1027,7 +1037,7 @@ export function MyBroadcastsScreen({ layout }: MyBroadcastsScreenProps) {
       </div>
 
       {/* Main Content - Messages */}
-      <div className="flex-1 flex flex-col min-w-0 relative bg-[#0d1424]/50 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 relative bg-white dark:bg-[#0d1424]/50 overflow-hidden">
         {selectedChannel ? (
           <ChannelView
             channelId={selectedChannel.id}

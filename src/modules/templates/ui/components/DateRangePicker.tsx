@@ -60,7 +60,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
         <Button
           variant="outline"
           className={cn(
-            'w-full justify-start text-left font-normal bg-white/5 border-white/10',
+            'w-full justify-start text-left font-normal bg-background border-border',
             !value.start && !value.end && 'text-muted-foreground'
           )}
           disabled={disabled}
@@ -69,10 +69,10 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           {formatDateRange()}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 bg-gray-900/95 backdrop-blur-xl border-gray-800" align="start">
+      <PopoverContent className="w-auto p-0 bg-card border-border backdrop-blur-xl" align="start">
         <div className="p-4 space-y-4">
           <div>
-            <label className="text-sm font-medium text-white/80 mb-2 block">
+            <label className="text-sm font-medium text-foreground mb-2 block">
               Start Date
             </label>
             <Calendar
@@ -80,11 +80,11 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
               selected={value.start}
               onSelect={handleSelectStart}
               disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-              className="rounded-md border border-white/10"
+              className="rounded-md border border-border"
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-white/80 mb-2 block">
+            <label className="text-sm font-medium text-foreground mb-2 block">
               End Date
             </label>
             <Calendar
@@ -95,10 +95,10 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
                 const today = new Date(new Date().setHours(0, 0, 0, 0));
                 return date < today || (value.start ? date < value.start : false);
               }}
-              className="rounded-md border border-white/10"
+              className="rounded-md border border-border"
             />
           </div>
-          <div className="flex justify-end gap-2 pt-2 border-t border-white/10">
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
             <Button
               variant="outline"
               size="sm"
@@ -106,7 +106,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
                 onChange({ start: undefined, end: undefined });
                 setIsOpen(false);
               }}
-              className="bg-transparent border-white/20"
+              className="bg-transparent border-border"
             >
               Clear
             </Button>

@@ -54,14 +54,14 @@ export function TemplateGroupCard({
             >
                 {/* Header */}
                 <CollapsibleTrigger asChild>
-                    <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-white/5 transition-colors rounded-t-xl">
+                    <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50 transition-colors rounded-t-xl">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-white/10">
+                            <div className="p-2 rounded-lg bg-background/50">
                                 {config.icon}
                             </div>
                             <div>
-                                <h3 className="font-semibold text-white">{group.name}</h3>
-                                <p className="text-xs text-gray-400">
+                                <h3 className="font-semibold text-foreground">{group.name}</h3>
+                                <p className="text-xs text-muted-foreground">
                                     {group.subGroups.length} subgroups • {shiftCount} shifts
                                 </p>
                             </div>
@@ -75,16 +75,16 @@ export function TemplateGroupCard({
                                         e.stopPropagation();
                                         onAddSubgroup();
                                     }}
-                                    className={cn('hover:bg-white/10', config.badge)}
+                                    className={cn('hover:bg-muted', config.badge)}
                                 >
                                     <Plus className="h-4 w-4 mr-1" />
                                     Subgroup
                                 </Button>
                             )}
                             {isExpanded ? (
-                                <ChevronDown className="h-5 w-5 text-gray-400" />
+                                <ChevronDown className="h-5 w-5 text-muted-foreground" />
                             ) : (
-                                <ChevronRight className="h-5 w-5 text-gray-400" />
+                                <ChevronRight className="h-5 w-5 text-muted-foreground" />
                             )}
                         </div>
                     </div>

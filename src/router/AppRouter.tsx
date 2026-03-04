@@ -128,7 +128,7 @@ const AppRouter: React.FC = () => {
             <Route
                 path="/my-roster"
                 element={
-                    <ProtectedRouteWithLayout>
+                    <ProtectedRouteWithLayout noPadding={true}>
                         <MyRosterPage />
                     </ProtectedRouteWithLayout>
                 }

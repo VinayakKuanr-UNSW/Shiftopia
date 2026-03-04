@@ -134,7 +134,7 @@ const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg bg-[#0d1424] border-white/10 text-white max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg bg-card border-border text-foreground max-h-[90vh] overflow-y-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -164,7 +164,7 @@ const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
 
               <div className="flex items-center justify-between mb-2">
                 <div className="text-lg font-bold">{shift.roles?.name || 'Shift'}</div>
-                <Badge className="bg-white/20 text-white text-[10px]">
+                <Badge className="bg-white/20 text-white border-white/20 text-[10px]">
                   {shift.remuneration_levels?.level_name || 'Standard'}
                 </Badge>
               </div>
@@ -198,15 +198,15 @@ const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
               transition={{ delay: 0.3 }}
               className="space-y-2"
             >
-              <Label className="text-white/80">
-                Reason for Swap <span className="text-red-400">*</span>
+              <Label className="text-muted-foreground">
+                Reason for Swap <span className="text-destructive">*</span>
               </Label>
               <Textarea
                 placeholder="Please explain why you need to swap this shift..."
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={3}
-                className="bg-[#1a1f2e] border-white/10 text-white placeholder:text-white/30 resize-none"
+                className="bg-muted border-border text-foreground placeholder:text-muted-foreground/50 resize-none"
               />
             </motion.div>
 
@@ -235,7 +235,7 @@ const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
             <Button
               variant="outline"
               onClick={onClose}
-              className="border-white/20 text-white hover:bg-white/10"
+              className="border-border hover:bg-muted"
             >
               Cancel
             </Button>

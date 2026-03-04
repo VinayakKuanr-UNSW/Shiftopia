@@ -66,7 +66,7 @@ export function TemplateShiftRow({
     return (
         <div
             className={cn(
-                'flex items-center justify-between p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors group',
+                'flex items-center justify-between p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors group',
                 onClick && 'cursor-pointer',
                 className
             )}
@@ -74,7 +74,7 @@ export function TemplateShiftRow({
         >
             {/* Left: Time and Role */}
             <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 text-gray-400">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
                     <Clock className="h-3.5 w-3.5" />
                     <span className="text-xs font-mono">
                         {formatTime(shift.startTime)} - {formatTime(shift.endTime)}
@@ -83,12 +83,12 @@ export function TemplateShiftRow({
 
                 <div className="flex items-center gap-2 truncate">
                     {shift.roleName && (
-                        <span className="text-sm text-white truncate">
+                        <span className="text-sm text-foreground truncate">
                             {shift.roleName}
                         </span>
                     )}
                     {shift.name && shift.name !== shift.roleName && (
-                        <span className="text-xs text-gray-500 truncate">
+                        <span className="text-xs text-muted-foreground truncate">
                             ({shift.name})
                         </span>
                     )}
@@ -134,7 +134,7 @@ export function TemplateShiftRow({
                     <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 w-7 p-0 text-red-400 hover:text-red-300"
+                        className="h-7 w-7 p-0 text-destructive/70 hover:text-destructive"
                         onClick={(e) => {
                             e.stopPropagation();
                             onDelete();

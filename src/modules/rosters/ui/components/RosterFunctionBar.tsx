@@ -125,18 +125,18 @@ const IconButton: React.FC<{
 }> = ({ icon, tooltip, onClick, isActive, isLoading, disabled, variant = 'default', className }) => {
   const variantClasses = {
     default: isActive
-      ? 'bg-white/15 text-white'
-      : 'text-white/60 hover:text-white hover:bg-white/10',
+      ? 'bg-slate-200 dark:bg-white/15 text-slate-800 dark:text-white'
+      : 'text-slate-500 dark:text-white/60 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10',
     success: isActive
-      ? 'bg-emerald-500/20 text-emerald-300'
-      : 'text-white/60 hover:text-emerald-300 hover:bg-emerald-500/10',
+      ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+      : 'text-slate-500 dark:text-white/60 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/10',
     warning: isActive
-      ? 'bg-amber-500/20 text-amber-300'
-      : 'text-white/60 hover:text-amber-300 hover:bg-amber-500/10',
+      ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300'
+      : 'text-slate-500 dark:text-white/60 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-500/10',
     danger: isActive
-      ? 'bg-red-500/20 text-red-300'
-      : 'text-white/60 hover:text-red-300 hover:bg-red-500/10',
-    ghost: 'text-white/40 hover:text-white hover:bg-white/5',
+      ? 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300'
+      : 'text-slate-500 dark:text-white/60 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/10',
+    ghost: 'text-slate-400 dark:text-white/40 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5',
   };
 
   return (
@@ -287,7 +287,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
   const handleNext = () => navigateNext();
 
   return (
-    <div className="w-full h-16 flex-shrink-0 z-50 bg-slate-950/40 backdrop-blur-2xl border-b border-white/10 px-8 flex items-center shadow-2xl relative">
+    <div className="w-full h-16 flex-shrink-0 z-50 bg-white/90 dark:bg-slate-950/40 backdrop-blur-2xl border-b border-slate-200 dark:border-white/10 px-8 flex items-center shadow-sm dark:shadow-2xl relative">
       {/* Subtle top highlight for premium feel */}
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
@@ -300,7 +300,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
             type="single"
             value={activeMode}
             onValueChange={(v) => v && setActiveMode(v as RosterMode)}
-            className="bg-black/20 border border-white/5 rounded-xl p-1"
+            className="bg-slate-100 dark:bg-black/20 border border-slate-200 dark:border-white/5 rounded-xl p-1"
           >
             {[
               { id: 'group', icon: <Box className="h-4 w-4" />, label: 'Group' },
@@ -311,7 +311,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
               <ToggleGroupItem
                 key={m.id}
                 value={m.id}
-                className="h-8 px-4 text-[11px] font-black uppercase tracking-wider rounded-lg data-[state=on]:bg-white/10 data-[state=on]:text-white text-white/40 hover:text-white/60 transition-all"
+                className="h-8 px-4 text-[11px] font-black uppercase tracking-wider rounded-lg data-[state=on]:bg-white dark:data-[state=on]:bg-white/10 data-[state=on]:text-slate-900 dark:data-[state=on]:text-white text-slate-400 dark:text-white/40 hover:text-slate-600 dark:hover:text-white/60 transition-all"
               >
                 <div className="flex items-center gap-2">
                   {m.icon}
@@ -328,7 +328,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
             type="single"
             value={viewType}
             onValueChange={(v) => v && onViewTypeChange(v as ViewType)}
-            className="bg-black/40 border border-white/10 rounded-lg p-0.5 h-9"
+            className="bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-lg p-0.5 h-9"
           >
             {[
               { id: 'day', label: 'D' },
@@ -340,7 +340,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
                 key={v.id}
                 value={v.id}
                 className={cn(
-                  'px-2.5 py-1 text-[10px] uppercase font-black rounded-md transition-all h-7 grow min-w-[32px] data-[state=on]:bg-blue-600 data-[state=on]:text-white text-white/20 hover:text-white/40',
+                  'px-2.5 py-1 text-[10px] uppercase font-black rounded-md transition-all h-7 grow min-w-[32px] data-[state=on]:bg-blue-600 data-[state=on]:text-white text-slate-300 dark:text-white/20 hover:text-slate-500 dark:hover:text-white/40',
                 )}
               >
                 {v.label}
@@ -348,7 +348,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
             ))}
           </ToggleGroup>
 
-          <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-lg px-1 h-8">
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-1 h-8">
             <IconButton
               icon={<ChevronLeft className="h-4 w-4" />}
               tooltip="Prev"
@@ -386,10 +386,10 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
 
         {/* Right Section: Actions */}
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-xl px-2 py-1 h-10">
+          <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-2 py-1 h-10">
             <IconButton icon={<RefreshCw className="h-4 w-4" />} tooltip="Reload" onClick={onRefresh} isLoading={isRefreshing} />
             <RosterFilterPopover />
-            <Separator orientation="vertical" className="h-5 bg-white/10 mx-1" />
+            <Separator orientation="vertical" className="h-5 bg-slate-200 dark:bg-white/10 mx-1" />
             <IconButton
               icon={<CalendarCheck className="h-4 w-4" />}
               tooltip={activeMode === 'people' ? "Availabilities" : "Availabilities (People Mode Only)"}
@@ -429,7 +429,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
                 disabled={!selectedDepartmentId}
               />
               {appliedCount > 0 && (
-                <div className="absolute -top-1 -right-1 h-4 w-4 bg-blue-500 rounded-full border border-slate-900 flex items-center justify-center pointer-events-none shadow-lg">
+                <div className="absolute -top-1 -right-1 h-4 w-4 bg-blue-500 rounded-full border border-slate-100 dark:border-slate-900 flex items-center justify-center pointer-events-none shadow-lg">
                   <span className="text-[9px] font-black text-white leading-none">{appliedCount}</span>
                 </div>
               )}
@@ -440,7 +440,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
               onClick={onUnfilledPanelToggle}
               isActive={showUnfilledPanel}
             />
-            <Separator orientation="vertical" className="h-5 bg-white/10 mx-1" />
+            <Separator orientation="vertical" className="h-5 bg-slate-200 dark:bg-white/10 mx-1" />
             {activeMode === 'group' && (
               <IconButton
                 icon={<Box className="h-4 w-4" />}

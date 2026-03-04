@@ -314,23 +314,23 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="bg-[#0d1829] border-b border-white/10">
+      <div className="bg-card border-b border-border">
         {/* Top Bar */}
-        <div className="px-6 py-3 flex items-center justify-between border-b border-white/5">
+        <div className="px-6 py-3 flex items-center justify-between border-b border-border/50">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
               size="sm"
               onClick={onBack}
-              className="text-white/60 hover:text-white hover:bg-white/10 gap-2"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted/50 gap-2"
             >
               <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
 
-            <Separator orientation="vertical" className="h-5 bg-white/10" />
+            <Separator orientation="vertical" className="h-5 bg-border" />
 
-            <span className="text-white/40 text-sm uppercase tracking-wider font-medium">
+            <span className="text-muted-foreground text-sm uppercase tracking-wider font-medium">
               Template Editor
             </span>
 
@@ -409,7 +409,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
                   </Tooltip>
                 </TooltipProvider>
 
-                <Separator orientation="vertical" className="h-6 bg-white/10" />
+                <Separator orientation="vertical" className="h-6 bg-border" />
 
                 <Button
                   size="sm"
@@ -426,7 +426,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
                   variant="ghost"
                   onClick={() => onUpdateStatus(String(template.id), 'archived')}
                   disabled={isSaving}
-                  className="text-white/40 hover:text-purple-400 hover:bg-purple-400/10 gap-2"
+                  className="text-muted-foreground hover:text-purple-600 hover:bg-purple-100 dark:hover:text-purple-400 dark:hover:bg-purple-500/10 gap-2"
                 >
                   <Trash2 className="h-4 w-4" />
                   Archive
@@ -442,7 +442,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
                   variant="outline"
                   onClick={() => onUpdateStatus(String(template.id), 'draft')}
                   disabled={isSaving}
-                  className="bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:text-white gap-2"
+                  className="bg-transparent border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground gap-2"
                 >
                   <Edit2 className="h-4 w-4" />
                   Unlock to Edit
@@ -453,7 +453,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
                   variant="ghost"
                   onClick={() => onUpdateStatus(String(template.id), 'archived')}
                   disabled={isSaving}
-                  className="text-white/40 hover:text-purple-400 hover:bg-purple-400/10 gap-2"
+                  className="text-muted-foreground hover:text-purple-600 hover:bg-purple-100 dark:hover:text-purple-400 dark:hover:bg-purple-500/10 gap-2"
                 >
                   <Trash2 className="h-4 w-4" />
                   Archive
@@ -482,7 +482,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-3 mb-1">
-                <span className="text-xs text-white/40 uppercase tracking-wider">
+                <span className="text-xs text-muted-foreground uppercase tracking-wider">
                   Template Name
                 </span>
                 <Badge
@@ -508,9 +508,9 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
                   v{template.version}
                 </Badge>
               </div>
-              <h1 className="text-2xl font-bold text-white">{template.name}</h1>
+              <h1 className="text-2xl font-bold text-foreground">{template.name}</h1>
               {template.description && (
-                <p className="text-white/50 text-sm mt-1">
+                <p className="text-muted-foreground text-sm mt-1">
                   {template.description}
                 </p>
               )}
@@ -518,7 +518,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
 
             {/* Stats */}
             <div className="text-right">
-              <div className="flex items-center gap-4 text-sm text-white/50">
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <span>{stats.groupCount} groups</span>
                 <span>{stats.subgroupCount} subgroups</span>
                 <span>{stats.shiftCount} shifts</span>
@@ -527,7 +527,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
           </div>
         </div>
 
-        <Separator className="bg-white/10" />
+        <Separator className="bg-border" />
 
         {/* Metadata Row */}
         <div className="px-6 py-3 flex items-center justify-between text-sm">
@@ -535,7 +535,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="flex items-center gap-2 text-white/50">
+                  <div className="flex items-center gap-2 text-muted-foreground">
                     <Clock className="h-4 w-4" />
                     <span>Saved {lastSavedAgo}</span>
                   </div>
@@ -552,7 +552,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
             </TooltipProvider>
 
             {template.startDate && template.endDate === 'NEVER_MIND' && (
-              <div className="flex items-center gap-2 text-white/50">
+              <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="h-4 w-4" />
                 <span>
                   {template.startDate} - {template.endDate}

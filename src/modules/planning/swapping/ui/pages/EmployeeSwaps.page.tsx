@@ -59,43 +59,25 @@ const formatTime = (time: string): string => {
 
 // Premium Department Color Styling (Badges)
 function getDeptColor(groupType: string | null | undefined, dept: string): string {
-    const base = "font-medium backdrop-blur-sm";
-
-    // Convention Centre (Blue)
     if (groupType === 'convention_centre' || dept.toLowerCase().includes('convention'))
-        return `${base} bg-blue-500/10 border-blue-400/30 text-blue-200`;
-
-    // Exhibition Centre (Green/Emerald)
+        return 'dept-badge-convention';
     if (groupType === 'exhibition_centre' || dept.toLowerCase().includes('exhibition'))
-        return `${base} bg-emerald-500/10 border-emerald-400/30 text-emerald-200`;
-
-    // Theatre (Red)
+        return 'dept-badge-exhibition';
     if (groupType === 'theatre' || dept.toLowerCase().includes('theatre'))
-        return `${base} bg-red-500/10 border-red-400/30 text-red-200`;
-
-    // Default (Slate/Neutral)
-    return `${base} bg-white/5 border-white/20 text-slate-300`;
+        return 'dept-badge-theatre';
+    return 'dept-badge-default';
 }
 
-// Premium Card Background Styling (Glassmorphism & Gradients)
+// Premium Card Background Styling — semantic CSS classes handle light/dark
 function getCardBg(groupType: string | null | undefined, dept: string): string {
-    // Base styles for all cards: Glass effect, subtle border, hover lift + shadow
-    const base = "relative overflow-hidden backdrop-blur-md border shadow-lg transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 hover:border-opacity-50 group";
-
-    // Convention Centre
+    const base = 'dept-card-base';
     if (groupType === 'convention_centre' || dept.toLowerCase().includes('convention'))
-        return `${base} bg-gradient-to-br from-blue-900/40 via-blue-950/40 to-slate-900/60 border-blue-500/20 hover:border-blue-400/40 hover:shadow-blue-900/20`;
-
-    // Exhibition Centre
+        return `${base} dept-card-convention`;
     if (groupType === 'exhibition_centre' || dept.toLowerCase().includes('exhibition'))
-        return `${base} bg-gradient-to-br from-emerald-900/40 via-emerald-950/40 to-slate-900/60 border-emerald-500/20 hover:border-emerald-400/40 hover:shadow-emerald-900/20`;
-
-    // Theatre
+        return `${base} dept-card-exhibition`;
     if (groupType === 'theatre' || dept.toLowerCase().includes('theatre'))
-        return `${base} bg-gradient-to-br from-red-900/40 via-red-950/40 to-slate-900/60 border-red-500/20 hover:border-red-400/40 hover:shadow-red-900/20`;
-
-    // Default
-    return `${base} bg-gradient-to-br from-slate-800/50 via-slate-900/50 to-black/40 border-white/10 hover:border-white/20 hover:shadow-white/5`;
+        return `${base} dept-card-theatre`;
+    return `${base} dept-card-default`;
 }
 
 // Status configuration with icons, colors, and labels
@@ -336,13 +318,13 @@ export const EmployeeSwapsPage: React.FC = () => {
                 )}
             >
                 {/* HEADER ZONE */}
-                <div className="px-4 py-3 border-b border-white/5 bg-black/20 backdrop-blur-sm">
+                <div className="px-4 py-3 border-b border-slate-200/60 dark:border-white/5 bg-slate-50/80 dark:bg-black/20 backdrop-blur-sm">
                     <div className="flex items-center justify-between gap-2">
                         <div className={cn("flex items-center gap-1.5", statusConfig.textColor)}>
                             <StatusIcon className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
                             <span className="text-xs font-bold uppercase tracking-wide">{statusConfig.label}</span>
                         </div>
-                        <h3 className="font-bold text-sm text-white/90 truncate">
+                        <h3 className="font-bold text-sm text-slate-900 dark:text-white/90 truncate">
                             {shift?.roles?.name || 'Shift'}
                         </h3>
                     </div>
@@ -371,7 +353,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                     {timerText && (
                         <div className={cn(
                             "flex items-center gap-2 text-xs px-2 py-1 rounded-md w-fit font-bold",
-                            isExpired ? "bg-red-500/20 text-red-400 border border-red-500/30" : "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                            isExpired ? "bg-red-50 dark:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30" : "bg-purple-50 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-500/30"
                         )}>
                             <Clock className="h-3 w-3" aria-hidden="true" />
                             <span>{timerText}</span>
@@ -380,7 +362,7 @@ export const EmployeeSwapsPage: React.FC = () => {
 
                     {/* Compliance Indicators */}
                     <div className="flex items-center gap-3 text-xs">
-                        <div className="flex items-center gap-1 text-emerald-400">
+                        <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
                             <ShieldCheck className="h-3 w-3" aria-hidden="true" />
                             <span>Compliant</span>
                         </div>
@@ -395,7 +377,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                 </div>
 
                 {/* FOOTER ZONE */}
-                <div className="px-4 py-3 border-t border-white/5 bg-slate-900/30 space-y-2">
+                <div className="px-4 py-3 border-t border-slate-200/60 dark:border-white/5 bg-slate-50/60 dark:bg-slate-900/30 space-y-2">
                     {/* Logic: Show options based on ownership and status */}
                     {swap.requester_id === userId ? (
                         // I am the REQUESTER
@@ -407,7 +389,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                         // If I offered, I want to see status.
                         // For now, if status is pending, show "Offer Sent"
                         (swap.status === 'OPEN') && (
-                            <div className="w-full h-11 flex items-center justify-center bg-slate-800 border border-slate-700 rounded-md text-sm text-foreground">
+                            <div className="w-full h-11 flex items-center justify-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-sm text-foreground">
                                 <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-500" />
                                 Offer Sent
                             </div>
@@ -432,7 +414,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                 variant="ghost"
                                 size="sm"
                                 className={cn(
-                                    "text-red-400 hover:text-red-300 hover:bg-red-500/10 h-11",
+                                    "text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/10 h-11",
                                     swap.status === 'OPEN' ? 'flex-1' : 'flex-1'
                                 )}
                                 onClick={() => setConfirmDialog({ isOpen: true, swap })}
@@ -465,14 +447,14 @@ export const EmployeeSwapsPage: React.FC = () => {
                 )}
             >
                 {/* HEADER ZONE */}
-                <div className="px-4 py-3 border-b border-white/5 bg-black/20 backdrop-blur-sm">
+                <div className="px-4 py-3 border-b border-slate-200/60 dark:border-white/5 bg-slate-50/80 dark:bg-black/20 backdrop-blur-sm">
                     <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-[10px] bg-white/5 border-white/10 text-white/70">
+                            <Badge variant="outline" className="text-[10px] bg-slate-100 dark:bg-white/5 border-slate-300 dark:border-white/10 text-slate-600 dark:text-white/70">
                                 {myActiveOfferSwapIds.has(swap.id) ? '✓ Offered' : 'Swap Available'}
                             </Badge>
                         </div>
-                        <h3 className="font-bold text-sm text-white/90 truncate">
+                        <h3 className="font-bold text-sm text-slate-900 dark:text-white/90 truncate">
                             {shift?.roles?.name || 'Shift'}
                         </h3>
                     </div>
@@ -506,7 +488,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                     {timerText && (
                         <div className={cn(
                             "flex items-center gap-2 text-xs px-2 py-1 rounded-md w-fit font-bold",
-                            isExpired ? "bg-red-500/20 text-red-400 border border-red-500/30" : "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                            isExpired ? "bg-red-50 dark:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30" : "bg-purple-50 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-500/30"
                         )}>
                             <Clock className="h-3 w-3" aria-hidden="true" />
                             <span>{timerText}</span>
@@ -515,9 +497,9 @@ export const EmployeeSwapsPage: React.FC = () => {
                 </div>
 
                 {/* FOOTER ZONE */}
-                <div className="px-4 py-3 border-t border-white/5 bg-slate-900/30">
+                <div className="px-4 py-3 border-t border-slate-200/60 dark:border-white/5 bg-slate-50/60 dark:bg-slate-900/30">
                     {myActiveOfferSwapIds.has(swap.id) ? (
-                        <div className="w-full h-11 flex items-center justify-center bg-slate-800 border border-emerald-500/30 rounded-md text-sm text-emerald-400">
+                        <div className="w-full h-11 flex items-center justify-center bg-emerald-50 dark:bg-slate-800 border border-emerald-200 dark:border-emerald-500/30 rounded-md text-sm text-emerald-700 dark:text-emerald-400">
                             <CheckCircle2 className="h-4 w-4 mr-2" aria-hidden="true" />
                             Offer Sent
                         </div>
@@ -547,145 +529,143 @@ export const EmployeeSwapsPage: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-background text-foreground">
-            <div className="max-w-7xl mx-auto p-4 md:p-6">
+        <div className="w-full text-foreground">
 
 
-                {/* Scope Filter */}
-                <ScopeFilterBanner
-                    mode="personal"
-                    onScopeChange={setScope}
-                    hidden={isGammaLocked}
-                    className="mb-6"
-                />
+            {/* Scope Filter */}
+            <ScopeFilterBanner
+                mode="personal"
+                onScopeChange={setScope}
+                hidden={isGammaLocked}
+                className="mb-6"
+            />
 
-                {/* Function Bar */}
-                <FunctionBar
-                    tabs={[
-                        { id: 'my-swaps', label: 'My Swaps', count: filteredMySwaps.length },
-                        { id: 'available-swaps', label: 'Available Swaps', count: filteredAvailableSwaps.length }
-                    ]}
-                    activeTab={activeTab}
-                    onTabChange={(id) => setActiveTab(id as any)}
-                    viewMode={viewMode}
-                    onViewModeChange={setViewMode}
-                    onRefresh={handleRefresh}
-                    className="mb-6"
-                />
+            {/* Function Bar */}
+            <FunctionBar
+                tabs={[
+                    { id: 'my-swaps', label: 'My Swaps', count: filteredMySwaps.length },
+                    { id: 'available-swaps', label: 'Available Swaps', count: filteredAvailableSwaps.length }
+                ]}
+                activeTab={activeTab}
+                onTabChange={(id) => setActiveTab(id as any)}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+                onRefresh={handleRefresh}
+                className="mb-6"
+            />
 
-                {/* Info Banner */}
-                {activeTab === 'available-swaps' && (
-                    <div className="relative mb-6 overflow-hidden rounded-xl border-l-[3px] border-l-purple-500 bg-gradient-to-r from-purple-500/10 via-purple-900/5 to-transparent p-4 backdrop-blur-sm">
-                        <div className="flex items-start gap-3">
-                            <div className="rounded-full bg-purple-500/20 p-1.5 ring-1 ring-purple-500/30">
-                                <ArrowLeftRight className="h-4 w-4 text-purple-400" />
-                            </div>
-                            <div className="space-y-1">
-                                <h4 className="text-sm font-medium text-purple-200">Shift Swaps</h4>
-                                <p className="text-sm text-purple-200/70 leading-relaxed max-w-2xl">
-                                    Browse available swaps from colleagues or manage your own swap requests.
-                                </p>
-                            </div>
+            {/* Info Banner */}
+            {activeTab === 'available-swaps' && (
+                <div className="relative mb-6 overflow-hidden rounded-xl border-l-[3px] border-l-purple-500 bg-gradient-to-r from-purple-50 dark:from-purple-500/10 via-purple-50/50 dark:via-purple-900/5 to-transparent p-4 backdrop-blur-sm">
+                    <div className="flex items-start gap-3">
+                        <div className="rounded-full bg-purple-100 dark:bg-purple-500/20 p-1.5 ring-1 ring-purple-200 dark:ring-purple-500/30">
+                            <ArrowLeftRight className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                        </div>
+                        <div className="space-y-1">
+                            <h4 className="text-sm font-medium text-purple-700 dark:text-purple-200">Shift Swaps</h4>
+                            <p className="text-sm text-purple-600/80 dark:text-purple-200/70 leading-relaxed max-w-2xl">
+                                Browse available swaps from colleagues or manage your own swap requests.
+                            </p>
                         </div>
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* Content */}
-                {isLoading ? (
-                    <div className="flex items-center justify-center py-16">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
-                        <span className="ml-2 text-muted-foreground">Loading swaps...</span>
-                    </div>
-                ) : activeTab === 'my-swaps' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {filteredMySwaps.length === 0 ? (
-                            <div className="col-span-full py-12 text-center">
-                                <div className="mx-auto w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                                    <ArrowLeftRight className="h-6 w-6 text-white/20" />
-                                </div>
-                                <h3 className="text-lg font-medium text-white/50">No swap requests found</h3>
-                                <p className="text-sm text-white/30 mt-1">Create a swap request from your roster to get started.</p>
+            {/* Content */}
+            {isLoading ? (
+                <div className="flex items-center justify-center py-16">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+                    <span className="ml-2 text-muted-foreground">Loading swaps...</span>
+                </div>
+            ) : activeTab === 'my-swaps' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredMySwaps.length === 0 ? (
+                        <div className="col-span-full py-12 text-center">
+                            <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center mb-4">
+                                <ArrowLeftRight className="h-6 w-6 text-slate-300 dark:text-white/20" />
                             </div>
-                        ) : (
-                            filteredMySwaps.map(renderMySwapCard)
-                        )}
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {filteredAvailableSwaps.length === 0 ? (
-                            <div className="col-span-full py-12 text-center">
-                                <div className="mx-auto w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                                    <ArrowLeftRight className="h-6 w-6 text-white/20" />
-                                </div>
-                                <h3 className="text-lg font-medium text-white/50">No available swaps</h3>
-                                <p className="text-sm text-white/30 mt-1">Check back later for opportunities.</p>
+                            <h3 className="text-lg font-medium text-slate-400 dark:text-white/50">No swap requests found</h3>
+                            <p className="text-sm text-slate-400/70 dark:text-white/30 mt-1">Create a swap request from your roster to get started.</p>
+                        </div>
+                    ) : (
+                        filteredMySwaps.map(renderMySwapCard)
+                    )}
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredAvailableSwaps.length === 0 ? (
+                        <div className="col-span-full py-12 text-center">
+                            <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center mb-4">
+                                <ArrowLeftRight className="h-6 w-6 text-slate-300 dark:text-white/20" />
                             </div>
-                        ) : (
-                            filteredAvailableSwaps.map(renderAvailableSwapCard)
-                        )}
-                    </div>
-                )}
+                            <h3 className="text-lg font-medium text-slate-400 dark:text-white/50">No available swaps</h3>
+                            <p className="text-sm text-slate-400/70 dark:text-white/30 mt-1">Check back later for opportunities.</p>
+                        </div>
+                    ) : (
+                        filteredAvailableSwaps.map(renderAvailableSwapCard)
+                    )}
+                </div>
+            )}
 
-                {/* Modals */}
-                <OfferSwapModal
-                    isOpen={!!offerSwapTarget}
-                    onClose={() => setOfferSwapTarget(null)}
-                    onConfirmOffer={handleMakeOffer}
-                    isSubmitting={isMakingOffer}
-                    swapId={offerSwapTarget?.id || ''}
-                />
+            {/* Modals */}
+            <OfferSwapModal
+                isOpen={!!offerSwapTarget}
+                onClose={() => setOfferSwapTarget(null)}
+                onConfirmOffer={handleMakeOffer}
+                isSubmitting={isMakingOffer}
+                swapId={offerSwapTarget?.id || ''}
+            />
 
-                <ViewOffersModal
-                    isOpen={!!viewOffersSwapId}
-                    onClose={() => setViewOffersSwapId(null)}
-                    swapResquestId={viewOffersSwapId || ''}
-                    onAccept={(offer) => {
-                        acceptOffer({
-                            swapId: offer.swap_request_id,
-                            offerId: offer.id,
-                            offererId: offer.offerer_id,
-                            offeredShiftId: offer.offered_shift_id
-                        });
-                        setViewOffersSwapId(null);
-                    }}
-                    onDecline={(offerId) => declineOffer(offerId)}
-                    isAccepting={isAccepting}
-                    isDeclining={isDeclining}
-                />
+            <ViewOffersModal
+                isOpen={!!viewOffersSwapId}
+                onClose={() => setViewOffersSwapId(null)}
+                swapResquestId={viewOffersSwapId || ''}
+                onAccept={(offer) => {
+                    acceptOffer({
+                        swapId: offer.swap_request_id,
+                        offerId: offer.id,
+                        offererId: offer.offerer_id,
+                        offeredShiftId: offer.offered_shift_id
+                    });
+                    setViewOffersSwapId(null);
+                }}
+                onDecline={(offerId) => declineOffer(offerId)}
+                isAccepting={isAccepting}
+                isDeclining={isDeclining}
+            />
 
-                {/* Cancel Confirmation Dialog */}
-                <Dialog
-                    open={confirmDialog.isOpen}
-                    onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, isOpen: open }))}
-                >
-                    <DialogContent className="max-w-sm">
-                        <DialogHeader>
-                            <DialogTitle className="flex items-center gap-2">
-                                <AlertTriangle className="h-5 w-5 text-amber-500" aria-hidden="true" />
-                                Cancel Request
-                            </DialogTitle>
-                            <DialogDescription>
-                                Are you sure you want to cancel this swap request? This action cannot be undone.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter className="flex gap-2 mt-4">
-                            <Button
-                                variant="outline"
-                                onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
-                                className="flex-1 h-11"
-                            >
-                                Go Back
-                            </Button>
-                            <Button
-                                onClick={confirmCancel}
-                                className="flex-1 h-11 bg-destructive hover:bg-destructive/90"
-                            >
-                                Yes, Cancel
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-            </div>
+            {/* Cancel Confirmation Dialog */}
+            <Dialog
+                open={confirmDialog.isOpen}
+                onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, isOpen: open }))}
+            >
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-amber-500" aria-hidden="true" />
+                            Cancel Request
+                        </DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to cancel this swap request? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="flex gap-2 mt-4">
+                        <Button
+                            variant="outline"
+                            onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+                            className="flex-1 h-11"
+                        >
+                            Go Back
+                        </Button>
+                        <Button
+                            onClick={confirmCancel}
+                            className="flex-1 h-11 bg-destructive hover:bg-destructive/90"
+                        >
+                            Yes, Cancel
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };
@@ -725,7 +705,7 @@ const EmptyState: React.FC<{
     title: string;
     description: string;
 }> = ({ icon: Icon, title, description }) => (
-    <div className="text-center py-16 bg-slate-800/30 rounded-xl border border-slate-700">
+    <div className="text-center py-16 bg-slate-100/60 dark:bg-slate-800/30 rounded-xl border border-slate-200 dark:border-slate-700">
         <Icon className="h-12 w-12 text-muted-foreground mx-auto mb-4" aria-hidden="true" />
         <h3 className="text-lg font-medium text-foreground mb-2">{title}</h3>
         <p className="text-sm text-muted-foreground max-w-md mx-auto">{description}</p>

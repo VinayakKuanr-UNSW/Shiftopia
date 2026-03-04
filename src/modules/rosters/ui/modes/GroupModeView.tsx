@@ -404,7 +404,7 @@ const CoverageSignalBar: React.FC<CoverageSignalBarProps> = ({ pct, accent, segm
             'h-[5px] w-[14px] rounded-sm transition-all duration-300',
             i < filled
               ? cn(barColor, 'opacity-90 animate-[signalFill_0.3s_ease_forwards]')
-              : 'bg-white/10'
+              : 'bg-slate-200 dark:bg-white/10'
           )}
         />
       ))}
@@ -1284,14 +1284,14 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
-            className="h-4 w-4 flex items-center justify-center hover:bg-white/20 rounded transition-colors"
+            className="h-4 w-4 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-white/20 rounded transition-colors"
             onClick={(e) => e.stopPropagation()}
             disabled={isLocked && false} // Allow menu to open even if locked, to show delete/locked status
           >
-            <MoreHorizontal className={cn("h-3 w-3", isLocked ? "text-white/30" : "text-white")} />
+            <MoreHorizontal className={cn("h-3 w-3", isLocked ? "text-slate-300 dark:text-white/30" : "text-slate-600 dark:text-white")} />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="bg-[#1a2744] border-white/10 min-w-[160px] z-50">
+        <DropdownMenuContent align="end" className="bg-white dark:bg-[#1a2744] border-slate-200 dark:border-white/10 min-w-[160px] z-50">
           {/* Normalization: Check calculation from handleEditShift for consistency */}
           {(() => {
             const [h, m] = shift.startTime.split(':').map(Number);
@@ -1309,21 +1309,21 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
             if (hasStarted && shift.rawShift.lifecycle_status !== 'Published') { // 'Published' is already readonly by other logic, but this covers Draft/Started
               return (
                 <>
-                  <DropdownMenuItem disabled className="text-white/50 cursor-not-allowed">
+                  <DropdownMenuItem disabled className="text-slate-400 dark:text-white/50 cursor-not-allowed">
                     <Lock className="h-4 w-4 mr-2" />
                     Edit Shift (Locked)
                   </DropdownMenuItem>
 
-                  <DropdownMenuItem disabled className="text-white/50 cursor-not-allowed">
+                  <DropdownMenuItem disabled className="text-slate-400 dark:text-white/50 cursor-not-allowed">
                     <Lock className="h-4 w-4 mr-2" />
                     Publish (Locked)
                   </DropdownMenuItem>
 
-                  <DropdownMenuSeparator className="bg-white/10" />
+                  <DropdownMenuSeparator className="bg-slate-200 dark:bg-white/10" />
 
                   <DropdownMenuItem
                     onClick={() => handleDeleteShift(shift)}
-                    className="text-red-400 hover:bg-red-500/10 cursor-pointer"
+                    className="text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 cursor-pointer"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete Shift
@@ -1338,7 +1338,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                 {isLocked ? (
                   <DropdownMenuItem
                     onClick={() => handleDeleteShift(shift)}
-                    className="text-red-400 hover:bg-red-500/10 cursor-pointer"
+                    className="text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 cursor-pointer"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete Shift (Locked)
@@ -1348,7 +1348,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                     {shift.isDraft && (
                       <DropdownMenuItem
                         onClick={() => handleEditShift(shift, group, subGroup, date)}
-                        className="text-white hover:bg-white/10 cursor-pointer"
+                        className="text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer"
                       >
                         <Edit2 className="h-4 w-4 mr-2" />
                         Edit Shift
@@ -1358,7 +1358,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                     {shift.isDraft && !shift.isPublished && (
                       <DropdownMenuItem
                         onClick={() => handleRequestPublish(shift)}
-                        className="text-white hover:bg-white/10 cursor-pointer"
+                        className="text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer"
                       >
                         <Send className="h-4 w-4 mr-2" />
                         Publish Shift
@@ -1368,18 +1368,18 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                     {shift.rawShift.lifecycle_status === 'Published' && (
                       <DropdownMenuItem
                         onClick={() => handleRequestUnpublish(shift)}
-                        className="text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+                        className="text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 cursor-pointer"
                       >
                         <Undo2 className="h-4 w-4 mr-2" />
                         Unpublish Shift
                       </DropdownMenuItem>
                     )}
 
-                    <DropdownMenuSeparator className="bg-white/10" />
+                    <DropdownMenuSeparator className="bg-slate-200 dark:bg-white/10" />
 
                     <DropdownMenuItem
                       onClick={() => handleDeleteShift(shift)}
-                      className="text-red-400 hover:bg-red-500/10 cursor-pointer"
+                      className="text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 cursor-pointer"
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
                       Delete Shift
@@ -1441,10 +1441,10 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   // ==================== LOADING STATE ====================
   if (isShiftsLoading) {
     return (
-      <div className="flex items-center justify-center h-full bg-[#0a0f1e]">
+      <div className={cn("flex items-center justify-center h-full", isDark ? 'bg-[#0a0f1e]' : 'bg-slate-50')}>
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-400 mx-auto mb-2" />
-          <p className="text-white/60">Loading shifts...</p>
+          <Loader2 className="h-8 w-8 animate-spin text-emerald-500 dark:text-emerald-400 mx-auto mb-2" />
+          <p className="text-slate-500 dark:text-white/60">Loading shifts...</p>
         </div>
       </div>
     );
@@ -1559,7 +1559,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                     <div className="overflow-auto">
                       <table className="w-full min-w-max border-collapse relative">
                         <thead>
-                          <tr className="bg-black/20 sticky top-0 z-20">
+                          <tr className="bg-slate-100/80 dark:bg-black/20 sticky top-0 z-20">
                             <th className={cn(
                               "sticky left-0 z-10 backdrop-blur-sm border-r px-4 py-3 text-left font-medium text-sm min-w-[160px]",
                               isDark ? "bg-[#0d1424]/90 border-white/5 text-white/70" : "bg-white/95 border-gray-200 text-gray-500"
@@ -1664,7 +1664,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                       'px-2 py-3 align-top min-h-[100px] relative',
                                       dateIdx < dates.length - 1 && (isDark ? 'border-r border-white/5' : 'border-r border-gray-200'),
                                       // Ghost cell styling
-                                      isGhost && 'bg-gray-800/40 border-dashed border-white/10 cursor-pointer hover:bg-gray-700/40',
+                                      isGhost && 'bg-slate-200/60 dark:bg-gray-800/40 border-dashed border-slate-300 dark:border-white/10 cursor-pointer hover:bg-slate-300/60 dark:hover:bg-gray-700/40',
                                       // Today highlighting (only if not ghost)
                                       !isGhost && cellIsToday && (isDark ? 'bg-purple-600/10' : 'bg-purple-50'),
                                       // Past date styling (only if not ghost and not today)
@@ -1675,7 +1675,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                     {isGhost ? (
                                       // Ghost Cell Content - "Go to [Month]" link
                                       <div className="absolute inset-0 flex items-center justify-center">
-                                        <span className="text-gray-500 text-sm font-medium hover:text-gray-300 transition-colors">
+                                        <span className="text-slate-500 dark:text-gray-400 text-sm font-medium hover:text-slate-700 dark:hover:text-gray-300 transition-colors">
                                           Go to {format(date, 'MMMM')} →
                                         </span>
                                       </div>
@@ -1757,8 +1757,8 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                             onClick={() => handleAddShift(group, subGroup, date)}
                                             className={cn(
                                               "w-full h-8 flex items-center justify-center rounded-lg",
-                                              "border border-dashed border-white/10 hover:border-white/25 hover:bg-white/[0.02]",
-                                              "transition-all text-white/20 hover:text-white/60 group/add"
+                                              "border border-dashed border-slate-300 dark:border-white/10 hover:border-slate-400 dark:hover:border-white/25 hover:bg-slate-50 dark:hover:bg-white/[0.02]",
+                                              "transition-all text-slate-300 dark:text-white/20 hover:text-slate-500 dark:hover:text-white/60 group/add"
                                             )}
                                             title="Add Shift"
                                           >
@@ -1786,16 +1786,16 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
         {/* Delete Dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <AlertDialogContent className="bg-[#1a2744] border-white/10">
+          <AlertDialogContent className="bg-background border-border">
             <AlertDialogHeader>
-              <AlertDialogTitle className="text-white">Delete Shift?</AlertDialogTitle>
-              <AlertDialogDescription className="text-white/60">
+              <AlertDialogTitle className="text-foreground">Delete Shift?</AlertDialogTitle>
+              <AlertDialogDescription className="text-muted-foreground">
                 This action cannot be undone. The shift "{shiftToDelete?.role}" will be permanently removed.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel
-                className="bg-white/5 border-white/10 text-white hover:bg-white/10"
+                className="border-border text-muted-foreground hover:bg-muted"
                 disabled={isDeleting}
               >
                 Cancel
@@ -1888,13 +1888,13 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
       {/* Confirmation Dialog */}
       <AlertDialog open={confirmActionOpen} onOpenChange={setConfirmActionOpen}>
-        <AlertDialogContent className="bg-[#1a2744] border-white/10">
+        <AlertDialogContent className="bg-background border-border">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white flex items-center gap-2">
+            <AlertDialogTitle className="text-foreground flex items-center gap-2">
               {pendingAction?.type === 'publish' && 'Publish Shift'}
               {pendingAction?.type === 'unpublish' && 'Unpublish Shift'}
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-slate-300">
+            <AlertDialogDescription className="text-muted-foreground">
               {pendingAction?.type === 'publish' && (
                 pendingAction.shift.rawShift.assigned_employee_id
                   ? "This shift is assigned. Publishing will send a job offer to the employee. They must accept it to confirm."
@@ -1905,7 +1905,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel
-              className="bg-white/5 border-white/10 text-white hover:bg-white/10"
+              className="border-border text-muted-foreground hover:bg-muted"
               disabled={isProcessingAction}
             >
               Cancel
@@ -1932,18 +1932,18 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
       {/* Emergency Cover Alert */}
       <AlertDialog open={isEmergencyAlertOpen} onOpenChange={setIsEmergencyAlertOpen}>
-        <AlertDialogContent className="bg-red-950 border-red-500/50 backdrop-blur-xl">
+        <AlertDialogContent className="bg-red-50 dark:bg-red-950 border-red-300 dark:border-red-500/50 backdrop-blur-xl">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-red-400 flex items-center gap-2">
+            <AlertDialogTitle className="text-red-600 dark:text-red-400 flex items-center gap-2">
               <Ban className="h-5 w-5" />
               Emergency Cover Required
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-white/90 text-base">
+            <AlertDialogDescription className="text-slate-700 dark:text-white/90 text-base">
               {emergencyAlertMessage}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-white/10 text-white hover:bg-white/20 border-white/10">Close</AlertDialogCancel>
+            <AlertDialogCancel className="bg-white dark:bg-white/10 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/20 border-slate-300 dark:border-white/10">Close</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

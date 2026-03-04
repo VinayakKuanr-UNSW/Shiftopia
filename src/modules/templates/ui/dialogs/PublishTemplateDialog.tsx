@@ -58,17 +58,17 @@ export const PublishTemplateDialog: React.FC<PublishTemplateDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-[#0d1829] border-white/10 sm:max-w-[500px]">
+      <DialogContent className="bg-card border-border sm:max-w-[500px]">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
             <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400">
               <CalendarIcon className="h-5 w-5" />
             </div>
             <div>
-              <DialogTitle className="text-xl text-white">
+              <DialogTitle className="text-xl text-foreground">
                 Apply Template to Roster
               </DialogTitle>
-              <DialogDescription className="text-white/50 text-sm">
+              <DialogDescription className="text-muted-foreground text-sm">
                 Apply current template to the generated roster.
               </DialogDescription>
             </div>
@@ -77,20 +77,20 @@ export const PublishTemplateDialog: React.FC<PublishTemplateDialogProps> = ({
 
         <div className="py-4 space-y-6">
           {/* Template Info */}
-          <div className="bg-[#1a2744] rounded-xl p-4 border border-white/5 space-y-3">
+          <div className="bg-muted/50 rounded-xl p-4 border border-border/50 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-white/40 text-sm">Target Month</span>
-              <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 font-semibold px-3 py-1">
+              <span className="text-muted-foreground text-sm">Target Month</span>
+              <Badge className="bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/30 font-semibold px-3 py-1">
                 {displayMonth}
               </Badge>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-white/40">Template Name</span>
-              <span className="text-white font-medium">{templateName}</span>
+              <span className="text-muted-foreground">Template Name</span>
+              <span className="text-foreground font-medium">{templateName}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-white/40">Version</span>
-              <span className="text-white font-medium">v{templateVersion}</span>
+              <span className="text-muted-foreground">Version</span>
+              <span className="text-foreground font-medium">v{templateVersion}</span>
             </div>
           </div>
 
@@ -100,16 +100,16 @@ export const PublishTemplateDialog: React.FC<PublishTemplateDialogProps> = ({
               <div className="mt-1 w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
                 <CheckCircle2 className="h-3 w-3 text-emerald-400" />
               </div>
-              <p className="text-sm text-white/70">
-                <span className="text-emerald-400 font-medium">Append New:</span> Only new shifts and sub-groups defined in this template will be added.
+              <p className="text-sm text-muted-foreground">
+                <span className="text-emerald-600 dark:text-emerald-400 font-medium">Append New:</span> Only new shifts and sub-groups defined in this template will be added.
               </p>
             </div>
             <div className="flex items-start gap-3">
               <div className="mt-1 w-5 h-5 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
-                <Info className="h-3 w-3 text-amber-400" />
+                <Info className="h-3 w-3 text-amber-600 dark:text-amber-400" />
               </div>
-              <p className="text-sm text-white/70">
-                <span className="text-amber-400 font-medium">Preserve Manual:</span> Shifts created manually in the roster will not be overwritten.
+              <p className="text-sm text-muted-foreground">
+                <span className="text-amber-600 dark:text-amber-400 font-medium">Preserve Manual:</span> Shifts created manually in the roster will not be overwritten.
               </p>
             </div>
           </div>
@@ -127,7 +127,7 @@ export const PublishTemplateDialog: React.FC<PublishTemplateDialogProps> = ({
             variant="outline"
             onClick={onClose}
             disabled={isPublishing}
-            className="bg-white/5 border-white/10 text-white hover:bg-white/10 hover:text-white"
+            className="bg-transparent border-border text-foreground hover:bg-muted/50"
           >
             Cancel
           </Button>

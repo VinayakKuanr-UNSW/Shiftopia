@@ -52,11 +52,11 @@ const SearchPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-8 max-w-4xl mx-auto">
+    <div className="min-h-screen p-4 md:p-8 w-full">
       <div className="flex items-center mb-6">
-        <Button 
-          variant="ghost" 
-          size="icon" 
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={() => navigate(-1)}
           className="mr-2"
         >
@@ -95,7 +95,7 @@ const SearchPage: React.FC = () => {
       ) : searchResults.length > 0 ? (
         <div className="space-y-4">
           {searchResults.map((result, index) => (
-            <Card 
+            <Card
               key={`${result.type}-${result.id}-${index}`}
               className="hover:bg-muted/50 transition-colors cursor-pointer"
               onClick={() => {

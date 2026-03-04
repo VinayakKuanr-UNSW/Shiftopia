@@ -86,7 +86,7 @@ export const TemplateHeader: React.FC<TemplateHeaderProps> = ({
         {/* Right: Status indicator */}
         <div className="flex items-center gap-2">
           {isPublished && (
-            <div className="flex items-center gap-2 text-sm text-emerald-500 bg-emerald-500/10 px-3 py-1.5 rounded-md">
+            <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-500 bg-emerald-500/10 px-3 py-1.5 rounded-md">
               <Lock className="h-3.5 w-3.5" />
               Published (Read-only)
             </div>

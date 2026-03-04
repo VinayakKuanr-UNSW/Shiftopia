@@ -144,12 +144,12 @@ export const ShiftCardLegend: React.FC<ShiftCardLegendProps> = ({
     if (inline) {
         return (
             <div className={cn('flex flex-wrap items-center gap-3 text-xs', className)}>
-                <HelpCircle className="h-3.5 w-3.5 text-white/40 shrink-0" />
+                <HelpCircle className="h-3.5 w-3.5 text-slate-400 dark:text-white/40 shrink-0" />
                 {LEGEND_SECTIONS.map((section) =>
                     section.items.map((item) => (
                         <div
                             key={item.label}
-                            className="flex items-center gap-1 text-white/60"
+                            className="flex items-center gap-1 text-slate-500 dark:text-white/60"
                             title={`${item.label}: ${item.description}`}
                         >
                             {item.icon}
@@ -162,20 +162,20 @@ export const ShiftCardLegend: React.FC<ShiftCardLegendProps> = ({
     }
 
     return (
-        <div className={cn('rounded-xl border border-white/10 bg-black/20 backdrop-blur-sm overflow-hidden', className)}>
+        <div className={cn('rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-black/20 backdrop-blur-sm overflow-hidden', className)}>
             {/* Toggle Header */}
             <button
                 onClick={() => setIsCollapsed(!isCollapsed)}
-                className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
             >
                 <div className="flex items-center gap-2">
-                    <HelpCircle className="h-3.5 w-3.5 text-white/50" />
-                    <span className="text-xs font-medium text-white/80">Shift Card Legend</span>
+                    <HelpCircle className="h-3.5 w-3.5 text-slate-400 dark:text-white/50" />
+                    <span className="text-xs font-medium text-slate-700 dark:text-white/80">Shift Card Legend</span>
                 </div>
                 {isCollapsed ? (
-                    <ChevronDown className="h-3.5 w-3.5 text-white/40" />
+                    <ChevronDown className="h-3.5 w-3.5 text-slate-400 dark:text-white/40" />
                 ) : (
-                    <ChevronUp className="h-3.5 w-3.5 text-white/40" />
+                    <ChevronUp className="h-3.5 w-3.5 text-slate-400 dark:text-white/40" />
                 )}
             </button>
 
@@ -184,7 +184,7 @@ export const ShiftCardLegend: React.FC<ShiftCardLegendProps> = ({
                 <div className="px-3 pb-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                     {LEGEND_SECTIONS.map((section) => (
                         <div key={section.title} className="space-y-1.5">
-                            <h4 className="text-[9px] font-bold uppercase tracking-widest text-white/30 border-b border-white/5 pb-0.5">
+                            <h4 className="text-[9px] font-bold uppercase tracking-widest text-slate-400 dark:text-white/30 border-b border-slate-200 dark:border-white/5 pb-0.5">
                                 {section.title}
                             </h4>
                             <div className="space-y-1">
@@ -193,7 +193,7 @@ export const ShiftCardLegend: React.FC<ShiftCardLegendProps> = ({
                                         <div className="shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
                                             {React.cloneElement(item.icon as React.ReactElement, { className: cn((item.icon as React.ReactElement).props.className, 'h-3 w-3') })}
                                         </div>
-                                        <span className="text-[10px] text-white/60 group-hover:text-white/90 truncate cursor-help transition-colors">
+                                        <span className="text-[10px] text-slate-500 dark:text-white/60 group-hover:text-slate-800 dark:group-hover:text-white/90 truncate cursor-help transition-colors">
                                             {item.label}
                                         </span>
                                     </div>

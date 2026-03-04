@@ -64,19 +64,19 @@ export function TemplateSubgroupCard({
 
     const colorClasses: Record<string, { bg: string; border: string; text: string }> = {
         blue: {
-            bg: 'bg-blue-500/10',
+            bg: 'bg-blue-500/15 dark:bg-blue-900/40',
             border: 'border-blue-500/30',
-            text: 'text-blue-400',
+            text: 'text-blue-700 dark:text-blue-300',
         },
         green: {
-            bg: 'bg-emerald-500/10',
+            bg: 'bg-emerald-500/15 dark:bg-emerald-900/40',
             border: 'border-emerald-500/30',
-            text: 'text-emerald-400',
+            text: 'text-emerald-700 dark:text-emerald-300',
         },
         red: {
-            bg: 'bg-red-500/10',
+            bg: 'bg-red-500/15 dark:bg-red-900/40',
             border: 'border-red-500/30',
-            text: 'text-red-400',
+            text: 'text-red-700 dark:text-red-300',
         },
     };
 
@@ -86,7 +86,8 @@ export function TemplateSubgroupCard({
         <Collapsible open={isExpanded} onOpenChange={onToggleExpand}>
             <div
                 className={cn(
-                    'rounded-lg border bg-slate-900/50',
+                    'rounded-lg border',
+                    colors.bg,
                     colors.border,
                     className
                 )}

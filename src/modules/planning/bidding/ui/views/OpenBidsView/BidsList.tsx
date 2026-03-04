@@ -24,7 +24,7 @@ export const BidsList: React.FC<BidsListProps> = ({ bids, isLoading, onAssign })
         ) : bids.length === 0 ? (
           <EmptyState />
         ) : (
-          <div className="space-y-2.5 max-w-4xl mx-auto">
+          <div className="space-y-2.5 w-full">
             {bids.map((bid) => (
               <BidCard key={bid.id} bid={bid} onAssign={onAssign} />
             ))}

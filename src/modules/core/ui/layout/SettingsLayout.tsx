@@ -46,7 +46,7 @@ const SettingsLayout: React.FC<SettingsLayoutProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-8">
+    <div className="w-full h-full p-4 md:p-8">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>

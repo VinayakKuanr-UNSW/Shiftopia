@@ -350,20 +350,20 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="bg-[#020617] border-white/5 p-0 overflow-hidden sm:max-w-[760px] shadow-2xl shadow-blue-500/10">
+      <DialogContent className="bg-card border-border p-0 overflow-hidden sm:max-w-[760px] shadow-2xl">
         <div className="grid grid-cols-1 md:grid-cols-[1fr_1.4fr]">
           {/* Left Column: Hierarchy (Locked) */}
-          <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600/20 via-slate-900 to-slate-900 p-8 flex flex-col justify-between border-r border-white/5">
+          <div className="relative overflow-hidden bg-muted/30 p-8 flex flex-col justify-between border-r border-border">
             {/* Background Decoration */}
             <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
             <div className="relative z-10 flex flex-col h-full">
               <div className="mb-8">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-bold text-indigo-300 uppercase tracking-widest mb-4">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-bold text-primary uppercase tracking-widest mb-4">
                   Scope Context
                 </div>
-                <h3 className="text-2xl font-bold text-white tracking-tight">Hierarchy</h3>
-                <p className="text-slate-400 text-sm mt-1">This template will be bound to the selected context.</p>
+                <h3 className="text-2xl font-bold text-foreground tracking-tight">Hierarchy</h3>
+                <p className="text-muted-foreground text-sm mt-1">This template will be bound to the selected context.</p>
               </div>
 
               <div className="space-y-4 flex-1">
@@ -373,15 +373,15 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
                   { label: 'Sub-Department', value: getSubDeptName(), icon: Network, color: 'text-violet-400', bg: 'bg-violet-400/10' },
                 ].map((item, i) => (
                   <div key={item.label} className="relative group">
-                    <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/[0.03] border border-white/5 backdrop-blur-sm group-hover:bg-white/[0.05] group-hover:border-white/10 transition-all duration-300">
+                    <div className="flex items-center gap-4 p-4 rounded-2xl bg-background/50 border border-border backdrop-blur-sm group-hover:bg-muted/50 transition-all duration-300">
                       <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center shrink-0", item.bg)}>
                         <item.icon className={cn("h-6 w-6", item.color)} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-0.5">
+                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-0.5">
                           {item.label}
                         </Label>
-                        <div className="text-sm font-semibold text-white truncate pr-2">
+                        <div className="text-sm font-semibold text-foreground truncate pr-2">
                           {item.value}
                         </div>
                       </div>
@@ -393,26 +393,26 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
                 ))}
               </div>
 
-              <div className="mt-8 flex items-center gap-2 text-[10px] text-slate-500 font-medium">
-                <div className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+              <div className="mt-8 flex items-center gap-2 text-[10px] text-muted-foreground font-medium">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary" />
                 Prefilled & Locked from Global Scope
               </div>
             </div>
           </div>
 
           {/* Right Column: Form Inputs */}
-          <div className="p-8 bg-slate-950 flex flex-col justify-between">
+          <div className="p-8 bg-card flex flex-col justify-between">
             <div className="flex-1">
               <div className="flex items-center justify-between mb-8">
                 <div>
-                  <h3 className="text-xl font-bold text-white tracking-tight">Template Details</h3>
-                  <p className="text-slate-500 text-sm mt-1">Configure your new template skeleton.</p>
+                  <h3 className="text-xl font-bold text-foreground tracking-tight">Template Details</h3>
+                  <p className="text-muted-foreground text-sm mt-1">Configure your new template skeleton.</p>
                 </div>
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={handleClose}
-                  className="rounded-full text-slate-500 hover:text-white hover:bg-white/5 -mt-8 -mr-4"
+                  className="rounded-full text-muted-foreground hover:text-foreground hover:bg-muted -mt-8 -mr-4"
                 >
                   <Plus className="h-5 w-5 rotate-45" />
                 </Button>
@@ -420,8 +420,8 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="name" className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Template Name <span className="text-indigo-500 font-black">*</span>
+                  <Label htmlFor="name" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                    Template Name <span className="text-primary font-black">*</span>
                   </Label>
                   <Input
                     id="name"
@@ -430,67 +430,67 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
                     placeholder="e.g., January Performance Spike"
                     autoFocus
                     className={cn(
-                      "bg-slate-900/50 border-white/5 text-white h-12 px-4 rounded-xl focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all placeholder:text-slate-600 font-medium",
-                      nameError && "border-red-500/50 focus:ring-red-500/20 focus:border-red-500"
+                      "bg-background border-border text-foreground h-12 px-4 rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all placeholder:text-muted-foreground/50 font-medium",
+                      nameError && "border-destructive/50 focus:ring-destructive/20 focus:border-destructive"
                     )}
                   />
                   {nameError ? (
-                    <p className="text-[11px] text-red-400 flex items-center gap-1.5 font-medium">
+                    <p className="text-[11px] text-destructive flex items-center gap-1.5 font-medium">
                       <AlertCircle className="h-3.5 w-3.5" />
                       {nameError}
                     </p>
                   ) : (
-                    <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                    <p className="text-[11px] text-muted-foreground font-medium leading-relaxed">
                       Must be unique within the sub-department. Min 3 characters.
                     </p>
                   )}
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="description" className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Description <span className="text-slate-600">(optional)</span>
+                  <Label htmlFor="description" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                    Description <span className="text-muted-foreground/50">(optional)</span>
                   </Label>
                   <Textarea
                     id="description"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Identify the specific peaks and roles this template addresses..."
-                    className="bg-slate-900/50 border-white/5 text-white min-h-[120px] p-4 rounded-xl focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all resize-none placeholder:text-slate-600 font-medium text-sm leading-relaxed"
+                    className="bg-background border-border text-foreground min-h-[120px] p-4 rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all resize-none placeholder:text-muted-foreground/50 font-medium text-sm leading-relaxed"
                   />
                 </div>
 
-                <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 group overflow-hidden relative">
-                  <div className="absolute top-0 right-0 -mr-4 -mt-4 w-16 h-16 bg-indigo-500/10 rounded-full blur-xl animate-pulse" />
+                <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 group overflow-hidden relative">
+                  <div className="absolute top-0 right-0 -mr-4 -mt-4 w-16 h-16 bg-primary/10 rounded-full blur-xl animate-pulse" />
                   <div className="flex gap-4 relative z-10">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center shrink-0">
-                      <FileText className="h-5 w-5 text-indigo-400" />
+                    <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
+                      <FileText className="h-5 w-5 text-primary" />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest block">
+                      <Label className="text-[10px] font-bold text-primary uppercase tracking-widest block">
                         Auto-Seeding
                       </Label>
-                      <p className="text-xs text-slate-400 leading-relaxed">
-                        Created with core shifts for <span className="text-slate-200">Convention</span>, <span className="text-slate-200">Exhibition</span>, and <span className="text-slate-200">Theatre</span>.
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Created with core shifts for <span className="text-foreground">Convention</span>, <span className="text-foreground">Exhibition</span>, and <span className="text-foreground">Theatre</span>.
                       </p>
                     </div>
                   </div>
                 </div>
 
                 {error && (
-                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-[13px] text-red-400 font-medium text-center">
+                  <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-[13px] text-destructive font-medium text-center">
                     {error}
                   </div>
                 )}
               </form>
             </div>
 
-            <div className="mt-8 pt-6 border-t border-white/5 flex gap-3">
+            <div className="mt-8 pt-6 border-t border-border flex gap-3">
               <Button
                 type="button"
                 variant="ghost"
                 onClick={handleClose}
                 disabled={isCreating}
-                className="flex-1 h-12 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 font-bold tracking-wide"
+                className="flex-1 h-12 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted font-bold tracking-wide"
               >
                 Cancel
               </Button>
@@ -498,7 +498,7 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
                 type="submit"
                 onClick={handleSubmit}
                 disabled={!canSubmit}
-                className="flex-[1.5] h-12 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black tracking-widest shadow-lg shadow-indigo-600/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100 uppercase text-xs"
+                className="flex-[1.5] h-12 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-black tracking-widest shadow-lg shadow-primary/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100 uppercase text-xs"
               >
                 {isCreating ? (
                   <>

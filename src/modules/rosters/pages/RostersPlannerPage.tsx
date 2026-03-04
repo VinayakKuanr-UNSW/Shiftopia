@@ -540,7 +540,7 @@ const NewRostersPage: React.FC = () => {
 
   // ==================== RENDER ====================
   return (
-    <div className="flex flex-col h-full min-h-0 bg-[#030405] overflow-hidden">
+    <div className="flex flex-col h-full min-h-0 bg-slate-50 dark:bg-[#030405] overflow-hidden">
       {/* Scope Filter */}
       <ScopeFilterBanner
         mode="managerial"
@@ -595,7 +595,7 @@ const NewRostersPage: React.FC = () => {
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
             <div className="text-center">
               <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto mb-2" />
-              <p className="text-white/80 font-medium">Loading shifts...</p>
+              <p className="text-white/80 dark:text-white/80 font-medium">Loading shifts...</p>
             </div>
           </div>
         )}
@@ -702,7 +702,7 @@ const NewRostersPage: React.FC = () => {
         {/* Unfilled Shifts Panel */}
         <div
           className={cn(
-            'min-h-0 overflow-hidden border-l border-white/5 bg-black/10 backdrop-blur-md transition-all duration-300 ease-in-out',
+            'min-h-0 overflow-hidden border-l border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-black/10 backdrop-blur-md transition-all duration-300 ease-in-out',
             showUnfilledPanel ? 'w-80' : 'w-0 border-l-0'
           )}
         >
@@ -754,19 +754,19 @@ const NewRostersPage: React.FC = () => {
       )}
 
       {/* Footer Summary */}
-      <div className="border-t border-white/5 bg-black/20 backdrop-blur-md px-6 py-3 flex-shrink-0">
+      <div className="border-t border-slate-200 dark:border-white/5 bg-white dark:bg-black/20 backdrop-blur-md px-6 py-3 flex-shrink-0">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between text-sm gap-3">
           <div className="flex items-center gap-6">
             <div>
               <span className="text-muted-foreground/60">Total Shifts:</span>
               <span className="ml-2 font-medium text-foreground">{totalShifts}</span>
             </div>
-            <Separator orientation="vertical" className="h-4 hidden md:block bg-white/10" />
+            <Separator orientation="vertical" className="h-4 hidden md:block bg-slate-200 dark:bg-white/10" />
             <div>
               <span className="text-muted-foreground/60">Assigned:</span>
               <span className="ml-2 font-medium text-emerald-400">{totalAssignedShifts}</span>
             </div>
-            <Separator orientation="vertical" className="h-4 hidden md:block bg-white/10" />
+            <Separator orientation="vertical" className="h-4 hidden md:block bg-slate-200 dark:bg-white/10" />
             <div>
               <span className="text-muted-foreground/60">Unfilled:</span>
               <span className="ml-2 font-medium text-amber-400">{totalUnfilledShifts}</span>
@@ -778,12 +778,12 @@ const NewRostersPage: React.FC = () => {
               <span className="text-muted-foreground/60">Est. Cost:</span>
               <span className="ml-2 font-medium text-foreground">${estimatedCost.toFixed(2)}</span>
             </div>
-            <Separator orientation="vertical" className="h-4 hidden md:block bg-white/10" />
+            <Separator orientation="vertical" className="h-4 hidden md:block bg-slate-200 dark:bg-white/10" />
             <div>
               <span className="text-muted-foreground/60">Budget:</span>
               <span className="ml-2 font-medium text-foreground">${budget.toFixed(2)}</span>
             </div>
-            <Separator orientation="vertical" className="h-4 hidden md:block bg-white/10" />
+            <Separator orientation="vertical" className="h-4 hidden md:block bg-slate-200 dark:bg-white/10" />
             <div>
               <span className="text-muted-foreground/60">Remaining:</span>
               <span

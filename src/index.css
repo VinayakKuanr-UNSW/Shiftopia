@@ -328,3 +328,175 @@ body,
 body {
   overflow: auto;
 }
+
+/* ============================================================
+   LIGHT MODE COMPONENT OVERRIDES
+   ============================================================ */
+
+/* Override dark-glass utility in light mode */
+.light .modern-card {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+}
+.light .modern-card:hover {
+  border-color: hsl(var(--border) / 0.8);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.light .lovable-button-secondary {
+  @apply bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200 hover:border-slate-300;
+}
+
+.light .lovable-input {
+  @apply bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 hover:border-slate-300 hover:bg-white;
+}
+
+.light .glass-panel {
+  @apply bg-white/90 border-slate-200 shadow-sm;
+}
+
+.light .management-header {
+  @apply bg-gradient-to-r from-indigo-50/80 to-transparent border-b border-slate-200;
+}
+
+.light .management-card {
+  @apply bg-white border-slate-200 shadow-sm hover:border-indigo-200 hover:bg-white;
+}
+
+.light .bid-card {
+  @apply bg-white border-slate-200 shadow-sm hover:bg-slate-50 hover:border-slate-300;
+}
+
+.light .swap-request-card {
+  @apply bg-white border-slate-200 shadow-sm hover:bg-slate-50 hover:border-slate-300;
+}
+
+/* Radix select dropdowns in light mode */
+.light [data-radix-popper-content-wrapper]>[data-state],
+.light [data-radix-select-content] {
+  border: 1px solid hsl(var(--border)) !important;
+  box-shadow: 0 4px 20px -4px rgba(0,0,0,0.12) !important;
+}
+
+/* Scrollbar in light mode */
+.light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+}
+.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* Glass heavy panel in light mode */
+.light .glass-panel-heavy {
+  background-color: rgba(255, 255, 255, 0.92);
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  backdrop-filter: blur(8px);
+}
+
+/* ============================================================
+   DEPARTMENT COLOR SYSTEM (light + dark adaptive)
+   ============================================================ */
+
+/* Base classes (layout only — colors come from light/dark variants) */
+.dept-card-base {
+  @apply relative overflow-hidden border shadow-md transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5;
+}
+
+/* -- Badge: Convention Centre (Blue) -- */
+.light .dept-badge-convention {
+  @apply bg-blue-50 border-blue-200 text-blue-700 font-medium;
+}
+.dark .dept-badge-convention {
+  @apply bg-blue-500/10 border-blue-400/30 text-blue-200 font-medium;
+}
+
+/* -- Badge: Exhibition Centre (Emerald) -- */
+.light .dept-badge-exhibition {
+  @apply bg-emerald-50 border-emerald-200 text-emerald-700 font-medium;
+}
+.dark .dept-badge-exhibition {
+  @apply bg-emerald-500/10 border-emerald-400/30 text-emerald-200 font-medium;
+}
+
+/* -- Badge: Theatre (Red) -- */
+.light .dept-badge-theatre {
+  @apply bg-red-50 border-red-200 text-red-700 font-medium;
+}
+.dark .dept-badge-theatre {
+  @apply bg-red-500/10 border-red-400/30 text-red-200 font-medium;
+}
+
+/* -- Badge: Default -- */
+.light .dept-badge-default {
+  @apply bg-slate-50 border-slate-200 text-slate-600 font-medium;
+}
+.dark .dept-badge-default {
+  @apply bg-white/5 border-white/20 text-slate-300 font-medium;
+}
+
+/* -- Card: Convention Centre -- */
+.light .dept-card-convention {
+  @apply bg-gradient-to-br from-blue-50 via-white to-slate-50 border-blue-100 hover:border-blue-200;
+}
+.dark .dept-card-convention {
+  @apply bg-gradient-to-br from-blue-900/40 via-blue-950/40 to-slate-900/60 border-blue-500/20 hover:border-blue-400/40;
+}
+
+/* -- Card: Exhibition Centre -- */
+.light .dept-card-exhibition {
+  @apply bg-gradient-to-br from-emerald-50 via-white to-slate-50 border-emerald-100 hover:border-emerald-200;
+}
+.dark .dept-card-exhibition {
+  @apply bg-gradient-to-br from-emerald-900/40 via-emerald-950/40 to-slate-900/60 border-emerald-500/20 hover:border-emerald-400/40;
+}
+
+/* -- Card: Theatre -- */
+.light .dept-card-theatre {
+  @apply bg-gradient-to-br from-rose-50 via-white to-slate-50 border-rose-100 hover:border-rose-200;
+}
+.dark .dept-card-theatre {
+  @apply bg-gradient-to-br from-red-900/40 via-red-950/40 to-slate-900/60 border-red-500/20 hover:border-red-400/40;
+}
+
+/* -- Card: Default -- */
+.light .dept-card-default {
+  @apply bg-white border-slate-200 hover:border-slate-300;
+}
+.dark .dept-card-default {
+  @apply bg-gradient-to-br from-slate-800/50 via-slate-900/50 to-black/40 border-white/10 hover:border-white/20;
+}
+
+/* -- Card interior: fix text color in light mode -- */
+.light .dept-card-base .dept-card-title {
+  @apply text-slate-900;
+}
+.light .dept-card-base .dept-card-meta {
+  @apply text-slate-500;
+}
+.light .dept-card-base .dept-card-icon-wrap {
+  @apply bg-slate-100 border-slate-200;
+}
+.light .dept-card-base .dept-card-icon {
+  @apply text-slate-600;
+}
+
+/* ============================================================
+   BROADCAST GROUP CARDS - light mode override
+   ============================================================ */
+.light .broadcast-group-card {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.light .broadcast-group-card .broadcast-card-title {
+  @apply text-slate-900;
+}
+.light .broadcast-group-card .broadcast-card-meta {
+  @apply text-slate-500;
+}
+.light .broadcast-group-card .broadcast-card-footer {
+  @apply border-slate-200/80 text-slate-400;
+}
+.light .broadcast-group-card .broadcast-card-hover-overlay {
+  background: rgba(0,0,0,0.02);
+}

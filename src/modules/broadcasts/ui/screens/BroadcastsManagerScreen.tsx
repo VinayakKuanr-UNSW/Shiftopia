@@ -271,7 +271,7 @@ export function BroadcastsManagerScreen({ layout, scope }: BroadcastsManagerScre
           <BroadcastAnalytics />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-8 max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-8 w-full">
           {/* Main Area - Groups */}
           <div className="lg:col-span-2">
             {renderGroupsSection()}

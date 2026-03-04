@@ -27,22 +27,25 @@ interface ShiftCardProps {
 
 const colorClasses: Record<
   string,
-  { bg: string; border: string; text: string }
+  { bg: string; border: string; text: string; bgHover: string }
 > = {
   blue: {
-    bg: 'bg-blue-500/10',
-    border: 'border-blue-500/30',
-    text: 'text-blue-400',
+    bg: 'bg-blue-500/5 dark:bg-blue-500/10',
+    bgHover: 'hover:bg-blue-500/10 dark:hover:bg-blue-500/20',
+    border: 'border-blue-500/20 dark:border-blue-500/30',
+    text: 'text-blue-600 dark:text-blue-400',
   },
   green: {
-    bg: 'bg-emerald-500/10',
-    border: 'border-emerald-500/30',
-    text: 'text-emerald-400',
+    bg: 'bg-emerald-500/5 dark:bg-emerald-500/10',
+    bgHover: 'hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20',
+    border: 'border-emerald-500/20 dark:border-emerald-500/30',
+    text: 'text-emerald-600 dark:text-emerald-400',
   },
   red: {
-    bg: 'bg-red-500/10',
-    border: 'border-red-500/30',
-    text: 'text-red-400',
+    bg: 'bg-red-500/5 dark:bg-red-500/10',
+    bgHover: 'hover:bg-red-500/10 dark:hover:bg-red-500/20',
+    border: 'border-red-500/20 dark:border-red-500/30',
+    text: 'text-red-600 dark:text-red-400',
   },
 };
 
@@ -68,6 +71,7 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
       className={cn(
         'group relative p-3 rounded-lg border transition-all duration-200',
         colors.bg,
+        colors.bgHover,
         colors.border,
         'hover:border-opacity-60'
       )}
@@ -81,7 +85,7 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-7 w-7 text-white/50 hover:text-white hover:bg-white/10"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   onClick={(e) => {
                     e.stopPropagation();
                     onEdit();
@@ -100,7 +104,7 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-7 w-7 text-white/50 hover:text-white hover:bg-white/10"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   onClick={(e) => {
                     e.stopPropagation();
                     onClone?.();
@@ -119,7 +123,7 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-7 w-7 text-red-400/50 hover:text-red-400 hover:bg-red-500/10"
+                  className="h-7 w-7 text-destructive/70 hover:text-destructive hover:bg-destructive/10"
                   onClick={(e) => {
                     e.stopPropagation();
                     onDelete();
@@ -145,25 +149,25 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
           <User className={cn('h-3.5 w-3.5', colors.text)} />
         </div>
         <div className="min-w-0">
-          <h4 className="text-sm font-medium text-white truncate">
+          <h4 className="text-sm font-medium text-foreground truncate">
             {shift.name || shift.roleName || 'Unnamed Shift'}
           </h4>
           {shift.roleName && shift.name && shift.name !== shift.roleName && (
-            <p className="text-xs text-white/50 truncate">{shift.roleName}</p>
+            <p className="text-xs text-muted-foreground truncate">{shift.roleName}</p>
           )}
         </div>
       </div>
 
       {/* Time */}
       <div className="flex items-center gap-2 mb-2">
-        <Clock className="h-3.5 w-3.5 text-white/40" />
-        <span className="text-sm text-white/70">
+        <Clock className="h-3.5 w-3.5 text-muted-foreground/70" />
+        <span className="text-sm text-foreground/80">
           {formatTimeDisplay(shift.startTime)} -{' '}
           {formatTimeDisplay(shift.endTime)}
         </span>
         <Badge
           variant="outline"
-          className="text-[10px] px-1.5 py-0 text-white/50 border-white/20"
+          className="text-[10px] px-1.5 py-0 text-muted-foreground border-border"
         >
           {netHours}h net
         </Badge>
@@ -172,8 +176,8 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
       {/* Breaks */}
       {totalBreak > 0 && (
         <div className="flex items-center gap-2 mb-2">
-          <Coffee className="h-3.5 w-3.5 text-white/40" />
-          <span className="text-xs text-white/50">
+          <Coffee className="h-3.5 w-3.5 text-muted-foreground/70" />
+          <span className="text-xs text-muted-foreground">
             {shift.paidBreakDuration > 0 && (
               <span className="text-emerald-400/70">
                 {shift.paidBreakDuration}m paid
@@ -192,8 +196,8 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
       {/* Remuneration Level */}
       {shift.remunerationLevel && (
         <div className="flex items-center gap-2 mb-2">
-          <Tag className="h-3.5 w-3.5 text-white/40" />
-          <span className="text-xs text-white/50">
+          <Tag className="h-3.5 w-3.5 text-muted-foreground/70" />
+          <span className="text-xs text-muted-foreground">
             {shift.remunerationLevel}
           </span>
         </div>
@@ -219,7 +223,7 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
             </Badge>
           ))}
           {(shift.skills?.length || 0) + (shift.licenses?.length || 0) > 5 && (
-            <Badge className="text-[9px] px-1.5 py-0 bg-white/10 text-white/50 border-white/20">
+            <Badge className="text-[9px] px-1.5 py-0 bg-muted text-muted-foreground border-border">
               +{(shift.skills?.length || 0) + (shift.licenses?.length || 0) - 5}{' '}
               more
             </Badge>
@@ -232,7 +236,7 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <p className="text-[10px] text-white/40 mt-2 truncate cursor-help">
+              <p className="text-[10px] text-muted-foreground/80 mt-2 truncate cursor-help">
                 📝 {shift.notes}
               </p>
             </TooltipTrigger>

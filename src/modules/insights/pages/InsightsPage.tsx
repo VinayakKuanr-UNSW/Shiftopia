@@ -22,7 +22,7 @@ const InsightsPage: React.FC = () => {
             <main className="flex-1 p-4 md:p-8 space-y-8">
                 {/* Header Section */}
                 <div className="glass-panel p-8 mb-8 border border-white/10 rounded-2xl backdrop-blur-xl bg-white/5">
-                    <div className="max-w-4xl">
+                    <div className="w-full">
                         <h1 className="text-4xl font-bold mb-3 bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
                             Insights & Analytics
                         </h1>

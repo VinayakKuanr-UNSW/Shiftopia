@@ -29,21 +29,21 @@ export const GROUP_CONFIG: Record<
 > = {
     'Convention Centre': {
         icon: React.createElement(Building2, { className: 'h-5 w-5' }),
-        gradient: 'from-blue-600/20 via-blue-500/10 to-transparent',
+        gradient: 'from-blue-600/30 via-blue-500/10 to-transparent dark:from-blue-600/20 dark:via-blue-500/10',
         border: 'border-blue-500/30',
-        badge: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+        badge: 'bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/30',
     },
     'Exhibition Centre': {
         icon: React.createElement(LayoutGrid, { className: 'h-5 w-5' }),
-        gradient: 'from-emerald-600/20 via-emerald-500/10 to-transparent',
+        gradient: 'from-emerald-600/30 via-emerald-500/10 to-transparent dark:from-emerald-600/20 dark:via-emerald-500/10',
         border: 'border-emerald-500/30',
-        badge: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+        badge: 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
     },
     Theatre: {
         icon: React.createElement(Theater, { className: 'h-5 w-5' }),
-        gradient: 'from-red-600/20 via-red-500/10 to-transparent',
+        gradient: 'from-red-600/30 via-red-500/10 to-transparent dark:from-red-600/20 dark:via-red-500/10',
         border: 'border-red-500/30',
-        badge: 'bg-red-500/20 text-red-400 border-red-500/30',
+        badge: 'bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/30',
     },
 };
 

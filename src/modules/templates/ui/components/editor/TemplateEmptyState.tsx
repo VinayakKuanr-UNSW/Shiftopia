@@ -108,7 +108,7 @@ export function TemplateEmptyState({
             {/* Icon */}
             <div
                 className={cn(
-                    'relative p-5 rounded-2xl text-white mb-6 shadow-lg',
+                    'relative p-5 rounded-2xl text-primary-foreground mb-6 shadow-lg',
                     config.iconBg
                 )}
                 style={{
@@ -126,10 +126,10 @@ export function TemplateEmptyState({
             </div>
 
             {/* Text */}
-            <h3 className="text-xl font-semibold text-white mb-2 tracking-tight">
+            <h3 className="text-xl font-semibold text-foreground mb-2 tracking-tight">
                 {config.title}
             </h3>
-            <p className="text-gray-400 max-w-sm mb-6 leading-relaxed">
+            <p className="text-muted-foreground max-w-sm mb-6 leading-relaxed">
                 {config.description}
             </p>
 
@@ -139,10 +139,10 @@ export function TemplateEmptyState({
                     onClick={onAction}
                     className={cn(
                         'group relative overflow-hidden px-6 py-2.5',
-                        'bg-white/10 hover:bg-white/20 backdrop-blur-sm',
-                        'border border-white/20 hover:border-white/30',
+                        'bg-background/10 hover:bg-background/20 backdrop-blur-sm',
+                        'border border-border/20 hover:border-border/50 text-foreground',
                         'transition-all duration-300 ease-out',
-                        'hover:shadow-lg hover:shadow-white/5',
+                        'hover:shadow-lg hover:shadow-primary/5',
                         'hover:scale-105'
                     )}
                 >

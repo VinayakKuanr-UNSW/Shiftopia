@@ -190,7 +190,7 @@ function ShiftDetailView() {
         <div className="min-h-screen bg-[#0A0E1A] text-white">
             {/* Header */}
             <div className="bg-gray-900/50 border-b border-gray-800 p-4">
-                <div className="flex items-center justify-between max-w-7xl mx-auto">
+                <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => startTransition(() => navigate('/audit'))}
@@ -237,7 +237,7 @@ function ShiftDetailView() {
             </div>
 
             {/* Main Content */}
-            <div className="max-w-7xl mx-auto p-6">
+            <div className="w-full p-6">
                 <div className="grid grid-cols-12 gap-6">
                     {/* Left Sidebar - Current Snapshot */}
                     <div className="col-span-3">
