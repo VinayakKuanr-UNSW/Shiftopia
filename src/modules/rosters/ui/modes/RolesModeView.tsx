@@ -208,16 +208,16 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="h-4 w-4 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-white/20 rounded transition-colors"
+          className="h-4 w-4 flex items-center justify-center hover:bg-muted dark:hover:bg-white/20 rounded transition-colors"
           onClick={(e) => e.stopPropagation()}
         >
-          <MoreHorizontal className="h-3 w-3 text-slate-500 dark:text-white/60" />
+          <MoreHorizontal className="h-3 w-3 text-muted-foreground dark:text-white/60" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="bg-white dark:bg-[#1a2744] border-slate-200 dark:border-white/10 min-w-[160px] z-50">
+      <DropdownMenuContent align="end" className="bg-popover border-border min-w-[160px] z-50">
         <DropdownMenuItem
           onClick={() => onEditShift?.(shift)}
-          className="text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer"
+          className="text-popover-foreground hover:bg-accent cursor-pointer"
         >
           <Edit2 className="h-4 w-4 mr-2" />
           Edit Shift
@@ -225,10 +225,10 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
 
         {canUnpublish(shift) && (
           <>
-            <DropdownMenuSeparator className="bg-slate-200 dark:bg-white/10" />
+            <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem
               onClick={() => handleRequestUnpublish(shift.id)}
-              className="text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 cursor-pointer"
+              className="text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 dark:hover:bg-amber-500/10 cursor-pointer"
             >
               <Undo2 className="h-4 w-4 mr-2" />
               Unpublish Shift
@@ -308,7 +308,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[400px] text-slate-400 gap-3">
+      <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground gap-3">
         <Loader2 className="w-8 h-8 animate-spin" />
         <p className="text-sm font-medium tracking-wide">Loading roles…</p>
       </div>
@@ -331,16 +331,16 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-[#060a12]">
+    <div className="flex flex-col h-full bg-background">
       {/* Header bar */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200 dark:border-white/[0.06] bg-white dark:bg-[#080d18]/90 backdrop-blur-xl">
+      <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-card/90 backdrop-blur-xl">
         <div className="flex items-center gap-3">
           <div className="p-1.5 rounded-md bg-indigo-100 dark:bg-indigo-500/10">
             <Briefcase className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-slate-800 dark:text-white/90 uppercase tracking-[0.08em]">Roles Mode</h2>
-            <div className="flex items-center gap-2 text-[10px] text-slate-400 dark:text-white/30 font-mono tracking-wider mt-0.5">
+            <h2 className="text-sm font-bold text-foreground uppercase tracking-[0.08em]">Roles Mode</h2>
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono tracking-wider mt-0.5">
               <span>Coverage per Role</span>
               {(activeSubDeptId || activeDeptId) && (
                 <span className="text-indigo-400/80 font-semibold">Filtered</span>
@@ -355,10 +355,10 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
           size="sm"
           onClick={() => setIsBulkMode(!isBulkMode)}
           className={cn(
-            "h-7 text-[10px] font-bold uppercase tracking-wider border-slate-200 dark:border-white/[0.08] transition-all",
+            "h-7 text-[10px] font-bold uppercase tracking-wider border-border transition-all",
             isBulkMode
-              ? "bg-indigo-100 dark:bg-indigo-500/15 border-indigo-300 dark:border-indigo-500/40 text-indigo-700 dark:text-indigo-300"
-              : "bg-slate-50 dark:bg-white/[0.03] text-slate-400 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/70 hover:bg-slate-100 dark:hover:bg-white/[0.06]"
+              ? "bg-primary/10 text-primary border-primary/20"
+              : "bg-muted text-muted-foreground hover:text-foreground hover:bg-accent"
           )}
         >
           {isBulkMode ? "Exit Bulk" : "Bulk Mode"}
@@ -376,9 +376,9 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
             <tr>
               {/* Top-left corner cell — sticky in both axes */}
               <th
-                className="sticky top-0 left-0 z-30 w-64 min-w-[256px] p-0 bg-slate-50 dark:bg-[#0a0f1c] border-b border-r border-slate-200 dark:border-white/[0.06]"
+                className="sticky top-0 left-0 z-30 w-64 min-w-[256px] p-0 bg-background border-b border-r border-border"
               >
-                <div className="px-4 py-3 text-[10px] font-bold text-slate-400 dark:text-white/25 uppercase tracking-[0.14em] font-mono">
+                <div className="px-4 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-[0.14em] font-mono">
                   Role / Level
                 </div>
               </th>
@@ -387,19 +387,19 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                 <th
                   key={date.toISOString()}
                   className={cn(
-                    "sticky top-0 z-20 min-w-[200px] px-3 py-2.5 text-center border-b border-l border-slate-200 dark:border-white/[0.06] bg-slate-50 dark:bg-[#0a0f1c]",
-                    isToday(date) && "bg-indigo-50 dark:bg-indigo-500/[0.08]"
+                    "sticky top-0 z-20 min-w-[200px] px-3 py-2.5 text-center border-b border-l border-border bg-background",
+                    isToday(date) && "bg-primary/5"
                   )}
                 >
                   <div className={cn(
                     "text-[10px] font-bold uppercase tracking-[0.12em] font-mono",
-                    isToday(date) ? "text-indigo-600 dark:text-indigo-300" : "text-slate-400 dark:text-white/40"
+                    isToday(date) ? "text-primary" : "text-muted-foreground"
                   )}>
                     {format(date, 'EEE')}
                   </div>
                   <div className={cn(
                     "text-sm font-mono tabular-nums mt-0.5",
-                    isToday(date) ? "text-indigo-700 dark:text-indigo-200 font-bold" : "text-slate-400 dark:text-white/25 font-medium"
+                    isToday(date) ? "text-primary font-bold" : "text-muted-foreground/50 font-medium"
                   )}>
                     {format(date, 'MMM d')}
                   </div>
@@ -415,26 +415,26 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                 key={role.id}
                 className={cn(
                   "group transition-colors",
-                  "hover:bg-slate-50 dark:hover:bg-white/[0.02]",
-                  idx % 2 === 0 ? "bg-white dark:bg-transparent" : "bg-slate-50/60 dark:bg-white/[0.008]"
+                  "hover:bg-accent/30",
+                  idx % 2 === 0 ? "bg-card" : "bg-muted/30"
                 )}
               >
                 {/* Sticky first column — role name + level badge */}
                 <td
-                  className="sticky left-0 z-10 w-64 min-w-[256px] px-4 py-3 align-middle border-r border-b border-slate-200 dark:border-white/[0.06] bg-white dark:bg-[#080d18] group-hover:bg-slate-50 dark:group-hover:bg-[#0c1220] transition-colors"
+                  className="sticky left-0 z-10 w-64 min-w-[256px] px-4 py-3 align-middle border-r border-b border-border bg-card group-hover:bg-accent/50 transition-colors"
                 >
                   <div className="flex items-center gap-2.5">
-                    <span className="text-[13px] font-semibold text-slate-700 dark:text-white/80 group-hover:text-slate-900 dark:group-hover:text-white transition-colors leading-tight">
+                    <span className="text-[13px] font-semibold text-foreground/80 group-hover:text-foreground transition-colors leading-tight">
                       {role.name}
                     </span>
                     {role.levelLabel && (
                       <span className={cn(
                         "shrink-0 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-sm tracking-wide",
                         role.levelNumber >= 5
-                          ? "text-amber-700 dark:text-amber-300/80 bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/15"
+                          ? "text-amber-700 dark:text-amber-300 bg-amber-100/50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20"
                           : role.levelNumber >= 3
-                            ? "text-indigo-700 dark:text-indigo-300/80 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-300 dark:border-indigo-500/15"
-                            : "text-slate-400 dark:text-white/35 bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06]"
+                            ? "text-indigo-700 dark:text-indigo-300 bg-indigo-100/50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20"
+                            : "text-muted-foreground bg-muted border border-border"
                       )}>
                         {role.levelLabel}
                       </span>
@@ -452,8 +452,8 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                     <td
                       key={`${role.id}-${dateStr}`}
                       className={cn(
-                        "min-w-[200px] px-2 py-2 border-l border-b border-slate-200 dark:border-white/[0.06] align-top relative group/cell transition-colors",
-                        today && "bg-indigo-50/50 dark:bg-indigo-500/[0.03]"
+                        "min-w-[200px] px-2 py-2 border-l border-b border-border align-top relative group/cell transition-colors",
+                        today && "bg-primary/5"
                       )}
                     >
                       <div className="flex flex-col gap-1 min-h-[52px]">
@@ -474,7 +474,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                         {canEdit && !isBulkMode && (
                           <button
                             onClick={() => handleCellClick(role.id, date)}
-                            className="opacity-0 group-hover/cell:opacity-100 flex items-center justify-center w-full py-1.5 rounded border border-dashed border-slate-300 dark:border-white/[0.08] hover:border-indigo-400 dark:hover:border-indigo-500/30 text-slate-300 dark:text-white/15 hover:text-indigo-500 dark:hover:text-indigo-400/60 hover:bg-indigo-50 dark:hover:bg-indigo-500/[0.04] transition-all duration-200"
+                            className="opacity-0 group-hover/cell:opacity-100 flex items-center justify-center w-full py-1.5 rounded border border-dashed border-border hover:border-primary/50 text-muted-foreground/30 hover:text-primary hover:bg-primary/5 transition-all duration-200"
                           >
                             <Plus className="w-3 h-3" />
                           </button>
@@ -490,16 +490,16 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
       </div>
 
       {/* ─── Footer ─── */}
-      <div className="flex items-center justify-between px-6 py-2.5 border-t border-slate-200 dark:border-white/[0.06] bg-white dark:bg-[#080d18]/90 backdrop-blur-xl text-[10px] uppercase tracking-wider text-slate-400 dark:text-white/25 font-mono font-bold">
+      <div className="flex items-center justify-between px-6 py-2.5 border-t border-border bg-card/90 backdrop-blur-xl text-[10px] uppercase tracking-wider text-muted-foreground font-mono font-bold">
         <div className="flex items-center gap-5">
-          <span>Shifts: <span className="text-slate-600 dark:text-white/60 tabular-nums">{totalShifts}</span></span>
-          <span className="text-emerald-600 dark:text-emerald-400/60">Assigned: <span className="tabular-nums">{assignedShifts}</span></span>
-          <span className="text-amber-600 dark:text-amber-400/60">Open: <span className="tabular-nums">{unfilledShifts}</span></span>
+          <span>Shifts: <span className="text-foreground tabular-nums">{totalShifts}</span></span>
+          <span className="text-emerald-600 dark:text-emerald-400">Assigned: <span className="tabular-nums">{assignedShifts}</span></span>
+          <span className="text-amber-600 dark:text-amber-400">Open: <span className="tabular-nums">{unfilledShifts}</span></span>
         </div>
         <div className="flex items-center gap-4">
-          <span>Est. Cost: <span className="text-slate-500 dark:text-white/50 tabular-nums">${estCost.toFixed(2)}</span></span>
-          <span className="text-slate-200 dark:text-white/10">|</span>
-          <span>Hours: <span className="text-slate-500 dark:text-white/50 tabular-nums">{totalHours}</span></span>
+          <span>Est. Cost: <span className="text-muted-foreground/50 tabular-nums">${estCost.toFixed(2)}</span></span>
+          <span className="text-border">|</span>
+          <span>Hours: <span className="text-muted-foreground/50 tabular-nums">{totalHours}</span></span>
         </div>
       </div>
 
@@ -511,7 +511,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
           onClearSelection={() => setSelectedShiftIds([])}
           onDelete={handleDelete}
           onPublish={handlePublish}
-          allowedActions={{ canPublish: true }}
+          allowedActions={{ canPublish: true, canUnpublish: true }}
         />
       )}
 

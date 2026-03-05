@@ -337,11 +337,12 @@ body {
 .light .modern-card {
   background: hsl(var(--card));
   border-color: hsl(var(--border));
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
 }
+
 .light .modern-card:hover {
   border-color: hsl(var(--border) / 0.8);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .light .lovable-button-secondary {
@@ -376,13 +377,14 @@ body {
 .light [data-radix-popper-content-wrapper]>[data-state],
 .light [data-radix-select-content] {
   border: 1px solid hsl(var(--border)) !important;
-  box-shadow: 0 4px 20px -4px rgba(0,0,0,0.12) !important;
+  box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.12) !important;
 }
 
 /* Scrollbar in light mode */
 .light ::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.15);
 }
+
 .light ::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.25);
 }
@@ -391,7 +393,7 @@ body {
 .light .glass-panel-heavy {
   background-color: rgba(255, 255, 255, 0.92);
   border: 1px solid hsl(var(--border));
-  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   backdrop-filter: blur(8px);
 }
 
@@ -408,6 +410,7 @@ body {
 .light .dept-badge-convention {
   @apply bg-blue-50 border-blue-200 text-blue-700 font-medium;
 }
+
 .dark .dept-badge-convention {
   @apply bg-blue-500/10 border-blue-400/30 text-blue-200 font-medium;
 }
@@ -416,6 +419,7 @@ body {
 .light .dept-badge-exhibition {
   @apply bg-emerald-50 border-emerald-200 text-emerald-700 font-medium;
 }
+
 .dark .dept-badge-exhibition {
   @apply bg-emerald-500/10 border-emerald-400/30 text-emerald-200 font-medium;
 }
@@ -424,6 +428,7 @@ body {
 .light .dept-badge-theatre {
   @apply bg-red-50 border-red-200 text-red-700 font-medium;
 }
+
 .dark .dept-badge-theatre {
   @apply bg-red-500/10 border-red-400/30 text-red-200 font-medium;
 }
@@ -432,6 +437,7 @@ body {
 .light .dept-badge-default {
   @apply bg-slate-50 border-slate-200 text-slate-600 font-medium;
 }
+
 .dark .dept-badge-default {
   @apply bg-white/5 border-white/20 text-slate-300 font-medium;
 }
@@ -440,6 +446,7 @@ body {
 .light .dept-card-convention {
   @apply bg-gradient-to-br from-blue-50 via-white to-slate-50 border-blue-100 hover:border-blue-200;
 }
+
 .dark .dept-card-convention {
   @apply bg-gradient-to-br from-blue-900/40 via-blue-950/40 to-slate-900/60 border-blue-500/20 hover:border-blue-400/40;
 }
@@ -448,6 +455,7 @@ body {
 .light .dept-card-exhibition {
   @apply bg-gradient-to-br from-emerald-50 via-white to-slate-50 border-emerald-100 hover:border-emerald-200;
 }
+
 .dark .dept-card-exhibition {
   @apply bg-gradient-to-br from-emerald-900/40 via-emerald-950/40 to-slate-900/60 border-emerald-500/20 hover:border-emerald-400/40;
 }
@@ -456,6 +464,7 @@ body {
 .light .dept-card-theatre {
   @apply bg-gradient-to-br from-rose-50 via-white to-slate-50 border-rose-100 hover:border-rose-200;
 }
+
 .dark .dept-card-theatre {
   @apply bg-gradient-to-br from-red-900/40 via-red-950/40 to-slate-900/60 border-red-500/20 hover:border-red-400/40;
 }
@@ -464,20 +473,75 @@ body {
 .light .dept-card-default {
   @apply bg-white border-slate-200 hover:border-slate-300;
 }
+
 .dark .dept-card-default {
   @apply bg-gradient-to-br from-slate-800/50 via-slate-900/50 to-black/40 border-white/10 hover:border-white/20;
+}
+
+/* -- Metropolis Glass Styling (Premium Glassmorphism) -- */
+.dept-card-glass-base {
+  @apply backdrop-blur-2xl border transition-all duration-500 !important;
+  box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* -- Glass: Convention (Blue) -- */
+.light .dept-card-glass-convention {
+  @apply bg-blue-500/[0.08] border-blue-500/30 shadow-blue-500/10 !important;
+  background-image: radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%), linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, transparent 100%) !important;
+}
+
+.dark .dept-card-glass-convention {
+  @apply bg-blue-500/[0.15] border-blue-500/50 shadow-blue-500/20 !important;
+  background-image: radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.25) 0px, transparent 50%), linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, transparent 100%) !important;
+}
+
+
+/* -- Glass: Exhibition (Green) -- */
+.light .dept-card-glass-exhibition {
+  @apply bg-emerald-500/[0.08] border-emerald-500/30 shadow-emerald-500/10 !important;
+  background-image: radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.15) 0px, transparent 50%), linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, transparent 100%) !important;
+}
+
+.dark .dept-card-glass-exhibition {
+  @apply bg-emerald-500/[0.15] border-emerald-500/50 shadow-emerald-500/20 !important;
+  background-image: radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.25) 0px, transparent 50%), linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, transparent 100%) !important;
+}
+
+
+/* -- Glass: Theatre (Red) -- */
+.light .dept-card-glass-theatre {
+  @apply bg-rose-500/[0.08] border-rose-500/30 shadow-rose-500/10 !important;
+  background-image: radial-gradient(at 0% 0%, rgba(244, 63, 94, 0.15) 0px, transparent 50%), linear-gradient(135deg, rgba(244, 63, 94, 0.05) 0%, transparent 100%) !important;
+}
+
+.dark .dept-card-glass-theatre {
+  @apply bg-rose-500/[0.15] border-rose-500/50 shadow-rose-500/20 !important;
+  background-image: radial-gradient(at 0% 0%, rgba(244, 63, 94, 0.25) 0px, transparent 50%), linear-gradient(135deg, rgba(244, 63, 94, 0.1) 0%, transparent 100%) !important;
+}
+
+
+/* -- Glass: Default -- */
+.light .dept-card-glass-default {
+  @apply bg-slate-500/[0.02] border-border/40 shadow-slate-500/5 !important;
+}
+
+.dark .dept-card-glass-default {
+  @apply bg-slate-500/[0.08] border-white/10 shadow-slate-500/10 !important;
 }
 
 /* -- Card interior: fix text color in light mode -- */
 .light .dept-card-base .dept-card-title {
   @apply text-slate-900;
 }
+
 .light .dept-card-base .dept-card-meta {
   @apply text-slate-500;
 }
+
 .light .dept-card-base .dept-card-icon-wrap {
   @apply bg-slate-100 border-slate-200;
 }
+
 .light .dept-card-base .dept-card-icon {
   @apply text-slate-600;
 }
@@ -486,17 +550,21 @@ body {
    BROADCAST GROUP CARDS - light mode override
    ============================================================ */
 .light .broadcast-group-card {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
+
 .light .broadcast-group-card .broadcast-card-title {
   @apply text-slate-900;
 }
+
 .light .broadcast-group-card .broadcast-card-meta {
   @apply text-slate-500;
 }
+
 .light .broadcast-group-card .broadcast-card-footer {
   @apply border-slate-200/80 text-slate-400;
 }
+
 .light .broadcast-group-card .broadcast-card-hover-overlay {
-  background: rgba(0,0,0,0.02);
+  background: rgba(0, 0, 0, 0.02);
 }

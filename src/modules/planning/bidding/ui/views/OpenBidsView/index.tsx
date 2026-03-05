@@ -22,6 +22,20 @@ import { useShiftBids } from './useShiftBids';
 import { useTimeTicker } from './useTimeTicker';
 
 // ============================================================================
+// HELPERS
+// ============================================================================
+function getCardBg(groupType: string | null | undefined, dept: string): string {
+  const base = 'dept-card-glass-base';
+  if (groupType === 'convention_centre' || dept.toLowerCase().includes('convention'))
+    return `${base} dept-card-glass-convention`;
+  if (groupType === 'exhibition_centre' || dept.toLowerCase().includes('exhibition'))
+    return `${base} dept-card-glass-exhibition`;
+  if (groupType === 'theatre' || dept.toLowerCase().includes('theatre'))
+    return `${base} dept-card-glass-theatre`;
+  return `${base} dept-card-glass-default`;
+}
+
+// ============================================================================
 // MAIN VIEW
 // ============================================================================
 export const OpenBidsView: React.FC = () => {
@@ -133,18 +147,20 @@ export const OpenBidsView: React.FC = () => {
   // RENDER
   // ========================================================================
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] bg-[#080c14] relative">
+    <div className="flex flex-col h-[calc(100vh-64px)] bg-background relative overflow-hidden">
+      {/* Ambient glow */}
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-primary/[0.05] blur-[120px] rounded-full pointer-events-none" />
 
       {/* ── FUNCTION BAR ────────────────────────────────────────── */}
-      <div className="shrink-0 z-20 h-14 px-5 border-b border-white/[0.06] bg-[#0a0f1a]/80 backdrop-blur-xl flex items-center justify-between gap-4">
+      <div className="shrink-0 z-20 h-16 px-6 border-b border-border bg-card/80 backdrop-blur-xl flex items-center justify-between gap-4">
         {/* Search */}
-        <div className="relative w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30" />
+        <div className="relative w-80 group">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 group-focus-within:text-primary transition-colors" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search roles, departments…"
-            className="h-9 pl-9 bg-white/[0.03] border-white/[0.06] text-sm text-white/80 placeholder:text-white/25 rounded-lg focus:ring-1 focus:ring-cyan-500/30 focus:border-cyan-500/20 transition-all"
+            className="h-10 pl-10 bg-muted/30 border-border text-sm text-foreground placeholder:text-muted-foreground/40 rounded-xl focus:ring-1 focus:ring-primary/30 transition-all font-medium"
           />
         </div>
 
@@ -156,7 +172,7 @@ export const OpenBidsView: React.FC = () => {
             icon={<Flame className="h-3 w-3" />}
             label="Urgent"
             count={counts.urgent}
-            activeClass="bg-red-500/15 text-red-400 border-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.1)]"
+            activeClass="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 shadow-sm shadow-rose-500/5 font-black"
           />
           <ToggleChip
             active={activeToggle === 'normal'}
@@ -164,7 +180,7 @@ export const OpenBidsView: React.FC = () => {
             icon={<Clock className="h-3 w-3" />}
             label="Normal"
             count={counts.normal}
-            activeClass="bg-amber-500/15 text-amber-400 border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.1)]"
+            activeClass="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 shadow-sm shadow-amber-500/5 font-black"
           />
           <ToggleChip
             active={activeToggle === 'resolved'}
@@ -172,12 +188,12 @@ export const OpenBidsView: React.FC = () => {
             icon={<CheckCircle className="h-3 w-3" />}
             label="Resolved"
             count={counts.resolved}
-            activeClass="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.1)]"
+            activeClass="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 shadow-sm shadow-emerald-500/5 font-black"
           />
         </div>
 
         {/* Total */}
-        <div className="text-[11px] text-white/25 font-medium">
+        <div className="text-[11px] text-muted-foreground/40 font-mono font-black uppercase tracking-widest">
           {filteredShifts.length} shift{filteredShifts.length !== 1 ? 's' : ''}
         </div>
       </div>
@@ -185,20 +201,20 @@ export const OpenBidsView: React.FC = () => {
       {/* ── CARD GRID ───────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto p-5">
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-white/20">
-            <Loader2 className="h-7 w-7 animate-spin" />
-            <span className="text-[11px] font-medium">Loading shifts…</span>
+          <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground/20">
+            <Loader2 className="h-8 w-8 animate-spin text-primary/40" />
+            <span className="text-[11px] font-black uppercase tracking-[0.2em]">Loading Bids Console…</span>
           </div>
         ) : filteredShifts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="w-16 h-16 bg-white/[0.03] rounded-2xl flex items-center justify-center mb-4 border border-white/[0.04]">
-              <Inbox className="h-7 w-7 text-white/15" />
+          <div className="flex flex-col items-center justify-center h-full text-center py-20">
+            <div className="w-20 h-20 bg-muted/30 rounded-3xl flex items-center justify-center mb-6 border border-border shadow-inner">
+              <Inbox className="h-9 w-9 text-muted-foreground/20" />
             </div>
-            <p className="text-[13px] font-medium text-white/40 mb-1">No {activeToggle} shifts</p>
-            <p className="text-[11px] text-white/20 max-w-[240px]">
+            <p className="text-sm font-black text-foreground/40 mb-2 uppercase tracking-[0.2em]">No {activeToggle} shifts found</p>
+            <p className="text-[11px] text-muted-foreground/40 font-mono font-black max-w-[280px]">
               {activeToggle === 'resolved'
-                ? 'No shifts have been assigned through bidding yet.'
-                : 'There are no shifts in this category right now.'}
+                ? 'COMPLETED ASSIGNMENTS WILL APPEAR HERE ONCE FINALIZED.'
+                : 'CHECK BACK LATER OR ADJUST YOUR SEARCH PARAMETERS.'}
             </p>
           </div>
         ) : (
@@ -250,17 +266,17 @@ const ToggleChip: React.FC<ToggleChipProps> = ({ active, onClick, icon, label, c
   <button
     onClick={onClick}
     className={cn(
-      'px-3 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-wider transition-all duration-200 flex items-center gap-1.5 border',
+      'px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2 border',
       active
         ? activeClass
-        : 'text-white/35 border-transparent hover:text-white/55 hover:bg-white/[0.03]'
+        : 'text-muted-foreground/40 border-transparent hover:text-foreground hover:bg-muted/50'
     )}
   >
     {icon}
     {label}
     <span className={cn(
-      'rounded-full px-1.5 min-w-[18px] text-center text-[10px] font-bold',
-      active ? 'bg-white/10 text-inherit' : 'bg-white/[0.04] text-white/25'
+      'rounded-full px-1.5 min-w-[20px] h-[20px] flex items-center justify-center text-[9px] font-black',
+      active ? 'bg-primary/10 text-inherit' : 'bg-muted text-muted-foreground/30'
     )}>
       {count}
     </span>
@@ -298,21 +314,18 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
 
   return (
     <div className={cn(
-      'relative flex flex-col rounded-xl border transition-all duration-200 overflow-hidden',
-      'bg-white/[0.02]',
-      isResolved
-        ? 'border-emerald-500/15'
-        : shift.isUrgent
-          ? 'border-red-500/20'
-          : 'border-white/[0.06]',
-      isExpanded ? 'ring-1 ring-cyan-500/30 bg-white/[0.03]' : 'hover:bg-white/[0.04] hover:border-white/[0.12]'
+      'relative flex flex-col rounded-[1.5rem] border transition-all duration-500 overflow-hidden',
+      getCardBg(shift.groupType, shift.department),
+      isExpanded
+        ? 'ring-2 ring-primary/20 shadow-2xl scale-[1.02] z-10'
+        : 'hover:shadow-xl hover:translate-y-[-4px] hover:border-primary/40'
     )}>
 
       {/* ── CORE CARD DETAILS ── */}
-      <div className="p-4 relative">
+      <div className="p-5 relative">
         {/* Urgency Indicator */}
         {shift.isUrgent && (
-          <div className="absolute top-3 right-3 flex items-center gap-1 text-[10px] text-red-400 font-bold">
+          <div className="absolute top-4 right-4 flex items-center gap-1 text-[9px] text-rose-600 dark:text-rose-400 font-black tracking-widest bg-rose-500/10 px-2.5 py-1 rounded-full border border-rose-500/20 backdrop-blur-md">
             <Flame className="h-3 w-3" />
             URGENT
           </div>
@@ -320,46 +333,46 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
 
         {/* Resolved Badge */}
         {isResolved && shift.assignedEmployeeName && (
-          <div className="absolute top-3 right-3 flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 rounded-md px-2 py-0.5">
+          <div className="absolute top-4 right-4 flex items-center gap-1.5 text-[9px] text-emerald-600 dark:text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2.5 py-1 backdrop-blur-md">
             <UserCheck className="h-3 w-3" />
             Assigned
           </div>
         )}
 
         {/* Breadcrumb */}
-        <div className="text-[10px] text-white/25 mb-1.5 tracking-wide pr-20">
-          {shift.organization} → {shift.department}
-          {shift.subDepartment && ` → ${shift.subDepartment}`}
+        <div className="text-[10px] text-muted-foreground/60 mb-2 tracking-[0.1em] font-mono font-black pr-20 uppercase">
+          {shift.organization} <span className="text-primary/30 mx-0.5">/</span> {shift.department}
+          {shift.subDepartment && <> <span className="text-primary/30 mx-0.5">/</span> {shift.subDepartment}</>}
         </div>
 
         {/* Role */}
-        <h3 className="font-bold text-[15px] text-white/90 leading-tight mb-3">
+        <h3 className="font-black text-xl text-foreground leading-tight mb-5 tracking-tight group-hover:text-primary transition-colors">
           {shift.role}
         </h3>
 
         {/* Date + Time */}
-        <div className="flex items-center gap-4 text-[11px] text-white/50 mb-1.5">
-          <div className="flex items-center gap-1.5">
-            <Calendar className="h-3 w-3 text-white/25" />
-            <span>{shift.dayLabel}</span>
+        <div className="flex items-center gap-4 text-[11px] text-foreground/80 mb-2">
+          <div className="flex items-center gap-1.5 bg-muted/40 px-2.5 py-1.5 rounded-xl border border-border/50 backdrop-blur-md">
+            <Calendar className="h-3.5 w-3.5 text-primary" />
+            <span className="font-black font-mono">{shift.dayLabel}</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <Clock className="h-3 w-3 text-white/25" />
-            <span>{shift.startTime} – {shift.endTime}</span>
+          <div className="flex items-center gap-1.5 bg-muted/40 px-2.5 py-1.5 rounded-xl border border-border/50 backdrop-blur-md">
+            <Clock className="h-3.5 w-3.5 text-primary" />
+            <span className="font-black font-mono">{shift.startTime} – {shift.endTime}</span>
           </div>
         </div>
 
         {/* Net + Breaks + Count Area */}
-        <div className="flex items-center justify-between mt-3 text-[11px]">
-          <div className="flex items-center gap-3 text-white/35">
-            <div className="flex items-center gap-1">
-              <Coffee className="h-3 w-3 text-white/20" />
-              <span>Net {shift.netHours}h</span>
+        <div className="flex items-center justify-between mt-6">
+          <div className="flex items-center gap-3 text-[11px] text-muted-foreground/70">
+            <div className="flex items-center gap-1.5 bg-muted/20 px-2 py-1 rounded-lg">
+              <Coffee className="h-3.5 w-3.5 text-orange-500/60" />
+              <span className="font-black font-mono">Net {shift.netHours}h</span>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 font-medium text-white/40">
+          <div className="flex items-center gap-2 font-black font-mono text-[10px] text-primary bg-primary/10 px-3 py-1.5 rounded-xl border border-primary/20 backdrop-blur-md shadow-sm">
             <Users className="h-3.5 w-3.5" />
-            <span>{shift.bidCount} Bid{shift.bidCount !== 1 ? 's' : ''}</span>
+            <span>{shift.bidCount} {shift.bidCount === 1 ? 'BID' : 'BIDS'}</span>
           </div>
         </div>
       </div>
@@ -368,30 +381,30 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
       <button
         onClick={onToggleExpand}
         className={cn(
-          "h-9 flex items-center justify-center gap-2 border-t text-[11px] font-bold tracking-wide transition-all uppercase",
+          "h-12 flex items-center justify-center gap-3 border-t text-[11px] font-black tracking-[0.3em] transition-all uppercase px-6",
           isExpanded
-            ? "border-cyan-500/20 bg-cyan-500/[0.04] text-cyan-400"
-            : "border-white/[0.04] bg-white/[0.02] text-white/30 hover:text-white/50 hover:bg-white/[0.04]"
+            ? "bg-primary/20 text-primary border-primary/30 backdrop-blur-md"
+            : "bg-primary/5 text-primary/80 hover:text-primary hover:bg-primary/10 hover:border-primary/30 border-transparent backdrop-blur-sm"
         )}
       >
         {isExpanded ? (
-          <>Close Bids <ChevronUp className="h-3.5 w-3.5" /></>
+          <>Collapse Console <ChevronUp className="h-4 w-4" /></>
         ) : (
-          <>View Bids <ChevronDown className="h-3.5 w-3.5" /></>
+          <>Review Bids <ChevronDown className="h-4 w-4" /></>
         )}
       </button>
 
       {/* ── INLINE BID ACCORDION ── */}
       {isExpanded && (
-        <div className="border-t border-cyan-500/10 bg-black/20 p-3 pt-4 animate-in slide-in-from-top-2 flex flex-col gap-2.5 max-h-[300px] overflow-y-auto">
+        <div className="border-t border-primary/10 bg-muted/30 p-4 animate-in slide-in-from-top-4 duration-300 flex flex-col gap-3 max-h-[400px] overflow-y-auto shadow-inner">
           {isLoadingBids ? (
-            <div className="flex justify-center py-6">
-              <Loader2 className="h-5 w-5 text-cyan-500/50 animate-spin" />
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-6 w-6 text-primary/40 animate-spin" />
             </div>
           ) : bids.length === 0 ? (
-            <div className="flex justify-center flex-col items-center py-6 text-white/20">
-              <Users className="h-6 w-6 mb-2 opacity-50" />
-              <span className="text-[11px] font-medium">No bids received yet</span>
+            <div className="flex justify-center flex-col items-center py-10 text-muted-foreground/30">
+              <Users className="h-8 w-8 mb-3 opacity-20" />
+              <span className="text-[10px] font-black uppercase tracking-widest font-mono">No active bids received</span>
             </div>
           ) : (
             bids.map(bid => {
@@ -402,42 +415,42 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
                 <div
                   key={bid.id}
                   className={cn(
-                    'flex items-center justify-between gap-3 p-2.5 rounded-lg border transition-all duration-200',
+                    'flex items-center justify-between gap-4 p-3 rounded-2xl border transition-all duration-300',
                     isWinner
-                      ? 'bg-emerald-500/[0.06] border-emerald-500/20'
+                      ? 'bg-emerald-500/5 border-emerald-500/20 shadow-emerald-500/5'
                       : isDisabled
-                        ? 'bg-white/[0.01] border-white/[0.02] opacity-50'
-                        : 'bg-white/[0.03] border-white/[0.06] hover:border-white/[0.12]'
+                        ? 'bg-muted/10 border-border/50 opacity-40grayscale pointer-events-none'
+                        : 'bg-card border-border hover:border-primary/30 hover:shadow-md'
                   )}
                 >
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <Avatar className="h-8 w-8 shrink-0 border border-white/[0.06]">
+                  <div className="flex items-center gap-4 overflow-hidden">
+                    <Avatar className="h-10 w-10 shrink-0 ring-1 ring-border shadow-sm">
                       <AvatarImage src={`https://api.dicebear.com/7.x/personas/svg?seed=${bid.employeeName}`} />
-                      <AvatarFallback className="bg-white/[0.04] text-white/50 text-[10px] font-bold">
+                      <AvatarFallback className="bg-primary text-primary-foreground text-[10px] font-black">
                         {bid.employeeName.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col truncate">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[12px] font-bold text-white/90 truncate">{bid.employeeName}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-black text-foreground truncate tracking-tight">{bid.employeeName}</span>
                         {isWinner && (
-                          <Badge className="bg-emerald-500/15 text-emerald-400 text-[8px] px-1 py-0 h-3.5 border border-emerald-500/20 font-bold uppercase tracking-wide">
+                          <Badge className="bg-emerald-500 text-white text-[8px] px-1.5 py-0 h-4 border-none font-black uppercase tracking-wider">
                             Winner
                           </Badge>
                         )}
                       </div>
-                      <span className="text-[10px] text-white/35 truncate">
+                      <span className="text-[10px] text-muted-foreground/60 truncate font-mono font-black uppercase tracking-wider">
                         {bid.employmentType}
                       </span>
                     </div>
                   </div>
 
                   {isWinner ? (
-                    <div className="flex items-center gap-1 text-emerald-400 text-[10px] font-bold px-2 py-1 bg-emerald-500/10 rounded shrink-0">
-                      <CheckCircle className="h-3 w-3" /> Assigned
+                    <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest px-3 py-1.5 bg-emerald-500/10 rounded-xl border border-emerald-500/20 shadow-sm shrink-0">
+                      <CheckCircle className="h-3.5 w-3.5" /> Assigned
                     </div>
                   ) : (
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                       <Button
                         size="sm"
                         variant="ghost"
@@ -446,10 +459,9 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
                           e.stopPropagation();
                           onCheckCompliance(bid);
                         }}
-                        className="h-7 px-2 text-[9px] font-bold uppercase text-cyan-400/60 hover:text-cyan-400 hover:bg-cyan-500/10"
+                        className="h-9 px-3 text-[9px] font-black uppercase tracking-wider text-primary/60 hover:text-primary hover:bg-primary/10 rounded-xl"
                       >
-                        {/* {isCheckingCompliance ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Shield className="h-3 w-3 mr-1" /> Check</>} */}
-                        <Shield className="h-3 w-3 mr-1" /> Check
+                        <Shield className="h-3.5 w-3.5 mr-1.5" /> Check
                       </Button>
                       <Button
                         size="sm"
@@ -459,10 +471,10 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
                           onAssign(bid);
                         }}
                         className={cn(
-                          'h-7 px-3 text-[10px] font-bold rounded-md transition-all uppercase tracking-wider',
+                          'h-9 px-4 text-[10px] font-black rounded-xl transition-all uppercase tracking-[0.2em] shadow-lg shadow-primary/20',
                           isDisabled
-                            ? 'bg-white/[0.02] text-white/20 border-0'
-                            : 'bg-white/[0.05] hover:bg-cyan-500/15 text-white/60 hover:text-cyan-400'
+                            ? 'bg-muted text-muted-foreground/30 border-0'
+                            : 'bg-primary text-primary-foreground hover:bg-primary/90'
                         )}
                       >
                         Assign
@@ -474,8 +486,9 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
             })
           )}
         </div>
-      )}
-    </div>
+      )
+      }
+    </div >
   );
 };
 

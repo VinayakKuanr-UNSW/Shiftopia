@@ -42,6 +42,14 @@ export interface EligibleContract {
     role_id: string | null;
 }
 
+export interface ContractedStaffMember {
+    id: string;
+    first_name: string;
+    last_name: string;
+    role_name: string | null;
+    role_code: string | null;
+}
+
 // ── Service ───────────────────────────────────────────────────────────────────
 
 export const EligibilityService = {
@@ -138,6 +146,69 @@ export const EligibilityService = {
             return (data ?? []) as EligibleContract[];
         } catch (error) {
             console.error('[EligibilityService] Exception:', error);
+            return [];
+        }
+    },
+
+    /**
+     * Returns all contracted staff for the given scope, enriched with role name + code.
+     * Used by the Group Mode and Roles Mode side panel ("Contracted Staff").
+     * Note: roles table has no color column — role_code is used for UI colour derivation.
+     */
+    async getContractedStaff(context: Omit<EligibilityContext, 'roleId'>): Promise<ContractedStaffMember[]> {
+        try {
+            let query = supabase
+                .from('user_contracts')
+                .select(`
+                    user_id,
+                    profiles:profiles!user_contracts_user_id_profiles_fkey (
+                        id,
+                        first_name,
+                        last_name
+                    ),
+                    role:roles!user_contracts_role_id_fkey (
+                        name,
+                        code
+                    )
+                `)
+                .eq('status', 'Active');
+
+            if (context.organizationId && isValidUuid(context.organizationId)) {
+                query = query.eq('organization_id', context.organizationId);
+            }
+
+            if (context.subDepartmentId && isValidUuid(context.subDepartmentId)) {
+                query = query.eq('department_id', context.departmentId!)
+                    .or(`sub_department_id.eq.${context.subDepartmentId},sub_department_id.is.null`);
+            } else if (context.departmentId && isValidUuid(context.departmentId)) {
+                query = query.eq('department_id', context.departmentId);
+            }
+
+            const { data, error } = await query;
+
+            if (error) {
+                console.error('[EligibilityService] Error fetching contracted staff:', error);
+                return [];
+            }
+
+            // Deduplicate by user_id — keep first record per person (role from first matching contract)
+            const staffMap = new Map<string, ContractedStaffMember>();
+            (data ?? []).forEach((row: any) => {
+                const profile = row.profiles;
+                if (!profile?.id || staffMap.has(profile.id)) return;
+                staffMap.set(profile.id, {
+                    id: profile.id,
+                    first_name: profile.first_name || '',
+                    last_name: profile.last_name || '',
+                    role_name: row.role?.name ?? null,
+                    role_code: row.role?.code ?? null,
+                });
+            });
+
+            return Array.from(staffMap.values())
+                .sort((a, b) => a.last_name.localeCompare(b.last_name));
+        } catch (error) {
+            console.error('[EligibilityService] Exception in getContractedStaff:', error);
             return [];
         }
     },

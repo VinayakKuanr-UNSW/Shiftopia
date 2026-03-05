@@ -80,12 +80,13 @@ const getGroupColor = (groupType: string | null = null, deptName: string = '') =
     const type = groupType || '';
     const name = deptName.toLowerCase();
 
-    if (type === 'convention_centre' || name.includes('convention')) return 'bg-blue-600/10 border-blue-500/20 text-blue-400';
-    if (type === 'exhibition_centre' || name.includes('exhibition')) return 'bg-emerald-600/10 border-emerald-500/20 text-emerald-400';
-    if (type === 'theatre' || name.includes('theatre')) return 'bg-rose-600/10 border-rose-500/20 text-rose-400';
+    if (type === 'convention_centre' || name.includes('convention')) return 'bg-blue-500/[0.03] border-blue-500/20 text-blue-600 dark:text-blue-400';
+    if (type === 'exhibition_centre' || name.includes('exhibition')) return 'bg-emerald-500/[0.03] border-emerald-500/20 text-emerald-600 dark:text-emerald-400';
+    if (type === 'theatre' || name.includes('theatre')) return 'bg-rose-500/[0.03] border-rose-500/20 text-rose-600 dark:text-rose-400';
 
-    return 'bg-slate-800/50 border-slate-700 text-slate-300';
+    return 'bg-muted/30 border-border text-muted-foreground';
 };
+
 
 export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
     isOpen,
@@ -167,8 +168,9 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
         <>
             <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
                 <DialogContent
-                    className="sm:max-w-[1040px] h-[720px] max-h-[85vh] bg-[#0A0C0E] border border-white/10 p-0 overflow-hidden shadow-[0_0_80px_-15px_rgba(0,0,0,0.8)] flex flex-col rounded-[2.5rem] [&>button]:hidden"
+                    className="sm:max-w-[1040px] h-[720px] max-h-[85vh] bg-background border border-border p-0 overflow-hidden shadow-2xl flex flex-col rounded-[2.5rem] [&>button]:hidden"
                 >
+
                     <VisuallyHidden>
                         <DialogTitle>Received Offers</DialogTitle>
                         <DialogDescription>
@@ -178,18 +180,20 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
 
                     <div className="flex flex-1 h-full min-h-0">
                         {/* LEFT PANE: INBOX */}
-                        <div className="w-[320px] border-r border-white/5 flex flex-col bg-[#0D0F12]">
+                        <div className="w-[320px] border-r border-border flex flex-col bg-muted/20">
+
                             <div className="p-8 pb-6">
                                 <div className="flex items-center gap-3 mb-8">
                                     <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-600/20 to-indigo-400/10 flex items-center justify-center border border-indigo-500/20 shadow-lg shadow-indigo-500/5">
                                         <Inbox className="h-4.5 w-4.5 text-indigo-400" />
                                     </div>
                                     <div className="flex flex-col">
-                                        <h2 className="text-lg font-black text-white tracking-tight leading-none">Offers</h2>
-                                        <p className="text-[9px] text-slate-500 uppercase font-black tracking-[0.15em] mt-1.5 opacity-60">
+                                        <h2 className="text-lg font-black text-foreground tracking-tight leading-none">Offers</h2>
+                                        <p className="text-[9px] text-muted-foreground uppercase font-black tracking-[0.15em] mt-1.5 opacity-60">
                                             Swap Inbox
                                         </p>
                                     </div>
+
                                 </div>
                             </div>
 
@@ -197,9 +201,10 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                 {isLoadingOffers ? (
                                     <div className="space-y-2 px-2">
                                         {[1, 2, 3].map(i => (
-                                            <Skeleton key={i} className="h-20 w-full rounded-xl bg-white/[0.02]" />
+                                            <Skeleton key={i} className="h-20 w-full rounded-xl bg-muted/40" />
                                         ))}
                                     </div>
+
                                 ) : displayOffers.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-20 text-center opacity-30">
                                         <MessageSquare className="h-8 w-8 mb-4 stroke-[1]" />
@@ -213,17 +218,19 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                             className={cn(
                                                 "w-full text-left p-3.5 rounded-xl border transition-all flex flex-col gap-2 relative overflow-hidden group active:scale-[0.98]",
                                                 selectedOfferId === offer.id
-                                                    ? "bg-indigo-600/10 border-indigo-500/40 shadow-[0_4px_20px_-5px_rgba(79,70,229,0.15)]"
-                                                    : "bg-[#121418] border-white/5 hover:border-white/10 hover:bg-[#16191D]"
+                                                    ? "bg-indigo-500/10 border-indigo-500/40 shadow-sm"
+                                                    : "bg-card border-border hover:bg-muted/50"
                                             )}
+
                                         >
                                             <div className="flex items-center justify-between">
                                                 <span className={cn(
                                                     "text-[13px] font-black tracking-tight transition-colors",
-                                                    selectedOfferId === offer.id ? "text-white" : "text-slate-400 group-hover:text-slate-200"
+                                                    selectedOfferId === offer.id ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
                                                 )}>
                                                     {offer.offerer?.full_name || 'Anonymous'}
                                                 </span>
+
                                                 <Badge className={cn(
                                                     "text-[8px] h-4 px-1 px-1.5 font-black uppercase tracking-widest",
                                                     offer.status === 'SUBMITTED' ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
@@ -233,7 +240,7 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                                     {offer.status === 'SUBMITTED' ? 'Pending' : offer.status}
                                                 </Badge>
                                             </div>
-                                            <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500 tracking-tight">
+                                            <div className="flex items-center gap-3 text-[10px] font-bold text-muted-foreground tracking-tight">
                                                 <div className="flex items-center gap-1">
                                                     <Calendar className="h-3 w-3 opacity-50" />
                                                     {offer.offered_shift ? format(new Date(offer.offered_shift.shiftDate), 'MMM d') : 'N/A'}
@@ -243,6 +250,7 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                                     {offer.offered_shift ? offer.offered_shift.startTime.slice(0, 5) : 'N/A'}
                                                 </div>
                                             </div>
+
                                             {selectedOfferId === offer.id && (
                                                 <motion.div layoutId="activeInboxGlow" className="absolute inset-0 rounded-xl ring-1 ring-indigo-500/50" />
                                             )}
@@ -253,7 +261,8 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                         </div>
 
                         {/* MIDDLE PANE: DETAILS */}
-                        <div className="flex-1 flex flex-col bg-[#0A0C0E] relative overflow-hidden h-full">
+                        <div className="flex-1 flex flex-col bg-background relative overflow-hidden h-full">
+
                             <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-600/5 blur-[120px] rounded-full pointer-events-none" />
                             <div className="absolute bottom-[-5%] right-[-5%] w-[30%] h-[30%] bg-blue-600/5 blur-[100px] rounded-full pointer-events-none" />
 
@@ -272,16 +281,17 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                             <div className="mb-10 text-center">
                                                 <div className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full bg-indigo-600/10 border border-indigo-500/20 shadow-inner shadow-indigo-500/5">
                                                     <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
-                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">
+                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500">
                                                         Swap Offer Details
                                                     </span>
                                                 </div>
-                                                <h2 className="text-4xl font-black text-white tracking-tighter leading-none mb-4">
+                                                <h2 className="text-4xl font-black text-foreground tracking-tighter leading-none mb-4">
                                                     {selectedOffer.offered_shift?.roles?.name || 'Open Shift'}
                                                 </h2>
-                                                <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-[400px] mx-auto">
+                                                <p className="text-sm text-muted-foreground font-medium leading-relaxed max-w-[400px] mx-auto">
                                                     Offered by {selectedOffer.offerer?.full_name || 'a teammate'} in exchange for your shift.
                                                 </p>
+
                                             </div>
 
                                             {/* Swap Comparison */}
@@ -292,7 +302,7 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                                 )}>
                                                     <span className="text-[9px] font-black uppercase tracking-widest opacity-60">They Give</span>
                                                     <div className="text-center">
-                                                        <div className="text-sm font-black text-white">
+                                                        <div className="text-sm font-black text-foreground">
                                                             {selectedOffer.offered_shift ? format(new Date(selectedOffer.offered_shift.shiftDate), 'EEE, MMM d') : 'N/A'}
                                                         </div>
                                                         <div className="text-[11px] font-bold opacity-80">
@@ -301,9 +311,10 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                                     </div>
                                                 </div>
 
-                                                <div className="h-10 w-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
-                                                    <ArrowLeftRight className="h-4 w-4 text-slate-500" />
+                                                <div className="h-10 w-10 rounded-full bg-muted border border-border flex items-center justify-center flex-shrink-0">
+                                                    <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
                                                 </div>
+
 
                                                 <div className={cn(
                                                     "flex-1 p-5 rounded-3xl border flex flex-col items-center gap-3",
@@ -311,7 +322,7 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                                 )}>
                                                     <span className="text-[9px] font-black uppercase tracking-widest opacity-60">You Give</span>
                                                     <div className="text-center">
-                                                        <div className="text-sm font-black text-white">
+                                                        <div className="text-sm font-black text-foreground">
                                                             {myShift ? format(new Date(myShift.shiftDate), 'EEE, MMM d') : 'N/A'}
                                                         </div>
                                                         <div className="text-[11px] font-bold opacity-80">
@@ -319,6 +330,7 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                                         </div>
                                                     </div>
                                                 </div>
+
                                             </div>
 
                                             {/* Detailed Info Cards */}
@@ -330,8 +342,9 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                                                 <Building className="h-4 w-4 text-emerald-400" />
                                                             </div>
                                                             <div>
-                                                                <div className="text-[9px] font-black uppercase tracking-widest text-slate-500">Location</div>
-                                                                <div className="text-[11px] font-bold text-slate-200">
+                                                                <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60">Location</div>
+                                                                <div className="text-[11px] font-bold text-foreground">
+
                                                                     {[
                                                                         selectedOffer.offered_shift?.organizations?.name,
                                                                         selectedOffer.offered_shift?.departments?.name,
@@ -350,8 +363,9 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                                                 <ShieldCheck className="h-4 w-4 text-blue-400" />
                                                             </div>
                                                             <div>
-                                                                <div className="text-[9px] font-black uppercase tracking-widest text-slate-500">Compliance & Validation</div>
-                                                                <div className="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+                                                                <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60">Compliance & Validation</div>
+                                                                <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+
                                                                     <Check className="h-3 w-3" />
                                                                     Validated - No Conflicts
                                                                 </div>
@@ -389,10 +403,11 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                                         variant="ghost"
                                                         onClick={() => setShowRejectConfirm(selectedOffer.id)}
                                                         disabled={isAccepting || isDeclining}
-                                                        className="h-12 rounded-2xl font-black text-[10px] uppercase tracking-widest text-slate-500 hover:text-rose-400 hover:bg-rose-500/5 transition-all"
+                                                        className="h-12 rounded-2xl font-black text-[10px] uppercase tracking-widest text-muted-foreground hover:text-rose-500 hover:bg-rose-500/5 transition-all"
                                                     >
                                                         Reject Offer
                                                     </Button>
+
                                                 </div>
                                             ) : (
                                                 <div className="flex flex-col items-center justify-center py-6 mt-auto">
@@ -427,19 +442,22 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                         </div>
 
                         {/* RIGHT PANE: REQUEST STATUS / AUDIT */}
-                        <div className="w-[300px] border-l border-white/5 flex flex-col bg-[#0D0F12]">
+                        <div className="w-[300px] border-l border-border flex flex-col bg-muted/20">
+
                             <div className="p-10 pb-6">
-                                <div className="flex items-center gap-3 mb-8 text-amber-500/80">
+                                <div className="flex items-center gap-3 mb-8 text-amber-500">
                                     <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
                                         <HistoryIcon className="h-4.5 w-4.5" />
                                     </div>
-                                    <h2 className="text-xs font-black text-white uppercase tracking-widest opacity-80">Request Lifecycle</h2>
+                                    <h2 className="text-xs font-black text-foreground uppercase tracking-widest opacity-80">Request Lifecycle</h2>
                                 </div>
-                                <Separator className="bg-white/5" />
+                                <Separator className="bg-border/50" />
+
                             </div>
 
                             <div className="flex-1 overflow-y-auto px-8 pb-10 custom-scrollbar">
-                                <div className="space-y-8 relative pl-6 before:absolute before:left-0 before:top-1 before:bottom-0 before:w-px before:bg-white/5">
+                                <div className="space-y-8 relative pl-6 before:absolute before:left-0 before:top-1 before:bottom-0 before:w-px before:bg-border">
+
                                     {/* Lifecycle Steps */}
                                     {[
                                         { id: 'created', label: 'Request Created', icon: Check, active: timeline.created, desc: 'Your swap request is live.' },
@@ -449,15 +467,17 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                     ].map((step, idx) => (
                                         <div key={step.id} className="relative">
                                             <div className={cn(
-                                                "absolute left-[-30px] top-0 h-4 w-4 rounded-full border-2 border-[#0D0F12] transition-all duration-500 flex items-center justify-center",
-                                                step.active ? "bg-indigo-500 shadow-[0_0_12px_rgba(79,70,229,0.4)]" : "bg-slate-800 border-white/5"
+                                                "absolute left-[-30px] top-0 h-4 w-4 rounded-full border-2 border-background transition-all duration-500 flex items-center justify-center",
+                                                step.active ? "bg-indigo-500 shadow-[0_0_12px_rgba(79,70,229,0.4)]" : "bg-muted border-border"
                                             )}>
+
                                                 <step.icon className={cn("h-2 w-2", step.active ? "text-white" : "text-slate-600")} />
                                             </div>
                                             <div className={cn(
                                                 "text-[10px] font-black uppercase tracking-widest mb-1 transition-colors",
-                                                step.active ? "text-slate-200" : "text-slate-600"
+                                                step.active ? "text-foreground" : "text-muted-foreground/40"
                                             )}>
+
                                                 {step.label}
                                             </div>
                                             <div className={cn(
@@ -470,32 +490,35 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                     ))}
                                 </div>
 
-                                <div className="mt-20 p-5 rounded-2xl bg-white/[0.02] border border-white/5">
+                                <div className="mt-20 p-5 rounded-2xl bg-muted/30 border border-border">
                                     <div className="flex gap-3 mb-3">
-                                        <AlertCircle className="h-3.5 w-3.5 text-slate-500/50 mt-0.5" />
-                                        <div className="text-[9px] font-black uppercase tracking-widest text-slate-500/80">Compliance Note</div>
+                                        <AlertCircle className="h-3.5 w-3.5 text-muted-foreground/30 mt-0.5" />
+                                        <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/50">Compliance Note</div>
                                     </div>
-                                    <p className="text-[10px] font-medium leading-relaxed text-slate-600">
+                                    <p className="text-[10px] font-medium leading-relaxed text-muted-foreground/60">
                                         All swaps are subject to shift eligibility, fatigue management, and manager verification.
                                     </p>
                                 </div>
+
                             </div>
 
-                            <div className="p-8 border-t border-white/5 bg-black/5">
+                            <div className="p-8 border-t border-border bg-muted/10">
                                 <Button
                                     onClick={onClose}
-                                    className="w-full h-10 rounded-xl bg-white/5 hover:bg-white/10 text-white text-[10px] font-black uppercase tracking-widest border border-white/10 transition-all font-inter"
+                                    className="w-full h-10 rounded-xl bg-muted hover:bg-muted/80 text-foreground text-[10px] font-black uppercase tracking-widest border border-border transition-all font-inter"
                                 >
                                     Dismiss Portal
                                 </Button>
                             </div>
+
                         </div>
                     </div>
                 </DialogContent>
             </Dialog>
 
             <AlertDialog open={!!showRejectConfirm} onOpenChange={() => setShowRejectConfirm(null)}>
-                <AlertDialogContent className="bg-[#0D0F12] border border-white/10 rounded-[2rem] p-8 max-w-sm">
+                <AlertDialogContent className="bg-background border border-border rounded-[2rem] p-8 max-w-sm">
+
                     <AlertDialogHeader>
                         <AlertDialogTitle className="text-xl font-black text-white tracking-tight">Decline Offer?</AlertDialogTitle>
                         <AlertDialogDescription className="text-slate-500 text-sm font-medium">
@@ -503,9 +526,10 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter className="mt-8 gap-3">
-                        <AlertDialogCancel className="h-12 rounded-xl font-black text-[10px] uppercase tracking-widest bg-white/5 border-white/5 text-slate-400 hover:bg-white/10 hover:text-white transition-all">
+                        <AlertDialogCancel className="h-12 rounded-xl font-black text-[10px] uppercase tracking-widest bg-muted/50 border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-all">
                             Cancel
                         </AlertDialogCancel>
+
                         <AlertDialogAction
                             className="flex-1 h-12 rounded-xl font-black text-[10px] uppercase tracking-widest bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-500/10 transition-all"
                             onClick={handleReject}

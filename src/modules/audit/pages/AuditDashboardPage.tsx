@@ -111,7 +111,7 @@ function AuditDashboardPage() {
     const endItem = Math.min((pagination.page + 1) * pagination.pageSize, totalCount);
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
+        <div className="min-h-screen bg-background text-foreground">
             {/* Header with Org/Dept/Sub-Dept Dropdowns */}
             <OrgDeptSelector
                 selectedOrganizationId={selectedOrganizationId}
@@ -122,60 +122,61 @@ function AuditDashboardPage() {
                 onSubDepartmentChange={setSelectedSubDepartmentId}
             />
 
-            <div className="p-6 max-w-[1600px] mx-auto">
+            <div className="p-8 max-w-[1600px] mx-auto">
                 {/* Page Title */}
-                <div className="mb-8">
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+                <div className="mb-10 relative">
+                    <div className="absolute -left-4 top-0 bottom-0 w-1 bg-primary rounded-full opacity-50 shadow-[0_0_15px_rgba(var(--primary),0.5)]" />
+                    <h1 className="text-4xl font-black text-foreground tracking-tight leading-none">
                         Audit Dashboard
                     </h1>
-                    <p className="text-sm text-gray-400 mt-2">
+                    <p className="text-sm text-muted-foreground/60 mt-3 font-medium">
                         Track all shift changes, assignments, and system events
                     </p>
                 </div>
 
                 {/* Filters Card */}
-                <div className="bg-slate-900/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-4 mb-6 shadow-xl">
-                    <div className="flex flex-wrap items-center gap-3">
+                <div className="bg-card border border-border rounded-[2rem] p-5 mb-8 shadow-2xl shadow-primary/5 transition-all hover:shadow-primary/10">
+                    <div className="flex flex-wrap items-center gap-4">
                         {/* Date Range */}
-                        <div className="relative">
+                        <div className="relative group">
                             <select
                                 value={selectedDateRange}
                                 onChange={(e) => {
                                     setSelectedDateRange(Number(e.target.value));
                                     setPagination(prev => ({ ...prev, page: 0 }));
                                 }}
-                                className="appearance-none bg-slate-800 border border-slate-600 rounded-lg pl-10 pr-8 py-2.5 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all cursor-pointer hover:border-slate-500"
+                                className="appearance-none bg-muted/30 border border-border rounded-xl pl-11 pr-10 py-3 text-sm text-foreground font-black uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all cursor-pointer hover:bg-muted/50 hover:border-primary/30 min-w-[180px]"
                             >
                                 {dateRangeOptions.map((option) => (
-                                    <option key={option.days} value={option.days}>
+                                    <option key={option.days} value={option.days} className="bg-card text-foreground">
                                         {option.label}
                                     </option>
                                 ))}
                             </select>
-                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-400 pointer-events-none" />
+                            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary group-hover:scale-110 transition-transform" />
                         </div>
 
                         {/* Event Type */}
-                        <div className="relative">
+                        <div className="relative group">
                             <select
                                 value={selectedEventType}
                                 onChange={(e) => {
                                     setSelectedEventType(e.target.value);
                                     setPagination(prev => ({ ...prev, page: 0 }));
                                 }}
-                                className="appearance-none bg-slate-800 border border-slate-600 rounded-lg pl-10 pr-8 py-2.5 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all cursor-pointer hover:border-slate-500"
+                                className="appearance-none bg-muted/30 border border-border rounded-xl pl-11 pr-10 py-3 text-sm text-foreground font-black uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all cursor-pointer hover:bg-muted/50 hover:border-primary/30 min-w-[200px]"
                             >
                                 {eventTypeOptions.map((option) => (
-                                    <option key={option.value} value={option.value}>
+                                    <option key={option.value} value={option.value} className="bg-card text-foreground">
                                         {option.label}
                                     </option>
                                 ))}
                             </select>
-                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 pointer-events-none" />
+                            <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary group-hover:rotate-12 transition-transform" />
                         </div>
 
                         {/* Search */}
-                        <div className="flex-1 min-w-[200px] relative">
+                        <div className="flex-1 min-w-[300px] relative group">
                             <input
                                 type="text"
                                 placeholder="Search by Shift ID or Actor..."
@@ -184,33 +185,34 @@ function AuditDashboardPage() {
                                     setSearchQuery(e.target.value);
                                     setPagination(prev => ({ ...prev, page: 0 }));
                                 }}
-                                className="w-full bg-slate-800 border border-slate-600 rounded-lg pl-10 pr-4 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all hover:border-slate-500"
+                                className="w-full bg-muted/30 border border-border rounded-xl pl-12 pr-6 py-3 text-sm text-foreground placeholder-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all hover:bg-muted/50 font-medium"
                             />
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40 group-focus-within:text-primary transition-colors" />
                         </div>
 
                         {/* Export Button */}
-                        <button className="px-4 py-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:from-blue-500 hover:to-blue-400 transition-all text-sm flex items-center gap-2 font-medium shadow-lg shadow-blue-500/20">
+                        <button className="px-6 py-3 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all text-[11px] font-black uppercase tracking-[0.2em] flex items-center gap-3 shadow-lg shadow-primary/20">
                             <Download className="w-4 h-4" />
-                            Export
+                            Export Data
                         </button>
                     </div>
                 </div>
 
                 {/* Table Card */}
-                <div className="bg-slate-900/50 backdrop-blur-sm rounded-xl border border-slate-700/50 overflow-hidden shadow-xl">
+                <div className="bg-card border border-border rounded-[2.5rem] overflow-hidden shadow-2xl shadow-primary/5">
                     <AuditTable groupedShifts={groupedShifts} loading={loading} />
                 </div>
 
                 {/* Pagination */}
                 <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm">
                     {/* Left: Count info */}
-                    <div className="text-gray-400">
+                    <div className="text-muted-foreground/50 font-mono text-[11px] font-black uppercase tracking-widest">
                         {totalCount > 0 ? (
                             <>
-                                Showing <span className="text-white font-medium">{startItem}</span>
-                                -<span className="text-white font-medium">{endItem}</span>
-                                {' '}of <span className="text-white font-medium">{totalCount}</span> events
+                                Showing <span className="text-foreground tracking-normal">{startItem}</span>
+                                <span className="text-primary/30 mx-1">–</span>
+                                <span className="text-foreground tracking-normal">{endItem}</span>
+                                {' '}of <span className="text-foreground tracking-normal">{totalCount}</span> events
                             </>
                         ) : (
                             'No events found'
@@ -220,15 +222,15 @@ function AuditDashboardPage() {
                     {/* Right: Pagination controls */}
                     <div className="flex items-center gap-4">
                         {/* Rows per page */}
-                        <div className="flex items-center gap-2">
-                            <span className="text-gray-400">Rows per page:</span>
+                        <div className="flex items-center gap-3">
+                            <span className="text-muted-foreground/40 font-black uppercase tracking-widest text-[10px]">Rows per page:</span>
                             <select
                                 value={pagination.pageSize}
                                 onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-                                className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer hover:border-slate-500 transition-all"
+                                className="bg-muted/30 border border-border rounded-xl px-4 py-2 text-xs text-foreground font-black focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer hover:bg-muted/50 transition-all"
                             >
                                 {pageSizeOptions.map(size => (
-                                    <option key={size} value={size}>{size}</option>
+                                    <option key={size} value={size} className="bg-card text-foreground">{size}</option>
                                 ))}
                             </select>
                         </div>
@@ -240,7 +242,7 @@ function AuditDashboardPage() {
                                 <button
                                     onClick={() => goToPage(pagination.page - 1)}
                                     disabled={pagination.page === 0}
-                                    className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all border border-slate-600 hover:border-slate-500 disabled:hover:border-slate-600"
+                                    className="p-3 rounded-xl bg-muted/30 hover:bg-muted/50 disabled:opacity-20 disabled:cursor-not-allowed transition-all border border-border text-primary"
                                 >
                                     <ChevronLeft className="w-4 h-4" />
                                 </button>
@@ -249,14 +251,14 @@ function AuditDashboardPage() {
                                 <div className="flex items-center gap-1 mx-1">
                                     {getVisiblePages().map((page, idx) => (
                                         page === 'ellipsis' ? (
-                                            <span key={`ellipsis-${idx}`} className="px-2 py-1 text-gray-500">…</span>
+                                            <span key={`ellipsis-${idx}`} className="px-2 py-1 text-muted-foreground/30 font-black">…</span>
                                         ) : (
                                             <button
                                                 key={page}
                                                 onClick={() => goToPage(page)}
-                                                className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-all ${pagination.page === page
-                                                        ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30'
-                                                        : 'bg-slate-800 text-gray-300 hover:bg-slate-700 border border-slate-600 hover:border-slate-500'
+                                                className={`min-w-[40px] h-10 rounded-xl text-xs font-black transition-all ${pagination.page === page
+                                                    ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-110'
+                                                    : 'bg-muted/30 text-muted-foreground/60 hover:text-foreground hover:bg-muted/50 border border-border'
                                                     }`}
                                             >
                                                 {page + 1}
@@ -269,7 +271,7 @@ function AuditDashboardPage() {
                                 <button
                                     onClick={() => goToPage(pagination.page + 1)}
                                     disabled={pagination.page >= totalPages - 1}
-                                    className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all border border-slate-600 hover:border-slate-500 disabled:hover:border-slate-600"
+                                    className="p-3 rounded-xl bg-muted/30 hover:bg-muted/50 disabled:opacity-20 disabled:cursor-not-allowed transition-all border border-border text-primary"
                                 >
                                     <ChevronRight className="w-4 h-4" />
                                 </button>

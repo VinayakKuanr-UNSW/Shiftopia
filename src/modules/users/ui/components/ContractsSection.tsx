@@ -37,11 +37,11 @@ interface AccessCertificate {
 }
 
 const ACCESS_LEVEL_STYLES: Record<string, { color: string }> = {
-    alpha: { color: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-500/20 dark:text-gray-300 dark:border-gray-500/30' },
-    beta: { color: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30' },
-    gamma: { color: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/30' },
-    delta: { color: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30' },
-    epsilon: { color: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30' },
+    alpha: { color: 'bg-muted/50 text-muted-foreground border border-border' },
+    beta: { color: 'bg-primary/10 text-primary border border-primary/20' },
+    gamma: { color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20' },
+    delta: { color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20' },
+    epsilon: { color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' },
 };
 
 const AccessIcon = ({ level }: { level: string }) => {
@@ -202,12 +202,12 @@ const ContractsSection: React.FC<ContractsSectionProps> = ({ employeeId, employe
                                             <TableCell>{contract.role_name}</TableCell>
                                             <TableCell>{contract.level_name}</TableCell>
                                             <TableCell>
-                                                <Badge variant="outline" className="bg-slate-500/10 text-slate-400 border-slate-500/20">
+                                                <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border">
                                                     {contract.employment_status || 'Full-Time'}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <Button variant="ghost" size="sm" onClick={() => handleDeleteContract(contract.id)} className="text-red-500 hover:text-red-400 h-8 w-8 p-0">
+                                                <Button variant="ghost" size="sm" onClick={() => handleDeleteContract(contract.id)} className="text-muted-foreground hover:text-destructive h-8 w-8 p-0">
                                                     <Trash2 className="w-4 h-4" />
                                                 </Button>
                                             </TableCell>
@@ -294,7 +294,7 @@ const ContractsSection: React.FC<ContractsSectionProps> = ({ employeeId, employe
                                                         existingCertificates={certificates || []}
                                                         certificateToEdit={cert}
                                                         trigger={
-                                                            <Button variant="ghost" size="sm" className="text-blue-400 hover:text-blue-300 h-8 w-8 p-0">
+                                                            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary h-8 w-8 p-0">
                                                                 <Pencil className="w-4 h-4" />
                                                             </Button>
                                                         }
@@ -302,7 +302,7 @@ const ContractsSection: React.FC<ContractsSectionProps> = ({ employeeId, employe
                                                             queryClient.invalidateQueries({ queryKey: ['access_certificates', employeeId] });
                                                         }}
                                                     />
-                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteCertificate(cert.id)} className="text-red-500 hover:text-red-400 h-8 w-8 p-0">
+                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteCertificate(cert.id)} className="text-muted-foreground hover:text-destructive h-8 w-8 p-0">
                                                         <Trash2 className="w-4 h-4" />
                                                     </Button>
                                                 </div>

@@ -190,6 +190,22 @@ export function useEmployees(
   });
 }
 
+export function useContractedStaff(
+  organizationId?: string,
+  departmentId?: string,
+  subDepartmentId?: string,
+) {
+  return useQuery({
+    queryKey: ['contracted-staff', organizationId, departmentId, subDepartmentId],
+    queryFn: async () => {
+      const { EligibilityService } = await import('../services/eligibility.service');
+      return EligibilityService.getContractedStaff({ organizationId, departmentId, subDepartmentId });
+    },
+    enabled: !!organizationId,
+    staleTime: 2 * 60_000,
+  });
+}
+
 export function useTemplates(subDepartmentId?: string, departmentId?: string) {
   return useQuery({
     queryKey: shiftKeys.lookups.templates(subDepartmentId, departmentId),
@@ -304,9 +320,18 @@ export function useUpdateShift() {
       await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
       const snapshot = snapshotLists(queryClient);
 
-      // Patch all list views
+      // Patch all list views — also derive assignment_status from assigned_employee_id
+      // so the cache is immediately consistent without waiting for a server refetch.
       patchLists(queryClient, (old) =>
-        old.map(s => s.id === shiftId ? { ...s, ...updates } : s),
+        old.map(s => {
+          if (s.id !== shiftId) return s;
+          const merged: Shift = { ...s, ...updates } as Shift;
+          if (updates.assigned_employee_id !== undefined) {
+            (merged as unknown as Record<string, unknown>).assignment_status =
+              updates.assigned_employee_id ? 'assigned' : 'unassigned';
+          }
+          return merged;
+        }),
       );
 
       // Also patch the detail view if loaded

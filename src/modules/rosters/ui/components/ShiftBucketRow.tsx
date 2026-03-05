@@ -50,7 +50,7 @@ export const ShiftBucketRow: React.FC<ShiftBucketRowProps> = ({
         <div
             className={cn(
                 'flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors group',
-                'hover:bg-white/5',
+                'hover:bg-accent/20',
                 isLocked && 'opacity-60'
             )}
         >
@@ -98,7 +98,7 @@ export const ShiftBucketRow: React.FC<ShiftBucketRowProps> = ({
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="h-5 w-5 hover:bg-blue-500/20"
+                    className="h-5 w-5 hover:bg-primary/10"
                     onClick={() => onEdit(shiftId)}
                     disabled={disabled}
                     title="Edit shift"
@@ -109,7 +109,7 @@ export const ShiftBucketRow: React.FC<ShiftBucketRowProps> = ({
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="h-5 w-5 hover:bg-emerald-500/20"
+                        className="h-5 w-5 hover:bg-emerald-500/10"
                         onClick={() => onPublish(shiftId)}
                         disabled={disabled}
                         title="Publish shift"
@@ -120,7 +120,7 @@ export const ShiftBucketRow: React.FC<ShiftBucketRowProps> = ({
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="h-5 w-5 hover:bg-red-500/20"
+                    className="h-5 w-5 hover:bg-destructive/10"
                     onClick={() => onDelete(shiftId)}
                     disabled={disabled}
                     title="Delete shift"

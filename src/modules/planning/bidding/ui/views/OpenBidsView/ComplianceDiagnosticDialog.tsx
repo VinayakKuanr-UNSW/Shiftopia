@@ -170,24 +170,24 @@ export const ComplianceDiagnosticDialog: React.FC<ComplianceDiagnosticDialogProp
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0 bg-[#0f172a] border-white/10 overflow-hidden">
-                <DialogHeader className="px-6 py-4 border-b border-white/5 bg-slate-900/50">
+            <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-0 bg-card border-border overflow-hidden shadow-3xl rounded-[2rem]">
+                <DialogHeader className="px-8 py-6 border-b border-border bg-muted/30">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
-                                <ShieldCheck className="h-6 w-6" />
+                            <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-sm shadow-primary/5">
+                                <ShieldCheck className="h-7 w-7" />
                             </div>
                             <div>
-                                <DialogTitle className="text-xl font-bold text-white">Compliance Diagnostic</DialogTitle>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 px-1.5 py-0">
+                                <DialogTitle className="text-2xl font-black text-foreground tracking-tight">Compliance Diagnostic</DialogTitle>
+                                <div className="flex items-center gap-2 mt-1.5">
+                                    <Badge variant="outline" className="bg-primary text-primary-foreground border-none px-2 py-0.5 text-[9px] font-black uppercase tracking-widest shadow-lg shadow-primary/20">
                                         Full Engine v2.0
                                     </Badge>
-                                    <span className="text-white/40 text-xs italic">Verifying {bid.employeeName}</span>
+                                    <span className="text-muted-foreground/60 text-[11px] font-mono font-black uppercase tracking-wider italic">Verifying {bid.employeeName}</span>
                                 </div>
                             </div>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-white/5">
+                        <Button variant="ghost" size="icon" onClick={onClose} className="rounded-xl hover:bg-muted text-muted-foreground/40 hover:text-foreground transition-all">
                             <X className="h-5 w-5" />
                         </Button>
                     </div>
@@ -195,30 +195,33 @@ export const ComplianceDiagnosticDialog: React.FC<ComplianceDiagnosticDialogProp
 
                 <div className="flex-1 min-h-0 flex flex-col">
                     {/* Quick Context Bar */}
-                    <div className="bg-slate-900/30 px-6 py-3 border-b border-white/5 grid grid-cols-3 gap-4">
-                        <div className="flex items-center gap-2 text-sm">
-                            <User className="h-4 w-4 text-white/30" />
-                            <span className="text-white/50">Employee:</span>
-                            <span className="text-white font-medium truncate">{bid.employeeName}</span>
+                    <div className="bg-muted/10 px-8 py-4 border-b border-border grid grid-cols-3 gap-6">
+                        <div className="flex items-center gap-3 text-[11px] font-black uppercase tracking-widest">
+                            <User className="h-4 w-4 text-primary/40" />
+                            <span className="text-muted-foreground/50">Employee:</span>
+                            <span className="text-foreground truncate">{bid.employeeName}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-sm">
-                            <Calendar className="h-4 w-4 text-white/30" />
-                            <span className="text-white/50">Date:</span>
-                            <span className="text-white font-medium">{format(new Date(shift.date), 'EEE, MMM d')}</span>
+                        <div className="flex items-center gap-3 text-[11px] font-black uppercase tracking-widest">
+                            <Calendar className="h-4 w-4 text-primary/40" />
+                            <span className="text-muted-foreground/50">Date:</span>
+                            <span className="text-foreground">{format(new Date(shift.date), 'EEE, MMM d')}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-sm">
-                            <Clock className="h-4 w-4 text-white/30" />
-                            <span className="text-white/50">Time:</span>
-                            <span className="text-white font-medium">{shift.startTime} - {shift.endTime}</span>
+                        <div className="flex items-center gap-3 text-[11px] font-black uppercase tracking-widest">
+                            <Clock className="h-4 w-4 text-primary/40" />
+                            <span className="text-muted-foreground/50">Time:</span>
+                            <span className="text-foreground">{shift.startTime} - {shift.endTime}</span>
                         </div>
                     </div>
 
                     <ScrollArea className="flex-1">
                         <div className="p-6">
                             {isLoadingShifts ? (
-                                <div className="flex flex-col items-center justify-center py-20 gap-4">
-                                    <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                                    <p className="text-white/50 animate-pulse">Running diagnostic engine...</p>
+                                <div className="flex flex-col items-center justify-center py-24 gap-6">
+                                    <div className="relative">
+                                        <Loader2 className="h-12 w-12 animate-spin text-primary/40" />
+                                        <ShieldCheck className="h-6 w-6 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                                    </div>
+                                    <p className="text-[11px] font-black uppercase tracking-[0.3em] text-muted-foreground/40 animate-pulse">Running diagnostic engine…</p>
                                 </div>
                             ) : (
                                 <ComplianceTabContent
@@ -233,30 +236,30 @@ export const ComplianceDiagnosticDialog: React.FC<ComplianceDiagnosticDialogProp
                     </ScrollArea>
                 </div>
 
-                <DialogFooter className="px-6 py-4 border-t border-white/5 bg-slate-900/50 flex items-center justify-between sm:justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-1.5">
-                            <div className={cn("h-2 w-2 rounded-full", stats.blockingFails > 0 ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" : "bg-white/20")} />
-                            <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider">Blockers: {stats.blockingFails}</span>
+                <DialogFooter className="px-8 py-5 border-t border-border bg-muted/30 flex items-center justify-between sm:justify-between">
+                    <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-2">
+                            <div className={cn("h-2.5 w-2.5 rounded-full", stats.blockingFails > 0 ? "bg-rose-500 shadow-[0_0_12px_rgba(239,68,68,0.4)]" : "bg-muted")} />
+                            <span className="text-[10px] uppercase font-black text-muted-foreground/60 tracking-[0.1em] font-mono">Blockers: {stats.blockingFails}</span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                            <div className={cn("h-2 w-2 rounded-full", stats.warnings > 0 ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "bg-white/20")} />
-                            <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider">Warnings: {stats.warnings}</span>
+                        <div className="flex items-center gap-2">
+                            <div className={cn("h-2.5 w-2.5 rounded-full", stats.warnings > 0 ? "bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.4)]" : "bg-muted")} />
+                            <span className="text-[10px] uppercase font-black text-muted-foreground/60 tracking-[0.1em] font-mono">Warnings: {stats.warnings}</span>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        <Button variant="ghost" onClick={onClose} disabled={isAssigning} className="text-white/60 hover:text-white hover:bg-white/5">
-                            Close
+                    <div className="flex items-center gap-4">
+                        <Button variant="ghost" onClick={onClose} disabled={isAssigning} className="text-muted-foreground/60 hover:text-foreground hover:bg-muted font-black uppercase tracking-widest text-[11px] rounded-xl px-4">
+                            Cancel
                         </Button>
                         <Button
                             className={cn(
-                                "min-w-[140px] font-bold",
+                                "min-w-[160px] h-11 font-black uppercase tracking-[0.15em] text-[11px] rounded-xl transition-all duration-300 shadow-lg",
                                 stats.blockingFails > 0
-                                    ? "bg-slate-800 text-white/40 cursor-not-allowed border-white/5"
+                                    ? "bg-muted text-muted-foreground/30 border-none shadow-none cursor-not-allowed"
                                     : stats.warnings > 0
-                                        ? "bg-amber-500 hover:bg-amber-600 text-black shadow-[0_0_15px_rgba(245,158,11,0.3)]"
-                                        : "bg-emerald-500 hover:bg-emerald-600 text-black shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                                        ? "bg-amber-500 hover:bg-amber-600 text-amber-950 shadow-amber-500/30"
+                                        : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-primary/20"
                             )}
                             disabled={isAssigning || stats.blockingFails > 0}
                             onClick={() => onAssign(bid)}

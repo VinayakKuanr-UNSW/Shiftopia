@@ -1,84 +1,302 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
-import { Button } from '@/modules/core/ui/primitives/button';
 import { format } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
+import {
+  Search,
+  Users,
+  AlertCircle,
+  Loader2,
+  CheckCircle2,
+  UserRound,
+  Clock,
+} from 'lucide-react';
+import { useRosterUI } from '@/modules/rosters/contexts/RosterUIContext';
+import { useContractedStaff } from '@/modules/rosters/state/useRosterShifts';
+import type { ContractedStaffMember } from '@/modules/rosters/services/eligibility.service';
+
+/* ── Types ──────────────────────────────────────────────────────────────────── */
 
 export interface UnfilledShift {
   id: string;
   title: string;
   role: string;
   department?: string;
-  date: string; // yyyy-MM-dd
-  start: string; // HH:MM
-  end: string;   // HH:MM
+  date: string;   // yyyy-MM-dd
+  start: string;  // HH:MM
+  end: string;    // HH:MM
 }
 
 interface UnfilledShiftsPanelProps {
   unfilledShifts: UnfilledShift[];
   onPickShift?: (shift: UnfilledShift) => void;
+  /** @deprecated use the self-contained panel — width is now fixed at w-80 */
   width?: string;
 }
+
+/* ── Role colour palette (derived from code string — no color column in DB) ──── */
+const ROLE_PALETTE = [
+  'bg-blue-500/20 text-blue-700 dark:text-blue-300',
+  'bg-violet-500/20 text-violet-700 dark:text-violet-300',
+  'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300',
+  'bg-amber-500/20 text-amber-700 dark:text-amber-300',
+  'bg-rose-500/20 text-rose-700 dark:text-rose-300',
+  'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300',
+  'bg-orange-500/20 text-orange-700 dark:text-orange-300',
+  'bg-indigo-500/20 text-indigo-700 dark:text-indigo-300',
+];
+
+function roleColorClass(seed: string | null): string {
+  if (!seed) return ROLE_PALETTE[0];
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+  return ROLE_PALETTE[Math.abs(hash) % ROLE_PALETTE.length];
+}
+
+/* ── Staff Card (Group / Roles Mode) ─────────────────────────────────────────── */
+
+const StaffCard: React.FC<{ member: ContractedStaffMember }> = ({ member }) => {
+  const initials = `${member.first_name?.[0] ?? ''}${member.last_name?.[0] ?? ''}`.toUpperCase();
+  const roleColor = roleColorClass(member.role_code ?? member.role_name);
+
+  return (
+    <div className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 dark:border-white/[0.06] bg-white dark:bg-white/[0.03] hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-all">
+      {/* Avatar */}
+      <div className={cn('h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 border border-current/10', roleColor)}>
+        {initials ? (
+          <span className="text-[11px] font-black leading-none">
+            {initials}
+          </span>
+        ) : (
+          <UserRound className="h-3.5 w-3.5" />
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-semibold text-slate-800 dark:text-white truncate">
+          {member.first_name} {member.last_name}
+        </div>
+        {member.role_name ? (
+          <div className="text-[11px] text-slate-500 dark:text-white/50 truncate mt-0.5">
+            {member.role_name}
+          </div>
+        ) : (
+          <div className="text-[11px] text-slate-400 dark:text-white/30 truncate mt-0.5 italic">
+            No role assigned
+          </div>
+        )}
+      </div>
+
+      {/* Role code badge */}
+      {member.role_code && (
+        <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0', roleColor)}>
+          {member.role_code}
+        </span>
+      )}
+    </div>
+  );
+};
+
+/* ── Shift Card (People / other modes) ──────────────────────────────────────── */
+
+const DEPT_COLORS: Record<string, string> = {
+  Convention: 'bg-blue-500',
+  Exhibition: 'bg-emerald-500',
+  Theatre: 'bg-rose-500',
+};
+
+const ShiftCard: React.FC<{
+  shift: UnfilledShift;
+  onClick: () => void;
+}> = ({ shift, onClick }) => {
+  const dateObj = new Date(`${shift.date}T00:00:00`);
+  const barColor = DEPT_COLORS[shift.department ?? ''] ?? 'bg-amber-400';
+
+  const [sh, sm] = shift.start.split(':').map(Number);
+  const [eh, em] = shift.end.split(':').map(Number);
+  const hrs = ((eh * 60 + em) - (sh * 60 + sm)) / 60;
+  const hoursLabel = hrs > 0 ? `${hrs % 1 === 0 ? hrs : hrs.toFixed(1)}h` : '';
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      draggable
+      onClick={onClick}
+      onKeyDown={(e) => e.key === 'Enter' && onClick()}
+      onDragStart={(e) => e.dataTransfer.setData('application/json', JSON.stringify(shift))}
+      className="flex items-stretch rounded-xl border border-slate-200 dark:border-white/[0.06] bg-white dark:bg-white/[0.03] hover:bg-slate-50 dark:hover:bg-white/[0.06] active:scale-[0.98] transition-all cursor-pointer overflow-hidden"
+    >
+      {/* Left colour bar */}
+      <div className={cn('w-1.5 flex-shrink-0', barColor)} />
+
+      <div className="flex-1 p-2.5 min-w-0">
+        {/* Role */}
+        <div className="text-xs font-semibold text-slate-800 dark:text-white truncate">
+          {shift.role}
+        </div>
+        {/* Title / subgroup — only if distinct */}
+        {shift.title && shift.title !== shift.role && (
+          <div className="text-[11px] text-slate-500 dark:text-white/50 truncate mt-0.5">
+            {shift.title}
+          </div>
+        )}
+        {/* Time */}
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <Clock className="h-3 w-3 text-slate-400 dark:text-white/30 flex-shrink-0" />
+          <span className="text-[11px] text-slate-500 dark:text-white/60">
+            {shift.start} – {shift.end}
+            {hoursLabel && (
+              <span className="ml-1.5 text-slate-400 dark:text-white/40">{hoursLabel}</span>
+            )}
+          </span>
+        </div>
+        {/* Date */}
+        <div className="text-[10px] text-slate-400 dark:text-white/40 mt-1">
+          {format(dateObj, 'EEE, MMM d')}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ── Main Panel ──────────────────────────────────────────────────────────────── */
 
 export const UnfilledShiftsPanel: React.FC<UnfilledShiftsPanelProps> = ({
   unfilledShifts,
   onPickShift,
-  width = 'w-80'
 }) => {
+  const {
+    activeMode,
+    selectedOrganizationId,
+    selectedDepartmentId,
+    selectedSubDepartmentId,
+  } = useRosterUI();
+
+  const [search, setSearch] = useState('');
+  // Show contracted staff in group + roles modes; show unfilled shifts in people mode
+  const showStaff = activeMode === 'group' || activeMode === 'roles';
+
+  /* ── Staff panel (group + roles modes) ────────────────────────── */
+  const { data: staff = [], isLoading: staffLoading } = useContractedStaff(
+    selectedOrganizationId ?? undefined,
+    selectedDepartmentId ?? undefined,
+    selectedSubDepartmentId ?? undefined,
+  );
+
+  const filteredStaff = useMemo(() => {
+    if (!search.trim()) return staff;
+    const q = search.toLowerCase();
+    return staff.filter(
+      (m) =>
+        `${m.first_name} ${m.last_name}`.toLowerCase().includes(q) ||
+        m.role_name?.toLowerCase().includes(q),
+    );
+  }, [staff, search]);
+
+  /* ── People / other modes: unfilled shifts ───────────────────── */
+  const filteredShifts = useMemo(() => {
+    if (!search.trim()) return unfilledShifts;
+    const q = search.toLowerCase();
+    return unfilledShifts.filter(
+      (s) =>
+        s.role.toLowerCase().includes(q) ||
+        s.title.toLowerCase().includes(q) ||
+        (s.department ?? '').toLowerCase().includes(q),
+    );
+  }, [unfilledShifts, search]);
+
+  const count = showStaff ? filteredStaff.length : filteredShifts.length;
+
   return (
-    <div className={cn(`${width} border-l border-slate-200 dark:border-white/10 bg-white dark:bg-[#0d1424] flex flex-col`)}>
-      <div className="p-4 border-b border-slate-200 dark:border-white/10">
-        <h3 className="font-semibold text-slate-800 dark:text-white text-sm">Unfilled Shifts</h3>
-        <p className="text-xs text-slate-500 dark:text-white/60 mt-1">
-          Drag or click to assign a shift
+    <div className="w-80 h-full flex flex-col bg-slate-50 dark:bg-slate-950/60">
+
+      {/* Header */}
+      <div className="px-4 pt-4 pb-3 border-b border-slate-200 dark:border-white/[0.06]">
+        <div className="flex items-center gap-2">
+          {showStaff ? (
+            <Users className="h-4 w-4 text-blue-500 dark:text-blue-400" />
+          ) : (
+            <AlertCircle className="h-4 w-4 text-amber-500" />
+          )}
+          <h3 className="text-sm font-bold text-slate-800 dark:text-white tracking-tight">
+            {showStaff ? 'Contracted Staff' : 'Unfilled Shifts'}
+          </h3>
+          <span className="ml-auto text-[11px] font-semibold text-slate-400 dark:text-white/40 bg-slate-200 dark:bg-white/[0.06] px-2 py-0.5 rounded-full">
+            {count}
+          </span>
+        </div>
+        <p className="text-[11px] text-slate-400 dark:text-white/40 mt-1">
+          {showStaff
+            ? 'Active position contracts in scope'
+            : 'Drag or click a shift to assign it'}
         </p>
       </div>
 
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-3">
-          {unfilledShifts.length === 0 && (
-            <div className="text-slate-500 dark:text-white/60 text-sm">No unfilled shifts</div>
+      {/* Search */}
+      <div className="px-3 py-2 border-b border-slate-200 dark:border-white/[0.06]">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-white/30 pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={showStaff ? 'Search staff or role…' : 'Search shifts…'}
+            className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg bg-white dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 text-slate-700 dark:text-white/80 placeholder-slate-400 dark:placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+      </div>
+
+      {/* Content */}
+      <ScrollArea className="flex-1">
+        <div className="p-3 space-y-1.5">
+
+          {/* GROUP MODE: contracted staff list */}
+          {showStaff && (
+            <>
+              {staffLoading && (
+                <div className="flex items-center justify-center gap-2 py-12 text-slate-400 dark:text-white/40">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-xs">Loading staff…</span>
+                </div>
+              )}
+              {!staffLoading && filteredStaff.length === 0 && (
+                <div className="flex flex-col items-center py-12 gap-3">
+                  <Users className="h-8 w-8 text-slate-300 dark:text-white/20" />
+                  <p className="text-xs text-slate-400 dark:text-white/40 text-center">
+                    {search
+                      ? 'No staff match your search'
+                      : 'No contracted staff in this scope'}
+                  </p>
+                </div>
+              )}
+              {!staffLoading &&
+                filteredStaff.map((member) => (
+                  <StaffCard key={member.id} member={member} />
+                ))}
+            </>
           )}
 
-          {unfilledShifts.map((s) => {
-            const dateObj = new Date(s.date);
-            return (
-              <div
-                key={s.id}
-                className="p-3 rounded-md border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] hover:bg-slate-100 dark:hover:bg-white/5 transition-all cursor-move"
-                role="button"
-                onClick={() => onPickShift?.(s)}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData('application/json', JSON.stringify(s));
-                }}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-slate-800 dark:text-white text-xs truncate">{s.title}</div>
-                    <div className="text-slate-600 dark:text-white/80 text-[11px] truncate">{s.role}</div>
-                  </div>
-                  <div className={cn(
-                    'w-2 h-8 rounded-full ml-2',
-                    s.department === 'Convention' ? 'bg-blue-500' :
-                    s.department === 'Exhibition' ? 'bg-green-500' :
-                    s.department === 'Theatre' ? 'bg-red-500' : 'bg-slate-300 dark:bg-white/30'
-                  )} />
+          {/* PEOPLE / OTHER MODES: unfilled shifts */}
+          {!showStaff && (
+            <>
+              {filteredShifts.length === 0 && (
+                <div className="flex flex-col items-center py-12 gap-3">
+                  <CheckCircle2 className="h-8 w-8 text-emerald-400 dark:text-emerald-500/40" />
+                  <p className="text-xs text-slate-400 dark:text-white/40 text-center">
+                    {search ? 'No matching shifts' : 'All shifts are filled'}
+                  </p>
                 </div>
+              )}
+              {filteredShifts.map((s) => (
+                <ShiftCard key={s.id} shift={s} onClick={() => onPickShift?.(s)} />
+              ))}
+            </>
+          )}
 
-                <div className="text-slate-500 dark:text-white/70 text-[11px] mb-1">
-                  {s.start} - {s.end}
-                </div>
-                <div className="text-slate-400 dark:text-white/60 text-[10px]">{format(dateObj, 'EEE, MMM d')}</div>
-              </div>
-            );
-          })}
         </div>
       </ScrollArea>
-
-      <div className="p-3 border-t border-slate-200 dark:border-white/10">
-        <Button size="sm" className="w-full">Create Unfilled Shift</Button>
-      </div>
     </div>
   );
 };

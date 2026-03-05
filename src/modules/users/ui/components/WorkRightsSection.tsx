@@ -143,14 +143,14 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
                                 <div className="flex items-center gap-3">
                                     <Badge className={
                                         workRight.status === 'Active'
-                                            ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-500/20 dark:text-green-300 dark:border-green-500/30'
-                                            : 'bg-red-100 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/30'
+                                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                            : 'bg-destructive/10 text-destructive border border-destructive/20'
                                     }>
                                         {workRight.status}
                                     </Badge>
                                     <button
                                         onClick={handleDelete}
-                                        className="text-muted-foreground hover:text-red-500 dark:hover:text-red-400 transition-colors p-1"
+                                        className="text-muted-foreground hover:text-destructive transition-colors p-1"
                                         title="Remove Work Rights"
                                     >
                                         <XCircle className="w-5 h-5" />
@@ -180,30 +180,30 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
 
                         {/* Student Visa Restrictions Toggle */}
                         {isStudentVisa && (
-                            <div className="bg-amber-50 dark:bg-amber-500/10 p-4 rounded-lg border border-amber-200 dark:border-amber-500/20">
+                            <div className="bg-amber-500/5 p-4 rounded-lg border border-amber-500/20">
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="space-y-0.5">
-                                        <Label className="text-amber-700 dark:text-amber-200 font-medium flex items-center gap-2">
+                                        <Label className="text-amber-600 dark:text-amber-400 font-medium flex items-center gap-2">
                                             <AlertOctagon className="w-4 h-4" />
                                             Student Visa Restrictions (Subclass 500)
                                         </Label>
-                                        <p className="text-xs text-amber-600 dark:text-amber-200/70">
+                                        <p className="text-xs text-amber-600/80 dark:text-amber-400/80">
                                             Limit work hours during study sessions
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        {isToggling && <Loader2 className="w-3 h-3 animate-spin text-amber-600 dark:text-amber-200" />}
+                                        {isToggling && <Loader2 className="w-3 h-3 animate-spin text-amber-600 dark:text-amber-400" />}
                                         <Switch
                                             checked={workRight.has_restricted_work_limit || false}
                                             onCheckedChange={handleToggleWorkLimit}
                                             disabled={isToggling}
-                                            className="data-[state=checked]:bg-amber-600"
+                                            className="data-[state=checked]:bg-amber-500"
                                         />
                                     </div>
                                 </div>
 
                                 {workRight.has_restricted_work_limit && (
-                                    <div className="mt-3 p-3 bg-amber-100 dark:bg-amber-900/20 rounded border border-amber-200 dark:border-amber-900/30 text-amber-800 dark:text-amber-300 text-sm">
+                                    <div className="mt-3 p-3 bg-amber-500/10 rounded border border-amber-500/20 text-amber-700 dark:text-amber-300 text-sm">
                                         <strong>Restriction Active:</strong> Cannot work more than 48 hours a fortnight when course of study or training is in session.
                                     </div>
                                 )}

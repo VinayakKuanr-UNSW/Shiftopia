@@ -104,6 +104,7 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
           organizationId: s.organization_id,
           departmentId: s.department_id,
           subDepartmentId: s.sub_department_id,
+          groupType: s.group_type,
         };
       });
 

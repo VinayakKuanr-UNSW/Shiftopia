@@ -16,12 +16,12 @@ export const NotesStep: React.FC<StepProps> = ({ form }) => {
                 name="notes"
                 render={({ field }) => (
                     <FormItem>
-                        <FormLabel className="text-white/70">Notes</FormLabel>
+                        <FormLabel className="text-muted-foreground">Notes</FormLabel>
                         <FormControl>
                             <Textarea
                                 placeholder="Add notes for this shift..."
                                 rows={8}
-                                className="bg-[#1e293b] border-white/10 text-white resize-none"
+                                className="bg-muted/50 border-border text-foreground resize-none"
                                 {...field}
                             />
                         </FormControl>

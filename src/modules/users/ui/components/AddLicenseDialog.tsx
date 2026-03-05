@@ -144,7 +144,7 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
                     {isVisa ? 'Add Work Rights' : 'Add License'}
                 </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md bg-slate-900/95 border-white/10 text-white">
+            <DialogContent className="max-w-md bg-card border-border text-foreground shadow-xl shadow-black/5 dark:shadow-black/20">
                 <DialogHeader>
                     <DialogTitle>{isVisa ? 'Add Work Rights' : 'Add License'}</DialogTitle>
                     <DialogDescription>
@@ -155,7 +155,7 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
                 <div className="space-y-4 py-4">
                     {/* License Selection */}
                     <div className="space-y-2">
-                        <Label className="text-white/70 flex items-center gap-2">
+                        <Label className="text-muted-foreground flex items-center gap-2">
                             {isVisa ? <Shield className="w-4 h-4" /> : <Award className="w-4 h-4" />}
                             {isVisa ? 'Visa Type' : 'License Name'}
                         </Label>
@@ -163,7 +163,7 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
                             value={formData.license_id}
                             onValueChange={(val) => setFormData({ ...formData, license_id: val })}
                         >
-                            <SelectTrigger className="bg-white/5 border-white/10">
+                            <SelectTrigger className="bg-muted/30 border-border">
                                 <SelectValue placeholder={`Select ${isVisa ? 'visa' : 'license'}...`} />
                             </SelectTrigger>
                             <SelectContent>
@@ -179,25 +179,25 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
                     {/* Dates Grid */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label className="text-white/70">Issue Date</Label>
+                            <Label className="text-muted-foreground">Issue Date</Label>
                             <div className="relative">
                                 <Input
                                     type="date"
-                                    className="bg-white/5 border-white/10"
+                                    className="bg-muted/30 border-border"
                                     value={formData.issue_date}
                                     onChange={(e) => setFormData({ ...formData, issue_date: e.target.value })}
                                 />
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label className="text-white/70">
+                            <Label className="text-muted-foreground">
                                 Expiration Date
                                 {selectedLicense?.requires_expiration && <span className="text-red-400 ml-1">*</span>}
                             </Label>
                             <div className="relative">
                                 <Input
                                     type="date"
-                                    className="bg-white/5 border-white/10"
+                                    className="bg-muted/30 border-border"
                                     value={formData.expiration_date}
                                     onChange={(e) => setFormData({ ...formData, expiration_date: e.target.value })}
                                 />
@@ -207,12 +207,12 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
 
                     {/* Status */}
                     <div className="space-y-2">
-                        <Label className="text-white/70">Status</Label>
+                        <Label className="text-muted-foreground">Status</Label>
                         <Select
                             value={formData.status}
                             onValueChange={(val) => setFormData({ ...formData, status: val })}
                         >
-                            <SelectTrigger className="bg-white/5 border-white/10">
+                            <SelectTrigger className="bg-muted/30 border-border">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>

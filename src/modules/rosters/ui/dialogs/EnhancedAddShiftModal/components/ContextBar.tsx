@@ -12,35 +12,35 @@ export const ContextBar: React.FC<ContextBarProps> = ({ safeContext, timezone })
     const customTzLabel = TIMEZONES.find(t => t.value === timezone)?.label.split('(')[1]?.replace(')', '') || 'AEST/AEDT';
 
     return (
-        <div className="px-6 py-3 border-b border-white/10 bg-[#1e293b]/50">
+        <div className="px-6 py-3 border-b border-border bg-muted/50">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <Lock className="h-3.5 w-3.5 text-amber-400" />
                     <span className="text-xs font-medium text-amber-400 uppercase tracking-wide">Inherited Context</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-xs text-white/70">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     {safeContext.organizationName && (
                         <>
-                            <span className="text-white font-medium">{safeContext.organizationName}</span>
-                            <ChevronRight className="h-3 w-3 text-white/30" />
+                            <span className="text-foreground font-medium">{safeContext.organizationName}</span>
+                            <ChevronRight className="h-3 w-3 text-muted-foreground/60" />
                         </>
                     )}
                     {safeContext.departmentName && (
                         <>
-                            <span className="text-white font-medium">{safeContext.departmentName}</span>
-                            <ChevronRight className="h-3 w-3 text-white/30" />
+                            <span className="text-foreground font-medium">{safeContext.departmentName}</span>
+                            <ChevronRight className="h-3 w-3 text-muted-foreground/60" />
                         </>
                     )}
                     {safeContext.subDepartmentName && (
                         <>
-                            <span className="text-white font-medium">{safeContext.subDepartmentName}</span>
-                            <ChevronRight className="h-3 w-3 text-white/30" />
+                            <span className="text-foreground font-medium">{safeContext.subDepartmentName}</span>
+                            <ChevronRight className="h-3 w-3 text-muted-foreground/60" />
                         </>
                     )}
                     {safeContext.groupName && (
                         <>
                             <span className="text-emerald-400 font-medium">{safeContext.groupName}</span>
-                            <ChevronRight className="h-3 w-3 text-white/30" />
+                            <ChevronRight className="h-3 w-3 text-muted-foreground/60" />
                         </>
                     )}
                     {safeContext.subGroupName && (
@@ -48,10 +48,10 @@ export const ContextBar: React.FC<ContextBarProps> = ({ safeContext, timezone })
                     )}
 
                     {/* Timezone */}
-                    <span className="mx-2 text-white/20">|</span>
-                    <Globe className="h-3.5 w-3.5 text-white/40" />
-                    <span className="text-white/60">Timezone:</span>
-                    <span className="text-white font-medium">{customTzLabel}</span>
+                    <span className="mx-2 text-muted-foreground/40">|</span>
+                    <Globe className="h-3.5 w-3.5 text-muted-foreground/80" />
+                    <span className="text-foreground/60">Timezone:</span>
+                    <span className="text-foreground font-medium">{customTzLabel}</span>
                 </div>
             </div>
         </div>

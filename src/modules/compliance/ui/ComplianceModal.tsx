@@ -62,22 +62,22 @@ function RuleCard({
     const statusConfig = {
         'pass': {
             icon: CheckCircle,
-            colors: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+            colors: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20 dark:text-emerald-400',
             label: 'Passed'
         },
         'fail': {
             icon: XCircle,
-            colors: 'text-red-400 bg-red-500/10 border-red-500/20',
+            colors: 'text-red-500 bg-red-500/10 border-red-500/20 dark:text-red-400',
             label: 'Failed'
         },
         'warning': {
             icon: AlertTriangle,
-            colors: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+            colors: 'text-amber-500 bg-amber-500/10 border-amber-500/20 dark:text-amber-400',
             label: 'Warning'
         },
         'not-run': {
             icon: Circle,
-            colors: 'text-gray-400 bg-gray-500/10 border-gray-500/20',
+            colors: 'text-muted-foreground bg-muted/30 border-border',
             label: 'Not Run'
         }
     };
@@ -96,23 +96,23 @@ function RuleCard({
                     <StatusIcon className="w-5 h-5 mt-0.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="font-medium text-white">{ruleName}</h4>
+                            <h4 className="font-medium text-foreground">{ruleName}</h4>
                             <span className={cn(
                                 'text-xs px-2 py-0.5 rounded',
-                                status === 'not-run' ? 'bg-gray-500/20 text-gray-400' :
-                                    status === 'pass' ? 'bg-emerald-500/20 text-emerald-300' :
-                                        status === 'fail' ? 'bg-red-500/20 text-red-300' :
-                                            'bg-amber-500/20 text-amber-300'
+                                status === 'not-run' ? 'bg-muted text-muted-foreground' :
+                                    status === 'pass' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300' :
+                                        status === 'fail' ? 'bg-red-500/20 text-red-600 dark:text-red-300' :
+                                            'bg-amber-500/20 text-amber-600 dark:text-amber-300'
                             )}>
                                 {config.label}
                             </span>
                             {blocking && (
-                                <span className="text-xs px-2 py-0.5 rounded bg-slate-500/20 text-slate-400 border border-slate-500/30">
+                                <span className="text-xs px-2 py-0.5 rounded bg-slate-500/10 text-slate-500 dark:bg-slate-500/20 dark:text-slate-400 border border-slate-500/30">
                                     Blocking
                                 </span>
                             )}
                         </div>
-                        <p className="text-sm mt-1 text-gray-400">{description}</p>
+                        <p className="text-sm mt-1 text-muted-foreground">{description}</p>
                     </div>
                 </div>
 
@@ -130,7 +130,7 @@ function RuleCard({
                     {isRunning ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
-                        <Play className="w-3.5 h-3.5" />
+                        <Play className="w-3.5 h-3.5 fill-current" />
                     )}
                     Run
                 </button>
@@ -140,30 +140,30 @@ function RuleCard({
             {result && status !== 'not-run' && (
                 <>
                     {/* Summary */}
-                    <div className="mt-3 p-2 rounded bg-black/20">
-                        <p className="text-sm">{result.summary}</p>
+                    <div className="mt-3 p-2 rounded bg-muted/40 border border-border/50">
+                        <p className="text-sm text-foreground">{result.summary}</p>
                         {result.details && (
-                            <p className="text-xs text-gray-400 mt-1">{result.details}</p>
+                            <p className="text-xs text-muted-foreground mt-1">{result.details}</p>
                         )}
                     </div>
 
                     {/* Calculation breakdown */}
                     {result.calculation && (
-                        <div className="mt-3 pt-3 border-t border-gray-700/50">
-                            <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-2">
+                        <div className="mt-3 pt-3 border-t border-border">
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
                                 <Info className="w-3.5 h-3.5" />
                                 <span className="font-medium">Calculation</span>
                             </div>
                             <div className="grid grid-cols-2 gap-2 text-sm">
                                 {/* Day Count (Specific to Working Days Cap) */}
                                 {result.calculation.day_count !== undefined && (
-                                    <div className="flex justify-between bg-slate-800/50 rounded px-2 py-1 col-span-2">
-                                        <span className="text-gray-400">Working Days (28d period):</span>
+                                    <div className="flex justify-between bg-muted/30 rounded px-2 py-1 col-span-2">
+                                        <span className="text-muted-foreground">Working Days (28d period):</span>
                                         <span className={cn(
                                             'font-mono font-bold',
                                             result.calculation.day_count > (result.calculation.limit || 20)
-                                                ? 'text-red-400'
-                                                : 'text-emerald-400'
+                                                ? 'text-red-500 dark:text-red-400'
+                                                : 'text-emerald-500 dark:text-emerald-400'
                                         )}>
                                             {result.calculation.day_count} days
                                         </span>
@@ -174,25 +174,25 @@ function RuleCard({
                                 {(result.calculation.total_hours !== undefined && result.calculation.total_hours > 0 || result.calculation.candidate_hours > 0) && (
                                     <>
                                         {result.calculation.existing_hours !== undefined && result.calculation.existing_hours > 0 && (
-                                            <div className="flex justify-between bg-slate-800/50 rounded px-2 py-1">
-                                                <span className="text-gray-400">Existing:</span>
-                                                <span className="text-white font-mono">{result.calculation.existing_hours.toFixed(1)}h</span>
+                                            <div className="flex justify-between bg-muted/30 rounded px-2 py-1">
+                                                <span className="text-muted-foreground">Existing:</span>
+                                                <span className="text-foreground font-mono">{result.calculation.existing_hours.toFixed(1)}h</span>
                                             </div>
                                         )}
                                         {result.calculation.candidate_hours !== undefined && result.calculation.candidate_hours > 0 && (
-                                            <div className="flex justify-between bg-slate-800/50 rounded px-2 py-1">
-                                                <span className="text-gray-400">This shift:</span>
-                                                <span className="text-white font-mono">{result.calculation.candidate_hours.toFixed(1)}h</span>
+                                            <div className="flex justify-between bg-muted/30 rounded px-2 py-1">
+                                                <span className="text-muted-foreground">This shift:</span>
+                                                <span className="text-foreground font-mono">{result.calculation.candidate_hours.toFixed(1)}h</span>
                                             </div>
                                         )}
                                         {result.calculation.total_hours !== undefined && (
-                                            <div className="flex justify-between bg-slate-800/50 rounded px-2 py-1">
-                                                <span className="text-gray-400">Total:</span>
+                                            <div className="flex justify-between bg-muted/30 rounded px-2 py-1">
+                                                <span className="text-muted-foreground">Total:</span>
                                                 <span className={cn(
                                                     'font-mono font-bold',
                                                     result.calculation.limit && result.calculation.total_hours > result.calculation.limit
-                                                        ? 'text-red-400'
-                                                        : 'text-emerald-400'
+                                                        ? 'text-red-500 dark:text-red-400'
+                                                        : 'text-emerald-500 dark:text-emerald-400'
                                                 )}>
                                                     {result.calculation.total_hours.toFixed(1)}h
                                                 </span>
@@ -202,9 +202,9 @@ function RuleCard({
                                 )}
 
                                 {result.calculation.limit !== undefined && (
-                                    <div className="flex justify-between bg-slate-800/50 rounded px-2 py-1">
-                                        <span className="text-gray-400">Limit:</span>
-                                        <span className="text-white font-mono">
+                                    <div className="flex justify-between bg-muted/30 rounded px-2 py-1">
+                                        <span className="text-muted-foreground">Limit:</span>
+                                        <span className="text-foreground font-mono">
                                             {result.calculation.limit}
                                             {result.calculation.day_count !== undefined ? ' days' : 'h'}
                                         </span>
@@ -304,10 +304,10 @@ export function ComplianceModal({
     const overallStatus = hasBlockingFail ? 'fail' : hasWarning ? 'warning' : allPassed ? 'pass' : 'not-run';
 
     const headerColors = {
-        'pass': 'from-emerald-600/20 to-transparent border-emerald-500/30',
-        'fail': 'from-red-600/20 to-transparent border-red-500/30',
-        'warning': 'from-amber-600/20 to-transparent border-amber-500/30',
-        'not-run': 'from-slate-600/20 to-transparent border-slate-500/30'
+        'pass': 'from-emerald-600/10 to-transparent border-emerald-500/20 dark:from-emerald-600/20',
+        'fail': 'from-red-600/10 to-transparent border-red-500/20 dark:from-red-600/20',
+        'warning': 'from-amber-600/10 to-transparent border-amber-500/20 dark:from-amber-600/20',
+        'not-run': 'from-slate-600/10 to-transparent border-slate-500/20 dark:from-slate-600/20'
     };
 
     return (
@@ -319,19 +319,19 @@ export function ComplianceModal({
             />
 
             {/* Modal */}
-            <div className="relative w-full max-w-lg mx-4 bg-slate-900 rounded-xl shadow-2xl border border-slate-700 overflow-hidden">
+            <div className="relative w-full max-w-lg mx-4 bg-background dark:bg-slate-900 rounded-xl shadow-2xl border border-border overflow-hidden">
                 {/* Header */}
                 <div className={cn(
                     'px-6 py-4 border-b bg-gradient-to-b',
                     headerColors[overallStatus]
                 )}>
                     <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-semibold text-white">{title}</h3>
+                        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
                         <button
                             onClick={onClose}
-                            className="p-1.5 rounded-lg hover:bg-slate-700/50 transition-colors"
+                            className="p-1.5 rounded-lg hover:bg-muted transition-colors"
                         >
-                            <X className="w-5 h-5 text-gray-400" />
+                            <X className="w-5 h-5 text-muted-foreground" />
                         </button>
                     </div>
 
@@ -340,26 +340,26 @@ export function ComplianceModal({
                         <div className="flex items-center gap-2">
                             {overallStatus === 'fail' && (
                                 <>
-                                    <XCircle className="w-5 h-5 text-red-400" />
-                                    <span className="text-red-400 font-medium">Action blocked</span>
+                                    <XCircle className="w-5 h-5 text-red-500 dark:text-red-400" />
+                                    <span className="text-red-500 dark:text-red-400 font-medium">Action blocked</span>
                                 </>
                             )}
                             {overallStatus === 'warning' && (
                                 <>
-                                    <AlertTriangle className="w-5 h-5 text-amber-400" />
-                                    <span className="text-amber-400 font-medium">Proceed with caution</span>
+                                    <AlertTriangle className="w-5 h-5 text-amber-500 dark:text-amber-400" />
+                                    <span className="text-amber-500 dark:text-amber-400 font-medium">Proceed with caution</span>
                                 </>
                             )}
                             {overallStatus === 'pass' && (
                                 <>
-                                    <CheckCircle className="w-5 h-5 text-emerald-400" />
-                                    <span className="text-emerald-400 font-medium">All checks passed</span>
+                                    <CheckCircle className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
+                                    <span className="text-emerald-500 dark:text-emerald-400 font-medium">All checks passed</span>
                                 </>
                             )}
                             {overallStatus === 'not-run' && (
                                 <>
-                                    <Circle className="w-5 h-5 text-gray-400" />
-                                    <span className="text-gray-400 font-medium">No checks run</span>
+                                    <Circle className="w-5 h-5 text-muted-foreground" />
+                                    <span className="text-muted-foreground font-medium">No checks run</span>
                                 </>
                             )}
                         </div>
@@ -388,20 +388,20 @@ export function ComplianceModal({
                     ))}
 
                     {ruleStates.length === 0 && (
-                        <div className="text-center py-8 text-gray-400">
+                        <div className="text-center py-8 text-muted-foreground">
                             No compliance rules registered
                         </div>
                     )}
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 py-4 border-t border-slate-700 flex justify-between items-center">
-                    <span className="text-xs text-gray-500">
+                <div className="px-6 py-4 border-t border-border flex justify-between items-center bg-muted/30">
+                    <span className="text-xs text-muted-foreground">
                         {runResults.length}/{ruleStates.length} rules evaluated
                     </span>
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-medium transition-colors"
+                        className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 font-medium transition-colors shadow-sm"
                     >
                         Close
                     </button>

@@ -59,14 +59,14 @@ export const ModalFooter: React.FC<ModalFooterProps> = ({
             : 'Create Shift';
 
     return (
-        <DialogFooter className="relative px-6 py-4 border-t border-white/10 bg-[#0f172a]">
+        <DialogFooter className="relative px-6 py-4 border-t border-border bg-background">
             <div className="flex items-center justify-between w-full">
                 {/* ── Dismiss ──────────────────────────────────────────────── */}
                 <Button
                     variant="ghost"
                     onClick={onCancel}
                     aria-label="Discard changes and close"
-                    className="text-white/70 hover:text-white hover:bg-white/5"
+                    className="text-muted-foreground hover:text-foreground hover:bg-muted"
                 >
                     Cancel
                 </Button>
@@ -78,7 +78,7 @@ export const ModalFooter: React.FC<ModalFooterProps> = ({
                             variant="outline"
                             onClick={onPrevStep}
                             aria-label={`Go back to step ${currentStep - 1}`}
-                            className="border-white/20 text-white hover:bg-white/10"
+                            className="border-border text-foreground hover:bg-muted"
                         >
                             Back
                         </Button>
@@ -94,7 +94,7 @@ export const ModalFooter: React.FC<ModalFooterProps> = ({
                                     ? 'Complete required fields to proceed'
                                     : `Continue to step ${currentStep + 1}`
                             }
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-primary-foreground gap-2"
                         >
                             Next Step
                             <ArrowRight className="h-4 w-4" aria-hidden />
@@ -119,7 +119,7 @@ export const ModalFooter: React.FC<ModalFooterProps> = ({
                             variant="secondary"
                             aria-disabled
                             aria-label="Shift is published and cannot be unpublished from this state"
-                            className="bg-slate-700 text-white/50 cursor-not-allowed border-0 gap-2"
+                            className="bg-muted text-muted-foreground/50 cursor-not-allowed border-0 gap-2"
                         >
                             <Lock className="h-4 w-4" aria-hidden />
                             Published
@@ -133,7 +133,7 @@ export const ModalFooter: React.FC<ModalFooterProps> = ({
                             aria-disabled={saveDisabled}
                             aria-busy={isLoading}
                             aria-label={saveLabel}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-primary-foreground gap-2"
                         >
                             {isLoading
                                 ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -150,7 +150,7 @@ export const ModalFooter: React.FC<ModalFooterProps> = ({
             {/* Keyboard hint — visually subtle, machine-readable via aria-label */}
             <p
                 aria-label="Keyboard shortcut: press Enter to save"
-                className="absolute bottom-2 right-6 text-[10px] text-white/30 select-none pointer-events-none"
+                className="absolute bottom-2 right-6 text-[10px] text-muted-foreground/30 select-none pointer-events-none"
                 aria-hidden
             >
                 Press Enter to save

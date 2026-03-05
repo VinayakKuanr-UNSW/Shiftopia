@@ -35,7 +35,7 @@ const ReviewLogsStep = lazy(() => import('./components/ReviewLogsStep').then(m =
 function StepSkeleton() {
     return (
         <div className="flex items-center justify-center h-48">
-            <Loader2 className="h-5 w-5 animate-spin text-white/20" />
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/30" />
         </div>
     );
 }
@@ -122,7 +122,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent
-                className="sm:max-w-[1400px] h-[90vh] p-0 gap-0 bg-[#0f172a] border-white/10 overflow-hidden flex flex-col"
+                className="sm:max-w-[1400px] h-[90vh] p-0 gap-0 bg-background border-border overflow-hidden flex flex-col"
                 aria-describedby={undefined}
             >
                 <ModalHeader
@@ -142,7 +142,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                         className="flex flex-col flex-1 min-h-0 overflow-hidden"
                     >
                         {/* Step indicator */}
-                        <div className="px-6 pt-4 pb-6 border-b border-white/5">
+                        <div className="px-6 pt-4 pb-6 border-b border-border">
                             <StepIndicator
                                 currentStep={currentStep}
                                 completedSteps={completedSteps}

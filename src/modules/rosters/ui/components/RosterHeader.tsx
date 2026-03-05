@@ -11,6 +11,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modu
 import { CalendarView } from '@/modules/rosters/hooks/useRosterView';
 import { useHotkeys } from 'react-hotkeys-hook';
 
+import { cn } from '@/modules/core/lib/utils';
+
 interface RosterHeaderProps {
   sidebarOpen: boolean;
   toggleSidebar: () => void;
@@ -91,8 +93,8 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
   return (
     <div className="flex flex-col space-y-4">
       <div className="flex flex-wrap justify-between items-center gap-4">
-        <h1 className="text-2xl font-bold text-white flex items-center">
-          <Users className="mr-2 text-purple-400" size={24} />
+        <h1 className="text-2xl font-bold text-foreground flex items-center">
+          <Users className="mr-2 text-primary" size={24} />
           Roster Management
         </h1>
 
@@ -103,10 +105,10 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
                 <Button
                   variant="outline"
                   size="icon"
-                  className="h-8 w-8 bg-white/5 border-white/10"
+                  className="h-8 w-8 bg-muted border-border"
                   onClick={() => { }}
                 >
-                  <Search className="h-4 w-4 text-white/80 hover:text-white" />
+                  <Search className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -121,10 +123,10 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
                 <Button
                   variant="outline"
                   size="icon"
-                  className="h-8 w-8 bg-white/5 border-white/10"
+                  className="h-8 w-8 bg-muted border-border"
                   onClick={() => { }}
                 >
-                  <Filter className="h-4 w-4 text-white/80 hover:text-white" />
+                  <Filter className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -140,13 +142,13 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
                   <Button
                     variant="outline"
                     size="icon"
-                    className="h-8 w-8 bg-white/5 border-white/10"
+                    className="h-8 w-8 bg-muted border-border"
                     onClick={onToggleLock}
                   >
                     {isLocked ? (
-                      <Unlock className="h-4 w-4 text-white/80 hover:text-white" />
+                      <Unlock className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                     ) : (
-                      <Lock className="h-4 w-4 text-white/80 hover:text-white" />
+                      <Lock className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                     )}
                   </Button>
                 </TooltipTrigger>
@@ -161,8 +163,10 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  className={`p-2 rounded-full transition-all duration-200 ${sidebarOpen ? 'bg-purple-500/20 text-purple-300' : 'bg-white/5 text-white/80 hover:bg-white/10 hover:text-white'
-                    }`}
+                  className={cn(
+                    "p-2 rounded-full transition-all duration-200",
+                    sidebarOpen ? 'bg-primary/20 text-primary font-bold' : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
+                  )}
                   onClick={toggleSidebar}
                 >
                   <PanelRight className="h-5 w-5" />
@@ -183,9 +187,9 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
               <TooltipTrigger asChild>
                 <Button
                   onClick={navigatePrevious}
-                  className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-all duration-200"
+                  className="p-2 rounded-full bg-muted hover:bg-accent transition-all duration-200"
                 >
-                  <ChevronLeft className="h-5 w-5 text-white/80 hover:text-white" />
+                  <ChevronLeft className="h-5 w-5 text-muted-foreground hover:text-foreground" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -196,14 +200,14 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
 
           <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
             <PopoverTrigger asChild>
-              <Button className="flex items-center space-x-2 px-4 py-2 rounded-md bg-white/5 hover:bg-white/10 transition-all duration-200">
-                <Calendar className="h-5 w-5 text-blue-400" />
-                <span className="font-medium text-white">
+              <Button className="flex items-center space-x-2 px-4 py-2 rounded-md bg-muted hover:bg-accent transition-all duration-200">
+                <Calendar className="h-5 w-5 text-primary" />
+                <span className="font-medium text-foreground">
                   {getDateDisplay()}
                 </span>
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0 bg-black/80 backdrop-blur-md border border-white/10">
+            <PopoverContent className="w-auto p-0 bg-popover backdrop-blur-md border border-border">
               <CalendarComponent
                 mode="single"
                 selected={selectedDate}
@@ -223,9 +227,9 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
               <TooltipTrigger asChild>
                 <Button
                   onClick={navigateNext}
-                  className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-all duration-200"
+                  className="p-2 rounded-full bg-muted hover:bg-accent transition-all duration-200"
                 >
-                  <ChevronRight className="h-5 w-5 text-white/80 hover:text-white" />
+                  <ChevronRight className="h-5 w-5 text-muted-foreground hover:text-foreground" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -329,6 +333,6 @@ export const RosterHeader: React.FC<RosterHeaderProps> = ({
           </TooltipProvider>
         </div>
       </div>
-    </div>
+    </div >
   );
 };

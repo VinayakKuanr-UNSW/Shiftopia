@@ -161,69 +161,78 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
 
     const SortableHeader: React.FC<{ field: keyof TimesheetRow; label: string; className?: string }> = ({ field, label, className = '' }) => (
         <th
-            className={`text-left p-2 text-xs font-medium text-white/90 cursor-pointer hover:bg-white/5 whitespace-nowrap ${className}`}
+            className={`text-left p-2.5 text-[10px] font-black uppercase tracking-widest text-foreground/70 cursor-pointer hover:bg-muted/50 whitespace-nowrap transition-colors border-b border-border/50 ${className}`}
             onClick={() => handleSort(field)}
         >
-            {label} {getSortIndicator(field)}
+            <div className="flex items-center">
+                {label} {getSortIndicator(field)}
+            </div>
         </th>
     );
 
     const getContainerBgClass = () => {
-        if (theme === 'light') {
-            return 'bg-white border-gray-200';
-        } else if (theme === 'dark') {
-            return 'bg-gray-900 border-gray-700';
-        } else {
-            return 'bg-transparent backdrop-blur-md border-white/10';
-        }
+        return 'bg-card border-border shadow-2xl';
     };
 
-    // Header group colors - Updated to dark headers
+    // Header group colors - Premium theme-aware palette
     const headerGroupStyles = {
-        select: 'bg-slate-950',
-        employeeInfo: 'bg-slate-900',
-        hierarchy2: 'bg-slate-950',
-        scheduled: 'bg-slate-900',
-        geofenced: 'bg-slate-950',
-        adjusted: 'bg-slate-900',
-        payroll: 'bg-slate-950',
-        statuses: 'bg-slate-900',
-        actions: 'bg-slate-950',
+        select: 'bg-muted/50 border-r border-border/30',
+        employeeInfo: 'bg-primary/5 border-r border-border/30',
+        hierarchy2: 'bg-muted/50 border-r border-border/30',
+        scheduled: 'bg-primary/5 border-r border-border/30',
+        geofenced: 'bg-muted/50 border-r border-border/30',
+        adjusted: 'bg-primary/5 border-r border-border/30',
+        payroll: 'bg-muted/50 border-r border-border/30',
+        statuses: 'bg-primary/5 border-r border-border/30',
+        actions: 'bg-muted/50',
     };
 
     const pendingCount = sortedEntries.filter(e => e.timesheetStatus === 'DRAFT' || e.timesheetStatus === 'SUBMITTED').length;
 
     return (
-        <div className="overflow-x-auto mt-6 text-white">
+        <div className="overflow-x-auto mt-8">
             <Tabs value={viewMode} onValueChange={(v) => onViewChange(v as 'table' | 'group')}>
-                <TabsList className="mb-4">
-                    <TabsTrigger value="table">Table View</TabsTrigger>
-                    <TabsTrigger value="group" disabled>Grouped View (WIP)</TabsTrigger>
+                <TabsList className="mb-6 bg-muted/30 border border-border p-1 h-11 rounded-xl w-fit">
+                    <TabsTrigger
+                        value="table"
+                        className="data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg px-6 font-bold"
+                    >
+                        Table View
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="group"
+                        disabled
+                        className="rounded-lg px-6 font-bold"
+                    >
+                        Grouped View (WIP)
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="table" className="mt-0">
                     <div className={`overflow-x-auto rounded-lg border ${getContainerBgClass()}`}>
                         {/* Header with counts and bulk actions */}
-                        <div className="p-4 border-b border-white/10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div className="p-6 border-b border-border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-muted/10">
                             <div>
-                                <div className="text-lg font-semibold">Timesheets for {format(selectedDate, 'MMMM d, yyyy')}</div>
-                                <div className="text-sm text-white/60 mt-1">
-                                    {sortedEntries.length} entries found • {pendingCount} pending approval
+                                <div className="text-xl font-black tracking-tight text-foreground">Timesheets for {format(selectedDate, 'MMMM d, yyyy')}</div>
+                                <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
+                                    <span className="font-bold text-primary">{sortedEntries.length}</span> entries found
+                                    <span className="h-1 w-1 rounded-full bg-border" />
+                                    <span className="font-bold text-amber-500">{pendingCount}</span> pending approval
                                 </div>
                             </div>
 
                             {/* Bulk Actions Toolbar */}
                             {selectedIds.length > 0 && !readOnly && (
-                                <div className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg">
-                                    <span className="text-sm font-medium">
-                                        {selectedIds.length} selected
+                                <div className="flex items-center gap-3 bg-primary/10 border border-primary/20 px-4 py-2.5 rounded-2xl animate-in fade-in slide-in-from-right-4 duration-300">
+                                    <span className="text-sm font-black text-primary uppercase tracking-tighter">
+                                        {selectedIds.length} Selected
                                     </span>
-                                    <div className="h-4 w-px bg-white/20" />
+                                    <div className="h-4 w-px bg-primary/20 mx-1" />
                                     <Button
                                         size="sm"
                                         variant="ghost"
                                         onClick={handleBulkApprove}
-                                        className="text-green-400 hover:text-green-300 hover:bg-green-500/20"
+                                        className="text-green-600 dark:text-green-400 hover:bg-green-500/20 font-black text-xs uppercase tracking-tight h-9 rounded-xl"
                                     >
                                         <CheckCircle className="mr-1.5 h-4 w-4" />
                                         Approve All
@@ -232,7 +241,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                         size="sm"
                                         variant="ghost"
                                         onClick={handleBulkReject}
-                                        className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                                        className="text-red-600 dark:text-red-400 hover:bg-red-500/20 font-black text-xs uppercase tracking-tight h-9 rounded-xl"
                                     >
                                         <XCircle className="mr-1.5 h-4 w-4" />
                                         Reject All
@@ -245,45 +254,45 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                             <table className="w-full border-collapse min-w-[2200px]">
                                 <thead>
                                     {/* Row 1: Grouped Headers */}
-                                    <tr>
-                                        <th className={`p-2 text-xs font-semibold text-white ${headerGroupStyles.select}`}>
+                                    <tr className="border-b border-border/50">
+                                        <th className={`p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 ${headerGroupStyles.select}`}>
                                             {/* Select */}
                                         </th>
-                                        <th colSpan={2} className={`p-2 text-xs font-semibold text-white text-center ${headerGroupStyles.employeeInfo}`}>
+                                        <th colSpan={2} className={`p-3 text-[10px] font-black uppercase tracking-widest text-primary text-center border-b-2 border-primary/20 ${headerGroupStyles.employeeInfo}`}>
                                             Employee Info
                                         </th>
-                                        <th colSpan={4} className={`p-2 text-xs font-semibold text-white text-center ${headerGroupStyles.hierarchy2}`}>
+                                        <th colSpan={4} className={`p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 ${headerGroupStyles.hierarchy2}`}>
                                             Hierarchy
                                         </th>
-                                        <th colSpan={2} className={`p-2 text-xs font-semibold text-white text-center ${headerGroupStyles.scheduled}`}>
+                                        <th colSpan={2} className={`p-3 text-[10px] font-black uppercase tracking-widest text-primary text-center border-b-2 border-primary/20 ${headerGroupStyles.scheduled}`}>
                                             Scheduled
                                         </th>
-                                        <th colSpan={2} className={`p-2 text-xs font-semibold text-white text-center ${headerGroupStyles.geofenced}`}>
+                                        <th colSpan={2} className={`p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 ${headerGroupStyles.geofenced}`}>
                                             Geofenced
                                         </th>
-                                        <th colSpan={6} className={`p-2 text-xs font-semibold text-white text-center ${headerGroupStyles.adjusted}`}>
-                                            Adjusted
+                                        <th colSpan={6} className={`p-3 text-[10px] font-black uppercase tracking-widest text-primary text-center border-b-2 border-primary/20 ${headerGroupStyles.adjusted}`}>
+                                            Adjusted (Inline Edit)
                                         </th>
-                                        <th colSpan={2} className={`p-2 text-xs font-semibold text-white text-center ${headerGroupStyles.payroll}`}>
+                                        <th colSpan={2} className={`p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 ${headerGroupStyles.payroll}`}>
                                             Payroll
                                         </th>
-                                        <th colSpan={2} className={`p-2 text-xs font-semibold text-white text-center ${headerGroupStyles.statuses}`}>
+                                        <th colSpan={2} className={`p-3 text-[10px] font-black uppercase tracking-widest text-primary text-center border-b-2 border-primary/20 ${headerGroupStyles.statuses}`}>
                                             Statuses
                                         </th>
-                                        <th className={`p-2 text-xs font-semibold text-white text-center ${headerGroupStyles.actions}`}>
+                                        <th className={`p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 ${headerGroupStyles.actions}`}>
                                             Actions
                                         </th>
                                     </tr>
 
                                     {/* Row 2: Individual Headers */}
-                                    <tr className="bg-black/40">
+                                    <tr className="bg-muted/30">
                                         {/* Select */}
-                                        <th className="p-2 text-xs font-medium text-white/90">
+                                        <th className="p-3 text-center border-b border-border/50 border-r border-border/30">
                                             <input
                                                 type="checkbox"
                                                 onChange={handleSelectAll}
                                                 checked={selectedIds.length > 0 && selectedIds.length === sortedEntries.filter(e => e.timesheetStatus === 'DRAFT' || e.timesheetStatus === 'SUBMITTED').length}
-                                                className="rounded"
+                                                className="rounded border-border bg-background"
                                                 disabled={pendingCount === 0}
                                             />
                                         </th>
@@ -315,8 +324,8 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                         <SortableHeader field="liveStatus" label="Live Status" />
                                         <SortableHeader field="timesheetStatus" label="Timesheet Status" />
                                         {/* Actions */}
-                                        <th className="p-2 text-xs font-medium text-white/90 text-center whitespace-nowrap">
-                                            Audit Trail / Approve / Reject
+                                        <th className="p-3 text-[10px] font-black uppercase tracking-widest text-foreground/70 text-center border-b border-border/50">
+                                            History / Actions
                                         </th>
                                     </tr>
                                 </thead>
@@ -336,8 +345,12 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                         </div>
 
                         {sortedEntries.length === 0 && (
-                            <div className="p-8 text-center text-white/60">
-                                No timesheet entries found for the selected filters.
+                            <div className="p-12 text-center text-muted-foreground flex flex-col items-center gap-2">
+                                <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-2">
+                                    <ArrowUp className="h-6 w-6 opacity-20" />
+                                </div>
+                                <p className="font-bold">No entries found</p>
+                                <p className="text-xs">Try adjusting your filters or search query.</p>
                             </div>
                         )}
                     </div>

@@ -76,59 +76,56 @@ export function OrgDeptSelector({
     }, [selectedDepartmentId]);
 
     return (
-        <div className="bg-gray-900/50 border-b border-gray-800 p-4">
-            <div className="flex items-center gap-3">
-                {/* Organization Dropdown */}
-                <div className="relative">
+        <div className="bg-background border-b border-border/40 py-5 px-8 relative z-20">
+            <div className="flex flex-wrap items-center gap-4 max-w-[1600px] mx-auto">
+                <div className="relative group">
                     <select
                         value={selectedOrganizationId || ''}
                         onChange={(e) => onOrganizationChange(e.target.value || null)}
-                        className="appearance-none bg-gray-800 border border-gray-700 rounded-lg pl-3 pr-10 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
+                        className="appearance-none bg-card border border-border/50 rounded-xl pl-4 pr-12 py-2.5 text-xs text-foreground font-black uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all cursor-pointer hover:bg-muted/40 hover:border-primary/30 min-w-[220px] shadow-sm"
                     >
-                        <option value="">Select Organization</option>
+                        <option value="" className="bg-card text-foreground">Select Organization</option>
                         {organizations.map((org) => (
-                            <option key={org.id} value={org.id}>
+                            <option key={org.id} value={org.id} className="bg-card text-foreground">
                                 {org.name}
                             </option>
                         ))}
                     </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary group-hover:translate-y-0.5 transition-transform pointer-events-none" />
                 </div>
 
-                {/* Department Dropdown */}
-                <div className="relative">
+                <div className="relative group">
                     <select
                         value={selectedDepartmentId || ''}
                         onChange={(e) => onDepartmentChange(e.target.value || null)}
-                        className="appearance-none bg-gray-800 border border-gray-700 rounded-lg pl-3 pr-10 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
+                        className="appearance-none bg-card border border-border/50 rounded-xl pl-4 pr-12 py-2.5 text-xs text-foreground font-black uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all cursor-pointer hover:bg-muted/40 hover:border-primary/30 min-w-[220px] disabled:opacity-30 disabled:cursor-not-allowed shadow-sm"
                         disabled={!selectedOrganizationId}
                     >
-                        <option value="">Select Department</option>
+                        <option value="" className="bg-card text-foreground">Select Department</option>
                         {departments.map((dept) => (
-                            <option key={dept.id} value={dept.id}>
+                            <option key={dept.id} value={dept.id} className="bg-card text-foreground">
                                 {dept.name}
                             </option>
                         ))}
                     </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary group-hover:translate-y-0.5 transition-transform pointer-events-none" />
                 </div>
 
-                {/* Sub-Department Dropdown */}
-                <div className="relative">
+                <div className="relative group">
                     <select
                         value={selectedSubDepartmentId || ''}
                         onChange={(e) => onSubDepartmentChange(e.target.value || null)}
-                        className="appearance-none bg-gray-800 border border-gray-700 rounded-lg pl-3 pr-10 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
+                        className="appearance-none bg-card border border-border/50 rounded-xl pl-4 pr-12 py-2.5 text-xs text-foreground font-black uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all cursor-pointer hover:bg-muted/40 hover:border-primary/30 min-w-[220px] disabled:opacity-30 disabled:cursor-not-allowed shadow-sm"
                         disabled={!selectedDepartmentId}
                     >
-                        <option value="">Select Sub-Department</option>
+                        <option value="" className="bg-card text-foreground">Select Sub-Department</option>
                         {subDepartments.map((subDept) => (
-                            <option key={subDept.id} value={subDept.id}>
+                            <option key={subDept.id} value={subDept.id} className="bg-card text-foreground">
                                 {subDept.name}
                             </option>
                         ))}
                     </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary group-hover:translate-y-0.5 transition-transform pointer-events-none" />
                 </div>
             </div>
         </div>

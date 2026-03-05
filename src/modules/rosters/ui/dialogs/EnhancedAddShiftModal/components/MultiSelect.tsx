@@ -41,20 +41,20 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
             <PopoverTrigger asChild>
                 <div
                     className={cn(
-                        "flex w-full items-center justify-between min-h-[42px] px-3 py-2 rounded-lg border bg-[#1e293b] border-white/10 text-white transition-colors",
-                        disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-white/20"
+                        "flex w-full items-center justify-between min-h-[42px] px-3 py-2 rounded-lg border bg-muted/50 border-border text-foreground transition-colors",
+                        disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-foreground/20"
                     )}
                 >
                     <div className="flex flex-wrap gap-1 flex-1">
                         {isLoading ? (
-                            <span className="text-white/40">Loading...</span>
+                            <span className="text-muted-foreground">Loading...</span>
                         ) : selectedItems.length > 0 ? (
                             selectedItems.map((item) => (
                                 <Badge key={item.id} variant="secondary" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
                                     {item.name}
                                     <span
                                         role="button"
-                                        className="ml-1 cursor-pointer hover:text-white"
+                                        className="ml-1 cursor-pointer hover:text-foreground"
                                         onClick={(e) => {
                                             if (disabled) return;
                                             e.stopPropagation();
@@ -66,15 +66,15 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
                                 </Badge>
                             ))
                         ) : (
-                            <span className="text-white/40">{placeholder}</span>
+                            <span className="text-muted-foreground">{placeholder}</span>
                         )}
                     </div>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 text-white/40" />
+                    <ChevronsUpDown className="ml-2 h-4 w-4 text-muted-foreground" />
                 </div>
             </PopoverTrigger>
-            <PopoverContent className="w-full p-0 bg-[#1e293b] border-white/10">
+            <PopoverContent className="w-full p-0 bg-popover border-border">
                 <Command>
-                    <CommandInput placeholder="Search..." className="text-white" />
+                    <CommandInput placeholder="Search..." className="text-foreground" />
                     <CommandList>
                         <CommandEmpty>No items found.</CommandEmpty>
                         <CommandGroup>
@@ -88,7 +88,7 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
                                             onChange([...selected, option.id]);
                                         }
                                     }}
-                                    className="text-white"
+                                    className="text-foreground"
                                 >
                                     <Check className={cn('mr-2 h-4 w-4', selected.includes(option.id) ? 'opacity-100' : 'opacity-0')} />
                                     {option.name}

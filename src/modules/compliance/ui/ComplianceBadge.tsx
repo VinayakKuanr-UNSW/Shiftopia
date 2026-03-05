@@ -29,9 +29,9 @@ export function ComplianceBadge({
         return (
             <div className={cn(
                 'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5',
-                'bg-slate-700/50 text-slate-400 border border-slate-600'
+                'bg-muted text-muted-foreground border border-border'
             )}>
-                <div className="w-4 h-4 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
                 {showLabel && <span className="text-sm">Checking...</span>}
             </div>
         );
@@ -60,8 +60,8 @@ export function ComplianceBadge({
                 onClick={onClick}
                 className={cn(
                     'inline-flex items-center rounded-full font-medium transition-all',
-                    'bg-red-500/20 text-red-400 border border-red-500/30',
-                    'hover:bg-red-500/30 hover:border-red-500/50',
+                    'bg-red-500/10 text-red-600 border border-red-500/20 dark:bg-red-500/20 dark:text-red-400 dark:border-red-500/30',
+                    'hover:bg-red-500/20 hover:border-red-500/40 dark:hover:bg-red-500/30 dark:hover:border-red-500/50',
                     sizeClasses[size],
                     onClick && 'cursor-pointer'
                 )}
@@ -78,8 +78,8 @@ export function ComplianceBadge({
                 onClick={onClick}
                 className={cn(
                     'inline-flex items-center rounded-full font-medium transition-all',
-                    'bg-amber-500/20 text-amber-400 border border-amber-500/30',
-                    'hover:bg-amber-500/30 hover:border-amber-500/50',
+                    'bg-amber-500/10 text-amber-600 border border-amber-500/20 dark:bg-amber-500/20 dark:text-amber-400 dark:border-amber-500/30',
+                    'hover:bg-amber-500/20 hover:border-amber-500/40 dark:hover:bg-amber-500/30 dark:hover:border-amber-500/50',
                     sizeClasses[size],
                     onClick && 'cursor-pointer'
                 )}
@@ -95,8 +95,8 @@ export function ComplianceBadge({
             onClick={onClick}
             className={cn(
                 'inline-flex items-center rounded-full font-medium transition-all',
-                'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
-                'hover:bg-emerald-500/30 hover:border-emerald-500/50',
+                'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30',
+                'hover:bg-emerald-500/20 hover:border-emerald-500/40 dark:hover:bg-emerald-500/30 dark:hover:border-emerald-500/50',
                 sizeClasses[size],
                 onClick && 'cursor-pointer'
             )}

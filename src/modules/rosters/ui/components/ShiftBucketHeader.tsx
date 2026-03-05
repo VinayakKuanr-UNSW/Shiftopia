@@ -50,7 +50,7 @@ export const ShiftBucketHeader: React.FC<ShiftBucketHeaderProps> = ({
     const hasDrafts = stats.draftCount > 0;
 
     const publishStatusStyle = {
-        'Draft': 'text-gray-400',
+        'Draft': 'text-muted-foreground',
         'Partially Published': 'text-amber-400',
         'Published': 'text-emerald-400',
     }[publishStatus];
@@ -59,7 +59,7 @@ export const ShiftBucketHeader: React.FC<ShiftBucketHeaderProps> = ({
         <div
             className={cn(
                 'flex flex-col gap-1.5 px-3 py-2 rounded-lg cursor-pointer select-none transition-colors border',
-                'bg-[#1a2034]/80 hover:bg-[#1f283d] border-white/[0.08]',
+                'bg-card hover:bg-accent/20 border-border shadow-sm',
                 isExpanded && 'rounded-b-none border-b-0'
             )}
             onClick={onToggle}

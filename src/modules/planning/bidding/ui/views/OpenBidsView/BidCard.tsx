@@ -17,58 +17,58 @@ export const BidCard: React.FC<BidCardProps> = ({ bid, onAssign }) => {
   const riskConfig = {
     low: {
       label: 'Low Risk',
-      icon: <ShieldCheck className="h-3 w-3" />,
-      colorClass: 'text-emerald-400',
-      bgClass: 'bg-emerald-500/8 border-emerald-500/15',
+      icon: <ShieldCheck className="h-3.5 w-3.5" />,
+      colorClass: 'text-emerald-600 dark:text-emerald-400',
+      bgClass: 'bg-emerald-500/10 border-emerald-500/20',
     },
     medium: {
-      label: 'Medium',
-      icon: <AlertTriangle className="h-3 w-3" />,
-      colorClass: 'text-amber-400',
-      bgClass: 'bg-amber-500/8 border-amber-500/15',
+      label: 'Medium Risk',
+      icon: <AlertTriangle className="h-3.5 w-3.5" />,
+      colorClass: 'text-amber-600 dark:text-amber-400',
+      bgClass: 'bg-amber-500/10 border-amber-500/20',
     },
     high: {
       label: 'High Risk',
-      icon: <ShieldAlert className="h-3 w-3" />,
-      colorClass: 'text-red-400',
-      bgClass: 'bg-red-500/8 border-red-500/15',
+      icon: <ShieldAlert className="h-3.5 w-3.5" />,
+      colorClass: 'text-rose-600 dark:text-rose-400',
+      bgClass: 'bg-rose-500/10 border-rose-500/20',
     },
   };
 
   const risk = riskConfig[bid.fatigueRisk as keyof typeof riskConfig] || riskConfig.low;
 
   return (
-    <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-4 flex items-center gap-4 hover:bg-white/[0.035] hover:border-white/[0.1] transition-all duration-200 group">
+    <div className="bg-card border border-border rounded-2xl p-5 flex items-center gap-5 hover:bg-muted/30 hover:shadow-xl transition-all duration-300 group shadow-sm">
       {/* Avatar */}
-      <Avatar className="h-10 w-10 border border-white/[0.08] shrink-0">
+      <Avatar className="h-12 w-12 ring-1 ring-border shadow-sm shrink-0">
         <AvatarImage
           src={`https://api.dicebear.com/7.x/personas/svg?seed=${bid.employeeName}`}
         />
-        <AvatarFallback className="bg-white/[0.04] text-white/50 text-xs font-bold">
+        <AvatarFallback className="bg-primary text-primary-foreground text-xs font-black">
           {bid.employeeName.slice(0, 2).toUpperCase()}
         </AvatarFallback>
       </Avatar>
 
       {/* Employee Info */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <h4 className="text-white/90 font-semibold text-sm truncate">{bid.employeeName}</h4>
+        <div className="flex items-center gap-2 mb-1">
+          <h4 className="text-foreground font-black text-sm truncate tracking-tight">{bid.employeeName}</h4>
           {bid.isBestMatch && (
-            <Badge className="bg-cyan-500/15 text-cyan-400 text-[9px] px-1.5 h-4 border-cyan-500/20 font-bold">
+            <Badge className="bg-primary/10 text-primary text-[8px] px-1.5 h-4 border-primary/20 font-black uppercase tracking-widest">
               BEST MATCH
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-2 text-[11px] text-white/35">
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60 font-mono font-black uppercase tracking-widest">
           <span>{bid.employmentType}</span>
-          <span className="text-white/15">•</span>
+          <span className="text-primary/20">•</span>
           <span>Submitted {new Date(bid.submittedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}</span>
         </div>
       </div>
 
       {/* Fatigue Risk */}
       <div className={cn(
-        'px-3 py-1.5 rounded-lg border text-[11px] font-semibold flex items-center gap-1.5 shrink-0',
+        'px-3 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shrink-0 shadow-sm transition-transform group-hover:scale-105',
         risk.bgClass, risk.colorClass
       )}>
         {risk.icon}
@@ -79,7 +79,7 @@ export const BidCard: React.FC<BidCardProps> = ({ bid, onAssign }) => {
       <Button
         size="sm"
         onClick={() => onAssign(bid)}
-        className="h-8 px-4 text-[11px] font-semibold bg-white/[0.04] hover:bg-cyan-500/15 text-white/60 hover:text-cyan-400 border border-white/[0.08] hover:border-cyan-500/25 rounded-lg transition-all duration-200 shrink-0"
+        className="h-9 px-5 text-[10px] font-black uppercase tracking-[0.2em] bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 rounded-xl transition-all duration-300 shrink-0 border-none"
       >
         Assign
       </Button>

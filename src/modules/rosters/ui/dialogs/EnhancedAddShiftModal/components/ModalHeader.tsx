@@ -37,10 +37,10 @@ export const ModalHeader: React.FC<ModalHeaderProps> = ({
 }) => {
     return (
         <>
-            <DialogHeader className="px-6 py-4 border-b border-white/10 bg-[#0f172a]">
+            <DialogHeader className="px-6 py-4 border-b border-border bg-background">
                 <div className="flex items-center justify-between">
-                    <DialogTitle className="flex items-center gap-2 text-white text-lg font-semibold">
-                        <CalendarDays className="h-5 w-5 text-emerald-400" aria-hidden />
+                    <DialogTitle className="flex items-center gap-2 text-foreground text-lg font-semibold">
+                        <CalendarDays className="h-5 w-5 text-emerald-500" aria-hidden />
                         {editMode ? 'Edit Shift' : 'Add Shift'}
                         {isReadOnly && (
                             <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 ml-2">
@@ -59,15 +59,15 @@ export const ModalHeader: React.FC<ModalHeaderProps> = ({
                         ].filter(Boolean).join('. ') || undefined}
                     >
                         {safeContext.date && (
-                            <div className="flex items-center gap-1.5 text-white/70" aria-hidden>
-                                <CalendarIcon className="h-4 w-4 text-emerald-400" aria-hidden />
+                            <div className="flex items-center gap-1.5 text-muted-foreground" aria-hidden>
+                                <CalendarIcon className="h-4 w-4 text-emerald-500" aria-hidden />
                                 <span className="font-medium">
                                     {format(new Date(`${safeContext.date}T12:00:00`), 'EEE, dd MMM')}
                                 </span>
                             </div>
                         )}
                         {safeContext.groupName && safeContext.subGroupName && (
-                            <div className="text-white/50" aria-hidden>
+                            <div className="text-muted-foreground/60" aria-hidden>
                                 {safeContext.groupName} · {safeContext.subGroupName}
                             </div>
                         )}

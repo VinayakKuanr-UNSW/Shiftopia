@@ -77,11 +77,11 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
         const daysUntilExpiry = differenceInDays(parseISO(expirationDate), new Date());
 
         if (daysUntilExpiry < 0) {
-            return { label: 'Expired', class: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/30' };
+            return { label: 'Expired', class: 'bg-destructive/10 text-destructive border border-destructive/20' };
         } else if (daysUntilExpiry <= 30) {
-            return { label: 'Expiring Soon', class: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30' };
+            return { label: 'Expiring Soon', class: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20' };
         }
-        return { label: `Exp: ${format(parseISO(expirationDate), 'MMM yyyy')}`, class: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-500/20 dark:text-green-300 dark:border-green-500/30' };
+        return { label: `Exp: ${format(parseISO(expirationDate), 'MMM yyyy')}`, class: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' };
     };
 
     // Group skills by category
@@ -186,7 +186,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
                                         return (
                                             <div key={skill.id} className="group relative">
                                                 <Badge
-                                                    className="bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30 pr-6 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-500/30 transition-colors"
+                                                    className="bg-primary/10 text-primary border border-primary/20 pr-6 cursor-pointer hover:bg-primary/20 transition-colors"
                                                 >
                                                     {skill.skill?.name}
                                                     {expiryStatus && (
@@ -197,7 +197,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
                                                 </Badge>
                                                 <button
                                                     onClick={() => handleRemoveSkill(skill.id)}
-                                                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    className="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                                                 >
                                                     <X className="w-3 h-3" />
                                                 </button>

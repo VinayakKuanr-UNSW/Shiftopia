@@ -99,13 +99,15 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
     };
 
     return (
-        <div className="space-y-4 text-white">
+        <div className="space-y-6">
             {/* Title Row */}
             <div className="flex flex-col gap-4">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div className="flex items-center">
-                        <Calendar className="mr-2 text-primary" size={24} />
-                        <h1 className="text-2xl font-bold">Timesheets</h1>
+                    <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shadow-sm">
+                            <Calendar className="h-5 w-5 text-primary" />
+                        </div>
+                        <h1 className="text-2xl font-black tracking-tight text-foreground">Timesheets</h1>
                     </div>
 
                     <div className="flex flex-wrap gap-2 ml-auto">
@@ -138,8 +140,9 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
                             size="sm"
                             onClick={onRefresh}
                             disabled={isRefreshing}
+                            className="bg-card border-border hover:bg-muted font-bold"
                         >
-                            <RefreshCw className={`mr-1.5 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                            <RefreshCw className={`mr-1.5 h-4 w-4 text-primary ${isRefreshing ? 'animate-spin' : ''}`} />
                             {isRefreshing ? 'Refreshing...' : 'Refresh'}
                         </Button>
                     </div>
@@ -149,13 +152,13 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
             {/* Search, Date Picker, and Filters Row */}
             <div className="flex flex-col lg:flex-row items-start lg:items-center gap-3">
                 {/* Search Bar */}
-                <div className="relative flex-1 min-w-[200px] max-w-md">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-white/50" />
+                <div className="relative flex-1 min-w-[200px] max-w-md group">
+                    <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/50 group-focus-within:text-primary transition-colors" />
                     <Input
                         placeholder="Search employee, ID, role..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-9 bg-white/5 border-white/10"
+                        className="pl-10 bg-muted/30 border-border h-11 rounded-xl focus:ring-1 focus:ring-primary/40 transition-all font-medium"
                     />
                     {searchQuery && (
                         <Button
@@ -170,7 +173,7 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
                 </div>
 
                 {/* Date Navigation */}
-                <div className="flex items-center bg-black/20 p-1.5 rounded-md border border-white/10">
+                <div className="flex items-center bg-muted/30 p-1.5 rounded-xl border border-border shadow-sm">
                     <Button
                         variant="ghost"
                         size="icon"
@@ -182,12 +185,12 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
 
                     <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                         <PopoverTrigger asChild>
-                            <Button variant="ghost" className="mx-1 px-3 h-8 font-medium text-sm">
-                                <Calendar className="mr-2 h-4 w-4" />
+                            <Button variant="ghost" className="mx-1 px-4 h-9 font-black text-sm text-foreground hover:bg-primary/5 rounded-lg">
+                                <Calendar className="mr-2 h-4 w-4 text-primary" />
                                 {format(selectedDate, 'MMM dd, yyyy')}
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 bg-gray-900/95 backdrop-blur-xl border-gray-800 text-white">
+                        <PopoverContent className="w-auto p-0 bg-popover border-border rounded-2xl shadow-2xl">
                             <CalendarComponent
                                 mode="single"
                                 selected={selectedDate}
@@ -215,34 +218,34 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
                 {/* Filter Popover */}
                 <Popover>
                     <PopoverTrigger asChild>
-                        <Button variant="outline" size="sm" className="bg-white/5 border-white/10 relative">
-                            <Filter className="mr-2 h-4 w-4" />
-                            Filters
+                        <Button variant="ghost" size="sm" className="bg-muted/30 border border-border hover:bg-muted rounded-xl h-11 px-4 relative group transition-all">
+                            <Filter className="mr-2 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                            <span className="font-bold text-foreground">Filters</span>
                             {activeFilterCount > 0 && (
-                                <Badge className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
+                                <Badge className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px] font-black bg-primary text-primary-foreground animate-in zoom-in">
                                     {activeFilterCount}
                                 </Badge>
                             )}
                         </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-80 p-4 bg-gray-900/95 backdrop-blur-xl border-gray-800 text-white">
+                    <PopoverContent className="w-80 p-5 bg-popover border-border rounded-2xl shadow-2xl">
                         <div className="space-y-4">
-                            <div className="flex justify-between items-center">
-                                <h3 className="font-medium">Filters</h3>
-                                <Button variant="ghost" size="sm" onClick={onClearFilters} className="h-8 px-2 text-xs">
+                            <div className="flex justify-between items-center mb-1">
+                                <h3 className="font-black text-xs uppercase tracking-widest text-muted-foreground/60">Search Config</h3>
+                                <Button variant="ghost" size="sm" onClick={onClearFilters} className="h-7 px-2 text-[10px] font-black uppercase tracking-tighter text-red-500 hover:bg-red-500/10">
                                     <X className="mr-1 h-3 w-3" />
-                                    Clear All
+                                    Reset
                                 </Button>
                             </div>
 
                             {/* Group Type Filter */}
                             <div className="space-y-2">
-                                <label className="text-sm">Group Type</label>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 ml-1">Group Type</label>
                                 <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                                    <SelectTrigger className="bg-white/5 border-white/10">
+                                    <SelectTrigger className="bg-muted/30 border-border rounded-xl">
                                         <SelectValue placeholder="All Groups" />
                                     </SelectTrigger>
-                                    <SelectContent className="bg-gray-900/95 backdrop-blur-xl border-gray-800 text-white">
+                                    <SelectContent className="bg-popover border-border rounded-xl shadow-2xl">
                                         <SelectItem value="all">All Groups</SelectItem>
                                         <SelectItem value="convention_centre">Convention Centre</SelectItem>
                                         <SelectItem value="exhibition_centre">Exhibition Centre</SelectItem>
@@ -312,15 +315,15 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
 
                             {/* Live Status Filter */}
                             <div className="space-y-2">
-                                <label className="text-sm">Live Status</label>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 ml-1">Live Status</label>
                                 <Select
                                     value={statusFilter || 'all'}
                                     onValueChange={(value) => onStatusFilterChange(value === 'all' ? null : value)}
                                 >
-                                    <SelectTrigger className="bg-white/5 border-white/10">
+                                    <SelectTrigger className="bg-muted/30 border-border rounded-xl">
                                         <SelectValue placeholder="All Statuses" />
                                     </SelectTrigger>
-                                    <SelectContent className="bg-gray-900/95 backdrop-blur-xl border-gray-800 text-white">
+                                    <SelectContent className="bg-popover border-border rounded-xl shadow-2xl">
                                         <SelectItem value="all">All Statuses</SelectItem>
                                         <SelectItem value="open">Open</SelectItem>
                                         <SelectItem value="assigned">Assigned</SelectItem>
@@ -334,20 +337,19 @@ export const TimesheetHeader: React.FC<TimesheetHeaderProps> = ({
                     </PopoverContent>
                 </Popover>
 
-                {/* View Toggle */}
                 <div className="ml-auto">
                     <Tabs value="table" className="w-auto">
-                        <TabsList className="bg-black/20 border border-white/10">
+                        <TabsList className="bg-muted/30 border border-border p-1 h-11 rounded-xl">
                             <TabsTrigger
                                 value="table"
-                                className="data-[state=active]:bg-white/10"
+                                className="data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg px-6 font-bold"
                                 onClick={() => onViewChange('table')}
                             >
                                 Table
                             </TabsTrigger>
                             <TabsTrigger
                                 value="group"
-                                className="data-[state=active]:bg-white/10"
+                                className="data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg px-6 font-bold"
                                 onClick={() => onViewChange('group')}
                             >
                                 Group

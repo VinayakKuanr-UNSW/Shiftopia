@@ -231,13 +231,7 @@ const TimesheetPageInner: React.FC = () => {
     };
 
     const getContainerBgClass = () => {
-        if (theme === 'light') {
-            return 'bg-white border-gray-200';
-        } else if (theme === 'dark') {
-            return 'bg-gray-900 border-gray-700';
-        } else {
-            return 'bg-transparent backdrop-blur-md border-white/10';
-        }
+        return 'bg-card border-border shadow-2xl';
     };
 
     return (
@@ -247,9 +241,9 @@ const TimesheetPageInner: React.FC = () => {
                 onScopeChange={setScope}
                 hidden={isGammaLocked}
                 multiSelect={false}
-                className="mb-4"
+                className="mb-6"
             />
-            <div className={`rounded-lg shadow-xl p-4 md:p-6 border ${getContainerBgClass()}`}>
+            <div className={`rounded-[2rem] p-6 md:p-8 border ${getContainerBgClass()} transition-all duration-300`}>
                 <TimesheetHeader
                     selectedDate={selectedDate}
                     onDateChange={setSelectedDate}

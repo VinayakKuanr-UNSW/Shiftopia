@@ -259,6 +259,21 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
     return { monthStart, monthEnd };
   }, []);
 
+  // Compute the date range matching the currently viewed period for AutoScheduler
+  const autoScheduleRange = React.useMemo(() => {
+    switch (viewType) {
+      case 'day':
+        return { start: selectedDate, end: selectedDate };
+      case '3day':
+        return { start: selectedDate, end: addDays(selectedDate, 2) };
+      case 'week':
+        return { start: selectedDate, end: addDays(selectedDate, 6) };
+      case 'month':
+      default:
+        return { start: startOfMonth(selectedDate), end: endOfMonth(selectedDate) };
+    }
+  }, [selectedDate, viewType]);
+
   React.useEffect(() => {
     if (onTemplateDatesChange) {
       onTemplateDatesChange(activeRangeBounds.monthStart, activeRangeBounds.monthEnd);
@@ -436,9 +451,10 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
             </div>
             <IconButton
               icon={<PanelRight className="h-4 w-4" />}
-              tooltip="Unfilled"
+              tooltip={activeMode === 'events' ? 'Panel not available in Events mode' : (activeMode === 'group' || activeMode === 'roles' ? 'Contracted Staff' : 'Unfilled Shifts')}
               onClick={onUnfilledPanelToggle}
               isActive={showUnfilledPanel}
+              disabled={activeMode === 'events'}
             />
             <Separator orientation="vertical" className="h-5 bg-slate-200 dark:bg-white/10 mx-1" />
             {activeMode === 'group' && (
@@ -495,8 +511,8 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
           organizationId: selectedOrganizationId,
           departmentId: selectedDepartmentId,
           subDepartmentId: selectedSubDepartmentId,
-          dateStart: activeRangeBounds.monthStart ? format(activeRangeBounds.monthStart, 'yyyy-MM-dd') : undefined,
-          dateEnd: activeRangeBounds.monthEnd ? format(activeRangeBounds.monthEnd, 'yyyy-MM-dd') : undefined
+          dateStart: format(autoScheduleRange.start, 'yyyy-MM-dd'),
+          dateEnd: format(autoScheduleRange.end, 'yyyy-MM-dd')
         }}
         onAssignmentsApplied={() => {
           queryClient.invalidateQueries({ queryKey: ['shifts'] });

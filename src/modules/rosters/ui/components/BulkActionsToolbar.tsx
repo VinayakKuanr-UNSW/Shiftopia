@@ -124,7 +124,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
   return (
     <>
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5 duration-300">
-        <div className="bg-white dark:bg-black/80 backdrop-blur-xl border border-slate-200 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.15)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] rounded-full px-6 py-3 flex items-center gap-4">
+        <div className="bg-background/95 dark:bg-popover/90 backdrop-blur-xl border border-border shadow-[0_8px_32px_rgba(0,0,0,0.15)] rounded-full px-6 py-3 flex items-center gap-4">
           <div className="flex items-center gap-4">
             <Badge variant="glass" className="px-3 py-1.5 text-sm font-medium bg-primary/20 text-primary dark:text-white border-primary/20 shadow-glow whitespace-nowrap flex-shrink-0">
               {selectedCount} Selected
@@ -135,7 +135,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={onSelectAll}
-                className="gap-2 text-slate-600 dark:text-white/70 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-full"
+                className="gap-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full"
               >
                 <TrendingUp className="h-4 w-4" />
                 Select All
@@ -156,7 +156,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                         "gap-2 shadow-glow rounded-full",
                         allowedActions?.canPublish
                           ? "bg-emerald-500 hover:bg-emerald-600 text-white"
-                          : "bg-slate-100 dark:bg-white/5 text-slate-300 dark:text-white/30"
+                          : "bg-muted text-muted-foreground/30"
                       )}
                     >
                       <TrendingUp className="h-4 w-4" />
@@ -186,7 +186,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                         "gap-2 rounded-full",
                         allowedActions?.canUnpublish
                           ? "bg-transparent border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 shadow-glow"
-                          : "bg-slate-100 dark:bg-white/5 text-slate-300 dark:text-white/30"
+                          : "bg-muted text-muted-foreground/30"
                       )}
                     >
                       <Undo2 className="h-4 w-4" />
@@ -212,13 +212,13 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
               Delete
             </Button>
 
-            <div className="w-px h-6 bg-slate-200 dark:bg-white/10 mx-2" />
+            <div className="w-px h-6 bg-border mx-2" />
 
             <Button
               variant="ghost"
               size="icon"
               onClick={onClearSelection}
-              className="text-slate-400 dark:text-white/50 hover:text-slate-700 dark:hover:text-white rounded-full hover:bg-slate-100 dark:hover:bg-white/10"
+              className="text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
             >
               <X className="h-4 w-4" />
             </Button>

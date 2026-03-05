@@ -231,36 +231,42 @@ export function BidComplianceModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto bg-slate-900 border-white/10">
+            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto bg-background border-border shadow-2xl">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-white">
-                        <Shield className="h-5 w-5 text-purple-400" />
+                    <DialogTitle className="flex items-center gap-2 text-foreground">
+                        <Shield className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />
                         Compliance Check
                     </DialogTitle>
-                    <DialogDescription className="text-white/50">
+                    <DialogDescription className="text-muted-foreground">
                         Review compliance rules before expressing interest in this shift.
                     </DialogDescription>
                 </DialogHeader>
 
                 {/* Shift Summary */}
-                <div className="bg-white/5 rounded-lg p-4 border border-white/10 mb-4">
-                    <div className="text-sm text-white/50 mb-1">Checking eligibility for:</div>
-                    <div className="font-semibold text-white">{shift.role}</div>
-                    <div className="text-sm text-white/70">
-                        {shift.date} • {shift.startTime} - {shift.endTime} ({Math.round(shift.netLength)}m)
+                <div className="bg-muted/50 rounded-xl p-5 border border-border mb-6">
+                    <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground/60 mb-2">Checking eligibility for:</div>
+                    <div className="text-lg font-black text-foreground mb-1">{shift.role}</div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                        <span className="font-semibold text-foreground/80">{shift.date}</span>
+                        <span className="opacity-30">•</span>
+                        <span>{shift.startTime} - {shift.endTime}</span>
+                        <span className="opacity-30">•</span>
+                        <span className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded text-xs font-bold">{Math.round(shift.netLength)}m</span>
                     </div>
-                    <div className="text-xs text-white/50 mt-1">
-                        {shift.organization} → {shift.department}
+                    <div className="text-xs text-muted-foreground/70 mt-3 flex items-center gap-1.5 font-medium">
+                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                        {shift.organization} <span className="opacity-40">/</span> {shift.department}
                     </div>
                 </div>
 
                 {/* Loading State */}
                 {(isLoadingShifts || isRunningChecks || !checksComplete) && (
-                    <div className="flex items-center justify-center py-12">
-                        <div className="text-center">
-                            <Loader2 className="h-8 w-8 animate-spin text-purple-400 mx-auto mb-3" />
-                            <p className="text-white/70">Running compliance checks...</p>
+                    <div className="flex flex-col items-center justify-center py-16 animate-in fade-in zoom-in duration-300">
+                        <div className="relative">
+                            <div className="absolute inset-0 bg-indigo-500/20 blur-xl rounded-full animate-pulse" />
+                            <Loader2 className="h-10 w-10 animate-spin text-indigo-600 dark:text-indigo-400 relative z-10" />
                         </div>
+                        <p className="text-muted-foreground mt-4 font-medium">Analyzing compliance rules...</p>
                     </div>
                 )}
 
@@ -276,8 +282,8 @@ export function BidComplianceModal({
                     />
                 )}
 
-                <DialogFooter className="mt-6 gap-2">
-                    <Button variant="outline" onClick={onClose} className="border-white/10">
+                <DialogFooter className="mt-8 gap-3">
+                    <Button variant="outline" onClick={onClose} className="border-border hover:bg-muted font-bold px-6">
                         Cancel
                     </Button>
 
@@ -286,26 +292,26 @@ export function BidComplianceModal({
                             onClick={onConfirmBid}
                             disabled={!canProceed || isPending}
                             className={cn(
-                                "gap-2",
+                                "gap-2 h-10 px-8 font-black uppercase tracking-widest shadow-lg transition-all active:scale-95",
                                 canProceed
-                                    ? "bg-purple-600 hover:bg-purple-700 text-white"
-                                    : "bg-white/10 text-white/50 cursor-not-allowed"
+                                    ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20"
+                                    : "bg-muted text-muted-foreground cursor-not-allowed border border-border"
                             )}
                         >
                             {isPending ? (
                                 <>
                                     <Loader2 className="h-4 w-4 animate-spin" />
-                                    Submitting...
+                                    Processing...
                                 </>
                             ) : canProceed ? (
                                 <>
                                     <ThumbsUp className="h-4 w-4" />
-                                    {hasWarnings ? 'Express Interest Anyway' : 'Express Interest'}
+                                    {hasWarnings ? 'Bid Anyway' : 'Confirm Bid'}
                                 </>
                             ) : (
                                 <>
                                     <XCircle className="h-4 w-4" />
-                                    Cannot Proceed
+                                    Ineligible
                                 </>
                             )}
                         </Button>

@@ -76,16 +76,16 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="h-4 w-4 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-white/20 rounded transition-colors"
+          className="h-4 w-4 flex items-center justify-center hover:bg-muted dark:hover:bg-white/20 rounded transition-colors"
           onClick={(e) => e.stopPropagation()}
         >
-          <MoreHorizontal className="h-3 w-3 text-slate-500 dark:text-white/60" />
+          <MoreHorizontal className="h-3 w-3 text-muted-foreground dark:text-white/60" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="bg-white dark:bg-[#1a2744] border-slate-200 dark:border-white/10 min-w-[160px] z-50">
+      <DropdownMenuContent align="end" className="bg-popover border-border min-w-[160px] z-50">
         <DropdownMenuItem
           onClick={() => onViewShift?.(shift)}
-          className="text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer"
+          className="text-popover-foreground hover:bg-accent cursor-pointer"
         >
           <Edit2 className="h-4 w-4 mr-2" />
           Edit Shift
@@ -93,10 +93,10 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
 
         {canUnpublish(shift) && onUnpublishShift && (
           <>
-            <DropdownMenuSeparator className="bg-slate-200 dark:bg-white/10" />
+            <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem
               onClick={() => onUnpublishShift(shift.id)}
-              className="text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 cursor-pointer"
+              className="text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
             >
               <Undo2 className="h-4 w-4 mr-2" />
               Unpublish Shift
@@ -203,7 +203,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                                 )}
                               </div>
                               {/* Progress bar */}
-                              <div className="h-[3px] w-full bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+                              <div className="h-[3px] w-full bg-muted rounded-full overflow-hidden">
                                 <div
                                   className={cn(
                                     'h-full rounded-full transition-all duration-500',
@@ -291,7 +291,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                                 !bulkModeActive &&
                                 canEdit && (
                                   <button
-                                    className="w-full flex items-center justify-center gap-1 py-4 rounded border border-dashed border-slate-300 dark:border-white/10 text-[11px] font-mono text-slate-300 dark:text-white/25 transition-all hover:border-slate-400 dark:hover:border-white/25 hover:text-slate-500 dark:hover:text-white/50 hover:bg-slate-50 dark:hover:bg-white/[0.02]"
+                                    className="w-full flex items-center justify-center gap-1 py-4 rounded border border-dashed border-border text-[11px] font-mono text-muted-foreground/30 transition-all hover:border-border/80 hover:text-muted-foreground hover:bg-accent"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       onAddShift(employee, date);
@@ -306,7 +306,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                               {/* Add another shift when cell already has shifts */}
                               {shifts.length > 0 && canEdit && !bulkModeActive && (
                                 <button
-                                  className="w-full flex items-center justify-center gap-1 py-1 rounded border border-dashed border-slate-200 dark:border-white/[0.07] text-[10px] font-mono text-slate-300 dark:text-white/20 transition-all hover:border-slate-300 dark:hover:border-white/20 hover:text-slate-400 dark:hover:text-white/40"
+                                  className="w-full flex items-center justify-center gap-1 py-1 rounded border border-dashed border-border text-[10px] font-mono text-muted-foreground/30 transition-all hover:border-border/80 hover:text-muted-foreground"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     onAddShift(employee, date);

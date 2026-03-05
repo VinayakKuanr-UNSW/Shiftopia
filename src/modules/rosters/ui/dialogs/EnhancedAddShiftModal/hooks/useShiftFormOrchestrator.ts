@@ -567,7 +567,7 @@ export function useShiftFormOrchestrator({
                 form.reset();
                 onClose();
             } else {
-                const payload = {
+                const basePayload = {
                     roster_id: rosterId,
                     shift_date: format(values.shift_date!, 'yyyy-MM-dd'),
                     start_time: values.start_time,
@@ -590,9 +590,12 @@ export function useShiftFormOrchestrator({
                     event_ids: values.event_ids || [],
                     notes: values.notes || null,
                     display_order: 0,
-                    lifecycle_status: 'Draft' as const,
-                    fulfillment_status: (values.assigned_employee_id ? 'scheduled' : 'none') as 'scheduled' | 'none',
                 };
+                // Only include lifecycle_status for new shifts — updateShift ignores it
+                // and including it causes the optimistic cache to flash wrong status.
+                const payload = editMode
+                    ? basePayload
+                    : { ...basePayload, lifecycle_status: 'Draft' as const, fulfillment_status: (values.assigned_employee_id ? 'scheduled' : 'none') as 'scheduled' | 'none' };
 
                 if (editMode && existingShift?.id) {
                     updateShiftMutation.mutate(

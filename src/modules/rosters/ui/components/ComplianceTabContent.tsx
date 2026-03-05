@@ -166,11 +166,11 @@ export function ComplianceTabContent({
             {needsRerun && (
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-start gap-4 backdrop-blur-md">
                     <div className="p-2 bg-amber-500/20 rounded-lg">
-                        <AlertTriangle className="h-5 w-5 text-amber-500" />
+                        <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-500" />
                     </div>
                     <div>
-                        <h4 className="text-sm font-semibold text-amber-500">Inputs Changed</h4>
-                        <p className="text-sm text-white/60 mt-1">
+                        <h4 className="text-sm font-bold text-amber-700 dark:text-amber-500">Inputs Changed</h4>
+                        <p className="text-sm text-muted-foreground mt-1">
                             Shift details have been modified. Please re-run compliance checks to ensure validity.
                         </p>
                     </div>
@@ -179,24 +179,24 @@ export function ComplianceTabContent({
 
             {/* Premium Header Banner */}
             <div className={cn(
-                "relative overflow-hidden rounded-2xl border p-6 transition-all duration-300 shadow-xl",
+                "relative overflow-hidden rounded-2xl border p-6 transition-all duration-500 shadow-xl",
                 canProceed
-                    ? "bg-gradient-to-br from-emerald-950/80 via-emerald-900/40 to-slate-900/80 border-emerald-500/30 shadow-emerald-900/20"
+                    ? "bg-gradient-to-br from-emerald-50/80 via-white to-emerald-50/80 border-emerald-500/20 shadow-emerald-900/5 dark:from-emerald-950/80 dark:via-emerald-950/40 dark:to-slate-900/80 dark:border-emerald-500/30 dark:shadow-emerald-900/20"
                     : summaryStats.blockingFails > 0
-                        ? "bg-gradient-to-br from-red-950/80 via-red-900/40 to-slate-900/80 border-red-500/30 shadow-red-900/20"
-                        : "bg-gradient-to-br from-slate-900/90 via-slate-800/50 to-slate-900/90 border-white/10"
+                        ? "bg-gradient-to-br from-red-50/80 via-white to-red-50/80 border-red-500/20 shadow-red-900/5 dark:from-red-950/80 dark:via-red-950/40 dark:to-slate-900/80 dark:border-red-500/30 dark:shadow-red-900/20"
+                        : "bg-gradient-to-br from-background via-muted/20 to-background border-border shadow-soft dark:from-slate-900/90 dark:via-slate-800/50 dark:to-slate-900/90 dark:border-white/10"
             )}>
-                <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-overlay" />
+                <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-overlay dark:opacity-[0.05]" />
 
                 <div className="relative flex items-center justify-between">
                     <div className="flex items-center gap-5">
                         <div className={cn(
-                            "h-14 w-14 rounded-2xl flex items-center justify-center shadow-lg border",
+                            "h-14 w-14 rounded-2xl flex items-center justify-center shadow-lg border transition-all duration-300",
                             canProceed
-                                ? "bg-emerald-500/20 border-emerald-500/20 text-emerald-400"
+                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:bg-emerald-500/20 dark:border-emerald-500/20 dark:text-emerald-400"
                                 : summaryStats.blockingFails > 0
-                                    ? "bg-red-500/20 border-red-500/20 text-red-400"
-                                    : "bg-slate-700/30 border-white/10 text-slate-400"
+                                    ? "bg-red-500/10 border-red-500/20 text-red-600 dark:bg-red-500/20 dark:border-red-500/20 dark:text-red-400"
+                                    : "bg-muted border-border text-muted-foreground dark:bg-slate-700/30 dark:border-white/10 dark:text-slate-400"
                         )}>
                             {canProceed ? (
                                 <Shield className="h-7 w-7" />
@@ -209,8 +209,8 @@ export function ComplianceTabContent({
 
                         <div>
                             <h3 className={cn(
-                                "text-xl font-bold tracking-tight",
-                                canProceed ? "text-emerald-400" : summaryStats.blockingFails > 0 ? "text-red-400" : "text-white"
+                                "text-xl font-black tracking-tight uppercase",
+                                canProceed ? "text-emerald-700 dark:text-emerald-400" : summaryStats.blockingFails > 0 ? "text-red-700 dark:text-red-400" : "text-foreground"
                             )}>
                                 {canProceed
                                     ? "Compliance Passed"
@@ -218,7 +218,7 @@ export function ComplianceTabContent({
                                         ? "Compliance Failed"
                                         : "Validation Required"}
                             </h3>
-                            <p className="text-sm text-white/50 mt-1">
+                            <p className="text-sm text-muted-foreground mt-1 font-medium">
                                 {summaryStats.blockingFails > 0
                                     ? `${summaryStats.blockingFails} blocking issue${summaryStats.blockingFails > 1 ? 's' : ''} prevents saving`
                                     : summaryStats.notRun > 0
@@ -234,7 +234,7 @@ export function ComplianceTabContent({
                         onClick={handleRunAll}
                         disabled={isRunningAll}
                         className={cn(
-                            "h-10 px-6 font-semibold shadow-lg transition-all active:scale-95",
+                            "h-10 px-6 font-black uppercase tracking-widest shadow-lg transition-all active:scale-95",
                             canProceed
                                 ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20"
                                 : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20"
@@ -257,19 +257,19 @@ export function ComplianceTabContent({
                 {/* Glassy Stats Bar */}
                 <div className="relative mt-6 flex gap-3">
                     {summaryStats.blockingFails > 0 && (
-                        <div className="px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center gap-2 text-xs font-medium text-red-300">
+                        <div className="px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-red-600 dark:text-red-300 shadow-sm transition-all hover:bg-red-500/20">
                             <div className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
                             {summaryStats.blockingFails} Blocking
                         </div>
                     )}
                     {summaryStats.warnings > 0 && (
-                        <div className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center gap-2 text-xs font-medium text-amber-300">
+                        <div className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-300 shadow-sm transition-all hover:bg-amber-500/20">
                             <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                             {summaryStats.warnings} Warning{summaryStats.warnings > 1 ? 's' : ''}
                         </div>
                     )}
                     {summaryStats.passed > 0 && (
-                        <div className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2 text-xs font-medium text-emerald-300">
+                        <div className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-300 shadow-sm transition-all hover:bg-emerald-500/20">
                             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                             {summaryStats.passed} Passed
                         </div>
@@ -307,39 +307,39 @@ function HardValidationCard({ result }: { result: HardValidationResult }) {
     );
 
     return (
-        <div className="rounded-xl overflow-hidden border border-red-500/40 bg-red-950/20 shadow-lg shadow-red-900/10">
+        <div className="rounded-xl overflow-hidden border border-red-500/30 bg-red-500/5 dark:border-red-500/40 dark:bg-red-950/20 shadow-lg dark:shadow-red-900/10 transition-all duration-300">
             <div
-                className="p-4 flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors"
+                className="p-4 flex items-center justify-between cursor-pointer hover:bg-red-500/5 dark:hover:bg-white/5 transition-colors"
                 onClick={() => setExpanded(!expanded)}
             >
                 <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-lg bg-red-500/20 flex items-center justify-center text-red-400 border border-red-500/20">
+                    <div className="h-10 w-10 rounded-lg bg-red-500/10 dark:bg-red-500/20 flex items-center justify-center text-red-600 dark:text-red-400 border border-red-500/20">
                         <XCircle className="h-5 w-5" />
                     </div>
                     <div>
-                        <div className="font-bold text-white flex items-center gap-2">
+                        <div className="font-black text-red-900 dark:text-white flex items-center gap-2 tracking-tight uppercase text-sm">
                             Scheduling Conflict
-                            <span className="text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider bg-red-500/20 text-red-300 border border-red-500/20">
+                            <span className="text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest bg-red-600 text-white dark:bg-red-500/20 dark:text-red-300 border border-red-600 dark:border-red-500/20 shadow-sm">
                                 BLOCKING
                             </span>
                         </div>
-                        <div className="text-sm text-red-200/60 mt-0.5">
+                        <div className="text-xs text-red-700/70 dark:text-red-200/60 mt-0.5 font-medium">
                             Critical scheduling error detected
                         </div>
                     </div>
                 </div>
-                <ChevronDown className={cn("h-5 w-5 text-white/40 transition-transform", expanded && "rotate-180")} />
+                <ChevronDown className={cn("h-5 w-5 text-red-900/30 dark:text-white/40 transition-transform duration-300", expanded && "rotate-180")} />
             </div>
 
             {expanded && (
-                <div className="border-t border-red-500/20 bg-red-950/30 p-4">
+                <div className="border-t border-red-500/20 bg-white/50 dark:bg-red-950/30 p-5">
                     <div className="space-y-4">
                         {result.errors.map((err, idx) => (
                             <div key={idx}>
                                 {hasOverlap && idx === 0 ? (
                                     <OverlapVisualization error={err} />
                                 ) : (
-                                    <div className="p-3 bg-red-500/10 rounded-lg border border-red-500/20 text-sm text-red-200">
+                                    <div className="p-4 bg-red-500/5 dark:bg-red-500/10 rounded-xl border border-red-500/10 dark:border-red-500/20 text-sm text-red-800 dark:text-red-200 font-medium leading-relaxed">
                                         {err.message}
                                     </div>
                                 )}
@@ -380,28 +380,28 @@ function ComplianceRuleCard({
     const getStyles = () => {
         switch (status) {
             case 'pass': return {
-                card: "border-emerald-500/20 bg-emerald-950/10",
-                icon: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-                badge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-                text: "text-emerald-100/60"
+                card: "border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-950/10",
+                icon: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+                badge: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+                text: "text-emerald-800/60 dark:text-emerald-100/60"
             };
             case 'fail': return {
-                card: "border-red-500/30 bg-red-950/20 shadow-[0_0_15px_-3px_rgba(239,68,68,0.1)]",
-                icon: "bg-red-500/10 text-red-400 border-red-500/20",
-                badge: "bg-red-500/10 text-red-400 border-red-500/20",
-                text: "text-red-100/60"
+                card: "border-red-500/20 bg-red-500/5 dark:bg-red-950/20 shadow-[0_0_15px_-3px_rgba(239,68,68,0.05)]",
+                icon: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+                badge: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+                text: "text-red-800/60 dark:text-red-100/60"
             };
             case 'warning': return {
-                card: "border-amber-500/30 bg-amber-950/20",
-                icon: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-                badge: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-                text: "text-amber-100/60"
+                card: "border-amber-500/20 bg-amber-500/5 dark:bg-amber-950/20",
+                icon: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+                badge: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+                text: "text-amber-800/60 dark:text-amber-100/60"
             };
             default: return { // not-run
-                card: "border-white/5 bg-slate-900/40 hover:border-white/10",
-                icon: "bg-white/5 text-slate-400 border-white/5",
-                badge: "bg-white/5 text-slate-400 border-white/5",
-                text: "text-slate-500"
+                card: "border-border bg-card dark:bg-slate-900/40 hover:border-muted-foreground/20",
+                icon: "bg-muted text-muted-foreground border-border",
+                badge: "bg-muted text-muted-foreground border-border",
+                text: "text-muted-foreground/60"
             };
         }
     };
@@ -419,23 +419,23 @@ function ComplianceRuleCard({
     };
 
     return (
-        <div className={cn("rounded-xl border transition-all duration-200 overflow-hidden backdrop-blur-sm", styles.card)}>
-            <div className="p-4 flex items-center justify-between cursor-pointer hover:bg-white/5" onClick={toggle}>
+        <div className={cn("rounded-xl border transition-all duration-300 overflow-hidden backdrop-blur-sm shadow-sm", styles.card)}>
+            <div className="p-4 flex items-center justify-between cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/5 transition-colors" onClick={toggle}>
                 <div className="flex items-center gap-4">
-                    <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center border transition-colors", styles.icon)}>
+                    <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center border transition-all duration-300", styles.icon)}>
                         {status === 'pass' ? <CheckCircle2 className="h-5 w-5" /> : getIcon()}
                     </div>
                     <div>
-                        <div className="font-semibold text-white flex items-center gap-2">
+                        <div className="font-bold text-foreground dark:text-white flex items-center gap-2 uppercase tracking-tight text-sm">
                             {rule.name}
                             <span className={cn(
-                                "text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider border",
+                                "text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest border shadow-sm",
                                 styles.badge
                             )}>
                                 {status === 'not-run' ? 'PENDING' : status === 'fail' && !rule.blocking ? 'WARNING' : status.toUpperCase()}
                             </span>
                         </div>
-                        <div className={cn("text-xs mt-0.5", styles.text)}>
+                        <div className={cn("text-xs mt-0.5 font-medium", styles.text)}>
                             {result?.summary || rule.description}
                         </div>
                     </div>
@@ -446,17 +446,17 @@ function ComplianceRuleCard({
                         type="button"
                         size="sm"
                         variant="ghost"
-                        className="h-8 w-8 p-0 text-white/30 hover:text-white hover:bg-white/10"
+                        className="h-8 w-8 p-0 text-muted-foreground/40 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
                         onClick={(e) => { e.stopPropagation(); onRun(); }}
                     >
                         <Play className="h-3.5 w-3.5 fill-current" />
                     </Button>
-                    <ChevronDown className={cn("h-4 w-4 text-white/30 transition-transform duration-200", isExpanded && "rotate-180")} />
+                    <ChevronDown className={cn("h-4 w-4 text-muted-foreground/30 dark:text-white/30 transition-transform duration-300", isExpanded && "rotate-180")} />
                 </div>
             </div>
 
             {isExpanded && result && (
-                <div className="border-t border-white/5 bg-black/20 p-5 animate-in slide-in-from-top-2 duration-200">
+                <div className="border-t border-border dark:border-white/5 bg-muted/30 dark:bg-black/20 p-6 animate-in slide-in-from-top-2 duration-300">
                     <RuleVisualization rule={rule} result={result} />
                 </div>
             )}
@@ -539,7 +539,7 @@ function OverlapVisualization({ error }: { error: { code?: string; message: stri
 
     // Try to parse times from error message as fallback
     const parseTimesFromMessage = (msg: string): { existingStart: string; existingEnd: string; newStart?: string; newEnd?: string } | null => {
-        const existingMatch = msg.match(/\((\d{1, 2}:\d{2}(?::\d{2})?)\s*-\s*(\d{1, 2}:\d{2}(?::\d{2})?)\)/);
+        const existingMatch = msg.match(/\((\d{1,2}:\d{2}(?::\d{2})?)\s*-\s*(\d{1,2}:\d{2}(?::\d{2})?)\)/);
         if (!existingMatch) return null;
 
         const result: { existingStart: string; existingEnd: string; newStart?: string; newEnd?: string } = {
@@ -547,7 +547,7 @@ function OverlapVisualization({ error }: { error: { code?: string; message: stri
             existingEnd: normalizeTime(existingMatch[2])
         };
 
-        const newMatch = msg.match(/New shift:\s*(\d{1, 2}:\d{2}(?::\d{2})?)\s*-\s*(\d{1, 2}:\d{2}(?::\d{2})?)/i);
+        const newMatch = msg.match(/New shift:\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*-\s*(\d{1,2}:\d{2}(?::\d{2})?)/i);
         if (newMatch) {
             result.newStart = normalizeTime(newMatch[1]);
             result.newEnd = normalizeTime(newMatch[2]);
@@ -566,7 +566,7 @@ function OverlapVisualization({ error }: { error: { code?: string; message: stri
     if (!existingStart || !existingEnd || !newStart || !newEnd) {
         return (
             <div className="space-y-3">
-                <div className="text-sm font-medium text-red-300 flex items-center gap-2">
+                <div className="text-sm font-medium text-red-600 dark:text-red-300 flex items-center gap-2">
                     <Layers className="h-4 w-4" />
                     {error.message || 'The new shift overlaps with an existing shift.'}
                 </div>
@@ -591,67 +591,67 @@ function OverlapVisualization({ error }: { error: { code?: string; message: stri
 
     return (
         <div className="space-y-4">
-            <div className="text-sm font-medium text-red-300 flex items-center gap-2">
+            <div className="text-sm font-bold text-red-700 dark:text-red-300 flex items-center gap-2 uppercase tracking-tight">
                 <Layers className="h-4 w-4" />
-                The new shift overlaps with an existing shift.
+                Shift Overlap Detected
             </div>
 
             {/* Timeline */}
-            <div className="relative h-24 bg-slate-900/50 rounded-lg border border-white/10 overflow-hidden">
+            <div className="relative h-28 bg-muted rounded-xl border border-border overflow-hidden shadow-inner">
                 {/* Time grid */}
                 <div className="absolute inset-0 flex">
                     {Array.from({ length: 12 }).map((_, i) => (
-                        <div key={i} className="flex-1 border-r border-white/5 last:border-r-0" />
+                        <div key={i} className="flex-1 border-r border-border/40 last:border-r-0" />
                     ))}
                 </div>
 
                 {/* Conflict zone highlight */}
                 {hasOverlap && (
                     <div
-                        className="absolute top-0 bottom-0 bg-red-500/10 border-x-2 border-red-500/30"
+                        className="absolute top-0 bottom-0 bg-red-500/10 border-x-2 border-red-500/30 z-10"
                         style={{
                             left: `${overlapStart}%`,
                             width: `${overlapEnd - overlapStart}%`
                         }}
                     >
                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                            <AlertTriangle className="h-5 w-5 text-red-400 animate-pulse" />
+                            <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400 animate-pulse" />
                         </div>
                     </div>
                 )}
 
                 {/* Existing shift */}
                 <div className="absolute top-4 h-6 flex items-center" style={{ left: '2%' }}>
-                    <span className="text-[10px] text-white/40 mr-2">Existing</span>
+                    <span className="text-[10px] uppercase font-black tracking-widest text-muted-foreground/40 mr-2">Existing</span>
                 </div>
                 <div
-                    className="absolute top-3 h-8 rounded-md bg-slate-600 border border-slate-500 flex items-center px-2"
+                    className="absolute top-3 h-8 rounded-lg bg-muted-foreground shadow-sm flex items-center px-3 border border-border/10"
                     style={{
                         left: `${existingStartPct}%`,
                         width: `${existingWidthPct}%`,
                         minWidth: '80px'
                     }}
                 >
-                    <span className="text-xs text-white font-mono truncate">
+                    <span className="text-[10px] text-white font-black font-mono truncate">
                         {existingStart} - {existingEnd}
                     </span>
                 </div>
 
                 {/* New shift */}
-                <div className="absolute top-14 h-6 flex items-center" style={{ left: '2%' }}>
-                    <span className="text-[10px] text-cyan-400 mr-2">New</span>
+                <div className="absolute top-16 h-6 flex items-center" style={{ left: '2%' }}>
+                    <span className="text-[10px] uppercase font-black tracking-widest text-indigo-600 dark:text-indigo-400 mr-2">Candidate</span>
                 </div>
                 <div
-                    className="absolute top-14 h-8 rounded-md border-2 flex items-center px-2"
+                    className="absolute top-16 h-8 rounded-lg border-2 flex items-center px-3 shadow-sm"
                     style={{
                         left: `${newStartPct}%`,
                         width: `${newWidthPct}%`,
                         minWidth: '80px',
-                        background: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(6, 182, 212, 0.1) 3px, rgba(6, 182, 212, 0.1) 6px)',
-                        borderColor: 'rgb(6, 182, 212)'
+                        background: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(79, 70, 229, 0.05) 3px, rgba(79, 70, 229, 0.05) 6px)',
+                        borderColor: 'rgb(79, 70, 229)'
                     }}
                 >
-                    <span className="text-xs text-cyan-300 font-mono truncate">
+                    <span className="text-[10px] text-indigo-700 dark:text-indigo-300 font-black font-mono truncate">
                         {newStart} - {newEnd}
                     </span>
                 </div>
@@ -672,9 +672,9 @@ function OverlapVisualization({ error }: { error: { code?: string; message: stri
                 const overlapMins = overlapMinutes % 60;
 
                 return (
-                    <div className="flex items-center justify-center gap-2 text-sm text-red-300 bg-red-500/10 rounded-lg py-2 border border-red-500/20">
+                    <div className="flex items-center justify-center gap-3 text-[11px] font-black uppercase tracking-widest text-red-700 dark:text-red-300 bg-red-500/10 rounded-xl py-3 border border-red-500/20 shadow-sm">
                         <AlertTriangle className="h-4 w-4" />
-                        <span>Overlap duration: {overlapHours > 0 ? `${overlapHours}h ${overlapMins}m` : `${overlapMins}m`}</span>
+                        <span>Conflict duration: {overlapHours > 0 ? `${overlapHours}h ${overlapMins}m` : `${overlapMins}m`}</span>
                     </div>
                 );
             })()}
@@ -699,29 +699,31 @@ function MaxDailyHoursViz({ result }: { result: ComplianceResult }) {
     const overflowPct = Math.max(0, totalPct - 100);
 
     return (
-        <div className="space-y-4">
-            <div className="text-xs text-white/50">
+        <div className="space-y-6">
+            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2">
+                <Clock className="h-3 w-3" />
                 {result.status === 'fail'
-                    ? `Total working hours for the day exceed the ${limit}-hour limit.`
-                    : `Total working hours are within the ${limit}-hour limit.`}
+                    ? `Daily cap reached (${limit}h limit)`
+                    : `Daily projection: Within ${limit}h limit`}
             </div>
 
             {/* Bar Chart */}
             <div className="relative pt-6">
-                <div className="absolute right-0 top-0 flex items-center gap-1 text-[10px] text-white/40">
+                <div className="absolute right-0 top-0 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground/40">
+                    <Shield className="h-2.5 w-2.5" />
                     <span>Limit {limit}h</span>
                 </div>
 
-                <div className="h-14 bg-slate-900/50 rounded-lg border border-white/10 overflow-visible relative">
+                <div className="h-16 bg-muted rounded-xl border border-border overflow-visible relative shadow-inner">
                     {/* Existing hours */}
                     <div
-                        className="absolute top-0 bottom-0 bg-slate-600 rounded-l-lg flex items-center justify-center transition-all"
+                        className="absolute top-0 bottom-0 bg-muted-foreground/40 dark:bg-slate-600 rounded-l-xl flex items-center justify-center transition-all duration-500"
                         style={{ width: `${Math.min(existingPct, 100)}%` }}
                     >
                         {existingPct > 20 && (
-                            <div className="text-center">
-                                <span className="text-sm text-white font-bold">{existingHours}h</span>
-                                <div className="text-[10px] text-white/60">Existing</div>
+                            <div className="text-center px-2">
+                                <span className="text-xs text-white font-black uppercase tracking-tighter">{existingHours}h</span>
+                                <div className="text-[8px] text-white/60 font-black uppercase leading-none">Existing</div>
                             </div>
                         )}
                     </div>
@@ -729,9 +731,9 @@ function MaxDailyHoursViz({ result }: { result: ComplianceResult }) {
                     {/* Candidate hours (new shift) */}
                     <div
                         className={cn(
-                            "absolute top-0 bottom-0 flex items-center justify-center transition-all",
-                            result.status === 'fail' ? "bg-red-500" : "bg-cyan-500",
-                            totalPct > 100 ? "rounded-r-none" : "rounded-r-lg"
+                            "absolute top-0 bottom-0 flex items-center justify-center transition-all duration-500 shadow-lg",
+                            result.status === 'fail' ? "bg-red-500" : "bg-indigo-500",
+                            totalPct >= 99 ? "rounded-r-xl" : "rounded-r-none"
                         )}
                         style={{
                             left: `${Math.min(existingPct, 100)}%`,
@@ -739,9 +741,9 @@ function MaxDailyHoursViz({ result }: { result: ComplianceResult }) {
                         }}
                     >
                         {candidatePct > 15 && (
-                            <div className="text-center">
-                                <span className="text-sm text-white font-bold">+ {candidateHours}h</span>
-                                <div className="text-[10px] text-white/80">New Shift</div>
+                            <div className="text-center px-2">
+                                <span className="text-xs text-white font-black uppercase tracking-tighter">+{candidateHours}h</span>
+                                <div className="text-[8px] text-white/80 font-black uppercase leading-none">New</div>
                             </div>
                         )}
                     </div>
@@ -749,24 +751,30 @@ function MaxDailyHoursViz({ result }: { result: ComplianceResult }) {
                     {/* Overflow indicator */}
                     {overflowPct > 0 && (
                         <div
-                            className="absolute top-0 bottom-0 right-0 bg-red-600/80 rounded-r-lg flex items-center justify-center border-l-2 border-white/30"
+                            className="absolute top-0 bottom-0 right-0 bg-red-600 rounded-r-xl flex items-center justify-center border-l-2 border-white/30 shadow-[4px_0_15px_rgba(220,38,38,0.4)]"
                             style={{ width: `${Math.min(overflowPct, 25)}%`, transform: 'translateX(100%)' }}
                         >
-                            <AlertTriangle className="h-5 w-5 text-white" />
+                            <AlertTriangle className="h-5 w-5 text-white animate-pulse" />
                         </div>
                     )}
 
                     {/* Limit line */}
-                    <div className="absolute right-0 top-0 bottom-0 w-0.5 bg-white/60" />
+                    <div className="absolute right-0 top-0 bottom-0 w-0.5 bg-red-500/50 dark:bg-white/60 z-20" />
                 </div>
             </div>
 
             <div className={cn(
-                "flex items-center justify-end gap-2 text-right",
-                result.status === 'fail' ? "text-red-400" : "text-emerald-400"
+                "flex items-center justify-between p-4 rounded-xl border border-border shadow-sm",
+                result.status === 'fail' ? "bg-red-500/5" : "bg-emerald-500/5"
             )}>
-                <span className="text-white/50 text-sm">Total:</span>
-                <span className="text-2xl font-bold">{totalHours}h</span>
+                <div className="text-xs font-black uppercase tracking-widest text-muted-foreground">Total Projected</div>
+                <div className={cn(
+                    "flex items-baseline gap-1",
+                    result.status === 'fail' ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
+                )}>
+                    <span className="text-3xl font-black tracking-tighter">{totalHours}</span>
+                    <span className="text-sm font-bold uppercase tracking-widest opacity-60">Hours</span>
+                </div>
             </div>
         </div>
     );
@@ -778,43 +786,43 @@ function MaxDailyHoursViz({ result }: { result: ComplianceResult }) {
 
 function MinShiftLengthViz({ result }: { result: ComplianceResult }) {
     const calc = result.calculation;
-    const duration = calc.duration_hours || 0;
-    const limit = calc.limit || 3;
+    const duration = calc.shift_duration || 0;
+    const limit = calc.limit || 0;
     const isFail = result.status === 'fail';
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
                     <div className={cn(
-                        "text-3xl font-bold",
-                        isFail ? "text-red-400" : "text-emerald-400"
+                        "text-4xl font-black tracking-tighter",
+                        isFail ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
                     )}>
-                        {duration.toFixed(1)}h
+                        {duration.toFixed(1)}<span className="text-lg opacity-40 ml-1">h</span>
                     </div>
-                    <div className="text-xs text-white/40">Shift Duration</div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mt-1">Shift Duration</div>
                 </div>
                 <div className="text-right">
-                    <div className="text-3xl font-bold text-white/30">{limit}h</div>
-                    <div className="text-xs text-white/40">Minimum Required</div>
+                    <div className="text-2xl font-black text-muted-foreground/20">{limit}h</div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">Min Required</div>
                 </div>
             </div>
 
             {/* Visual Bar */}
-            <div className="h-4 bg-slate-900/50 rounded-full border border-white/10 overflow-hidden relative">
+            <div className="h-4 bg-muted rounded-full border border-border overflow-hidden relative shadow-inner">
                 {/* Min Marker Line */}
-                <div className="absolute top-0 bottom-0 w-0.5 bg-white/40" style={{ left: '30%' }} />
+                <div className="absolute top-0 bottom-0 w-0.5 bg-red-500/50 dark:bg-white/40 z-10" style={{ left: `${(limit / 10) * 100}%` }} />
 
                 <div
                     className={cn(
-                        "h-full rounded-full transition-all",
-                        isFail ? "bg-red-500" : "bg-emerald-500"
+                        "h-full rounded-full transition-all duration-700 shadow-lg",
+                        isFail ? "bg-red-500 shadow-red-500/20" : "bg-emerald-500 shadow-emerald-500/20"
                     )}
                     style={{ width: `${Math.min((duration / 10) * 100, 100)}%` }}
                 />
             </div>
 
-            <div className="text-xs text-white/50 flex justify-between">
+            <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40 flex justify-between px-1">
                 <span>0h</span>
                 <span>10h+</span>
             </div>
@@ -832,31 +840,30 @@ function WorkingDaysCapViz({ result }: { result: ComplianceResult }) {
     const limit = calc.limit || 20;
     const period = calc.period_days || 28;
     const isFail = result.status === 'fail';
-    const pct = Math.min((count / period) * 100, 100);
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
                     <div className={cn(
-                        "text-3xl font-bold",
-                        isFail ? "text-red-400" : "text-white"
+                        "text-4xl font-black tracking-tighter",
+                        isFail ? "text-red-600 dark:text-red-400" : "text-foreground dark:text-white"
                     )}>
-                        {count} <span className="text-sm font-normal text-white/50">days</span>
+                        {count} <span className="text-lg opacity-40 font-bold uppercase tracking-widest ml-1">days</span>
                     </div>
-                    <div className="text-xs text-white/40">Worked in last {period} days</div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mt-1">Worked in last {period} days</div>
                 </div>
                 <div className="text-right">
-                    <div className="text-3xl font-bold text-white/30">{limit}</div>
-                    <div className="text-xs text-white/40">Max Allowed</div>
+                    <div className="text-2xl font-black text-muted-foreground/20">{limit}</div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">Max Allowed</div>
                 </div>
             </div>
 
-            <div className="h-4 bg-slate-900/50 rounded-full border border-white/10 overflow-hidden">
+            <div className="h-4 bg-muted rounded-full border border-border overflow-hidden shadow-inner">
                 <div
                     className={cn(
-                        "h-full rounded-full transition-all relative",
-                        isFail ? "bg-red-500" : "bg-emerald-500"
+                        "h-full rounded-full transition-all duration-700 relative shadow-lg",
+                        isFail ? "bg-red-500 shadow-red-500/20" : "bg-emerald-500 shadow-emerald-500/20"
                     )}
                     style={{ width: `${Math.min((count / limit) * 100, 100)}%` }}
                 >
@@ -878,34 +885,36 @@ function AvgFourWeekCycleViz({ result }: { result: ComplianceResult }) {
     const limit = 38; // 38h/week average
     const cycleLimit = 152; // 152h/4weeks
 
-    const isFail = result.status === 'fail';
-
     return (
-        <div className="space-y-5">
+        <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-slate-800/50 rounded-xl border border-white/10">
-                    <div className="text-xs text-white/40 mb-1 uppercase tracking-wider">4-Week Total</div>
+                <div className="p-5 bg-card border border-border rounded-2xl shadow-sm group hover:border-indigo-500/30 transition-all duration-300">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mb-2">4-Week Total</div>
                     <div className={cn(
-                        "text-2xl font-bold",
-                        totalHours > cycleLimit ? "text-red-400" : "text-white"
+                        "text-3xl font-black tracking-tighter",
+                        totalHours > cycleLimit ? "text-red-600 dark:text-red-400" : "text-foreground dark:text-white"
                     )}>
-                        {totalHours.toFixed(1)}h
-                        <span className="text-xs font-normal text-white/30 ml-2">/ {cycleLimit}h</span>
+                        {totalHours.toFixed(1)}<span className="text-xs opacity-40 ml-1">h</span>
+                    </div>
+                    <div className="mt-2 text-[9px] font-bold text-muted-foreground/40 tracking-wider">
+                        Limit: {cycleLimit}h
                     </div>
                 </div>
-                <div className="p-4 bg-slate-800/50 rounded-xl border border-white/10">
-                    <div className="text-xs text-white/40 mb-1 uppercase tracking-wider">Weekly Avg</div>
+                <div className="p-5 bg-card border border-border rounded-2xl shadow-sm group hover:border-indigo-500/30 transition-all duration-300">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mb-2">Weekly Avg</div>
                     <div className={cn(
-                        "text-2xl font-bold",
-                        avgHours > limit ? "text-amber-400" : "text-emerald-400"
+                        "text-3xl font-black tracking-tighter",
+                        avgHours > limit ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
                     )}>
-                        {avgHours.toFixed(1)}h
-                        <span className="text-xs font-normal text-white/30 ml-2">/ {limit}h</span>
+                        {avgHours.toFixed(1)}<span className="text-xs opacity-40 ml-1">h</span>
+                    </div>
+                    <div className="mt-2 text-[9px] font-bold text-muted-foreground/40 tracking-wider">
+                        Target: {limit}h
                     </div>
                 </div>
             </div>
 
-            <div className="text-xs text-white/40 text-center">
+            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 text-center py-2 bg-muted/30 rounded-lg border border-border/50">
                 Calculated over the current 4-week roster cycle
             </div>
         </div>
@@ -924,37 +933,37 @@ function MinRestGapViz({ result }: { result: ComplianceResult }) {
 
     const GapCard = ({ label, value, isViolation }: { label: string; value: number | null | undefined; isViolation: boolean }) => (
         <div className={cn(
-            "p-4 rounded-xl border-2",
+            "p-5 rounded-2xl border transition-all duration-300 shadow-sm overflow-hidden relative",
             isViolation
-                ? "bg-red-500/10 border-red-500/40"
+                ? "bg-red-500/5 border-red-500/20"
                 : value != null
-                    ? "bg-emerald-500/10 border-emerald-500/30"
-                    : "bg-slate-800/50 border-white/10"
+                    ? "bg-emerald-500/5 border-emerald-500/20"
+                    : "bg-muted border-border"
         )}>
-            <div className="text-xs text-white/40 mb-2 uppercase tracking-wider">{label}</div>
+            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mb-3">{label}</div>
             {value != null ? (
                 <>
                     <div className={cn(
-                        "text-3xl font-bold",
-                        isViolation ? "text-red-400" : "text-emerald-400"
+                        "text-3xl font-black tracking-tighter",
+                        isViolation ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
                     )}>
-                        {value.toFixed(1)}h
+                        {value.toFixed(1)}<span className="text-xs opacity-40 ml-1">h</span>
                     </div>
-                    <div className="mt-3 h-2 bg-slate-900 rounded-full overflow-hidden">
+                    <div className="mt-4 h-2 bg-muted-foreground/10 dark:bg-slate-900 rounded-full overflow-hidden shadow-inner">
                         <div
                             className={cn(
-                                "h-full rounded-full transition-all",
-                                isViolation ? "bg-red-500" : "bg-emerald-500"
+                                "h-full rounded-full transition-all duration-700 shadow-lg",
+                                isViolation ? "bg-red-500 shadow-red-500/20" : "bg-emerald-500 shadow-emerald-500/20"
                             )}
                             style={{ width: `${Math.min((value / (limit * 1.5)) * 100, 100)}%` }}
                         />
                     </div>
-                    <div className="text-[10px] text-white/30 mt-1">
-                        {isViolation ? `Below ${limit}h minimum` : `Above ${limit}h minimum`}
+                    <div className="text-[9px] font-black uppercase tracking-widest mt-2 opacity-50">
+                        {isViolation ? `Below ${limit}h min` : `Above ${limit}h min`}
                     </div>
                 </>
             ) : (
-                <div className="text-white/30 text-lg">No shift</div>
+                <div className="text-muted-foreground/30 text-lg font-black uppercase tracking-widest py-2">No shift</div>
             )}
         </div>
     );
@@ -1013,57 +1022,57 @@ function StudentVisaViz({ result }: { result: ComplianceResult }) {
         const maxHours = Math.max(...Object.values(weeksData).map(w => w.hours), 30);
 
         return (
-            <div className="space-y-5">
-                <div className="text-xs text-white/50">
-                    Employee cannot work more than {limit} hours in any rolling fortnight.
+            <div className="space-y-6">
+                <div className="text-[11px] font-medium text-muted-foreground leading-relaxed p-4 bg-muted/30 rounded-xl border border-border">
+                    Employee cannot work more than <span className="font-black text-foreground">{limit} hours</span> in any rolling fortnight.
                     {isFail && (
-                        <span className="text-red-400 font-medium"> The combined hours exceed this limit.</span>
+                        <span className="text-red-600 dark:text-red-400 font-black uppercase tracking-tight ml-1"> Limits exceeded.</span>
                     )}
                 </div>
 
                 {/* Weekly breakdown */}
-                <div className="space-y-3 max-h-48 overflow-y-auto pr-2">
+                <div className="space-y-4 max-h-56 overflow-y-auto pr-3 custom-scrollbar">
                     {weekKeys.map((weekKey, idx) => {
                         const weekData = weeksData[weekKey];
                         const barWidth = (weekData.hours / maxHours) * 100;
                         const isViolating = violatingWeeks.has(weekKey);
-
-                        // Extract week number from key (e.g., "2026-W42" -> "W42")
                         const weekLabel = weekKey.split('-')[1] || weekKey;
 
                         return (
-                            <div key={`${weekKey}-${idx}`} className="flex items-center gap-4">
-                                <div className="w-24 flex-shrink-0">
+                            <div key={`${weekKey}-${idx}`} className="group">
+                                <div className="flex items-center gap-5 mb-1.5">
+                                    <div className="w-24 flex-shrink-0">
+                                        <div className={cn(
+                                            "text-xs font-black uppercase tracking-widest",
+                                            isViolating ? "text-red-600 dark:text-red-400" : "text-muted-foreground"
+                                        )}>
+                                            {weekLabel}
+                                        </div>
+                                        <div className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-tighter">{weekData.dates}</div>
+                                    </div>
+
+                                    <div className="flex-1 h-2.5 bg-muted rounded-full overflow-hidden shadow-inner">
+                                        <div
+                                            className={cn(
+                                                "h-full transition-all duration-700 rounded-full relative shadow-sm",
+                                                isViolating
+                                                    ? "bg-gradient-to-r from-red-600 to-red-400"
+                                                    : "bg-muted-foreground/30 dark:bg-slate-600"
+                                            )}
+                                            style={{ width: `${barWidth}%` }}
+                                        >
+                                            {isViolating && (
+                                                <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                                            )}
+                                        </div>
+                                    </div>
+
                                     <div className={cn(
-                                        "text-sm font-medium",
-                                        isViolating ? "text-red-400" : "text-white/70"
+                                        "w-12 text-right text-xs font-black tracking-tight",
+                                        isViolating ? "text-red-600 dark:text-red-400" : "text-foreground dark:text-white"
                                     )}>
-                                        {weekLabel}
+                                        {weekData.hours}<span className="text-[10px] opacity-40">h</span>
                                     </div>
-                                    <div className="text-[10px] text-white/30">{weekData.dates}</div>
-                                </div>
-
-                                <div className="flex-1 h-3 bg-slate-800/50 rounded-full overflow-hidden">
-                                    <div
-                                        className={cn(
-                                            "h-full transition-all rounded-full relative",
-                                            isViolating
-                                                ? "bg-gradient-to-r from-red-600 to-red-500"
-                                                : "bg-slate-600"
-                                        )}
-                                        style={{ width: `${barWidth}%` }}
-                                    >
-                                        {isViolating && (
-                                            <div className="absolute inset-0 bg-red-400/30 blur-sm" />
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className={cn(
-                                    "w-12 text-right text-sm font-bold",
-                                    isViolating ? "text-red-400" : "text-white/70"
-                                )}>
-                                    {weekData.hours}h
                                 </div>
                             </div>
                         );
@@ -1072,28 +1081,33 @@ function StudentVisaViz({ result }: { result: ComplianceResult }) {
 
                 {/* Calculation footer */}
                 <div className={cn(
-                    "p-4 rounded-xl border flex items-center justify-between backdrop-blur-sm",
+                    "p-5 rounded-2xl border flex items-center justify-between backdrop-blur-sm shadow-lg transition-all duration-500",
                     isFail
-                        ? "bg-red-950/20 border-red-500/30"
-                        : "bg-slate-800/30 border-white/5"
+                        ? "bg-red-500/10 border-red-500/30 shadow-red-900/5"
+                        : "bg-card border-border shadow-soft"
                 )}>
-                    <div className="flex items-center gap-2 text-xs text-white/50">
-                        <div className={cn("h-2 w-2 rounded-full", isFail ? "bg-red-500 animate-pulse" : "bg-white/20")} />
-                        {worstWindow ? (
-                            <span>Peak: {worstWindow.weeks[0]} + {worstWindow.weeks[1]}</span>
-                        ) : (
-                            <span>No windows evaluated</span>
-                        )}
-                    </div>
-                    <div className="flex items-baseline gap-3">
-                        <span className="text-xs text-white/40 uppercase tracking-wider">Total Window</span>
-                        <span className={cn(
-                            "text-3xl font-bold tracking-tight",
-                            isFail ? "text-red-400" : "text-white"
+                    <div className="flex items-center gap-3">
+                        <div className={cn(
+                            "h-10 w-10 rounded-xl flex items-center justify-center border transition-all duration-300",
+                            isFail ? "bg-red-500/20 border-red-500/20 text-red-600 dark:text-red-400" : "bg-muted border-border text-muted-foreground"
                         )}>
-                            {worstWindow?.hours || 0}h
+                            <Clock className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Fortnight Peak</div>
+                            <div className="text-[11px] font-bold text-foreground truncate max-w-[140px]">
+                                {worstWindow ? `${worstWindow.weeks[0]} + ${worstWindow.weeks[1]}` : "No peak window"}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                        <span className={cn(
+                            "text-4xl font-black tracking-tighter",
+                            isFail ? "text-red-600 dark:text-red-400" : "text-foreground dark:text-white"
+                        )}>
+                            {worstWindow?.hours || 0}<span className="text-base opacity-40 ml-0.5">h</span>
                         </span>
-                        <span className="text-sm text-white/30">/ {limit}h</span>
+                        <span className="text-xs font-black uppercase tracking-widest text-muted-foreground/30">/ {limit}h Limit</span>
                     </div>
                 </div>
             </div>
@@ -1119,19 +1133,19 @@ function MaxConsecutiveDaysViz({ result }: { result: ComplianceResult }) {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <div className={cn("text-4xl font-bold tracking-tighter", result.status === 'fail' ? "text-red-400" : "text-white")}>
-                        {streakDays}<span className="text-lg text-white/30 font-normal ml-1">days</span>
+                    <div className={cn("text-4xl font-black tracking-tighter", result.status === 'fail' ? "text-red-600 dark:text-red-400" : "text-foreground dark:text-white")}>
+                        {streakDays}<span className="text-lg opacity-40 font-bold uppercase tracking-widest ml-1">days</span>
                     </div>
-                    <div className="text-xs text-white/40 font-medium uppercase tracking-wider mt-1">Current Streak</div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mt-1">Current Streak</div>
                 </div>
                 <div className="text-right">
-                    <div className="text-2xl font-bold text-white/10">{limit}</div>
-                    <div className="text-[10px] text-white/20 uppercase">Max Allowed</div>
+                    <div className="text-3xl font-black text-muted-foreground/10">{limit}</div>
+                    <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/20">Max Allowed</div>
                 </div>
             </div>
 
             {/* 20-Day Grid Visualization */}
-            <div className="grid grid-cols-10 gap-1.5">
+            <div className="grid grid-cols-10 gap-2">
                 {Array.from({ length: 20 }).map((_, i) => {
                     const dayNum = i + 1;
                     const isActive = dayNum <= streakDays;
@@ -1141,10 +1155,12 @@ function MaxConsecutiveDaysViz({ result }: { result: ComplianceResult }) {
                         <div
                             key={i}
                             className={cn(
-                                "aspect-square rounded-md flex items-center justify-center text-xs font-bold transition-all",
+                                "aspect-square rounded-lg flex items-center justify-center text-[10px] font-black transition-all duration-300",
                                 isActive
-                                    ? isOverLimit ? "bg-red-500 text-white" : "bg-emerald-500/90 text-white shadow-lg shadow-emerald-500/20"
-                                    : "bg-white/5 text-white/10 border border-white/5"
+                                    ? isOverLimit
+                                        ? "bg-red-500 text-white shadow-lg shadow-red-500/20 scale-110 z-10"
+                                        : "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"
+                                    : "bg-muted text-muted-foreground/20 border border-border/50"
                             )}
                         >
                             {dayNum}
@@ -1154,11 +1170,11 @@ function MaxConsecutiveDaysViz({ result }: { result: ComplianceResult }) {
             </div>
 
             {streakStart && streakEnd && (
-                <div className="flex items-center gap-3 text-sm p-3 bg-white/5 rounded-lg border border-white/5 text-white/60">
-                    <Calendar className="h-4 w-4 text-emerald-400" />
-                    <span>{format(parseISO(streakStart), 'MMMM d')}</span>
-                    <span className="text-white/20">→</span>
-                    <span>{format(parseISO(streakEnd), 'MMMM d')}</span>
+                <div className="flex items-center gap-3 text-[11px] font-medium p-4 bg-muted/30 rounded-xl border border-border text-muted-foreground/70">
+                    <Calendar className="h-4 w-4 text-emerald-500" />
+                    <span className="font-black uppercase tracking-tight">{format(parseISO(streakStart), 'MMM d')}</span>
+                    <span className="opacity-30">→</span>
+                    <span className="font-black uppercase tracking-tight">{format(parseISO(streakEnd), 'MMM d')}</span>
                 </div>
             )}
         </div>
@@ -1173,11 +1189,11 @@ function MaxConsecutiveDaysViz({ result }: { result: ComplianceResult }) {
 
 function DefaultViz({ result }: { result: ComplianceResult }) {
     return (
-        <div className="space-y-3">
-            <div className="text-sm text-white/70">{result.details}</div>
+        <div className="space-y-4">
+            <div className="text-sm font-medium text-muted-foreground leading-relaxed italic">{result.details}</div>
             {result.calculation && Object.keys(result.calculation).length > 0 && (
-                <div className="p-3 bg-slate-900/50 rounded-lg border border-white/10">
-                    <pre className="text-xs text-white/50 overflow-x-auto">
+                <div className="p-4 bg-muted/50 rounded-xl border border-border shadow-inner">
+                    <pre className="text-[10px] text-muted-foreground/60 overflow-x-auto font-mono">
                         {JSON.stringify(result.calculation, null, 2)}
                     </pre>
                 </div>

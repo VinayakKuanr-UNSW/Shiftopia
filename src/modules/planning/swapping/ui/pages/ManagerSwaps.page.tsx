@@ -18,13 +18,8 @@ import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanne
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 
 /* ============================================================
-   DESIGN TOKENS
+   DESIGN TOKENS (Deprecated hex scales, using theme-aware variables)
    ============================================================ */
-
-const CANVAS = '#080B12';
-const SURFACE = '#0D1118';
-const SURFACE_RAISED = '#121820';
-const BORDER_SUBTLE = 'rgba(255,255,255,0.06)';
 
 /* ============================================================
    HELPERS
@@ -44,22 +39,46 @@ const getInitials = (name: string): string => {
     return name.slice(0, 2).toUpperCase();
 };
 
-// Department-coded gradient cards
-function getCardGradient(dept?: string | null): string {
-    const d = (dept || '').toLowerCase();
-    if (d.includes('convention')) return 'from-blue-900/30 via-blue-950/20 to-transparent border-blue-500/15 hover:border-blue-400/30';
-    if (d.includes('exhibition')) return 'from-emerald-900/30 via-emerald-950/20 to-transparent border-emerald-500/15 hover:border-emerald-400/30';
-    if (d.includes('theatre')) return 'from-rose-900/30 via-rose-950/20 to-transparent border-rose-500/15 hover:border-rose-400/30';
-    return 'from-slate-800/30 via-slate-900/20 to-transparent border-white/8 hover:border-white/15';
+// Redesigned: Metropolis Glass dynamic classes with deep venue mapping
+function getDeptGlassClass(data?: {
+    deptName?: string;
+    orgName?: string;
+    groupType?: string;
+    organizationId?: string;
+    subDepartmentId?: string;
+}): string {
+    const d = (data?.deptName || '').toLowerCase();
+    const o = (data?.orgName || '').toLowerCase();
+    const g = (data?.groupType || '').toLowerCase();
+    const sid = data?.subDepartmentId || '';
+
+    // Blue: Convention Centre (Sub-departments: Event Setups, operations, etc. under ED or explicit)
+    // Common pattern for Convention: "Event Sales", "Convention Sales", "Floor Management"
+    if (d.includes('convention') || o.includes('convention') || o.includes('icc') ||
+        g.includes('convention') || sid.startsWith('00000000-0000-0003-01')) return 'dept-card-glass-convention';
+
+    // Green: Exhibition Centre
+    if (d.includes('exhibition') || o.includes('exhibition') || g.includes('exhibition') ||
+        sid.startsWith('00000000-0000-0003-0502')) return 'dept-card-glass-exhibition';
+
+    // Red: Theatre
+    if (d.includes('theatre') || o.includes('theatre') || g.includes('theatre') ||
+        sid.startsWith('00000000-0000-0003-0503')) return 'dept-card-glass-theatre';
+
+    return 'dept-card-glass-default';
 }
+
+
+
 
 function getDeptAccent(dept?: string | null): string {
     const d = (dept || '').toLowerCase();
-    if (d.includes('convention')) return 'text-blue-400';
-    if (d.includes('exhibition')) return 'text-emerald-400';
-    if (d.includes('theatre')) return 'text-rose-400';
-    return 'text-slate-400';
+    if (d.includes('convention')) return 'text-blue-600 dark:text-blue-400';
+    if (d.includes('exhibition')) return 'text-emerald-600 dark:text-emerald-400';
+    if (d.includes('theatre')) return 'text-rose-600 dark:text-rose-400';
+    return 'text-muted-foreground';
 }
+
 
 function getDeptGlow(dept?: string | null): string {
     const d = (dept || '').toLowerCase();
@@ -82,11 +101,11 @@ const STATUS_TABS = [
 ] as const;
 
 const accentMap: Record<string, { bg: string; text: string; ring: string; glow: string }> = {
-    amber: { bg: 'bg-amber-500/10', text: 'text-amber-400', ring: 'ring-amber-500/20', glow: 'shadow-amber-500/20' },
-    blue: { bg: 'bg-blue-500/10', text: 'text-blue-400', ring: 'ring-blue-500/20', glow: 'shadow-blue-500/20' },
-    emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', ring: 'ring-emerald-500/20', glow: 'shadow-emerald-500/20' },
-    red: { bg: 'bg-red-500/10', text: 'text-red-400', ring: 'ring-red-500/20', glow: 'shadow-red-500/20' },
-    slate: { bg: 'bg-slate-500/10', text: 'text-slate-400', ring: 'ring-slate-500/20', glow: 'shadow-slate-500/20' },
+    amber: { bg: 'bg-amber-500/10', text: 'text-amber-600 dark:text-amber-400', ring: 'ring-amber-500/20', glow: 'shadow-amber-500/10' },
+    blue: { bg: 'bg-blue-500/10', text: 'text-blue-600 dark:text-blue-400', ring: 'ring-blue-500/20', glow: 'shadow-blue-500/10' },
+    emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', ring: 'ring-emerald-500/20', glow: 'shadow-emerald-500/10' },
+    red: { bg: 'bg-red-500/10', text: 'text-rose-600 dark:text-rose-400', ring: 'ring-rose-500/20', glow: 'shadow-rose-500/10' },
+    slate: { bg: 'bg-muted/50', text: 'text-muted-foreground', ring: 'ring-border', glow: 'shadow-sm' },
 };
 
 /* ============================================================
@@ -96,71 +115,100 @@ const accentMap: Record<string, { bg: string; text: string; ring: string; glow: 
 const ShiftPane: React.FC<{ data: any; label: string }> = ({ data, label }) => {
     if (!data) {
         return (
-            <div className="flex-1 min-w-[200px] rounded-2xl border border-dashed border-white/8 p-5 flex flex-col items-center justify-center gap-2">
-                <div className="h-10 w-10 rounded-full bg-white/[0.03] flex items-center justify-center">
-                    <ArrowLeftRight className="h-4 w-4 text-white/15" />
+            <div className="flex-1 min-w-[200px] rounded-2xl border border-dashed border-border/60 p-5 flex flex-col items-center justify-center gap-2 bg-muted/5 backdrop-blur-sm">
+                <div className="h-10 w-10 rounded-full bg-muted/20 flex items-center justify-center">
+                    <ArrowLeftRight className="h-4 w-4 text-muted-foreground/30" />
                 </div>
-                <span className="text-[10px] font-mono font-bold uppercase tracking-[0.2em] text-white/20">Open Market</span>
+                <span className="text-[10px] font-mono font-black uppercase tracking-[0.2em] text-muted-foreground/40">Open Market</span>
             </div>
         );
     }
 
     const isRequester = label === 'REQUESTER';
+    const deptClass = getDeptGlassClass({
+        deptName: data.deptName,
+        orgName: data.orgName,
+        groupType: data.groupType,
+        organizationId: data.organizationId,
+        subDepartmentId: data.subDepartmentId
+    });
+
+
+
 
     return (
-        <div className="flex-1 min-w-[200px]">
+        <div className={cn(
+            "flex-1 min-w-[240px] p-6 rounded-[2rem] border transition-all duration-500 relative overflow-hidden group/pane dept-card-glass-base",
+            deptClass
+        )}>
+            {/* Glass Background Highlight */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/[0.05] blur-3xl rounded-full pointer-events-none" />
+
             {/* Label */}
-            <div className="flex items-center gap-2 mb-3">
-                <div className={cn(
-                    "h-1 w-6 rounded-full",
-                    isRequester ? "bg-indigo-500" : "bg-emerald-500"
-                )} />
-                <span className={cn(
-                    "text-[9px] font-mono font-black uppercase tracking-[0.25em]",
-                    isRequester ? "text-indigo-400/70" : "text-emerald-400/70"
-                )}>
-                    {label}
-                </span>
+            <div className="flex items-center justify-between mb-5 relative z-10">
+                <div className="flex items-center gap-2">
+                    <div className={cn(
+                        "h-1.5 w-6 rounded-full",
+                        isRequester ? "bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]" : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+                    )} />
+                    <span className={cn(
+                        "text-[9px] font-black uppercase tracking-[0.25em]",
+                        isRequester ? "text-indigo-600 dark:text-indigo-400" : "text-emerald-600 dark:text-emerald-400"
+                    )}>
+                        {label}
+                    </span>
+                </div>
+                <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest bg-background/40 backdrop-blur-md border-border/50">
+                    {data.deptName || 'General'}
+                </Badge>
             </div>
 
             {/* Employee Row */}
-            <div className="flex items-center gap-3 mb-4">
-                <Avatar className="h-9 w-9 ring-1 ring-white/10">
+            <div className="flex items-center gap-3 mb-6 relative z-10">
+                <Avatar className="h-10 w-10 ring-2 ring-background shadow-xl">
                     <AvatarImage src={data.avatar} />
                     <AvatarFallback className={cn(
                         "text-[10px] font-black",
                         isRequester
-                            ? "bg-gradient-to-br from-indigo-600 to-indigo-800 text-white"
-                            : "bg-gradient-to-br from-emerald-600 to-emerald-800 text-white"
+                            ? "bg-indigo-600 text-white"
+                            : "bg-emerald-600 text-white"
                     )}>
                         {getInitials(data.employeeName || '?')}
                     </AvatarFallback>
                 </Avatar>
                 <div>
-                    <div className="text-[13px] font-bold text-white leading-tight tracking-tight">{data.employeeName}</div>
-                    <div className="text-[10px] text-white/35 font-mono uppercase tracking-wider">{data.roleName}</div>
+                    <div className="text-[14px] font-black text-foreground leading-tight tracking-tight">{data.employeeName}</div>
+                    <div className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider opacity-60 italic">{data.roleName}</div>
                 </div>
             </div>
 
-            {/* Shift Details */}
-            <div className="bg-black/30 rounded-xl p-3 border border-white/[0.04] space-y-2">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-[11px] text-white/60">
-                        <Calendar className="h-3 w-3 opacity-50" />
-                        <span className="font-mono font-medium">{data.formattedDate || 'N/A'}</span>
+            {/* Shift Details (Redesigned Table-like Grid) */}
+            <div className="space-y-3 relative z-10">
+                <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase tracking-widest font-black opacity-50">
+                        <Calendar className="h-3 w-3" />
+                        <span>Date</span>
                     </div>
+                    <span className="text-[11px] font-black text-foreground font-mono">{data.formattedDate || 'N/A'}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-[11px] text-white/60">
-                        <Clock className="h-3 w-3 opacity-50" />
-                        <span className="font-mono font-medium">{data.time}</span>
+
+                <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase tracking-widest font-black opacity-50">
+                        <Clock className="h-3 w-3" />
+                        <span>Time</span>
                     </div>
-                    <span className="text-[10px] font-mono text-white/25 bg-white/[0.03] px-2 py-0.5 rounded-md">{data.duration}</span>
+                    <span className="text-[11px] font-black text-foreground font-mono">{data.time}</span>
                 </div>
+
+                <div className="flex items-center justify-between px-1 pt-3 border-t border-border/30">
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-black opacity-50">Duration</span>
+                    <span className="text-[10px] font-black text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-md">{data.duration}</span>
+                </div>
+
                 {data.hourlyRate > 0 && (
-                    <div className="flex items-center justify-between pt-1.5 border-t border-white/[0.04]">
-                        <span className="text-[9px] font-mono text-white/20 uppercase tracking-wider">Value</span>
-                        <span className="text-[11px] font-mono font-bold text-white/50">${(data.hourlyRate * data.durationNum).toFixed(0)}</span>
+                    <div className="flex items-center justify-between px-1">
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-black opacity-50">Estimated Value</span>
+                        <span className="text-[12px] font-black text-foreground/40 font-mono">${(data.hourlyRate * data.durationNum).toFixed(0)}</span>
                     </div>
                 )}
             </div>
@@ -168,39 +216,53 @@ const ShiftPane: React.FC<{ data: any; label: string }> = ({ data, label }) => {
     );
 };
 
+
 /* ============================================================
    SWAP ARROW (center divider)
    ============================================================ */
 
 const SwapDivider: React.FC<{ hoursDiff: number; payDiff: number; compliance: boolean | null }> = ({ hoursDiff, payDiff, compliance }) => {
-    const hoursColor = hoursDiff > 0 ? 'text-emerald-400' : hoursDiff < 0 ? 'text-red-400' : 'text-white/20';
-    const payColor = payDiff > 0 ? 'text-emerald-400' : payDiff < 0 ? 'text-red-400' : 'text-white/20';
+    const hoursColor = hoursDiff > 0 ? 'text-emerald-600 dark:text-emerald-400' : hoursDiff < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground/30';
+    const payColor = payDiff > 0 ? 'text-emerald-600 dark:text-emerald-400' : payDiff < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground/30';
 
     return (
-        <div className="flex flex-col items-center justify-center px-5 py-2 gap-2 flex-shrink-0">
-            <div className="h-8 w-8 rounded-full bg-white/[0.03] border border-white/[0.06] flex items-center justify-center">
-                <ArrowLeftRight className="h-3.5 w-3.5 text-white/30" />
+        <div className="flex sm:flex-col items-center justify-center px-4 py-6 gap-3 flex-shrink-0 relative">
+            <div className="h-px w-8 sm:h-8 sm:w-px bg-border/50 absolute top-0 left-1/2 -translate-x-1/2 hidden sm:block" />
+            <div className="h-px w-8 sm:h-8 sm:w-px bg-border/50 absolute bottom-0 left-1/2 -translate-x-1/2 hidden sm:block" />
+
+            <div className="h-12 w-12 rounded-full bg-background border border-border flex items-center justify-center shadow-xl relative z-10 transition-transform group-hover:scale-110">
+                <ArrowLeftRight className="h-5 w-5 text-primary" />
             </div>
-            <div className="flex flex-col items-center gap-1">
-                <span className={cn("text-[10px] font-mono font-bold", hoursColor)}>
+
+            <div className="flex flex-col items-center gap-1.5 min-w-[60px]">
+                <Badge variant="secondary" className={cn("text-[10px] font-black font-mono shadow-none px-2", hoursColor)}>
                     {hoursDiff > 0 ? '+' : ''}{hoursDiff.toFixed(1)}h
-                </span>
+                </Badge>
                 {payDiff !== 0 && (
-                    <span className={cn("text-[10px] font-mono font-bold", payColor)}>
+                    <span className={cn("text-[9px] font-mono font-black opacity-60", payColor)}>
                         {payDiff > 0 ? '+' : ''}${payDiff.toFixed(0)}
                     </span>
                 )}
                 {compliance !== null && (
                     <TooltipProvider>
                         <Tooltip>
-                            <TooltipTrigger>
-                                {compliance
-                                    ? <CheckCircle className="h-3 w-3 text-emerald-500" />
-                                    : <AlertTriangle className="h-3 w-3 text-amber-500" />
-                                }
+                            <TooltipTrigger className="mt-1">
+                                <div className={cn(
+                                    "h-6 w-6 rounded-full flex items-center justify-center border",
+                                    compliance
+                                        ? "bg-emerald-500/10 border-emerald-500/20"
+                                        : "bg-amber-500/10 border-amber-500/20"
+                                )}>
+                                    {compliance
+                                        ? <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
+                                        : <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                                    }
+                                </div>
                             </TooltipTrigger>
-                            <TooltipContent>
-                                <p>{compliance ? 'Compliance Passed' : 'Compliance Warnings'}</p>
+                            <TooltipContent side="top" className="bg-popover text-popover-foreground border-border shadow-xl">
+                                <span className="text-[10px] font-black uppercase tracking-wider">
+                                    {compliance ? 'Compliance Passed' : 'Compliance Warnings Detected'}
+                                </span>
                             </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
@@ -209,6 +271,7 @@ const SwapDivider: React.FC<{ hoursDiff: number; payDiff: number; compliance: bo
         </div>
     );
 };
+
 
 /* ============================================================
    UI TYPES & MAPPER
@@ -226,7 +289,16 @@ interface SwapRequestManagement {
         durationNum: number;
         hourlyRate: number;
         avatar?: string;
+        deptName?: string;
+        orgName?: string;
+        groupType?: string;
+        organizationId?: string;
+        subDepartmentId?: string;
     };
+
+
+
+
     recipient: {
         employeeName: string;
         roleName: string;
@@ -237,7 +309,16 @@ interface SwapRequestManagement {
         durationNum: number;
         hourlyRate: number;
         avatar?: string;
+        deptName?: string;
+        orgName?: string;
+        groupType?: string;
+        organizationId?: string;
+        subDepartmentId?: string;
     } | null;
+
+
+
+
     status: SwapStatus;
     reason: string;
     requestedAt: string;
@@ -282,7 +363,16 @@ const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement =>
             durationNum: reqVal.durationHours,
             hourlyRate: reqVal.rate,
             avatar: apiData.requestorEmployee?.avatarUrl,
+            deptName: apiData.originalShift?.departments?.name || 'General',
+            orgName: apiData.originalShift?.organizations?.name || '',
+            groupType: apiData.originalShift?.roles?.group_type || '',
+            organizationId: apiData.originalShift?.organizationId,
+            subDepartmentId: apiData.originalShift?.subDepartmentId,
         },
+
+
+
+
         recipient: apiData.requestedShift ? {
             employeeName: apiData.targetEmployee?.fullName || 'Open Swap',
             roleName: apiData.requestedShift?.roles?.name || 'Any Role',
@@ -293,7 +383,15 @@ const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement =>
             durationNum: recVal.durationHours,
             hourlyRate: recVal.rate,
             avatar: apiData.targetEmployee?.avatarUrl,
+            deptName: apiData.requestedShift?.departments?.name || 'General',
+            orgName: apiData.requestedShift?.organizations?.name || '',
+            groupType: apiData.requestedShift?.roles?.group_type || '',
+            organizationId: apiData.requestedShift?.organizationId,
+            subDepartmentId: apiData.requestedShift?.subDepartmentId,
         } : null,
+
+
+
         status: apiData.status as any,
         reason: apiData.reason || '',
         requestedAt: apiData.created_at,
@@ -305,6 +403,7 @@ const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement =>
         ...deriveStateIds(apiData.status),
     };
 };
+
 
 const deriveStateIds = (status: string): { shiftStateId: string; combinedStateId: string } => {
     switch (status) {
@@ -448,12 +547,12 @@ export const ManagerSwapsPage: React.FC = () => {
 
     // ==================== RENDER ====================
     return (
-        <div className="flex flex-col h-full min-h-screen" style={{ background: `linear-gradient(180deg, ${CANVAS} 0%, #0A0E16 50%, ${CANVAS} 100%)` }}>
+        <div className="flex flex-col h-full min-h-screen bg-background">
             {/* Ambient glow */}
-            <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-indigo-600/[0.03] blur-[150px] rounded-full pointer-events-none" />
+            <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/[0.05] blur-[150px] rounded-full pointer-events-none" />
 
             {/* ── HEADER ── */}
-            <div className="sticky top-0 z-50 backdrop-blur-xl border-b" style={{ borderColor: BORDER_SUBTLE, background: `${SURFACE}ee` }}>
+            <div className="sticky top-0 z-50 backdrop-blur-xl border-b border-border bg-card/80">
                 <div className="max-w-[1400px] mx-auto px-6 py-5">
                     {/* Scope Filter */}
                     <ScopeFilterBanner
@@ -467,16 +566,16 @@ export const ManagerSwapsPage: React.FC = () => {
                     {/* Title + Status Tabs */}
                     <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                         <div>
-                            <h1 className="text-2xl font-black text-white tracking-tight leading-none mb-1">
+                            <h1 className="text-2xl font-black text-foreground tracking-tight leading-none mb-1">
                                 Swap Requests
                             </h1>
-                            <p className="text-[11px] font-mono text-white/25 uppercase tracking-[0.2em]">
+                            <p className="text-[11px] font-mono text-muted-foreground/60 uppercase tracking-[0.2em] font-black">
                                 Manager Review Console
                             </p>
                         </div>
 
                         {/* Status Tabs */}
-                        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-white/[0.02] border border-white/[0.04]">
+                        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/30 border border-border">
                             {STATUS_TABS.map(tab => {
                                 const isActive = statusFilter === tab.id;
                                 const colors = accentMap[tab.accent];
@@ -486,17 +585,17 @@ export const ManagerSwapsPage: React.FC = () => {
                                         key={tab.id}
                                         onClick={() => setStatusFilter(tab.id as any)}
                                         className={cn(
-                                            "relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-bold transition-all duration-300",
+                                            "relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-black transition-all duration-300",
                                             isActive
-                                                ? `${colors.bg} ${colors.text} shadow-lg ${colors.glow}`
-                                                : "text-white/30 hover:text-white/50 hover:bg-white/[0.03]"
+                                                ? `${colors.bg} ${colors.text} shadow-sm`
+                                                : "text-muted-foreground/50 hover:text-foreground hover:bg-muted/50"
                                         )}
                                     >
                                         <TabIcon className="h-3.5 w-3.5" />
                                         <span className="hidden sm:inline">{tab.label}</span>
                                         <span className={cn(
                                             "min-w-[18px] h-[18px] rounded-full text-[9px] font-black flex items-center justify-center px-1",
-                                            isActive ? `${colors.bg} ${colors.text} ring-1 ${colors.ring}` : "bg-white/5 text-white/20"
+                                            isActive ? `${colors.bg} ${colors.text} ring-1 ${colors.ring}` : "bg-muted text-muted-foreground/40"
                                         )}>
                                             {statusCounts[tab.id] || 0}
                                         </span>
@@ -514,7 +613,7 @@ export const ManagerSwapsPage: React.FC = () => {
                             {/* Refresh */}
                             <button
                                 onClick={fetchData}
-                                className="ml-1 h-8 w-8 rounded-xl flex items-center justify-center text-white/20 hover:text-white/50 hover:bg-white/[0.03] transition-all"
+                                className="ml-1 h-8 w-8 rounded-xl flex items-center justify-center text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-all border border-transparent hover:border-primary/20"
                                 title="Refresh"
                             >
                                 <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
@@ -536,14 +635,14 @@ export const ManagerSwapsPage: React.FC = () => {
                         /* Empty State */
                         <div className="flex flex-col items-center justify-center py-32 gap-6">
                             <div className="relative">
-                                <div className="h-20 w-20 rounded-3xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-center">
-                                    <ArrowLeftRight className="h-8 w-8 text-white/10" />
+                                <div className="h-20 w-20 rounded-3xl bg-muted/40 border border-border flex items-center justify-center shadow-2xl">
+                                    <ArrowLeftRight className="h-8 w-8 text-muted-foreground/20" />
                                 </div>
-                                <div className="absolute -inset-4 bg-indigo-500/5 rounded-full blur-2xl animate-pulse" />
+                                <div className="absolute -inset-4 bg-primary/5 rounded-full blur-2xl animate-pulse" />
                             </div>
                             <div className="text-center">
-                                <p className="text-sm font-bold text-white/30 mb-1">No {statusFilter === 'all' ? '' : statusFilter.replace('_', ' ').toLowerCase()} requests</p>
-                                <p className="text-[11px] text-white/15 font-mono">Check back later or adjust your filters</p>
+                                <p className="text-sm font-black text-foreground/40 mb-1 uppercase tracking-widest">No {statusFilter === 'all' ? '' : statusFilter.replace('_', ' ').toLowerCase()} requests</p>
+                                <p className="text-[11px] text-muted-foreground/40 font-mono font-black">Check back later or adjust your filters</p>
                             </div>
                         </div>
                     ) : (
@@ -567,31 +666,31 @@ export const ManagerSwapsPage: React.FC = () => {
                                 {filteredRequests.map((request, idx) => (
                                     <motion.div
                                         key={request.id}
-                                        initial={{ opacity: 0, y: 12 }}
-                                        animate={{ opacity: 1, y: 0 }}
+                                        initial={{ opacity: 0, scale: 0.98 }}
+                                        animate={{ opacity: 1, scale: 1 }}
                                         exit={{ opacity: 0, scale: 0.96 }}
-                                        transition={{ delay: idx * 0.05, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                                        transition={{ delay: idx * 0.05, duration: 0.3, ease: "easeOut" }}
                                         className={cn(
-                                            "group rounded-2xl border bg-gradient-to-r backdrop-blur-sm transition-all duration-300 hover:shadow-xl overflow-hidden",
-                                            getCardGradient(request.deptName),
-                                            getDeptGlow(request.deptName),
-                                            selectedIds.has(request.id) && "ring-1 ring-indigo-500/30"
+                                            "group rounded-[2.5rem] border transition-all duration-300 hover:shadow-2xl overflow-hidden bg-card/40 backdrop-blur-md",
+                                            "hover:translate-y-[-2px] border-border shadow-sm",
+                                            selectedIds.has(request.id) && "ring-2 ring-primary border-primary/40 shadow-primary/20"
                                         )}
                                     >
+
                                         <div className="flex flex-col lg:flex-row">
                                             {/* Left: Checkbox + State Badges */}
                                             {statusFilter === 'MANAGER_PENDING' && (
-                                                <div className="flex lg:flex-col items-center justify-center gap-3 p-4 lg:px-5 lg:border-r border-white/[0.04]">
+                                                <div className="flex lg:flex-col items-center justify-center gap-3 p-4 lg:px-5 lg:border-r border-border/50 bg-muted/5">
                                                     <Checkbox
                                                         checked={selectedIds.has(request.id)}
                                                         onCheckedChange={() => toggleSelection(request.id)}
-                                                        className="border-white/20 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
+                                                        className="border-border shadow-sm"
                                                     />
                                                     <div className="flex lg:flex-col gap-1">
-                                                        <Badge variant="outline" className="text-[8px] text-cyan-400/50 border-cyan-500/15 font-mono px-1.5 py-0">
+                                                        <Badge variant="outline" className="text-[8px] text-primary/50 border-primary/10 font-mono px-1.5 py-0 bg-background/50">
                                                             {request.shiftStateId}
                                                         </Badge>
-                                                        <Badge variant="outline" className="text-[8px] text-white/20 border-white/8 font-mono px-1.5 py-0">
+                                                        <Badge variant="outline" className="text-[8px] text-muted-foreground/30 border-border font-mono px-1.5 py-0">
                                                             {request.combinedStateId}
                                                         </Badge>
                                                     </div>
@@ -599,7 +698,7 @@ export const ManagerSwapsPage: React.FC = () => {
                                             )}
 
                                             {/* Center: Swap Comparison */}
-                                            <div className="flex-1 flex flex-col sm:flex-row items-stretch gap-0 p-5">
+                                            <div className="flex-1 flex flex-col sm:flex-row items-center gap-2 p-3">
                                                 <ShiftPane data={request.requestor} label="REQUESTER" />
                                                 <SwapDivider
                                                     hoursDiff={request.hoursDiff}
@@ -609,22 +708,23 @@ export const ManagerSwapsPage: React.FC = () => {
                                                 <ShiftPane data={request.recipient} label="OFFERER" />
                                             </div>
 
+
                                             {/* Right: Action Panel */}
-                                            <div className="flex flex-row lg:flex-col items-center justify-between gap-3 p-5 lg:pl-0 lg:border-l border-white/[0.04] min-w-[180px]">
+                                            <div className="flex flex-row lg:flex-col items-center justify-between gap-3 p-5 lg:pl-0 lg:border-l border-border/50 min-w-[180px] bg-muted/5">
                                                 {/* Meta */}
                                                 <div className="lg:flex-1 flex flex-col items-start lg:items-end gap-1.5 w-full">
-                                                    <span className="text-[9px] font-mono text-white/20 uppercase tracking-wider">
+                                                    <span className="text-[9px] font-mono text-muted-foreground/50 uppercase tracking-widest font-black">
                                                         {format(parseISO(request.requestedAt), 'MMM d, h:mm a')}
                                                     </span>
                                                     {request.reason && (
-                                                        <p className="text-[10px] text-white/30 line-clamp-2 lg:text-right leading-relaxed max-w-[160px]">
+                                                        <p className="text-[10px] text-foreground/50 line-clamp-2 lg:text-right leading-relaxed max-w-[160px] italic font-medium">
                                                             "{request.reason}"
                                                         </p>
                                                     )}
                                                     <div className="flex gap-1.5 flex-wrap">
                                                         {request.tags.map(tag => (
                                                             <Badge key={tag} variant="outline" className={cn(
-                                                                "text-[8px] font-mono px-1.5 py-0 border-white/8",
+                                                                "text-[8px] font-black font-mono px-1.5 py-0 border-border/50 bg-background/50",
                                                                 getDeptAccent(tag)
                                                             )}>
                                                                 {tag}
@@ -639,7 +739,7 @@ export const ManagerSwapsPage: React.FC = () => {
                                                         <Button
                                                             onClick={() => handleAction([request.id], 'rejected')}
                                                             size="sm"
-                                                            className="flex-1 h-9 rounded-xl bg-red-500/8 hover:bg-red-500/15 text-red-400 border border-red-500/15 hover:border-red-500/30 text-[10px] font-bold uppercase tracking-wider transition-all"
+                                                            className="flex-1 h-9 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[10px] font-black uppercase tracking-wider transition-all"
                                                         >
                                                             <X className="h-3 w-3 mr-1.5" />
                                                             Reject
@@ -647,7 +747,7 @@ export const ManagerSwapsPage: React.FC = () => {
                                                         <Button
                                                             onClick={() => handleAction([request.id], 'approved')}
                                                             size="sm"
-                                                            className="flex-1 h-9 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/30 text-[10px] font-bold uppercase tracking-wider transition-all"
+                                                            className="flex-1 h-9 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 text-[10px] font-black uppercase tracking-wider transition-all border-none"
                                                         >
                                                             <Check className="h-3 w-3 mr-1.5" />
                                                             Approve
@@ -655,12 +755,12 @@ export const ManagerSwapsPage: React.FC = () => {
                                                     </div>
                                                 ) : (
                                                     <div className={cn(
-                                                        "flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider border",
+                                                        "flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border",
                                                         request.status === 'APPROVED'
-                                                            ? "bg-emerald-500/8 text-emerald-400 border-emerald-500/15"
+                                                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
                                                             : request.status === 'REJECTED'
-                                                                ? "bg-red-500/8 text-red-400 border-red-500/15"
-                                                                : "bg-white/5 text-white/30 border-white/8"
+                                                                ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+                                                                : "bg-muted text-muted-foreground/50 border-border"
                                                     )}>
                                                         {request.status === 'APPROVED' && <CheckCircle className="h-3.5 w-3.5" />}
                                                         {request.status === 'REJECTED' && <XCircle className="h-3.5 w-3.5" />}
@@ -685,34 +785,34 @@ export const ManagerSwapsPage: React.FC = () => {
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: 80, opacity: 0 }}
                         transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                        className="sticky bottom-0 z-20 backdrop-blur-xl border-t shadow-2xl shadow-black/50"
-                        style={{ borderColor: BORDER_SUBTLE, background: `${SURFACE_RAISED}f0` }}
+                        className="sticky bottom-4 z-20 backdrop-blur-xl border border-primary/20 shadow-2xl shadow-primary/10 rounded-[2rem] mx-6"
+                        style={{ background: 'hsl(var(--card) / 0.9)' }}
                     >
                         <div className="max-w-[1400px] mx-auto px-6 py-4 flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="h-8 w-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-                                    <span className="text-[11px] font-black text-indigo-400">{selectedIds.size}</span>
+                                <div className="h-8 w-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                                    <span className="text-[11px] font-black text-primary">{selectedIds.size}</span>
                                 </div>
-                                <span className="text-[11px] font-mono text-white/40 uppercase tracking-wider">
-                                    Selected
+                                <span className="text-[11px] font-black text-foreground/50 uppercase tracking-widest">
+                                    Requests Selected
                                 </span>
                             </div>
                             <div className="flex gap-2">
                                 <Button
                                     onClick={() => handleAction(Array.from(selectedIds), 'rejected')}
                                     size="sm"
-                                    className="h-9 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-[10px] font-bold uppercase tracking-wider"
+                                    className="h-9 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[10px] font-black uppercase tracking-wider"
                                 >
                                     <X className="h-3 w-3 mr-1.5" />
-                                    Reject Selected
+                                    Reject Batch
                                 </Button>
                                 <Button
                                     onClick={() => handleAction(Array.from(selectedIds), 'approved')}
                                     size="sm"
-                                    className="h-9 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/30 text-[10px] font-bold uppercase tracking-wider"
+                                    className="h-9 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 text-[10px] font-black uppercase tracking-wider border-none"
                                 >
                                     <Check className="h-3 w-3 mr-1.5" />
-                                    Approve Selected
+                                    Approve Batch
                                 </Button>
                             </div>
                         </div>
@@ -734,61 +834,61 @@ export const ManagerSwapsPage: React.FC = () => {
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.9, opacity: 0 }}
                             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                            className="relative max-w-md w-full rounded-3xl border overflow-hidden"
-                            style={{ background: SURFACE_RAISED, borderColor: BORDER_SUBTLE }}
+                            className="relative max-w-md w-full rounded-[2.5rem] border border-border shadow-3xl overflow-hidden bg-card"
                         >
                             {/* Status stripe */}
                             <div className={cn(
-                                "h-1",
-                                actionConfirm.status === 'approved' ? "bg-emerald-500" : "bg-red-500"
+                                "h-1.5",
+                                actionConfirm.status === 'approved' ? "bg-emerald-500" : "bg-rose-500"
                             )} />
 
                             <div className="p-8">
                                 <div className="flex items-center gap-3 mb-4">
                                     <div className={cn(
-                                        "h-10 w-10 rounded-xl flex items-center justify-center border",
+                                        "h-12 w-12 rounded-2xl flex items-center justify-center border",
                                         actionConfirm.status === 'approved'
                                             ? "bg-emerald-500/10 border-emerald-500/20"
-                                            : "bg-red-500/10 border-red-500/20"
+                                            : "bg-rose-500/10 border-rose-500/20"
                                     )}>
                                         <Gavel className={cn(
-                                            "h-5 w-5",
-                                            actionConfirm.status === 'approved' ? "text-emerald-400" : "text-red-400"
+                                            "h-6 w-6",
+                                            actionConfirm.status === 'approved' ? "text-emerald-500" : "text-rose-500"
                                         )} />
                                     </div>
                                     <div>
-                                        <h3 className="text-lg font-black text-white tracking-tight">
+                                        <h3 className="text-xl font-black text-foreground tracking-tight">
                                             Confirm {actionConfirm.status === 'approved' ? 'Approval' : 'Rejection'}
                                         </h3>
-                                        <p className="text-[11px] font-mono text-white/30 uppercase tracking-wider">
+                                        <p className="text-[11px] font-mono text-muted-foreground font-black uppercase tracking-widest">
                                             {actionConfirm.ids.length} request{actionConfirm.ids.length > 1 ? 's' : ''}
                                         </p>
                                     </div>
                                 </div>
 
-                                <p className="text-sm text-white/50 mb-8 leading-relaxed">
+                                <p className="text-sm text-muted-foreground/80 mb-8 leading-relaxed font-medium">
                                     This action will {actionConfirm.status === 'approved' ? 'approve and execute' : 'reject'} the
                                     selected swap {actionConfirm.ids.length > 1 ? 'requests' : 'request'}. This cannot be undone.
                                 </p>
 
                                 <div className="flex justify-end gap-3">
                                     <Button
-                                        variant="outline"
+                                        variant="ghost"
                                         onClick={() => setActionConfirm(null)}
-                                        className="rounded-xl text-white/60 border-white/10 hover:bg-white/5 text-[11px] font-bold uppercase tracking-wider"
+                                        className="rounded-xl text-muted-foreground hover:bg-muted font-black uppercase tracking-widest text-[10px]"
                                     >
                                         Cancel
                                     </Button>
                                     <Button
                                         onClick={handleConfirmAction}
                                         className={cn(
-                                            "rounded-xl text-white text-[11px] font-bold uppercase tracking-wider shadow-lg",
+                                            "rounded-xl text-primary-foreground text-[11px] font-black uppercase tracking-wider shadow-lg border-none h-11 px-6",
                                             actionConfirm.status === 'approved'
-                                                ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/30"
-                                                : "bg-red-600 hover:bg-red-500 shadow-red-900/30"
+                                                ? "bg-primary hover:bg-primary/90 shadow-primary/20"
+                                                : "bg-rose-600 hover:bg-rose-500 shadow-rose-500/20"
                                         )}
+
                                     >
-                                        {actionConfirm.status === 'approved' ? 'Approve' : 'Reject'}
+                                        {actionConfirm.status === 'approved' ? 'Confirm Approval' : 'Confirm Rejection'}
                                     </Button>
                                 </div>
                             </div>

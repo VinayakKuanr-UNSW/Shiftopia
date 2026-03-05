@@ -86,8 +86,8 @@ const RiskAlertsSection: React.FC<RiskAlertsSectionProps> = ({ employeeId, quart
                                 key={idx}
                                 className={
                                     indicator.type === 'success'
-                                        ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-500/20 dark:text-green-300 dark:border-green-500/30 w-full justify-start py-2'
-                                        : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30 w-full justify-start py-2'
+                                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 w-full justify-start py-2'
+                                        : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 w-full justify-start py-2'
                                 }
                             >
                                 {indicator.type === 'success' ? (

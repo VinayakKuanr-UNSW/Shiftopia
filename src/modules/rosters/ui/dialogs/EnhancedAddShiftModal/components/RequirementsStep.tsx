@@ -23,7 +23,7 @@ export const RequirementsStep: React.FC<RequirementsStepProps> = ({
                 name="required_skills"
                 render={({ field }) => (
                     <FormItem>
-                        <FormLabel className="text-white/70">Required Skills</FormLabel>
+                        <FormLabel className="text-muted-foreground">Required Skills</FormLabel>
                         <FormControl>
                             <MultiSelect
                                 options={skills.map((s) => ({ id: s.id, name: s.name }))}
@@ -43,7 +43,7 @@ export const RequirementsStep: React.FC<RequirementsStepProps> = ({
                 name="required_licenses"
                 render={({ field }) => (
                     <FormItem>
-                        <FormLabel className="text-white/70">Required Licenses</FormLabel>
+                        <FormLabel className="text-muted-foreground">Required Licenses</FormLabel>
                         <FormControl>
                             <MultiSelect
                                 options={licenses.map((l) => ({ id: l.id, name: l.name }))}
@@ -63,7 +63,7 @@ export const RequirementsStep: React.FC<RequirementsStepProps> = ({
                 name="event_ids"
                 render={({ field }) => (
                     <FormItem>
-                        <FormLabel className="text-white/70">Related Events</FormLabel>
+                        <FormLabel className="text-muted-foreground">Related Events</FormLabel>
                         <FormControl>
                             <MultiSelect
                                 options={events.map((e) => ({ id: e.id, name: e.name }))}

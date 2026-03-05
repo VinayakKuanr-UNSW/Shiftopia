@@ -974,7 +974,7 @@ export const shiftsQueries = {
                 .is('deleted_at', null)
                 .eq('is_cancelled', false)
                 // Shifts that are/were in bidding OR have been assigned from bidding
-                .or('bidding_status.in.(on_bidding_normal,on_bidding_urgent),assigned_employee_id.not.is.null');
+                .or('bidding_status.eq.on_bidding_normal,bidding_status.eq.on_bidding_urgent,assigned_employee_id.not.is.null');
 
             if (subDepartmentId && isValidUuid(subDepartmentId)) {
                 query = query.eq('sub_department_id', subDepartmentId);

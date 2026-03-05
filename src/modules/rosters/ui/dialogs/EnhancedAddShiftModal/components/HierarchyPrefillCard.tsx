@@ -63,17 +63,17 @@ export const HierarchyPrefillCard: React.FC<HierarchyPrefillCardProps> = ({
                         <h4 className="text-xs font-bold text-violet-300 uppercase tracking-wider mb-1">
                             Global Filter Context
                         </h4>
-                        <div className="flex items-center gap-2 text-sm text-white font-medium">
+                        <div className="flex items-center gap-2 text-sm text-foreground font-medium">
                             <span>{names.org}</span>
                             {(names.dept) && (
                                 <>
-                                    <ArrowRight className="h-3 w-3 text-white/20" />
+                                    <ArrowRight className="h-3 w-3 text-foreground/20" />
                                     <span>{names.dept}</span>
                                 </>
                             )}
                             {(names.subDept) && (
                                 <>
-                                    <ArrowRight className="h-3 w-3 text-white/20" />
+                                    <ArrowRight className="h-3 w-3 text-foreground/20" />
                                     <span>{names.subDept}</span>
                                 </>
                             )}

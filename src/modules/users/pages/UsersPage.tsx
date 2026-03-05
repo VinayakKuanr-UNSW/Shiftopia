@@ -72,26 +72,28 @@ const UsersPage: React.FC = () => {
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
-                className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0d1424] via-[#1a2744] to-[#0d1424] p-8 border border-white/5 shadow-2xl"
+                className="relative overflow-hidden rounded-[2.5rem] bg-card p-8 border border-border/50 shadow-2xl shadow-primary/5"
             >
                 <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
 
                 <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                     <div>
                         <div className="flex items-center gap-3 mb-2">
-                            <h1 className="text-3xl font-bold text-white tracking-tight">User Management</h1>
+                            <h1 className="text-4xl font-black text-foreground tracking-tight leading-none">
+                                User Management
+                            </h1>
                         </div>
-                        <p className="text-blue-200/60 max-w-xl">
+                        <p className="text-muted-foreground max-w-xl font-medium">
                             Comprehensive employee profiles, performance metrics, and compliance management.
                         </p>
                     </div>
 
                     <div className="flex gap-3">
-                        <Button variant="outline" className="bg-white/5 border-white/10 hover:bg-white/10 text-white gap-2">
+                        <Button variant="outline" className="bg-muted/40 border-border/50 hover:bg-muted/60 text-foreground gap-2 rounded-xl h-11 px-5">
                             <Filter className="w-4 h-4" />
                             Filters
                         </Button>
-                        <Button variant="default" className="bg-primary hover:bg-primary/90 text-white shadow-glow gap-2">
+                        <Button variant="default" className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-glow gap-2 rounded-xl h-11 px-6 text-[11px] font-black uppercase tracking-[0.2em] shadow-lg shadow-primary/20">
                             <Download className="w-4 h-4" />
                             Export Data
                         </Button>
@@ -99,21 +101,22 @@ const UsersPage: React.FC = () => {
                 </div>
 
                 {/* Filters Bar */}
-                <div className="mt-8 p-4 rounded-xl bg-white/5 border border-white/10 backdrop-blur-md flex flex-wrap gap-6 items-end">
+                <div className="mt-8 p-5 rounded-2xl bg-muted/30 border border-border/50 backdrop-blur-md flex flex-wrap gap-6 items-end">
                     {/* User Selector */}
                     <div className="flex-1 min-w-[300px]">
-                        <Label className="text-xs text-blue-200/60 mb-2 uppercase tracking-wider font-semibold flex items-center gap-2">
-                            <User className="w-3 h-3" />
+                        <Label className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mb-3 flex items-center gap-2">
+                            <User className="w-3.5 h-3.5 text-primary" />
                             Select Employee
                         </Label>
                         <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                            <SelectTrigger className="w-full bg-black/20 border-white/10 text-white h-11 focus:ring-primary/50">
+                            <SelectTrigger className="w-full bg-card border border-border/50 text-foreground h-12 rounded-xl focus:ring-2 focus:ring-primary/30 text-sm font-semibold hover:border-primary/30 transition-all shadow-sm">
                                 <SelectValue placeholder="Choose a user to manage..." />
                             </SelectTrigger>
-                            <SelectContent className="bg-[#1a2744] border-white/10 text-white">
+                            <SelectContent className="bg-card border-border text-foreground shadow-2xl rounded-xl">
                                 {profiles?.map(profile => (
-                                    <SelectItem key={profile.id} value={profile.id} className="focus:bg-white/10 focus:text-white">
-                                        {profile.full_name || `${profile.first_name} ${profile.last_name}`} <span className="text-white/40 ml-2 text-xs">— {profile.email}</span>
+                                    <SelectItem key={profile.id} value={profile.id} className="focus:bg-muted/50 focus:text-foreground cursor-pointer py-2.5 rounded-lg">
+                                        <span className="font-semibold">{profile.full_name || `${profile.first_name} ${profile.last_name}`}</span>
+                                        <span className="text-muted-foreground ml-2 text-xs font-medium">— {profile.email}</span>
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -122,18 +125,18 @@ const UsersPage: React.FC = () => {
 
                     {/* Quarter Selector */}
                     <div className="w-48">
-                        <Label className="text-xs text-blue-200/60 mb-2 uppercase tracking-wider font-semibold">Period</Label>
+                        <Label className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mb-3 block">Period</Label>
                         <Select
                             value={selectedQuarter}
                             onValueChange={setSelectedQuarter}
                             disabled={isAllTime}
                         >
-                            <SelectTrigger className="w-full bg-black/20 border-white/10 text-white h-11 disabled:opacity-50">
+                            <SelectTrigger className="w-full bg-card border border-border/50 text-foreground h-12 rounded-xl disabled:opacity-50 text-sm font-semibold hover:border-primary/30 transition-all shadow-sm">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SelectContent className="bg-[#1a2744] border-white/10 text-white">
+                            <SelectContent className="bg-card border-border text-foreground shadow-2xl rounded-xl">
                                 {quarterOptions.map(quarter => (
-                                    <SelectItem key={quarter} value={quarter} className="focus:bg-white/10 focus:text-white">
+                                    <SelectItem key={quarter} value={quarter} className="focus:bg-muted/50 focus:text-foreground cursor-pointer py-2.5 rounded-lg font-semibold">
                                         {formatQuarter(quarter)}
                                     </SelectItem>
                                 ))}
@@ -142,7 +145,7 @@ const UsersPage: React.FC = () => {
                     </div>
 
                     {/* All Time Toggle */}
-                    <div className="flex items-center space-x-3 pb-3 px-2">
+                    <div className="flex items-center space-x-3 pb-3 px-2 h-12">
                         <Switch
                             id="all-time-mode"
                             checked={isAllTime}
@@ -151,7 +154,7 @@ const UsersPage: React.FC = () => {
                         />
                         <Label
                             htmlFor="all-time-mode"
-                            className="text-sm text-white cursor-pointer select-none"
+                            className="text-xs font-black uppercase tracking-widest text-foreground cursor-pointer select-none"
                         >
                             All Time View
                         </Label>
@@ -165,14 +168,14 @@ const UsersPage: React.FC = () => {
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        className="flex flex-col items-center justify-center py-20 text-center space-y-6 rounded-3xl border border-white/5 bg-white/5 border-dashed"
+                        className="flex flex-col items-center justify-center py-20 text-center space-y-6 rounded-[2.5rem] border border-border/50 bg-muted/10 border-dashed"
                     >
-                        <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                            <User className="w-10 h-10 text-primary/50" />
+                        <div className="w-20 h-20 rounded-[2rem] bg-primary/5 flex items-center justify-center mb-2 shadow-inner">
+                            <User className="w-10 h-10 text-primary/60" />
                         </div>
                         <div className="space-y-2">
-                            <h3 className="text-xl font-medium text-white">No Employee Selected</h3>
-                            <p className="text-blue-200/60 max-w-sm mx-auto">
+                            <h3 className="text-xl font-black text-foreground">No Employee Selected</h3>
+                            <p className="text-muted-foreground max-w-sm mx-auto font-medium">
                                 Select an employee from the dropdown above to view their skills, compliance status, and performance metrics.
                             </p>
                         </div>

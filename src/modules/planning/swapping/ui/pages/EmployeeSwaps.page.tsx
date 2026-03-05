@@ -70,14 +70,14 @@ function getDeptColor(groupType: string | null | undefined, dept: string): strin
 
 // Premium Card Background Styling — semantic CSS classes handle light/dark
 function getCardBg(groupType: string | null | undefined, dept: string): string {
-    const base = 'dept-card-base';
+    const base = 'dept-card-glass-base';
     if (groupType === 'convention_centre' || dept.toLowerCase().includes('convention'))
-        return `${base} dept-card-convention`;
+        return `${base} dept-card-glass-convention`;
     if (groupType === 'exhibition_centre' || dept.toLowerCase().includes('exhibition'))
-        return `${base} dept-card-exhibition`;
+        return `${base} dept-card-glass-exhibition`;
     if (groupType === 'theatre' || dept.toLowerCase().includes('theatre'))
-        return `${base} dept-card-theatre`;
-    return `${base} dept-card-default`;
+        return `${base} dept-card-glass-theatre`;
+    return `${base} dept-card-glass-default`;
 }
 
 // Status configuration with icons, colors, and labels
@@ -312,72 +312,73 @@ export const EmployeeSwapsPage: React.FC = () => {
             <div
                 key={swap.id}
                 className={cn(
+                    "flex flex-col h-full rounded-[1.5rem] transition-all duration-500 overflow-hidden border",
                     getCardBg(shift?.group_type, shift?.departments?.name || ''),
-                    "flex flex-col h-full rounded-xl transition-all duration-300",
-                    isExpired && "opacity-60 grayscale-[0.8] hover:grayscale-0 hover:opacity-90"
+                    isExpired ? "opacity-60 grayscale-[0.8]" : "hover:shadow-2xl hover:translate-y-[-4px] hover:border-primary/40"
                 )}
             >
                 {/* HEADER ZONE */}
-                <div className="px-4 py-3 border-b border-slate-200/60 dark:border-white/5 bg-slate-50/80 dark:bg-black/20 backdrop-blur-sm">
+                <div className="px-5 py-3.5 border-b border-border/10 bg-muted/20 backdrop-blur-md">
                     <div className="flex items-center justify-between gap-2">
-                        <div className={cn("flex items-center gap-1.5", statusConfig.textColor)}>
-                            <StatusIcon className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-                            <span className="text-xs font-bold uppercase tracking-wide">{statusConfig.label}</span>
+                        <div className={cn("flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-background/40 border border-border/20 backdrop-blur-sm", statusConfig.textColor)}>
+                            <StatusIcon className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
+                            <span className="text-[9px] font-black uppercase tracking-widest">{statusConfig.label}</span>
                         </div>
-                        <h3 className="font-bold text-sm text-slate-900 dark:text-white/90 truncate">
+                        <h3 className="font-black text-xs text-foreground/90 truncate tracking-tight uppercase font-mono">
                             {shift?.roles?.name || 'Shift'}
                         </h3>
                     </div>
                 </div>
 
                 {/* BODY ZONE */}
-                <div className="px-4 py-4 flex-1 space-y-3">
-                    {/* Department */}
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Building2 className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                        <span>{shift?.departments?.name || 'Department'} • {shift?.sub_departments?.name || 'General'}</span>
+                <div className="p-5 flex-1 space-y-4 relative">
+                    {/* Department Breadcrumb */}
+                    <div className="text-[9px] text-muted-foreground/60 tracking-[0.1em] font-mono font-black uppercase flex items-center gap-1.5">
+                        <Building2 className="h-3 w-3 opacity-40" />
+                        <span>{shift?.departments?.name || 'Department'} <span className="text-primary/30">/</span> {shift?.sub_departments?.name || 'General'}</span>
                     </div>
 
-                    {/* Date */}
-                    <div className="flex items-center gap-2 text-sm text-foreground">
-                        <Calendar className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <span>{shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'EEEE, MMM d, yyyy') : (shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEEE, MMM d, yyyy') : 'Unknown date')}</span>
-                    </div>
-
-                    {/* Time */}
-                    <div className="flex items-center gap-2 text-sm text-foreground">
-                        <Clock className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <span>{shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : formatTime(shift?.start_time || '')} - {shift?.end_at ? formatInTimezone(new Date(shift.end_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : formatTime(shift?.end_time || '')}</span>
-                    </div>
-
-                    {timerText && (
-                        <div className={cn(
-                            "flex items-center gap-2 text-xs px-2 py-1 rounded-md w-fit font-bold",
-                            isExpired ? "bg-red-50 dark:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30" : "bg-purple-50 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-500/30"
-                        )}>
-                            <Clock className="h-3 w-3" aria-hidden="true" />
-                            <span>{timerText}</span>
+                    <div className="space-y-2">
+                        {/* Date */}
+                        <div className="flex items-center gap-2.5 bg-muted/40 px-3 py-2 rounded-xl border border-border/50 backdrop-blur-md w-fit">
+                            <Calendar className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                            <span className="text-[11px] font-black font-mono leading-none tracking-tight">
+                                {shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'EEEE, MMM d, yyyy') : (shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEEE, MMM d, yyyy') : 'Unknown date')}
+                            </span>
                         </div>
-                    )}
 
-                    {/* Compliance Indicators */}
-                    <div className="flex items-center gap-3 text-xs">
-                        <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                        {/* Time */}
+                        <div className="flex items-center gap-2.5 bg-muted/40 px-3 py-2 rounded-xl border border-border/50 backdrop-blur-md w-fit">
+                            <Clock className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                            <span className="text-[11px] font-black font-mono leading-none tracking-tight">
+                                {shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : formatTime(shift?.start_time || '')} – {shift?.end_at ? formatInTimezone(new Date(shift.end_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : formatTime(shift?.end_time || '')}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 pt-2">
+                        {timerText && (
+                            <div className={cn(
+                                "flex items-center gap-2 text-[10px] px-3 py-1.5 rounded-xl font-black font-mono backdrop-blur-md border uppercase tracking-tight",
+                                isExpired
+                                    ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+                                    : "bg-primary/10 text-primary border-primary/20"
+                            )}>
+                                <Clock className="h-3 w-3" aria-hidden="true" />
+                                <span>{timerText}</span>
+                            </div>
+                        )}
+
+                        {/* Compliance Indicator */}
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-black text-[10px] uppercase font-mono tracking-tight backdrop-blur-md ml-auto">
                             <ShieldCheck className="h-3 w-3" aria-hidden="true" />
                             <span>Compliant</span>
                         </div>
                     </div>
-
-                    {/* Helper Text */}
-                    {statusConfig.helperText && swap.status === 'OPEN' && (
-                        <p className="text-xs text-amber-500/80 italic mt-2">
-                            {statusConfig.helperText}
-                        </p>
-                    )}
                 </div>
 
                 {/* FOOTER ZONE */}
-                <div className="px-4 py-3 border-t border-slate-200/60 dark:border-white/5 bg-slate-50/60 dark:bg-slate-900/30 space-y-2">
+                <div className="p-0 border-t border-border/10">
                     {/* Logic: Show options based on ownership and status */}
                     {swap.requester_id === userId ? (
                         // I am the REQUESTER
@@ -385,44 +386,38 @@ export const EmployeeSwapsPage: React.FC = () => {
                             <SwapCardOfferButton swapId={swap.id} onClick={() => setViewOffersSwapId(swap.id)} />
                         )
                     ) : (
-                        // I am the OFFERER (or it's a manager review, but manager tab handles that separate)
-                        // If I offered, I want to see status.
-                        // For now, if status is pending, show "Offer Sent"
+                        // I am the OFFERER
                         (swap.status === 'OPEN') && (
-                            <div className="w-full h-11 flex items-center justify-center bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-sm text-foreground">
-                                <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-500" />
+                            <div className="w-full h-12 flex items-center justify-center bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[11px] font-black uppercase tracking-[0.2em] backdrop-blur-md">
+                                <CheckCircle2 className="h-3.5 w-3.5 mr-2" />
                                 Offer Sent
                             </div>
                         )
                     )}
 
                     {(swap.status === 'OPEN' || swap.status === 'MANAGER_PENDING') && (
-                        <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center">
                             {swap.status === 'MANAGER_PENDING' && (
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="flex-1 h-11"
+                                <button
+                                    className="flex-1 h-12 flex items-center justify-center gap-2 text-[11px] font-black tracking-[0.2em] uppercase transition-all bg-primary/10 text-primary hover:bg-primary/20 border-r border-border/10"
                                     onClick={() => setViewOffersSwapId(swap.id)}
                                 >
-                                    <Eye className="h-4 w-4 mr-2" aria-hidden="true" />
-                                    View Details
-                                </Button>
+                                    <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                                    Details
+                                </button>
                             )}
 
-                            <Button
-                                variant="ghost"
-                                size="sm"
+                            <button
                                 className={cn(
-                                    "text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/10 h-11",
-                                    swap.status === 'OPEN' ? 'flex-1' : 'flex-1'
+                                    "flex-1 h-12 flex items-center justify-center gap-2 text-[11px] font-black tracking-[0.2em] uppercase transition-all",
+                                    "text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 bg-background/20"
                                 )}
                                 onClick={() => setConfirmDialog({ isOpen: true, swap })}
                                 disabled={isCancelling || swap.status === 'MANAGER_PENDING'}
                             >
-                                <X className="h-4 w-4 mr-2" aria-hidden="true" />
-                                Cancel Request
-                            </Button>
+                                <X className="h-3.5 w-3.5" aria-hidden="true" />
+                                Cancel
+                            </button>
                         </div>
                     )}
                 </div>
@@ -436,92 +431,116 @@ export const EmployeeSwapsPage: React.FC = () => {
         const requesterName = (swap as any).requested_by?.full_name || (swap as any).requested_by?.email || 'Unknown Employee';
         const timerText = getSwapTimer(now, shift?.start_at, shift?.shift_date, shift?.start_time, shift?.tz_identifier);
         const isExpired = timerText === 'Expired';
+        const hasOffered = myActiveOfferSwapIds.has(swap.id);
 
         return (
             <div
                 key={swap.id}
                 className={cn(
+                    "flex flex-col h-full rounded-[1.5rem] transition-all duration-500 overflow-hidden border",
                     getCardBg(shift?.group_type, shift?.departments?.name || ''),
-                    "flex flex-col h-full rounded-xl transition-all duration-300",
-                    isExpired && "opacity-60 grayscale-[0.8] hover:grayscale-0 hover:opacity-90"
+                    isExpired ? "opacity-60 grayscale-[0.8]" : "hover:shadow-2xl hover:translate-y-[-4px] hover:border-primary/40"
                 )}
             >
                 {/* HEADER ZONE */}
-                <div className="px-4 py-3 border-b border-slate-200/60 dark:border-white/5 bg-slate-50/80 dark:bg-black/20 backdrop-blur-sm">
+                <div className="px-5 py-3.5 border-b border-border/10 bg-muted/20 backdrop-blur-md">
                     <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-[10px] bg-slate-100 dark:bg-white/5 border-slate-300 dark:border-white/10 text-slate-600 dark:text-white/70">
-                                {myActiveOfferSwapIds.has(swap.id) ? '✓ Offered' : 'Swap Available'}
-                            </Badge>
+                            <div className={cn(
+                                "flex items-center gap-1.5 px-3 py-1 rounded-full border text-[9px] font-black uppercase tracking-widest backdrop-blur-sm",
+                                hasOffered
+                                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                                    : "bg-background/40 text-muted-foreground border-border/20"
+                            )}>
+                                {hasOffered && <CheckCircle2 className="h-3 w-3" />}
+                                {hasOffered ? 'Offered' : 'Available'}
+                            </div>
                         </div>
-                        <h3 className="font-bold text-sm text-slate-900 dark:text-white/90 truncate">
+                        <h3 className="font-black text-xs text-foreground/90 truncate tracking-tight uppercase font-mono">
                             {shift?.roles?.name || 'Shift'}
                         </h3>
                     </div>
                 </div>
 
                 {/* BODY ZONE */}
-                <div className="px-4 py-4 flex-1 space-y-3">
-                    {/* Department */}
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Building2 className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                <div className="p-5 flex-1 space-y-4">
+                    {/* Department Breadcrumb */}
+                    <div className="text-[9px] text-muted-foreground/60 tracking-[0.1em] font-mono font-black uppercase flex items-center gap-1.5">
+                        <Building2 className="h-3 w-3 opacity-40" />
                         <span>{shift?.departments?.name || 'Department'}</span>
                     </div>
 
-                    {/* Date */}
-                    <div className="flex items-center gap-2 text-sm text-foreground">
-                        <Calendar className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <span>{shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'EEE, MMM d') : (shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE, MMM d') : 'Unknown')}</span>
-                    </div>
-
-                    {/* Time */}
-                    <div className="flex items-center gap-2 text-sm text-foreground">
-                        <Clock className="h-4 w-4 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <span>{shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : formatTime(shift?.start_time || '')} - {shift?.end_at ? formatInTimezone(new Date(shift.end_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : formatTime(shift?.end_time || '')}</span>
-                    </div>
-
-                    {/* Posted By */}
-                    <div className="text-xs text-muted-foreground">
-                        Posted by <span className="text-foreground">{requesterName}</span>
-                    </div>
-
-                    {timerText && (
-                        <div className={cn(
-                            "flex items-center gap-2 text-xs px-2 py-1 rounded-md w-fit font-bold",
-                            isExpired ? "bg-red-50 dark:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30" : "bg-purple-50 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-500/30"
-                        )}>
-                            <Clock className="h-3 w-3" aria-hidden="true" />
-                            <span>{timerText}</span>
+                    <div className="space-y-2">
+                        {/* Date */}
+                        <div className="flex items-center gap-2.5 bg-muted/40 px-3 py-2 rounded-xl border border-border/50 backdrop-blur-md w-fit">
+                            <Calendar className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                            <span className="text-[11px] font-black font-mono leading-none tracking-tight">
+                                {shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'EEE, MMM d') : (shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE, MMM d') : 'Unknown')}
+                            </span>
                         </div>
-                    )}
+
+                        {/* Time */}
+                        <div className="flex items-center gap-2.5 bg-muted/40 px-3 py-2 rounded-xl border border-border/50 backdrop-blur-md w-fit">
+                            <Clock className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                            <span className="text-[11px] font-black font-mono leading-none tracking-tight">
+                                {shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : formatTime(shift?.start_time || '')} – {shift?.end_at ? formatInTimezone(new Date(shift.end_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : formatTime(shift?.end_time || '')}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Posted By & Timer Row */}
+                    <div className="flex items-center justify-between gap-3 pt-2">
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-background/20 border border-border/10 backdrop-blur-md">
+                            <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-black text-primary">
+                                {requesterName.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-[10px] font-black tracking-tight text-foreground/70 truncate max-w-[80px]">{requesterName}</span>
+                        </div>
+
+                        {timerText && (
+                            <div className={cn(
+                                "flex items-center gap-2 text-[10px] px-3 py-1.5 rounded-xl font-black font-mono backdrop-blur-md border uppercase tracking-tight ml-auto",
+                                isExpired
+                                    ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+                                    : "bg-primary/10 text-primary border-primary/20"
+                            )}>
+                                <Clock className="h-3 w-3" aria-hidden="true" />
+                                <span>{timerText}</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* FOOTER ZONE */}
-                <div className="px-4 py-3 border-t border-slate-200/60 dark:border-white/5 bg-slate-50/60 dark:bg-slate-900/30">
-                    {myActiveOfferSwapIds.has(swap.id) ? (
-                        <div className="w-full h-11 flex items-center justify-center bg-emerald-50 dark:bg-slate-800 border border-emerald-200 dark:border-emerald-500/30 rounded-md text-sm text-emerald-700 dark:text-emerald-400">
-                            <CheckCircle2 className="h-4 w-4 mr-2" aria-hidden="true" />
+                <div className="p-0 border-t border-border/10">
+                    {hasOffered ? (
+                        <div className="w-full h-12 flex items-center justify-center bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[11px] font-black uppercase tracking-[0.2em] backdrop-blur-md">
+                            <CheckCircle2 className="h-3.5 w-3.5 mr-2" />
                             Offer Sent
                         </div>
                     ) : (
-                        <Button
-                            className="w-full h-11"
+                        <button
+                            className={cn(
+                                "w-full h-12 flex items-center justify-center gap-3 text-[11px] font-black tracking-[0.3em] uppercase transition-all backdrop-blur-md",
+                                isExpired
+                                    ? "bg-muted/30 text-muted-foreground/40 cursor-not-allowed"
+                                    : "bg-primary/10 text-primary hover:bg-primary/20 hover:tracking-[0.4em]"
+                            )}
                             onClick={() => setOfferSwapTarget(swap)}
                             disabled={isMakingOffer || isExpired}
-                            variant={isExpired ? "outline" : "default"}
                         >
                             {isExpired ? (
                                 <>
-                                    <Clock className="h-4 w-4 mr-2" aria-hidden="true" />
+                                    <Clock className="h-3.5 w-3.5" />
                                     Expired
                                 </>
                             ) : (
                                 <>
-                                    <ArrowLeftRight className="h-4 w-4 mr-2" aria-hidden="true" />
+                                    <ArrowLeftRight className="h-3.5 w-3.5" />
                                     Make Offer
                                 </>
                             )}
-                        </Button>
+                        </button>
                     )}
                 </div>
             </div>
@@ -680,14 +699,17 @@ const SwapCardOfferButton: React.FC<{ swapId: string; onClick: () => void }> = (
     const pendingCount = offers?.filter(o => o.status === 'SUBMITTED').length || 0;
 
     return (
-        <Button
-            variant={pendingCount > 0 ? 'default' : 'outline'}
-            size="sm"
-            className="w-full h-11"
+        <button
+            className={cn(
+                "w-full h-12 flex items-center justify-center gap-3 text-[11px] font-black tracking-[0.3em] uppercase transition-all backdrop-blur-md",
+                pendingCount > 0
+                    ? "bg-primary/20 text-primary hover:bg-primary/30"
+                    : "bg-muted/30 text-foreground/40 hover:bg-muted/40"
+            )}
             onClick={onClick}
             disabled={isLoading}
         >
-            <Eye className="h-4 w-4 mr-2" aria-hidden="true" />
+            <Eye className="h-4 w-4" aria-hidden="true" />
             {isLoading ? (
                 'Loading...'
             ) : pendingCount > 0 ? (
@@ -695,7 +717,7 @@ const SwapCardOfferButton: React.FC<{ swapId: string; onClick: () => void }> = (
             ) : (
                 'No Offers Yet'
             )}
-        </Button>
+        </button>
     );
 };
 

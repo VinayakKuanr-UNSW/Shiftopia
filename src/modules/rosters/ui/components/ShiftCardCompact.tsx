@@ -67,12 +67,12 @@ interface ShiftCardCompactProps {
  */
 const getHeaderColor = (color: GroupColor = 'blue'): string => {
   const map: Record<string, string> = {
-    blue: 'bg-blue-900', // Darker for high contrast header
-    green: 'bg-emerald-900',
-    red: 'bg-red-900',
-    orange: 'bg-orange-900',
-    purple: 'bg-purple-900',
-    default: 'bg-blue-900'
+    blue: 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100',
+    green: 'bg-emerald-100 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-100',
+    red: 'bg-red-100 dark:bg-red-900 text-red-900 dark:text-red-100',
+    orange: 'bg-orange-100 dark:bg-orange-900 text-orange-900 dark:text-orange-100',
+    purple: 'bg-purple-100 dark:bg-purple-900 text-purple-900 dark:text-purple-100',
+    default: 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100'
   };
   return map[color] || map.default;
 };
@@ -130,17 +130,17 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
   return (
     <div
       className={cn(
-        'relative flex flex-col rounded-xl overflow-hidden border bg-[#0f172a] shadow-sm transition-all h-full group select-none',
+        'relative flex flex-col rounded-xl overflow-hidden border bg-card shadow-sm transition-all h-full group select-none',
         // Hover effect for interactivity
-        onClick && 'cursor-pointer hover:shadow-lg hover:ring-1 hover:ring-white/20',
-        isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-[#0f172a]',
+        onClick && 'cursor-pointer hover:shadow-lg hover:ring-1 hover:ring-primary/20',
+        isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
         isDragging && 'opacity-50',
         className
       )}
       onClick={onClick}
     >
       {/* HEADER */}
-      <div className={cn('px-4 py-2 flex justify-between items-center text-white min-h-[40px]', headerColor)}>
+      <div className={cn('px-4 py-2 flex justify-between items-center min-h-[40px]', headerColor)}>
         <span className="text-[11px] font-bold uppercase tracking-widest truncate flex-1 opacity-90">
           {shift.subGroup || 'Shift'}
         </span>
@@ -149,7 +149,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
             {headerAction}
           </div>
         ) : (
-          <MoreHorizontal className="h-4 w-4 text-white/50" />
+          <MoreHorizontal className="h-4 w-4 opacity-50" />
         )}
       </div>
 
@@ -158,10 +158,10 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
 
         {/* IDENTITY */}
         <div className="text-center space-y-1">
-          <div className="text-lg font-bold text-white leading-none truncate">
+          <div className="text-lg font-bold text-foreground leading-none truncate">
             {shift.employeeName || 'Unassigned'}
           </div>
-          <div className="text-[10px] uppercase tracking-wide text-white/40 font-medium truncate">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium truncate">
             {shift.role}
           </div>
           {/* DEEP DEBUG: Removed */}
@@ -169,22 +169,22 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
 
         {/* TIME PILL */}
         <div className="flex justify-center">
-          <div className="bg-[#1e293b] border border-white/5 rounded-lg px-4 py-2 flex items-center gap-3 shadow-inner">
-            <Clock className="w-3.5 h-3.5 text-white/40" />
-            <span className="text-sm font-mono font-medium text-emerald-400 tracking-wider">
+          <div className="bg-muted border border-border rounded-lg px-4 py-2 flex items-center gap-3 shadow-inner">
+            <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-sm font-mono font-medium text-emerald-600 dark:text-emerald-400 tracking-wider">
               {formatTime(shift.startTime)} - {formatTime(shift.endTime)}
             </span>
           </div>
         </div>
 
         {/* VISUAL STATE GRID - 3x2 */}
-        <div className="bg-[#0f172a] rounded-lg border border-white/10 p-2 mt-auto">
+        <div className="bg-background rounded-lg border border-border p-2 mt-auto">
           <div className="grid grid-cols-3 gap-y-3 gap-x-1">
 
             {/* 1. ID */}
             <div className="flex flex-col items-center gap-1">
-              <div className="w-4 h-4 flex items-center justify-center font-mono font-bold text-xs text-white/50 border border-white/20 rounded">#</div>
-              <span className="text-[9px] font-bold text-blue-400 text-center">{stateId}</span>
+              <div className="w-4 h-4 flex items-center justify-center font-mono font-bold text-xs text-muted-foreground border border-border rounded">#</div>
+              <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 text-center">{stateId}</span>
             </div>
 
             {/* 2. LIFECYCLE */}
@@ -203,7 +203,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
                 if (s === 'cancelled' || shift.isCancelled) return <XCircle className="w-4 h-4 text-red-600" />;
                 return <Edit className="w-4 h-4 text-gray-500" />;
               })()}
-              <span className="text-[9px] font-bold text-gray-400 capitalize truncate w-full text-center">
+              <span className="text-[9px] font-bold text-muted-foreground capitalize truncate w-full text-center">
                 {rawShift.lifecycle_status || shift.lifecycleStatus || 'Draft'}
               </span>
             </div>
@@ -215,7 +215,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
                 if (isAssigned) return <UserCheck className="w-4 h-4 text-green-600" />;
                 return <UserPlus className="w-4 h-4 text-amber-500" />;
               })()}
-              <span className="text-[9px] font-bold text-gray-400 capitalize truncate w-full text-center">
+              <span className="text-[9px] font-bold text-muted-foreground capitalize truncate w-full text-center">
                 {shift.employeeName || shift.assignedEmployeeId ? 'Assigned' : 'Unassigned'}
               </span>
             </div>
@@ -234,7 +234,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
                 if (o === 'emergency_assigned') return <Zap className="w-4 h-4 text-red-500" />;
                 return <Circle className="w-4 h-4 text-gray-300" />;
               })()}
-              <span className="text-[9px] font-bold text-gray-400 capitalize truncate w-full text-center">
+              <span className="text-[9px] font-bold text-muted-foreground capitalize truncate w-full text-center">
                 {(() => {
                   if (stateId === 'S2' && !shift.assignmentOutcome) return 'Pending';
                   if (typeof shift.assignmentOutcome === 'string') {
@@ -258,7 +258,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
                 if (b === 'bidding_closed_no_winner') return <Lock className="w-4 h-4 text-gray-600" />;
                 return <Ban className="w-4 h-4 text-gray-400" />;
               })()}
-              <span className="text-[9px] font-bold text-gray-400 truncate w-full text-center">
+              <span className="text-[9px] font-bold text-muted-foreground truncate w-full text-center">
                 {(() => {
                   const b = rawShift.bidding_status;
                   if (b === 'on_bidding_normal') return 'OnBiddingNormal';
@@ -276,7 +276,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
                 // TODO: TradeAccepted? shift.trading_status?
                 return <Minus className="w-4 h-4 text-gray-400" />;
               })()}
-              <span className="text-[9px] font-bold text-gray-400 truncate w-full text-center">
+              <span className="text-[9px] font-bold text-muted-foreground truncate w-full text-center">
                 {isTrading ? 'TradeRequested' : 'NoTrade'}
               </span>
             </div>

@@ -35,7 +35,7 @@ export const ManagerBidsPage: React.FC = () => {
 
     if (!activeContract) {
         return (
-            <div className="flex items-center justify-center h-full text-white/40">
+            <div className="flex items-center justify-center h-full text-muted-foreground/40 font-mono text-xs uppercase tracking-widest bg-background">
                 Please select a manager certificate to view open bids.
             </div>
         );

@@ -16,6 +16,7 @@ import { TimelineEvent } from '../components/TimelineEvent';
 import { useShiftAudit } from '../hooks/useAuditData';
 import { supabase } from '@/platform/realtime/client';
 import { format } from 'date-fns';
+import { cn } from '@/modules/core/lib/utils';
 
 interface ShiftData {
     id: string;
@@ -180,29 +181,32 @@ function ShiftDetailView() {
 
     if (loading || loadingShift) {
         return (
-            <div className="min-h-screen bg-[#0A0E1A] flex items-center justify-center text-white">
+            <div className="min-h-screen bg-background flex items-center justify-center text-foreground font-medium">
                 Loading shift audit trail...
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-[#0A0E1A] text-white">
+        <div className="min-h-screen bg-background text-foreground">
             {/* Header */}
-            <div className="bg-gray-900/50 border-b border-gray-800 p-4">
+            <div className="bg-card/50 backdrop-blur-md border-b border-border/50 p-5 sticky top-0 z-50">
                 <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-5">
                         <button
                             onClick={() => startTransition(() => navigate('/audit'))}
-                            className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+                            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-all font-bold text-sm tracking-tight hover:-translate-x-1"
                         >
                             <ArrowLeft className="w-4 h-4" />
                             Back to Dashboard
                         </button>
-                        <div className="h-6 w-px bg-gray-700" />
-                        <h1 className="text-xl font-bold">Shift #{shiftId?.slice(0, 6)}</h1>
+                        <div className="h-6 w-px bg-border" />
+                        <h1 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
+                            <span className="text-muted-foreground/50">Shift</span>
+                            <span className="text-primary">#{shiftId?.slice(0, 8).toUpperCase()}</span>
+                        </h1>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                         <button
                             onClick={() => {
                                 // Navigate to the shifts roster page with this shift
@@ -210,7 +214,7 @@ function ShiftDetailView() {
                                     navigate(`/rosters?shiftId=${shiftId}`);
                                 });
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors text-sm"
+                            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 text-[11px] font-black uppercase tracking-widest flex items-center gap-2"
                         >
                             Jump to Current
                         </button>
@@ -222,13 +226,13 @@ function ShiftDetailView() {
                                     events[events.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
                                 }
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors text-sm"
+                            className="px-4 py-2 rounded-xl bg-muted/40 hover:bg-muted text-foreground border border-border/50 transition-all text-[11px] font-black uppercase tracking-widest flex items-center gap-2"
                         >
                             Go to Latest Event
                         </button>
                         <button
                             onClick={() => setShowJsonModal(true)}
-                            className="px-3 py-1.5 rounded-lg border border-gray-700 hover:bg-gray-800 transition-colors text-sm"
+                            className="px-4 py-2 rounded-xl border border-border/80 hover:bg-muted/30 text-muted-foreground hover:text-foreground transition-all text-[11px] font-black uppercase tracking-widest"
                         >
                             View JSON Source
                         </button>
@@ -237,38 +241,40 @@ function ShiftDetailView() {
             </div>
 
             {/* Main Content */}
-            <div className="w-full p-6">
-                <div className="grid grid-cols-12 gap-6">
+            <div className="w-full p-8 max-w-[1600px] mx-auto">
+                <div className="grid grid-cols-12 gap-8">
                     {/* Left Sidebar - Current Snapshot */}
                     <div className="col-span-3">
-                        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 sticky top-6">
-                            <h2 className="text-sm font-semibold text-gray-400 uppercase mb-4">Current Status</h2>
+                        <div className="bg-card border border-border/50 rounded-2xl p-6 sticky top-28 shadow-xl shadow-primary/5">
+                            <h2 className="text-[11px] font-black text-muted-foreground/50 uppercase tracking-[0.2em] mb-6">Current Status</h2>
 
-                            <div className="space-y-4">
+                            <div className="space-y-6">
                                 <div>
-                                    <span className={`inline-flex items-center px-2 py-1 rounded-md text-sm font-medium ${shiftData?.lifecycle_status === 'draft'
-                                        ? 'bg-gray-500/20 text-gray-300'
-                                        : shiftData?.lifecycle_status === 'published'
-                                            ? 'bg-blue-500/20 text-blue-300'
-                                            : shiftData?.assigned_employee_id
-                                                ? 'bg-green-500/20 text-green-300'
-                                                : 'bg-yellow-500/20 text-yellow-300'
-                                        }`}>
+                                    <span className={cn(
+                                        "inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest border border-border/50 shadow-sm",
+                                        shiftData?.lifecycle_status === 'draft'
+                                            ? 'bg-muted/50 text-muted-foreground'
+                                            : shiftData?.lifecycle_status === 'published'
+                                                ? 'bg-primary/10 text-primary border-primary/20'
+                                                : shiftData?.assigned_employee_id
+                                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                                    )}>
                                         ● {shiftData?.assigned_employee_id ? 'Assigned' : shiftData?.lifecycle_status || 'Draft'}
                                     </span>
                                 </div>
 
                                 <div>
-                                    <div className="text-xs text-gray-500 mb-1">Role</div>
-                                    <div className="text-sm text-white font-medium">{shiftData?.role_name || 'N/A'}</div>
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 mb-1.5">Role</div>
+                                    <div className="text-sm text-foreground font-bold">{shiftData?.role_name || 'N/A'}</div>
                                 </div>
 
                                 <div>
-                                    <div className="text-xs text-gray-500 mb-1">Date & Time</div>
-                                    <div className="text-sm text-white">
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 mb-1.5">Date & Time</div>
+                                    <div className="text-sm text-foreground font-medium">
                                         {shiftData?.shift_date ? format(new Date(shiftData.shift_date), 'MMM dd, yyyy') : 'N/A'}
                                     </div>
-                                    <div className="text-sm text-gray-400">
+                                    <div className="text-sm text-muted-foreground font-mono mt-0.5">
                                         {shiftData?.start_time && shiftData?.end_time
                                             ? `${shiftData.start_time.slice(0, 5)} - ${shiftData.end_time.slice(0, 5)}`
                                             : 'N/A'
@@ -278,37 +284,37 @@ function ShiftDetailView() {
 
                                 {shiftData?.organization_name && (
                                     <div>
-                                        <div className="text-xs text-gray-500 mb-1">Location</div>
-                                        <div className="text-sm text-white">
-                                            {shiftData.organization_name}
-                                            {shiftData.department_name && ` > ${shiftData.department_name}`}
-                                            {shiftData.sub_department_name && ` > ${shiftData.sub_department_name}`}
+                                        <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 mb-1.5">Location</div>
+                                        <div className="text-sm text-foreground font-medium flex items-center gap-1.5 flex-wrap">
+                                            <span>{shiftData.organization_name}</span>
+                                            {shiftData.department_name && <><span className="text-muted-foreground/30">›</span><span>{shiftData.department_name}</span></>}
+                                            {shiftData.sub_department_name && <><span className="text-muted-foreground/30">›</span><span>{shiftData.sub_department_name}</span></>}
                                         </div>
                                     </div>
                                 )}
 
                                 <div>
-                                    <div className="text-xs text-gray-500 mb-1">Current Owner</div>
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 mb-2">Current Owner</div>
                                     {shiftData?.assigned_employee_name ? (
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold">
+                                        <div className="flex items-center gap-3 bg-muted/30 p-2.5 rounded-xl border border-border/50">
+                                            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-[10px] font-black text-primary-foreground shadow-md shadow-primary/20">
                                                 {shiftData.assigned_employee_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                                             </div>
-                                            <div className="text-sm text-white">{shiftData.assigned_employee_name}</div>
+                                            <div className="text-sm text-foreground font-bold">{shiftData.assigned_employee_name}</div>
                                         </div>
                                     ) : (
-                                        <div className="text-sm text-gray-400 italic">Unassigned</div>
+                                        <div className="text-sm text-muted-foreground/60 italic font-medium bg-muted/30 p-2.5 rounded-xl border border-border/50 text-center">Unassigned</div>
                                     )}
                                 </div>
 
-                                <div className="border-t border-gray-700 pt-4">
-                                    <div className="text-xs text-gray-500 mb-2">System Metadata</div>
+                                <div className="border-t border-border/50 pt-5">
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 mb-3">System Metadata</div>
 
-                                    <div className="text-xs space-y-2">
-                                        <div>
-                                            <div className="text-gray-500">Created by</div>
-                                            <div className="text-white">{shiftData?.creator_name || 'Unknown User'}</div>
-                                            <div className="text-gray-500">
+                                    <div className="text-xs space-y-3">
+                                        <div className="bg-muted/30 p-3 rounded-xl border border-border/50">
+                                            <div className="text-muted-foreground/70 font-medium mb-1">Created by</div>
+                                            <div className="text-foreground font-bold">{shiftData?.creator_name || 'Unknown User'}</div>
+                                            <div className="text-muted-foreground font-mono text-[10px] mt-1">
                                                 {shiftData?.created_at ? format(new Date(shiftData.created_at), 'MMM dd, yyyy HH:mm') : 'N/A'}
                                             </div>
                                         </div>
@@ -320,8 +326,8 @@ function ShiftDetailView() {
 
                     {/* Center - Timeline */}
                     <div className="col-span-6">
-                        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6">
-                            <h2 className="text-lg font-semibold mb-6">Lifecycle Timeline</h2>
+                        <div className="bg-card border border-border/50 rounded-2xl p-8 shadow-xl shadow-primary/5">
+                            <h2 className="text-xl font-black text-foreground tracking-tight mb-8">Lifecycle Timeline</h2>
                             <div className="space-y-0">
                                 {timeline.map((snapshot, index) => (
                                     <TimelineEvent
@@ -337,57 +343,59 @@ function ShiftDetailView() {
 
                     {/* Right Sidebar - Snapshot Viewer */}
                     <div className="col-span-3">
-                        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 sticky top-6 space-y-4">
+                        <div className="bg-card border border-border/50 rounded-2xl p-6 sticky top-28 space-y-6 shadow-xl shadow-primary/5">
                             <div>
-                                <h2 className="text-sm font-semibold text-gray-400 uppercase mb-3">Snapshot Viewer</h2>
-                                <div className="text-xs text-gray-500 mb-2">Viewing state after</div>
-                                <div className="text-sm text-white font-medium">Oct 14, 10:30 AM</div>
-                                <div className="text-xs text-gray-500">Shift Assigned</div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <button className="w-full px-3 py-2 rounded-lg bg-green-500/20 text-green-300 text-sm border border-green-500/30 flex items-center justify-between">
-                                    <span className="flex items-center gap-2">
-                                        <CheckCircle className="w-4 h-4" />
-                                        Compliance
-                                    </span>
-                                    <ChevronRight className="w-4 h-4" />
-                                </button>
-
-                                <button className="w-full px-3 py-2 rounded-lg bg-blue-500/20 text-blue-300 text-sm border border-blue-500/30 flex items-center justify-between">
-                                    <span className="flex items-center gap-2">
-                                        <Calendar className="w-4 h-4" />
-                                        Payroll
-                                    </span>
-                                    <ChevronRight className="w-4 h-4" />
-                                </button>
-
-                                <button className="w-full px-3 py-2 rounded-lg bg-yellow-500/20 text-yellow-300 text-sm border border-yellow-500/30 flex items-center justify-between">
-                                    <span className="flex items-center gap-2">
-                                        <Clock className="w-4 h-4" />
-                                        Timesheet
-                                    </span>
-                                    <ChevronRight className="w-4 h-4" />
-                                </button>
-                            </div>
-
-                            <div className="pt-4 border-t border-gray-800">
-                                <div className="text-xs font-semibold text-gray-400 uppercase mb-2">System Notes</div>
-                                <div className="bg-gray-800/50 rounded-lg p-3 text-xs text-gray-300">
-                                    <div className="font-medium mb-1">Transfer: Assignment by Manager</div>
-                                    <div className="text-gray-500">Manual Assignment by Manager</div>
-                                    <div className="mt-2 text-gray-500">Reference: REF-32474</div>
+                                <h2 className="text-[11px] font-black text-muted-foreground/50 uppercase tracking-[0.2em] mb-4">Snapshot Viewer</h2>
+                                <div className="bg-muted/30 p-3 rounded-xl border border-border/50">
+                                    <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70 mb-1">Viewing state after</div>
+                                    <div className="text-sm text-foreground font-bold">Oct 14, 10:30 AM</div>
+                                    <div className="text-[11px] font-black uppercase tracking-widest text-primary/80 mt-1">Shift Assigned</div>
                                 </div>
                             </div>
 
-                            <div className="pt-4 border-t border-gray-800">
-                                <div className="text-xs font-semibold text-gray-400 uppercase mb-2">Override Flag</div>
-                                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-                                    <div className="flex items-center gap-2 text-xs text-red-400 font-medium mb-1">
-                                        <AlertTriangle className="w-3 h-3" />
+                            <div className="space-y-3">
+                                <button className="w-full px-4 py-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm font-bold tracking-tight border border-emerald-500/20 transition-all flex items-center justify-between group">
+                                    <span className="flex items-center gap-3">
+                                        <CheckCircle className="w-4 h-4" />
+                                        Compliance
+                                    </span>
+                                    <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                                </button>
+
+                                <button className="w-full px-4 py-3 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-sm font-bold tracking-tight border border-primary/20 transition-all flex items-center justify-between group">
+                                    <span className="flex items-center gap-3">
+                                        <Calendar className="w-4 h-4" />
+                                        Payroll
+                                    </span>
+                                    <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                                </button>
+
+                                <button className="w-full px-4 py-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 text-sm font-bold tracking-tight border border-amber-500/20 transition-all flex items-center justify-between group">
+                                    <span className="flex items-center gap-3">
+                                        <Clock className="w-4 h-4" />
+                                        Timesheet
+                                    </span>
+                                    <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                                </button>
+                            </div>
+
+                            <div className="pt-6 border-t border-border/50">
+                                <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 mb-3">System Notes</div>
+                                <div className="bg-muted/30 rounded-xl p-4 text-xs text-muted-foreground border border-border/50">
+                                    <div className="font-bold text-foreground mb-1.5 text-sm tracking-tight">Transfer: Assignment by Manager</div>
+                                    <div className="text-muted-foreground/80 font-medium">Manual Assignment by Manager</div>
+                                    <div className="mt-3 text-muted-foreground/60 font-mono text-[10px] bg-background/50 inline-block px-2 py-1 rounded-md border border-border/50">Reference: REF-32474</div>
+                                </div>
+                            </div>
+
+                            <div className="pt-6 border-t border-border/50">
+                                <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 mb-3">Override Flag</div>
+                                <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4">
+                                    <div className="flex items-center gap-2 text-xs text-destructive font-black tracking-widest mb-1.5">
+                                        <AlertTriangle className="w-4 h-4" />
                                         YES (Code: WH)
                                     </div>
-                                    <div className="text-xs text-gray-400">Hidden from Employee</div>
+                                    <div className="text-xs text-destructive/70 font-medium">Hidden from Employee</div>
                                 </div>
                             </div>
                         </div>
@@ -397,12 +405,12 @@ function ShiftDetailView() {
 
             {/* JSON Source Modal */}
             {showJsonModal && (
-                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-6">
-                    <div className="bg-gray-900 border border-gray-700 rounded-lg w-full max-w-4xl max-h-[80vh] flex flex-col">
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-6">
+                    <div className="bg-card border border-border rounded-2xl w-full max-w-4xl max-h-[80vh] flex flex-col shadow-2xl">
                         {/* Modal Header */}
-                        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-                            <h2 className="text-lg font-semibold text-white">Shift JSON Source</h2>
-                            <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-between p-6 border-b border-border/50 bg-muted/20">
+                            <h2 className="text-xl font-black text-foreground tracking-tight">Shift JSON Source</h2>
+                            <div className="flex items-center gap-3">
                                 <button
                                     onClick={() => {
                                         navigator.clipboard.writeText(
@@ -417,13 +425,13 @@ function ShiftDetailView() {
                                         );
                                         alert('JSON copied to clipboard!');
                                     }}
-                                    className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors text-sm text-white"
+                                    className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 transition-all text-[11px] font-black uppercase tracking-widest text-primary-foreground shadow-lg shadow-primary/20"
                                 >
                                     Copy JSON
                                 </button>
                                 <button
                                     onClick={() => setShowJsonModal(false)}
-                                    className="px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors text-sm text-white"
+                                    className="px-4 py-2 rounded-xl bg-muted/40 hover:bg-muted transition-all text-[11px] font-black uppercase tracking-widest text-foreground border border-border/50"
                                 >
                                     Close
                                 </button>
@@ -431,8 +439,8 @@ function ShiftDetailView() {
                         </div>
 
                         {/* Modal Content */}
-                        <div className="flex-1 overflow-auto p-4">
-                            <pre className="text-xs text-gray-300 font-mono bg-gray-950 rounded-lg p-4 overflow-x-auto">
+                        <div className="flex-1 overflow-auto p-6 bg-muted/10">
+                            <pre className="text-xs text-foreground/80 font-mono bg-card rounded-xl border border-border/50 p-6 overflow-x-auto shadow-inner">
                                 {JSON.stringify(
                                     {
                                         shift: shiftData,

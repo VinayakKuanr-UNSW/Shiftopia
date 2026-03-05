@@ -11,14 +11,14 @@ export const TimesheetStatusBadge: React.FC<TimesheetStatusBadgeProps> = ({ stat
     const s = (status as string).toUpperCase();
 
     const variants: Record<string, string> = {
-        'DRAFT': 'bg-gray-500/20 text-gray-400 border-gray-500/30',
-        'SUBMITTED': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-        'APPROVED': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-        'REJECTED': 'bg-rose-500/20 text-rose-400 border-rose-500/30',
-        'LOCKED': 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+        'DRAFT': 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
+        'SUBMITTED': 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+        'APPROVED': 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+        'REJECTED': 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
+        'LOCKED': 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
     };
 
-    const variant = variants[s] || 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+    const variant = variants[s] || 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20';
 
     return (
         <Badge variant="outline" className={`${variant} ${className}`}>

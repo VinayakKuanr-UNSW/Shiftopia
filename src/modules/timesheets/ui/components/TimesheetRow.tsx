@@ -162,98 +162,102 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
 
     // Get differential color based on value
     const getDifferentialColor = (diff: string) => {
-        if (!diff || diff === '-' || diff === '0.00') return 'text-white/70';
-        if (diff.startsWith('+')) return 'text-green-400';
-        if (diff.startsWith('-')) return 'text-red-400';
-        return 'text-white/70';
+        if (!diff || diff === '-' || diff === '0.00' || diff === '0.00 h') return 'text-muted-foreground/60';
+        if (diff.startsWith('+')) return 'text-green-500';
+        if (diff.startsWith('-')) return 'text-red-500';
+        return 'text-muted-foreground/60';
     };
 
     /* -- render ------------------------------------------------ */
-    const cellClass = "p-2 text-sm whitespace-nowrap";
-    const editableCellClass = `${cellClass} cursor-pointer hover:bg-purple-500/10 transition-colors`;
+    const cellClass = "p-3 text-sm whitespace-nowrap border-b border-border/50 transition-all duration-200";
+    const editableCellClass = `${cellClass} cursor-pointer hover:bg-primary/5 hover:text-primary font-medium text-foreground/80`;
 
     return (
-        <>
-            <tr className="border-b border-white/10 hover:bg-white/5 transition-colors">
+        <>{/* TimesheetRow.tsx */}
+            <tr className="group hover:bg-muted/30 transition-all duration-300">
                 {/* Select */}
-                <td className={cellClass}>
+                <td className={`${cellClass} text-center border-r border-border/30`}>
                     <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={onToggleSelect}
-                        className="rounded"
+                        className="rounded border-border bg-background focus:ring-primary h-4 w-4 transition-all"
                         disabled={entry.timesheetStatus !== 'SUBMITTED' && entry.timesheetStatus !== 'DRAFT'}
                     />
                 </td>
 
                 {/* Employee Info */}
-                <td className={cellClass}>{entry.employeeId}</td>
-                <td className={`${cellClass} font-medium`}>{entry.employee}</td>
+                <td className={`${cellClass} font-black text-[11px] text-muted-foreground/60 uppercase tracking-tighter`}>{entry.employeeId}</td>
+                <td className={`${cellClass} font-black tracking-tight text-foreground border-r border-border/30`}>{entry.employee}</td>
 
                 {/* Hierarchy */}
                 <td className={cellClass}>{entry.group}</td>
                 <td className={cellClass}>{entry.subGroup}</td>
                 <td className={cellClass}>{entry.role}</td>
-                <td className={cellClass}>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                <td className={`${cellClass} border-r border-border/30`}>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-primary/10 text-primary border border-primary/20 shadow-sm">
                         {entry.remunerationLevel}
                     </span>
                 </td>
 
                 {/* Scheduled */}
                 <td className={cellClass}>{entry.scheduledStart}</td>
-                <td className={cellClass}>{entry.scheduledEnd}</td>
+                <td className={`${cellClass} border-r border-border/30`}>{entry.scheduledEnd}</td>
 
                 {/* Geofenced */}
                 <td className={cellClass}>{entry.clockIn || '-'}</td>
-                <td className={cellClass}>{entry.clockOut || '-'}</td>
+                <td className={`${cellClass} border-r border-border/30`}>{entry.clockOut || '-'}</td>
 
                 {/* Adjusted (Inline Editable) */}
                 {isEditingAdjusted ? (
                     <>
-                        <td className={cellClass}>
+                        <td className={`${cellClass} bg-primary/5`}>
                             <input
                                 type="time"
                                 value={editedAdjusted.adjustedStart}
                                 onChange={(e) => setEditedAdjusted({ ...editedAdjusted, adjustedStart: e.target.value })}
-                                className="bg-purple-500/20 border border-purple-500/30 rounded px-2 py-1 w-24 text-sm"
+                                className="bg-background border border-primary/30 rounded-lg px-2 py-1 w-24 text-xs font-black shadow-sm"
                             />
                         </td>
-                        <td className={cellClass}>
+                        <td className={`${cellClass} bg-primary/5`}>
                             <input
                                 type="time"
                                 value={editedAdjusted.adjustedEnd}
                                 onChange={(e) => setEditedAdjusted({ ...editedAdjusted, adjustedEnd: e.target.value })}
-                                className="bg-purple-500/20 border border-purple-500/30 rounded px-2 py-1 w-24 text-sm"
+                                className="bg-background border border-primary/30 rounded-lg px-2 py-1 w-24 text-xs font-black shadow-sm"
                             />
                         </td>
-                        <td className={`${cellClass} bg-purple-500/10`}>
-                            <span className="font-medium">{calculatedValues.length}</span>
-                            <span className="text-xs text-white/50 ml-1">(auto)</span>
+                        <td className={`${cellClass} bg-primary/10 border-r border-border/30`}>
+                            <div className="flex flex-col">
+                                <span className="font-black text-primary">{calculatedValues.length}</span>
+                                <span className="text-[8px] font-black uppercase text-muted-foreground tracking-widest leading-none">Auto</span>
+                            </div>
                         </td>
-                        <td className={cellClass}>
+                        <td className={`${cellClass} bg-primary/5`}>
                             <input
                                 type="number"
                                 step="0.25"
                                 min="0"
                                 value={editedAdjusted.paidBreak}
                                 onChange={(e) => setEditedAdjusted({ ...editedAdjusted, paidBreak: e.target.value })}
-                                className="bg-purple-500/20 border border-purple-500/30 rounded px-2 py-1 w-16 text-sm"
+                                className="bg-background border border-primary/30 rounded-lg px-2 py-1 w-16 text-xs font-black shadow-sm"
                             />
                         </td>
-                        <td className={cellClass}>
+                        <td className={`${cellClass} bg-primary/5`}>
                             <input
                                 type="number"
                                 step="0.25"
                                 min="0"
                                 value={editedAdjusted.unpaidBreak}
                                 onChange={(e) => setEditedAdjusted({ ...editedAdjusted, unpaidBreak: e.target.value })}
-                                className="bg-purple-500/20 border border-purple-500/30 rounded px-2 py-1 w-16 text-sm"
+                                className="bg-background border border-primary/30 rounded-lg px-2 py-1 w-16 text-xs font-black shadow-sm"
                             />
                         </td>
-                        <td className={`${cellClass} bg-purple-500/10`}>
-                            <span className="font-medium">{calculatedValues.netLength}</span>
-                            <span className="text-xs text-white/50 ml-1">(auto)</span>
+                        <td className={`${cellClass} bg-primary/10 border-r border-border/30`}>
+                            <div className="flex flex-col">
+                                <span className="font-black text-primary">{calculatedValues.netLength}</span>
+                                <span className="text-[8px] font-black uppercase text-muted-foreground tracking-widest leading-none">Auto</span>
+                            </div>
                         </td>
                     </>
                 ) : (
@@ -264,7 +268,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                         <td className={editableCellClass} onClick={handleAdjustedCellClick}>
                             {entry.adjustedEnd || '-'}
                         </td>
-                        <td className={`${cellClass} font-medium`}>
+                        <td className={`${cellClass} font-black text-foreground border-r border-border/30`}>
                             {displayValues.length}
                         </td>
                         <td className={editableCellClass} onClick={handleAdjustedCellClick}>
@@ -273,33 +277,35 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                         <td className={editableCellClass} onClick={handleAdjustedCellClick}>
                             {entry.unpaidBreak || '-'}
                         </td>
-                        <td className={`${cellClass} font-medium`}>
+                        <td className={`${cellClass} font-black text-foreground border-r border-border/30`}>
                             {displayValues.netLength}
                         </td>
                     </>
                 )}
 
                 {/* Payroll */}
-                <td className={`${cellClass} font-medium`}>
+                <td className={`${cellClass} font-black text-primary tracking-tight`}>
                     {entry.approximatePay || '-'}
                 </td>
 
                 {/* Differential */}
-                <td className={`${cellClass} font-medium ${getDifferentialColor(isEditingAdjusted ? calculatedValues.differential : displayValues.differential)}`}>
-                    {isEditingAdjusted ? calculatedValues.differential : displayValues.differential}
+                <td className={`${cellClass} border-r border-border/30`}>
+                    <div className={`px-2 py-1 rounded-lg text-[10px] font-black text-center w-fit ${getDifferentialColor(isEditingAdjusted ? calculatedValues.differential : displayValues.differential).replace('text-', 'bg-').replace('-400', '/10 text-')}`}>
+                        {isEditingAdjusted ? calculatedValues.differential : displayValues.differential}
+                    </div>
                 </td>
 
                 {/* Statuses */}
                 <td className={cellClass}>
                     <ShiftStatusBadge status={entry.liveStatus as any} />
                 </td>
-                <td className={cellClass}>
+                <td className={`${cellClass} border-r border-border/30`}>
                     <TimesheetStatusBadge status={entry.timesheetStatus} />
                 </td>
 
                 {/* Actions */}
-                <td className={cellClass}>
-                    <div className="flex items-center justify-center gap-1">
+                <td className={`${cellClass} text-center`}>
+                    <div className="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         {isEditingAdjusted ? (
                             <>
                                 <TooltipProvider>
@@ -309,7 +315,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                                 variant="ghost"
                                                 size="icon"
                                                 onClick={handleSaveAdjusted}
-                                                className="h-8 w-8 rounded-full text-green-400 hover:bg-green-500/20 hover:text-green-300"
+                                                className="h-8 w-8 rounded-xl text-green-600 dark:text-green-400 hover:bg-green-500/20"
                                             >
                                                 <Save size={16} />
                                             </Button>
@@ -325,7 +331,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                                 variant="ghost"
                                                 size="icon"
                                                 onClick={handleCancelEdit}
-                                                className="h-8 w-8 rounded-full text-red-400 hover:bg-red-500/20 hover:text-red-300"
+                                                className="h-8 w-8 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-500/20"
                                             >
                                                 <X size={16} />
                                             </Button>
@@ -344,7 +350,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                                 variant="ghost"
                                                 size="icon"
                                                 onClick={() => setHistoryOpen(true)}
-                                                className="h-8 w-8 rounded-full text-blue-400 hover:bg-blue-500/20 hover:text-blue-300"
+                                                className="h-8 w-8 rounded-xl text-primary hover:bg-primary/10"
                                             >
                                                 <Clock size={16} />
                                             </Button>
@@ -362,12 +368,12 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                                     variant="ghost"
                                                     size="icon"
                                                     onClick={handleApprove}
-                                                    className="h-8 w-8 rounded-full text-green-400 hover:bg-green-500/20 hover:text-green-300"
+                                                    className="h-8 w-8 rounded-xl text-green-600 dark:text-green-400 hover:bg-green-500/20"
                                                 >
                                                     <CheckCircle size={16} />
                                                 </Button>
                                             </TooltipTrigger>
-                                            <TooltipContent>Approve Timesheet</TooltipContent>
+                                            <TooltipContent>Approve</TooltipContent>
                                         </Tooltip>
                                     </TooltipProvider>
                                 )}
@@ -381,12 +387,12 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                                     variant="ghost"
                                                     size="icon"
                                                     onClick={handleReject}
-                                                    className="h-8 w-8 rounded-full text-red-400 hover:bg-red-500/20 hover:text-red-300"
+                                                    className="h-8 w-8 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-500/20"
                                                 >
                                                     <XCircle size={16} />
                                                 </Button>
                                             </TooltipTrigger>
-                                            <TooltipContent>Reject Timesheet</TooltipContent>
+                                            <TooltipContent>Reject</TooltipContent>
                                         </Tooltip>
                                     </TooltipProvider>
                                 )}

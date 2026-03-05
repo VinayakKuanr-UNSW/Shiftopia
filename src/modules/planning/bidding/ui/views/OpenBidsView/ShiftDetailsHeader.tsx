@@ -21,25 +21,25 @@ export const ShiftDetailsHeader: React.FC<ShiftDetailsHeaderProps> = ({
   const timeRemaining = calculateTimeRemaining(shift.biddingDeadline);
 
   return (
-    <div className="shrink-0 relative overflow-hidden border-b border-white/[0.06]">
+    <div className="shrink-0 relative overflow-hidden border-b border-border bg-card">
       {/* Ambient Background Glow */}
-      <div className={cn('absolute inset-0 opacity-[0.06] blur-3xl', colors.bg)} />
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#080c14]/80" />
+      <div className={cn('absolute inset-0 opacity-[0.08] blur-[100px]', colors.bg)} />
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/90" />
 
       <div className="relative z-10 p-6 pb-5">
         {/* Top Row: Badges + Withdraw */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-2 flex-wrap">
-            <Badge className={cn('text-[10px] px-2.5 py-0.5 font-semibold border rounded-md', colors.accent)}>
+            <Badge className={cn('text-[9px] px-2.5 py-0.5 font-black uppercase tracking-widest border-none rounded-lg shadow-sm', colors.accent)}>
               {shift.groupLabel}
             </Badge>
             {shift.subDepartment && (
-              <Badge className="text-[10px] px-2.5 py-0.5 font-medium bg-white/[0.04] border-white/[0.08] text-white/50 rounded-md">
+              <Badge className="text-[9px] px-2.5 py-0.5 font-black uppercase tracking-widest bg-muted/50 border-border/50 text-muted-foreground/60 rounded-lg">
                 {shift.subDepartment}
               </Badge>
             )}
-            <span className="text-white/30 text-[11px]">•</span>
-            <span className="text-white/40 text-[11px] font-medium">{shift.dayLabel}</span>
+            <span className="text-primary/20 text-[11px] mx-1">•</span>
+            <span className="text-muted-foreground/60 text-[11px] font-black uppercase font-mono tracking-wider">{shift.dayLabel}</span>
           </div>
 
           {onWithdraw && (
@@ -47,59 +47,59 @@ export const ShiftDetailsHeader: React.FC<ShiftDetailsHeaderProps> = ({
               variant="outline"
               size="sm"
               onClick={onWithdraw}
-              className="h-7 text-[11px] border-red-500/20 text-red-400/70 hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-all"
+              className="h-8 text-[10px] font-black uppercase tracking-widest border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all shadow-sm"
             >
-              <Ban className="h-3 w-3 mr-1.5" />
-              Withdraw
+              <Ban className="h-3.5 w-3.5 mr-2" />
+              Withdraw Bid
             </Button>
           )}
         </div>
 
         {/* Role Title */}
-        <h1 className="text-2xl font-black text-white/95 tracking-tight leading-none mb-4">
+        <h1 className="text-4xl font-black text-foreground tracking-tight leading-none mb-6">
           {shift.role}
         </h1>
 
         {/* Info Grid */}
-        <div className="flex items-center gap-5 text-[12px] text-white/55 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 text-cyan-400/60" />
-            <span>{shift.startTime} – {shift.endTime}</span>
+        <div className="flex items-center gap-6 text-[11px] text-muted-foreground flex-wrap font-black uppercase tracking-widest font-mono">
+          <div className="flex items-center gap-2 bg-muted/40 px-3 py-1.5 rounded-xl border border-border/50">
+            <Clock className="h-4 w-4 text-primary" />
+            <span className="text-foreground">{shift.startTime} – {shift.endTime}</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <Calendar className="h-3.5 w-3.5 text-cyan-400/60" />
-            <span>{shift.date}</span>
+          <div className="flex items-center gap-2 bg-muted/40 px-3 py-1.5 rounded-xl border border-border/50">
+            <Calendar className="h-4 w-4 text-primary" />
+            <span className="text-foreground">{shift.date}</span>
           </div>
           {shift.remunerationLevel && (
-            <div className="flex items-center gap-1.5">
-              <DollarSign className="h-3.5 w-3.5 text-emerald-400/60" />
-              <span>{shift.remunerationLevel}</span>
+            <div className="flex items-center gap-2 bg-emerald-500/5 px-3 py-1.5 rounded-xl border border-emerald-500/10">
+              <DollarSign className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-emerald-600 dark:text-emerald-400">{shift.remunerationLevel}</span>
             </div>
           )}
-          <div className="flex items-center gap-1.5">
-            <Building className="h-3.5 w-3.5 text-blue-400/60" />
-            <span>{shift.department}</span>
+          <div className="flex items-center gap-2 bg-muted/40 px-3 py-1.5 rounded-xl border border-border/50">
+            <Building className="h-4 w-4 text-primary" />
+            <span className="text-foreground">{shift.department}</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <Coffee className="h-3.5 w-3.5 text-white/30" />
-            <span>Net {shift.netHours}h</span>
+          <div className="flex items-center gap-2 bg-muted/40 px-3 py-1.5 rounded-xl border border-border/50">
+            <Coffee className="h-4 w-4 text-orange-500/50" />
+            <span className="text-foreground">Net {shift.netHours}h</span>
           </div>
         </div>
 
         {/* Countdown Strip */}
-        <div className="mt-4 flex items-center gap-3">
+        <div className="mt-6 flex items-center gap-4">
           <div className={cn(
-            'inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-semibold border',
+            'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] border shadow-sm',
             timeRemaining.isExpired
-              ? 'bg-white/[0.03] border-white/[0.06] text-white/30'
+              ? 'bg-muted border-border text-muted-foreground/30 shadow-none'
               : timeRemaining.hours < 4
-                ? 'bg-red-500/10 border-red-500/20 text-red-400'
-                : 'bg-amber-500/8 border-amber-500/15 text-amber-400/80'
+                ? 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400 animate-pulse'
+                : 'bg-amber-500/5 border-amber-500/10 text-amber-600 dark:text-amber-400'
           )}>
-            <Clock className="h-3 w-3" />
+            <Clock className="h-4 w-4" />
             {timeRemaining.isExpired ? 'EXPIRED' : `Closes in ${formatTimeRemaining(timeRemaining)}`}
           </div>
-          <span className="text-[10px] text-white/20 font-mono">{shift.stateId}</span>
+          <span className="text-[10px] text-muted-foreground/20 font-black font-mono tracking-widest uppercase">{shift.stateId}</span>
         </div>
       </div>
     </div>

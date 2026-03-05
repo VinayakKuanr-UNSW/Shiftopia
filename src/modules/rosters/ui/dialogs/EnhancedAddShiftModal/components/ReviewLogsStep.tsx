@@ -26,9 +26,9 @@ const SystemField = ({
 }) => {
     const { toast } = useToast();
     return (
-        <div className={cn("p-2 rounded bg-black/20 border border-white/5", highlight && "bg-emerald-500/10 border-emerald-500/20")}>
+        <div className={cn("p-2 rounded bg-muted/30 border border-border", highlight && "bg-emerald-500/10 border-emerald-500/20")}>
             <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] uppercase tracking-wider text-white/40 font-medium flex items-center gap-1.5">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium flex items-center gap-1.5">
                     {icon}
                     {label}
                 </span>
@@ -37,7 +37,7 @@ const SystemField = ({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-4 w-4 text-white/20 hover:text-white"
+                        className="h-4 w-4 text-muted-foreground/40 hover:text-foreground"
                         onClick={(e) => {
                             e.preventDefault();
                             navigator.clipboard.writeText(String(value));
@@ -48,7 +48,7 @@ const SystemField = ({
                     </Button>
                 )}
             </div>
-            <div className={cn("text-xs font-mono truncate", highlight ? "text-emerald-400 font-medium" : "text-white/70")}>
+            <div className={cn("text-xs font-mono truncate", highlight ? "text-emerald-500 font-medium" : "text-foreground/70")}>
                 {value || '—'}
             </div>
         </div>
@@ -72,7 +72,7 @@ export const ReviewLogsStep: React.FC<ReviewLogsStepProps> = ({
     return (
         <div className="space-y-6">
             <div className="space-y-3">
-                <h4 className="text-sm font-medium text-white/70 flex items-center gap-2">
+                <h4 className="text-sm font-medium text-muted-foreground/70 flex items-center gap-2">
                     <Database className="h-4 w-4" />
                     Identifiers
                 </h4>
@@ -86,10 +86,10 @@ export const ReviewLogsStep: React.FC<ReviewLogsStepProps> = ({
                 </div>
             </div>
 
-            <Separator className="bg-white/10" />
+            <Separator className="bg-border" />
 
             <div className="space-y-3">
-                <h4 className="text-sm font-medium text-white/70 flex items-center gap-2">
+                <h4 className="text-sm font-medium text-muted-foreground/70 flex items-center gap-2">
                     <Tag className="h-4 w-4" />
                     Visual Grouping
                 </h4>
@@ -103,10 +103,10 @@ export const ReviewLogsStep: React.FC<ReviewLogsStepProps> = ({
                 </div>
             </div>
 
-            <Separator className="bg-white/10" />
+            <Separator className="bg-border" />
 
             <div className="space-y-3">
-                <h4 className="text-sm font-medium text-white/70 flex items-center gap-2">
+                <h4 className="text-sm font-medium text-muted-foreground/70 flex items-center gap-2">
                     <Settings className="h-4 w-4" />
                     Status & Flags
                 </h4>
@@ -120,10 +120,10 @@ export const ReviewLogsStep: React.FC<ReviewLogsStepProps> = ({
                 </div>
             </div>
 
-            <Separator className="bg-white/10" />
+            <Separator className="bg-border" />
 
             <div className="space-y-3">
-                <h4 className="text-sm font-medium text-white/70 flex items-center gap-2">
+                <h4 className="text-sm font-medium text-muted-foreground/70 flex items-center gap-2">
                     <Timer className="h-4 w-4" />
                     Calculated Values
                 </h4>
@@ -137,10 +137,10 @@ export const ReviewLogsStep: React.FC<ReviewLogsStepProps> = ({
                 </div>
             </div>
 
-            <Separator className="bg-white/10" />
+            <Separator className="bg-border" />
 
             <div className="space-y-3">
-                <h4 className="text-sm font-medium text-white/70 flex items-center gap-2">
+                <h4 className="text-sm font-medium text-muted-foreground/70 flex items-center gap-2">
                     <CalendarIcon2 className="h-4 w-4" />
                     Date & Time
                 </h4>
@@ -153,24 +153,24 @@ export const ReviewLogsStep: React.FC<ReviewLogsStepProps> = ({
 
             {/* Audit Trail included in Review Logs step for edit mode */}
             {editMode && existingShift?.id ? (
-                <div className="mt-8 pt-8 border-t border-white/10">
-                    <h3 className="text-sm font-medium text-white/70 mb-4 flex items-center gap-2">
+                <div className="mt-8 pt-8 border-t border-border">
+                    <h3 className="text-sm font-medium text-muted-foreground/70 mb-4 flex items-center gap-2">
                         <History className="h-4 w-4" />
                         Audit History
                     </h3>
                     <ShiftAuditTrail shiftId={existingShift.id} className="h-[350px]" />
                 </div>
             ) : (
-                <div className="mt-8 pt-8 border-t border-white/10">
-                    <h3 className="text-sm font-medium text-white/70 mb-4 flex items-center gap-2">
+                <div className="mt-8 pt-8 border-t border-border">
+                    <h3 className="text-sm font-medium text-muted-foreground/70 mb-4 flex items-center gap-2">
                         <History className="h-4 w-4" />
                         Audit History
                     </h3>
-                    <div className="p-4 rounded bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm flex items-start gap-3">
+                    <div className="p-4 rounded bg-blue-500/10 border border-blue-500/20 text-blue-500 text-sm flex items-start gap-3">
                         <Info className="h-5 w-5 shrink-0" />
                         <div>
                             <p className="font-medium">Audit logs are generated upon creation.</p>
-                            <p className="text-white/60 mt-1">Once you create this shift, all actions and modifications will be tracked here.</p>
+                            <p className="text-muted-foreground/60 mt-1">Once you create this shift, all actions and modifications will be tracked here.</p>
                         </div>
                     </div>
                 </div>

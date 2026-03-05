@@ -89,7 +89,7 @@ export function StepIndicator({
                 aria-label="Step list"
             >
                 {/* Background rail */}
-                <div className="absolute top-4 left-0 right-0 h-0.5 bg-white/10" aria-hidden />
+                <div className="absolute top-4 left-0 right-0 h-0.5 bg-muted" aria-hidden />
 
                 {/* Filled progress rail */}
                 <div
@@ -122,10 +122,10 @@ export function StepIndicator({
                                 className={cn(
                                     'h-8 w-8 rounded-full flex items-center justify-center transition-all duration-200',
                                     'border-2 text-sm font-medium',
-                                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f172a]',
-                                    isCurrent && 'bg-emerald-500 border-emerald-500 text-white scale-110 shadow-lg shadow-emerald-500/30',
+                                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                                    isCurrent && 'bg-emerald-500 border-emerald-500 text-primary-foreground scale-110 shadow-lg shadow-emerald-500/30',
                                     isCompleted && !isCurrent && 'bg-emerald-500/20 border-emerald-500 text-emerald-400',
-                                    !isCurrent && !isCompleted && 'bg-slate-800 border-white/20 text-white/40',
+                                    !isCurrent && !isCompleted && 'bg-muted border-border text-muted-foreground/40',
                                     canClick && !isCurrent && 'hover:border-emerald-400 hover:text-emerald-400 cursor-pointer',
                                     !canClick && 'cursor-not-allowed',
                                 )}
@@ -143,7 +143,7 @@ export function StepIndicator({
                                     'mt-2 text-[10px] font-medium tracking-wide uppercase',
                                     isCurrent && 'text-emerald-400',
                                     isCompleted && !isCurrent && 'text-emerald-400/70',
-                                    !isCurrent && !isCompleted && 'text-white/40',
+                                    !isCurrent && !isCompleted && 'text-muted-foreground/40',
                                 )}
                             >
                                 {step.name}

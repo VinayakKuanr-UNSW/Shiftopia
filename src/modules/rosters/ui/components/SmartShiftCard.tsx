@@ -102,12 +102,12 @@ export interface SmartShiftCardProps {
 // HELPERS
 // ============================================================================
 
-const GROUP_COLORS: Record<string, { header: string; accent: string }> = {
-    blue: { header: 'bg-blue-900', accent: 'border-blue-500/30' },
-    green: { header: 'bg-emerald-900', accent: 'border-emerald-500/30' },
-    red: { header: 'bg-red-900', accent: 'border-red-500/30' },
-    orange: { header: 'bg-orange-900', accent: 'border-orange-500/30' },
-    purple: { header: 'bg-purple-900', accent: 'border-purple-500/30' },
+const GROUP_COLORS: Record<string, { header: string; accent: string; text: string; badge: string }> = {
+    blue: { header: 'bg-blue-100 dark:bg-blue-900', accent: 'border-blue-500/30', text: 'text-blue-900 dark:text-blue-100', badge: 'bg-blue-200 dark:bg-black/30' },
+    green: { header: 'bg-emerald-100 dark:bg-emerald-900', accent: 'border-emerald-500/30', text: 'text-emerald-900 dark:text-emerald-100', badge: 'bg-emerald-200 dark:bg-black/30' },
+    red: { header: 'bg-red-100 dark:bg-red-900', accent: 'border-red-500/30', text: 'text-red-900 dark:text-red-100', badge: 'bg-red-200 dark:bg-black/30' },
+    orange: { header: 'bg-orange-100 dark:bg-orange-900', accent: 'border-orange-500/30', text: 'text-orange-900 dark:text-orange-100', badge: 'bg-orange-200 dark:bg-black/30' },
+    purple: { header: 'bg-purple-100 dark:bg-purple-900', accent: 'border-purple-500/30', text: 'text-purple-900 dark:text-purple-100', badge: 'bg-purple-200 dark:bg-black/30' },
 };
 
 function formatTime(time: string | null): string {
@@ -199,12 +199,12 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
             onClick={isLocked ? undefined : onClick}
         >
             {/* Header */}
-            <div className={cn('px-3 py-1.5 flex justify-between items-center text-white', colors.header, isLocked && 'bg-slate-700')}>
+            <div className={cn('px-3 py-1.5 flex justify-between items-center', colors.header, colors.text, isLocked && 'bg-muted dark:bg-slate-700 text-muted-foreground')}>
                 {/* State ID Badge */}
                 <div className="flex items-center gap-1.5 min-w-0">
                     <span className={cn(
                         "text-[9px] font-mono font-bold px-1.5 py-0.5 rounded",
-                        isLocked ? "bg-black/50 text-white/70" : "bg-black/30"
+                        isLocked ? "bg-black/20 dark:bg-black/50 opacity-70" : colors.badge
                     )}>
                         {stateId}
                     </span>
@@ -215,11 +215,11 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                 <div className="flex items-center gap-1">
                     {shift.is_from_template && (
                         <div className="mr-1" title="From Template">
-                            <CopyPlus className="h-3 w-3 text-white/60" />
+                            <CopyPlus className="h-3 w-3 opacity-60" />
                         </div>
                     )}
-                    {isLocked && <Lock className="h-3 w-3 text-white/70" />}
-                    {headerAction || (!isLocked && <MoreHorizontal className="h-3.5 w-3.5 text-white/40" />)}
+                    {isLocked && <Lock className="h-3 w-3 opacity-70" />}
+                    {headerAction || (!isLocked && <MoreHorizontal className="h-3.5 w-3.5 opacity-40" />)}
                 </div>
             </div>
 
@@ -346,23 +346,23 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
             onClick={isLocked ? undefined : onClick}
         >
             {/* Header */}
-            <div className={cn('px-4 py-2.5 flex justify-between items-center text-white', colors.header, isLocked && 'bg-slate-700')}>
+            <div className={cn('px-4 py-2.5 flex justify-between items-center', colors.header, colors.text, isLocked && 'bg-muted dark:bg-slate-700 text-muted-foreground')}>
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <GripVertical className={cn("h-4 w-4 text-white/30 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity", isLocked ? "cursor-not-allowed" : "cursor-grab")} />
+                    <GripVertical className={cn("h-4 w-4 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity", isLocked ? "cursor-not-allowed" : "cursor-grab")} />
                     <span className="text-xs font-bold uppercase tracking-widest truncate opacity-90">
                         {shift.roster_subgroup?.name || shift.sub_group_name || 'Shift'}
                     </span>
                 </div>
                 <div className="flex items-center gap-1.5">
                     {shift.is_from_template && (
-                        <Badge variant="outline" className="text-[9px] bg-indigo-500/10 border-indigo-500/30 text-indigo-300 h-4 px-1 gap-1">
+                        <Badge variant="outline" className="text-[9px] bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 h-4 px-1 gap-1">
                             <CopyPlus className="h-2.5 w-2.5" />
                             Template
                         </Badge>
                     )}
-                    {isLocked && <Lock className="h-4 w-4 text-white/70 mr-1" />}
+                    {isLocked && <Lock className="h-4 w-4 opacity-70 mr-1" />}
                     {getLifecycleIcon(shift.lifecycle_status)}
-                    {headerAction || (!isLocked && <MoreHorizontal className="h-4 w-4 text-white/50" />)}
+                    {headerAction || (!isLocked && <MoreHorizontal className="h-4 w-4 opacity-50" />)}
                 </div>
             </div>
 

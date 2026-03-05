@@ -25,37 +25,37 @@ export function BidComplianceBadge({
     const config = {
         pass: {
             icon: ShieldCheck,
-            bg: 'bg-emerald-500/20',
-            border: 'border-emerald-500/40',
-            text: 'text-emerald-400',
+            bg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
+            border: 'border-emerald-500/20 dark:border-emerald-500/40',
+            text: 'text-emerald-600 dark:text-emerald-400',
             label: 'Compliant',
         },
         warning: {
             icon: ShieldAlert,
-            bg: 'bg-amber-500/20',
-            border: 'border-amber-500/40',
-            text: 'text-amber-400',
+            bg: 'bg-amber-500/10 dark:bg-amber-500/20',
+            border: 'border-amber-500/20 dark:border-amber-500/40',
+            text: 'text-amber-600 dark:text-amber-400',
             label: 'Warning',
         },
         fail: {
             icon: ShieldAlert,
-            bg: 'bg-red-500/20',
-            border: 'border-red-500/40',
-            text: 'text-red-400',
+            bg: 'bg-red-500/10 dark:bg-red-500/20',
+            border: 'border-red-500/20 dark:border-red-500/40',
+            text: 'text-red-600 dark:text-red-400',
             label: 'Ineligible',
         },
         loading: {
             icon: Loader2,
-            bg: 'bg-white/10',
-            border: 'border-white/20',
-            text: 'text-white/60',
+            bg: 'bg-muted',
+            border: 'border-border',
+            text: 'text-muted-foreground',
             label: 'Checking...',
         },
         unknown: {
             icon: Shield,
-            bg: 'bg-white/10',
-            border: 'border-white/20',
-            text: 'text-white/40',
+            bg: 'bg-muted',
+            border: 'border-border',
+            text: 'text-muted-foreground/40',
             label: 'Not Checked',
         },
     };
@@ -65,7 +65,7 @@ export function BidComplianceBadge({
     return (
         <div
             className={cn(
-                'flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs',
+                'flex items-center gap-1.5 px-2 py-1 rounded-md border text-[10px] uppercase font-black tracking-widest transition-all',
                 bg,
                 border,
                 className
@@ -73,12 +73,12 @@ export function BidComplianceBadge({
         >
             <Icon
                 className={cn(
-                    'w-3.5 h-3.5',
+                    'w-3 h-3',
                     text,
                     status === 'loading' && 'animate-spin'
                 )}
             />
-            <span className={cn('font-medium', text)}>
+            <span className={cn(text)}>
                 {status === 'loading' || status === 'unknown'
                     ? label
                     : `${passedCount}/${totalCount} Passed`}

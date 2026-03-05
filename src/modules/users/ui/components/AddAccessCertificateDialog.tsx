@@ -35,7 +35,7 @@ const TYPE_X_LEVELS: { level: AccessLevel; label: string; description: string; i
         level: 'alpha',
         label: 'Alpha (Employee)',
         description: 'View own data only',
-        icon: <User className="w-4 h-4 text-slate-400" />,
+        icon: <User className="w-4 h-4 text-muted-foreground" />,
     },
     {
         level: 'beta',
@@ -256,7 +256,7 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
                     </Button>
                 )}
             </DialogTrigger>
-            <DialogContent className="max-w-xl bg-slate-900/95 border-emerald-500/20 text-white shadow-2xl shadow-emerald-900/10">
+            <DialogContent className="max-w-xl bg-card border-border text-foreground shadow-2xl shadow-black/5 dark:shadow-black/20">
                 <DialogHeader>
                     <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
@@ -274,7 +274,7 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
                 <div className="grid grid-cols-1 gap-6 py-4">
                     {/* Certificate Type Selection */}
                     <div className="space-y-2">
-                        <Label className="text-white/70 flex items-center gap-2">
+                        <Label className="text-muted-foreground flex items-center gap-2">
                             <Shield className="w-4 h-4" /> Certificate Type
                         </Label>
                         <div className="grid grid-cols-2 gap-3">
@@ -283,14 +283,14 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
                                 onClick={() => setCertificateType('X')}
                                 className={`p-3 rounded-lg border text-left transition-all ${certificateType === 'X'
                                     ? 'border-blue-500/40 bg-blue-500/10'
-                                    : 'border-white/10 bg-white/[0.02] hover:bg-white/[0.04]'
+                                    : 'border-border/50 bg-muted/30 hover:bg-muted/50'
                                     }`}
                             >
                                 <div className="flex items-center gap-2 mb-1">
                                     <User className="w-4 h-4 text-blue-400" />
                                     <span className="font-semibold text-sm">Type X — Personal</span>
                                 </div>
-                                <p className="text-xs text-white/50">Individual access to own data</p>
+                                <p className="text-xs text-muted-foreground">Individual access to own data</p>
                             </button>
                             <button
                                 type="button"
@@ -303,8 +303,8 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
                                 className={`p-3 rounded-lg border text-left transition-all ${certificateType === 'Y'
                                     ? 'border-purple-500/40 bg-purple-500/10'
                                     : hasExistingTypeY && !isEditMode
-                                        ? 'border-white/5 bg-white/[0.01] opacity-50 cursor-not-allowed'
-                                        : 'border-white/10 bg-white/[0.02] hover:bg-white/[0.04]'
+                                        ? 'border-border/20 bg-muted/10 opacity-50 cursor-not-allowed'
+                                        : 'border-border/50 bg-muted/30 hover:bg-muted/50'
                                     }`}
                             >
                                 <div className="flex items-center gap-2 mb-1">
@@ -314,7 +314,7 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
                                         <Lock className="w-3 h-3 text-amber-400/60 ml-auto" />
                                     )}
                                 </div>
-                                <p className="text-xs text-white/50">
+                                <p className="text-xs text-muted-foreground">
                                     {hasExistingTypeY && !isEditMode
                                         ? 'Already assigned (max 1)'
                                         : 'Administrative data scope'
@@ -324,28 +324,28 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
                         </div>
                     </div>
 
-                    <div className="h-px bg-white/10" />
+                    <div className="h-px bg-border" />
 
                     {/* Access Level */}
                     <div className="space-y-2">
-                        <Label className="text-white/70 flex items-center gap-2">
+                        <Label className="text-muted-foreground flex items-center gap-2">
                             <Shield className="w-4 h-4" /> Access Level
                         </Label>
                         <Select
                             value={accessLevel}
                             onValueChange={(val) => setAccessLevel(val as AccessLevel)}
                         >
-                            <SelectTrigger className="bg-emerald-950/20 border-emerald-500/20 text-white h-12">
+                            <SelectTrigger className="bg-emerald-500/5 border-emerald-500/20 text-foreground h-12">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SelectContent className="bg-slate-900 border-white/10">
+                            <SelectContent className="bg-popover border-border">
                                 {availableLevels.map(({ level, label, description, icon }) => (
-                                    <SelectItem key={level} value={level} className="focus:bg-white/5">
+                                    <SelectItem key={level} value={level} className="focus:bg-muted">
                                         <div className="flex items-center gap-3 py-1">
                                             {icon}
                                             <div className="flex flex-col text-left">
                                                 <span className="font-semibold capitalize text-base">{label}</span>
-                                                <span className="text-xs text-white/50">{description}</span>
+                                                <span className="text-xs text-muted-foreground">{description}</span>
                                             </div>
                                         </div>
                                     </SelectItem>
@@ -354,13 +354,13 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
                         </Select>
                     </div>
 
-                    <div className="h-px bg-white/10" />
+                    <div className="h-px bg-border" />
 
                     {/* Scope Selection */}
                     <div className="space-y-4">
                         {/* Organization */}
                         <div className="space-y-2">
-                            <Label className={`flex items-center gap-2 ${needsOrganization ? 'text-white/70' : 'text-white/30'}`}>
+                            <Label className={`flex items-center gap-2 ${needsOrganization ? 'text-muted-foreground' : 'text-muted-foreground/50'}`}>
                                 <Building2 className="w-4 h-4" /> Organization
                                 {needsOrganization && <span className="text-rose-400">*</span>}
                             </Label>
@@ -369,10 +369,10 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
                                     value={organizationId}
                                     onValueChange={updateOrganization}
                                 >
-                                    <SelectTrigger className="bg-white/5 border-white/10">
+                                    <SelectTrigger className="bg-muted/30 border-border">
                                         <SelectValue placeholder="Select organization" />
                                     </SelectTrigger>
-                                    <SelectContent className="bg-slate-900 border-white/10">
+                                    <SelectContent className="bg-popover border-border">
                                         {organizations.map(org => (
                                             <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
                                         ))}
@@ -388,7 +388,7 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
 
                         {/* Department */}
                         <div className="space-y-2">
-                            <Label className={`flex items-center gap-2 ${needsDepartment ? 'text-white/70' : 'text-white/30'}`}>
+                            <Label className={`flex items-center gap-2 ${needsDepartment ? 'text-muted-foreground' : 'text-muted-foreground/50'}`}>
                                 <Users className="w-4 h-4" /> Department
                                 {needsDepartment && <span className="text-rose-400">*</span>}
                             </Label>
@@ -398,10 +398,10 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
                                     onValueChange={updateDepartment}
                                     disabled={!organizationId}
                                 >
-                                    <SelectTrigger className="bg-white/5 border-white/10">
+                                    <SelectTrigger className="bg-muted/30 border-border">
                                         <SelectValue placeholder="Select department" />
                                     </SelectTrigger>
-                                    <SelectContent className="bg-slate-900 border-white/10">
+                                    <SelectContent className="bg-popover border-border">
                                         {filteredDepartments.map(dept => (
                                             <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
                                         ))}
@@ -417,7 +417,7 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
 
                         {/* Sub-Department */}
                         <div className="space-y-2">
-                            <Label className={`flex items-center gap-2 ${needsSubDepartment ? 'text-white/70' : 'text-white/30'}`}>
+                            <Label className={`flex items-center gap-2 ${needsSubDepartment ? 'text-muted-foreground' : 'text-muted-foreground/50'}`}>
                                 <ChevronRight className="w-4 h-4" /> Sub-Department
                                 {needsSubDepartment && <span className="text-rose-400">*</span>}
                             </Label>
@@ -427,10 +427,10 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
                                     onValueChange={setSubDepartmentId}
                                     disabled={!departmentId}
                                 >
-                                    <SelectTrigger className="bg-white/5 border-white/10">
+                                    <SelectTrigger className="bg-muted/30 border-border">
                                         <SelectValue placeholder="Select sub-department" />
                                     </SelectTrigger>
-                                    <SelectContent className="bg-slate-900 border-white/10">
+                                    <SelectContent className="bg-popover border-border">
                                         {filteredSubDepartments.map(sd => (
                                             <SelectItem key={sd.id} value={sd.id}>{sd.name}</SelectItem>
                                         ))}

@@ -84,7 +84,7 @@ const EventCoverageBar: React.FC<{ pct: number; variant: string }> = ({ pct, var
           style={{ animationDelay: `${i * 30}ms` }}
           className={cn(
             'h-[4px] w-[10px] rounded-sm transition-all',
-            i < filled ? cn(barColor, 'opacity-90') : 'bg-white/10'
+            i < filled ? cn(barColor, 'opacity-90') : 'bg-muted dark:bg-white/10'
           )}
         />
       ))}
@@ -139,16 +139,16 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="h-4 w-4 flex items-center justify-center hover:bg-white/20 rounded transition-colors"
+          className="h-4 w-4 flex items-center justify-center hover:bg-muted dark:hover:bg-white/20 rounded transition-colors"
           onClick={(e) => e.stopPropagation()}
         >
-          <MoreHorizontal className="h-3 w-3 text-white/60" />
+          <MoreHorizontal className="h-3 w-3 text-muted-foreground dark:text-white/60" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="bg-[#1a2744] border-white/10 min-w-[160px] z-50">
+      <DropdownMenuContent align="end" className="bg-popover border-border min-w-[160px] z-50">
         <DropdownMenuItem
           onClick={() => onEditShift?.(shift)}
-          className="text-white hover:bg-white/10 cursor-pointer"
+          className="text-popover-foreground hover:bg-accent cursor-pointer"
         >
           <Edit2 className="h-4 w-4 mr-2" />
           Edit Shift
@@ -156,7 +156,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
 
         {canUnpublish(shift) && (
           <>
-            <DropdownMenuSeparator className="bg-white/10" />
+            <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem
               onClick={() => handleRequestUnpublish(shift.id)}
               className="text-amber-400 hover:bg-amber-500/10 cursor-pointer"
@@ -327,16 +327,16 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
   const totalShifts = projection?.stats.totalShifts ?? shifts.length;
 
   return (
-    <div className="flex flex-col h-full bg-[#0B0F1A]">
+    <div className="flex flex-col h-full bg-background">
       {/* Header strip */}
-      <div className="px-6 py-3 border-b border-white/5 bg-[#0B0F1A]/80 backdrop-blur-md">
-        <div className="text-[10px] font-mono tracking-[0.12em] uppercase text-slate-500">
-          <span className="text-slate-300 tabular-nums">{eventGroups.length}</span> event{eventGroups.length !== 1 ? 's' : ''}
-          <span className="mx-2 text-slate-700">·</span>
-          <span className="text-slate-300 tabular-nums">{totalShifts}</span> shifts
+      <div className="px-6 py-3 border-b border-border bg-background/80 backdrop-blur-md">
+        <div className="text-[10px] font-mono tracking-[0.12em] uppercase text-muted-foreground">
+          <span className="text-foreground tabular-nums">{eventGroups.length}</span> event{eventGroups.length !== 1 ? 's' : ''}
+          <span className="mx-2 text-border">·</span>
+          <span className="text-foreground tabular-nums">{totalShifts}</span> shifts
           {projection && (
             <>
-              <span className="mx-2 text-slate-700">·</span>
+              <span className="mx-2 text-border">·</span>
               <span className="text-emerald-500/70 tabular-nums">{(projection.stats.totalNetMinutes / 60).toFixed(1)}h</span>
             </>
           )}
@@ -355,16 +355,16 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
               <Card
                 key={group.eventId}
                 className={cn(
-                  'overflow-hidden border border-white/5 bg-[#0D121F]',
-                  group.eventId === '_no_event_' && 'border-dashed border-white/[0.07]'
+                  'overflow-hidden border border-border bg-card',
+                  group.eventId === '_no_event_' && 'border-dashed border-border/50'
                 )}
               >
                 {/* Event Header */}
                 <button
                   onClick={() => toggleEventCollapse(group.eventId)}
                   className={cn(
-                    'w-full px-5 py-4 flex items-start justify-between hover:bg-white/[0.02] transition-colors text-left border-t border-white/5',
-                    group.eventId === '_no_event_' && 'bg-white/[0.01]'
+                    'w-full px-5 py-4 flex items-start justify-between hover:bg-accent/50 transition-colors text-left border-t border-border',
+                    group.eventId === '_no_event_' && 'bg-muted/30'
                   )}
                 >
                   <div className="flex items-start gap-3">
@@ -374,18 +374,18 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                         : <ChevronDown className="h-4 w-4" />}
                     </div>
                     <div>
-                      <h3 className="text-sm font-semibold text-slate-100 tracking-wide uppercase">
+                      <h3 className="text-sm font-semibold text-foreground tracking-wide uppercase">
                         {group.eventName}
                       </h3>
                       {/* Coverage LED bar + label */}
                       <div className="flex items-center gap-3 mt-1.5">
                         <EventCoverageBar pct={coveragePct} variant={badgeVariant} />
-                        <span className="text-[10px] font-mono tracking-[0.12em] text-slate-500">
+                        <span className="text-[10px] font-mono tracking-[0.12em] text-muted-foreground">
                           {group.assignedCount}/{group.shifts.length} filled
                         </span>
                       </div>
                       {group.eventDate && (
-                        <div className="flex items-center gap-2 mt-1.5 text-[10px] font-mono text-slate-500 uppercase tracking-[0.1em]">
+                        <div className="flex items-center gap-2 mt-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-[0.1em]">
                           <Calendar className="h-3 w-3" />
                           {format(group.eventDate, 'MMM d, yyyy')}
                           {group.startTime && (
@@ -398,7 +398,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                   </div>
 
                   <div className="flex items-center gap-3 shrink-0 ml-4">
-                    <div className="text-right text-[10px] font-mono text-slate-500 tabular-nums">
+                    <div className="text-right text-[10px] font-mono text-muted-foreground tabular-nums">
                       <div className="flex items-center gap-1.5 justify-end">
                         <Users className="h-3 w-3" />
                         <span>{group.assignedCount}/{group.shifts.length}</span>
@@ -416,7 +416,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
 
                 {/* Shift grid (collapsible) */}
                 {!isCollapsed && (
-                  <div className="px-5 pb-5 pt-2 border-t border-white/5">
+                  <div className="px-5 pb-5 pt-2 border-t border-border">
                     {group.unassignedCount > 0 && (
                       <div className="mb-3 px-3 py-2 bg-red-500/5 border border-red-500/20 rounded-md flex items-center gap-2">
                         <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
@@ -449,8 +449,8 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                     <button
                       className={cn(
                         'w-full mt-3 h-9 flex items-center justify-center rounded-lg',
-                        'border border-dashed border-white/10 hover:border-white/25 hover:bg-white/[0.02]',
-                        'text-[10px] font-mono tracking-[0.12em] uppercase text-white/30 hover:text-white/60',
+                        'border border-dashed border-border hover:border-accent hover:bg-accent/30',
+                        'text-[10px] font-mono tracking-[0.12em] uppercase text-muted-foreground hover:text-foreground',
                         'transition-all gap-1.5'
                       )}
                       onClick={() => handleAddShiftClick(group)}
@@ -465,7 +465,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
           })}
 
           {eventGroups.length === 0 && (
-            <div className="text-center py-12 text-[10px] font-mono tracking-[0.12em] uppercase text-slate-600">
+            <div className="text-center py-12 text-[10px] font-mono tracking-[0.12em] uppercase text-muted-foreground">
               No events or shifts for this period
             </div>
           )}
@@ -479,15 +479,15 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
       />
 
       <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
-        <AlertDialogContent className="bg-[#0f172a] border-white/10">
+        <AlertDialogContent className="bg-popover border-border">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Unpublish Shift</AlertDialogTitle>
-            <AlertDialogDescription className="text-slate-300">
+            <AlertDialogTitle className="text-foreground">Unpublish Shift</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
               This shift will be reverted to Draft and removed from all employee-facing surfaces immediately.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-white/10 text-white/70 hover:bg-white/5">
+            <AlertDialogCancel className="border-border text-muted-foreground hover:bg-accent">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction

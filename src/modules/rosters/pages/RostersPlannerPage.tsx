@@ -216,7 +216,11 @@ const NewRostersPage: React.FC = () => {
 
 
   // Employees lookup
-  const { data: employees = [] } = useEmployees(selectedOrganizationId || undefined);
+  const { data: employees = [] } = useEmployees(
+    selectedOrganizationId || undefined,
+    selectedDepartmentIds[0] || undefined,
+    selectedSubDepartmentIds[0] || undefined,
+  );
 
   // Roster structures for Group mode projection
   const { data: rosterStructures = [] } = useRosterStructure(

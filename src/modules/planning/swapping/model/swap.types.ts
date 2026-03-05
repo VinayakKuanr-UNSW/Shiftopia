@@ -44,7 +44,9 @@ export interface SwapRequestWithDetails extends SwapRequest {
         } | null;
         departments?: { name: string } | null;
         sub_departments?: { name: string } | null;
+        organizations?: { name: string } | null;
     };
+
     requestedShift?: Shift & {
         roles?: {
             name: string;
@@ -54,7 +56,9 @@ export interface SwapRequestWithDetails extends SwapRequest {
         } | null;
         departments?: { name: string } | null;
         sub_departments?: { name: string } | null;
+        organizations?: { name: string } | null;
     };
+
     requestorEmployee?: Employee;
     targetEmployee?: Employee; // Added to match mapToUIModel usage
     swap_offers?: {

@@ -12,13 +12,7 @@ interface AddContractDialogProps {
     employeeName: string;
 }
 
-const ACCESS_LEVEL_DESCRIPTIONS: Record<AccessLevel, string> = {
-    alpha: 'Employee - View own data only',
-    beta: 'Team Lead - View timesheets',
-    gamma: 'Manager - Manage sub-department',
-    delta: 'Department Manager - Manage department',
-    epsilon: 'Global Admin - Manage organization',
-};
+// Replaced hardcoded themes
 
 export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId, employeeName }) => {
     const [open, setOpen] = useState(false);
@@ -50,7 +44,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                     Add Contract
                 </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl bg-slate-900/95 border-white/10 text-white">
+            <DialogContent className="max-w-2xl bg-card border-border text-foreground shadow-xl shadow-black/5 dark:shadow-black/20">
                 <DialogHeader>
                     <DialogTitle>Add Contract</DialogTitle>
                     <DialogDescription>
@@ -61,14 +55,14 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
                     {/* Organization */}
                     <div className="space-y-2">
-                        <Label className="text-white/70 flex items-center gap-2">
+                        <Label className="text-muted-foreground flex items-center gap-2">
                             <Building2 className="w-4 h-4" /> Organization
                         </Label>
                         <Select
                             value={formData.organization_id}
                             onValueChange={(val) => updateField('organization_id', val)}
                         >
-                            <SelectTrigger className="bg-white/5 border-white/10">
+                            <SelectTrigger className="bg-muted/30 border-border">
                                 <SelectValue placeholder="Select organization" />
                             </SelectTrigger>
                             <SelectContent>
@@ -81,7 +75,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
 
                     {/* Department */}
                     <div className="space-y-2">
-                        <Label className="text-white/70 flex items-center gap-2">
+                        <Label className="text-muted-foreground flex items-center gap-2">
                             <Users className="w-4 h-4" /> Department
                         </Label>
                         <Select
@@ -89,7 +83,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                             onValueChange={(val) => updateField('department_id', val)}
                             disabled={!formData.organization_id}
                         >
-                            <SelectTrigger className="bg-white/5 border-white/10">
+                            <SelectTrigger className="bg-muted/30 border-border">
                                 <SelectValue placeholder="Select department" />
                             </SelectTrigger>
                             <SelectContent>
@@ -102,7 +96,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
 
                     {/* Sub-Department */}
                     <div className="space-y-2">
-                        <Label className="text-white/70 flex items-center gap-2">
+                        <Label className="text-muted-foreground flex items-center gap-2">
                             <ChevronRight className="w-4 h-4" /> Sub-Department
                         </Label>
                         <Select
@@ -110,7 +104,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                             onValueChange={(val) => updateField('sub_department_id', val)}
                             disabled={!formData.department_id}
                         >
-                            <SelectTrigger className="bg-white/5 border-white/10">
+                            <SelectTrigger className="bg-muted/30 border-border">
                                 <SelectValue placeholder="Select sub-department" />
                             </SelectTrigger>
                             <SelectContent>
@@ -123,7 +117,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
 
                     {/* Role */}
                     <div className="space-y-2">
-                        <Label className="text-white/70 flex items-center gap-2">
+                        <Label className="text-muted-foreground flex items-center gap-2">
                             <Briefcase className="w-4 h-4" /> Role
                         </Label>
                         <Select
@@ -134,7 +128,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                             }}
                             disabled={!formData.sub_department_id}
                         >
-                            <SelectTrigger className="bg-white/5 border-white/10">
+                            <SelectTrigger className="bg-muted/30 border-border">
                                 <SelectValue placeholder="Select role" />
                             </SelectTrigger>
                             <SelectContent>
@@ -147,14 +141,14 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
 
                     {/* Remuneration Level */}
                     <div className="space-y-2">
-                        <Label className="text-white/70 flex items-center gap-2">
+                        <Label className="text-muted-foreground flex items-center gap-2">
                             <DollarSign className="w-4 h-4" /> Remuneration Level
                         </Label>
                         <Select
                             value={formData.rem_level_id}
                             onValueChange={(val) => updateField('rem_level_id', val)}
                         >
-                            <SelectTrigger className="bg-white/5 border-white/10">
+                            <SelectTrigger className="bg-muted/30 border-border">
                                 <SelectValue placeholder="Select level" />
                             </SelectTrigger>
                             <SelectContent>
@@ -169,14 +163,14 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
 
                     {/* Employment Status */}
                     <div className="space-y-2">
-                        <Label className="text-white/70 flex items-center gap-2">
+                        <Label className="text-muted-foreground flex items-center gap-2">
                             <Briefcase className="w-4 h-4" /> Employment Status
                         </Label>
                         <Select
                             value={formData.employment_status}
                             onValueChange={(val) => updateField('employment_status', val)}
                         >
-                            <SelectTrigger className="bg-white/5 border-white/10">
+                            <SelectTrigger className="bg-muted/30 border-border">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>

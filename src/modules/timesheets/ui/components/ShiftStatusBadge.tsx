@@ -13,29 +13,29 @@ export const ShiftStatusBadge: React.FC<ShiftStatusBadgeProps> = ({ status }) =>
 
     switch (status) {
         case 'Completed':
-            bgColor = 'bg-green-500/20';
-            textColor = 'text-green-300';
-            borderColor = 'border-green-500/30';
+            bgColor = 'bg-emerald-500/10';
+            textColor = 'text-emerald-600 dark:text-emerald-400';
+            borderColor = 'border-emerald-500/20';
             break;
         case 'Cancelled':
-            bgColor = 'bg-red-500/20';
-            textColor = 'text-red-300';
-            borderColor = 'border-red-500/30';
+            bgColor = 'bg-rose-500/10';
+            textColor = 'text-rose-600 dark:text-rose-400';
+            borderColor = 'border-rose-500/20';
             break;
         case 'Active':
-            bgColor = 'bg-blue-500/20';
-            textColor = 'text-blue-300';
-            borderColor = 'border-blue-500/30';
+            bgColor = 'bg-blue-500/10';
+            textColor = 'text-blue-600 dark:text-blue-400';
+            borderColor = 'border-blue-500/20';
             break;
         case 'No-Show':
-            bgColor = 'bg-yellow-500/20';
-            textColor = 'text-yellow-300';
-            borderColor = 'border-yellow-500/30';
+            bgColor = 'bg-amber-500/10';
+            textColor = 'text-amber-600 dark:text-amber-400';
+            borderColor = 'border-amber-500/20';
             break;
         case 'Swapped':
-            bgColor = 'bg-purple-500/20';
-            textColor = 'text-purple-300';
-            borderColor = 'border-purple-500/30';
+            bgColor = 'bg-violet-500/10';
+            textColor = 'text-violet-600 dark:text-violet-400';
+            borderColor = 'border-violet-500/20';
             break;
     }
 

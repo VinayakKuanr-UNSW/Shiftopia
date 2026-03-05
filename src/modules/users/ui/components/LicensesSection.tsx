@@ -25,17 +25,17 @@ const LicensesSection: React.FC<LicensesSectionProps> = ({ employeeId, employeeN
 
     const getStatusBadge = (status: string, expirationDate?: string) => {
         if (status === 'Expired') {
-            return <Badge className="bg-red-100 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/30">Expired</Badge>;
+            return <Badge className="bg-destructive/10 text-destructive border border-destructive/20">Expired</Badge>;
         }
 
         if (expirationDate) {
             const daysUntilExpiry = differenceInDays(parseISO(expirationDate), new Date());
             if (daysUntilExpiry <= 60 && daysUntilExpiry > 0) {
-                return <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30">Expiring Soon</Badge>;
+                return <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">Expiring Soon</Badge>;
             }
         }
 
-        return <Badge className="bg-green-100 text-green-700 border-green-200 dark:bg-green-500/20 dark:text-green-300 dark:border-green-500/30">Active</Badge>;
+        return <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">Active</Badge>;
     };
 
     return (

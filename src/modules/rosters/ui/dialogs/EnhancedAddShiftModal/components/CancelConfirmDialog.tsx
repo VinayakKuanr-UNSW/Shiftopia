@@ -23,16 +23,16 @@ export const CancelConfirmDialog: React.FC<CancelConfirmDialogProps> = ({
 }) => {
     return (
         <AlertDialog open={open} onOpenChange={onOpenChange}>
-            <AlertDialogContent className="bg-[#1e293b] border-white/10 text-white">
+            <AlertDialogContent className="bg-card border-border text-foreground">
                 <AlertDialogHeader>
-                    <AlertDialogTitle className="text-white">Discard changes?</AlertDialogTitle>
-                    <AlertDialogDescription className="text-white/70">
+                    <AlertDialogTitle className="text-foreground">Discard changes?</AlertDialogTitle>
+                    <AlertDialogDescription className="text-muted-foreground">
                         You have unsaved changes. Are you sure you want to discard them and close the modal?
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                    <AlertDialogCancel className="bg-transparent text-white/70 border-white/20 hover:bg-white/10 hover:text-white">Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={onConfirm} className="bg-red-500 hover:bg-red-600 text-white border-0">Discard Changes</AlertDialogAction>
+                    <AlertDialogCancel className="bg-transparent text-muted-foreground border-white/20 hover:bg-white/10 hover:text-foreground">Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={onConfirm} className="bg-red-500 hover:bg-red-600 text-foreground border-0">Discard Changes</AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>

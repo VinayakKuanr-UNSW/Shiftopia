@@ -69,7 +69,7 @@ const EmployeeCard = ({
                 'h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-all',
                 isSelected
                     ? 'bg-emerald-500/20 text-emerald-400 ring-2 ring-emerald-500/30'
-                    : 'bg-white/5 text-white/50 group-hover/emp:bg-white/10 group-hover/emp:text-white/70'
+                    : 'bg-muted/50 text-muted-foreground group-hover/emp:bg-muted group-hover/emp:text-foreground'
             )}>
                 {initials}
             </div>
@@ -78,11 +78,11 @@ const EmployeeCard = ({
             <div className="flex-1 min-w-0">
                 <p className={cn(
                     'text-sm font-semibold truncate transition-colors',
-                    isSelected ? 'text-emerald-300' : 'text-white/80 group-hover/emp:text-white'
+                    isSelected ? 'text-emerald-500' : 'text-foreground/80 group-hover/emp:text-foreground'
                 )}>
                     {displayName}
                 </p>
-                <p className="text-[10px] text-white/30 truncate">
+                <p className="text-[10px] text-muted-foreground truncate">
                     ID: {employee.id.slice(0, 8)}…
                 </p>
             </div>
@@ -144,35 +144,35 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
     return (
         <div className="flex gap-4 h-[calc(100%-1rem)]" style={{ minHeight: '480px' }}>
             {/* ═══════ LEFT PANE: EMPLOYEE POOL ═══════ */}
-            <div className="w-[45%] flex flex-col rounded-2xl bg-[#1e293b]/30 border border-white/5 backdrop-blur-md overflow-hidden">
+            <div className="w-[45%] flex flex-col rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden">
                 {/* Header */}
-                <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center gap-3">
+                <div className="p-4 border-b border-border bg-muted/50 flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
                         <Users className="h-5 w-5" />
                     </div>
                     <div className="flex-1">
-                        <h3 className="text-sm font-bold text-white tracking-tight uppercase">Employee Pool</h3>
-                        <p className="text-[10px] text-white/30 font-medium">
+                        <h3 className="text-sm font-bold text-foreground tracking-tight uppercase">Employee Pool</h3>
+                        <p className="text-[10px] text-muted-foreground font-medium">
                             {filteredEmployees.length} available · Hover to inspect
                         </p>
                     </div>
                 </div>
 
                 {/* Search */}
-                <div className="px-4 py-3 border-b border-white/5">
+                <div className="px-4 py-3 border-b border-border">
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/20" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
                         <Input
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="Search employees..."
-                            className="h-9 pl-9 bg-white/[0.03] border-white/5 text-white text-sm rounded-xl focus:border-cyan-500/30"
+                            className="h-9 pl-9 bg-muted/50 border-border text-foreground text-sm rounded-xl focus:border-cyan-500/30"
                         />
                         {searchQuery && (
                             <button
                                 type="button"
                                 onClick={() => setSearchQuery('')}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground"
                             >
                                 <X className="h-3.5 w-3.5" />
                             </button>
@@ -187,7 +187,7 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
                             <Gavel className="h-4 w-4 text-indigo-400 flex-shrink-0 mt-0.5" />
                             <div>
                                 <p className="text-[11px] font-medium text-indigo-300">On Bidding</p>
-                                <p className="text-[10px] text-white/50 mt-0.5">
+                                <p className="text-[10px] text-muted-foreground/70 mt-0.5">
                                     Assigning will close bidding and assign directly.
                                 </p>
                             </div>
@@ -202,7 +202,7 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
                             <AlertTriangle className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" />
                             <div>
                                 <p className="text-[11px] font-medium text-amber-300">Templates Only</p>
-                                <p className="text-[10px] text-white/50 mt-0.5">
+                                <p className="text-[10px] text-muted-foreground/70 mt-0.5">
                                     Assign employees when applying the template to a roster.
                                 </p>
                             </div>
@@ -221,25 +221,25 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
                             className={cn(
                                 'w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left',
                                 !selectedEmployeeId
-                                    ? 'bg-white/[0.06] border-white/15 shadow-md'
-                                    : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.04] hover:border-white/10',
+                                    ? 'bg-accent border-border shadow-md'
+                                    : 'bg-muted/30 border-border hover:bg-accent hover:border-border',
                                 (isReadOnly || isEmployeeLocked || isTemplateMode) && 'opacity-50 cursor-not-allowed'
                             )}
                         >
-                            <div className="h-9 w-9 rounded-full bg-white/5 flex items-center justify-center">
-                                <UserCircle className="h-5 w-5 text-white/30" />
+                            <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center">
+                                <UserCircle className="h-5 w-5 text-muted-foreground/40" />
                             </div>
                             <div>
                                 <p className={cn(
                                     'text-sm font-semibold',
-                                    !selectedEmployeeId ? 'text-white' : 'text-white/50'
+                                    !selectedEmployeeId ? 'text-foreground' : 'text-muted-foreground/50'
                                 )}>
                                     Unassigned
                                 </p>
-                                <p className="text-[10px] text-white/30">Leave shift open</p>
+                                <p className="text-[10px] text-muted-foreground/40">Leave shift open</p>
                             </div>
                             {!selectedEmployeeId && (
-                                <CheckCircle2 className="h-5 w-5 text-white/40 ml-auto flex-shrink-0" />
+                                <CheckCircle2 className="h-5 w-5 text-emerald-500/80 ml-auto flex-shrink-0" />
                             )}
                         </button>
 
@@ -257,7 +257,7 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
                         ))}
 
                         {!isTemplateMode && filteredEmployees.length === 0 && (
-                            <div className="text-center py-8 text-white/30 text-sm">
+                            <div className="text-center py-8 text-muted-foreground/40 text-sm">
                                 No employees match your search.
                             </div>
                         )}
@@ -266,9 +266,9 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
 
                 {/* Notes under employee list */}
                 {selectedEmployeeId && !isTemplateMode && (
-                    <div className="px-4 py-3 border-t border-white/5 bg-white/[0.01]">
-                        <p className="text-[10px] text-white/40 uppercase tracking-wide font-bold mb-1">Selected</p>
-                        <p className="text-sm text-emerald-400 font-semibold">
+                    <div className="px-4 py-3 border-t border-border bg-muted/20">
+                        <p className="text-[10px] text-muted-foreground/40 uppercase tracking-wide font-bold mb-1">Selected</p>
+                        <p className="text-sm text-emerald-500 font-semibold">
                             {inspectedEmployee
                                 ? (inspectedEmployee.profiles?.full_name || inspectedEmployee.full_name || `${inspectedEmployee.first_name} ${inspectedEmployee.last_name}`)
                                 : 'Unknown'}
@@ -278,15 +278,15 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
             </div>
 
             {/* ═══════ RIGHT PANE: COMPLIANCE INSPECTOR ═══════ */}
-            <div className="w-[55%] flex flex-col rounded-2xl bg-[#1e293b]/30 border border-white/5 backdrop-blur-md overflow-hidden">
+            <div className="w-[55%] flex flex-col rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden">
                 {/* Header */}
-                <div className="p-4 border-b border-white/5 bg-white/[0.02] flex items-center gap-3">
+                <div className="p-4 border-b border-border bg-muted/50 flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
                         <Shield className="h-5 w-5" />
                     </div>
                     <div className="flex-1">
-                        <h3 className="text-sm font-bold text-white tracking-tight uppercase">Compliance Inspector</h3>
-                        <p className="text-[10px] text-white/30 font-medium">
+                        <h3 className="text-sm font-bold text-foreground tracking-tight uppercase">Compliance Inspector</h3>
+                        <p className="text-[10px] text-muted-foreground font-medium">
                             {inspectedEmployee
                                 ? `Inspecting: ${inspectedEmployee.profiles?.full_name || inspectedEmployee.full_name || `${inspectedEmployee.first_name} ${inspectedEmployee.last_name}`}`
                                 : hoveredEmployeeId
@@ -318,10 +318,10 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
                 <ScrollArea className="flex-1">
                     <div className="p-4">
                         {isTemplateMode && !watchEmployeeId ? (
-                            <div className="text-center py-16 border border-white/5 rounded-xl bg-white/[0.02]">
+                            <div className="text-center py-16 border border-border rounded-xl bg-muted/50">
                                 <Shield className="h-12 w-12 text-emerald-500 mx-auto mb-4 opacity-60" />
-                                <h3 className="text-base font-semibold text-white mb-2">Compliance Checks Passed</h3>
-                                <p className="text-white/40 max-w-sm mx-auto text-sm">
+                                <h3 className="text-base font-semibold text-foreground mb-2">Compliance Checks Passed</h3>
+                                <p className="text-muted-foreground/60 max-w-sm mx-auto text-sm">
                                     Templated shifts are validated when assigned to an employee.
                                     You can proceed without further checks.
                                 </p>

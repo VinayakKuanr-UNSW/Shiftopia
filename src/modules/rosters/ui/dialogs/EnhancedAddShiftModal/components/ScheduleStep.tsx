@@ -68,7 +68,7 @@ const MiniBadge = ({ label, color = 'emerald' }: { label: string; color?: string
                         {label}
                     </span>
                 </TooltipTrigger>
-                <TooltipContent side="top" className="bg-slate-900 border-white/10 text-white text-xs">
+                <TooltipContent side="top" className="bg-popover border-border text-popover-foreground text-xs">
                     {label}
                 </TooltipContent>
             </Tooltip>
@@ -185,14 +185,14 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                 />
 
                 {/* ── COL 2: CONTEXT ──────────────────── */}
-                <div className="flex flex-col h-full rounded-2xl bg-[#1e293b]/30 border border-white/5 backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-amber-500/20 group/card">
-                    <div className="p-3 border-b border-white/5 bg-white/[0.02] flex items-center gap-2">
+                <div className="flex flex-col h-full rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-amber-500/20 group/card">
+                    <div className="p-3 border-b border-border bg-muted/50 flex items-center gap-2">
                         <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.15)]">
                             <Lock className="h-4 w-4" />
                         </div>
                         <div>
-                            <h3 className="text-[11px] font-bold text-white tracking-tight uppercase">Context</h3>
-                            <p className="text-[9px] text-white/25 font-medium">Assignment Details</p>
+                            <h3 className="text-[11px] font-bold text-foreground tracking-tight uppercase">Context</h3>
+                            <p className="text-[9px] text-muted-foreground font-medium">Assignment Details</p>
                         </div>
                     </div>
 
@@ -201,15 +201,15 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                         <div className="flex flex-col justify-center">
                             {isTemplateMode ? (
                                 <div className="space-y-1">
-                                    <Label className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em]">Roster</Label>
-                                    <div className="flex items-center gap-1.5 p-2 text-white/30 rounded-lg border border-white/5 bg-white/[0.01] text-[10px]">
+                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">Roster</Label>
+                                    <div className="flex items-center gap-1.5 p-2 text-muted-foreground/50 rounded-lg border border-border bg-muted/30 text-[10px]">
                                         <Lock className="w-3 h-3 opacity-50" />
                                         <span>N/A — templates</span>
                                     </div>
                                 </div>
                             ) : !isReadOnly ? (
                                 <div className="space-y-1">
-                                    <Label className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em]">Roster</Label>
+                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">Roster</Label>
                                     {rosters?.length > 0 ? (
                                         <Select
                                             disabled={isReadOnly || isRosterLocked}
@@ -217,12 +217,12 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                             onValueChange={onRosterChange}
                                         >
                                             <SelectTrigger className={cn(
-                                                "h-8 bg-white/[0.03] border-white/5 text-white text-[11px] hover:bg-white/10 transition-all rounded-lg focus:ring-1 focus:ring-amber-500/30",
+                                                "h-8 bg-muted/50 border-border text-foreground text-[11px] hover:bg-accent transition-all rounded-lg focus:ring-1 focus:ring-amber-500/30",
                                                 !selectedRosterId && "border-amber-500/50"
                                             )}>
                                                 <SelectValue placeholder="Select roster" />
                                             </SelectTrigger>
-                                            <SelectContent className="bg-[#1e293b] border-white/10 backdrop-blur-xl">
+                                            <SelectContent className="bg-popover border-border backdrop-blur-xl">
                                                 {rosters.map((roster) => (
                                                     <SelectItem key={roster.id} value={roster.id} className="text-[11px] focus:bg-amber-500/10 focus:text-amber-400">
                                                         {roster.name || roster.description || (roster.start_date ? format(parseISO(roster.start_date), 'dd MMM yyyy') : 'Unknown Roster')}
@@ -239,8 +239,8 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                 </div>
                             ) : (
                                 <div className="space-y-1">
-                                    <Label className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em]">Roster</Label>
-                                    <div className="text-[11px] text-white/60 font-medium px-1">
+                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">Roster</Label>
+                                    <div className="text-[11px] text-muted-foreground font-medium px-1">
                                         {selectedRoster ? (selectedRoster.name || (selectedRoster.start_date ? format(parseISO(selectedRoster.start_date), 'dd MMM yyyy') : 'Unknown')) : 'None'}
                                     </div>
                                 </div>
@@ -255,14 +255,14 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                     name="group_type"
                                     render={({ field }) => (
                                         <FormItem className="space-y-1">
-                                            <FormLabel className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em]">Group</FormLabel>
+                                            <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">Group</FormLabel>
                                             {isGroupLocked ? (
                                                 <FormControl>
                                                     <Input
                                                         {...field}
                                                         value={field.value ? field.value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : context?.groupName || ''}
                                                         disabled={true}
-                                                        className="h-8 bg-white/[0.02] border-white/5 text-white/60 text-[11px] rounded-lg cursor-not-allowed"
+                                                        className="h-8 bg-muted/40 border-border text-muted-foreground text-[11px] rounded-lg cursor-not-allowed"
                                                     />
                                                 </FormControl>
                                             ) : !isRosterActive ? (
@@ -287,13 +287,13 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                                 >
                                                     <FormControl>
                                                         <SelectTrigger className={cn(
-                                                            "h-8 bg-white/[0.03] border-white/5 text-white text-[11px] hover:bg-white/10 transition-all rounded-lg",
+                                                            "h-8 bg-muted/50 border-border text-foreground text-[11px] hover:bg-accent transition-all rounded-lg",
                                                             !isRosterActive && "opacity-50 cursor-not-allowed"
                                                         )}>
                                                             <SelectValue placeholder="Select group" />
                                                         </SelectTrigger>
                                                     </FormControl>
-                                                    <SelectContent className="bg-[#1e293b] border-white/10 backdrop-blur-xl">
+                                                    <SelectContent className="bg-popover border-border backdrop-blur-xl">
                                                         {showDefaultGroups ? (
                                                             <>
                                                                 <SelectItem value="convention_centre">Convention Centre</SelectItem>
@@ -316,8 +316,8 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                 />
                             ) : (
                                 <div className="space-y-1">
-                                    <Label className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em]">Group</Label>
-                                    <div className="text-[11px] text-white/60 font-medium px-1">
+                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">Group</Label>
+                                    <div className="text-[11px] text-muted-foreground font-medium px-1">
                                         {watchGroupType ? watchGroupType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not specified'}
                                     </div>
                                 </div>
@@ -332,17 +332,17 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                     name="sub_group_name"
                                     render={({ field }) => (
                                         <FormItem className="space-y-1">
-                                            <FormLabel className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em]">Sub-Group</FormLabel>
+                                            <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">Sub-Group</FormLabel>
                                             {isSubGroupLocked ? (
                                                 <FormControl>
                                                     <Input
                                                         {...field}
                                                         disabled={true}
-                                                        className="h-8 bg-white/[0.02] border-white/5 text-white/60 text-[11px] rounded-lg cursor-not-allowed"
+                                                        className="h-8 bg-muted/40 border-border text-muted-foreground text-[11px] rounded-lg cursor-not-allowed"
                                                     />
                                                 </FormControl>
                                             ) : !isRosterActive || !watchGroupType ? (
-                                                <div className="flex items-center gap-1.5 p-2 text-white/30 rounded-lg border border-white/5 bg-white/[0.01] text-[10px] italic">
+                                                <div className="flex items-center gap-1.5 p-2 text-muted-foreground/30 rounded-lg border border-border bg-muted/20 text-[10px] italic">
                                                     <Lock className="w-3 h-3 opacity-50" />
                                                     <span>Select group first</span>
                                                 </div>
@@ -358,11 +358,11 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                                     value={field.value}
                                                 >
                                                     <FormControl>
-                                                        <SelectTrigger className="h-8 bg-white/[0.03] border-white/5 text-white text-[11px] hover:bg-white/10 transition-all rounded-lg">
+                                                        <SelectTrigger className="h-8 bg-muted/50 border-border text-foreground text-[11px] hover:bg-accent transition-all rounded-lg">
                                                             <SelectValue placeholder="Select sub-group" />
                                                         </SelectTrigger>
                                                     </FormControl>
-                                                    <SelectContent className="bg-[#1e293b] border-white/10 backdrop-blur-xl">
+                                                    <SelectContent className="bg-popover border-border backdrop-blur-xl">
                                                         {availableSubGroups.map((sg) => (
                                                             <SelectItem key={sg} value={sg} className="focus:bg-amber-500/10 focus:text-amber-400">
                                                                 {sg}
@@ -377,8 +377,8 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                 />
                             ) : (
                                 <div className="space-y-1">
-                                    <Label className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em]">Sub-Group</Label>
-                                    <div className="text-[11px] text-white/60 font-medium px-1">
+                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">Sub-Group</Label>
+                                    <div className="text-[11px] text-muted-foreground font-medium px-1">
                                         {watchSubGroup || 'Not specified'}
                                     </div>
                                 </div>
@@ -388,14 +388,14 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                 </div>
 
                 {/* ── COL 3: TIMINGS ──────────────────── */}
-                <div className="flex flex-col h-full rounded-2xl bg-[#1e293b]/30 border border-white/5 backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-emerald-500/20 group/card">
-                    <div className="p-3 border-b border-white/5 bg-white/[0.02] flex items-center gap-2">
+                <div className="flex flex-col h-full rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-emerald-500/20 group/card">
+                    <div className="p-3 border-b border-border bg-muted/50 flex items-center gap-2">
                         <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.15)]">
                             <Clock className="h-4 w-4" />
                         </div>
                         <div>
-                            <h3 className="text-[11px] font-bold text-white tracking-tight uppercase">Timings</h3>
-                            <p className="text-[9px] text-white/25 font-medium">Start & End</p>
+                            <h3 className="text-[11px] font-bold text-foreground tracking-tight uppercase">Timings</h3>
+                            <p className="text-[9px] text-muted-foreground font-medium">Start & End</p>
                         </div>
                     </div>
 
@@ -406,18 +406,18 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                             name="start_time"
                             render={({ field }) => (
                                 <FormItem className="space-y-1">
-                                    <FormLabel className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em]">Start Time</FormLabel>
+                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">Start Time</FormLabel>
                                     <FormControl>
                                         {!isReadOnly ? (
                                             <Input
                                                 type="time"
                                                 step="900"
-                                                className="h-8 text-sm font-bold bg-white/[0.03] border-white/5 text-white focus:bg-white/[0.05] focus:border-emerald-500/50 transition-all rounded-lg"
+                                                className="h-8 text-sm font-bold bg-muted/50 border-border text-foreground focus:bg-accent focus:border-emerald-500/50 transition-all rounded-lg"
                                                 disabled={isReadOnly}
                                                 {...field}
                                             />
                                         ) : (
-                                            <div className="text-base font-bold text-white px-1">
+                                            <div className="text-base font-bold text-foreground px-1">
                                                 {formatTimeDisplay(field.value)}
                                             </div>
                                         )}
@@ -433,18 +433,18 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                             name="end_time"
                             render={({ field }) => (
                                 <FormItem className="space-y-1">
-                                    <FormLabel className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em]">End Time</FormLabel>
+                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">End Time</FormLabel>
                                     <FormControl>
                                         {!isReadOnly ? (
                                             <Input
                                                 type="time"
                                                 step="900"
-                                                className="h-8 text-sm font-bold bg-white/[0.03] border-white/5 text-white focus:bg-white/[0.05] focus:border-emerald-500/50 transition-all rounded-lg"
+                                                className="h-8 text-sm font-bold bg-muted/50 border-border text-foreground focus:bg-accent focus:border-emerald-500/50 transition-all rounded-lg"
                                                 disabled={isReadOnly}
                                                 {...field}
                                             />
                                         ) : (
-                                            <div className="text-base font-bold text-white px-1">
+                                            <div className="text-base font-bold text-foreground px-1">
                                                 {formatTimeDisplay(field.value)}
                                             </div>
                                         )}
@@ -456,13 +456,13 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
 
                         {/* Length */}
                         <div>
-                            <Label className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em] mb-1 block">Length</Label>
+                            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] mb-1 block">Length</Label>
                             <div className={cn(
                                 "relative p-2.5 rounded-xl border transition-all duration-300",
-                                shiftLength > 0 ? "bg-emerald-500/[0.08] border-emerald-500/30" : "bg-white/[0.02] border-white/5"
+                                shiftLength > 0 ? "bg-emerald-500/[0.08] border-emerald-500/30" : "bg-muted/40 border-border"
                             )}>
                                 <div className="flex items-baseline gap-1.5">
-                                    <p className="text-xl font-bold text-white tracking-tight">
+                                    <p className="text-xl font-bold text-foreground tracking-tight">
                                         {shiftLength.toFixed(1)}
                                     </p>
                                     <p className="text-[10px] font-medium text-emerald-400 uppercase tracking-widest">
@@ -481,14 +481,14 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                 </div>
 
                 {/* ── COL 4: BREAKS ───────────────────── */}
-                <div className="flex flex-col h-full rounded-2xl bg-[#1e293b]/30 border border-white/5 backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-blue-500/20 group/card">
-                    <div className="p-3 border-b border-white/5 bg-white/[0.02] flex items-center gap-2">
+                <div className="flex flex-col h-full rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-blue-500/20 group/card">
+                    <div className="p-3 border-b border-border bg-muted/50 flex items-center gap-2">
                         <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.15)]">
                             <Timer className="h-4 w-4" />
                         </div>
                         <div>
-                            <h3 className="text-[11px] font-bold text-white tracking-tight uppercase">Breaks</h3>
-                            <p className="text-[9px] text-white/25 font-medium">Pay Deductions</p>
+                            <h3 className="text-[11px] font-bold text-foreground tracking-tight uppercase">Breaks</h3>
+                            <p className="text-[9px] text-muted-foreground font-medium">Pay Deductions</p>
                         </div>
                     </div>
 
@@ -499,7 +499,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                             name="paid_break_minutes"
                             render={({ field }) => (
                                 <FormItem className="space-y-1">
-                                    <FormLabel className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em] flex justify-between">
+                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] flex justify-between">
                                         Paid <span className="text-[8px] lowercase opacity-40">(min)</span>
                                     </FormLabel>
                                     <FormControl>
@@ -507,7 +507,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                             <Input
                                                 type="number"
                                                 min="0"
-                                                className="h-8 pl-3 bg-white/[0.03] border-white/5 text-white focus:bg-white/[0.05] focus:border-blue-500/50 transition-all rounded-lg text-[11px]"
+                                                className="h-8 pl-3 bg-muted/50 border-border text-foreground focus:bg-accent focus:border-blue-500/50 transition-all rounded-lg text-[11px]"
                                                 disabled={isReadOnly}
                                                 value={field.value ?? ''}
                                                 onChange={(e) => {
@@ -518,7 +518,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                             <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
                                                 <CheckCircle className={cn(
                                                     "h-3 w-3 transition-all",
-                                                    (field.value ?? 0) > 0 ? "text-emerald-500" : "text-white/5"
+                                                    (field.value ?? 0) > 0 ? "text-emerald-500" : "text-muted-foreground/10"
                                                 )} />
                                             </div>
                                         </div>
@@ -533,7 +533,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                             name="unpaid_break_minutes"
                             render={({ field }) => (
                                 <FormItem className="space-y-1">
-                                    <FormLabel className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em] flex justify-between">
+                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] flex justify-between">
                                         Unpaid <span className="text-[8px] lowercase opacity-40">(min)</span>
                                     </FormLabel>
                                     <FormControl>
@@ -541,7 +541,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                             <Input
                                                 type="number"
                                                 min="0"
-                                                className="h-8 pl-3 bg-white/[0.03] border-white/5 text-white focus:bg-white/[0.05] focus:border-rose-500/50 transition-all rounded-lg text-[11px]"
+                                                className="h-8 pl-3 bg-muted/50 border-border text-foreground focus:bg-accent focus:border-rose-500/50 transition-all rounded-lg text-[11px]"
                                                 disabled={isReadOnly}
                                                 value={field.value ?? ''}
                                                 onChange={(e) => {
@@ -552,7 +552,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                             <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
                                                 <X className={cn(
                                                     "h-3 w-3 transition-all",
-                                                    (field.value ?? 0) > 0 ? "text-rose-500" : "text-white/5"
+                                                    (field.value ?? 0) > 0 ? "text-rose-500" : "text-muted-foreground/10"
                                                 )} />
                                             </div>
                                         </div>
@@ -563,21 +563,21 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
 
                         {/* Net Length */}
                         <div>
-                            <Label className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em] mb-1 block">Net Length</Label>
+                            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] mb-1 block">Net Length</Label>
                             <div className={cn(
                                 "h-12 px-3 rounded-xl border flex flex-col justify-center transition-all duration-500 relative overflow-hidden",
-                                netLength > 0 ? "bg-blue-500/[0.08] border-blue-500/30" : "bg-white/[0.02] border-white/5"
+                                netLength > 0 ? "bg-blue-500/[0.08] border-blue-500/30" : "bg-muted/40 border-border"
                             )}>
                                 <div className="flex items-baseline gap-1.5">
                                     <span className={cn(
                                         "text-lg font-black tracking-tighter transition-all",
-                                        netLength > 0 ? "text-white" : "text-white/10"
+                                        netLength > 0 ? "text-foreground" : "text-muted-foreground/10"
                                     )}>
                                         {formatHours(netLength)}
                                     </span>
                                     <span className={cn(
                                         "text-[9px] font-black uppercase tracking-widest transition-colors",
-                                        netLength > 0 ? "text-blue-400/80" : "text-white/5"
+                                        netLength > 0 ? "text-blue-400/80" : "text-muted-foreground/10"
                                     )}>
                                         Paid
                                     </span>
@@ -588,14 +588,14 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                 </div>
 
                 {/* ── COL 5: ASSIGNMENT CRITERIA ─────── */}
-                <div className="flex flex-col h-full rounded-2xl bg-[#1e293b]/30 border border-white/5 backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-cyan-500/20 group/card">
-                    <div className="p-3 border-b border-white/5 bg-white/[0.02] flex items-center gap-2">
+                <div className="flex flex-col h-full rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-cyan-500/20 group/card">
+                    <div className="p-3 border-b border-border bg-muted/50 flex items-center gap-2">
                         <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-500 shadow-[0_0_12px_rgba(6,182,212,0.15)]">
                             <Tag className="h-4 w-4" />
                         </div>
                         <div>
-                            <h3 className="text-[11px] font-bold text-white tracking-tight uppercase">Criteria</h3>
-                            <p className="text-[9px] text-white/25 font-medium">Role & Requirements</p>
+                            <h3 className="text-[11px] font-bold text-foreground tracking-tight uppercase">Criteria</h3>
+                            <p className="text-[9px] text-muted-foreground font-medium">Role & Requirements</p>
                         </div>
                     </div>
 
@@ -606,29 +606,29 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                             name="role_id"
                             render={({ field }) => (
                                 <FormItem className="space-y-1">
-                                    <FormLabel className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em] flex items-center gap-1">
+                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] flex items-center gap-1">
                                         <Briefcase className="h-3 w-3" /> Role *
                                     </FormLabel>
                                     {!isReadOnly && !isRoleLocked ? (
                                         <Select onValueChange={field.onChange} value={field.value || ''} disabled={isReadOnly || isRoleLocked}>
                                             <FormControl>
                                                 <SelectTrigger className={cn(
-                                                    "h-8 bg-white/[0.03] border-white/5 text-white text-[11px] hover:bg-white/10 transition-all rounded-lg",
+                                                    "h-8 bg-muted/50 border-border text-foreground text-[11px] hover:bg-accent transition-all rounded-lg",
                                                     !field.value && "border-amber-500/50"
                                                 )}>
                                                     <SelectValue placeholder="Select role" />
                                                 </SelectTrigger>
                                             </FormControl>
-                                            <SelectContent className="bg-[#1e293b] border-white/10">
+                                            <SelectContent className="bg-popover border-border">
                                                 {roles.map((role) => (
-                                                    <SelectItem key={role.id} value={role.id} className="text-[11px] text-white">
+                                                    <SelectItem key={role.id} value={role.id} className="text-[11px] text-foreground">
                                                         {role.name}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
                                     ) : (
-                                        <div className="text-[11px] font-medium text-white px-1">
+                                        <div className="text-[11px] font-medium text-foreground px-1">
                                             {selectedRole?.name || 'No role'}
                                         </div>
                                     )}
@@ -640,7 +640,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                         {/* Pay Level — derived from role */}
                         {selectedRemLevel && (
                             <div className="space-y-1">
-                                <Label className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em] flex items-center gap-1">
+                                <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] flex items-center gap-1">
                                     <Star className="h-3 w-3" /> Pay
                                 </Label>
                                 <MiniBadge label={`${selectedRemLevel.level_name} — $${selectedRemLevel.hourly_rate_min}/hr`} color="amber" />
@@ -653,7 +653,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                             name="required_skills"
                             render={({ field }) => (
                                 <FormItem className="space-y-1">
-                                    <FormLabel className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em] flex items-center gap-1">
+                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] flex items-center gap-1">
                                         <Shield className="h-3 w-3" /> Skills
                                     </FormLabel>
                                     {!isReadOnly ? (
@@ -670,7 +670,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                         <div className="flex flex-wrap gap-1">
                                             {selectedSkillNames.length > 0
                                                 ? selectedSkillNames.map(name => <MiniBadge key={name} label={name} color="emerald" />)
-                                                : <span className="text-[10px] text-white/30">None</span>}
+                                                : <span className="text-[10px] text-muted-foreground/30">None</span>}
                                         </div>
                                     )}
                                 </FormItem>
@@ -683,7 +683,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                             name="required_licenses"
                             render={({ field }) => (
                                 <FormItem className="space-y-1">
-                                    <FormLabel className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em] flex items-center gap-1">
+                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] flex items-center gap-1">
                                         <CalendarCheck className="h-3 w-3" /> Licenses
                                     </FormLabel>
                                     {!isReadOnly ? (
@@ -700,7 +700,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                         <div className="flex flex-wrap gap-1">
                                             {selectedLicenseNames.length > 0
                                                 ? selectedLicenseNames.map(name => <MiniBadge key={name} label={name} color="blue" />)
-                                                : <span className="text-[10px] text-white/30">None</span>}
+                                                : <span className="text-[10px] text-muted-foreground/30">None</span>}
                                         </div>
                                     )}
                                 </FormItem>
@@ -713,7 +713,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                             name="event_ids"
                             render={({ field }) => (
                                 <FormItem className="space-y-1">
-                                    <FormLabel className="text-[10px] font-bold text-white/40 uppercase tracking-[0.08em] flex items-center gap-1">
+                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] flex items-center gap-1">
                                         <CalendarCheck className="h-3 w-3" /> Events
                                     </FormLabel>
                                     {!isReadOnly ? (
@@ -730,7 +730,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                         <div className="flex flex-wrap gap-1">
                                             {selectedEventNames.length > 0
                                                 ? selectedEventNames.map(name => <MiniBadge key={name} label={name} color="violet" />)
-                                                : <span className="text-[10px] text-white/30">None</span>}
+                                                : <span className="text-[10px] text-muted-foreground/30">None</span>}
                                         </div>
                                     )}
                                 </FormItem>
@@ -740,14 +740,14 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                 </div>
 
                 {/* ── COL 6: NOTES ────────────────────── */}
-                <div className="flex flex-col h-full rounded-2xl bg-[#1e293b]/30 border border-white/5 backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-rose-500/20 group/card">
-                    <div className="p-3 border-b border-white/5 bg-white/[0.02] flex items-center gap-2">
+                <div className="flex flex-col h-full rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-rose-500/20 group/card">
+                    <div className="p-3 border-b border-border bg-muted/50 flex items-center gap-2">
                         <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.15)]">
                             <StickyNote className="h-4 w-4" />
                         </div>
                         <div>
-                            <h3 className="text-[11px] font-bold text-white tracking-tight uppercase">Notes</h3>
-                            <p className="text-[9px] text-white/25 font-medium">Shift Remarks</p>
+                            <h3 className="text-[11px] font-bold text-foreground tracking-tight uppercase">Notes</h3>
+                            <p className="text-[9px] text-muted-foreground font-medium">Shift Remarks</p>
                         </div>
                     </div>
 
@@ -760,7 +760,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                     <FormControl>
                                         <Textarea
                                             placeholder="Add notes for this shift..."
-                                            className="h-full min-h-[200px] bg-white/[0.03] border-white/5 text-white resize-none text-[11px] rounded-lg focus:border-rose-500/30"
+                                            className="h-full min-h-[200px] bg-muted/50 border-border text-foreground resize-none text-[11px] rounded-lg focus:border-rose-500/30"
                                             disabled={isReadOnly}
                                             {...field}
                                         />
