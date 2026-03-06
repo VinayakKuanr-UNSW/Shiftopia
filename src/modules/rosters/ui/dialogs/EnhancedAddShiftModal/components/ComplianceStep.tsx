@@ -12,6 +12,7 @@ export const ComplianceStep: React.FC<ComplianceStepProps> = ({
     buildComplianceInput,
     complianceNeedsRerun,
     onChecksComplete,
+    shiftId,
 }) => {
     return (
         <div className="space-y-6">
@@ -32,6 +33,7 @@ export const ComplianceStep: React.FC<ComplianceStepProps> = ({
                     buildComplianceInput={buildComplianceInput}
                     needsRerun={complianceNeedsRerun}
                     onChecksComplete={onChecksComplete}
+                    shiftId={shiftId}
                 />
             )}
         </div>

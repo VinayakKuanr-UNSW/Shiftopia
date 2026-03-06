@@ -1,11 +1,11 @@
 /**
  * Compliance Service
  *
- * Runs the three compliance checks against the database and returns a
+ * Runs four compliance checks against the database and returns a
  * strongly-typed ComplianceResult. Failures are never swallowed silently.
  *
- * Each check (overlap, weekly hours, rest period) is independently
- * wrapped in a Result<T> so that:
+ * Each check (overlap, weekly hours, rest period, qualification) is
+ * independently wrapped in a Result<T> so that:
  *  - A network failure on one check does NOT cancel the others
  *  - The caller sees exactly which checks ran and which were unavailable
  *  - The overall status is 'unavailable' only if ALL checks failed —
@@ -33,40 +33,61 @@ export type ComplianceStatus =
   | 'warned'       // Soft warning — save can proceed with acknowledgment
   | 'unavailable'; // Engine unreachable — surface to UI, NEVER treat as passed
 
+export interface QualificationViolation {
+  type: 'ROLE_MISMATCH' | 'LICENSE_MISSING' | 'LICENSE_EXPIRED' | 'SKILL_MISSING' | 'SKILL_EXPIRED';
+  message: string;
+  role_id?: string;
+  license_id?: string;
+  license_name?: string;
+  skill_id?: string;
+  skill_name?: string;
+  expiration_date?: string;
+}
+
 export interface ComplianceResult {
   /** Overall result status */
-  status:           ComplianceStatus;
+  status: ComplianceStatus;
   /** Hard violations — present when status = 'violated' */
-  violations:       string[];
+  violations: string[];
   /** Soft warnings — may be present alongside any status */
-  warnings:         string[];
+  warnings: string[];
   /** Projected weekly hours after this shift is added */
-  weeklyHours:      number;
+  weeklyHours: number;
   /** Configured maximum weekly hours */
-  maxWeeklyHours:   number;
+  maxWeeklyHours: number;
   /** Which checks actually ran successfully */
-  checksPerformed:  string[];
+  checksPerformed: string[];
   /** Which checks could not reach the database */
-  checksSkipped:    string[];
+  checksSkipped: string[];
+  /** Structured qualification violations (role/license/skill) */
+  qualificationViolations: QualificationViolation[];
 }
 
 export interface ComplianceInput {
-  employeeId:       string;
-  shiftDate:        string;
-  startTime:        string;
-  endTime:          string;
+  employeeId: string;
+  shiftDate: string;
+  startTime: string;
+  endTime: string;
   netLengthMinutes: number;
-  excludeShiftId?:  string;
+  excludeShiftId?: string;
+  /** The shift ID (UUID) — required for qualification compliance check */
+  shiftId?: string;
+  /** Optional override for required role */
+  overrideRoleId?: string;
+  /** Optional override for required skills */
+  overrideSkillIds?: string[];
+  /** Optional override for required licenses */
+  overrideLicenseIds?: string[];
 }
 
 // ── Individual check functions — each returns Result<T> ───────────────────
 
 async function checkOverlap(input: ComplianceInput): Promise<Result<boolean>> {
   const { data, error } = await supabase.rpc('check_shift_overlap', {
-    p_employee_id:    input.employeeId,
-    p_shift_date:     input.shiftDate,
-    p_start_time:     input.startTime,
-    p_end_time:       input.endTime,
+    p_employee_id: input.employeeId,
+    p_shift_date: input.shiftDate,
+    p_start_time: input.startTime,
+    p_end_time: input.endTime,
     ...(input.excludeShiftId ? { p_exclude_shift_id: input.excludeShiftId } : {}),
   });
 
@@ -92,7 +113,7 @@ async function checkOverlap(input: ComplianceInput): Promise<Result<boolean>> {
 
 async function checkWeeklyHours(input: ComplianceInput): Promise<Result<number>> {
   const { data, error } = await supabase.rpc('calculate_weekly_hours', {
-    p_employee_id:     input.employeeId,
+    p_employee_id: input.employeeId,
     p_week_start_date: getWeekStart(input.shiftDate),
   });
 
@@ -118,10 +139,10 @@ async function checkWeeklyHours(input: ComplianceInput): Promise<Result<number>>
 
 async function checkRestPeriod(input: ComplianceInput): Promise<Result<boolean>> {
   const { data, error } = await supabase.rpc('validate_rest_period', {
-    p_employee_id:   input.employeeId,
-    p_shift_date:    input.shiftDate,
-    p_start_time:    input.startTime,
-    p_end_time:      input.endTime,
+    p_employee_id: input.employeeId,
+    p_shift_date: input.shiftDate,
+    p_start_time: input.startTime,
+    p_end_time: input.endTime,
     p_minimum_hours: 11,
   });
 
@@ -145,6 +166,51 @@ async function checkRestPeriod(input: ComplianceInput): Promise<Result<boolean>>
   return ok(parsed.data);
 }
 
+// ── Qualification check ───────────────────────────────────────────────────
+
+interface QualificationRpcResult {
+  is_compliant: boolean;
+  compliance_status: string;
+  violations: QualificationViolation[];
+  eligibility_snapshot: Record<string, unknown> | null;
+}
+
+async function checkQualification(
+  shiftId: string,
+  employeeId: string,
+  overrideRoleId?: string,
+  overrideSkillIds?: string[],
+  overrideLicenseIds?: string[],
+): Promise<Result<QualificationRpcResult>> {
+  const { data, error } = await supabase.rpc('check_shift_compliance', {
+    p_roster_shift_id: shiftId,
+    p_employee_id: employeeId,
+    p_role_id_override: overrideRoleId || null,
+    p_skill_ids_override: overrideSkillIds || null,
+    p_license_ids_override: overrideLicenseIds || null,
+  });
+
+  if (error) {
+    return err(new AppError({
+      code: 'RPC_NETWORK',
+      message: error.message,
+      rpcName: 'check_shift_compliance',
+    }));
+  }
+
+  // The RPC returns a single-row SETOF, Supabase wraps it in an array
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || typeof row.is_compliant !== 'boolean') {
+    return err(new AppError({
+      code: 'RPC_VALIDATION',
+      message: 'check_shift_compliance returned unexpected data',
+      rpcName: 'check_shift_compliance',
+    }));
+  }
+
+  return ok(row as QualificationRpcResult);
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function getWeekStart(dateStr: string): string {
@@ -158,7 +224,7 @@ function getWeekStart(dateStr: string): string {
 // ── Main compliance entry point ────────────────────────────────────────────
 
 /**
- * Run all three compliance checks and return a typed ComplianceResult.
+ * Run all four compliance checks and return a typed ComplianceResult.
  *
  * Checks run in parallel. Each is independently fault-tolerant.
  * Unavailable checks surface as warnings — NEVER silently treated as passing.
@@ -168,26 +234,34 @@ export async function validateCompliance(input: ComplianceInput): Promise<Compli
 
   if (!isValidUuid(input.employeeId)) {
     return {
-      status:          'unavailable',
-      violations:      [],
-      warnings:        ['Cannot validate compliance without a valid employee assignment'],
-      weeklyHours:     0,
-      maxWeeklyHours:  MAX_WEEKLY_HOURS,
+      status: 'unavailable',
+      violations: [],
+      warnings: ['Cannot validate compliance without a valid employee assignment'],
+      weeklyHours: 0,
+      maxWeeklyHours: MAX_WEEKLY_HOURS,
       checksPerformed: [],
-      checksSkipped:   ['overlap', 'weekly_hours', 'rest_period'],
+      checksSkipped: ['overlap', 'weekly_hours', 'rest_period', 'qualification'],
+      qualificationViolations: [],
     };
   }
 
-  const [overlapResult, weeklyResult, restResult] = await Promise.all([
+  // Run all checks in parallel — qualification only if shiftId is provided
+  const qualificationPromise = input.shiftId && isValidUuid(input.shiftId)
+    ? checkQualification(input.shiftId, input.employeeId, input.overrideRoleId, input.overrideSkillIds, input.overrideLicenseIds)
+    : null;
+
+  const [overlapResult, weeklyResult, restResult, qualResult] = await Promise.all([
     checkOverlap(input),
     checkWeeklyHours(input),
     checkRestPeriod(input),
+    qualificationPromise,
   ]);
 
-  const violations:      string[] = [];
-  const warnings:        string[] = [];
+  const violations: string[] = [];
+  const warnings: string[] = [];
   const checksPerformed: string[] = [];
-  const checksSkipped:   string[] = [];
+  const checksSkipped: string[] = [];
+  const qualificationViolations: QualificationViolation[] = [];
   let weeklyHours = 0;
 
   // Overlap
@@ -198,7 +272,7 @@ export async function validateCompliance(input: ComplianceInput): Promise<Compli
     }
   } else {
     checksSkipped.push('overlap');
-    warnings.push(`Overlap check unavailable — ${overlapResult.error.message}`);
+    warnings.push(`Overlap check unavailable — ${(overlapResult as any).error.message}`);
   }
 
   // Weekly hours
@@ -217,7 +291,7 @@ export async function validateCompliance(input: ComplianceInput): Promise<Compli
     }
   } else {
     checksSkipped.push('weekly_hours');
-    warnings.push(`Weekly hours check unavailable — ${weeklyResult.error.message}`);
+    warnings.push(`Weekly hours check unavailable — ${(weeklyResult as any).error.message}`);
   }
 
   // Rest period
@@ -228,13 +302,32 @@ export async function validateCompliance(input: ComplianceInput): Promise<Compli
     }
   } else {
     checksSkipped.push('rest_period');
-    warnings.push(`Rest period check unavailable — ${restResult.error.message}`);
+    warnings.push(`Rest period check unavailable — ${(restResult as any).error.message}`);
   }
 
+  // Qualification
+  if (qualResult === null) {
+    // No shiftId provided — skip silently (not an error)
+    checksSkipped.push('qualification');
+  } else if (qualResult.ok) {
+    checksPerformed.push('qualification');
+    const qr = qualResult.value;
+    if (!qr.is_compliant && Array.isArray(qr.violations)) {
+      qr.violations.forEach((v: QualificationViolation) => {
+        qualificationViolations.push(v);
+        violations.push(v.message);
+      });
+    }
+  } else {
+    checksSkipped.push('qualification');
+    warnings.push(`Qualification check unavailable — ${(qualResult as any).error.message}`);
+  }
+
+  const totalChecks = 4; // overlap, weekly_hours, rest_period, qualification
   let status: ComplianceStatus;
   if (violations.length > 0) {
     status = 'violated';
-  } else if (checksSkipped.length === 3) {
+  } else if (checksSkipped.length === totalChecks) {
     status = 'unavailable'; // all checks failed — do NOT silently pass
   } else if (warnings.length > 0) {
     status = 'warned';
@@ -250,6 +343,7 @@ export async function validateCompliance(input: ComplianceInput): Promise<Compli
     maxWeeklyHours: MAX_WEEKLY_HOURS,
     checksPerformed,
     checksSkipped,
+    qualificationViolations,
   };
 }
 
@@ -259,21 +353,21 @@ export async function validateCompliance(input: ComplianceInput): Promise<Compli
 
 export const complianceService = {
   async validateShiftCompliance(
-    employeeId:       string,
-    shiftDate:        string,
-    startTime:        string,
-    endTime:          string,
+    employeeId: string,
+    shiftDate: string,
+    startTime: string,
+    endTime: string,
     netLengthMinutes: number,
-    excludeShiftId?:  string,
+    excludeShiftId?: string,
   ) {
     const result = await validateCompliance({
       employeeId, shiftDate, startTime, endTime, netLengthMinutes, excludeShiftId,
     });
     return {
-      isValid:        result.status !== 'violated',
-      violations:     result.violations,
-      warnings:       result.warnings,
-      weeklyHours:    result.weeklyHours,
+      isValid: result.status !== 'violated',
+      violations: result.violations,
+      warnings: result.warnings,
+      weeklyHours: result.weeklyHours,
       maxWeeklyHours: result.maxWeeklyHours,
     };
   },

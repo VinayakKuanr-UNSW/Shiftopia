@@ -21,6 +21,7 @@ export interface RosterSlot { groupType: string; subGroupName: string }
 const SHIFT_SELECT = `
   *,
   assignment_outcome,
+  offer_expires_at,
   organizations(id, name),
   departments(id, name),
   sub_departments(id, name),
@@ -677,6 +678,7 @@ export const shiftsQueries = {
                 unpaid_break_minutes,
                 break_minutes,
                 timezone,
+                offer_expires_at,
                 group_type,
                 sub_group_name,
                 roles(name),
@@ -717,6 +719,7 @@ export const shiftsQueries = {
                 shift_id: shift.id,
                 status: 'Pending' as const,
                 offered_at: shift.published_at,
+                offer_expires_at: (shift as any).offer_expires_at,
                 offered_by_name: events?.find(e => e.shift_id === shift.id)?.performed_by_name ?? 'Admin',
                 shift: {
                     id: shift.id,
@@ -731,6 +734,7 @@ export const shiftsQueries = {
                     break_minutes: shift.break_minutes,
                     paid_break_minutes: shift.paid_break_minutes,
                     unpaid_break_minutes: shift.unpaid_break_minutes,
+                    offer_expires_at: (shift as any).offer_expires_at,
                     remuneration_levels: shift.remuneration_levels,
                 },
             }));
@@ -774,6 +778,7 @@ export const shiftsQueries = {
                 unpaid_break_minutes,
                 break_minutes,
                 timezone,
+                offer_expires_at,
                 group_type,
                 sub_group_name,
                 roles(name),
@@ -802,6 +807,7 @@ export const shiftsQueries = {
                 offered_at: events?.find(e => e.shift_id === shift.id)?.created_at
                     ?? shift.created_at
                     ?? new Date().toISOString(),
+                offer_expires_at: (shift as any).offer_expires_at,
                 offered_by_name: events?.find(e => e.shift_id === shift.id)?.performed_by_name ?? 'Admin',
                 shift: {
                     id: shift.id,
@@ -816,6 +822,7 @@ export const shiftsQueries = {
                     break_minutes: shift.break_minutes,
                     paid_break_minutes: shift.paid_break_minutes,
                     unpaid_break_minutes: shift.unpaid_break_minutes,
+                    offer_expires_at: (shift as any).offer_expires_at,
                     remuneration_levels: shift.remuneration_levels,
                 },
             }));

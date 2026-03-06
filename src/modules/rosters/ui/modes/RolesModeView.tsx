@@ -3,6 +3,7 @@ import { Plus, Briefcase, Loader2, MoreHorizontal, Undo2, Edit2 } from 'lucide-r
 import { Button } from '@/modules/core/ui/primitives/button';
 import { cn } from '@/modules/core/lib/utils';
 import { format, addDays, startOfWeek } from 'date-fns';
+import { isSydneyPast } from '@/modules/core/lib/date.utils';
 import { EnhancedAddShiftModal, ShiftContext } from '@/modules/rosters/ui/dialogs/EnhancedAddShiftModal';
 import { ShiftCardCompact } from '@/modules/rosters/ui/components/ShiftCardCompact';
 import { BulkActionsToolbar } from '@/modules/rosters/ui/components/BulkActionsToolbar';
@@ -339,8 +340,8 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
             <Briefcase className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-foreground uppercase tracking-[0.08em]">Roles Mode</h2>
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono tracking-wider mt-0.5">
+            <h2 className="text-[13px] font-bold text-foreground uppercase tracking-[0.08em]">Roles Mode</h2>
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono tracking-[0.12em] mt-0.5">
               <span>Coverage per Role</span>
               {(activeSubDeptId || activeDeptId) && (
                 <span className="text-indigo-400/80 font-semibold">Filtered</span>
@@ -373,21 +374,24 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
         >
           {/* ── Sticky header row ── */}
           <thead>
-            <tr>
-              {/* Top-left corner cell — sticky in both axes */}
+            <tr className="bg-muted/30">
+              {/* Sticky Meta Columns — Level and Role with Glassmorphism */}
               <th
-                className="sticky top-0 left-0 z-30 w-64 min-w-[256px] p-0 bg-background border-b border-r border-border"
+                className="sticky top-0 left-0 z-[40] w-24 min-w-[96px] px-4 py-3 text-left bg-muted/80 backdrop-blur-xl border-b border-r border-border"
               >
-                <div className="px-4 py-3 text-[10px] font-bold text-muted-foreground uppercase tracking-[0.14em] font-mono">
-                  Role / Level
-                </div>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.14em] font-mono">Level</span>
+              </th>
+              <th
+                className="sticky top-0 left-[96px] z-[40] w-48 min-w-[192px] px-4 py-3 text-left bg-muted/80 backdrop-blur-xl border-b border-r border-border shadow-[4px_0_8px_-4px_rgba(0,0,0,0.3)]"
+              >
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.14em] font-mono">Role</span>
               </th>
 
               {dates.map(date => (
                 <th
                   key={date.toISOString()}
                   className={cn(
-                    "sticky top-0 z-20 min-w-[200px] px-3 py-2.5 text-center border-b border-l border-border bg-background",
+                    "sticky top-0 z-20 min-w-[200px] px-3 py-3 text-center border-b border-border bg-muted/30",
                     isToday(date) && "bg-primary/5"
                   )}
                 >
@@ -419,27 +423,31 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                   idx % 2 === 0 ? "bg-card" : "bg-muted/30"
                 )}
               >
-                {/* Sticky first column — role name + level badge */}
+                {/* Sticky Level Column — Glassmorphic */}
                 <td
-                  className="sticky left-0 z-10 w-64 min-w-[256px] px-4 py-3 align-middle border-r border-b border-border bg-card group-hover:bg-accent/50 transition-colors"
+                  className="sticky left-0 z-20 w-24 min-w-[96px] px-4 py-3 align-middle border-r border-b border-border bg-card/80 backdrop-blur-md group-hover:bg-accent/40 transition-colors"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-[13px] font-semibold text-foreground/80 group-hover:text-foreground transition-colors leading-tight">
-                      {role.name}
+                  {role.levelLabel && (
+                    <span className={cn(
+                      "shrink-0 text-[10px] font-mono font-bold px-2 py-0.5 rounded-sm tracking-wide",
+                      role.levelNumber >= 5
+                        ? "text-amber-700 dark:text-amber-300 bg-amber-100/50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20"
+                        : role.levelNumber >= 3
+                          ? "text-indigo-700 dark:text-indigo-300 bg-indigo-100/50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20"
+                          : "text-muted-foreground bg-muted border border-border"
+                    )}>
+                      {role.levelLabel}
                     </span>
-                    {role.levelLabel && (
-                      <span className={cn(
-                        "shrink-0 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-sm tracking-wide",
-                        role.levelNumber >= 5
-                          ? "text-amber-700 dark:text-amber-300 bg-amber-100/50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20"
-                          : role.levelNumber >= 3
-                            ? "text-indigo-700 dark:text-indigo-300 bg-indigo-100/50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20"
-                            : "text-muted-foreground bg-muted border border-border"
-                      )}>
-                        {role.levelLabel}
-                      </span>
-                    )}
-                  </div>
+                  )}
+                </td>
+
+                {/* Sticky Role Column — Glassmorphic with Right Shadow */}
+                <td
+                  className="sticky left-[96px] z-20 w-48 min-w-[192px] px-4 py-3 align-middle border-r border-b border-border bg-card/80 backdrop-blur-md group-hover:bg-accent/40 transition-colors shadow-[4px_0_8px_-4px_rgba(0,0,0,0.3)]"
+                >
+                  <span className="text-[13px] font-semibold text-foreground/80 group-hover:text-foreground transition-colors leading-tight">
+                    {role.name}
+                  </span>
                 </td>
 
                 {/* Date cells */}
@@ -471,13 +479,23 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                           />
                         ))}
 
-                        {canEdit && !isBulkMode && (
-                          <button
-                            onClick={() => handleCellClick(role.id, date)}
-                            className="opacity-0 group-hover/cell:opacity-100 flex items-center justify-center w-full py-1.5 rounded border border-dashed border-border hover:border-primary/50 text-muted-foreground/30 hover:text-primary hover:bg-primary/5 transition-all duration-200"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
+                        {/* Unified Add Shift Button — Perfectly Centered Glassmorphed Purple Circle */}
+                        {canEdit && !isBulkMode && !isSydneyPast(date) && (
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                            <button
+                              onClick={() => handleCellClick(role.id, date)}
+                              className={cn(
+                                "w-9 h-9 flex items-center justify-center rounded-full transition-all duration-300 pointer-events-auto",
+                                "bg-primary/30 text-primary border border-primary/40 backdrop-blur-md",
+                                "hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]",
+                                cellShifts.length > 0 ? "opacity-100 scale-100" : "opacity-40 scale-90 hover:opacity-100",
+                                "group/add"
+                              )}
+                              title="Add Shift"
+                            >
+                              <Plus className="w-5 h-5 transition-transform group-hover/add:rotate-90" />
+                            </button>
+                          </div>
                         )}
                       </div>
                     </td>
@@ -489,19 +507,6 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
         </table>
       </div>
 
-      {/* ─── Footer ─── */}
-      <div className="flex items-center justify-between px-6 py-2.5 border-t border-border bg-card/90 backdrop-blur-xl text-[10px] uppercase tracking-wider text-muted-foreground font-mono font-bold">
-        <div className="flex items-center gap-5">
-          <span>Shifts: <span className="text-foreground tabular-nums">{totalShifts}</span></span>
-          <span className="text-emerald-600 dark:text-emerald-400">Assigned: <span className="tabular-nums">{assignedShifts}</span></span>
-          <span className="text-amber-600 dark:text-amber-400">Open: <span className="tabular-nums">{unfilledShifts}</span></span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span>Est. Cost: <span className="text-muted-foreground/50 tabular-nums">${estCost.toFixed(2)}</span></span>
-          <span className="text-border">|</span>
-          <span>Hours: <span className="text-muted-foreground/50 tabular-nums">{totalHours}</span></span>
-        </div>
-      </div>
 
       {/* Bulk toolbar */}
       {isBulkMode && selectedShiftIds.length > 0 && (

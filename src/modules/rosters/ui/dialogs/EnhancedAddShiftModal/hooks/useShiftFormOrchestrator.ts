@@ -410,7 +410,10 @@ export function useShiftFormOrchestrator({
         },
         existing_shifts: employeeExistingShifts,
         exclude_shift_id: existingShift?.id || undefined,
-    }), [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchUnpaidBreak, isTemplateMode, employeeExistingShifts, watchTimezone, existingShift?.id]);
+        overrideRoleId: watchRoleId || undefined,
+        overrideSkillIds: watchSkills?.length ? watchSkills : undefined,
+        overrideLicenseIds: watchLicenses?.length ? watchLicenses : undefined,
+    }), [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchUnpaidBreak, isTemplateMode, employeeExistingShifts, watchTimezone, existingShift?.id, watchRoleId, watchSkills, watchLicenses]);
 
     const { runChecks, isRunning: isComplianceRunning } = useComplianceRunner({
         buildComplianceInput,
@@ -419,6 +422,7 @@ export function useShiftFormOrchestrator({
         needsRerun: complianceNeedsRerun,
         setNeedsRerun: setComplianceNeedsRerun,
         setHasRun: setComplianceHasRun,
+        shiftId: existingShift?.id,
     });
 
     // Debounced auto-run

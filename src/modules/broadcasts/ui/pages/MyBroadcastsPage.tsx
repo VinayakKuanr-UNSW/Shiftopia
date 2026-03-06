@@ -67,14 +67,15 @@ export const MyBroadcastsPage: React.FC = () => {
         className="m-4 md:m-6"
       />
       {breakpoint === 'desktop' ? (
-        <MyBroadcastsDesktopLayout />
+        <MyBroadcastsDesktopLayout scope={scope} />
       ) : breakpoint === 'tablet' ? (
-        <MyBroadcastsTabletLayout />
+        <MyBroadcastsTabletLayout scope={scope} />
       ) : (
-        <MyBroadcastsMobileLayout />
+        <MyBroadcastsMobileLayout scope={scope} />
       )}
     </div>
   );
+
 };
 
 export default MyBroadcastsPage;

@@ -12,9 +12,15 @@
 
 import React from 'react';
 import { MyBroadcastsScreen } from '../ui/screens/MyBroadcastsScreen';
+import { ScopeSelection } from '@/platform/auth/types';
 
-export const MyBroadcastsMobileLayout: React.FC = () => {
-  return <MyBroadcastsScreen layout="mobile" />;
+interface LayoutProps {
+  scope: ScopeSelection;
+}
+
+export const MyBroadcastsMobileLayout: React.FC<LayoutProps> = ({ scope }) => {
+  return <MyBroadcastsScreen layout="mobile" scope={scope} />;
 };
+
 
 export default MyBroadcastsMobileLayout;

@@ -25,6 +25,7 @@ import {
     AlertTriangle,
     Gavel,
     X,
+    Zap,
 } from 'lucide-react';
 import type { AssignmentStepProps } from '../types';
 
@@ -115,6 +116,7 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
     buildComplianceInput,
     complianceNeedsRerun,
     onChecksComplete,
+    shiftId,
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [hoveredEmployeeId, setHoveredEmployeeId] = useState<string | null>(null);
@@ -180,8 +182,41 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
                     </div>
                 </div>
 
+                {/* Emergency Assign Warning */}
+                {(() => {
+                    let isLocked = false;
+                    if (existingShift) {
+                        if (existingShift.bidding_status === 'bidding_closed_no_winner') {
+                            isLocked = true;
+                        } else if (existingShift.shift_date && existingShift.start_time) {
+                            const [h, m] = existingShift.start_time.split(':').map(Number);
+                            const shiftStart = new Date(existingShift.shift_date);
+                            shiftStart.setHours(h, m, 0, 0);
+                            const now = new Date(); // approximate, enough for UI warning
+                            const diffMs = shiftStart.getTime() - now.getTime();
+                            const diffHours = diffMs / (1000 * 60 * 60);
+                            if (diffHours >= 0 && diffHours <= 4) isLocked = true;
+                        }
+                    }
+                    if (!isLocked) return null;
+
+                    return (
+                        <div className="mx-4 mt-3 p-2.5 rounded-lg bg-orange-500/10 border border-orange-500/30">
+                            <div className="flex items-start gap-2">
+                                <Zap className="h-4 w-4 text-orange-400 flex-shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="text-[11px] font-bold text-orange-400 uppercase tracking-wider">Emergency Assignment</p>
+                                    <p className="text-[10px] text-muted-foreground/80 mt-0.5">
+                                        The standard offer window has closed. Assigning an employee now will bypass bidding and require direct confirmation.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
+
                 {/* Bidding Warning */}
-                {existingShift?.is_on_bidding && (
+                {existingShift?.is_on_bidding && existingShift?.bidding_status !== 'bidding_closed_no_winner' && (
                     <div className="mx-4 mt-3 p-2.5 rounded-lg bg-indigo-500/10 border border-indigo-500/30">
                         <div className="flex items-start gap-2">
                             <Gavel className="h-4 w-4 text-indigo-400 flex-shrink-0 mt-0.5" />
@@ -334,6 +369,7 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
                                 buildComplianceInput={buildComplianceInput}
                                 needsRerun={complianceNeedsRerun}
                                 onChecksComplete={onChecksComplete}
+                                shiftId={shiftId}
                             />
                         )}
                     </div>

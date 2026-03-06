@@ -201,6 +201,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                                             buildComplianceInput={buildComplianceInput}
                                             complianceNeedsRerun={complianceNeedsRerun}
                                             onChecksComplete={handleComplianceComplete}
+                                            shiftId={props.existingShift?.id}
                                         />
                                     )}
 

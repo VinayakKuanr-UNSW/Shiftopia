@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import {
     Dialog,
@@ -50,6 +50,94 @@ import { Separator } from '@/modules/core/ui/primitives/separator';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 
+/* ═══════════════════════════════════════════════════════════════════════
+   EXPIRATION COUNTDOWN COMPONENT
+   ═══════════════════════════════════════════════════════════════════════ */
+const ExpirationCountdown = ({ expiresAt, className, showIcon = true, debug = false }: { expiresAt: any, className?: string, showIcon?: boolean, debug?: boolean }) => {
+    const [timeLeft, setTimeLeft] = useState<number | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!expiresAt) {
+            setTimeLeft(null);
+            return;
+        }
+
+        const parseDate = (val: any) => {
+            if (val instanceof Date) return val.getTime();
+            if (typeof val !== 'string') return NaN;
+
+            let dateStr = val.trim();
+            // Handle Supabase space format: "2026-03-06 13:58:31" -> "2026-03-06T13:58:31"
+            if (dateStr.includes(' ') && !dateStr.includes('T')) {
+                dateStr = dateStr.replace(' ', 'T');
+            }
+
+            // Critical: Ensure UTC if no timezone is specified
+            // Supabase timestamps without 'Z' or offset should be treated as UTC
+            if (!dateStr.includes('Z') && !dateStr.includes('+') && !/[-+]\d{2}(:?\d{2})?$/.test(dateStr)) {
+                dateStr += 'Z';
+            }
+
+            const t = new Date(dateStr).getTime();
+            return t;
+        };
+
+        const target = parseDate(expiresAt);
+
+        if (isNaN(target)) {
+            console.error("ExpirationCountdown Error:", expiresAt);
+            setError("Data Error");
+            return;
+        }
+
+        const update = () => {
+            const now = new Date().getTime();
+            const diff = Math.max(0, Math.floor((target - now) / 1000));
+            setTimeLeft(diff);
+        };
+
+        update();
+        const timer = setInterval(update, 1000);
+        return () => clearInterval(timer);
+    }, [expiresAt]);
+
+    if (!expiresAt) return null;
+
+    if (error) {
+        return <span className="text-[10px] text-red-500/50 font-mono tracking-widest uppercase">{error}</span>;
+    }
+
+    if (timeLeft === null) return <div className="h-8 w-32 animate-pulse bg-amber-500/10 rounded-full" />;
+
+    if (timeLeft === 0) {
+        return (
+            <div className={cn("flex items-center gap-2 text-red-500 font-black uppercase tracking-widest animate-in fade-in zoom-in duration-500", className)}>
+                {showIcon && <AlertCircle className="h-4 w-4" />}
+                <span>retracted</span>
+            </div>
+        );
+    }
+
+    const hours = Math.floor(timeLeft / 3600);
+    const minutes = Math.floor((timeLeft % 3600) / 60);
+    const seconds = timeLeft % 60;
+    const isUrgent = timeLeft < 3600;
+
+    return (
+        <div className={cn(
+            "flex items-center gap-2 font-mono font-black tabular-nums tracking-tight",
+            isUrgent ? "text-red-500" : "text-amber-500",
+            className
+        )}>
+            {showIcon && <Timer className={cn("h-4 w-4", isUrgent && "animate-pulse")} />}
+            <span>
+                {hours > 0 ? `${hours}h ` : ''}{minutes}m{isUrgent ? `:${seconds.toString().padStart(2, '0')}s` : ''}
+            </span>
+        </div>
+    );
+};
+
 type OfferStatus = 'Pending' | 'Accepted' | 'Declined';
 
 interface MyOffersModalProps {
@@ -67,6 +155,7 @@ interface OfferData {
     shift_id: string;
     status: OfferStatus;
     offered_at: string;
+    offer_expires_at?: string | null;
     offered_by_name: string;
     shift: {
         id: string;
@@ -81,6 +170,7 @@ interface OfferData {
         break_minutes?: number;
         paid_break_minutes?: number;
         unpaid_break_minutes?: number;
+        offer_expires_at?: string | null;
         remuneration_levels?: {
             level_name: string;
             hourly_rate_min: number;
@@ -123,12 +213,10 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
     // But `MyOffersModal` is often global.
     // Let's use `useRosterStore` or similar if it exists? 
     // Checking previous context: `useRosterState` or `useRosterFilters`?
-    // Let's try to find where filters come from in `ManagerSwaps` or `MyRoster`.
     // In `ManagerSwaps`, filters come from local state.
     // In `MyRoster`, likely similar.
 
-    // For now, let's look at `useRosterShifts` usage.
-    // I will add optional props for filters to `MyOffersModal` and let the parent pass them.
+    // For now, let's add optional props for filters to `MyOffersModal` and let the parent pass them.
     // But I can't change the call sites easily without knowing them all.
     // The user said "Global filter", so I assume they mean the filters on the page.
     // I I'll add `organizationId` and `departmentId` to props.
@@ -328,10 +416,19 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                                                 )}>
                                                     {offer.shift.roles?.name || 'Shift'}
                                                 </span>
-                                                <ChevronRight className={cn(
-                                                    "h-3.5 w-3.5 transition-all duration-300",
-                                                    selectedOfferId === offer.id ? "text-blue-500 translate-x-1 opacity-100" : "text-muted-foreground opacity-0 group-hover:opacity-100"
-                                                )} />
+                                                <div className="flex items-center gap-2">
+                                                    {(offer.offer_expires_at || (offer.shift as any).offer_expires_at) && (
+                                                        <ExpirationCountdown
+                                                            expiresAt={offer.offer_expires_at || (offer.shift as any).offer_expires_at}
+                                                            showIcon={false}
+                                                            className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20"
+                                                        />
+                                                    )}
+                                                    <ChevronRight className={cn(
+                                                        "h-3.5 w-3.5 transition-all duration-300",
+                                                        selectedOfferId === offer.id ? "text-blue-500 translate-x-1 opacity-100" : "text-muted-foreground opacity-0 group-hover:opacity-100"
+                                                    )} />
+                                                </div>
                                             </div>
                                             <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500 tracking-tight">
                                                 <div className="flex items-center gap-1">
@@ -381,6 +478,50 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                                                     {selectedOffer.shift.notes || 'This shift has been specifically selected for your primary skill set and seniority level.'}
                                                 </p>
                                             </div>
+
+                                            {/* Expiration Indicator - Premium Metropolist Glass Hero */}
+                                            {(selectedOffer.offer_expires_at || (selectedOffer.shift as any).offer_expires_at) && (
+                                                <div className="mb-10 relative group">
+                                                    {/* Background Glow Pulse */}
+                                                    <div className="absolute -inset-1 bg-gradient-to-r from-amber-500/20 to-orange-500/20 rounded-[3rem] blur-xl opacity-50 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-pulse" />
+
+                                                    <div className="relative p-8 rounded-[2.5rem] bg-background/40 backdrop-blur-md border border-amber-500/20 shadow-2xl overflow-hidden flex flex-col items-center">
+                                                        {/* Animated Grid Overlay */}
+                                                        <div className="absolute inset-0 bg-grid-slate-900/[0.04] [mask-image:radial-gradient(ellipse_at_center,white,transparent)] pointer-events-none" />
+
+                                                        <div className="relative z-10 flex flex-col items-center gap-6">
+                                                            {/* Status Pill */}
+                                                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 shadow-inner">
+                                                                <Timer className="h-3.5 w-3.5 text-amber-500 animate-[spin_4s_linear_infinite]" />
+                                                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-500 drop-shadow-sm">
+                                                                    Live Offer Expiration
+                                                                </span>
+                                                            </div>
+
+                                                            {/* Hero Timer */}
+                                                            <div className="flex flex-col items-center">
+                                                                <ExpirationCountdown
+                                                                    expiresAt={selectedOffer.offer_expires_at || (selectedOffer.shift as any).offer_expires_at}
+                                                                    className="text-6xl tracking-[-0.08em] font-black drop-shadow-2xl text-amber-500 drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]"
+                                                                    showIcon={false}
+                                                                />
+                                                                <div className="flex items-center gap-2 mt-2">
+                                                                    <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                                                    <span className="text-[10px] font-black text-amber-500/50 uppercase tracking-[0.4em]">
+                                                                        Time Remaining
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Contextual Footer */}
+                                                            <div className="text-[11px] font-bold text-muted-foreground/60 max-w-[320px] text-center leading-relaxed px-6">
+                                                                This deployment window remains open until the zero-hour transition.
+                                                                <span className="text-amber-500/40 block mt-1 uppercase text-[9px] tracking-widest">Retraction Status: Active</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
 
                                             {/* Detailed Info Cards */}
                                             <div className="space-y-4 mb-10 text-muted-foreground">
@@ -469,9 +610,12 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                                                     </Button>
                                                     <Button
                                                         variant="ghost"
-                                                        onClick={() => setShowDeclineConfirm(selectedOffer.shift_id)}
-                                                        disabled={processingId === selectedOffer.shift_id}
-                                                        className="h-12 rounded-2xl font-black text-[10px] uppercase tracking-widest text-muted-foreground hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setShowDeclineConfirm(selectedOffer.shift_id);
+                                                        }}
+                                                        disabled={!!processingId}
+                                                        className="h-12 rounded-2xl font-black text-[10px] uppercase tracking-widest text-muted-foreground hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all border border-transparent hover:border-red-200"
                                                     >
                                                         Decline Shift
                                                     </Button>
@@ -589,32 +733,34 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                             </div>
                         </div>
                     </div>
+
+                    {/* CONFIRMATION OVERLAYS (Inside Portal Context) */}
+                    <AlertDialog open={!!showDeclineConfirm} onOpenChange={() => setShowDeclineConfirm(null)}>
+                        <AlertDialogContent className="bg-background border border-border rounded-[2rem] p-8 max-w-sm z-[200] shadow-2xl">
+                            <AlertDialogHeader>
+                                <AlertDialogTitle className="text-xl font-black text-foreground tracking-tight">Decline Engagement?</AlertDialogTitle>
+                                <AlertDialogDescription className="text-muted-foreground text-sm font-medium">
+                                    This shift will become available for public bidding. This action is irreversible.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter className="mt-8 gap-3">
+                                <AlertDialogCancel className="h-12 rounded-xl font-black text-[10px] uppercase tracking-widest bg-muted border-border text-foreground hover:bg-muted/80 transition-all">
+                                    Cancel
+                                </AlertDialogCancel>
+                                <AlertDialogAction
+                                    className="flex-1 h-12 rounded-xl font-black text-[10px] uppercase tracking-widest bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-lg shadow-red-500/10 transition-all"
+                                    onClick={() => showDeclineConfirm && handleDecline(showDeclineConfirm)}
+                                    disabled={!!processingId}
+                                >
+                                    {processingId ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                                    Confirm Rejection
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                 </DialogContent>
             </Dialog>
-
-            <AlertDialog open={!!showDeclineConfirm} onOpenChange={() => setShowDeclineConfirm(null)}>
-                <AlertDialogContent className="bg-background border border-border rounded-[2rem] p-8 max-w-sm">
-                    <AlertDialogHeader>
-                        <AlertDialogTitle className="text-xl font-black text-foreground tracking-tight">Decline Engagement?</AlertDialogTitle>
-                        <AlertDialogDescription className="text-muted-foreground text-sm font-medium">
-                            This shift will become available for public bidding. This action is irreversible.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter className="mt-8 gap-3">
-                        <AlertDialogCancel className="h-12 rounded-xl font-black text-[10px] uppercase tracking-widest bg-muted border-border text-foreground hover:bg-muted/80 transition-all">
-                            Cancel
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                            className="flex-1 h-12 rounded-xl font-black text-[10px] uppercase tracking-widest bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-lg shadow-red-500/10 transition-all"
-                            onClick={() => showDeclineConfirm && handleDecline(showDeclineConfirm)}
-                            disabled={!!processingId}
-                        >
-                            {processingId ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                            Confirm Rejection
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
         </>
     );
 };
+

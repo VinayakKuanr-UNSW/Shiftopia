@@ -9,6 +9,7 @@ import { AvailabilityBar } from '@/modules/rosters/ui/components/AvailabilityBar
 import { useResolvedAvailability } from '@/modules/rosters/hooks/useResolvedAvailability';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
+import { isSydneyPast } from '@/modules/core/lib/date.utils';
 import { PeopleModeEmployee, PeopleModeShift } from './people-mode.types';
 import {
   DropdownMenu,
@@ -128,25 +129,29 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                 <thead>
                   <tr className="bg-muted/30">
                     {/* Employee Column Header */}
-                    <th className="sticky left-0 z-10 bg-muted/30 border-r border-b border-border px-4 py-3 text-left font-medium text-sm min-w-[200px]">
-                      Employee
+                    <th className="sticky top-0 left-0 z-30 bg-muted/30 border-r border-b border-border px-4 py-3 text-left min-w-[200px]">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.14em] font-mono">Employee</span>
                     </th>
 
                     {/* Date Column Headers */}
-                    {dates.map((date, idx) => (
-                      <th
-                        key={idx}
-                        className={cn(
-                          'border-b border-border px-3 py-3 text-center font-medium text-sm min-w-[160px]',
-                          idx < dates.length - 1 && 'border-r'
-                        )}
-                      >
-                        <div className="font-semibold">{format(date, 'EEE')}</div>
-                        <div className="text-xs text-muted-foreground font-normal">
-                          {format(date, 'MMM d')}
-                        </div>
-                      </th>
-                    ))}
+                    {dates.map((date, idx) => {
+                      const dateIsToday = format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+                      return (
+                        <th
+                          key={idx}
+                          className={cn(
+                            'sticky top-0 z-20 bg-muted/30 border-b border-border px-3 py-3 text-center min-w-[160px]',
+                            idx < dates.length - 1 && 'border-r',
+                            dateIsToday && 'bg-primary/5'
+                          )}
+                        >
+                          <div className={cn("text-[10px] font-bold uppercase tracking-[0.12em] font-mono", dateIsToday ? "text-primary" : "text-muted-foreground")}>{format(date, 'EEE')}</div>
+                          <div className={cn("text-sm font-mono tabular-nums mt-0.5", dateIsToday ? "text-primary font-bold" : "text-muted-foreground/50 font-medium")}>
+                            {format(date, 'MMM d')}
+                          </div>
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
 
@@ -156,12 +161,14 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                     <tr
                       key={employee.id}
                       className={cn(
-                        'hover:bg-muted/20 transition-colors',
+                        'group transition-colors',
+                        'hover:bg-accent/30',
+                        empIdx % 2 === 0 ? "bg-card" : "bg-muted/30",
                         empIdx < employees.length - 1 && 'border-b border-border'
                       )}
                     >
                       {/* ========== EMPLOYEE INFO CELL ========== */}
-                      <td className="sticky left-0 z-10 bg-background border-r border-border px-4 py-3 align-top">
+                      <td className="sticky left-0 z-10 bg-card group-hover:bg-accent/50 transition-colors border-r border-border px-4 py-3 align-top">
                         <div className="flex items-center gap-3">
                           <Avatar className={cn(
                             'h-10 w-10 shrink-0 ring-2 ring-offset-1',
@@ -237,12 +244,12 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                           <td
                             key={dateIdx}
                             className={cn(
-                              'px-3 py-3 align-top',
+                              'px-3 py-3 align-top relative group/cell',
                               dateIdx < dates.length - 1 && 'border-r border-border',
-                              canEdit && !bulkModeActive && 'cursor-pointer hover:bg-primary/5'
+                              canEdit && !bulkModeActive && 'cursor-pointer'
                             )}
                             onClick={() => {
-                              if (canEdit && !bulkModeActive && shifts.length === 0) {
+                              if (canEdit && !bulkModeActive && shifts.length === 0 && !isSydneyPast(date)) {
                                 onAddShift(employee, date);
                               }
                             }}
@@ -286,35 +293,28 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                                     isLocked={isShiftLocked(dateKey, shift.startTime, 'roster_management')}
                                   />
                                 ))
-                              ) : (
-                                /* Empty state — Data Ops dashed ring */
-                                !bulkModeActive &&
-                                canEdit && (
+                              ) : null}
+
+                              {/* Unified Add Shift Button — Perfectly Centered Glassmorphed Purple Circle */}
+                              {!bulkModeActive && canEdit && !isSydneyPast(date) && (
+                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                                   <button
-                                    className="w-full flex items-center justify-center gap-1 py-4 rounded border border-dashed border-border text-[11px] font-mono text-muted-foreground/30 transition-all hover:border-border/80 hover:text-muted-foreground hover:bg-accent"
+                                    className={cn(
+                                      "w-9 h-9 flex items-center justify-center rounded-full transition-all duration-300 pointer-events-auto",
+                                      "bg-primary/30 text-primary border border-primary/40 backdrop-blur-md",
+                                      "hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]",
+                                      shifts.length > 0 ? "opacity-100 scale-100" : "opacity-40 scale-90 hover:opacity-100",
+                                      "group/add"
+                                    )}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       onAddShift(employee, date);
                                     }}
+                                    title="Add Shift"
                                   >
-                                    <Plus className="h-3 w-3" />
-                                    add
+                                    <Plus className="h-5 w-5 transition-transform group-hover/add:rotate-90" />
                                   </button>
-                                )
-                              )}
-
-                              {/* Add another shift when cell already has shifts */}
-                              {shifts.length > 0 && canEdit && !bulkModeActive && (
-                                <button
-                                  className="w-full flex items-center justify-center gap-1 py-1 rounded border border-dashed border-border text-[10px] font-mono text-muted-foreground/30 transition-all hover:border-border/80 hover:text-muted-foreground"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onAddShift(employee, date);
-                                  }}
-                                >
-                                  <Plus className="h-2.5 w-2.5" />
-                                  add
-                                </button>
+                                </div>
                               )}
 
                               {/* ========== AVAILABILITY BAR ========== */}

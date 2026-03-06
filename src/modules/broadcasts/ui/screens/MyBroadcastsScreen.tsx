@@ -94,10 +94,12 @@ import type {
 
 export interface MyBroadcastsScreenProps {
   layout: 'desktop' | 'tablet' | 'mobile';
+  scope?: import('@/platform/auth/types').ScopeSelection;
 }
 
 // ============================================================================
 // CONSTANTS
+
 // ============================================================================
 
 const PRIORITY_CONFIG: Record<
@@ -122,7 +124,14 @@ const PRIORITY_CONFIG: Record<
     bg: 'bg-blue-500/10 border-blue-500/20',
     icon: <MessageSquare className="h-3.5 w-3.5" />,
   },
+  low: {
+    label: 'Low',
+    color: 'text-slate-400',
+    bg: 'bg-slate-500/10 border-slate-500/20',
+    icon: <MessageSquare className="h-3.5 w-3.5" />,
+  },
 };
+
 
 const GROUP_ICONS: Record<string, React.ReactNode> = {
   megaphone: <Megaphone className="h-5 w-5" />,
@@ -629,7 +638,7 @@ const ChannelView: React.FC<ChannelViewProps> = ({
 // MAIN COMPONENT
 // ============================================================================
 
-export function MyBroadcastsScreen({ layout }: MyBroadcastsScreenProps) {
+export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -640,12 +649,8 @@ export function MyBroadcastsScreen({ layout }: MyBroadcastsScreenProps) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [channelSheetOpen, setChannelSheetOpen] = useState(false);
 
-  // Hierarchy State
-  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
-  const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
-  const [selectedSubDeptId, setSelectedSubDeptId] = useState<string | null>(null);
-
   // Data
+
   const { groups, isLoading, error, refetch } =
     useEmployeeBroadcastGroups();
 
@@ -683,13 +688,16 @@ export function MyBroadcastsScreen({ layout }: MyBroadcastsScreenProps) {
 
   // Filter groups
   const filteredGroups = useMemo(() => {
+    if (!scope) return groups;
     return groups.filter((g) => {
-      if (selectedOrgId && g.organizationId && g.organizationId !== selectedOrgId) return false;
-      if (selectedDeptId && g.departmentId && g.departmentId !== selectedDeptId) return false;
-      if (selectedSubDeptId && g.subDepartmentId && g.subDepartmentId !== selectedSubDeptId) return false;
+      // Must match explicit scope selections if group has hierarchy defined
+      if (g.organizationId && scope.org_ids.length > 0 && !scope.org_ids.includes(g.organizationId)) return false;
+      if (g.departmentId && scope.dept_ids.length > 0 && !scope.dept_ids.includes(g.departmentId)) return false;
+      if (g.subDepartmentId && scope.subdept_ids.length > 0 && !scope.subdept_ids.includes(g.subDepartmentId)) return false;
       return true;
     });
-  }, [groups, selectedOrgId, selectedDeptId, selectedSubDeptId]);
+  }, [groups, scope]);
+
 
   // Handlers
   const handleSelectGroup = (group: EmployeeBroadcastGroup) => {
@@ -782,22 +790,11 @@ export function MyBroadcastsScreen({ layout }: MyBroadcastsScreenProps) {
             )}
           </div>
         </div>
-
-        {/* Hierarchy Filter */}
-        <div className="w-full pt-4 border-t border-slate-200 dark:border-white/10">
-          <OrgDeptSelector
-            selectedOrganizationId={selectedOrgId}
-            selectedDepartmentId={selectedDeptId}
-            selectedSubDepartmentId={selectedSubDeptId}
-            onOrganizationChange={setSelectedOrgId}
-            onDepartmentChange={setSelectedDeptId}
-            onSubDepartmentChange={setSelectedSubDeptId}
-            className="bg-transparent border-none p-0"
-          />
-        </div>
       </div>
     </motion.div>
   );
+
+
 
   // ========================================
   // RENDER: CHANNEL SIDEBAR

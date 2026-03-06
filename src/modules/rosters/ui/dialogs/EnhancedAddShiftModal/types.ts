@@ -195,6 +195,7 @@ export interface ComplianceStepProps {
     buildComplianceInput: () => any;
     complianceNeedsRerun: boolean;
     onChecksComplete: () => void;
+    shiftId?: string;
 }
 
 export interface AssignmentStepProps {
@@ -213,6 +214,7 @@ export interface AssignmentStepProps {
     buildComplianceInput: () => any;
     complianceNeedsRerun: boolean;
     onChecksComplete: () => void;
+    shiftId?: string;
 }
 
 export interface ReviewLogsStepProps {

@@ -374,7 +374,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                         : <ChevronDown className="h-4 w-4" />}
                     </div>
                     <div>
-                      <h3 className="text-sm font-semibold text-foreground tracking-wide uppercase">
+                      <h3 className="text-[13px] font-bold text-foreground tracking-[0.08em] uppercase">
                         {group.eventName}
                       </h3>
                       {/* Coverage LED bar + label */}
@@ -416,7 +416,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
 
                 {/* Shift grid (collapsible) */}
                 {!isCollapsed && (
-                  <div className="px-5 pb-5 pt-2 border-t border-border">
+                  <div className="px-5 pb-5 pt-2 border-t border-border relative group/event">
                     {group.unassignedCount > 0 && (
                       <div className="mb-3 px-3 py-2 bg-red-500/5 border border-red-500/20 rounded-md flex items-center gap-2">
                         <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
@@ -446,18 +446,22 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                       ))}
                     </div>
 
-                    <button
-                      className={cn(
-                        'w-full mt-3 h-9 flex items-center justify-center rounded-lg',
-                        'border border-dashed border-border hover:border-accent hover:bg-accent/30',
-                        'text-[10px] font-mono tracking-[0.12em] uppercase text-muted-foreground hover:text-foreground',
-                        'transition-all gap-1.5'
-                      )}
-                      onClick={() => handleAddShiftClick(group)}
-                    >
-                      <Plus className="h-3 w-3" />
-                      Add shift to event
-                    </button>
+                    {/* Unified Add Shift Button — Perfectly Centered Glassmorphed Purple Circle */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 pt-10">
+                      <button
+                        onClick={() => handleAddShiftClick(group)}
+                        className={cn(
+                          "w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 pointer-events-auto",
+                          "bg-primary/30 text-primary border border-primary/40 backdrop-blur-md",
+                          "hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]",
+                          group.shifts.length > 0 ? "opacity-100 scale-100" : "opacity-40 scale-90 hover:opacity-100",
+                          "group/add"
+                        )}
+                        title="Add shift to event"
+                      >
+                        <Plus className="h-6 w-6 transition-transform group-hover/add:rotate-90" />
+                      </button>
+                    </div>
                   </div>
                 )}
               </Card>

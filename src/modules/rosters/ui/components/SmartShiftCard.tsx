@@ -193,13 +193,17 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                 isDragging && 'opacity-50 scale-95',
                 isDragOver && 'ring-2 ring-blue-400 ring-offset-1',
                 hasComplianceIssue && 'border-amber-500/40',
-                isLocked && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
+                shift.bidding_status === 'bidding_closed_no_winner' && 'ring-2 ring-orange-500 ring-offset-1 border-orange-500/50 bg-orange-500/5',
+                isLocked && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
                 className
             )}
             onClick={isLocked ? undefined : onClick}
         >
             {/* Header */}
-            <div className={cn('px-3 py-1.5 flex justify-between items-center', colors.header, colors.text, isLocked && 'bg-muted dark:bg-slate-700 text-muted-foreground')}>
+            <div className={cn('px-3 py-1.5 flex justify-between items-center',
+                shift.bidding_status === 'bidding_closed_no_winner' ? 'bg-orange-500/20 text-orange-900 dark:text-orange-100' : colors.header,
+                shift.bidding_status !== 'bidding_closed_no_winner' && colors.text,
+                isLocked && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-muted dark:bg-slate-700 text-muted-foreground')}>
                 {/* State ID Badge */}
                 <div className="flex items-center gap-1.5 min-w-0">
                     <span className={cn(
@@ -218,16 +222,36 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                             <CopyPlus className="h-3 w-3 opacity-60" />
                         </div>
                     )}
-                    {isLocked && <Lock className="h-3 w-3 opacity-70" />}
+                    {shift.bidding_status === 'bidding_closed_no_winner' ? (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger>
+                                    <Lock className="h-3 w-3 text-orange-600 dark:text-orange-400" />
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-orange-600 text-white border-none py-1 px-2">
+                                    <p className="text-[10px] font-medium">Locked (Emergency)</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    ) : (
+                        isLocked && <Lock className="h-3 w-3 opacity-70" />
+                    )}
                     {headerAction || (!isLocked && <MoreHorizontal className="h-3.5 w-3.5 opacity-40" />)}
                 </div>
             </div>
 
             {/* Body */}
             <div className="px-3 py-1.5 flex flex-col gap-1 flex-1">
-                {/* Employee */}
-                <div className="text-sm font-semibold text-foreground truncate text-center">
-                    {employeeName || 'Unassigned'}
+                {/* Employee & Expired Warning */}
+                <div className="flex flex-col items-center justify-center min-h-[20px] gap-0.5">
+                    <div className="text-sm font-semibold text-foreground truncate text-center">
+                        {employeeName || 'Unassigned'}
+                    </div>
+                    {(!shift.assigned_employee_id && shift.last_modified_reason?.startsWith('Offer expired')) && (
+                        <div className="text-[9px] font-bold text-red-600 dark:text-red-400 bg-red-500/10 px-1.5 rounded uppercase tracking-wider">
+                            Offer Expired
+                        </div>
+                    )}
                 </div>
 
                 {/* Time */}
@@ -340,13 +364,17 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                 isDragOver && 'ring-2 ring-blue-400 ring-offset-2',
                 hasComplianceIssue && compliance?.status === 'violation' && 'border-red-500/50',
                 hasComplianceIssue && compliance?.status === 'warning' && 'border-amber-500/40',
-                isLocked && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
+                shift.bidding_status === 'bidding_closed_no_winner' && 'ring-2 ring-orange-500 ring-offset-1 border-orange-500/50 bg-orange-500/5',
+                isLocked && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
                 className
             )}
             onClick={isLocked ? undefined : onClick}
         >
             {/* Header */}
-            <div className={cn('px-4 py-2.5 flex justify-between items-center', colors.header, colors.text, isLocked && 'bg-muted dark:bg-slate-700 text-muted-foreground')}>
+            <div className={cn('px-4 py-2.5 flex justify-between items-center',
+                shift.bidding_status === 'bidding_closed_no_winner' ? 'bg-orange-500/20 text-orange-900 dark:text-orange-100' : colors.header,
+                shift.bidding_status !== 'bidding_closed_no_winner' && colors.text,
+                isLocked && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-muted dark:bg-slate-700 text-muted-foreground')}>
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                     <GripVertical className={cn("h-4 w-4 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity", isLocked ? "cursor-not-allowed" : "cursor-grab")} />
                     <span className="text-xs font-bold uppercase tracking-widest truncate opacity-90">
@@ -360,7 +388,20 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                             Template
                         </Badge>
                     )}
-                    {isLocked && <Lock className="h-4 w-4 opacity-70 mr-1" />}
+                    {shift.bidding_status === 'bidding_closed_no_winner' ? (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger>
+                                    <Lock className="h-4 w-4 text-orange-600 dark:text-orange-400 mr-1" />
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-orange-600 text-white border-none py-1 px-2">
+                                    <p className="text-xs font-medium">Shift locked. Only emergency assignment allowed.</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    ) : (
+                        isLocked && <Lock className="h-4 w-4 opacity-70 mr-1" />
+                    )}
                     {getLifecycleIcon(shift.lifecycle_status)}
                     {headerAction || (!isLocked && <MoreHorizontal className="h-4 w-4 opacity-50" />)}
                 </div>
@@ -411,11 +452,18 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                             {formatTime(shift.start_time)} - {formatTime(shift.end_time)}
                         </span>
                     </div>
-                    {totalHours && (
-                        <Badge variant="secondary" className="text-xs">
-                            {totalHours}h net
-                        </Badge>
-                    )}
+                    <div className="flex gap-1.5 items-center">
+                        {totalHours && (
+                            <Badge variant="secondary" className="text-xs">
+                                {totalHours}h net
+                            </Badge>
+                        )}
+                        {(!shift.assigned_employee_id && shift.last_modified_reason?.startsWith('Offer expired')) && (
+                            <Badge variant="destructive" className="text-[10px] bg-red-500/10 text-red-600 border-red-500/30 font-semibold px-1.5">
+                                Offer Expired
+                            </Badge>
+                        )}
+                    </div>
                 </div>
 
                 {/* Status Badges Row */}
@@ -427,7 +475,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     </Badge>
 
                     {/* Bidding */}
-                    {shift.bidding_status !== 'not_on_bidding' && (
+                    {shift.bidding_status !== 'not_on_bidding' && shift.bidding_status !== 'bidding_closed_no_winner' && (
                         <Badge variant="outline" className="text-[10px] gap-1 border-blue-500/30 text-blue-600 dark:text-blue-400">
                             <Gavel className="h-3 w-3" />
                             {shift.bidding_status === 'on_bidding_urgent' ? 'Urgent Bidding' : 'On Bidding'}

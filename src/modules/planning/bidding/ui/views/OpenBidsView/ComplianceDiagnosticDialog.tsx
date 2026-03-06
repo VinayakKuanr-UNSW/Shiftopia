@@ -230,6 +230,7 @@ export const ComplianceDiagnosticDialog: React.FC<ComplianceDiagnosticDialogProp
                                     ruleResults={ruleResults}
                                     setRuleResults={setRuleResults}
                                     onChecksComplete={() => { }}
+                                    shiftId={shift?.id}
                                 />
                             )}
                         </div>

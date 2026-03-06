@@ -119,7 +119,9 @@ export interface EmployeeBroadcastGroup extends BroadcastGroup {
     unreadCount: number;
     hasUrgentMessages: boolean;
     hasPendingAcknowledgements: boolean;
+    lastBroadcastAt?: string;
 }
+
 
 export interface BroadcastAcknowledgement {
     id: string;

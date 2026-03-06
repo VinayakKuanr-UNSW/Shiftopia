@@ -279,6 +279,7 @@ export function BidComplianceModal({
                         buildComplianceInput={buildComplianceInput}
                         needsRerun={false}
                         onChecksComplete={() => setChecksComplete(true)}
+                        shiftId={shift?.id}
                     />
                 )}
 

@@ -6,7 +6,7 @@ import {
     ComplianceCheckInput,
     HardValidationResult
 } from '@/modules/compliance';
-import { validateCompliance } from '@/modules/rosters/services/compliance.service';
+import { validateCompliance, type QualificationViolation } from '@/modules/rosters/services/compliance.service';
 
 interface UseComplianceRunnerProps {
     buildComplianceInput: () => ComplianceCheckInput;
@@ -15,6 +15,8 @@ interface UseComplianceRunnerProps {
     needsRerun: boolean;
     setNeedsRerun: (needs: boolean) => void;
     setHasRun: (hasRun: boolean) => void;
+    /** The shift ID (UUID) — required for qualification compliance check */
+    shiftId?: string;
 }
 
 /** Net minutes between two HH:MM times (handles overnight). */
@@ -25,13 +27,25 @@ function calcNetMinutes(s: { start_time: string; end_time: string; unpaid_break_
     return Math.max(0, gross - (s.unpaid_break_minutes ?? 0));
 }
 
+/** Build a human-readable summary from qualification violations */
+function buildQualificationSummary(violations: QualificationViolation[]): string {
+    if (violations.length === 0) return 'Employee meets all qualification requirements';
+    const types = new Set(violations.map(v => v.type));
+    const parts: string[] = [];
+    if (types.has('ROLE_MISMATCH')) parts.push('role mismatch');
+    if (types.has('LICENSE_MISSING') || types.has('LICENSE_EXPIRED')) parts.push('license issue');
+    if (types.has('SKILL_MISSING') || types.has('SKILL_EXPIRED')) parts.push('skill issue');
+    return `Qualification violations: ${parts.join(', ')}`;
+}
+
 export function useComplianceRunner({
     buildComplianceInput,
     hardValidation,
     setComplianceResults,
     needsRerun,
     setNeedsRerun,
-    setHasRun
+    setHasRun,
+    shiftId
 }: UseComplianceRunnerProps) {
     const [isRunning, setIsRunning] = useState(false);
     const rules = getRegisteredRules();
@@ -65,6 +79,10 @@ export function useComplianceRunner({
                         endTime: input.candidate_shift.end_time,
                         netLengthMinutes: calcNetMinutes(input.candidate_shift),
                         excludeShiftId: input.exclude_shift_id,
+                        shiftId: shiftId,
+                        overrideRoleId: input.overrideRoleId,
+                        overrideSkillIds: input.overrideSkillIds,
+                        overrideLicenseIds: input.overrideLicenseIds,
                     });
 
                     if (serverResult.checksPerformed.includes('overlap')) {
@@ -86,6 +104,29 @@ export function useComplianceRunner({
                             blocking: true,
                         };
                     }
+
+                    // ── 3. Qualification compliance (role/license/skill) ──────────
+                    if (serverResult.checksPerformed.includes('qualification')) {
+                        const qualViolations = serverResult.qualificationViolations || [];
+                        const hasViolation = qualViolations.length > 0;
+                        newResults['QUALIFICATION_COMPLIANCE'] = {
+                            rule_id: 'QUALIFICATION_COMPLIANCE',
+                            rule_name: 'Qualification Compliance',
+                            status: hasViolation ? 'fail' : 'pass',
+                            summary: buildQualificationSummary(qualViolations),
+                            details: hasViolation
+                                ? qualViolations.map(v => v.message).join('\n')
+                                : 'All role, license, and skill requirements met.',
+                            calculation: {
+                                existing_hours: 0,
+                                candidate_hours: 0,
+                                total_hours: 0,
+                                limit: 0,
+                                violations: qualViolations,
+                            },
+                            blocking: true,
+                        };
+                    }
                 } catch {
                     // Server unavailable — keep client-side result as best-effort
                 }
@@ -99,7 +140,7 @@ export function useComplianceRunner({
         } finally {
             setIsRunning(false);
         }
-    }, [buildComplianceInput, rules, setComplianceResults, setHasRun, setNeedsRerun]);
+    }, [buildComplianceInput, rules, setComplianceResults, setHasRun, setNeedsRerun, shiftId]);
 
     return {
         runChecks,

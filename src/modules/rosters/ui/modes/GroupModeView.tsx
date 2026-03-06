@@ -1556,9 +1556,9 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                     <div className="overflow-auto">
                       <table className="w-full min-w-max border-collapse relative">
                         <thead>
-                          <tr className="bg-slate-100/80 dark:bg-black/20 sticky top-0 z-20">
-                            <th className="sticky left-0 z-10 backdrop-blur-sm border-r border-border px-4 py-3 text-left font-medium text-sm min-w-[160px] bg-card/95 text-muted-foreground">
-                              Sub-Group
+                          <tr className="bg-muted/30 sticky top-0 z-20">
+                            <th className="sticky left-0 z-10 backdrop-blur-sm border-r border-b border-border px-4 py-3 text-left min-w-[160px] bg-muted/30">
+                              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.14em] font-mono">Sub-Group</span>
                             </th>
                             {dates.map((date, idx) => {
                               const dateIsToday = isToday(date);
@@ -1569,37 +1569,37 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                 <th
                                   key={idx}
                                   className={cn(
-                                    'px-3 py-3 text-center font-medium text-sm min-w-[280px]',
+                                    'px-3 py-3 text-center min-w-[280px] bg-muted/30 border-b',
                                     idx < dates.length - 1 && 'border-r border-border',
                                     // Ghost cell styling
                                     isGhost && 'bg-muted/40 border-dashed border-border opacity-50',
                                     // Today highlighting (only if not ghost)
-                                    !isGhost && dateIsToday && 'bg-primary/10 border-primary/20',
+                                    !isGhost && dateIsToday && 'bg-primary/5',
                                     // Past date styling (only if not ghost and not today)
                                     !isGhost && dateIsPast && !dateIsToday && 'opacity-50'
                                   )}
                                 >
                                   <div className="flex flex-col items-center gap-1.5 pt-1">
                                     <div className={cn(
-                                      "font-semibold leading-tight",
+                                      "text-[10px] font-bold uppercase tracking-[0.12em] font-mono leading-tight",
                                       isGhost
-                                        ? 'text-gray-500'
+                                        ? 'text-muted-foreground/30'
                                         : dateIsToday
-                                          ? (isDark ? 'text-purple-300' : 'text-purple-700')
-                                          : (isDark ? 'text-white' : 'text-gray-900')
+                                          ? 'text-primary'
+                                          : 'text-muted-foreground'
                                     )}>
                                       {format(date, 'EEE')}
                                     </div>
                                     <div className="flex items-center gap-1.5">
                                       <div className={cn(
-                                        "text-[11px] font-medium leading-none",
+                                        "text-sm font-mono tabular-nums font-medium leading-none",
                                         isGhost
-                                          ? 'text-gray-600'
+                                          ? 'text-muted-foreground/30'
                                           : dateIsToday
-                                            ? (isDark ? 'text-purple-400' : 'text-purple-600')
-                                            : (isDark ? 'text-white/50' : 'text-gray-500')
+                                            ? 'text-primary font-bold'
+                                            : 'text-muted-foreground/50'
                                       )}>
-                                        {format(date, 'dd MMM')}
+                                        {format(date, 'MMM d')}
                                       </div>
 
                                       {/* Roster Indicator (from DB status) - Robust matching */}
@@ -1741,19 +1741,23 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                           ))
                                         )}
 
-                                        {/* Add Shift Button — dashed ring with + icon (Data Ops style) */}
+                                        {/* Unified Add Shift Button — Perfectly Centered Glassmorphed Purple Circle */}
                                         {!isBulkMode && canEdit && !cellIsPast && (
-                                          <button
-                                            onClick={() => handleAddShift(group, subGroup, date)}
-                                            className={cn(
-                                              "w-full h-8 flex items-center justify-center rounded-lg",
-                                              "border border-dashed border-border hover:border-border/80 hover:bg-accent transition-all",
-                                              "text-muted-foreground/30 hover:text-muted-foreground group/add"
-                                            )}
-                                            title="Add Shift"
-                                          >
-                                            <Plus className="h-3.5 w-3.5 transition-transform group-hover/add:scale-110" />
-                                          </button>
+                                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                                            <button
+                                              onClick={() => handleAddShift(group, subGroup, date)}
+                                              className={cn(
+                                                "w-9 h-9 flex items-center justify-center rounded-full transition-all duration-300 pointer-events-auto",
+                                                "bg-primary/30 text-primary border border-primary/40 backdrop-blur-md",
+                                                "hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]",
+                                                cellShifts.length > 0 ? "opacity-100 scale-100" : "opacity-40 scale-90 hover:opacity-100",
+                                                "group/add"
+                                              )}
+                                              title="Add Shift"
+                                            >
+                                              <Plus className="h-5 w-5 transition-transform group-hover/add:rotate-90" />
+                                            </button>
+                                          </div>
                                         )}
                                       </div>
                                     )}

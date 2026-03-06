@@ -361,7 +361,8 @@ export const EmployeeBidsPage: React.FC = () => {
                 shiftDate: shift.date,
                 startTime: shift.startTime + ':00',
                 endTime: shift.endTime + ':00',
-                netLengthMinutes: shift.netLength
+                netLengthMinutes: shift.netLength,
+                shiftId: shift.id,
             });
             setCheckingShiftId(null);
 

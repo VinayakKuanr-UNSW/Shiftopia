@@ -61,6 +61,8 @@ interface ComplianceTabContentProps {
     setRuleResults: React.Dispatch<React.SetStateAction<Record<string, ComplianceResult | null>>>;
     needsRerun?: boolean;
     onChecksComplete?: () => void;
+    /** The shift ID (UUID) — required for server-side qualification compliance check */
+    shiftId?: string;
 }
 
 type RuleStatus = 'pass' | 'fail' | 'warning' | 'not-run';
@@ -75,7 +77,8 @@ export function ComplianceTabContent({
     ruleResults,
     setRuleResults,
     needsRerun = false,
-    onChecksComplete
+    onChecksComplete,
+    shiftId
 }: ComplianceTabContentProps) {
     const [isRunningAll, setIsRunningAll] = useState(false);
     const rules = getRegisteredRules();
@@ -125,6 +128,7 @@ export function ComplianceTabContent({
                         endTime: input.candidate_shift.end_time,
                         netLengthMinutes: calcNetMinutes(input.candidate_shift),
                         excludeShiftId: input.exclude_shift_id,
+                        shiftId: shiftId,
                     });
 
                     if (serverResult.checksPerformed.includes('overlap')) {
@@ -146,6 +150,37 @@ export function ComplianceTabContent({
                             blocking: true,
                         };
                     }
+
+                    // Qualification compliance (role/license/skill)
+                    if (serverResult.checksPerformed.includes('qualification')) {
+                        const qualViolations = serverResult.qualificationViolations || [];
+                        const hasViolation = qualViolations.length > 0;
+                        const types = new Set(qualViolations.map(v => v.type));
+                        const parts: string[] = [];
+                        if (types.has('ROLE_MISMATCH')) parts.push('role mismatch');
+                        if (types.has('LICENSE_MISSING') || types.has('LICENSE_EXPIRED')) parts.push('license issue');
+                        if (types.has('SKILL_MISSING') || types.has('SKILL_EXPIRED')) parts.push('skill issue');
+
+                        newResults['QUALIFICATION_COMPLIANCE'] = {
+                            rule_id: 'QUALIFICATION_COMPLIANCE',
+                            rule_name: 'Qualification Compliance',
+                            status: hasViolation ? 'fail' : 'pass',
+                            summary: hasViolation
+                                ? `Qualification violations: ${parts.join(', ')}`
+                                : 'Employee meets all qualification requirements',
+                            details: hasViolation
+                                ? qualViolations.map(v => v.message).join('\n')
+                                : 'All role, license, and skill requirements met.',
+                            calculation: {
+                                existing_hours: 0,
+                                candidate_hours: 0,
+                                total_hours: 0,
+                                limit: 0,
+                                violations: qualViolations,
+                            },
+                            blocking: true,
+                        };
+                    }
                 } catch {
                     // Server unavailable — keep client-side result as best-effort
                 }
@@ -156,10 +191,13 @@ export function ComplianceTabContent({
         } finally {
             setIsRunningAll(false);
         }
-    }, [buildComplianceInput, rules, setRuleResults, onChecksComplete]);
+    }, [buildComplianceInput, rules, setRuleResults, onChecksComplete, shiftId]);
 
     const canProceed = hardValidation.passed &&
         !Object.values(ruleResults).some(r => r?.status === 'fail' && r?.blocking);
+
+    // Qualification compliance result (server-only rule, not in registered list)
+    const qualResult = ruleResults['QUALIFICATION_COMPLIANCE'];
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -290,6 +328,9 @@ export function ComplianceTabContent({
                         onRun={() => handleRunRule(rule.id)}
                     />
                 ))}
+
+                {/* Server-only: Qualification Compliance card */}
+                {qualResult && <QualificationComplianceCard result={qualResult} />}
             </div>
         </div>
     );
@@ -458,6 +499,136 @@ function ComplianceRuleCard({
             {isExpanded && result && (
                 <div className="border-t border-border dark:border-white/5 bg-muted/30 dark:bg-black/20 p-6 animate-in slide-in-from-top-2 duration-300">
                     <RuleVisualization rule={rule} result={result} />
+                </div>
+            )}
+        </div>
+    );
+}
+
+// =============================================================================
+// QUALIFICATION COMPLIANCE CARD (SERVER-ONLY)
+// =============================================================================
+
+function QualificationComplianceCard({ result }: { result: ComplianceResult }) {
+    const [expanded, setExpanded] = useState(result.status === 'fail');
+    const isPassed = result.status === 'pass';
+    const violations = (result.calculation as any)?.violations || [];
+
+    const getViolationIcon = (type: string) => {
+        switch (type) {
+            case 'ROLE_MISMATCH': return <AlertOctagon className="h-4 w-4" />;
+            case 'LICENSE_MISSING': return <Shield className="h-4 w-4" />;
+            case 'LICENSE_EXPIRED': return <Clock className="h-4 w-4" />;
+            case 'SKILL_MISSING': return <Zap className="h-4 w-4" />;
+            case 'SKILL_EXPIRED': return <Clock className="h-4 w-4" />;
+            default: return <AlertTriangle className="h-4 w-4" />;
+        }
+    };
+
+    const getViolationColor = (type: string) => {
+        if (type.includes('EXPIRED')) return 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20';
+        return 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20';
+    };
+
+    const getViolationLabel = (type: string) => {
+        switch (type) {
+            case 'ROLE_MISMATCH': return 'Role Mismatch';
+            case 'LICENSE_MISSING': return 'Missing License';
+            case 'LICENSE_EXPIRED': return 'Expired License';
+            case 'SKILL_MISSING': return 'Missing Skill';
+            case 'SKILL_EXPIRED': return 'Expired Skill';
+            default: return type;
+        }
+    };
+
+    return (
+        <div className={cn(
+            "rounded-xl border transition-all duration-300 overflow-hidden backdrop-blur-sm shadow-sm",
+            isPassed
+                ? "border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-950/10"
+                : "border-red-500/20 bg-red-500/5 dark:bg-red-950/20 shadow-[0_0_15px_-3px_rgba(239,68,68,0.05)]"
+        )}>
+            <div
+                className="p-4 flex items-center justify-between cursor-pointer hover:bg-black/[0.02] dark:hover:bg-white/5 transition-colors"
+                onClick={() => setExpanded(!expanded)}
+            >
+                <div className="flex items-center gap-4">
+                    <div className={cn(
+                        "h-10 w-10 rounded-lg flex items-center justify-center border transition-all duration-300",
+                        isPassed
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                            : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
+                    )}>
+                        {isPassed ? <CheckCircle2 className="h-5 w-5" /> : <Shield className="h-5 w-5" />}
+                    </div>
+                    <div>
+                        <div className="font-bold text-foreground dark:text-white flex items-center gap-2 uppercase tracking-tight text-sm">
+                            Qualification Compliance
+                            <span className={cn(
+                                "text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest border shadow-sm",
+                                isPassed
+                                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                                    : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
+                            )}>
+                                {isPassed ? 'PASS' : 'FAIL'}
+                            </span>
+                            {!isPassed && (
+                                <span className="text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-widest bg-red-600 text-white dark:bg-red-500/20 dark:text-red-300 border border-red-600 dark:border-red-500/20 shadow-sm">
+                                    BLOCKING
+                                </span>
+                            )}
+                        </div>
+                        <div className={cn(
+                            "text-xs mt-0.5 font-medium",
+                            isPassed ? "text-emerald-800/60 dark:text-emerald-100/60" : "text-red-800/60 dark:text-red-100/60"
+                        )}>
+                            {result.summary}
+                        </div>
+                    </div>
+                </div>
+                <ChevronDown className={cn("h-4 w-4 text-muted-foreground/30 dark:text-white/30 transition-transform duration-300", expanded && "rotate-180")} />
+            </div>
+
+            {expanded && (
+                <div className="border-t border-border dark:border-white/5 bg-muted/30 dark:bg-black/20 p-6 animate-in slide-in-from-top-2 duration-300">
+                    {isPassed ? (
+                        <div className="flex items-center gap-3 p-4 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                            <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                            <div className="text-sm text-emerald-700 dark:text-emerald-200">
+                                All role, license, and skill requirements met. Employee is fully qualified for this shift.
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2">
+                                <Shield className="h-3 w-3" />
+                                {violations.length} qualification violation{violations.length > 1 ? 's' : ''} found
+                            </div>
+                            {violations.map((v: any, i: number) => (
+                                <div key={i} className={cn(
+                                    "flex items-start gap-3 p-4 rounded-xl border",
+                                    getViolationColor(v.type)
+                                )}>
+                                    <div className="mt-0.5">
+                                        {getViolationIcon(v.type)}
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="text-xs font-black uppercase tracking-widest mb-1">
+                                            {getViolationLabel(v.type)}
+                                        </div>
+                                        <div className="text-sm font-medium opacity-80">
+                                            {v.message}
+                                        </div>
+                                        {v.expiration_date && (
+                                            <div className="text-xs mt-1 opacity-60">
+                                                Expired: {v.expiration_date}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
         </div>

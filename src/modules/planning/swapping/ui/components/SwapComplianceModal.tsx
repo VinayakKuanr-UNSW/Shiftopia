@@ -449,6 +449,7 @@ export function SwapComplianceModal({
                         buildComplianceInput={() => buildComplianceInput(requesterId!, offeredShift!, filteredRequesterRoster)} // Default view, not fully used by read-only tab
                         needsRerun={false}
                         onChecksComplete={() => setChecksComplete(true)}
+                        shiftId={offeredShift?.id}
                     />
                 )}
 
