@@ -87,6 +87,7 @@ export interface Shift {
     breakDuration?: number;
     notes?: string;
     templateBatchId?: string;
+    group_type?: 'convention_centre' | 'exhibition_centre' | 'theatre';
 }
 
 export interface Roster {

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
-import { X, Trash2, TrendingUp, Loader2, Undo2 } from 'lucide-react';
+import { X, Trash2, TrendingUp, Loader2, Undo2, UserCheck } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,6 +20,27 @@ import {
 } from '@/modules/core/ui/primitives/tooltip';
 import { cn } from '@/modules/core/lib/utils';
 
+// =============================================================================
+// STATE MACHINE
+// =============================================================================
+
+/**
+ * Replaces 6 independent booleans (3 showXxxDialog + 3 isXxxing).
+ * Mutex by construction — only one action can be confirming or processing at a time.
+ */
+type ConfirmAction = 'delete' | 'publish' | 'unpublish';
+
+type ActionState =
+  | { type: 'idle' }
+  | { type: 'confirming'; action: ConfirmAction }
+  | { type: 'processing'; action: ConfirmAction };
+
+const IDLE: ActionState = { type: 'idle' };
+
+// =============================================================================
+// PROPS
+// =============================================================================
+
 interface BulkActionsToolbarProps {
   selectedCount: number;
   selectedShiftIds: string[];
@@ -28,6 +49,14 @@ interface BulkActionsToolbarProps {
   onSelectAll?: () => void;
   onPublish?: (shiftIds: string[]) => Promise<void>;
   onUnpublish?: (shiftIds: string[]) => Promise<void>;
+  onAssign?: () => void;
+  onUnassign?: () => void;
+  stateCounts?: {
+    assignedCount: number;
+    unassignedCount: number;
+    draftCount: number;
+    publishedCount: number;
+  };
   allowedActions?: {
     canPublish: boolean;
     canUnpublish: boolean;
@@ -35,6 +64,10 @@ interface BulkActionsToolbarProps {
     canUnpublishReason?: string;
   };
 }
+
+// =============================================================================
+// COMPONENT
+// =============================================================================
 
 export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
   selectedCount,
@@ -44,25 +77,34 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
   onDelete,
   onPublish,
   onUnpublish,
+  onAssign,
+  onUnassign,
+  stateCounts,
   allowedActions,
 }) => {
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [showPublishDialog, setShowPublishDialog] = useState(false);
-  const [showUnpublishDialog, setShowUnpublishDialog] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [isUnpublishing, setIsUnpublishing] = useState(false);
+  const [actionState, setActionState] = useState<ActionState>(IDLE);
   const { toast } = useToast();
 
+  // ── Derived booleans from state machine ──────────────────────────────────
+  const showDeleteDialog    = actionState.type === 'confirming' && actionState.action === 'delete';
+  const showPublishDialog   = actionState.type === 'confirming' && actionState.action === 'publish';
+  const showUnpublishDialog = actionState.type === 'confirming' && actionState.action === 'unpublish';
+  const isDeleting          = actionState.type === 'processing' && actionState.action === 'delete';
+  const isPublishing        = actionState.type === 'processing' && actionState.action === 'publish';
+  const isUnpublishing      = actionState.type === 'processing' && actionState.action === 'unpublish';
+  const isBusy              = actionState.type === 'processing';
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+
   const handleDelete = async () => {
-    setIsDeleting(true);
+    setActionState({ type: 'processing', action: 'delete' });
     try {
       await onDelete();
       toast({
         title: 'Shifts Deleted',
         description: `Successfully deleted ${selectedCount} shift${selectedCount > 1 ? 's' : ''}.`,
       });
-      setShowDeleteDialog(false);
+      setActionState(IDLE);
       onClearSelection();
     } catch (error) {
       toast({
@@ -70,21 +112,20 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
         description: 'Failed to delete shifts. Please try again.',
         variant: 'destructive',
       });
-    } finally {
-      setIsDeleting(false);
+      setActionState(IDLE);
     }
   };
 
   const handlePublish = async () => {
     if (!onPublish) return;
-    setIsPublishing(true);
+    setActionState({ type: 'processing', action: 'publish' });
     try {
       await onPublish(selectedShiftIds);
       toast({
         title: 'Shifts Published',
         description: `Successfully published ${selectedCount} shift${selectedCount > 1 ? 's' : ''}.`,
       });
-      setShowPublishDialog(false);
+      setActionState(IDLE);
       onClearSelection();
     } catch (error) {
       toast({
@@ -92,21 +133,20 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
         description: 'Failed to publish shifts. Please try again.',
         variant: 'destructive',
       });
-    } finally {
-      setIsPublishing(false);
+      setActionState(IDLE);
     }
   };
 
   const handleUnpublish = async () => {
     if (!onUnpublish) return;
-    setIsUnpublishing(true);
+    setActionState({ type: 'processing', action: 'unpublish' });
     try {
       await onUnpublish(selectedShiftIds);
       toast({
         title: 'Shifts Unpublished',
         description: `Successfully unpublished ${selectedCount} shift${selectedCount > 1 ? 's' : ''}.`,
       });
-      setShowUnpublishDialog(false);
+      setActionState(IDLE);
       onClearSelection();
     } catch (error) {
       toast({
@@ -114,8 +154,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
         description: 'Failed to unpublish shifts. Please try again.',
         variant: 'destructive',
       });
-    } finally {
-      setIsUnpublishing(false);
+      setActionState(IDLE);
     }
   };
 
@@ -126,9 +165,35 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5 duration-300">
         <div className="bg-background/95 dark:bg-popover/90 backdrop-blur-xl border border-border shadow-[0_8px_32px_rgba(0,0,0,0.15)] rounded-full px-6 py-3 flex items-center gap-4">
           <div className="flex items-center gap-4">
-            <Badge variant="glass" className="px-3 py-1.5 text-sm font-medium bg-primary/20 text-primary dark:text-white border-primary/20 shadow-glow whitespace-nowrap flex-shrink-0">
-              {selectedCount} Selected
-            </Badge>
+            <div className="flex flex-col items-start min-w-[120px]">
+              <Badge variant="glass" className="px-3 py-1.5 text-sm font-medium bg-primary/20 text-primary dark:text-white border-primary/20 shadow-glow whitespace-nowrap flex-shrink-0">
+                {selectedCount} Selected
+              </Badge>
+              {stateCounts && selectedCount > 0 && (
+                <div className="flex gap-2 mt-1 px-1">
+                  {stateCounts.assignedCount > 0 && (
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                      {stateCounts.assignedCount} assigned
+                    </span>
+                  )}
+                  {stateCounts.unassignedCount > 0 && (
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                      {stateCounts.unassignedCount} unassigned
+                    </span>
+                  )}
+                  {stateCounts.draftCount > 0 && (
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                      {stateCounts.draftCount} draft
+                    </span>
+                  )}
+                  {stateCounts.publishedCount > 0 && (
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                      {stateCounts.publishedCount} published
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
 
             {onSelectAll && (
               <Button
@@ -150,11 +215,11 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                     <Button
                       variant="default"
                       size="sm"
-                      disabled={!allowedActions?.canPublish}
-                      onClick={() => setShowPublishDialog(true)}
+                      disabled={isBusy || !(stateCounts ? stateCounts.draftCount > 0 : allowedActions?.canPublish)}
+                      onClick={() => setActionState({ type: 'confirming', action: 'publish' })}
                       className={cn(
                         "gap-2 shadow-glow rounded-full",
-                        allowedActions?.canPublish
+                        (stateCounts ? stateCounts.draftCount > 0 : allowedActions?.canPublish)
                           ? "bg-emerald-500 hover:bg-emerald-600 text-white"
                           : "bg-muted text-muted-foreground/30"
                       )}
@@ -164,7 +229,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                     </Button>
                   </span>
                 </TooltipTrigger>
-                {!allowedActions?.canPublish && (
+                {!(stateCounts ? stateCounts.draftCount > 0 : allowedActions?.canPublish) && (
                   <TooltipContent>
                     <p>Requires Draft shifts</p>
                   </TooltipContent>
@@ -180,11 +245,11 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                     <Button
                       variant="default"
                       size="sm"
-                      disabled={!allowedActions?.canUnpublish}
-                      onClick={() => setShowUnpublishDialog(true)}
+                      disabled={isBusy || !(stateCounts ? stateCounts.publishedCount > 0 : allowedActions?.canUnpublish)}
+                      onClick={() => setActionState({ type: 'confirming', action: 'unpublish' })}
                       className={cn(
                         "gap-2 rounded-full",
-                        allowedActions?.canUnpublish
+                        (stateCounts ? stateCounts.publishedCount > 0 : allowedActions?.canUnpublish)
                           ? "bg-transparent border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 shadow-glow"
                           : "bg-muted text-muted-foreground/30"
                       )}
@@ -194,9 +259,71 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                     </Button>
                   </span>
                 </TooltipTrigger>
-                {!allowedActions?.canUnpublish && (
+                {!(stateCounts ? stateCounts.publishedCount > 0 : allowedActions?.canUnpublish) && (
                   <TooltipContent>
-                    <p>{allowedActions?.canUnpublishReason ?? 'Only Offered or Bidding shifts can be unpublished'}</p>
+                    <p>{allowedActions?.canUnpublishReason ?? 'Only Published shifts can be unpublished'}</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            )}
+
+            <div className="w-px h-6 bg-border mx-1" />
+
+            {/* Assign Button */}
+            {onAssign && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0}>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      disabled={isBusy || (stateCounts ? stateCounts.unassignedCount === 0 : false)}
+                      onClick={onAssign}
+                      className={cn(
+                        "gap-2 rounded-full shadow-glow",
+                        (stateCounts ? stateCounts.unassignedCount > 0 : true)
+                          ? "bg-primary hover:bg-primary/90 text-primary-foreground"
+                          : "bg-muted text-muted-foreground/30"
+                      )}
+                    >
+                      <UserCheck className="h-4 w-4" />
+                      Assign
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {stateCounts && stateCounts.unassignedCount === 0 && (
+                  <TooltipContent>
+                    <p>Requires unassigned shifts</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            )}
+
+            {/* Unassign Button */}
+            {onUnassign && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={isBusy || (stateCounts ? stateCounts.assignedCount === 0 : false)}
+                      onClick={onUnassign}
+                      className={cn(
+                        "gap-2 rounded-full",
+                        (stateCounts ? stateCounts.assignedCount > 0 : true)
+                          ? "text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                          : "text-muted-foreground/30"
+                      )}
+                    >
+                      <X className="h-4 w-4" />
+                      Unassign
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {stateCounts && stateCounts.assignedCount === 0 && (
+                  <TooltipContent>
+                    <p>Requires assigned shifts</p>
                   </TooltipContent>
                 )}
               </Tooltip>
@@ -205,7 +332,8 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setShowDeleteDialog(true)}
+              disabled={isBusy}
+              onClick={() => setActionState({ type: 'confirming', action: 'delete' })}
               className="gap-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-full"
             >
               <Trash2 className="h-4 w-4" />
@@ -226,7 +354,8 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
         </div>
       </div>
 
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      {/* Delete Confirmation */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={(open) => !open && setActionState(IDLE)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {selectedCount} Shift{selectedCount > 1 ? 's' : ''}?</AlertDialogTitle>
@@ -255,8 +384,8 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Publish Confirmation Dialog */}
-      <AlertDialog open={showPublishDialog} onOpenChange={setShowPublishDialog}>
+      {/* Publish Confirmation */}
+      <AlertDialog open={showPublishDialog} onOpenChange={(open) => !open && setActionState(IDLE)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Publish {selectedCount} Shift{selectedCount > 1 ? 's' : ''}?</AlertDialogTitle>
@@ -291,8 +420,8 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Unpublish Confirmation Dialog */}
-      <AlertDialog open={showUnpublishDialog} onOpenChange={setShowUnpublishDialog}>
+      {/* Unpublish Confirmation */}
+      <AlertDialog open={showUnpublishDialog} onOpenChange={(open) => !open && setActionState(IDLE)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Unpublish {selectedCount} Shift{selectedCount > 1 ? 's' : ''}?</AlertDialogTitle>

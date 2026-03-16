@@ -62,7 +62,9 @@ export const isTodayInTimezone = (date: Date, timezone: string = SYDNEY_TZ): boo
  * Result: The UTC timestamp corresponding to 10:00 AM Sydney time on that date.
  */
 export const parseZonedDateTime = (dateStr: string, timeStr: string, timezone: string = SYDNEY_TZ): Date => {
-    const dateTimeStr = `${dateStr}T${timeStr}:00`;
+    // timeStr might be "HH:mm" or "HH:mm:ss" from postgres. We only want HH:mm to append ":00" safely
+    const cleanTimeStr = timeStr.slice(0, 5);
+    const dateTimeStr = `${dateStr}T${cleanTimeStr}:00`;
     // toDate from date-fns-tz takes an ISO string (without offset) and interprets it as being in the target timezone
     return toDate(dateTimeStr, { timeZone: timezone });
 };

@@ -13,10 +13,10 @@
  * spreads these values into its JSX.
  */
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { format, startOfDay, parse } from 'date-fns';
+import { format, startOfDay, parse, getDay } from 'date-fns';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useCreateShift, useUpdateShift, useUnpublishShift } from '@/modules/rosters/state/useRosterShifts';
@@ -92,6 +92,7 @@ export function useShiftFormOrchestrator({
     const watchTimezone = form.watch('timezone') || SYDNEY_TZ;
     const watchGroup = form.watch('group_type');
     const watchSubGroupName = form.watch('sub_group_name');
+    const watchIsTraining = form.watch('is_training');
 
     // ── Data hooks ───────────────────────────────────────────────────────────
     const {
@@ -193,7 +194,7 @@ export function useShiftFormOrchestrator({
     }, [scopeTree, rosters, selectedRosterId, safeContext, watchGroup, watchSubGroupName]);
 
     // ── Hard validation ──────────────────────────────────────────────────────
-    const { hardValidation, employeeExistingShifts } = useHardValidation({
+    const { hardValidation, employeeExistingShifts, studentVisaEnforcement } = useHardValidation({
         watchStart,
         watchEnd,
         watchShiftDate,
@@ -215,7 +216,15 @@ export function useShiftFormOrchestrator({
     }, [shiftLength, watchUnpaidBreak]);
 
     const selectedRemLevel = remunerationLevels.find(r => r.id === watchRemLevel);
-    const isNetLengthValid = netLength > 0 && netLength <= 12;
+    const minShiftHours = useMemo(() => {
+        if (watchIsTraining) return 2.0;
+        if (!watchShiftDate) return 3.0;
+        const day = getDay(watchShiftDate);
+        return day === 0 ? 4.0 : 3.0; // Sunday=0
+    }, [watchIsTraining, watchShiftDate]);
+
+    const isMinLengthValid = netLength >= minShiftHours;
+    const isNetLengthValid = netLength > 0 && netLength <= 12 && isMinLengthValid;
 
     // ── Read-only checks ─────────────────────────────────────────────────────
     const isPast = useMemo(() => isDateInPast(watchShiftDate, watchTimezone), [watchShiftDate, watchTimezone]);
@@ -267,10 +276,9 @@ export function useShiftFormOrchestrator({
     const isRoleLocked = isContextInherited && safeContext.mode === 'roles' && !!safeContext.roleId;
     const isEmployeeLocked = isContextInherited && safeContext.mode === 'people' && !!safeContext.employeeId;
 
-    // ── Tab completion ───────────────────────────────────────────────────────
     const tabCompletion = useMemo(() => {
         if (isReadOnly) {
-            return { schedule: true, role: true, requirements: true, notes: true, system: true, audit: true };
+            return { schedule: true, role: true, requirements: true, notes: true, system: true };
         }
         return {
             schedule: isTemplateMode
@@ -280,7 +288,6 @@ export function useShiftFormOrchestrator({
             requirements: (watchSkills?.length || 0) > 0 || (watchLicenses?.length || 0) > 0,
             notes: !!form.watch('notes'),
             system: true,
-            audit: true,
         };
     }, [isReadOnly, watchStart, watchEnd, watchRoleId, watchSkills, watchLicenses, watchShiftDate, form, isTemplateMode, hasRoster, isRosterActive, watchGroup, watchSubGroupName]);
 
@@ -298,6 +305,7 @@ export function useShiftFormOrchestrator({
         isTemplateMode,
         tabCompletion,
         isNetLengthValid: isReadOnly ? true : isNetLengthValid,
+        isMinLengthValid: isReadOnly ? true : isMinLengthValid,
         watchRoleId: isReadOnly ? 'read-only' : watchRoleId,
         complianceHasRun: isReadOnly ? true : complianceHasRun,
         hardValidation,
@@ -356,8 +364,8 @@ export function useShiftFormOrchestrator({
 
         if (editMode && existingShift) {
             form.reset({
-                group_type: existingShift.group_type || (existingShift.groupName?.toLowerCase().replace(/\s+/g, '_') as FormValues['group_type']) || undefined,
-                sub_group_name: existingShift.sub_group_name || existingShift.subGroupName || '',
+                group_type: (existingShift.group_type || existingShift.groupName?.toLowerCase().replace(/\s+/g, '_') || safeContext.group_type || safeContext.groupName?.toLowerCase().replace(/\s+/g, '_')) as FormValues['group_type'] || undefined,
+                sub_group_name: existingShift.sub_group_name || existingShift.subGroupName || safeContext.sub_group_name || safeContext.subGroupName || '',
                 role_id: existingShift.role_id || existingShift.roleId || '',
                 remuneration_level_id: existingShift.remuneration_level_id || existingShift.remunerationLevelId || '',
                 shift_date: existingShift.shift_date ? startOfDay(parse(existingShift.shift_date, 'yyyy-MM-dd', new Date())) : undefined,
@@ -371,6 +379,7 @@ export function useShiftFormOrchestrator({
                 required_licenses: existingShift.required_licenses || existingShift.licenses || [],
                 event_ids: existingShift.event_ids || [],
                 notes: existingShift.notes || '',
+                is_training: existingShift.is_training || false,
             });
             if (!selectedRosterId && existingShift.roster_id) {
                 setSelectedRosterId(existingShift.roster_id);
@@ -392,6 +401,7 @@ export function useShiftFormOrchestrator({
                 required_licenses: [],
                 event_ids: [],
                 notes: '',
+                is_training: false,
             });
         }// eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, editMode, existingShift, context]);
@@ -413,9 +423,15 @@ export function useShiftFormOrchestrator({
         overrideRoleId: watchRoleId || undefined,
         overrideSkillIds: watchSkills?.length ? watchSkills : undefined,
         overrideLicenseIds: watchLicenses?.length ? watchLicenses : undefined,
-    }), [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchUnpaidBreak, isTemplateMode, employeeExistingShifts, watchTimezone, existingShift?.id, watchRoleId, watchSkills, watchLicenses]);
+        candidate_is_training: watchIsTraining || false,
+        student_visa_enforcement: studentVisaEnforcement,
+    }), [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchUnpaidBreak, isTemplateMode, employeeExistingShifts, watchTimezone, existingShift?.id, watchRoleId, watchSkills, watchLicenses, watchIsTraining, studentVisaEnforcement]);
 
-    const { runChecks, isRunning: isComplianceRunning } = useComplianceRunner({
+    const {
+        runChecks,
+        clearResults,
+        isRunning: isComplianceRunning
+    } = useComplianceRunner({
         buildComplianceInput,
         hardValidation,
         setComplianceResults,
@@ -432,6 +448,17 @@ export function useShiftFormOrchestrator({
             return () => clearTimeout(timer);
         }
     }, [complianceNeedsRerun, isTemplateMode, watchStart, watchEnd, watchRoleId, runChecks]);
+
+    // Auto-run all compliance checks whenever the user enters Step 2
+    const prevStepRef = useRef<number>(currentStep);
+    useEffect(() => {
+        const prev = prevStepRef.current;
+        prevStepRef.current = currentStep;
+        if (currentStep === 2 && prev !== 2 && !isTemplateMode && watchStart && watchEnd && watchRoleId) {
+            runChecks();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentStep]);
 
     // ── Handlers ─────────────────────────────────────────────────────────────
     const handleComplianceComplete = useCallback(() => {
@@ -594,6 +621,11 @@ export function useShiftFormOrchestrator({
                     event_ids: values.event_ids || [],
                     notes: values.notes || null,
                     display_order: 0,
+                    // Source tracking
+                    creation_source: isTemplateMode ? 'template' : 'manual',
+                    assignment_source: values.assigned_employee_id
+                        ? (editMode ? 'manual' : 'direct')
+                        : null,
                 };
                 // Only include lifecycle_status for new shifts — updateShift ignores it
                 // and including it causes the optimistic cache to flash wrong status.
@@ -668,6 +700,8 @@ export function useShiftFormOrchestrator({
         // Computed values
         shiftLength,
         netLength,
+        minShiftHours,
+        isMinLengthValid,
         selectedRemLevel,
 
         // Lock state
@@ -691,6 +725,7 @@ export function useShiftFormOrchestrator({
         // Validation
         canSave,
         hardValidation,
+        studentVisaEnforcement,
 
         // Compliance
         complianceResults,
@@ -698,6 +733,8 @@ export function useShiftFormOrchestrator({
         complianceHasRun,
         complianceNeedsRerun,
         isComplianceRunning,
+        runChecks,
+        clearResults,
         buildComplianceInput,
         handleComplianceComplete,
 

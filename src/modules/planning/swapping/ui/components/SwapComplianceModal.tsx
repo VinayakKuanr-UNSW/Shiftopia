@@ -1,12 +1,22 @@
 /**
  * SwapComplianceModal
- * 
- * Modal dialog that runs compliance checks before allowing an employee to offer a swap.
- * Checks if the REQUESTER (the person who posted the swap) can legally take the OFFERED shift.
- * Reuses the visual ComplianceTabContent for consistent UI/UX.
+ *
+ * Validates compliance for both parties before an employee can offer a swap.
+ *
+ * Architecture:
+ *   Uses the Constraint Solver (src/modules/compliance/solver) instead of
+ *   sequential per-rule checks. The solver builds a hypothetical schedule
+ *   for BOTH parties simultaneously and evaluates all constraints at once —
+ *   the same approach used in airline and hospital scheduling systems.
+ *
+ *   Solver flow:
+ *     1. ScenarioBuilder  — applies the swap to both rosters hypothetically
+ *     2. ConstraintEngine — evaluates ALL constraints simultaneously
+ *     3. SolverResult     — feasible / infeasible + per-party violations
+ *     4. Adapter          — converts to ComplianceResult map for the UI
  */
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -18,19 +28,25 @@ import {
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ComplianceTabContent } from '@/modules/rosters/ui/components/ComplianceTabContent';
 import {
-    getRegisteredRules,
-    runRule,
     ComplianceResult,
-    ComplianceCheckInput,
     HardValidationResult,
     HardValidationError,
-    ShiftTimeRange,
+    swapEvaluator,
+    solverResultToComplianceResults,
+    getScenarioWindow,
 } from '@/modules/compliance';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/platform/realtime/client';
-import { format, parseISO, addDays, subDays } from 'date-fns';
 import { Loader2, Shield, ArrowRightLeft, Play, Send } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
+import { validateCompliance } from '@/modules/rosters/services/compliance.service';
+
+function calcNetMinutes(s: { start_time: string; end_time: string; unpaid_break_minutes?: number }): number {
+    const parse = (t: string) => { const [h, m] = (t || '00:00').split(':').map(Number); return h * 60 + (m || 0); };
+    let gross = parse(s.end_time) - parse(s.start_time);
+    if (gross < 0) gross += 24 * 60;
+    return Math.max(0, gross - (s.unpaid_break_minutes ?? 0));
+}
 
 // =============================================================================
 // TYPES
@@ -49,17 +65,14 @@ interface ShiftData {
 interface SwapComplianceModalProps {
     isOpen: boolean;
     onClose: () => void;
-    // The shift we are OFFERING (our shift)
+    /** The shift we are OFFERING (our shift — given away by offerer). */
     offeredShift: ShiftData | null;
-    // The requester's original shift (the one they are swapping OUT)
+    /** The requester's original shift (the one they are swapping OUT). */
     requesterShift: ShiftData | null;
-    // The requester's profile ID (who we are checking compliance for)
     requesterId: string | null;
     requesterName: string;
-    // The offerer's profile ID (YOU)
     offererId: string | null;
     offererName: string;
-    // Callback when user confirms the offer
     onConfirmOffer: () => void;
     isSubmitting?: boolean;
 }
@@ -84,17 +97,15 @@ export function SwapComplianceModal({
     const [isRunningChecks, setIsRunningChecks] = useState(false);
     const [checksComplete, setChecksComplete] = useState(false);
 
-    // Fetch existing shifts for the REQUESTER (they take YOUR shift)
-    const { data: requesterRoster = [], isLoading: isLoadingRequester } = useQuery({
+    // -------------------------------------------------------------------------
+    // Roster fetches (both parties, ±30 days)
+    // -------------------------------------------------------------------------
+
+    const { data: requesterRoster = [] } = useQuery({
         queryKey: ['requesterRosterForSwapCompliance', requesterId, offeredShift?.shift_date],
         queryFn: async () => {
             if (!requesterId || !offeredShift?.shift_date) return [];
-
-            const startDate = format(subDays(parseISO(offeredShift.shift_date), 30), 'yyyy-MM-dd');
-            const endDate = format(addDays(parseISO(offeredShift.shift_date), 30), 'yyyy-MM-dd');
-
-            console.log('[SwapComplianceModal] Fetching roster for requester:', requesterId);
-
+            const { start: startDate, end: endDate } = getScenarioWindow(offeredShift.shift_date);
             const { data, error } = await supabase
                 .from('shifts')
                 .select('id, shift_date, start_time, end_time, unpaid_break_minutes')
@@ -103,27 +114,17 @@ export function SwapComplianceModal({
                 .lte('shift_date', endDate)
                 .is('deleted_at', null)
                 .is('is_cancelled', false);
-
-            if (error) {
-                console.error('[SwapComplianceModal] Error fetching requester roster:', error);
-                return [];
-            }
+            if (error) return [];
             return data || [];
         },
         enabled: isOpen && !!requesterId && !!offeredShift?.shift_date,
     });
 
-    // Fetch existing shifts for the OFFERER (YOU take THEIR shift)
-    const { data: offererRoster = [], isLoading: isLoadingOfferer } = useQuery({
+    const { data: offererRoster = [] } = useQuery({
         queryKey: ['offererRosterForSwapCompliance', offererId, requesterShift?.shift_date],
         queryFn: async () => {
             if (!offererId || !requesterShift?.shift_date) return [];
-
-            const startDate = format(subDays(parseISO(requesterShift.shift_date), 30), 'yyyy-MM-dd');
-            const endDate = format(addDays(parseISO(requesterShift.shift_date), 30), 'yyyy-MM-dd');
-
-            console.log('[SwapComplianceModal] Fetching roster for offerer:', offererId);
-
+            const { start: startDate, end: endDate } = getScenarioWindow(requesterShift.shift_date);
             const { data, error } = await supabase
                 .from('shifts')
                 .select('id, shift_date, start_time, end_time, unpaid_break_minutes')
@@ -132,106 +133,52 @@ export function SwapComplianceModal({
                 .lte('shift_date', endDate)
                 .is('deleted_at', null)
                 .is('is_cancelled', false);
-
-            if (error) {
-                console.error('[SwapComplianceModal] Error fetching offerer roster:', error);
-                return [];
-            }
+            if (error) return [];
             return data || [];
         },
         enabled: isOpen && !!offererId && !!requesterShift?.shift_date,
     });
 
-    const isLoading = isLoadingRequester || isLoadingOfferer;
+    // -------------------------------------------------------------------------
+    // Hard validation (overlap pre-check — instant, before solver)
+    // -------------------------------------------------------------------------
 
-    // Filter out the shift REQUESTER is swapping away (requesterShift) if it exists in their roster
-    const filteredRequesterRoster = useMemo(() => {
-        if (!requesterShift?.id) return requesterRoster;
-        return requesterRoster.filter(s => s.id !== requesterShift.id);
-    }, [requesterRoster, requesterShift?.id]);
-
-    // Filter out the shift OFFERER is swapping away (offeredShift) if it exists in their roster
-    const filteredOffererRoster = useMemo(() => {
-        if (!offeredShift?.id) return offererRoster;
-        return offererRoster.filter(s => s.id !== offeredShift.id);
-    }, [offererRoster, offeredShift?.id]);
-
-    // Build hard validation result (overlap check) - TWO WAY CHECK
     const hardValidation: HardValidationResult = useMemo(() => {
         const errors: HardValidationError[] = [];
 
-        // CHECK 1: REQUESTER takes OFFERED shift
-        if (offeredShift) {
-            const sameDayShifts = filteredRequesterRoster.filter(s => s.shift_date === offeredShift.shift_date);
-            const candidateStart = offeredShift.start_time.slice(0, 5);
-            const candidateEnd = offeredShift.end_time.slice(0, 5);
-
-            for (const existing of sameDayShifts) {
-                const existingStart = existing.start_time.slice(0, 5);
-                const existingEnd = existing.end_time.slice(0, 5);
-
-                if (candidateStart < existingEnd && candidateEnd > existingStart) {
-                    errors.push({
-                        field: 'time',
-                        rule: 'OVERLAP',
-                        message: `[${requesterName}] Overlap with existing shift (${existingStart} - ${existingEnd})`
-                    });
+        // Requester takes offeredShift — check for overlap with their current schedule
+        if (offeredShift && requesterId) {
+            const theirSchedule = requesterRoster.filter(s => s.id !== requesterShift?.id);
+            const sameDayShifts = theirSchedule.filter(s => s.shift_date === offeredShift.shift_date);
+            const cs = offeredShift.start_time.slice(0, 5);
+            const ce = offeredShift.end_time.slice(0, 5);
+            for (const ex of sameDayShifts) {
+                if (cs < ex.end_time.slice(0, 5) && ce > ex.start_time.slice(0, 5)) {
+                    errors.push({ field: 'time', rule: 'OVERLAP', message: `[${requesterName}] Overlap with existing shift (${ex.start_time.slice(0, 5)} - ${ex.end_time.slice(0, 5)})` });
                 }
             }
         }
 
-        // CHECK 2: OFFERER takes REQUESTER shift
-        if (requesterShift) {
-            const sameDayShifts = filteredOffererRoster.filter(s => s.shift_date === requesterShift.shift_date);
-            const candidateStart = requesterShift.start_time.slice(0, 5);
-            const candidateEnd = requesterShift.end_time.slice(0, 5);
-
-            for (const existing of sameDayShifts) {
-                const existingStart = existing.start_time.slice(0, 5);
-                const existingEnd = existing.end_time.slice(0, 5);
-
-                if (candidateStart < existingEnd && candidateEnd > existingStart) {
-                    errors.push({
-                        field: 'time',
-                        rule: 'OVERLAP',
-                        message: `[${offererName}] Overlap with existing shift (${existingStart} - ${existingEnd})`
-                    });
+        // Offerer takes requesterShift — check for overlap with their current schedule
+        if (requesterShift && offererId) {
+            const theirSchedule = offererRoster.filter(s => s.id !== offeredShift?.id);
+            const sameDayShifts = theirSchedule.filter(s => s.shift_date === requesterShift.shift_date);
+            const cs = requesterShift.start_time.slice(0, 5);
+            const ce = requesterShift.end_time.slice(0, 5);
+            for (const ex of sameDayShifts) {
+                if (cs < ex.end_time.slice(0, 5) && ce > ex.start_time.slice(0, 5)) {
+                    errors.push({ field: 'time', rule: 'OVERLAP', message: `[${offererName}] Overlap with existing shift (${ex.start_time.slice(0, 5)} - ${ex.end_time.slice(0, 5)})` });
                 }
             }
         }
 
-        return {
-            passed: errors.length === 0,
-            errors,
-        };
-    }, [offeredShift, requesterShift, filteredRequesterRoster, filteredOffererRoster, requesterName, offererName]);
+        return { passed: errors.length === 0, errors };
+    }, [offeredShift, requesterShift, requesterRoster, offererRoster, requesterId, offererId, requesterName, offererName]);
 
-    // Build compliance input for the rule engine - HELPER
-    // We need to support building input for BOTH parties
-    const buildComplianceInput = useCallback((
-        targetEmployeeId: string,
-        candidateShift: ShiftData,
-        roster: any[]
-    ): ComplianceCheckInput => {
-        return {
-            employee_id: targetEmployeeId,
-            action_type: 'swap',
-            candidate_shift: {
-                shift_date: candidateShift.shift_date,
-                start_time: candidateShift.start_time,
-                end_time: candidateShift.end_time,
-                unpaid_break_minutes: candidateShift.unpaid_break_minutes || 0,
-            },
-            existing_shifts: roster.map(s => ({
-                shift_date: s.shift_date,
-                start_time: s.start_time,
-                end_time: s.end_time,
-                unpaid_break_minutes: s.unpaid_break_minutes || 0,
-            })),
-        };
-    }, []);
+    // -------------------------------------------------------------------------
+    // Reset when modal closes
+    // -------------------------------------------------------------------------
 
-    // Reset state when modal closes
     useEffect(() => {
         if (!isOpen) {
             setRuleResults({});
@@ -239,88 +186,150 @@ export function SwapComplianceModal({
         }
     }, [isOpen]);
 
-    const handleRunAllChecks = useCallback(() => {
+    // -------------------------------------------------------------------------
+    // Main compliance check — uses the Constraint Solver
+    // -------------------------------------------------------------------------
+
+    const handleRunAllChecks = useCallback(async () => {
         if (!offeredShift || !requesterShift || !requesterId || !offererId) return;
 
         setIsRunningChecks(true);
-        setTimeout(() => {
-            const rules = getRegisteredRules();
-            const newResults: Record<string, ComplianceResult | null> = {};
+        await new Promise(resolve => setTimeout(resolve, 300));
 
-            // 1. Check REQUESTER taking OFFERED SHIFT
-            const inputRequester = buildComplianceInput(requesterId, offeredShift, filteredRequesterRoster);
-            rules.forEach(rule => {
-                const result = runRule(rule.id, inputRequester);
-                // Prefix ID to separate them but keep standard format for display
-                // Actually, ComplianceTabContent expects rule IDs.
-                // We need to merge results. If EITHER fails, the rule fails.
-                // We will append messages with names.
-                newResults[rule.id] = result;
-            });
+        // ── Layer 1–3: Constraint Solver ──────────────────────────────────────
+        //
+        // Build hypothetical scenario for both parties simultaneously,
+        // then evaluate ALL constraints at once (no sequential rule loop).
+        //
+        // partyA = requester: gives requesterShift, receives offeredShift
+        // partyB = offerer:   gives offeredShift,   receives requesterShift
 
-            // 2. Check OFFERER taking REQUESTER SHIFT
-            const inputOfferer = buildComplianceInput(offererId, requesterShift, filteredOffererRoster);
-            rules.forEach(rule => {
-                const result = runRule(rule.id, inputOfferer);
-                const existingResult = newResults[rule.id];
+        const solverResult = swapEvaluator.evaluate({
+            partyA: {
+                employee_id: requesterId,
+                name: requesterName,
+                current_shifts: requesterRoster,
+                shift_to_give: requesterShift,
+            },
+            partyB: {
+                employee_id: offererId,
+                name: offererName,
+                current_shifts: offererRoster,
+                shift_to_give: offeredShift,
+            },
+        });
 
-                if (!existingResult) {
-                    newResults[rule.id] = result;
-                    return;
-                }
+        // Adapt solver output → ComplianceResult map expected by ComplianceTabContent
+        const newResults: Record<string, ComplianceResult | null> =
+            solverResultToComplianceResults(solverResult);
 
-                // If Offerer fails, we need to show failure
-                if (result.status === 'fail' || result.status === 'warning') {
-                    // Update the existing result to include this failure
-                    if (existingResult.status === 'pass') {
-                        // Inherit failure
-                        newResults[rule.id] = {
-                            ...result,
-                            details: `[${offererName} (You)] ${result.details}`,
-                            summary: `[${offererName} (You)] ${result.summary}`
-                        };
-                    } else {
-                        // Both failed? Combine messages
-                        newResults[rule.id] = {
-                            ...existingResult,
-                            status: 'fail', // Worst case
-                            details: `[${requesterName}] ${existingResult.details} | [${offererName} (You)] ${result.details}`,
-                            summary: `[${requesterName}] ${existingResult.summary} | [${offererName} (You)] ${result.summary}`
-                        };
-                    }
-                } else {
-                    // Offerer passed. If Requester failed, keep Requester failure.
-                    // If Requester passed, rename message to show both checks passed?
-                    // Optional: just keep Requester's "Passed" message or generic "All checks passed"
-                    if (existingResult.status === 'pass') {
-                        // Both passed
-                        newResults[rule.id] = {
-                            ...existingResult,
-                            details: "Checks passed for both employees",
-                            summary: "Checks passed for both employees"
-                        };
-                    } else {
-                        // Requester failed, Offerer passed. Keep Requester msg but tag it
-                        newResults[rule.id] = {
-                            ...existingResult,
-                            details: `[${requesterName}] ${existingResult.details}`,
-                            summary: `[${requesterName}] ${existingResult.summary}`
-                        };
-                    }
-                }
-            });
+        // ── Layer 4: Server-side checks (qualifications, authoritative overlap) ─
 
-            console.log('[SwapComplianceModal] Combined results:', newResults);
-            setRuleResults(newResults);
-            setIsRunningChecks(false);
-            setChecksComplete(true);
-        }, 100);
-    }, [buildComplianceInput, offeredShift, requesterShift, requesterId, offererId, filteredRequesterRoster, filteredOffererRoster, requesterName, offererName]);
+        try {
+            const [serverReq, serverOff] = await Promise.all([
+                // Requester takes offeredShift
+                validateCompliance({
+                    employeeId: requesterId,
+                    shiftDate: offeredShift.shift_date,
+                    startTime: offeredShift.start_time,
+                    endTime: offeredShift.end_time,
+                    netLengthMinutes: calcNetMinutes(offeredShift),
+                    shiftId: offeredShift.id,
+                    excludeShiftId: requesterShift.id,
+                }),
+                // Offerer takes requesterShift
+                validateCompliance({
+                    employeeId: offererId,
+                    shiftDate: requesterShift.shift_date,
+                    startTime: requesterShift.start_time,
+                    endTime: requesterShift.end_time,
+                    netLengthMinutes: calcNetMinutes(requesterShift),
+                    shiftId: requesterShift.id,
+                    excludeShiftId: offeredShift.id,
+                }),
+            ]);
 
-    // Analyze failures for better UI feedback
+            const mergeServerRule = (ruleId: string, name: string) => {
+                const reqV = serverReq.qualificationViolations.filter(v =>
+                    ruleId === 'ROLE_CONTRACT_MATCH' ? v.type === 'ROLE_MISMATCH' :
+                    ruleId === 'QUALIFICATION_MATCH' ? (v.type === 'LICENSE_MISSING' || v.type === 'SKILL_MISSING') :
+                    (v.type === 'LICENSE_EXPIRED' || v.type === 'SKILL_EXPIRED')
+                );
+                const offV = serverOff.qualificationViolations.filter(v =>
+                    ruleId === 'ROLE_CONTRACT_MATCH' ? v.type === 'ROLE_MISMATCH' :
+                    ruleId === 'QUALIFICATION_MATCH' ? (v.type === 'LICENSE_MISSING' || v.type === 'SKILL_MISSING') :
+                    (v.type === 'LICENSE_EXPIRED' || v.type === 'SKILL_EXPIRED')
+                );
+
+                const hasReqFail = reqV.length > 0;
+                const hasOffFail = offV.length > 0;
+
+                newResults[ruleId] = {
+                    rule_id: ruleId,
+                    rule_name: name,
+                    status: (hasReqFail || hasOffFail) ? 'fail' : 'pass',
+                    summary: (hasReqFail && hasOffFail)
+                        ? `Both parties failed ${name}`
+                        : hasReqFail ? `[${requesterName}] Failed ${name}`
+                        : hasOffFail ? `[${offererName}] Failed ${name}`
+                        : `Both parties passed ${name}`,
+                    details: [
+                        ...(hasReqFail ? reqV.map(v => `[${requesterName}] ${v.message}`) : []),
+                        ...(hasOffFail ? offV.map(v => `[${offererName}] ${v.message}`) : []),
+                    ].join('\n'),
+                    blocking: true,
+                    calculation: { existing_hours: 0, candidate_hours: 0, total_hours: 0, limit: 0 },
+                };
+            };
+
+            mergeServerRule('ROLE_CONTRACT_MATCH', 'Role Contract Match');
+            mergeServerRule('QUALIFICATION_MATCH', 'Qualification & Certification');
+            mergeServerRule('QUALIFICATION_EXPIRY', 'Qualification Expiry');
+
+            // Server overlap is authoritative — override solver result if needed
+            const reqOverlap = serverReq.violations.some(v => v.toLowerCase().includes('overlap'));
+            const offOverlap = serverOff.violations.some(v => v.toLowerCase().includes('overlap'));
+
+            if (reqOverlap || offOverlap) {
+                const serverDetail = (reqOverlap && offOverlap)
+                    ? 'Server confirmed schedule conflicts for both employees.'
+                    : reqOverlap
+                        ? `Server confirmed a schedule conflict for ${requesterName}.`
+                        : `Server confirmed a schedule conflict for ${offererName}.`;
+
+                newResults['NO_OVERLAP'] = {
+                    ...(newResults['NO_OVERLAP'] || {
+                        rule_id: 'NO_OVERLAP',
+                        rule_name: 'No Overlapping Shifts',
+                        blocking: true,
+                        calculation: { existing_hours: 0, candidate_hours: 0, total_hours: 0, limit: 0 },
+                    }),
+                    status: 'fail',
+                    summary: (reqOverlap && offOverlap) ? 'Overlap detected for both parties' :
+                             reqOverlap ? `[${requesterName}] Overlap detected by server` :
+                             `[${offererName}] Overlap detected by server`,
+                    details: serverDetail,
+                    blocking: true,
+                };
+            }
+        } catch (err) {
+            console.error('[SwapComplianceModal] Server check failed:', err);
+        }
+
+        setRuleResults(newResults);
+        setIsRunningChecks(false);
+        setChecksComplete(true);
+    }, [
+        offeredShift, requesterShift, requesterId, offererId,
+        requesterRoster, offererRoster, requesterName, offererName,
+    ]);
+
+    // -------------------------------------------------------------------------
+    // Derived state
+    // -------------------------------------------------------------------------
+
     const failureAnalysis = useMemo(() => {
         if (!checksComplete) return null;
-
         const failures = Object.values(ruleResults || {}).filter(r => r?.status === 'fail');
         if (failures.length === 0) return null;
 
@@ -330,27 +339,25 @@ export function SwapComplianceModal({
         if (myFailures.length > 0 && theirFailures.length > 0) return 'BOTH_FAILED';
         if (myFailures.length > 0) return 'YOU_FAILED';
         if (theirFailures.length > 0) return 'THEY_FAILED';
-
         return 'UNKNOWN_FAILURE';
     }, [ruleResults, checksComplete, offererName, requesterName]);
 
-    // Determine if user can proceed
     const canProceed = useMemo(() => {
         if (!checksComplete) return false;
         if (!hardValidation.passed) return false;
-
-        const hasBlockingFailure = Object.values(ruleResults).some(
-            r => r?.status === 'fail' && r?.blocking
-        );
-
-        return !hasBlockingFailure;
+        return !Object.values(ruleResults).some(r => r?.status === 'fail' && r?.blocking);
     }, [checksComplete, hardValidation, ruleResults]);
 
-    const hasWarnings = useMemo(() => {
-        return Object.values(ruleResults).some(r => r?.status === 'warning');
-    }, [ruleResults]);
+    const hasWarnings = useMemo(
+        () => Object.values(ruleResults).some(r => r?.status === 'warning'),
+        [ruleResults],
+    );
 
     if (!offeredShift) return null;
+
+    // -------------------------------------------------------------------------
+    // Render
+    // -------------------------------------------------------------------------
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -368,18 +375,13 @@ export function SwapComplianceModal({
                 {/* Swap Summary */}
                 <div className="bg-white/5 rounded-lg p-4 border border-white/10 mb-4">
                     <div className="grid grid-cols-2 gap-4">
-                        {/* Their Shift (what they're giving up) */}
                         <div>
                             <div className="text-xs text-white/50 mb-1">They're swapping out:</div>
-                            <div className="text-sm font-medium text-white/70">
-                                {requesterShift?.shift_date}
-                            </div>
+                            <div className="text-sm font-medium text-white/70">{requesterShift?.shift_date}</div>
                             <div className="text-sm text-white/50">
                                 {requesterShift?.start_time?.slice(0, 5)} - {requesterShift?.end_time?.slice(0, 5)}
                             </div>
                         </div>
-
-                        {/* Arrow */}
                         <div className="flex items-center justify-center">
                             <ArrowRightLeft className="h-5 w-5 text-purple-400" />
                         </div>
@@ -387,50 +389,46 @@ export function SwapComplianceModal({
 
                     <div className="border-t border-white/10 my-3" />
 
-                    {/* Your Shift (what you're offering) */}
                     <div>
                         <div className="text-xs text-white/50 mb-1">You're offering:</div>
-                        <div className="font-semibold text-white">
-                            {offeredShift.role_name || 'Shift'}
-                        </div>
+                        <div className="font-semibold text-white">{offeredShift.role_name || 'Shift'}</div>
                         <div className="text-sm text-white/70">
                             {offeredShift.shift_date} • {offeredShift.start_time?.slice(0, 5)} - {offeredShift.end_time?.slice(0, 5)}
                         </div>
                         {offeredShift.department_name && (
-                            <div className="text-xs text-white/50 mt-1">
-                                {offeredShift.department_name}
-                            </div>
+                            <div className="text-xs text-white/50 mt-1">{offeredShift.department_name}</div>
                         )}
                     </div>
                 </div>
 
-                {/* Run Check Button - Before checks are run */}
-                {!checksComplete && !isRunningChecks && (
-                    <div className="flex flex-col items-center py-8">
-                        <p className="text-white/60 text-sm mb-4">
-                            Click below to run compliance checks for both parties.
-                        </p>
-                        <Button
-                            onClick={handleRunAllChecks}
-                            disabled={isLoading}
-                            className="gap-2 bg-purple-600 hover:bg-purple-700"
-                        >
-                            {isLoading ? (
-                                <>
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    Loading roster...
-                                </>
-                            ) : (
-                                <>
-                                    <Play className="h-4 w-4" />
-                                    Run Compliance Check
-                                </>
-                            )}
-                        </Button>
-                    </div>
+                {/* Compliance content */}
+                {!isRunningChecks && (
+                    <ComplianceTabContent
+                        hardValidation={hardValidation}
+                        ruleResults={ruleResults}
+                        setRuleResults={setRuleResults}
+                        buildComplianceInput={() => ({
+                            employee_id: requesterId!,
+                            action_type: 'swap',
+                            candidate_shift: {
+                                shift_date: offeredShift.shift_date,
+                                start_time: offeredShift.start_time,
+                                end_time: offeredShift.end_time,
+                                unpaid_break_minutes: offeredShift.unpaid_break_minutes || 0,
+                            },
+                            existing_shifts: requesterRoster.filter(s => s.id !== requesterShift?.id).map(s => ({
+                                shift_date: s.shift_date,
+                                start_time: s.start_time,
+                                end_time: s.end_time,
+                                unpaid_break_minutes: s.unpaid_break_minutes || 0,
+                            })),
+                        })}
+                        needsRerun={false}
+                        onChecksComplete={() => setChecksComplete(true)}
+                        onRunAll={handleRunAllChecks}
+                    />
                 )}
 
-                {/* Loading State */}
                 {isRunningChecks && (
                     <div className="flex items-center justify-center py-12">
                         <div className="text-center">
@@ -440,71 +438,64 @@ export function SwapComplianceModal({
                     </div>
                 )}
 
-                {/* Compliance Content - Only show after checks complete */}
-                {checksComplete && !isRunningChecks && (
-                    <ComplianceTabContent
-                        hardValidation={hardValidation}
-                        ruleResults={ruleResults}
-                        setRuleResults={setRuleResults}
-                        buildComplianceInput={() => buildComplianceInput(requesterId!, offeredShift!, filteredRequesterRoster)} // Default view, not fully used by read-only tab
-                        needsRerun={false}
-                        onChecksComplete={() => setChecksComplete(true)}
-                        shiftId={offeredShift?.id}
-                    />
-                )}
-
-                {/* Failure Analysis Alert */}
+                {/* Failure analysis banner */}
                 {failureAnalysis && (
                     <div className={cn(
                         "mx-4 mt-4 p-3 rounded-lg border text-sm flex items-start gap-3",
                         failureAnalysis === 'BOTH_FAILED' ? "bg-red-950/30 border-red-800 text-red-200" :
-                            failureAnalysis === 'YOU_FAILED' ? "bg-amber-950/30 border-amber-800 text-amber-200" :
-                                "bg-orange-950/30 border-orange-800 text-orange-200"
+                        failureAnalysis === 'YOU_FAILED'  ? "bg-amber-950/30 border-amber-800 text-amber-200" :
+                                                            "bg-orange-950/30 border-orange-800 text-orange-200"
                     )}>
                         <Shield className="h-5 w-5 shrink-0 mt-0.5" />
                         <div>
                             <p className="font-semibold mb-1">
-                                {failureAnalysis === 'BOTH_FAILED' ? "Compliance Failed for Both Parties" :
-                                    failureAnalysis === 'YOU_FAILED' ? "You cannot take this shift" :
-                                        `Request cannot be fulfilled`}
+                                {failureAnalysis === 'BOTH_FAILED' ? 'Compliance Failed for Both Parties' :
+                                 failureAnalysis === 'YOU_FAILED'  ? 'You cannot take this shift' :
+                                                                     'Request cannot be fulfilled'}
                             </p>
                             <p className="opacity-90">
-                                {failureAnalysis === 'BOTH_FAILED' && "Neither you nor the requester can legally work these shifts."}
-                                {failureAnalysis === 'YOU_FAILED' && "Taking this shift would put YOU in violation of compliance rules."}
-                                {failureAnalysis === 'THEY_FAILED' && `Taking your shift would put ${requesterName} in violation of compliance rules.`}
-                                {failureAnalysis === 'UNKNOWN_FAILURE' && "Compliance checks failed."}
+                                {failureAnalysis === 'BOTH_FAILED'    && 'Neither you nor the requester can legally work these shifts.'}
+                                {failureAnalysis === 'YOU_FAILED'     && 'Taking this shift would put YOU in violation of compliance rules.'}
+                                {failureAnalysis === 'THEY_FAILED'    && `Taking your shift would put ${requesterName} in violation of compliance rules.`}
+                                {failureAnalysis === 'UNKNOWN_FAILURE' && 'Compliance checks failed.'}
                             </p>
                         </div>
                     </div>
                 )}
 
-
                 <DialogFooter className="mt-6 gap-2">
-                    <Button variant="outline" onClick={onClose} className="border-white/10">
-                        Cancel
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={onClose} className="border-white/10">
+                            Cancel
+                        </Button>
+                        {checksComplete && (
+                            <Button
+                                variant="secondary"
+                                onClick={handleRunAllChecks}
+                                disabled={isRunningChecks}
+                                className="gap-2 bg-slate-800 hover:bg-slate-700 text-purple-400 border border-purple-500/20"
+                            >
+                                <Play className="h-4 w-4 fill-current" />
+                                Re-Run Checks
+                            </Button>
+                        )}
+                    </div>
 
                     {checksComplete && (
                         <Button
                             onClick={onConfirmOffer}
                             disabled={!canProceed || isSubmitting}
                             className={cn(
-                                "gap-2",
+                                'gap-2',
                                 canProceed
-                                    ? "bg-green-600 hover:bg-green-700 text-white"
-                                    : "bg-white/10 text-white/50 cursor-not-allowed"
+                                    ? 'bg-green-600 hover:bg-green-700 text-white'
+                                    : 'bg-white/10 text-white/50 cursor-not-allowed',
                             )}
                         >
                             {isSubmitting ? (
-                                <>
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    Sending...
-                                </>
+                                <><Loader2 className="h-4 w-4 animate-spin" />Sending...</>
                             ) : canProceed ? (
-                                <>
-                                    <Send className="h-4 w-4" />
-                                    {hasWarnings ? 'Send Offer Anyway' : 'Send Offer'}
-                                </>
+                                <><Send className="h-4 w-4" />{hasWarnings ? 'Send Offer Anyway' : 'Send Offer'}</>
                             ) : (
                                 'Cannot Proceed'
                             )}

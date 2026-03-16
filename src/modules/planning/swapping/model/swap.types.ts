@@ -38,8 +38,6 @@ export interface SwapRequestWithDetails extends SwapRequest {
     originalShift?: Shift & {
         roles?: {
             name: string;
-            group_type?: string;
-            groupType?: string;
             remuneration_levels?: { hourly_rate_min: number } | null;
         } | null;
         departments?: { name: string } | null;
@@ -50,8 +48,6 @@ export interface SwapRequestWithDetails extends SwapRequest {
     requestedShift?: Shift & {
         roles?: {
             name: string;
-            group_type?: string;
-            groupType?: string;
             remuneration_levels?: { hourly_rate_min: number } | null;
         } | null;
         departments?: { name: string } | null;

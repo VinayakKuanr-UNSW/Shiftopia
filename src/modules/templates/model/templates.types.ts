@@ -431,8 +431,8 @@ export function validateTemplateName(name: string): ValidationResult {
     errors.push('Template name must be less than 100 characters');
   }
 
-  if (/[<>"'\\]/.test(trimmed)) {
-    errors.push('Template name contains invalid characters');
+  if (/[<>\\]/.test(trimmed)) {
+    errors.push('Template name contains invalid characters (<, >, \\)');
   }
 
   return { valid: errors.length === 0, errors };

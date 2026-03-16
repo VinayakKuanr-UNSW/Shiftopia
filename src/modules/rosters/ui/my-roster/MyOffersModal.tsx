@@ -21,7 +21,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
 import { useToast } from '@/modules/core/hooks/use-toast';
-import { useMyOffers, useMyOffersHistory, useAcceptOffer, useDeclineOffer } from '@/modules/rosters/state/useRosterShifts';
+import { useMyOffers, useMyOffersHistory, useAcceptOffer, useDeclineOffer, useExpireOffer } from '@/modules/rosters/state/useRosterShifts';
 import { useAuth } from '@/modules/auth/hooks/useAuth';
 import { cn } from '@/modules/core/lib/utils';
 import {
@@ -42,13 +42,12 @@ import {
     Timer,
     Check,
     Layers,
-    History as HistoryIcon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { Separator } from '@/modules/core/ui/primitives/separator';
 import { Input } from '@/modules/core/ui/primitives/input';
-import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
+import { isShiftLocked, isShiftCommenced } from '@/modules/rosters/domain/shift-locking.utils';
 
 /* ═══════════════════════════════════════════════════════════════════════
    EXPIRATION COUNTDOWN COMPONENT
@@ -193,6 +192,14 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
     const [searchQuery, setSearchQuery] = useState('');
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [showDeclineConfirm, setShowDeclineConfirm] = useState<string | null>(null);
+    const [now, setNow] = useState(new Date());
+
+    // Reactive timer for expiration/locking.
+    useEffect(() => {
+        if (!isOpen) return;
+        const timer = setInterval(() => setNow(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, [isOpen]);
 
     // Get filters from context or props? 
     // Ideally passed in, but for now we might default to user's org if not provided, 
@@ -260,9 +267,10 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
         : activeTab === 'Accepted' ? errorAccepted
             : errorDeclined;
 
-    // Mutation hooks for accept/decline
+    // Mutation hooks for accept/decline/expire
     const acceptOfferMutation = useAcceptOffer();
     const declineOfferMutation = useDeclineOffer();
+    const expireOfferMutation = useExpireOffer();
 
     // Counts
     const pendingCount = pendingOffers.length;
@@ -279,6 +287,15 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
 
     // Handle Accept
     const handleAccept = async (shiftId: string) => {
+        if (isExpired || isLocked) {
+            toast({
+                title: 'Operation Invalid',
+                description: 'This offer is no longer available for acceptance.',
+                variant: 'destructive',
+            });
+            return;
+        }
+
         setProcessingId(shiftId);
         try {
             await acceptOfferMutation.mutateAsync(shiftId);
@@ -300,6 +317,15 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
 
     // Handle Decline
     const handleDecline = async (shiftId: string) => {
+        if (isExpired || isLocked) {
+            toast({
+                title: 'Operation Invalid',
+                description: 'This offer is no longer available.',
+                variant: 'destructive',
+            });
+            return;
+        }
+
         setProcessingId(shiftId);
         try {
             await declineOfferMutation.mutateAsync(shiftId);
@@ -323,11 +349,36 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
 
     const selectedOffer = Array.from([...pendingOffers, ...acceptedOffers, ...declinedOffers] as OfferData[]).find(o => o.id === selectedOfferId);
 
+    const isExpired = selectedOffer
+        ? (selectedOffer.offer_expires_at || (selectedOffer.shift as any).offer_expires_at)
+            ? new Date(selectedOffer.offer_expires_at || (selectedOffer.shift as any).offer_expires_at).getTime() < now.getTime()
+            : false
+        : false;
+
+    const isLocked = selectedOffer
+        ? isShiftLocked(selectedOffer.shift.shift_date, selectedOffer.shift.start_time)
+        : false;
+
+    const isCommenced = selectedOffer
+        ? isShiftCommenced(selectedOffer.shift.shift_date, selectedOffer.shift.start_time)
+        : false;
+
+    const isActionDisabled = !!processingId || isLocked || isExpired;
+
+    // Auto-trigger server-side expiry the moment the client detects the offer has expired or locked
+    useEffect(() => {
+        if (!selectedOffer || selectedOffer.status !== 'Pending') return;
+        if (!isExpired && !isLocked) return;
+        if (expireOfferMutation.isPending) return;
+        expireOfferMutation.mutate(selectedOffer.shift_id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isExpired, isLocked, selectedOffer?.shift_id, selectedOffer?.status]);
+
     return (
         <>
             <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
                 <DialogContent
-                    className="sm:max-w-[1040px] h-[720px] max-h-[85vh] bg-background border border-border p-0 overflow-hidden shadow-2xl flex flex-col rounded-[2.5rem] [&>button]:hidden z-[150]"
+                    className="sm:max-w-[740px] h-[720px] max-h-[85vh] bg-background border border-border p-0 overflow-hidden shadow-2xl flex flex-col rounded-[2.5rem] [&>button]:hidden z-[150]"
                 >
                     <VisuallyHidden>
                         <DialogTitle>My Shift Offers</DialogTitle>
@@ -485,38 +536,73 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                                                     {/* Background Glow Pulse */}
                                                     <div className="absolute -inset-1 bg-gradient-to-r from-amber-500/20 to-orange-500/20 rounded-[3rem] blur-xl opacity-50 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-pulse" />
 
-                                                    <div className="relative p-8 rounded-[2.5rem] bg-background/40 backdrop-blur-md border border-amber-500/20 shadow-2xl overflow-hidden flex flex-col items-center">
+                                                    <div className={cn(
+                                                        "relative p-8 rounded-[2.5rem] bg-background/40 backdrop-blur-md border shadow-2xl overflow-hidden flex flex-col items-center",
+                                                        isLocked ? "border-red-500/20 shadow-red-500/5" : "border-amber-500/20"
+                                                    )}>
                                                         {/* Animated Grid Overlay */}
                                                         <div className="absolute inset-0 bg-grid-slate-900/[0.04] [mask-image:radial-gradient(ellipse_at_center,white,transparent)] pointer-events-none" />
 
                                                         <div className="relative z-10 flex flex-col items-center gap-6">
                                                             {/* Status Pill */}
-                                                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 shadow-inner">
-                                                                <Timer className="h-3.5 w-3.5 text-amber-500 animate-[spin_4s_linear_infinite]" />
-                                                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-500 drop-shadow-sm">
-                                                                    Live Offer Expiration
+                                                            <div className={cn(
+                                                                "flex items-center gap-2 px-3 py-1.5 rounded-full border shadow-inner",
+                                                                isLocked ? "bg-red-500/10 border-red-500/20" : "bg-amber-500/10 border-amber-500/20"
+                                                            )}>
+                                                                {isLocked ? (
+                                                                    <AlertCircle className="h-3.5 w-3.5 text-red-500" />
+                                                                ) : (
+                                                                    <Timer className="h-3.5 w-3.5 text-amber-500 animate-[spin_4s_linear_infinite]" />
+                                                                )}
+                                                                <span className={cn(
+                                                                    "text-[10px] font-black uppercase tracking-[0.3em] drop-shadow-sm",
+                                                                    isLocked ? "text-red-500" : "text-amber-500"
+                                                                )}>
+                                                                    {isCommenced ? 'Shift Commenced' : isLocked ? 'Offer Expired (Lockout)' : isExpired ? 'Offer Expired' : 'Live Offer Expiration'}
                                                                 </span>
                                                             </div>
 
-                                                            {/* Hero Timer */}
+                                                            {/* Hero Timer / Status */}
                                                             <div className="flex flex-col items-center">
-                                                                <ExpirationCountdown
-                                                                    expiresAt={selectedOffer.offer_expires_at || (selectedOffer.shift as any).offer_expires_at}
-                                                                    className="text-6xl tracking-[-0.08em] font-black drop-shadow-2xl text-amber-500 drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]"
-                                                                    showIcon={false}
-                                                                />
-                                                                <div className="flex items-center gap-2 mt-2">
-                                                                    <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                                                    <span className="text-[10px] font-black text-amber-500/50 uppercase tracking-[0.4em]">
-                                                                        Time Remaining
-                                                                    </span>
-                                                                </div>
+                                                                {isLocked || isExpired ? (
+                                                                    <div className="flex flex-col items-center gap-2">
+                                                                        <span className="text-5xl tracking-[-0.08em] font-black text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.3)] uppercase">
+                                                                            {isExpired && !isLocked ? 'Retracted' : 'Locked'}
+                                                                        </span>
+                                                                        <span className="text-[10px] font-black text-red-500/50 uppercase tracking-[0.4em]">
+                                                                            {isExpired && !isLocked ? 'Deadline Passed' : '4h Policy Violation'}
+                                                                        </span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <>
+                                                                        <ExpirationCountdown
+                                                                            expiresAt={selectedOffer.offer_expires_at || (selectedOffer.shift as any).offer_expires_at}
+                                                                            className="text-6xl tracking-[-0.08em] font-black drop-shadow-2xl text-amber-500 drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]"
+                                                                            showIcon={false}
+                                                                        />
+                                                                        <div className="flex items-center gap-2 mt-2">
+                                                                            <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                                                            <span className="text-[10px] font-black text-amber-500/50 uppercase tracking-[0.4em]">
+                                                                                Time Remaining
+                                                                            </span>
+                                                                        </div>
+                                                                    </>
+                                                                )}
                                                             </div>
 
                                                             {/* Contextual Footer */}
                                                             <div className="text-[11px] font-bold text-muted-foreground/60 max-w-[320px] text-center leading-relaxed px-6">
-                                                                This deployment window remains open until the zero-hour transition.
-                                                                <span className="text-amber-500/40 block mt-1 uppercase text-[9px] tracking-widest">Retraction Status: Active</span>
+                                                                {isLocked
+                                                                    ? "This offer can no longer be accepted or declined as per the 4-hour pre-shift lockout protocol."
+                                                                    : isExpired
+                                                                        ? "The deadline for this offer has passed. The shift has been returned to the planning pool."
+                                                                        : "This deployment window remains open until the zero-hour transition."}
+                                                                <span className={cn(
+                                                                    "block mt-1 uppercase text-[9px] tracking-widest",
+                                                                    isLocked || isExpired ? "text-red-500/40" : "text-amber-500/40"
+                                                                )}>
+                                                                    Retraction Status: {isLocked || isExpired ? 'Finalized' : 'Active'}
+                                                                </span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -596,15 +682,20 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                                                 <div className="flex flex-col gap-3 mt-auto mb-4">
                                                     <Button
                                                         onClick={() => handleAccept(selectedOffer.shift_id)}
-                                                        disabled={processingId === selectedOffer.shift_id}
-                                                        className="h-14 rounded-2xl font-black text-sm uppercase tracking-[0.2em] bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_10px_30px_-10px_rgba(16,185,129,0.3)] border-b-4 border-emerald-800 active:scale-[0.98] active:border-b-0 transition-all"
+                                                        disabled={isActionDisabled}
+                                                        className={cn(
+                                                            "h-14 rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-[0_10px_30px_-10px_rgba(16,185,129,0.3)] active:scale-[0.98] transition-all",
+                                                            isActionDisabled
+                                                                ? "bg-slate-300 dark:bg-slate-800 text-slate-500 cursor-not-allowed border-b-4 border-slate-400 dark:border-slate-900 shadow-none"
+                                                                : "bg-emerald-600 hover:bg-emerald-500 text-white border-b-4 border-emerald-800 active:border-b-0"
+                                                        )}
                                                     >
                                                         {processingId === selectedOffer.shift_id ? (
                                                             <Loader2 className="h-5 w-5 animate-spin" />
                                                         ) : (
                                                             <div className="flex items-center gap-2">
-                                                                <Check className="h-5 w-5" />
-                                                                <span>Confirm Assignment</span>
+                                                                {isActionDisabled && !processingId ? <AlertCircle className="h-5 w-5" /> : <Check className="h-5 w-5" />}
+                                                                <span>{isExpired && !isLocked ? 'Offer Expired' : isLocked ? 'Window Closed' : 'Confirm Assignment'}</span>
                                                             </div>
                                                         )}
                                                     </Button>
@@ -614,8 +705,13 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                                                             e.stopPropagation();
                                                             setShowDeclineConfirm(selectedOffer.shift_id);
                                                         }}
-                                                        disabled={!!processingId}
-                                                        className="h-12 rounded-2xl font-black text-[10px] uppercase tracking-widest text-muted-foreground hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all border border-transparent hover:border-red-200"
+                                                        disabled={isActionDisabled}
+                                                        className={cn(
+                                                            "h-12 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border border-transparent",
+                                                            isActionDisabled
+                                                                ? "text-muted-foreground/30 cursor-not-allowed"
+                                                                : "text-muted-foreground hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:border-red-200"
+                                                        )}
                                                     >
                                                         Decline Shift
                                                     </Button>
@@ -652,85 +748,6 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                                     </motion.div>
                                 )}
                             </AnimatePresence>
-                        </div>
-
-                        {/* RIGHT PANE: AUDIT HISTORY */}
-                        <div className="w-[300px] border-l border-border flex flex-col bg-muted/30">
-                            <div className="p-10 pb-6">
-                                <div className="flex items-center gap-3 mb-8 text-amber-600 dark:text-amber-500/80">
-                                    <div className="h-9 w-9 rounded-xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center border border-amber-200 dark:border-amber-500/20">
-                                        <HistoryIcon className="h-4.5 w-4.5" />
-                                    </div>
-                                    <h2 className="text-xs font-black text-foreground uppercase tracking-widest opacity-80">Audit Log</h2>
-                                </div>
-                                <Separator className="bg-border" />
-                            </div>
-
-                            <div className="flex-1 overflow-y-auto px-8 pb-10 custom-scrollbar">
-                                <AnimatePresence mode="wait">
-                                    {selectedOffer ? (
-                                        <motion.div
-                                            key={selectedOffer.id + '_audit'}
-                                            initial={{ opacity: 0, x: 10 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            className="space-y-6"
-                                        >
-                                            <div className="relative pl-6 before:absolute before:left-0 before:top-1 before:bottom-0 before:w-px before:bg-border">
-                                                {/* Timeline Items */}
-                                                <div className="relative mb-8">
-                                                    <div className="absolute left-[-26px] top-1 h-3 w-3 rounded-full bg-blue-500 border-2 border-background shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
-                                                    <div className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5">Offer Dispatched</div>
-                                                    <div className="text-xs font-bold text-foreground">Offered by {selectedOffer.offered_by_name}</div>
-                                                    <div className="text-[9px] text-muted-foreground font-medium mt-1 uppercase tracking-tighter">
-                                                        {format(new Date(selectedOffer.offered_at), 'MMM d, HH:mm')}
-                                                    </div>
-                                                </div>
-
-                                                {selectedOffer.status !== 'Pending' && (
-                                                    <div className="relative">
-                                                        <div className={cn(
-                                                            "absolute left-[-26px] top-1 h-3 w-3 rounded-full border-2 border-background",
-                                                            selectedOffer.status === 'Accepted' ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" : "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]"
-                                                        )} />
-                                                        <div className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5">Outcome Recorded</div>
-                                                        <div className="text-xs font-bold text-foreground">
-                                                            {selectedOffer.status === 'Accepted' ? 'Integrated to Schedule' : 'Candidate Rejected'}
-                                                        </div>
-                                                        <div className="text-[9px] text-muted-foreground font-medium mt-1 uppercase tracking-tighter">
-                                                            Manual Employee Action
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <div className="mt-20 p-5 rounded-2xl bg-muted/50 border border-border">
-                                                <div className="flex gap-3 mb-3">
-                                                    <FileText className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
-                                                    <div className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Contextual Notes</div>
-                                                </div>
-                                                <p className="text-[10px] font-medium leading-relaxed text-muted-foreground">
-                                                    This engagement log records critical state transitions in the shift lifecycle for compliance and payroll auditing.
-                                                </p>
-                                            </div>
-                                        </motion.div>
-                                    ) : (
-                                        <div className="h-full flex flex-col items-center justify-center opacity-10">
-                                            <HistoryIcon className="h-10 w-10 mb-4" />
-                                            <span className="text-[11px] font-black uppercase tracking-widest italic">Logs Restricted</span>
-                                        </div>
-                                    )}
-                                </AnimatePresence>
-                            </div>
-
-                            {/* Visual Footer for Right Pane */}
-                            <div className="p-8 border-t border-border bg-muted/20">
-                                <Button
-                                    onClick={onClose}
-                                    className="w-full h-10 rounded-xl bg-background hover:bg-muted text-foreground text-[10px] font-black uppercase tracking-widest border border-border transition-all shadow-sm"
-                                >
-                                    Dismiss Portal
-                                </Button>
-                            </div>
                         </div>
                     </div>
 

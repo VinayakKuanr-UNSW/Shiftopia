@@ -8,10 +8,12 @@ import {
   Lock,
   Unlock,
   MoreVertical,
+  Pencil,
   Copy,
   Trash2,
   Upload,
   FileText,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
@@ -24,6 +26,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/modules/core/ui/primitives/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/modules/core/ui/primitives/dialog';
+import { Label } from '@/modules/core/ui/primitives/label';
 import { cn } from '@/modules/core/lib/utils';
 import { format, formatDistanceToNow, isValid } from 'date-fns';
 
@@ -55,6 +65,7 @@ interface TemplatesSidebarProps {
   onCreateTemplate: () => void;
   onDuplicateTemplate?: (id: string) => void;
   onDeleteTemplate: (id: string) => void;
+  onRenameTemplate?: (id: string, name: string) => Promise<boolean>;
   onArchiveTemplate: (id: string) => void;
   isLoading?: boolean;
 }
@@ -80,11 +91,18 @@ export const TemplatesSidebar: React.FC<TemplatesSidebarProps> = ({
   onCreateTemplate,
   onDuplicateTemplate,
   onDeleteTemplate,
+  onRenameTemplate,
   onArchiveTemplate,
   isLoading = false,
 }) => {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('published');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Rename Dialog State
+  const [isRenameOpen, setIsRenameOpen] = useState(false);
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [renameName, setRenameName] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
 
   const filteredTemplates = useMemo(() => {
     let result = templates.filter((t) => t.status === statusFilter);
@@ -112,6 +130,23 @@ export const TemplatesSidebar: React.FC<TemplatesSidebarProps> = ({
 
     return result;
   }, [templates, statusFilter, searchQuery]);
+
+  const handleOpenRename = (template: Template) => {
+    setRenameId(template.id);
+    setRenameName(template.name);
+    setIsRenameOpen(true);
+  };
+
+  const handleConfirmRename = async () => {
+    if (!renameId || !onRenameTemplate || !renameName.trim()) return;
+    setIsRenaming(true);
+    try {
+      const success = await onRenameTemplate(renameId, renameName);
+      if (success) setIsRenameOpen(false);
+    } finally {
+      setIsRenaming(false);
+    }
+  };
 
   const counts = useMemo(
     () => ({
@@ -223,6 +258,7 @@ export const TemplatesSidebar: React.FC<TemplatesSidebarProps> = ({
                 isSelected={selectedTemplateId === template.id}
                 onClick={() => onSelectTemplate(template.id)}
                 onDuplicate={() => onDuplicateTemplate?.(template.id)}
+                onRename={() => handleOpenRename(template)}
                 onDelete={() => onDeleteTemplate(template.id)}
                 onArchive={() => onArchiveTemplate(template.id)}
               />
@@ -230,6 +266,36 @@ export const TemplatesSidebar: React.FC<TemplatesSidebarProps> = ({
           )}
         </div>
       </ScrollArea>
+
+      {/* Rename Dialog */}
+      <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Rename Template</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">New Name</Label>
+              <Input
+                id="name"
+                value={renameName}
+                onChange={(e) => setRenameName(e.target.value)}
+                placeholder="Enter template name..."
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRenameOpen(false)} disabled={isRenaming}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmRename} disabled={isRenaming || !renameName.trim()}>
+              {isRenaming && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="p-3 border-t border-border">
         <Button variant="outline" className="w-full" onClick={onCreateTemplate}>
@@ -249,6 +315,7 @@ interface TemplateCardProps {
   isSelected: boolean;
   onClick: () => void;
   onDuplicate: () => void;
+  onRename: () => void;
   onDelete: () => void;
   onArchive: () => void;
 }
@@ -258,6 +325,7 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
   isSelected,
   onClick,
   onDuplicate,
+  onRename,
   onDelete,
   onArchive,
 }) => {
@@ -327,6 +395,11 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
               <DropdownMenuItem onClick={onDuplicate}>
                 <Copy className="h-4 w-4 mr-2" />
                 Duplicate
+              </DropdownMenuItem>
+
+              <DropdownMenuItem onClick={onRename}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Rename
               </DropdownMenuItem>
 
               {!isArchived && (

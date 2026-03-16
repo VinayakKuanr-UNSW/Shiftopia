@@ -1,10 +1,9 @@
 import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/modules/core/ui/primitives/card';
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { MetricId } from "../../model/metric.types";
 
 interface InsightMetricCardProps {
-    metricId: MetricId;
+    metricId: string;
     title: string;
     metric: string | number;
     description: string;
@@ -22,34 +21,35 @@ const InsightMetricCard: React.FC<InsightMetricCardProps> = ({
     loading
 }) => {
     return (
-        <Card className="bg-white/5 border-white/10 hover:bg-white/10 transition-all duration-300 group">
+        <Card className="bg-card border-border hover:bg-accent/5 transition-all duration-300 group">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                <CardTitle className="text-sm font-medium text-white/70 group-hover:text-white transition-colors">
+                <CardTitle className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
                     {title}
                 </CardTitle>
-                <div className="p-2 rounded-lg bg-white/5 group-hover:bg-white/10 transition-colors">
+                <div className="p-2 rounded-lg bg-muted/50 group-hover:bg-muted transition-colors">
                     {icon}
                 </div>
             </CardHeader>
             <CardContent>
                 {loading ? (
-                    <div className="h-8 w-24 bg-white/10 animate-pulse rounded mb-1" />
+                    <div className="h-8 w-24 bg-muted animate-pulse rounded mb-1" />
                 ) : (
-                    <div className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
+                    <div className="text-2xl font-bold text-foreground mb-1 flex items-center gap-2">
                         {metric}
                         {trend && (
-                            <span className={`text-xs flex items-center ${trend === 'up' ? 'text-green-400' :
-                                    trend === 'down' ? 'text-rose-400' :
-                                        'text-white/40'
-                                }`}>
-                                {trend === 'up' && <TrendingUp size={14} />}
-                                {trend === 'down' && <TrendingDown size={14} />}
-                                {trend === 'stable' && <Minus size={14} />}
+                            <span className={`text-xs flex items-center ${
+                                trend === 'up'     ? 'text-emerald-500' :
+                                trend === 'down'   ? 'text-rose-500' :
+                                                     'text-muted-foreground'
+                            }`}>
+                                {trend === 'up'     && <TrendingUp  size={14} />}
+                                {trend === 'down'   && <TrendingDown size={14} />}
+                                {trend === 'stable' && <Minus        size={14} />}
                             </span>
                         )}
                     </div>
                 )}
-                <p className="text-xs text-white/50">{description}</p>
+                <p className="text-xs text-muted-foreground">{description}</p>
             </CardContent>
         </Card>
     );

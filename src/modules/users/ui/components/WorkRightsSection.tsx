@@ -4,7 +4,7 @@ import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Switch } from '@/modules/core/ui/primitives/switch';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { useEmployeeLicenses, useRemoveEmployeeLicense } from '@/modules/users/hooks/useEmployeeLicenses';
-import { Shield, CheckCircle, XCircle, AlertTriangle, AlertOctagon, Loader2 } from 'lucide-react';
+import { Shield, CheckCircle, XCircle, AlertTriangle, AlertOctagon, Loader2, Trash2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { AddLicenseDialog } from './AddLicenseDialog';
 import { supabase } from '@/platform/realtime/client';
@@ -102,16 +102,16 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
     };
 
     return (
-        <Card className="border border-border bg-card">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <div className="space-y-1">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                        <Shield className="w-5 h-5" />
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden flex flex-col h-full">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/60 bg-white dark:bg-slate-900 flex items-center justify-between">
+                <div className="space-y-0.5">
+                    <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-slate-500" />
                         Work Rights
-                    </CardTitle>
-                    <CardDescription>
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-medium pl-6 uppercase tracking-wider">
                         Visa status and employment eligibility
-                    </CardDescription>
+                    </p>
                 </div>
                 {!workRight && (
                     <AddLicenseDialog
@@ -121,24 +121,26 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
                         existingLicenseIds={workRights?.map(l => l.license_id) || []}
                     />
                 )}
-            </CardHeader>
-            <CardContent>
+            </div>
+            <div className="p-5 flex-1">
                 {isLoading ? (
-                    <p className="text-muted-foreground text-sm">Loading work rights...</p>
+                    <div className="flex items-center justify-center h-full py-8">
+                        <p className="text-slate-400 text-sm animate-pulse">Loading work rights...</p>
+                    </div>
                 ) : !workRight ? (
-                    <div className="text-center py-8">
-                        <Shield className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
-                        <p className="text-muted-foreground text-sm">No work rights recorded</p>
+                    <div className="flex flex-col items-center justify-center h-full py-8 text-center text-slate-400">
+                        <Shield className="w-8 h-8 mx-auto mb-3 opacity-20" />
+                        <p className="text-sm font-medium">No work rights recorded</p>
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        <div className="bg-card rounded-lg border border-border p-4">
-                            <div className="flex items-start justify-between mb-4">
+                        <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-sm transition-all group p-4">
+                            <div className="flex items-start justify-between mb-2">
                                 <div className="flex-1">
-                                    <h4 className="font-medium text-foreground text-lg">{workRight.license?.name || 'Work Rights'}</h4>
-                                    <p className="text-sm text-muted-foreground mt-1">
-                                        {workRight.license?.description || 'Employment eligibility verification'}
-                                    </p>
+                                    <h4 className="font-semibold text-sm text-slate-900 dark:text-slate-100">{workRight.license?.name || 'Work Rights'}</h4>
+                                    {workRight.license?.description && (
+                                        <p className="text-[11px] text-slate-500 mt-1">{workRight.license.description}</p>
+                                    )}
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <Badge className={
@@ -150,30 +152,22 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
                                     </Badge>
                                     <button
                                         onClick={handleDelete}
-                                        className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                                        className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"
                                         title="Remove Work Rights"
                                     >
-                                        <XCircle className="w-5 h-5" />
+                                        <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
                             </div>
-
-                            <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                            <div className="flex gap-4 text-[10px] text-slate-400 uppercase tracking-widest font-semibold mt-3">
                                 {workRight.issue_date && (
-                                    <div>
-                                        <p className="text-muted-foreground">Issue Date</p>
-                                        <p className="text-foreground">{format(parseISO(workRight.issue_date), 'MMM d, yyyy')}</p>
-                                    </div>
+                                    <span>Issued: {format(parseISO(workRight.issue_date), 'MMM d, yyyy')}</span>
                                 )}
                                 {workRight.expiration_date && (
-                                    <div>
-                                        <p className="text-muted-foreground">Expiration Date</p>
-                                        <p className="text-foreground">{format(parseISO(workRight.expiration_date), 'MMM d, yyyy')}</p>
-                                    </div>
+                                    <span>Expires: {format(parseISO(workRight.expiration_date), 'MMM d, yyyy')}</span>
                                 )}
                             </div>
-
-                            <div className="pt-4 border-t border-border flex items-center justify-between">
+                            <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                                 {getVerificationBadge()}
                             </div>
                         </div>
@@ -211,8 +205,8 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
                         )}
                     </div>
                 )}
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     );
 };
 

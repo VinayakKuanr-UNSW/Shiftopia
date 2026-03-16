@@ -59,6 +59,25 @@ export const isShiftLocked = (
     }
 };
 
+/**
+ * Checks if a shift has already started based on the current time and Sydney TZ.
+ */
+export const isShiftCommenced = (
+    shiftDateStr: string,
+    startTimeStr: string,
+    timezone: string = SYDNEY_TZ
+): boolean => {
+    try {
+        const cleanStartTime = startTimeStr.length === 5 ? `${startTimeStr}:00` : startTimeStr;
+        const shiftStartAt = parseZonedDateTime(shiftDateStr, cleanStartTime, timezone);
+        const now = new Date();
+        return now >= shiftStartAt;
+    } catch (e) {
+        console.error('Error checking if shift commenced', e);
+        return false;
+    }
+};
+
 // Helper for policies
 export const canEditShiftPolicy = (shift: Shift): boolean => {
     // Manager view - locked only if shift has started

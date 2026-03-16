@@ -14,8 +14,9 @@ import {
   Settings,
   TrendingUp,
   RefreshCw,
-  FileCheck,
-  ScrollText
+  ScrollText,
+  BarChart3,
+  ClipboardList,
 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/platform/auth/useAuth';
@@ -121,16 +122,6 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
               sectionColor="blue"
             />
           )}
-          {hasPermission('rosters') && (
-            <NavItem
-              icon={<FileCheck className="h-5 w-5" />}
-              label="Audit Trail"
-              path="/audit"
-              active={isRouteActive('/audit')}
-              indent
-              sectionColor="blue"
-            />
-          )}
         </NavSection>
       )}
 
@@ -198,6 +189,27 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
           sectionColor="amber"
         />
       )}
+
+      {hasPermission('management') && (
+        <NavItem
+          icon={<BarChart3 className="h-5 w-5" />}
+          label="Performance"
+          path="/performance"
+          active={isRouteActive('/performance')}
+          sectionColor="green"
+        />
+      )}
+
+      {hasPermission('management') && (
+        <NavItem
+          icon={<ClipboardList className="h-5 w-5" />}
+          label="Audit Trail"
+          path="/audit"
+          active={isRouteActive('/audit')}
+          sectionColor="green"
+        />
+      )}
+
     </div>
   );
 };

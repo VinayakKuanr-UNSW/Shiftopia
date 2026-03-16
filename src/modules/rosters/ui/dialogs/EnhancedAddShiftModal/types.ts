@@ -20,6 +20,7 @@ export const formSchema = z.object({
     required_licenses: z.array(z.string()).optional(),
     event_ids: z.array(z.string()).optional(),
     notes: z.string().optional(),
+    is_training: z.boolean().optional(),
 });
 
 export type FormValues = z.infer<typeof formSchema>;
@@ -193,6 +194,8 @@ export interface ComplianceStepProps {
     complianceResults: Record<string, ComplianceResult | null>;
     setComplianceResults: (results: Record<string, any>) => void;
     buildComplianceInput: () => any;
+    runChecks: (overrideEmployeeId?: string) => Promise<void>;
+    clearResults: () => void;
     complianceNeedsRerun: boolean;
     onChecksComplete: () => void;
     shiftId?: string;
@@ -212,18 +215,9 @@ export interface AssignmentStepProps {
     complianceResults: Record<string, ComplianceResult | null>;
     setComplianceResults: (results: Record<string, any>) => void;
     buildComplianceInput: () => any;
+    runChecks: (overrideEmployeeId?: string) => Promise<void>;
+    clearResults: () => void;
     complianceNeedsRerun: boolean;
     onChecksComplete: () => void;
     shiftId?: string;
 }
-
-export interface ReviewLogsStepProps {
-    form: any;
-    editMode: boolean;
-    existingShift?: any;
-    safeContext: ShiftContext;
-    selectedRosterId: string;
-    shiftLength: number;
-    netLength: number;
-}
-

@@ -120,7 +120,10 @@ export async function checkBulkCompliance(
         }));
 
 
-        const restGapResult = checkBulkRestGaps(existingForRestGap, candidatesForRestGap);
+        // F2: pass the configurable rest-gap threshold so bulk and single-shift
+        // paths evaluate the same threshold. Default 10h unless relaxed.
+        const restGapMinHours = request.restGapHours ?? undefined;
+        const restGapResult = checkBulkRestGaps(existingForRestGap, candidatesForRestGap, restGapMinHours);
         // =====================================================
 
         // ========== OPTIMIZED STUDENT VISA: O(n) =============
@@ -354,7 +357,7 @@ function evaluateShiftForEmployee(
 
         // Construct rich data for visualization
         const calculationData = {
-            limit: 8, // Default limit
+            limit: restGapMinHours ?? 10, // F2: unified default
             // Basic data for simple views
             prev_day_gap_hours: impact?.rest_before_hours ?? null,
             next_day_gap_hours: impact?.rest_after_hours ?? null,

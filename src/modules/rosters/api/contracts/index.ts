@@ -170,8 +170,14 @@ export const BulkDeleteResponseSchema = z.object({
 });
 export type BulkDeleteResponse = z.infer<typeof BulkDeleteResponseSchema>;
 
-// delete_shift_with_audit → boolean
-export const DeleteShiftResponseSchema = z.boolean();
+// delete_shift_with_audit
+export const DeleteShiftResponseSchema = z.object({
+  success: z.boolean(),
+  shift_id: z.string().uuid().optional(),
+  error: z.string().optional(),
+  message: z.string().optional(),
+  code: z.string().optional(),
+});
 export type DeleteShiftResponse = z.infer<typeof DeleteShiftResponseSchema>;
 
 // sm_manager_cancel

@@ -13,7 +13,8 @@ import {
     Clock,
     Box,
     UserCheck,
-    UserX
+    UserX,
+    Undo2
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
@@ -28,6 +29,7 @@ export interface ShiftBucketHeaderProps {
     canEdit: boolean;
     onToggle: () => void;
     onPublishBucket: () => void;
+    onUnpublishBucket: () => void;
     onDeleteBucket: () => void;
 }
 
@@ -43,11 +45,13 @@ export const ShiftBucketHeader: React.FC<ShiftBucketHeaderProps> = ({
     canEdit,
     onToggle,
     onPublishBucket,
+    onUnpublishBucket,
     onDeleteBucket,
 }) => {
     const publishStatus = getBucketPublishStatus(stats);
     const hasLocked = stats.lockedCount > 0;
     const hasDrafts = stats.draftCount > 0;
+    const hasPublished = stats.publishedCount > 0;
 
     const publishStatusStyle = {
         'Draft': 'text-muted-foreground',
@@ -106,6 +110,20 @@ export const ShiftBucketHeader: React.FC<ShiftBucketHeaderProps> = ({
                             <Send className="h-3 w-3" />
                         </Button>
                     )}
+                    
+                    {hasPublished && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 hover:bg-amber-500/20 text-amber-400/70 hover:text-amber-400"
+                            onClick={onUnpublishBucket}
+                            disabled={!canEdit}
+                            title="Unpublish all published shifts"
+                        >
+                            <Undo2 className="h-3 w-3" />
+                        </Button>
+                    )}
+
                     <Button
                         variant="ghost"
                         size="icon"

@@ -8,6 +8,5 @@ export * from './RequirementsStep';
 export * from './NotesStep';
 export * from './ComplianceStep';
 export * from './AssignmentStep';
-export * from './ReviewLogsStep';
 export * from './StepIndicator';
 export * from './MultiSelect';

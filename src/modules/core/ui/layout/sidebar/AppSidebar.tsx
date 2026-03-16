@@ -28,6 +28,7 @@ import {
   FileText,
   LogOut,
   Activity,
+  BarChart3,
 } from 'lucide-react';
 import { useAuth } from '@/platform/auth/useAuth';
 import { cn } from '@/modules/core/lib/utils';
@@ -66,9 +67,9 @@ type IconColorKey =
   | 'sectionFeatures'
   | 'logo'
   | 'help'
-  | 'audit'
   | 'contracts'
-  | 'laborDemand';
+  | 'laborDemand'
+  | 'performance';
 
 const iconColorMap: Record<IconColorKey, string> = {
   dashboard: 'text-blue-400',
@@ -93,9 +94,9 @@ const iconColorMap: Record<IconColorKey, string> = {
   sectionFeatures: 'text-amber-400',
   logo: 'text-white',
   help: 'text-blue-400',
-  audit: 'text-emerald-400',
   contracts: 'text-violet-400',
   laborDemand: 'text-fuchsia-400',
+  performance: 'text-emerald-400',
 };
 
 /* ============================================================
@@ -430,7 +431,6 @@ const AppSidebar: React.FC = () => {
         {/* ---------- Features Section ---------- */}
         {(hasPermission('broadcast') ||
           hasPermission('insights') ||
-          hasPermission('audit') ||
           hasPermission('management')) && (
             <CollapsibleSection
               icon={Sparkles}
@@ -460,17 +460,7 @@ const AppSidebar: React.FC = () => {
                 />
               )}
 
-              {/* Moved Audit & Users Here */}
-              {hasPermission('audit') && (
-                <NavigationItem
-                  to="/audit"
-                  icon={ClipboardList}
-                  iconColor={iconColorMap.audit}
-                  label="Audit Trail"
-                  isActive={isRouteActive('/audit')}
-                  description="System logs"
-                />
-              )}
+              {/* Audit Trail removed in favor of contextual drawer */}
 
               {hasPermission('management') && (
                 <NavigationItem
@@ -480,6 +470,17 @@ const AppSidebar: React.FC = () => {
                   label="Users"
                   isActive={isRouteActive('/users')}
                   description="Manage users"
+                />
+              )}
+
+              {hasPermission('management') && (
+                <NavigationItem
+                  to="/performance"
+                  icon={BarChart3}
+                  iconColor={iconColorMap.performance}
+                  label="Performance"
+                  isActive={isRouteActive('/performance')}
+                  description="Quarterly metrics"
                 />
               )}
             </CollapsibleSection>

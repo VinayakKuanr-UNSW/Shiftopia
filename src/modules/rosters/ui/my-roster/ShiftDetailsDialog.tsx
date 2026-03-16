@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
+import { isShiftLocked, isShiftCommenced } from '@/modules/rosters/domain/shift-locking.utils';
 import {
   Dialog,
   DialogContent,
@@ -21,12 +21,15 @@ import {
   CalendarDays,
   Loader2,
   ArrowLeftRight,
+  History,
+  ChevronDown,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shift } from '@/modules/rosters';
 import { useDropShift } from '@/modules/rosters/state/useRosterShifts';
+import { ShiftTimeline } from '@/modules/audit/components/ShiftTimeline';
 import { useSwaps } from '@/modules/planning';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
@@ -94,6 +97,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
 
   // Use centralized hooks
   const dropShiftMutation = useDropShift();
@@ -110,12 +114,14 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   // HOISTED: Check if shift is within 4 hours of start (Lockout period)
   // CHECK LOCK STATUS (Strict Sydney Timezone) - EMPLOYEE CONTEXT
   const isWithinLockoutPeriod = isShiftLocked(shift.shift_date, shift.start_time, 'my_roster');
+  const isCommenced = isShiftCommenced(shift.shift_date, shift.start_time);
 
-  console.log('[ShiftDetailsDialog] Lockout Check (Sydney/Employee):', {
+  console.log('[ShiftDetailsDialog] Lockout/Commence Check (Sydney/Employee):', {
     shiftId: shift.id,
     shiftDate: shift.shift_date,
     startTime: shift.start_time,
-    isLocked: isWithinLockoutPeriod
+    isLocked: isWithinLockoutPeriod,
+    isCommenced
   });
 
   // Check if there is already an active swap request for this shift
@@ -316,11 +322,34 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
                     <div className="font-medium">
                       {shift.is_cancelled
                         ? 'Cancelled'
-                        : shift.assignment_outcome === 'offered'
-                          ? 'Offer Pending'
-                          : 'Assigned'}
+                        : isCommenced
+                          ? 'Shift has commenced'
+                          : existingSwapRequest
+                            ? (isWithinLockoutPeriod ? 'Swap Expired' : 'Swap Active')
+                            : shift.assignment_outcome === 'offered'
+                              ? 'Offer Pending'
+                              : 'Assigned'}
                     </div>
                   </div>
+                </div>
+
+                {/* Shift History */}
+                <div className="px-5 pt-3">
+                  <button
+                    onClick={() => setShowHistory(v => !v)}
+                    className="w-full flex items-center justify-between p-2.5 rounded-xl bg-black/20 hover:bg-black/30 transition-colors text-left"
+                  >
+                    <span className="flex items-center gap-2 text-xs font-medium text-white/70">
+                      <History className="h-3.5 w-3.5" />
+                      Shift History
+                    </span>
+                    <ChevronDown className={cn('h-3.5 w-3.5 text-white/50 transition-transform', showHistory && 'rotate-180')} />
+                  </button>
+                  {showHistory && (
+                    <div className="mt-2 max-h-48 overflow-y-auto rounded-xl bg-black/20 px-3 py-2">
+                      <ShiftTimeline shiftId={shift.id} className="text-white/80" />
+                    </div>
+                  )}
                 </div>
 
                 {/* Action Buttons */}
@@ -342,18 +371,18 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
                       )}
                     >
                       <ArrowLeftRight size={16} className="mr-2" />
-                      {existingSwapRequest ? 'Requested' : isWithinLockoutPeriod ? 'Locked' : shift.assignment_outcome === 'offered' ? 'Pending' : 'Swap'}
+                      {isCommenced ? 'Active' : (existingSwapRequest ? (isWithinLockoutPeriod ? 'Expired' : 'Requested') : (isWithinLockoutPeriod ? 'Locked' : (shift.assignment_outcome === 'offered' ? 'Pending' : 'Swap')))}
                     </Button>
                     <Button
                       onClick={handleDropShift}
-                      disabled={isWithinLockoutPeriod || !!existingSwapRequest || shift.assignment_outcome === 'offered'}
+                      disabled={isWithinLockoutPeriod || !!existingSwapRequest || shift.assignment_outcome === 'offered' || isCommenced}
                       className={cn(
                         "flex-1 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed",
-                        isWithinLockoutPeriod ? "bg-slate-600" : "bg-red-600 hover:bg-red-500 shadow-red-500/30"
+                        isCommenced || isWithinLockoutPeriod ? "bg-slate-600" : "bg-red-600 hover:bg-red-500 shadow-red-500/30"
                       )}
                     >
                       <X size={16} className="mr-2" />
-                      {existingSwapRequest ? 'Swap Active' : isWithinLockoutPeriod ? 'Locked' : 'Drop'}
+                      {isCommenced ? 'In Progress' : (existingSwapRequest ? (isWithinLockoutPeriod ? 'Expired' : 'Swap Active') : (isWithinLockoutPeriod ? 'Locked' : 'Drop'))}
                     </Button>
                   </div>
                   {isWithinLockoutPeriod && (

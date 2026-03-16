@@ -22,36 +22,50 @@ import {
 import { MaxDailyHoursRule } from './rules/max-daily-hours';
 import { MinRestGapRule } from './rules/min-rest-gap';
 import { StudentVisa48hRule } from './rules/student-visa-48h';
-import { MaxConsecutiveDaysRule } from './rules/max-consecutive-days';
-
 import { NoOverlapRule } from './rules/no-overlap';
 import { MinShiftLengthRule } from './rules/min-shift-length';
 import { WorkingDaysCapRule } from './rules/working-days-cap';
 import { AvgFourWeekCycleRule } from './rules/avg-four-week-cycle';
+import { BreakRequirementsRule } from './rules/break-requirements';
+import { MaxConsecutiveDaysRule } from './rules/max-consecutive-days';
 
 // =============================================================================
-// RULE REGISTRY
+// RULE REGISTRY  (maps directly to the 10 compliance user stories)
 // =============================================================================
 
 /**
  * All registered compliance rules.
- * Add new rules here as they are implemented.
+ *
+ * Rules 1–3 (Role Contract Match, Qualification Match, Qualification Expiry)
+ * are server-side only and handled via validateCompliance() RPC — not here.
  */
 const rules: ComplianceRule[] = [
-    NoOverlapRule, // Critical blocker
+    // Rule 4 – Shift Overlap
+    NoOverlapRule,
 
-    // Core Limits
-    MaxDailyHoursRule,      // 12h max
-    MinRestGapRule,         // 10h break
-    MaxConsecutiveDaysRule, // Streak limit
-    MinShiftLengthRule,     // 3h min
+    // Rule 5 – Minimum Shift Length (context-aware: training/weekday/Sunday/holiday)
+    MinShiftLengthRule,
 
-    // Rolling Limits
-    WorkingDaysCapRule,     // 20/28 days
-    AvgFourWeekCycleRule,   // 152h/4weeks
+    // Rule 6 – Maximum Daily Hours (12h cap)
+    MaxDailyHoursRule,
 
-    // Special Conditions
-    StudentVisa48hRule,     // Visa condition
+    // Rule 7 – Max Working Days in Rolling 28-day Window (20/28 days)
+    WorkingDaysCapRule,
+
+    // Rule 8 – Student Visa 48h/fortnight (toggle-based blocking)
+    StudentVisa48hRule,
+
+    // Rule 9 – Ordinary Hours Averaging (configurable cycle, default 4-week / 152h)
+    AvgFourWeekCycleRule,
+
+    // Rule 10 – Rest Gap Between Shifts (default 10h, configurable to 8h relaxed)
+    MinRestGapRule,
+
+    // Rule 11 – Mandatory Meal Break (NES s.101: >5h shift → 30 min break)
+    BreakRequirementsRule,
+
+    // Rule 12 – Maximum Consecutive Working Days (cap at 20 consecutive days)
+    MaxConsecutiveDaysRule,
 ];
 
 // =============================================================================

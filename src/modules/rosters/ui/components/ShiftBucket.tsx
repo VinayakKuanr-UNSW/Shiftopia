@@ -42,7 +42,9 @@ export interface ShiftBucketProps {
     onEditShift: (shiftId: string) => void;
     onDeleteShift: (shiftId: string) => void;
     onPublishShift: (shiftId: string) => void;
+    onUnpublishShift: (shiftId: string) => void;
     onBulkPublish: (shiftIds: string[]) => void;
+    onBulkUnpublish: (shiftIds: string[]) => void;
     onBulkDelete: (shiftIds: string[]) => void;
     /** Group color accent for theming */
     accentColor?: string;
@@ -55,7 +57,9 @@ export const ShiftBucket: React.FC<ShiftBucketProps> = ({
     onEditShift,
     onDeleteShift,
     onPublishShift,
+    onUnpublishShift,
     onBulkPublish,
+    onBulkUnpublish,
     onBulkDelete,
     accentColor,
 }) => {
@@ -87,8 +91,40 @@ export const ShiftBucket: React.FC<ShiftBucketProps> = ({
                 title: 'Bucket Published',
                 description: `Published ${draftShifts.length} shifts. ${skippedCount} shift${skippedCount !== 1 ? 's' : ''} skipped (already published).`,
             });
+        } else {
+            toast({
+                title: 'Bucket Published',
+                description: `Successfully published all ${draftShifts.length} shifts.`,
+            });
         }
     }, [shifts, onBulkPublish, toast]);
+
+    const handleUnpublishBucket = useCallback(() => {
+        const publishedShifts = shifts.filter(s => s.isPublished);
+        const skippedCount = shifts.length - publishedShifts.length;
+
+        if (publishedShifts.length === 0) {
+            toast({
+                title: 'Nothing to unpublish',
+                description: `No published shifts found in this bucket.`,
+            });
+            return;
+        }
+
+        onBulkUnpublish(publishedShifts.map(s => s.id));
+
+        if (skippedCount > 0) {
+            toast({
+                title: 'Bucket Unpublished',
+                description: `Unpublished ${publishedShifts.length} shifts. ${skippedCount} shift${skippedCount !== 1 ? 's' : ''} skipped (already draft).`,
+            });
+        } else {
+            toast({
+                title: 'Bucket Unpublished',
+                description: `Successfully unpublished all ${publishedShifts.length} shifts.`,
+            });
+        }
+    }, [shifts, onBulkUnpublish, toast]);
 
     const handleDeleteBucket = useCallback(() => {
         setDeleteDialogOpen(true);
@@ -111,6 +147,7 @@ export const ShiftBucket: React.FC<ShiftBucketProps> = ({
                 canEdit={canEdit}
                 onToggle={handleToggle}
                 onPublishBucket={handlePublishBucket}
+                onUnpublishBucket={handleUnpublishBucket}
                 onDeleteBucket={handleDeleteBucket}
             />
 
@@ -138,6 +175,7 @@ export const ShiftBucket: React.FC<ShiftBucketProps> = ({
                             onEdit={onEditShift}
                             onDelete={onDeleteShift}
                             onPublish={onPublishShift}
+                            onUnpublish={onUnpublishShift}
                         />
                     ))}
                 </div>

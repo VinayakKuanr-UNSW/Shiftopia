@@ -62,6 +62,12 @@ interface RosterUIContextValue {
   hasActiveFilters:            boolean;
   isBucketView:                boolean;
   setIsBucketView:             (value: boolean) => void;
+  bulkModeActive:              boolean;
+  setBulkModeActive:           (active: boolean) => void;
+  selectedShiftIds:            string[];
+  setSelectedShiftIds:         (ids: string[]) => void;
+  toggleShiftSelection:        (id: string) => void;
+  clearSelection:              () => void;
   navigatePrevious:            () => void;
   navigateNext:                () => void;
   navigateToToday:             () => void;
@@ -129,6 +135,8 @@ export const useRosterUI = (): RosterUIContextValue => {
   const selectedSubDepartmentIds = useRosterStore(s => s.selectedSubDepartmentIds);
   const advancedFilters        = useRosterStore(s => s.advancedFilters);
   const isBucketView           = useRosterStore(s => s.isBucketView);
+  const bulkModeActive         = useRosterStore(s => s.bulkModeActive);
+  const selectedShiftIds       = useRosterStore(s => s.selectedShiftIds);
 
   // Derived selectors (computed, not stored)
   // NOTE: selectSelectedDate returns `new Date(...)` — always a new object reference.
@@ -152,6 +160,10 @@ export const useRosterUI = (): RosterUIContextValue => {
   const setAdvancedFilters          = useRosterStore(s => s.setAdvancedFilters);
   const resetAdvancedFilters        = useRosterStore(s => s.resetAdvancedFilters);
   const setIsBucketView             = useRosterStore(s => s.setIsBucketView);
+  const setBulkModeActive           = useRosterStore(s => s.setBulkModeActive);
+  const setSelectedShiftIds         = useRosterStore(s => s.setSelectedShiftIds);
+  const toggleShiftSelection        = useRosterStore(s => s.toggleShiftSelection);
+  const clearSelection              = useRosterStore(s => s.clearSelection);
   const navigatePrevious            = useRosterStore(s => s.navigatePrevious);
   const navigateNext                = useRosterStore(s => s.navigateNext);
   const navigateToToday             = useRosterStore(s => s.navigateToToday);
@@ -192,6 +204,12 @@ export const useRosterUI = (): RosterUIContextValue => {
     hasActiveFilters,
     isBucketView,
     setIsBucketView,
+    bulkModeActive,
+    setBulkModeActive,
+    selectedShiftIds,
+    setSelectedShiftIds,
+    toggleShiftSelection,
+    clearSelection,
     navigatePrevious,
     navigateNext,
     navigateToToday,
@@ -210,6 +228,9 @@ export const useRosterUI = (): RosterUIContextValue => {
     advancedFilters, setAdvancedFilters, resetAdvancedFilters,
     hasActiveFilters,
     isBucketView, setIsBucketView,
+    bulkModeActive, setBulkModeActive,
+    selectedShiftIds, setSelectedShiftIds,
+    toggleShiftSelection, clearSelection,
     navigatePrevious, navigateNext, navigateToToday,
     getDateRange, getDaysInRange,
   ]);

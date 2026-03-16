@@ -1,8 +1,19 @@
-import { useState, useEffect } from 'react';
+/**
+ * useHardValidation — Fetches the employee's existing shifts via React Query
+ * and runs synchronous hard-validation checks whenever the form changes.
+ *
+ * Previously used raw supabase calls inside useEffect, which bypassed the
+ * React Query cache entirely. Now uses useQuery so results are shared,
+ * deduplicated, and respect optimistic updates written during the same session.
+ */
+
+import { useState, useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/platform/realtime/client';
 import { runHardValidation, HardValidationResult, ShiftTimeRange } from '@/modules/compliance';
 import { format, addDays, subDays } from 'date-fns';
 import { getNowInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 
 interface UseHardValidationProps {
     watchStart: string;
@@ -17,6 +28,7 @@ interface UseHardValidationProps {
 interface UseHardValidationReturn {
     hardValidation: HardValidationResult;
     employeeExistingShifts: ShiftTimeRange[];
+    studentVisaEnforcement: boolean;
 }
 
 export function useHardValidation({
@@ -29,67 +41,77 @@ export function useHardValidation({
     timezone = SYDNEY_TZ,
 }: UseHardValidationProps): UseHardValidationReturn {
     const [hardValidation, setHardValidation] = useState<HardValidationResult>({ passed: true, errors: [] });
-    const [employeeExistingShifts, setEmployeeExistingShifts] = useState<ShiftTimeRange[]>([]);
 
-    // Fetch existing shifts when employee changes
-    useEffect(() => {
-        console.debug('[HardValidation] useEffect triggered', { watchEmployeeId, watchShiftDate: watchShiftDate?.toISOString(), isTemplateMode });
+    // Stable date range strings (memoised so React Query key stays stable)
+    const startDate = useMemo(
+        () => watchShiftDate ? format(subDays(watchShiftDate, 35), 'yyyy-MM-dd') : '',
+        [watchShiftDate],
+    );
+    const endDate = useMemo(
+        () => watchShiftDate ? format(addDays(watchShiftDate, 35), 'yyyy-MM-dd') : '',
+        [watchShiftDate],
+    );
 
-        const fetchEmployeeShifts = async () => {
-            if (!watchEmployeeId || isTemplateMode) {
-                console.debug('[HardValidation] Skipping fetch - no employee assigned or template mode', { watchEmployeeId, isTemplateMode });
-                setEmployeeExistingShifts([]);
-                return;
-            }
+    const queryEnabled = !!watchEmployeeId && !!watchShiftDate && !isTemplateMode;
 
-            const shiftDateStr = watchShiftDate ? format(watchShiftDate, 'yyyy-MM-dd') : null;
-            if (!shiftDateStr || !watchShiftDate) {
-                console.debug('[HardValidation] Skipping fetch - no shift date', { shiftDateStr });
-                setEmployeeExistingShifts([]);
-                return;
-            }
+    // ── Existing shifts ───────────────────────────────────────────────────────
+    // Uses get_employee_shift_window (SECURITY DEFINER) so all shifts for the
+    // employee are visible regardless of the calling manager's RLS scope.
+    // This prevents false-pass on rest-gap / avg-4-week checks when the
+    // employee works across multiple departments.
+    // p_exclude_id filters out the shift being edited server-side.
+    const { data: rawShifts = [] } = useQuery({
+        queryKey: shiftKeys.byEmployee(watchEmployeeId ?? '', startDate, endDate),
+        queryFn: async () => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data, error } = await (supabase.rpc as any)('get_employee_shift_window', {
+                p_employee_id: watchEmployeeId!,
+                p_start_date: startDate,
+                p_end_date: endDate,
+                p_exclude_id: existingShiftId ?? null,
+            });
+            if (error) throw error;
+            return (data ?? []) as Array<{
+                id: string;
+                shift_date: string;
+                start_time: string;
+                end_time: string;
+                unpaid_break_minutes: number;
+            }>;
+        },
+        enabled: queryEnabled,
+        staleTime: 30_000,
+    });
 
-            // Calculate +/- 14 days rolling window context
-            const startDate = format(subDays(watchShiftDate, 14), 'yyyy-MM-dd');
-            const endDate = format(addDays(watchShiftDate, 14), 'yyyy-MM-dd');
+    // ── Student visa flag ─────────────────────────────────────────────────────
+    const { data: visaData } = useQuery({
+        queryKey: ['employee_licenses', watchEmployeeId, 'work_rights'],
+        queryFn: async () => {
+            const { data } = await supabase
+                .from('employee_licenses')
+                .select('has_restricted_work_limit')
+                .eq('employee_id', watchEmployeeId!)
+                .eq('license_type', 'WorkRights')
+                .maybeSingle();
+            return data;
+        },
+        enabled: queryEnabled,
+        staleTime: 5 * 60 * 1000,
+    });
 
-            try {
-                console.debug('[HardValidation] Fetching shifts for employee:', watchEmployeeId, 'range:', startDate, 'to', endDate);
-                const { data, error } = await supabase
-                    .from('shifts')
-                    .select('id, start_time, end_time, shift_date, unpaid_break_minutes')
-                    .eq('assigned_employee_id', watchEmployeeId)
-                    .gte('shift_date', startDate)
-                    .lte('shift_date', endDate)
-                    .is('deleted_at', null)
-                    .eq('is_cancelled', false);
+    const studentVisaEnforcement = visaData?.has_restricted_work_limit ?? false;
 
-                console.debug('[HardValidation] Query result:', { data, error });
+    // Shape RPC results into ShiftTimeRange[] — exclusion already handled server-side
+    const employeeExistingShifts = useMemo<ShiftTimeRange[]>(() => {
+        return rawShifts.map(s => ({
+            start_time: s.start_time,
+            end_time: s.end_time,
+            shift_date: s.shift_date,
+            unpaid_break_minutes: s.unpaid_break_minutes || 0,
+        }));
+    }, [rawShifts]);
 
-                if (!error && data) {
-                    // Filter out current shift if editing
-                    const shifts = data
-                        .filter(s => !existingShiftId || s.id !== existingShiftId)
-                        .map(s => ({
-                            start_time: s.start_time,
-                            end_time: s.end_time,
-                            shift_date: s.shift_date,
-                            unpaid_break_minutes: s.unpaid_break_minutes || 0
-                        }));
-                    console.debug('[HardValidation] Processed shifts:', shifts);
-                    setEmployeeExistingShifts(shifts);
-                } else if (error) {
-                    console.error('[HardValidation] Query error:', error);
-                }
-            } catch (err) {
-                console.error('[HardValidation] Error fetching employee shifts:', err);
-            }
-        };
-
-        fetchEmployeeShifts();
-    }, [watchEmployeeId, watchShiftDate, isTemplateMode, existingShiftId]);
-
-    // Run Hard validation: Run on time/date changes
+    // Run synchronous hard-validation whenever any input changes
     useEffect(() => {
         if (!watchStart || !watchEnd) {
             setHardValidation({ passed: true, errors: [] });
@@ -97,22 +119,13 @@ export function useHardValidation({
         }
 
         const shiftDateStr = isTemplateMode
-            ? format(new Date(), 'yyyy-MM-dd') // Templates don't have dates, use today for validation
-            : (watchShiftDate ? format(watchShiftDate, 'yyyy-MM-dd') : '');
+            ? format(new Date(), 'yyyy-MM-dd')
+            : watchShiftDate ? format(watchShiftDate, 'yyyy-MM-dd') : '';
 
         if (!shiftDateStr && !isTemplateMode) {
             setHardValidation({ passed: true, errors: [] });
             return;
         }
-
-        console.debug('[HardValidation] Running validation with:', {
-            shift_date: shiftDateStr,
-            start_time: watchStart,
-            end_time: watchEnd,
-            employee_id: watchEmployeeId,
-            existing_shifts_count: employeeExistingShifts.length,
-            existing_shifts: employeeExistingShifts
-        });
 
         const result = runHardValidation({
             shift_date: shiftDateStr,
@@ -121,14 +134,11 @@ export function useHardValidation({
             employee_id: watchEmployeeId,
             existing_shifts: employeeExistingShifts,
             current_time: getNowInTimezone(timezone),
-            is_template: isTemplateMode
+            is_template: isTemplateMode,
         });
-
-        console.debug('[HardValidation] Result:', result);
-        console.debug('[HardValidation] Errors with context:', result.errors);
 
         setHardValidation(result);
     }, [watchStart, watchEnd, watchShiftDate, watchEmployeeId, employeeExistingShifts, isTemplateMode, timezone]);
 
-    return { hardValidation, employeeExistingShifts };
+    return { hardValidation, employeeExistingShifts, studentVisaEnforcement };
 }

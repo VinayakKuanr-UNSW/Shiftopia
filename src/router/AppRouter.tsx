@@ -34,12 +34,6 @@ const TemplatesPage = lazy(() => import('@/modules/templates/pages/TemplatesPage
 const RostersPlannerPage = lazy(() => import('@/modules/rosters/pages/RostersPlannerPage'));
 const LaborDemandForecastingPage = lazy(() => import('@/modules/rosters/pages/LaborDemandForecastingPage'));
 const TimesheetPage = lazy(() => import('@/modules/timesheets/ui/TimesheetPage'));
-const AuditTrailPage = lazy(() => import('@/modules/audit/pages/AuditTrailPage'));
-
-// Audit
-const AuditDashboardPage = lazy(() => import('@/modules/audit/pages/AuditDashboardPage'));
-const ShiftDetailView = lazy(() => import('@/modules/audit/pages/ShiftDetailView'));
-
 // Management
 const ManagerBidsPage = lazy(() => import('@/modules/planning/bidding/ui/pages/ManagerBids.page'));
 const ManagerSwapsPage = lazy(() => import('@/modules/planning/swapping/ui/pages/ManagerSwaps.page'));
@@ -53,6 +47,8 @@ const AnalysisPage = lazy(() => import('@/modules/insights/pages/AnalysisPage'))
 
 const ContractsPage = lazy(() => import('@/modules/contracts/pages/ContractsPage'));
 const UsersPage = lazy(() => import('@/modules/users/pages/UsersPage'));
+const PerformancePage = lazy(() => import('@/modules/users/pages/PerformancePage'));
+const AuditDashboardPage = lazy(() => import('@/modules/audit/pages/AuditDashboardPage'));
 
 // Utility
 const SearchPage = lazy(() => import('@/modules/search/pages/SearchPage'));
@@ -208,33 +204,6 @@ const AppRouter: React.FC = () => {
                 }
             />
 
-            <Route
-                path="/timesheet/audit/:timesheetId"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="timesheet-view">
-                        <AuditTrailPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
-
-            {/* ================= Audit Dashboard ================= */}
-            <Route
-                path="/audit"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="rosters">
-                        <AuditDashboardPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
-
-            <Route
-                path="/audit/:shiftId"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="rosters">
-                        <ShiftDetailView />
-                    </ProtectedRouteWithLayout>
-                }
-            />
 
             {/* ================= Management ================= */}
             <Route
@@ -298,6 +267,24 @@ const AppRouter: React.FC = () => {
                 element={
                     <ProtectedRouteWithLayout requiredFeature="users">
                         <UsersPage />
+                    </ProtectedRouteWithLayout>
+                }
+            />
+
+            <Route
+                path="/performance"
+                element={
+                    <ProtectedRouteWithLayout requiredFeature="management">
+                        <PerformancePage />
+                    </ProtectedRouteWithLayout>
+                }
+            />
+
+            <Route
+                path="/audit"
+                element={
+                    <ProtectedRouteWithLayout requiredFeature="management">
+                        <AuditDashboardPage />
                     </ProtectedRouteWithLayout>
                 }
             />

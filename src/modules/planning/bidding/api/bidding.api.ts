@@ -62,6 +62,7 @@ export const biddingApi = {
             .from('shifts')
             .select(`
                 *,
+                dropped_by_id,
                 organizations(id, name),
                 departments(id, name),
                 sub_departments(id, name),
@@ -169,6 +170,7 @@ export const biddingApi = {
             console.error('Error placing bid:', error);
             throw error;
         }
+
         return data as Bid;
     },
 
@@ -189,13 +191,15 @@ export const biddingApi = {
 
     /**
      * Update bid status (MANAGER ACTION)
+     * When status = 'selected'/'accepted': assigns the winning employee to the shift (S5/S6 → S4)
+     * and logs A21 (manager selects) + A22 (system finalizes).
      */
     async updateBidStatus(id: string, status: BidStatus): Promise<Bid> {
         const dbStatus = mapBidStatusToDbStatus(status);
 
         const { data, error } = await supabase
             .from('shift_bids')
-            .update({ status: dbStatus } as any) // Cast to any to avoid enum mismatch with generated types
+            .update({ status: dbStatus } as any)
             .eq('id', id)
             .select()
             .single();
@@ -205,18 +209,36 @@ export const biddingApi = {
             throw error;
         }
 
-        // If selected, we might need to reject others. 
-        // Ideally this should be an RPC to ensure atomicity.
         if (status === 'selected' || status === 'accepted') {
-            // We won't block the UI for this, but worth sending a request to reject others
-            // or rely on a DB trigger.
             const shiftId = (data as any).shift_id;
+            const employeeId = (data as any).employee_id;
+
+            // Reject all other pending bids for this shift
             await supabase
                 .from('shift_bids')
                 .update({ status: 'rejected' } as any)
                 .eq('shift_id', shiftId)
                 .neq('id', id)
                 .eq('status', 'pending');
+
+            // Assign the winning employee to the shift (S5/S6 → S4)
+            const { error: shiftUpdateError } = await (supabase as any)
+                .from('shifts')
+                .update({
+                    assigned_employee_id: employeeId,
+                    assignment_status: 'assigned',
+                    assignment_outcome: 'confirmed',
+                    bidding_status: 'not_on_bidding',
+                    is_on_bidding: false,
+                    assigned_at: new Date().toISOString(),
+                })
+                .eq('id', shiftId);
+
+            if (shiftUpdateError) {
+                console.error('[bidding] Failed to assign winning employee to shift:', shiftUpdateError);
+                throw shiftUpdateError;
+            }
+
         }
 
         return data as Bid;

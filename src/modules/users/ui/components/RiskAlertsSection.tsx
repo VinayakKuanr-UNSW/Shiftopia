@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/modules/core/ui/primitives/card';
 import { Badge } from '@/modules/core/ui/primitives/badge';
-import { usePerformanceMetrics } from '@/modules/users/hooks/usePerformanceMetrics';
+import { usePerformanceMetrics, EMPTY_METRICS } from '@/modules/users/hooks/usePerformanceMetrics';
 import { useEmployeeSkills } from '@/modules/users/hooks/useEmployeeSkills';
 import { useEmployeeLicenses } from '@/modules/users/hooks/useEmployeeLicenses';
 import { AlertTriangle, CheckCircle } from 'lucide-react';
@@ -13,7 +13,8 @@ interface RiskAlertsSectionProps {
 }
 
 const RiskAlertsSection: React.FC<RiskAlertsSectionProps> = ({ employeeId, quarterYear }) => {
-    const { data: metrics } = usePerformanceMetrics(employeeId, quarterYear);
+    const { data: fetchedMetrics } = usePerformanceMetrics(employeeId, quarterYear);
+    const metrics = fetchedMetrics ? { ...EMPTY_METRICS, ...fetchedMetrics } : null;
     const { data: skills } = useEmployeeSkills(employeeId);
     const { data: licenses } = useEmployeeLicenses(employeeId);
 
@@ -66,42 +67,41 @@ const RiskAlertsSection: React.FC<RiskAlertsSectionProps> = ({ employeeId, quart
     }
 
     return (
-        <Card className="border border-border bg-card">
-            <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5" />
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden flex flex-col h-full">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/60 bg-white dark:bg-slate-900 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-slate-500" />
                     Risk & Alerts
-                </CardTitle>
-            </CardHeader>
-            <CardContent>
+                </h3>
+            </div>
+            <div className="p-5 flex-1">
                 {riskIndicators.length === 0 ? (
-                    <div className="text-center py-6">
-                        <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-600 dark:text-green-400" />
-                        <p className="text-sm text-muted-foreground">All metrics within normal range</p>
+                    <div className="flex flex-col items-center justify-center h-full py-8 text-center text-slate-400">
+                        <CheckCircle className="w-8 h-8 mx-auto mb-3 text-emerald-500/50" />
+                        <p className="text-sm font-medium">All metrics within normal range</p>
                     </div>
                 ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                         {riskIndicators.map((indicator, idx) => (
-                            <Badge
+                            <div
                                 key={idx}
-                                className={
-                                    indicator.type === 'success'
-                                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 w-full justify-start py-2'
-                                        : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 w-full justify-start py-2'
-                                }
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-sm font-medium ${indicator.type === 'success'
+                                        ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20'
+                                        : 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-100 dark:border-amber-500/20'
+                                    }`}
                             >
                                 {indicator.type === 'success' ? (
-                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                    <CheckCircle className="w-4 h-4 flex-shrink-0" />
                                 ) : (
-                                    <AlertTriangle className="w-4 h-4 mr-2" />
+                                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                                 )}
-                                {indicator.message}
-                            </Badge>
+                                <span>{indicator.message}</span>
+                            </div>
                         ))}
                     </div>
                 )}
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     );
 };
 

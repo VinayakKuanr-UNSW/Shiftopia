@@ -43,6 +43,7 @@ const TemplatesPage: React.FC = () => {
     deleteTemplate,
     duplicateTemplate,
     updateTemplateStatus,
+    renameTemplate,
     setCurrentTemplate,
     updateLocalGroup,
     addLocalSubgroup,
@@ -254,6 +255,7 @@ const TemplatesPage: React.FC = () => {
           onCreateTemplate={() => setCreateDialogOpen(true)}
           onDeleteTemplate={deleteTemplate}
           onDuplicateTemplate={duplicateTemplate}
+          onRenameTemplate={renameTemplate}
           onArchiveTemplate={handleArchiveTemplate}
         />
 
@@ -277,9 +279,9 @@ const TemplatesPage: React.FC = () => {
               onDiscardChanges={discardChanges}
             />
           ) : (
-            <div className="flex flex-col flex-1 items-center justify-center h-full text-slate-400 bg-slate-900/20">
-              <FileText className="h-16 w-16 mb-4 opacity-20" />
-              <p className="text-lg">Select a template to view details</p>
+            <div className="flex flex-col flex-1 items-center justify-center h-full text-muted-foreground bg-muted/20">
+              <FileText className="h-16 w-16 mb-4 opacity-50" />
+              <p className="text-lg font-medium">Select a template to view details</p>
               <p className="text-sm opacity-60">
                 Or create a new one from the sidebar
               </p>

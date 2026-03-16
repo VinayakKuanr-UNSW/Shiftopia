@@ -39,16 +39,16 @@ const LicensesSection: React.FC<LicensesSectionProps> = ({ employeeId, employeeN
     };
 
     return (
-        <Card className="border border-border bg-card">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <div className="space-y-1">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                        <Award className="w-5 h-5" />
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden flex flex-col h-full">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/60 bg-white dark:bg-slate-900 flex items-center justify-between">
+                <div className="space-y-0.5">
+                    <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                        <Award className="w-4 h-4 text-slate-500" />
                         Licenses
-                    </CardTitle>
-                    <CardDescription>
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-medium pl-6 uppercase tracking-wider">
                         {licenses?.length || 0} licenses recorded
-                    </CardDescription>
+                    </p>
                 </div>
                 <AddLicenseDialog
                     employeeId={employeeId}
@@ -56,28 +56,29 @@ const LicensesSection: React.FC<LicensesSectionProps> = ({ employeeId, employeeN
                     type="Standard"
                     existingLicenseIds={licenses?.map(l => l.license_id) || []}
                 />
-            </CardHeader>
-            <CardContent>
+            </div>
+            <div className="p-5 flex-1">
                 {isLoading ? (
-                    <p className="text-muted-foreground text-sm">Loading licenses...</p>
+                    <div className="flex items-center justify-center h-full">
+                        <p className="text-slate-400 text-sm animate-pulse">Loading licenses...</p>
+                    </div>
                 ) : !licenses || licenses.length === 0 ? (
-                    <div className="text-center py-8">
-                        <Award className="w-8 h-8 mx-auto mb-2 text-muted-foreground/50" />
-                        <p className="text-muted-foreground text-sm">No licenses recorded</p>
-                        <p className="text-muted-foreground/70 text-xs mt-1">Add licenses to track certifications</p>
+                    <div className="flex flex-col items-center justify-center h-full py-8 text-center text-slate-400">
+                        <Award className="w-8 h-8 mx-auto mb-3 opacity-20" />
+                        <p className="text-sm font-medium">No licenses recorded</p>
                     </div>
                 ) : (
                     <div className="space-y-3">
                         {licenses.map(license => (
                             <div
                                 key={license.id}
-                                className="bg-card rounded-lg border border-border hover:border-border/80 hover:shadow-sm transition-all cursor-pointer group p-4"
+                                className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-sm transition-all cursor-pointer group p-4"
                             >
                                 <div className="flex items-start justify-between mb-2">
                                     <div className="flex-1">
-                                        <h4 className="font-medium text-foreground">{license.license?.name}</h4>
+                                        <h4 className="font-semibold text-sm text-slate-900 dark:text-slate-100">{license.license?.name}</h4>
                                         {license.license?.description && (
-                                            <p className="text-sm text-muted-foreground mt-1">{license.license.description}</p>
+                                            <p className="text-[11px] text-slate-500 mt-1">{license.license.description}</p>
                                         )}
                                     </div>
                                     <div className="flex items-center gap-3">
@@ -87,14 +88,14 @@ const LicensesSection: React.FC<LicensesSectionProps> = ({ employeeId, employeeN
                                                 e.stopPropagation();
                                                 handleDelete(license.id, license.license?.name || 'License');
                                             }}
-                                            className="text-muted-foreground/40 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all p-1"
+                                            className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"
                                             title="Remove License"
                                         >
-                                            <Trash2 className="w-4 h-4" />
+                                            <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
                                 </div>
-                                <div className="flex gap-4 text-xs text-muted-foreground">
+                                <div className="flex gap-4 text-[10px] text-slate-400 uppercase tracking-widest font-semibold mt-3">
                                     {license.issue_date && (
                                         <span>Issued: {format(parseISO(license.issue_date), 'MMM d, yyyy')}</span>
                                     )}
@@ -106,8 +107,8 @@ const LicensesSection: React.FC<LicensesSectionProps> = ({ employeeId, employeeN
                         ))}
                     </div>
                 )}
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     );
 };
 

@@ -13,8 +13,7 @@ export type {
     ComplianceCalculation,
     ComplianceResult,
     ComplianceRule,
-    ComplianceCheckResult,
-    ComplianceAuditEntry
+    ComplianceCheckResult
 } from './types';
 
 // Engine functions
@@ -62,12 +61,6 @@ export {
 export { ComplianceBadge } from './ui/ComplianceBadge';
 export { ComplianceModal } from './ui/ComplianceModal';
 
-// API
-export {
-    logComplianceCheck,
-    getComplianceHistory,
-    getRecentFailedChecks
-} from './api/compliance.api';
 
 // Pre-Validation (Hard Validation - Layer 1)
 export type {
@@ -81,6 +74,40 @@ export {
     getFieldError,
     hasRuleError
 } from './prevalidation';
+
+// Constraint Solver (swap evaluation)
+export type {
+    RosterShift,
+    SwapParty,
+    SwapScenario,
+    SolverConfig,
+    SolverConstraint,
+    ConstraintViolation,
+    SolverResult,
+    SwapPartyInput,
+    SwapEvaluationInput,
+} from './solver';
+export { SwapEvaluator, swapEvaluator, solverResultToComplianceResults, evaluateScenario } from './solver';
+export type { GuardViolation, GuardViolationCode, GuardResult, SwapGuardInput, ChainSwapScenario } from './solver';
+export { runSwapGuards, SwapGuardError } from './solver';
+
+// Scenario utilities
+export { getScenarioWindow, SCENARIO_WINDOW_DAYS } from './solver';
+export type { ScenarioWindow } from './solver';
+export { aggregateSchedule, aggregateSchedules } from './solver';
+export type { UnifiedShift, ShiftState } from './solver';
+
+// Concurrency revalidation
+export { validateBeforeCommit, ConcurrencyValidationError } from './solver';
+export type { ConcurrencyCheckInput, ConcurrencyCheckResult } from './solver';
+
+// Single-party constraint solver: assignment / add / bid
+export {
+    AssignmentEvaluator,
+    assignmentEvaluator,
+    assignmentResultToComplianceResults,
+} from './solver';
+export type { AssignmentEvaluationInput } from './solver';
 
 // Bulk Compliance
 export type {

@@ -93,10 +93,15 @@ export const useMyRoster = (view: CalendarView, selectedDate: Date, scope?: Scop
 
                 // Filter by Sub-Department (if specific ones selected)
                 if (scope.subdept_ids && scope.subdept_ids.length > 0) {
-                    // Note: Shifts might have null sub_department_id (e.g. general dept shifts)
-                    // If the user selects specific sub-depts, we strictly filter matches.
-                    // If the user selects "All" (which is just a list of all), it works naturally.
-                    daysShifts = daysShifts.filter(s => s.sub_department_id && scope.subdept_ids.includes(s.sub_department_id));
+                    // Inclusion Fix: Include shifts that match selected sub-depts, 
+                    // OR are at the Department level (null sub_dept) if their parent department is match.
+                    daysShifts = daysShifts.filter(s => {
+                        const subDeptMatch = s.sub_department_id && scope.subdept_ids.includes(s.sub_department_id);
+                        const isDeptLevel = !s.sub_department_id;
+                        // If it's a department-level shift, we allow it if the department itself is in the scope.
+                        // Since scope.dept_ids usually contains the parents of subdept_ids, this is safe.
+                        return subDeptMatch || isDeptLevel;
+                    });
                 }
             }
             // 2. Fallback: Global Context (Single Select) - only if no explicit scope passed

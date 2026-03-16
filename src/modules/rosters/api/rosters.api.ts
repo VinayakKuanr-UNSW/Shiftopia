@@ -213,16 +213,28 @@ export const rostersApi = {
     getRostersByDateRange: async (
         startDate: string,
         endDate: string,
-        departmentId: string
+        departmentId: string,
+        organizationId?: string,
+        subDepartmentId?: string
     ): Promise<Roster[]> => {
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('rosters')
                 .select('*')
                 .eq('department_id', departmentId)
                 .gte('start_date', startDate)
                 .lte('start_date', endDate)
                 .order('start_date', { ascending: true });
+
+            if (organizationId) {
+                query = query.eq('organization_id', organizationId);
+            }
+
+            if (subDepartmentId) {
+                query = query.eq('sub_department_id', subDepartmentId);
+            }
+
+            const { data, error } = await query;
 
             if (error) {
                 console.error('Error fetching rosters:', error);

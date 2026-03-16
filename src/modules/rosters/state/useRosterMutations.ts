@@ -164,6 +164,66 @@ export function useActivateRoster() {
   });
 }
 
+// ── useCreatePlanningPeriod ───────────────────────────────────────────────────
+
+interface CreatePlanningPeriodVariables {
+  organizationId: string;
+  departmentId:   string;
+  subDeptIds:     string[];
+  startDate:      string;
+  endDate:        string;
+  templateId?:    string | null;
+  autoSeed?:      boolean;
+  autoPublish?:   boolean;
+  overridePast?:  boolean;
+}
+
+export function useCreatePlanningPeriod() {
+  const queryClient = useQueryClient();
+  const { toast }   = useToast();
+
+  return useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mutationFn: async (vars: CreatePlanningPeriodVariables): Promise<any> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase.rpc as any)('create_planning_period', {
+        p_org_id:        vars.organizationId,
+        p_dept_id:       vars.departmentId,
+        p_sub_dept_ids:  vars.subDeptIds,
+        p_start_date:    vars.startDate,
+        p_end_date:      vars.endDate,
+        p_template_id:   vars.templateId ?? null,
+        p_auto_seed:     vars.autoSeed  ?? true,
+        p_auto_publish:  vars.autoPublish ?? false,
+        p_override_past: vars.overridePast ?? false,
+      });
+      if (error) throw error;
+      return data;
+    },
+
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [ROSTER_STRUCTURE_KEY] });
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+
+      const days = (data?.days_created as number | undefined) ?? 0;
+      toast({
+        title: 'Planning Period Created',
+        description: `${days} roster day${days !== 1 ? 's' : ''} created across ${(data?.seed_results as unknown[])?.length ?? 0} sub-department(s).`,
+      });
+    },
+
+    onError: (err) => {
+      console.error('[useCreatePlanningPeriod]', err);
+      toast({
+        title: 'Error',
+        description: errorMessage(err, 'Failed to create planning period'),
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
 // ── useToggleRosterLock ───────────────────────────────────────────────────────
 
 interface ToggleRosterLockVariables {
@@ -349,6 +409,159 @@ export function useClearTemplate() {
     onError: (err) => {
       console.error('[useClearTemplate]', err);
       toast({ title: 'Error', description: errorMessage(err, 'Failed to clear template'), variant: 'destructive' });
+    },
+  });
+}
+
+// ── useDeleteSubGroup ─────────────────────────────────────────────────────────
+
+export function useDeleteSubGroup() {
+  const queryClient = useQueryClient();
+  const { toast }   = useToast();
+
+  return useMutation({
+    mutationFn: async ({
+      orgId,
+      deptId,
+      groupExternalId,
+      name,
+      startDate,
+      endDate
+    }: {
+      orgId: string;
+      deptId: string;
+      groupExternalId: string;
+      name: string;
+      startDate: string;
+      endDate: string;
+    }) => {
+      const { error } = await supabase.rpc('delete_roster_subgroup_v2', {
+        p_org_id: orgId,
+        p_dept_id: deptId,
+        p_group_external_id: groupExternalId,
+        p_name: name,
+        p_start_date: startDate,
+        p_end_date: endDate,
+      });
+
+      if (error) throw error;
+      return true;
+    },
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [ROSTER_STRUCTURE_KEY] });
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lookups._root });
+      toast({ title: 'Subgroup Deleted', description: 'The subgroup and its shifts have been removed across the active range.' });
+    },
+
+    onError: (err) => {
+      console.error('[useDeleteSubGroup]', err);
+      toast({ title: 'Error', description: errorMessage(err, 'Failed to delete subgroup'), variant: 'destructive' });
+    },
+  });
+}
+
+// ── useRenameSubGroup ─────────────────────────────────────────────────────────
+
+export function useRenameSubGroup() {
+  const queryClient = useQueryClient();
+  const { toast }   = useToast();
+
+  return useMutation({
+    mutationFn: async ({
+      orgId,
+      deptId,
+      groupExternalId,
+      oldName,
+      newName,
+      startDate,
+      endDate
+    }: {
+      orgId: string;
+      deptId: string;
+      groupExternalId: string;
+      oldName: string;
+      newName: string;
+      startDate: string;
+      endDate: string;
+    }) => {
+      const { error } = await supabase.rpc('rename_roster_subgroup_v2', {
+        p_org_id: orgId,
+        p_dept_id: deptId,
+        p_group_external_id: groupExternalId,
+        p_old_name: oldName,
+        p_new_name: newName,
+        p_start_date: startDate,
+        p_end_date: endDate,
+      });
+
+      if (error) throw error;
+      return true;
+    },
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [ROSTER_STRUCTURE_KEY] });
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lookups._root });
+      toast({ title: 'Subgroup Renamed', description: 'The subgroup has been renamed across the active range.' });
+    },
+
+    onError: (err) => {
+      console.error('[useRenameSubGroup]', err);
+      toast({ title: 'Error', description: errorMessage(err, 'Failed to rename subgroup'), variant: 'destructive' });
+    },
+  });
+}
+
+// ── useCloneSubGroup ──────────────────────────────────────────────────────────
+
+export function useCloneSubGroup() {
+  const queryClient = useQueryClient();
+  const { toast }   = useToast();
+
+  return useMutation({
+    mutationFn: async ({
+      orgId,
+      deptId,
+      groupExternalId,
+      sourceName,
+      newName,
+      startDate,
+      endDate
+    }: {
+      orgId: string;
+      deptId: string;
+      groupExternalId: string;
+      sourceName: string;
+      newName: string;
+      startDate: string;
+      endDate: string;
+    }) => {
+      const { data, error } = await supabase.rpc('clone_roster_subgroup_v2', {
+        p_org_id: orgId,
+        p_dept_id: deptId,
+        p_group_external_id: groupExternalId,
+        p_source_name: sourceName,
+        p_new_name: newName,
+        p_start_date: startDate,
+        p_end_date: endDate,
+      });
+
+      if (error) throw error;
+      return data;
+    },
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [ROSTER_STRUCTURE_KEY] });
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lookups._root });
+      toast({ title: 'Subgroup Cloned', description: 'The subgroup and its shifts have been duplicated across the active range.' });
+    },
+
+    onError: (err) => {
+      console.error('[useCloneSubGroup]', err);
+      toast({ title: 'Error', description: errorMessage(err, 'Failed to clone subgroup'), variant: 'destructive' });
     },
   });
 }

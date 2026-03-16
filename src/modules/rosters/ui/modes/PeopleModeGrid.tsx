@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
-import { Plus, MoreHorizontal, Undo2, Edit2 } from 'lucide-react';
+import { Plus, MoreHorizontal, Undo2, Edit2, History } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { format } from 'date-fns';
 import { SmartShiftCard, type ComplianceInfo } from '@/modules/rosters/ui/components/SmartShiftCard';
@@ -11,6 +11,8 @@ import type { Shift } from '@/modules/rosters/domain/shift.entity';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 import { isSydneyPast } from '@/modules/core/lib/date.utils';
 import { PeopleModeEmployee, PeopleModeShift } from './people-mode.types';
+import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
+import { useRosterUI } from '@/modules/rosters/contexts/RosterUIContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,6 +53,7 @@ interface PeopleModeGridProps {
   onSwapShift?: (shiftId: string) => void;
   onCancelShift?: (shiftId: string) => void;
   onUnpublishShift?: (shiftId: string) => void;
+  onViewAudit?: (shiftId: string) => void;
 }
 
 /* ============================================================
@@ -62,7 +65,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   canEdit,
   showAvailabilities,
   bulkModeActive = false,
-  selectedShifts = [],
+  selectedShifts: propsSelectedShifts = [],
   onToggleShiftSelection,
   onAddShift,
   onViewShift,
@@ -72,7 +75,19 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   onSwapShift,
   onCancelShift,
   onUnpublishShift,
+  onViewAudit,
 }) => {
+  const { 
+    bulkModeActive: globalBulkModeActive, 
+    selectedShiftIds: globalSelectedShiftIds,
+    toggleShiftSelection: globalToggleShiftSelection
+  } = useRosterStore();
+
+  const { toggleShiftSelection: uiToggleShiftSelection } = useRosterUI();
+
+  const isBulkMode = bulkModeActive || globalBulkModeActive;
+  const currentSelectedShifts = propsSelectedShifts.length > 0 ? propsSelectedShifts : globalSelectedShiftIds;
+
   const buildShiftMenu = (shift: PeopleModeShift) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -104,6 +119,16 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
             </DropdownMenuItem>
           </>
         )}
+
+        <DropdownMenuSeparator className="bg-border" />
+        <DropdownMenuItem
+          onClick={(e) => { e.stopPropagation(); onViewAudit?.(shift.id); }}
+          className="text-muted-foreground hover:bg-accent cursor-pointer"
+        >
+          <History className="h-4 w-4 mr-2" />
+          Audit Trail
+        </DropdownMenuItem>
+
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -246,10 +271,10 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                             className={cn(
                               'px-3 py-3 align-top relative group/cell',
                               dateIdx < dates.length - 1 && 'border-r border-border',
-                              canEdit && !bulkModeActive && 'cursor-pointer'
+                              canEdit && !isBulkMode && 'cursor-pointer'
                             )}
                             onClick={() => {
-                              if (canEdit && !bulkModeActive && shifts.length === 0 && !isSydneyPast(date)) {
+                              if (canEdit && !isBulkMode && shifts.length === 0 && !isSydneyPast(date)) {
                                 onAddShift(employee, date);
                               }
                             }}
@@ -264,7 +289,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                                 shifts.map((shift) => (
                                   <SmartShiftCard
                                     key={shift.id}
-                                    headerAction={canEdit && !bulkModeActive ? buildShiftMenu(shift) : undefined}
+                                    headerAction={canEdit && !isBulkMode ? buildShiftMenu(shift) : undefined}
                                     shift={shift.rawShift || ({
                                       id: shift.id,
                                       start_time: shift.startTime,
@@ -282,10 +307,17 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                                     variant={cardVariant}
                                     groupColor={shift.groupColor || 'blue'}
                                     compliance={complianceMap?.[shift.id]}
-                                    isSelected={selectedShifts.includes(shift.id)}
+                                    isSelected={currentSelectedShifts.includes(shift.id)}
                                     onClick={(e) => {
-                                      if (bulkModeActive) {
-                                        onToggleShiftSelection?.(shift.id);
+                                      if (isBulkMode) {
+                                        // Prioritize prop-based toggle, then global store, then UI context
+                                        if (onToggleShiftSelection) {
+                                          onToggleShiftSelection(shift.id);
+                                        } else if (globalToggleShiftSelection) {
+                                          globalToggleShiftSelection(shift.id);
+                                        } else {
+                                          uiToggleShiftSelection(shift.id);
+                                        }
                                       } else {
                                         onViewShift?.(shift);
                                       }
@@ -295,15 +327,20 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                                 ))
                               ) : null}
 
-                              {/* Unified Add Shift Button — Perfectly Centered Glassmorphed Purple Circle */}
-                              {!bulkModeActive && canEdit && !isSydneyPast(date) && (
-                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                              {/* Unified Add Shift Button — Repositioned to corner if shifts exist */}
+                              {!isBulkMode && canEdit && !isSydneyPast(date) && (
+                                <div className={cn(
+                                  "absolute inset-0 flex pointer-events-none z-10",
+                                  shifts.length > 0 ? "items-end justify-end p-2" : "items-center justify-center"
+                                )}>
                                   <button
                                     className={cn(
-                                      "w-9 h-9 flex items-center justify-center rounded-full transition-all duration-300 pointer-events-auto",
+                                      "flex items-center justify-center rounded-full transition-all duration-300 pointer-events-auto",
                                       "bg-primary/30 text-primary border border-primary/40 backdrop-blur-md",
                                       "hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]",
-                                      shifts.length > 0 ? "opacity-100 scale-100" : "opacity-40 scale-90 hover:opacity-100",
+                                      shifts.length > 0 
+                                        ? "w-7 h-7 opacity-0 scale-75 group-hover/cell:opacity-100 group-hover/cell:scale-100" 
+                                        : "w-9 h-9 opacity-40 scale-90 hover:opacity-100",
                                       "group/add"
                                     )}
                                     onClick={(e) => {
@@ -312,7 +349,10 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                                     }}
                                     title="Add Shift"
                                   >
-                                    <Plus className="h-5 w-5 transition-transform group-hover/add:rotate-90" />
+                                    <Plus className={cn(
+                                      shifts.length > 0 ? "h-4 w-4" : "h-5 w-5",
+                                      "transition-transform group-hover/add:rotate-90"
+                                    )} />
                                   </button>
                                 </div>
                               )}

@@ -537,7 +537,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                             ) : (
                                 <>
                                     <ArrowLeftRight className="h-3.5 w-3.5" />
-                                    Make Offer
+                                    Check Compliance & Offer
                                 </>
                             )}
                         </button>

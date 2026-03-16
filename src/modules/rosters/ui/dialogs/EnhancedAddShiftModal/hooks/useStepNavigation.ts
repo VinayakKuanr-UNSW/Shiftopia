@@ -10,9 +10,9 @@ interface UseStepNavigationProps {
         requirements: boolean;
         notes: boolean;
         system: boolean;
-        audit: boolean;
     };
     isNetLengthValid: boolean;
+    isMinLengthValid: boolean;
     watchRoleId: string;
     complianceHasRun: boolean;
     hardValidation: HardValidationResult;
@@ -23,6 +23,7 @@ export function useStepNavigation({
     isTemplateMode,
     tabCompletion,
     isNetLengthValid,
+    isMinLengthValid,
     watchRoleId,
     complianceHasRun,
     hardValidation,
@@ -38,26 +39,22 @@ export function useStepNavigation({
     }, [hardValidation.passed, complianceResults]);
 
     /**
-     * New 3-step validation:
-     *  Step 1 (Schedule & Details): Schedule + Role + (optional requirements/notes)
+     * New 2-step validation:
+     *  Step 1 (Schedule & Details): Schedule + Role + Length (net & min)
      *  Step 2 (Assignment & Compliance): Compliance must pass
-     *  Step 3 (Review Logs): Always valid
      */
     const isStepValid = (step: number): boolean => {
         let isValid = false;
         switch (step) {
-            case 1: // Schedule & Details (merged old steps 1-4)
-                isValid = tabCompletion.schedule && isNetLengthValid && !!watchRoleId;
+            case 1: // Schedule & Details
+                isValid = tabCompletion.schedule && isNetLengthValid && isMinLengthValid && !!watchRoleId;
                 break;
-            case 2: // Assignment & Compliance (merged old steps 2 employee + 5 compliance)
+            case 2: // Assignment & Compliance
                 if (isTemplateMode) {
                     isValid = true;
                 } else {
                     isValid = complianceHasRun && !hasBlockingComplianceFailures;
                 }
-                break;
-            case 3: // Review Logs
-                isValid = true;
                 break;
             default:
                 isValid = false;

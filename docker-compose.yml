@@ -1,0 +1,41 @@
+version: '3.9'
+
+# Two-layer workforce scheduling architecture
+#
+# web-app   → Vite React frontend (compliance engine in-browser)
+# optimizer → Python OR-Tools CP-SAT service (proposals only, never writes DB)
+#
+# Flow:  web-app → http://optimizer:5005/optimize → proposals
+#                → compliance engine validates
+#                → Supabase commit
+
+services:
+  optimizer:
+    build:
+      context: ./optimizer-service
+      dockerfile: Dockerfile
+    container_name: superman-optimizer
+    ports:
+      - '5005:5005'
+    environment:
+      - LOG_LEVEL=info
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:5005/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Uncomment to run the web-app in Docker too
+  # web-app:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.web
+  #   container_name: superman-web
+  #   ports:
+  #     - '5173:5173'
+  #   environment:
+  #     - VITE_OPTIMIZER_URL=http://optimizer:5005
+  #   depends_on:
+  #     optimizer:
+  #       condition: service_healthy

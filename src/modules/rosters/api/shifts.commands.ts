@@ -84,6 +84,8 @@ export const shiftsCommands = {
             lifecycle_status: 'Draft',
             is_draft: true,
             created_by_user_id: user.id,
+            creation_source: shiftData.creation_source ?? (shiftData.is_from_template ? 'template' : 'manual'),
+            assignment_source: shiftData.assigned_employee_id ? (shiftData.assignment_source ?? 'direct') : null,
         };
 
         const newShiftId = await callRpc('sm_create_shift', {
@@ -145,7 +147,11 @@ export const shiftsCommands = {
             if (updates.timezone !== undefined) payload.timezone = updates.timezone;
             if (updates.assigned_employee_id !== undefined) {
                 payload.assigned_employee_id = safeUuid(updates.assigned_employee_id);
-
+                if (updates.assigned_employee_id) {
+                    payload.assignment_source = updates.assignment_source ?? 'manual';
+                } else {
+                    payload.assignment_source = null;
+                }
             }
             if (updates.required_skills !== undefined)
                 payload.required_skills = updates.required_skills;
@@ -162,6 +168,7 @@ export const shiftsCommands = {
                 p_shift_id: shiftId,
                 p_shift_data: payload,
                 p_user_id: user.id,
+                p_expected_version: updates.expectedVersion ?? null,
             }, UpdateShiftResponseSchema);
 
             if (!success) {
@@ -237,6 +244,25 @@ export const shiftsCommands = {
 
 
     async publishShift(shiftId: string) {
+        // Compliance pre-check before publishing
+        const shift = await shiftsQueries.getShiftById(shiftId);
+        if (shift?.assigned_employee_id && isValidUuid(shift.assigned_employee_id)) {
+            const netMinutes =
+                calculateMinutesBetweenTimes(shift.start_time, shift.end_time)
+                - (shift.unpaid_break_minutes || 0);
+            const validation = await complianceService.validateShiftCompliance(
+                shift.assigned_employee_id,
+                shift.shift_date,
+                shift.start_time,
+                shift.end_time,
+                netMinutes,
+                shiftId,
+            );
+            if (!validation.isValid) {
+                throw new ComplianceError(validation.violations, 'sm_publish_shift');
+            }
+        }
+
         const result = await callAuthenticatedRpc(
             'sm_publish_shift',
             (userId) => ({ p_shift_id: shiftId, p_user_id: userId }),
@@ -251,10 +277,45 @@ export const shiftsCommands = {
     },
 
     async bulkPublishShifts(shiftIds: string[]): Promise<BulkPublishResponse> {
+        // Compliance pre-check for all assigned shifts
+        const checks = await Promise.allSettled(
+            shiftIds.map(async (id) => {
+                const shift = await shiftsQueries.getShiftById(id);
+                if (!shift?.assigned_employee_id || !isValidUuid(shift.assigned_employee_id)) return null;
+                const netMinutes =
+                    calculateMinutesBetweenTimes(shift.start_time, shift.end_time)
+                    - (shift.unpaid_break_minutes || 0);
+                const validation = await complianceService.validateShiftCompliance(
+                    shift.assigned_employee_id,
+                    shift.shift_date,
+                    shift.start_time,
+                    shift.end_time,
+                    netMinutes,
+                    id,
+                );
+                if (!validation.isValid) return validation.violations;
+                return null;
+            })
+        );
+
+        const allViolations = checks.flatMap(r =>
+            r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : []
+        );
+        if (allViolations.length > 0) {
+            throw new ComplianceError(allViolations, 'sm_bulk_publish_shifts');
+        }
+
         return callAuthenticatedRpc(
             'sm_bulk_publish_shifts',
             (userId) => ({ p_shift_ids: shiftIds, p_actor_id: userId }),
             BulkPublishResponseSchema,
+        );
+    },
+
+    async bulkUnpublishShifts(shiftIds: string[]): Promise<void> {
+        if (!shiftIds || shiftIds.length === 0) return;
+        await Promise.all(
+            shiftIds.map(id => this.unpublishShift(id, 'Bulk unpublish from bucket'))
         );
     },
 
@@ -318,52 +379,23 @@ export const shiftsCommands = {
     },
 
     /* ============================================================
-       AUDIT LOG METHODS
-       ============================================================ */
-
-    async addAuditLogEntry(
-        shiftId: string,
-        action: string,
-        fieldName?: string,
-        oldValue?: string,
-        newValue?: string,
-        reason?: string,
-    ): Promise<void> {
-        // Fire-and-forget: never let audit logging block the caller
-        if (!isValidUuid(shiftId)) return;
-
-        try {
-            const user = await requireUser();
-
-            await supabase.from('shift_audit_events').insert({
-                shift_id: shiftId,
-                event_type: action,
-                event_category: 'MANUAL_LOG',
-                field_changed: fieldName ?? null,
-                old_value: oldValue ?? null,
-                new_value: newValue ?? null,
-                metadata: reason ? { reason } : null,
-                performed_by_id: user.id,
-                performed_by_name: user.email ?? 'System',
-                performed_by_role: 'system',
-            });
-        } catch (error) {
-            console.error('[shifts.commands] addAuditLogEntry silenced:', error);
-        }
-    },
-
-    /* ============================================================
        DELETE SHIFT
        ============================================================ */
 
     async deleteShift(shiftId: string): Promise<boolean> {
         if (!shiftId || !isValidUuid(shiftId)) return false;
 
-        return callAuthenticatedRpc(
+        const result = await callAuthenticatedRpc(
             'delete_shift_with_audit',
             (userId) => ({ p_shift_id: shiftId, p_deleted_by: userId, p_reason: 'Manual deletion' }),
             DeleteShiftResponseSchema,
         );
+
+        if (!result.success) {
+            throw new Error(result.error ?? 'Failed to delete shift on the server.');
+        }
+
+        return true;
     },
 
     /* ============================================================
@@ -430,6 +462,19 @@ export const shiftsCommands = {
             (userId) => ({ p_shift_id: shiftId, p_employee_id: userId, p_reason: reason }),
             OfferActionResponseSchema,
         );
+    },
+
+    /**
+     * Immediately expire a shift offer. Called client-side the moment the
+     * countdown hits zero or isShiftLocked fires, so the DB transitions
+     * S3 → S2 (Draft+Assigned) instantly without waiting for the cron.
+     */
+    async expireOfferNow(shiftId: string) {
+        const { data, error } = await supabase.rpc('sm_expire_offer_now', {
+            p_shift_id: shiftId,
+        });
+        if (error) throw error;
+        return data as { success: boolean; error?: string; from_state?: string; to_state?: string };
     },
 
     /**

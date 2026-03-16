@@ -1,4 +1,4 @@
-export const TOTAL_STEPS = 3;
+export const TOTAL_STEPS = 2;
 
 export const TIMEZONES = [
     { value: 'Australia/Sydney', label: 'Sydney (AEST/AEDT)' },

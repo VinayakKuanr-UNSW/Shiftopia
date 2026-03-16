@@ -29,7 +29,6 @@ import {
 // ── Step panels (lazy) ────────────────────────────────────────────────────
 const ScheduleStep = lazy(() => import('./components/ScheduleStep').then(m => ({ default: m.ScheduleStep })));
 const AssignmentStep = lazy(() => import('./components/AssignmentStep').then(m => ({ default: m.AssignmentStep })));
-const ReviewLogsStep = lazy(() => import('./components/ReviewLogsStep').then(m => ({ default: m.ReviewLogsStep })));
 
 // ── Fallback while a step chunk loads ─────────────────────────────────────
 function StepSkeleton() {
@@ -107,6 +106,8 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
         setComplianceResults,
         complianceNeedsRerun,
         buildComplianceInput,
+        runChecks,
+        clearResults,
         handleComplianceComplete,
 
         // Watched fields
@@ -199,21 +200,11 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                                             complianceResults={complianceResults}
                                             setComplianceResults={setComplianceResults}
                                             buildComplianceInput={buildComplianceInput}
+                                            runChecks={runChecks}
+                                            clearResults={clearResults}
                                             complianceNeedsRerun={complianceNeedsRerun}
                                             onChecksComplete={handleComplianceComplete}
                                             shiftId={props.existingShift?.id}
-                                        />
-                                    )}
-
-                                    {currentStep === 3 && (
-                                        <ReviewLogsStep
-                                            form={form}
-                                            editMode={editMode}
-                                            existingShift={props.existingShift}
-                                            safeContext={resolvedContext}
-                                            selectedRosterId={derivedRosterId || ''}
-                                            shiftLength={shiftLength}
-                                            netLength={netLength}
                                         />
                                     )}
                                 </Suspense>

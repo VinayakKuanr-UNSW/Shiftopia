@@ -48,6 +48,8 @@ export interface BulkComplianceCheckRequest {
     requestedBy?: string;
     mode: BulkComplianceMode;
     assignments: BulkAssignment[];
+    /** F2: Minimum rest-gap threshold in hours. Default 10h — matches single-shift rule. Pass 8 for relaxed mode. */
+    restGapHours?: number;
 }
 
 // =============================================================================

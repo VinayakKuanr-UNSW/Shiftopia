@@ -17,6 +17,7 @@
 
 import type { Shift, TemplateGroupType } from '../../shift.entity';
 import type { RosterStructure }          from '../../../model/roster.types';
+import { parseZonedDateTime, getNowInTimezone } from '@/modules/core/lib/date.utils';
 import type {
   ProjectedShift,
   ProjectedSubGroup,
@@ -51,6 +52,12 @@ function toProjectedShift(shift: Shift): ProjectedShift {
   const assignmentOutcome = (shift as any).assignment_outcome ??
     (shift.assigned_employee_id ? 'pending' : undefined);
 
+  const isLocked = shift.is_locked || (() => {
+    const shiftStart = parseZonedDateTime(shift.shift_date, shift.start_time);
+    const now = getNowInTimezone();
+    return now >= shiftStart;
+  })();
+
   return {
     id:             shift.id,
     reactKey:       shift.id,
@@ -70,7 +77,7 @@ function toProjectedShift(shift: Shift): ProjectedShift {
     groupColors:    colors,
     employeeName:   resolveEmployeeName(shift),
     employeeId:     shift.assigned_employee_id,
-    isLocked:       shift.is_locked,
+    isLocked,
     isUrgent:       shift.bidding_status === 'on_bidding_urgent',
     isOnBidding:    shift.bidding_status !== 'not_on_bidding',
     isTrading:      !!shift.trade_requested_at,

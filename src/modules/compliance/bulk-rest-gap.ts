@@ -21,8 +21,9 @@ import { parseTimeToMinutes, minutesToHours } from './utils';
 // CONSTANTS
 // =============================================================================
 
-const MIN_REST_HOURS = 8;
-const MIN_REST_MINUTES = MIN_REST_HOURS * 60;
+// F2: Default matches the single-shift MIN_REST_GAP rule (10h).
+// Callers can pass a lower value for relaxed mode (min 8h).
+export const DEFAULT_BULK_REST_HOURS = 10;
 
 // =============================================================================
 // TYPES
@@ -76,15 +77,20 @@ export interface BulkRestGapResult {
 
 /**
  * Compute rest gap violations for all shifts in O(n log n) time.
- * 
- * @param existingShifts - Employee's currently assigned shifts
- * @param candidateShifts - New shifts to be assigned
+ *
+ * @param existingShifts   - Employee's currently assigned shifts
+ * @param candidateShifts  - New shifts to be assigned
+ * @param minRestHours     - Minimum rest required in hours (default 10 — matches
+ *                           the single-shift MIN_REST_GAP rule). Pass 8 for
+ *                           relaxed mode. (F2: was hardcoded to 8; now unified.)
  * @returns Violations and per-shift impact data
  */
 export function checkBulkRestGaps(
     existingShifts: ShiftForRestGap[],
-    candidateShifts: ShiftForRestGap[]
+    candidateShifts: ShiftForRestGap[],
+    minRestHours: number = DEFAULT_BULK_REST_HOURS
 ): BulkRestGapResult {
+    const MIN_REST_MINUTES = minRestHours * 60;
     const violations: RestGapViolation[] = [];
     const perShiftViolations = new Map<string, RestGapViolation[]>();
     const restImpacts = new Map<string, {
@@ -136,21 +142,18 @@ export function checkBulkRestGaps(
 
     for (const segment of segments) {
         if (prevSegment !== null) {
-            // STRICT REQUIREMENT: Rest Gap only applies to cross-day shifts.
-            // Ignore gaps between shifts on the same calendar day (e.g. split shifts, lunch breaks).
-            if (segment.originalDate === prevSegment.originalDate) {
-                prevSegment = segment;
-                continue;
-            }
+            // F3: Same-calendar-day gaps are now evaluated (removed the earlier
+            // same-day skip). A 2h break between two intraday shifts is a
+            // rest-gap violation just like a cross-day gap.
 
             // Calculate gap between prevSegment.end and segment.start
             const gapMinutes = differenceInMinutes(segment.startDateTime, prevSegment.endDateTime);
             const gapHours = gapMinutes / 60;
 
-            // If overlap, gap is 0 (or negative)
-            // Note: Overlaps are handled by a separate rule, but for rest gap purposes, it counts as 0
+            // Overlapping segments produce a negative or zero gap — handled by
+            // NO_OVERLAP; for rest-gap purposes we treat them as 0.
             const effectiveGap = Math.max(0, gapHours);
-            const isViolation = effectiveGap < MIN_REST_HOURS;
+            const isViolation = effectiveGap < minRestHours;
 
             // Update rest impacts for candidates
             // Previous shift's "after" gap
@@ -270,4 +273,4 @@ function addToMap(
 // EXPORTS FOR TESTING
 // =============================================================================
 
-export { MIN_REST_HOURS };
+export { DEFAULT_BULK_REST_HOURS as MIN_REST_HOURS };

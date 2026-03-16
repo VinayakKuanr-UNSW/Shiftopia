@@ -3,7 +3,7 @@
  * Format: <Role>  <Start – End>  [Edit] [Delete] [Publish]
  */
 import React from 'react';
-import { Edit2, Trash2, Send, Lock, User, UserX } from 'lucide-react';
+import { Edit2, Trash2, Send, Lock, User, UserX, Undo2 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
@@ -22,6 +22,7 @@ export interface ShiftBucketRowProps {
     onEdit: (shiftId: string) => void;
     onDelete: (shiftId: string) => void;
     onPublish: (shiftId: string) => void;
+    onUnpublish: (shiftId: string) => void;
 }
 
 function formatTime(time: string): string {
@@ -43,6 +44,7 @@ export const ShiftBucketRow: React.FC<ShiftBucketRowProps> = ({
     onEdit,
     onDelete,
     onPublish,
+    onUnpublish,
 }) => {
     const disabled = isLocked || !canEdit;
 
@@ -115,6 +117,18 @@ export const ShiftBucketRow: React.FC<ShiftBucketRowProps> = ({
                         title="Publish shift"
                     >
                         <Send className="h-3 w-3" />
+                    </Button>
+                )}
+                {isPublished && (
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 hover:bg-amber-500/10 hover:text-amber-400"
+                        onClick={() => onUnpublish(shiftId)}
+                        disabled={disabled}
+                        title="Unpublish shift"
+                    >
+                        <Undo2 className="h-3 w-3" />
                     </Button>
                 )}
                 <Button

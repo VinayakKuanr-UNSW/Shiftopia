@@ -118,31 +118,29 @@ const MyRosterPage: React.FC = () => {
               ))}
             </motion.div>
 
-            {/* My Offers Button - Only show when organization is selected */}
-            {organizationId && (
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.25 }}
+            {/* My Offers Button - Always available on Personal Roster if logged in */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.25 }}
+            >
+              <Button
+                variant="outline"
+                className={cn(
+                  "relative gap-2 h-11 px-5 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 hover:text-amber-700 dark:hover:text-amber-300 bg-amber-50 dark:bg-amber-950/20 backdrop-blur-md transition-all shadow-[0_0_15px_rgba(245,158,11,0.1)]",
+                  pendingOfferCount > 0 && "animate-pulse border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+                )}
+                onClick={() => setShowOffersModal(true)}
               >
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "relative gap-2 h-11 px-5 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 hover:text-amber-700 dark:hover:text-amber-300 bg-amber-50 dark:bg-amber-950/20 backdrop-blur-md transition-all shadow-[0_0_15px_rgba(245,158,11,0.1)]",
-                    pendingOfferCount > 0 && "animate-pulse border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
-                  )}
-                  onClick={() => setShowOffersModal(true)}
-                >
-                  <Mail className="h-4 w-4" />
-                  Shift Offers
-                  {pendingOfferCount > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 bg-amber-500 text-black font-bold text-xs flex items-center justify-center rounded-full shadow-lg border border-amber-400">
-                      {pendingOfferCount}
-                    </span>
-                  )}
-                </Button>
-              </motion.div>
-            )}
+                <Mail className="h-4 w-4" />
+                Shift Offers
+                {pendingOfferCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 bg-amber-500 text-black font-bold text-xs flex items-center justify-center rounded-full shadow-lg border border-amber-400">
+                    {pendingOfferCount}
+                  </span>
+                )}
+              </Button>
+            </motion.div>
           </div>
         </div>
       </motion.div>

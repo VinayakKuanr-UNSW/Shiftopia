@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useRosterUI } from '@/modules/rosters/contexts/RosterUIContext';
 import { Plus, Briefcase, Loader2, MoreHorizontal, Undo2, Edit2 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { cn } from '@/modules/core/lib/utils';
@@ -40,6 +41,7 @@ interface RolesModeViewProps {
   shifts?: Shift[];
   projection?: RolesProjection;
   onEditShift?: (shift: any) => void;
+  selectedShiftIds?: string[];
 }
 
 // ── canUnpublish — any Published shift can be unpublished (→ S1 or S2) ───────
@@ -67,10 +69,21 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   shifts: parentShifts,
   projection,
   onEditShift,
+  selectedShiftIds: propsSelectedShiftIds,
 }) => {
   // ==================== HOOKS ====================
   const activeDeptId = departmentIds[0];
   const activeSubDeptId = subDepartmentIds[0];
+
+  const {
+    bulkModeActive,
+    selectedShiftIds: globalSelectedShiftIds,
+    toggleShiftSelection,
+    clearSelection,
+  } = useRosterUI();
+
+  const selectedShiftIds = propsSelectedShiftIds ?? globalSelectedShiftIds;
+  const isBulkMode = bulkModeActive;
 
   const { data: levels = [], isLoading: isLoadingLevels } = useRemunerationLevels();
   const { data: roles = [], isLoading: isLoadingRoles } = useRoles(organizationId, activeDeptId, activeSubDeptId);
@@ -103,8 +116,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   const unpublishMutation = useUnpublishShift();
 
   // ==================== STATE ====================
-  const [selectedShiftIds, setSelectedShiftIds] = useState<string[]>([]);
-  const [isBulkMode, setIsBulkMode] = useState(false);
+  // Bulk state removed in favor of centralized store
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalContext, setModalContext] = useState<ShiftContext | null>(null);
   const [confirmShiftId, setConfirmShiftId] = useState<string | null>(null);
@@ -256,18 +268,14 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   };
 
   const handleShiftSelect = (id: string, selected: boolean) => {
-    if (selected) {
-      setSelectedShiftIds(prev => [...prev, id]);
-    } else {
-      setSelectedShiftIds(prev => prev.filter(s => s !== id));
-    }
+    toggleShiftSelection(id);
   };
 
   const handlePublish = async (ids: string[]) => {
     try {
       await bulkPublish.mutateAsync(ids);
       toast.success(`${ids.length} shifts published`);
-      setSelectedShiftIds([]);
+      clearSelection();
     } catch {
       toast.error('Failed to publish shifts');
     }
@@ -277,7 +285,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
     try {
       await bulkDelete.mutateAsync(selectedShiftIds);
       toast.success(`${selectedShiftIds.length} shifts deleted`);
-      setSelectedShiftIds([]);
+      clearSelection();
     } catch {
       toast.error('Failed to delete shifts');
     }
@@ -350,20 +358,6 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
             </div>
           </div>
         </div>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setIsBulkMode(!isBulkMode)}
-          className={cn(
-            "h-7 text-[10px] font-bold uppercase tracking-wider border-border transition-all",
-            isBulkMode
-              ? "bg-primary/10 text-primary border-primary/20"
-              : "bg-muted text-muted-foreground hover:text-foreground hover:bg-accent"
-          )}
-        >
-          {isBulkMode ? "Exit Bulk" : "Bulk Mode"}
-        </Button>
       </div>
 
       {/* ─── Calendar Grid ─── */}
@@ -479,21 +473,29 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                           />
                         ))}
 
-                        {/* Unified Add Shift Button — Perfectly Centered Glassmorphed Purple Circle */}
+                        {/* Unified Add Shift Button — Repositioned to corner if shifts exist */}
                         {canEdit && !isBulkMode && !isSydneyPast(date) && (
-                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                          <div className={cn(
+                            "absolute inset-0 flex pointer-events-none z-10",
+                            cellShifts.length > 0 ? "items-end justify-end p-2" : "items-center justify-center"
+                          )}>
                             <button
                               onClick={() => handleCellClick(role.id, date)}
                               className={cn(
-                                "w-9 h-9 flex items-center justify-center rounded-full transition-all duration-300 pointer-events-auto",
+                                "flex items-center justify-center rounded-full transition-all duration-300 pointer-events-auto",
                                 "bg-primary/30 text-primary border border-primary/40 backdrop-blur-md",
                                 "hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]",
-                                cellShifts.length > 0 ? "opacity-100 scale-100" : "opacity-40 scale-90 hover:opacity-100",
+                                cellShifts.length > 0 
+                                  ? "w-7 h-7 opacity-0 scale-75 group-hover/cell:opacity-100 group-hover/cell:scale-100" 
+                                  : "w-9 h-9 opacity-40 scale-90 hover:opacity-100",
                                 "group/add"
                               )}
                               title="Add Shift"
                             >
-                              <Plus className="w-5 h-5 transition-transform group-hover/add:rotate-90" />
+                              <Plus className={cn(
+                                cellShifts.length > 0 ? "h-4 w-4" : "h-5 w-5",
+                                "transition-transform group-hover/add:rotate-90"
+                              )} />
                             </button>
                           </div>
                         )}
@@ -508,17 +510,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
       </div>
 
 
-      {/* Bulk toolbar */}
-      {isBulkMode && selectedShiftIds.length > 0 && (
-        <BulkActionsToolbar
-          selectedCount={selectedShiftIds.length}
-          selectedShiftIds={selectedShiftIds}
-          onClearSelection={() => setSelectedShiftIds([])}
-          onDelete={handleDelete}
-          onPublish={handlePublish}
-          allowedActions={{ canPublish: true, canUnpublish: true }}
-        />
-      )}
+      {/* Bulk toolbar removed - now rendered in RostersPlannerPage */}
 
       {/* Shift modal */}
       {isModalOpen && (

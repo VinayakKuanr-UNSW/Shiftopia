@@ -21,13 +21,16 @@
  *  - Lookups:        shiftKeys.lookups._root        (reference data changed)
  */
 
-import { useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { shiftsQueries } from '../api/shifts.queries';
+import { useCallback, useEffect, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { shiftsQueries, type ShiftDeltaRow } from '../api/shifts.queries';
 import { shiftsCommands } from '../api/shifts.commands';
 import { complianceService } from '../services/compliance.service';
 import type { Shift } from '../domain/shift.entity';
 import { shiftKeys, rosterKeys, type ShiftFilters } from '../api/queryKeys';
+import { useToast } from '@/modules/core/hooks/use-toast';
+import { isAppError } from '@/platform/supabase/rpc/errors';
+import { supabase } from '@/platform/realtime/client';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -42,7 +45,7 @@ function snapshotLists(queryClient: ReturnType<typeof useQueryClient>): Snapshot
 }
 
 function rollbackLists(queryClient: ReturnType<typeof useQueryClient>, snapshot: Snapshot) {
-  snapshot.forEach(([key, data]) => queryClient.setQueryData(key, data));
+  snapshot.forEach(([key, data]) => queryClient.setQueryData<Shift[]>(key as QueryKey, data));
 }
 
 function patchLists(
@@ -306,6 +309,7 @@ export function useCreateShift() {
 /** Update an existing shift. Instant patch + rollback on error. */
 export function useUpdateShift() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   return useMutation({
     mutationFn: ({
@@ -343,10 +347,22 @@ export function useUpdateShift() {
       return { snapshot, prevDetail };
     },
 
-    onError: (_err, variables, context) => {
+    onError: (err, variables, context) => {
       if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
       if (context?.prevDetail) {
         queryClient.setQueryData(shiftKeys.detail(variables.shiftId), context.prevDetail);
+      }
+
+      // Surface version conflict as an actionable toast instead of a generic error
+      if (isAppError(err) && err.code === 'CONFLICT') {
+        toast({
+          title: 'Shift was modified',
+          description: 'Another user updated this shift. Your changes were not saved — the view has been refreshed.',
+          variant: 'destructive',
+        });
+        // Force a fresh fetch so the user sees the latest state immediately
+        queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+        queryClient.invalidateQueries({ queryKey: shiftKeys.detail(variables.shiftId) });
       }
     },
 
@@ -500,7 +516,14 @@ export function useUnpublishShift() {
       patchLists(queryClient, (old) =>
         old.map(s =>
           s.id === shiftId
-            ? { ...s, lifecycle_status: 'Draft' as const, is_published: false, is_draft: true }
+            ? { 
+                ...s, 
+                lifecycle_status: 'Draft' as const, 
+                is_published: false, 
+                is_draft: true,
+                assignment_outcome: null,
+                assignment_status: s.assigned_employee_id ? 'assigned' : 'unassigned',
+              }
             : s,
         ),
       );
@@ -515,6 +538,53 @@ export function useUnpublishShift() {
     onSettled: (_data, _err, { shiftId }) => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
       queryClient.invalidateQueries({ queryKey: shiftKeys.detail(shiftId) });
+      queryClient.invalidateQueries({ queryKey: ['shifts', 'offers'] });
+      queryClient.invalidateQueries({ queryKey: ['shifts', 'offerCount'] });
+    },
+  });
+}
+
+/**
+ * Bulk unpublish shifts.
+ * Reverts lifecycle_status to Draft for all selected IDs instantly.
+ */
+export function useBulkUnpublishShifts() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (shiftIds: string[]) => shiftsCommands.bulkUnpublishShifts(shiftIds),
+
+    onMutate: async (shiftIds) => {
+      await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
+      const snapshot = snapshotLists(queryClient);
+
+      patchLists(queryClient, (old) =>
+        old.map(s =>
+          shiftIds.includes(s.id)
+            ? { 
+                ...s, 
+                lifecycle_status: 'Draft' as const, 
+                is_published: false, 
+                is_draft: true,
+                assignment_outcome: null,
+                assignment_status: s.assigned_employee_id ? 'assigned' : 'unassigned',
+              }
+            : s,
+        ),
+      );
+
+      return { snapshot };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
+    },
+
+    onSettled: (_data, _err, shiftIds) => {
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      shiftIds.forEach(id => queryClient.invalidateQueries({ queryKey: shiftKeys.detail(id) }));
+      queryClient.invalidateQueries({ queryKey: ['shifts', 'offers'] });
+      queryClient.invalidateQueries({ queryKey: ['shifts', 'offerCount'] });
     },
   });
 }
@@ -588,6 +658,61 @@ export function useBulkDeleteShifts() {
 }
 
 /**
+ * Bulk update shift times.
+ * Optimized for resizing buckets — applies shifts in parallel to the server
+ * but performs a single optimistic surgical patch to the list views.
+ */
+export function useBulkUpdateShiftTimes() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      shiftIds,
+      updates,
+    }: {
+      shiftIds: string[];
+      updates: { start_time: string; end_time: string };
+    }) => {
+      // Loop updates - since there is no bulk RPC for this yet.
+      // Optimistic updates happen separately so this doesn't block the UI.
+      const results = await Promise.all(
+        shiftIds.map(id => shiftsCommands.updateShift(id, updates))
+      );
+      return results;
+    },
+
+    onMutate: async ({ shiftIds, updates }) => {
+      await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
+      const snapshot = snapshotLists(queryClient);
+
+      // Single surgical patch for all affected shifts
+      patchLists(queryClient, (old) =>
+        old.map(s => (shiftIds.includes(s.id) ? { ...s, ...updates } as Shift : s))
+      );
+
+      // Also patch detail views if loaded
+      shiftIds.forEach(id => {
+        const prevDetail = queryClient.getQueryData<Shift>(shiftKeys.detail(id));
+        if (prevDetail) {
+          queryClient.setQueryData(shiftKeys.detail(id), { ...prevDetail, ...updates });
+        }
+      });
+
+      return { snapshot };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
+    },
+
+    onSettled: (_data, _err, { shiftIds }) => {
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      shiftIds.forEach(id => queryClient.invalidateQueries({ queryKey: shiftKeys.detail(id) }));
+    },
+  });
+}
+
+/**
  * Employee drops a shift (pushes it to bidding).
  * Removes from employee view; marks as unassigned + on-bidding in manager view.
  */
@@ -632,6 +757,25 @@ export function useDropShift() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
       queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+    },
+  });
+}
+
+/**
+ * Immediately expire a shift offer (S3 → S2).
+ * Call when the client detects countdown = 0 or shift is within 4h lockout.
+ * Invalidates offers + roster lists so the UI reflects the new Draft state.
+ */
+export function useExpireOffer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (shiftId: string) => shiftsCommands.expireOfferNow(shiftId),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      queryClient.invalidateQueries({ queryKey: ['shifts', 'offers'] });
+      queryClient.invalidateQueries({ queryKey: ['shifts', 'offerCount'] });
+      queryClient.invalidateQueries({ queryKey: ['audit'] });
     },
   });
 }
@@ -787,6 +931,114 @@ export function useComplianceValidation() {
   });
 }
 
+// ── Delta sync hook ───────────────────────────────────────────────────────────
+
+/**
+ * useShiftDeltaSync — Realtime-backed surgical cache updater.
+ *
+ * Subscribes to a Supabase Realtime postgres_changes channel for the `shifts`
+ * table. When any row changes, fetches the delta (rows modified since the last
+ * cursor) via the `get_shift_delta` RPC and merges the result surgically into
+ * all active TanStack Query list caches — avoiding a full list invalidation.
+ *
+ * Deleted rows (deleted_at IS NOT NULL) are removed from the cache.
+ * Updated rows have their changed fields patched in-place.
+ *
+ * @param orgId      Organisation to subscribe to (required)
+ * @param deptIds    Optional dept filter (mirrors the list queries)
+ * @param startDate  Optional window start (YYYY-MM-DD)
+ * @param endDate    Optional window end   (YYYY-MM-DD)
+ */
+export function useShiftDeltaSync(params: {
+  orgId: string | null;
+  deptIds?: string[];
+  startDate?: string | null;
+  endDate?: string | null;
+}) {
+  const queryClient = useQueryClient();
+  // Cursor: ISO timestamp of the most recent change we have processed.
+  // Initialised to "now" so we only pick up changes after mount.
+  const cursorRef = useRef<string>(new Date().toISOString());
+  const fetchingRef = useRef(false);
+
+  const applyDelta = useCallback(async () => {
+    if (!params.orgId || fetchingRef.current) return;
+    fetchingRef.current = true;
+
+    try {
+      const rows = await shiftsQueries.getShiftDelta({
+        orgId: params.orgId,
+        since: cursorRef.current,
+        deptIds: params.deptIds,
+        startDate: params.startDate ?? undefined,
+        endDate: params.endDate ?? undefined,
+      });
+
+      if (rows.length === 0) return;
+
+      // Advance cursor to max(updated_at) of the batch
+      const maxUpdatedAt = rows.reduce((max, r) => (r.updated_at > max ? r.updated_at : max), cursorRef.current);
+      cursorRef.current = maxUpdatedAt;
+
+      const deleted = new Set(rows.filter(r => r.deleted_at !== null).map(r => r.id));
+      const updated = rows.filter(r => r.deleted_at === null);
+
+      queryClient.setQueriesData<Shift[]>({ queryKey: shiftKeys.lists }, (old) => {
+        if (!old || !Array.isArray(old)) return old;
+
+        // Remove soft-deleted rows
+        let next = old.filter(s => !deleted.has(s.id));
+
+        // Patch updated rows (only update fields that are in the delta)
+        next = next.map(s => {
+          const delta = updated.find(r => r.id === s.id);
+          if (!delta) return s;
+          return {
+            ...s,
+            shift_date:          delta.shift_date          ?? s.shift_date,
+            start_time:          delta.start_time          ?? s.start_time,
+            end_time:            delta.end_time            ?? s.end_time,
+            lifecycle_status:    (delta.lifecycle_status   ?? s.lifecycle_status) as Shift['lifecycle_status'],
+            assignment_status:   (delta.assignment_status  ?? s.assignment_status) as Shift['assignment_status'],
+            assigned_employee_id: delta.assigned_employee_id !== undefined
+              ? delta.assigned_employee_id
+              : s.assigned_employee_id,
+            version:             delta.version             ?? s.version,
+          };
+        });
+
+        return next;
+      });
+
+      // Invalidate detail views for any changed shift so they re-fetch fully
+      rows.forEach(r => {
+        queryClient.invalidateQueries({ queryKey: shiftKeys.detail(r.id) });
+      });
+    } catch (err) {
+      console.error('[useShiftDeltaSync] delta fetch error:', err);
+    } finally {
+      fetchingRef.current = false;
+    }
+  }, [params.orgId, params.deptIds, params.startDate, params.endDate, queryClient]);
+
+  useEffect(() => {
+    if (!params.orgId) return;
+
+    const channel = supabase
+      .channel(`shift-delta-${params.orgId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'shifts', filter: `organization_id=eq.${params.orgId}` },
+        () => { void applyDelta(); },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [params.orgId, applyDelta]);
+}
+
 // ── Combined convenience hook ─────────────────────────────────────────────────
 
 /**
@@ -806,7 +1058,9 @@ export function useRosterShifts(
   const bulkAssign = useBulkAssignShifts();
   const bulkUnassign = useBulkUnassignShifts();
   const bulkPublish = useBulkPublishShifts();
+  const bulkUnpublish = useBulkUnpublishShifts();
   const bulkDelete = useBulkDeleteShifts();
+  const bulkUpdateTimes = useBulkUpdateShiftTimes();
 
   /** Hard-invalidate all shift list queries (use sparingly). */
   const invalidateAll = useCallback(() => {
@@ -827,6 +1081,7 @@ export function useRosterShifts(
     bulkUnassign,
     bulkPublish,
     bulkDelete,
+    bulkUpdateTimes,
     invalidateAll,
   };
 }

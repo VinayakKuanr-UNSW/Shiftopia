@@ -33,7 +33,7 @@ import {
     sortISOWeekKeys,
     formatDateForDisplay
 } from '../utils';
-import { addDays, subDays, format, parseISO } from 'date-fns';
+import { addDays, subDays, format, parseISO, startOfISOWeek } from 'date-fns';
 
 const FORTNIGHT_LIMIT = 48;
 
@@ -157,11 +157,13 @@ function getWeekDateRangeString(weekKey: string): string {
 export const StudentVisa48hRule: ComplianceRule = {
     id: 'STUDENT_VISA_48H',
     name: 'Student Visa (48h/fortnight)',
-    description: 'Student visa holders cannot work more than 48 hours in any consecutive two-week period (rolling fortnight)',
+    description: 'Student visa holders cannot work more than 48h in any rolling fortnight. Toggle enforcement to make violations blocking.',
     appliesTo: ['add', 'assign', 'swap', 'bid'],
-    blocking: false,  // This is a hard visa requirement
+    // Blocking is determined at runtime from input.student_visa_enforcement
+    blocking: false,
 
     evaluate(input: ComplianceCheckInput): ComplianceResult {
+        const isEnforced = input.student_visa_enforcement ?? false;
         const { candidate_shift, existing_shifts } = input;
         const targetDateStr = candidate_shift.shift_date;
         const targetDate = parseISO(targetDateStr);
@@ -181,16 +183,25 @@ export const StudentVisa48hRule: ComplianceRule = {
         const allShifts = [...relevantExisting, candidate_shift];
         const weeklyTotals = buildWeeklyTotals(allShifts);
 
-        // Ensure we always have the candidate week and its neighbors (prev, current, next)
+        // Ensure we always have the candidate week and its neighbors (prev, current, next).
+        //
+        // F8 fix: deriving neighbours by adding ±7 days to the candidate week's Monday
+        // and re-parsing via getISOWeekInfoFromString. This is correct for all ISO
+        // years including those with 53 weeks (e.g. 2026), where the old arithmetic
+        // (week === 52 ? 1 : week + 1) would produce a phantom "W54" key.
         const candidateWeekInfo = getISOWeekInfoFromString(targetDateStr);
-        const prevWeekNum = candidateWeekInfo.week === 1 ? 52 : candidateWeekInfo.week - 1;
-        const prevWeekYear = candidateWeekInfo.week === 1 ? candidateWeekInfo.year - 1 : candidateWeekInfo.year;
-        const nextWeekNum = candidateWeekInfo.week === 52 ? 1 : candidateWeekInfo.week + 1;
-        const nextWeekYear = candidateWeekInfo.week === 52 ? candidateWeekInfo.year + 1 : candidateWeekInfo.year;
+        const candidateMonday   = format(startOfISOWeek(targetDate), 'yyyy-MM-dd');
 
-        const prevWeekKey = `${prevWeekYear}-W${prevWeekNum.toString().padStart(2, '0')}`;
+        const prevWeekInfo = getISOWeekInfoFromString(
+            format(subDays(parseISO(candidateMonday), 7), 'yyyy-MM-dd')
+        );
+        const nextWeekInfo = getISOWeekInfoFromString(
+            format(addDays(parseISO(candidateMonday), 7), 'yyyy-MM-dd')
+        );
+
+        const prevWeekKey = prevWeekInfo.key;
         const currWeekKey = candidateWeekInfo.key;
-        const nextWeekKey = `${nextWeekYear}-W${nextWeekNum.toString().padStart(2, '0')}`;
+        const nextWeekKey = nextWeekInfo.key;
 
         // Add missing weeks with 0 hours
         if (!weeklyTotals.has(prevWeekKey)) weeklyTotals.set(prevWeekKey, 0);
@@ -265,13 +276,15 @@ export const StudentVisa48hRule: ComplianceRule = {
             ? windows.reduce((peak, w) => w.totalHours > peak.totalHours ? w : peak, windows[0])
             : null;
 
+        const modeLabel = isEnforced ? ' (enforcement ON — blocking)' : ' (toggle OFF — warning only)';
+
         // Step 15: Build structured result
         const result: ComplianceResult = {
             rule_id: this.id,
             rule_name: this.name,
             status: hasViolation ? 'fail' : 'pass',
             summary: hasViolation
-                ? `Exceeds 48h limit: ${worstViolation!.totalHours}h in fortnight (${worstViolation!.weeks.join(' + ')})`
+                ? `Exceeds 48h limit: ${worstViolation!.totalHours}h in fortnight (${worstViolation!.weeks.join(' + ')})${modeLabel}`
                 : `Within 48h limit (${peakWindow?.totalHours || 0}h peak)`,
             details: hasViolation
                 ? `${violations.length} rolling fortnight(s) exceed 48h limit:\n${violations.map(v =>
@@ -296,9 +309,11 @@ export const StudentVisa48hRule: ComplianceRule = {
                     weeks: v.weeks,
                     hours: v.totalHours,
                     breakdown: { [v.weeks[0]]: v.weekAHours, [v.weeks[1]]: v.weekBHours }
-                }))
+                })),
+                enforcement_enabled: isEnforced
             },
-            blocking: this.blocking
+            // When enforcement toggle is ON, violations are blocking; otherwise they're warnings
+            blocking: isEnforced
         };
 
         return result;

@@ -8,10 +8,10 @@ export const rosterKeys = {
     all: ['enhanced-rosters'] as const,
     byDate: (date: string, departmentId: string) =>
         ['enhanced-rosters', date, departmentId] as const,
-    byRange: (startDate: string, endDate: string, departmentId: string) =>
-        ['enhanced-rosters', 'range', startDate, endDate, departmentId] as const,
-    conflict: (startDate: string, endDate: string, departmentId: string) =>
-        ['enhanced-rosters', 'conflict', startDate, endDate, departmentId] as const,
+    byRange: (startDate: string, endDate: string, departmentId: string, organizationId?: string, subDepartmentId?: string) =>
+        ['enhanced-rosters', 'range', startDate, endDate, departmentId, organizationId, subDepartmentId] as const,
+    conflict: (startDate: string, endDate: string, departmentId: string, organizationId?: string, subDepartmentId?: string) =>
+        ['enhanced-rosters', 'conflict', startDate, endDate, departmentId, organizationId, subDepartmentId] as const,
 };
 
 // ── Queries ────────────────────────────────────────────────────────
@@ -33,17 +33,21 @@ export function useRosterByDate(date: string, departmentId: string) {
 export function useRostersByDateRange(
     startDate: string,
     endDate: string,
-    departmentId: string
+    departmentId: string,
+    organizationId?: string,
+    subDepartmentId?: string
 ) {
     return useQuery({
-        queryKey: rosterKeys.byRange(startDate, endDate, departmentId),
+        queryKey: rosterKeys.byRange(startDate, endDate, departmentId, organizationId, subDepartmentId),
         queryFn: () =>
             enhancedRosterService.getRostersByDateRange(
                 startDate,
                 endDate,
-                departmentId
+                departmentId,
+                organizationId,
+                subDepartmentId
             ),
-        enabled: !!startDate && !!endDate && !!departmentId,
+        enabled: !!startDate && !!endDate && !!departmentId && !!organizationId,
     });
 }
 
@@ -54,17 +58,19 @@ export function useCheckDateRangeConflict(
     startDate: string,
     endDate: string,
     departmentId: string,
+    organizationId?: string,
+    subDepartmentId?: string,
     enabled: boolean = false
 ) {
     return useQuery({
-        queryKey: rosterKeys.conflict(startDate, endDate, departmentId),
+        queryKey: rosterKeys.conflict(startDate, endDate, departmentId, organizationId, subDepartmentId),
         queryFn: () =>
             enhancedRosterService.checkDateRangeConflict(
                 startDate,
                 endDate,
                 departmentId
             ),
-        enabled: enabled && !!startDate && !!endDate && !!departmentId,
+        enabled: enabled && !!startDate && !!endDate && !!departmentId && !!organizationId,
     });
 }
 

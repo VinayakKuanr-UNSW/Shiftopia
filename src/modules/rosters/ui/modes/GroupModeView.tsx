@@ -19,6 +19,7 @@ import {
   Zap,
   Lock,
   Wand2,
+  History,
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
@@ -38,8 +39,14 @@ import {
   EnhancedAddShiftModal,
   ShiftContext,
 } from '@/modules/rosters/ui/dialogs/EnhancedAddShiftModal';
+import { ShiftAuditSheet } from '@/modules/audit/components/ShiftAuditSheet';
 import { BulkActionsToolbar } from '@/modules/rosters/ui/components/BulkActionsToolbar';
 import { AddSubGroupDialog } from '@/modules/rosters/ui/dialogs/AddSubGroupDialog';
+import {
+  RenameSubGroupDialog,
+  CloneSubGroupDialog,
+  DeleteSubGroupDialog
+} from '@/modules/rosters/ui/dialogs/SubGroupActionsDialogs';
 import { SmartShiftCard, type ComplianceInfo } from '@/modules/rosters/ui/components/SmartShiftCard';
 import { GroupStatsSummary } from '@/modules/rosters/ui/components/GroupStatsSummary';
 import { ShiftCardLegend } from '@/modules/rosters/ui/components/ShiftCardLegend';
@@ -57,14 +64,23 @@ import {
   useUpdateShift,
   useBulkDeleteShifts,
   useBulkPublishShifts,
+  useBulkUnpublishShifts,
   usePublishShift,
   useUnpublishShift,
   useEmployees,
 } from '@/modules/rosters/state/useRosterShifts';
-import { useAddSubGroup, useAddSubGroupRange } from '@/modules/rosters/state/useRosterMutations';
+import { 
+  useAddSubGroup, 
+  useAddSubGroupRange,
+  useDeleteSubGroup,
+  useRenameSubGroup,
+  useCloneSubGroup
+} from '@/modules/rosters/state/useRosterMutations';
 import {
   getAllowedActions
 } from '../../domain/bulk-validation';
+import DayTimelineView from './DayTimelineView';
+import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { startOfMonth, endOfMonth } from 'date-fns';
 import {
   AlertDialog,
@@ -253,6 +269,9 @@ interface GroupModeViewProps {
   complianceMap?: Record<string, ComplianceInfo>;
   /** Show the shift card legend panel */
   showLegend?: boolean;
+  /** Zoom level for Day Timeline View (1h fixed) */
+  dayZoom?: 60;
+  selectedShiftIds?: string[];
 }
 
 interface VisualGroup {
@@ -438,12 +457,24 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   isShiftsLoading = false,
   complianceMap,
   showLegend = false,
+  dayZoom = 60,
   projection,
+  selectedShiftIds: propsSelectedShiftIds, // Destructure the prop and rename it
 }) => {
   const { toast } = useToast();
   const { isDark } = useTheme();
-  // Get enhanced filters from context
-  const { advancedFilters, hasActiveFilters, isBucketView } = useRosterUI();
+  // Get enhanced filters and selection state from context
+  const {
+    advancedFilters,
+    hasActiveFilters,
+    isBucketView,
+    selectedShiftIds: globalSelectedShiftIds,
+    toggleShiftSelection,
+    clearSelection
+  } = useRosterUI();
+
+  // Use props if provided, otherwise fallback to context
+  const selectedShiftIds = propsSelectedShiftIds ?? globalSelectedShiftIds;
 
   // Collapsible group state (persisted to localStorage)
   const [collapsedGroups, toggleGroupCollapse] = useCollapsedGroups();
@@ -453,6 +484,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   const updateShiftMutation = useUpdateShift(); // For DnD group changes
   const bulkDeleteMutation = useBulkDeleteShifts();
   const bulkPublishMutation = useBulkPublishShifts();
+  const bulkUnpublishMutation = useBulkUnpublishShifts();
   const publishShiftMutation = usePublishShift();
   const unpublishShiftMutation = useUnpublishShift();
   const addSubGroupMutation = useAddSubGroup();
@@ -535,6 +567,9 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   }, [templateStartDate, templateEndDate]);
 
 
+  // ==================== AUDIT SHEET ====================
+  const [auditShiftId, setAuditShiftId] = useState<string | null>(null);
+
   // ==================== MODAL STATE ====================
   const [isAddShiftOpen, setIsAddShiftOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -552,15 +587,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   const [isProcessingAction, setIsProcessingAction] = useState(false);
 
   // ==================== BULK MODE STATE ====================
-  const [selectedShiftIds, setSelectedShiftIds] = useState<Set<string>>(new Set());
-
-  // Reset selection when view or date changes
-  useEffect(() => {
-    setSelectedShiftIds(new Set());
-    if (isBulkMode && onBulkModeToggle) {
-      onBulkModeToggle(false);
-    }
-  }, [viewType, selectedDate]);
+  // Bulk mode selection state removed in favor of centralized store
 
   // ==================== SUB-GROUP DIALOG STATE ====================
   const [isAddSubGroupOpen, setIsAddSubGroupOpen] = useState(false);
@@ -570,6 +597,16 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   // ==================== EMERGENCY ALERT STATE ====================
   const [isEmergencyAlertOpen, setIsEmergencyAlertOpen] = useState(false);
   const [emergencyAlertMessage, setEmergencyAlertMessage] = useState('');
+
+  // ==================== SUB-GROUP ACTIONS STATE ====================
+  const [activeSubGroup, setActiveSubGroup] = useState<{ id: string, name: string, groupExternalId: string } | null>(null);
+  const [isRenameOpen, setIsRenameOpen] = useState(false);
+  const [isCloneOpen, setIsCloneOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+
+  const deleteSubGroupMutation = useDeleteSubGroup();
+  const renameSubGroupMutation = useRenameSubGroup();
+  const cloneSubGroupMutation = useCloneSubGroup();
 
 
 
@@ -775,12 +812,11 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         let assignmentOutcome = (shift as any).assignment_outcome;
         if (shift.assigned_employee_id && !assignmentOutcome) assignmentOutcome = 'pending';
 
-        const isPublished = shift.lifecycle_status === 'Published';
+        const isPublished = ['Published', 'InProgress', 'Completed'].includes(shift.lifecycle_status || '');
         const isDraft = shift.lifecycle_status === 'Draft';
 
-        // Lock calculation: Check if shift start time is in the past, OR if it's published
-        const isTimeLocked = isShiftLocked(shift.shift_date, shift.start_time, 'roster_management');
-        const isLocked = isTimeLocked || isPublished;
+        // Lock calculation: Check if shift start time is in the past OR explicitly locked in DB
+        const isLocked = shift.is_locked || isShiftLocked(shift.shift_date, shift.start_time, 'roster_management');
 
         sgEntry.shifts[dateKey].push({
           id: shift.id,
@@ -1002,7 +1038,8 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     shift: ShiftDisplay,
     group: VisualGroup,
     subGroup: VisualSubGroup,
-    date: Date
+    date: Date,
+    launchSource: 'grid' | 'edit' | 'global' = 'grid'
   ) => {
     // SECURITY: prevent editing started shifts even if the modal logic is bypassed
     const startTimeStr = shift.rawShift.start_time;
@@ -1070,11 +1107,29 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   // Push to Bidding - marks shift as available for bidding
   // Bidding window auto-closes 4 hours before shift start
   const handleRequestPublish = (shift: ShiftDisplay) => {
+    // SECURITY: prevent publishing started shifts
+    if (isShiftLocked(shift.rawShift.shift_date, shift.rawShift.start_time, 'roster_management')) {
+      toast({
+        title: 'Action Locked',
+        description: 'Cannot publish a shift that has already started.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setPendingAction({ type: 'publish', shift });
     setConfirmActionOpen(true);
   };
 
   const handleRequestUnpublish = (shift: ShiftDisplay) => {
+    // SECURITY: prevent unpublishing started shifts
+    if (isShiftLocked(shift.rawShift.shift_date, shift.rawShift.start_time, 'roster_management')) {
+      toast({
+        title: 'Action Locked',
+        description: 'Cannot unpublish a shift that has already started.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setPendingAction({ type: 'unpublish', shift });
     setConfirmActionOpen(true);
   };
@@ -1106,21 +1161,15 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     }
   };
 
-  const toggleShiftSelection = (shiftId: string) => {
+  const handleToggleShiftSelection = (id: string) => {
     // Check if shift is locked before toggling
-    const shift = externalShifts.find(s => s.id === shiftId);
+    const shift = externalShifts.find(s => s.id === id);
     if (shift) {
-      if (isShiftLocked(shift.shift_date, shift.end_time || shift.start_time, 'roster_management')) {
+      if (isShiftLocked(shift.shift_date, shift.start_time, 'roster_management')) {
         return;
       }
     }
-
-    setSelectedShiftIds((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(shiftId)) newSet.delete(shiftId);
-      else newSet.add(shiftId);
-      return newSet;
-    });
+    toggleShiftSelection(id);
   };
 
   const currentVisibleShiftIds = useMemo(() => {
@@ -1141,17 +1190,28 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   }, [visualGroups]);
 
   const handleSelectAll = () => {
-    if (selectedShiftIds.size === currentVisibleShiftIds.length) {
-      setSelectedShiftIds(new Set());
+    const currentVisibleShiftIds = visualGroups
+      .flatMap(g => g.subGroups)
+      .flatMap(sg => Object.values(sg.shifts).flat())
+      .map(s => s.id);
+
+    if (selectedShiftIds.length === currentVisibleShiftIds.length) {
+      clearSelection();
     } else {
-      setSelectedShiftIds(new Set(currentVisibleShiftIds));
+      // In a real scenario we'd want a bulk select action in the store
+      visualGroups
+        .flatMap(g => g.subGroups)
+        .flatMap(sg => Object.values(sg.shifts).flat())
+        .forEach(s => {
+          if (!selectedShiftIds.includes(s.id)) handleToggleShiftSelection(s.id);
+        });
     }
   };
 
 
 
   const handleBulkDelete = async () => {
-    if (selectedShiftIds.size === 0) return;
+    if (selectedShiftIds.length === 0) return;
 
     const shiftIdsArray = Array.from(selectedShiftIds);
 
@@ -1164,7 +1224,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           description: `Successfully deleted ${successCount} shift${successCount !== 1 ? 's' : ''}.`,
         });
         // Only clear selection if something was actually deleted
-        setSelectedShiftIds(new Set());
+        clearSelection();
       } else {
         toast({
           title: "Delete Failed",
@@ -1328,6 +1388,14 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete Shift
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-border" />
+                  <DropdownMenuItem
+                    onClick={(e) => { e.stopPropagation(); setAuditShiftId(shift.rawShift.id); }}
+                    className="text-muted-foreground hover:bg-accent cursor-pointer"
+                  >
+                    <History className="h-4 w-4 mr-2" />
+                    Audit Trail
+                  </DropdownMenuItem>
                 </>
               );
             }
@@ -1336,13 +1404,23 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
             return (
               <>
                 {isLocked ? (
-                  <DropdownMenuItem
-                    onClick={() => handleDeleteShift(shift)}
-                    className="text-destructive hover:bg-destructive/10 cursor-pointer"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Shift (Locked)
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem
+                      onClick={() => handleDeleteShift(shift)}
+                      className="text-destructive hover:bg-destructive/10 cursor-pointer"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Shift (Locked)
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator className="bg-border" />
+                    <DropdownMenuItem
+                      onClick={(e) => { e.stopPropagation(); setAuditShiftId(shift.rawShift.id); }}
+                      className="text-muted-foreground hover:bg-accent cursor-pointer"
+                    >
+                      <History className="h-4 w-4 mr-2" />
+                      Audit Trail
+                    </DropdownMenuItem>
+                  </>
                 ) : (
                   <>
                     {shift.isDraft && (
@@ -1371,7 +1449,9 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                         className="text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
                       >
                         <Undo2 className="h-4 w-4 mr-2" />
-                        Unpublish Shift
+                        {shift.rawShift.assignment_outcome === 'offered' 
+                          ? 'Retract Offer & Move to Draft' 
+                          : 'Unpublish Shift'}
                       </DropdownMenuItem>
                     )}
 
@@ -1384,12 +1464,21 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                       <Trash2 className="h-4 w-4 mr-2" />
                       Delete Shift
                     </DropdownMenuItem>
+                    <DropdownMenuSeparator className="bg-border" />
+                    <DropdownMenuItem
+                      onClick={(e) => { e.stopPropagation(); setAuditShiftId(shift.rawShift.id); }}
+                      className="text-muted-foreground hover:bg-accent cursor-pointer"
+                    >
+                      <History className="h-4 w-4 mr-2" />
+                      Audit Trail
+                    </DropdownMenuItem>
                   </>
                 )}
               </>
             );
           })()}
-        </DropdownMenuContent>
+
+          </DropdownMenuContent>
       </DropdownMenu>
     );
 
@@ -1430,8 +1519,8 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           compliance={complianceMap?.[shift.id]}
           headerAction={canEdit && !isBulkMode ? menu : undefined}
           className={cn(isPastDate && "opacity-60")}
-          isSelected={isBulkMode && selectedShiftIds.has(shift.id)}
-          onClick={() => isBulkMode && toggleShiftSelection(shift.id)}
+                            isSelected={isBulkMode && selectedShiftIds.includes(shift.id)}
+          onClick={() => isBulkMode && handleToggleShiftSelection(shift.id)}
           isLocked={isLocked}
         />
       </div>
@@ -1455,7 +1544,37 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     <DndProvider backend={HTML5Backend}>
       <div className="flex flex-col h-full transition-colors bg-background">
 
-        {/* Main Content */}
+        {/* ── Day Timeline View (replaces grid for day view) ── */}
+        {viewType === 'day' && (
+          <DayTimelineView
+            visualGroups={visualGroups as any}
+            selectedDate={selectedDate}
+            canEdit={canEdit}
+            isShiftsLoading={isShiftsLoading}
+            isBulkMode={isBulkMode}
+            selectedShiftIds={new Set(selectedShiftIds)}
+            onBulkToggle={handleToggleShiftSelection}
+            complianceMap={complianceMap}
+            isBucketView={false} // Bucket mode explicitly disabled for Day View
+            zoom={dayZoom as 60}
+            onSlotClick={handleAddShift as any}
+            onShiftEdit={handleEditShift as any}
+            onShiftDelete={handleDeleteShift as any}
+            onShiftPublish={handleRequestPublish as any}
+            onShiftUnpublish={handleRequestUnpublish as any}
+            onShiftAudit={(id) => setAuditShiftId(id)}
+            onAddSubGroup={(group) => handleAddSubGroup(group as any)}
+            onSubGroupAction={(action, subGroup, group) => {
+              setActiveSubGroup({ id: subGroup.id, name: subGroup.name, groupExternalId: (group as any).type || '' });
+              if (action === 'rename') setIsRenameOpen(true);
+              else if (action === 'clone') setIsCloneOpen(true);
+              else setIsDeleteOpen(true);
+            }}
+          />
+        )}
+
+        {/* Main Content (week / 3-day / month grid) */}
+        {viewType !== 'day' && (
         <ScrollArea className="flex-1">
           {/* Shift Card Legend (collapsible) */}
           {showLegend && (
@@ -1634,10 +1753,64 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                 subIdx < group.subGroups.length - 1 && 'border-b border-border'
                               )}
                             >
-                              <td className="sticky left-0 z-10 backdrop-blur-sm border-r border-border px-4 py-3 align-top bg-card group-hover:bg-accent/30 transition-colors">
-                                <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground transition-colors">
-                                  {subGroup.name}
-                                </span>
+                              <td className="sticky left-0 z-10 backdrop-blur-sm border-r border-border px-4 py-3 align-top bg-card group-hover:bg-accent/30 transition-colors group">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-sm font-medium text-foreground/80 group-hover:text-foreground transition-colors overflow-hidden text-ellipsis whitespace-nowrap">
+                                    {subGroup.name}
+                                  </span>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="start" className="w-48 bg-gray-900 border-gray-800">
+                                      <DropdownMenuItem 
+                                        className="gap-2 focus:bg-white/5 cursor-pointer"
+                                        onClick={() => {
+                                          setActiveSubGroup({ 
+                                            id: subGroup.id, 
+                                            name: subGroup.name,
+                                            groupExternalId: group.type || '' 
+                                          });
+                                          setIsRenameOpen(true);
+                                        }}
+                                      >
+                                        <Edit2 className="h-3.5 w-3.5" />
+                                        Rename
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem 
+                                        className="gap-2 focus:bg-white/5 cursor-pointer"
+                                        onClick={() => {
+                                          setActiveSubGroup({ 
+                                            id: subGroup.id, 
+                                            name: subGroup.name,
+                                            groupExternalId: group.type || '' 
+                                          });
+                                          setIsCloneOpen(true);
+                                        }}
+                                      >
+                                        <ArrowLeftRight className="h-3.5 w-3.5" />
+                                        Clone
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator className="bg-white/10" />
+                                      <DropdownMenuItem 
+                                        className="gap-2 text-red-500 focus:text-red-500 focus:bg-red-500/10 cursor-pointer"
+                                        onClick={() => {
+                                          setActiveSubGroup({ 
+                                            id: subGroup.id, 
+                                            name: subGroup.name,
+                                            groupExternalId: group.type || '' 
+                                          });
+                                          setIsDeleteOpen(true);
+                                        }}
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                        Delete
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
                               </td>
 
                               {dates.map((date, dateIdx) => {
@@ -1651,7 +1824,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                   <td
                                     key={dateIdx}
                                     className={cn(
-                                      'px-2 py-3 align-top min-h-[100px] relative',
+                                      'px-2 py-3 align-top min-h-[100px] relative group',
                                       dateIdx < dates.length - 1 && 'border-r border-border',
                                       // Ghost cell styling
                                       isGhost && 'bg-muted/30 border-dashed border-border cursor-pointer hover:bg-muted/50',
@@ -1720,8 +1893,15 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                                   const sd = cellShifts.find(cs => cs.id === shiftId);
                                                   if (sd) handleRequestPublish(sd);
                                                 }}
+                                                onUnpublishShift={(shiftId) => {
+                                                  const sd = cellShifts.find(cs => cs.id === shiftId);
+                                                  if (sd) handleRequestUnpublish(sd);
+                                                }}
                                                 onBulkPublish={(shiftIds) => {
                                                   bulkPublishMutation.mutate(shiftIds);
+                                                }}
+                                                onBulkUnpublish={(shiftIds) => {
+                                                  bulkUnpublishMutation.mutate(shiftIds);
                                                 }}
                                                 onBulkDelete={(shiftIds) => {
                                                   bulkDeleteMutation.mutate(shiftIds);
@@ -1741,21 +1921,29 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                           ))
                                         )}
 
-                                        {/* Unified Add Shift Button — Perfectly Centered Glassmorphed Purple Circle */}
+                                        {/* Unified Add Shift Button — Repositioned to corner if shifts exist */}
                                         {!isBulkMode && canEdit && !cellIsPast && (
-                                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                                          <div className={cn(
+                                            "absolute inset-0 flex pointer-events-none z-10",
+                                            cellShifts.length > 0 ? "items-end justify-end p-2" : "items-center justify-center"
+                                          )}>
                                             <button
                                               onClick={() => handleAddShift(group, subGroup, date)}
                                               className={cn(
-                                                "w-9 h-9 flex items-center justify-center rounded-full transition-all duration-300 pointer-events-auto",
+                                                "flex items-center justify-center rounded-full transition-all duration-300 pointer-events-auto",
                                                 "bg-primary/30 text-primary border border-primary/40 backdrop-blur-md",
                                                 "hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]",
-                                                cellShifts.length > 0 ? "opacity-100 scale-100" : "opacity-40 scale-90 hover:opacity-100",
+                                                cellShifts.length > 0 
+                                                  ? "w-7 h-7 opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100" 
+                                                  : "w-9 h-9 opacity-40 scale-90 hover:opacity-100",
                                                 "group/add"
                                               )}
                                               title="Add Shift"
                                             >
-                                              <Plus className="h-5 w-5 transition-transform group-hover/add:rotate-90" />
+                                              <Plus className={cn(
+                                                cellShifts.length > 0 ? "h-4 w-4" : "h-5 w-5",
+                                                "transition-transform group-hover/add:rotate-90"
+                                              )} />
                                             </button>
                                           </div>
                                         )}
@@ -1777,6 +1965,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
             })}
           </div>
         </ScrollArea>
+        )}
 
         {/* Delete Dialog */}
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -1806,79 +1995,30 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Add/Edit Shift Modal */}
-        <EnhancedAddShiftModal
-          isOpen={isAddShiftOpen}
-          onClose={() => {
-            setIsAddShiftOpen(false);
-            setShiftContext(null);
-            setIsEditMode(false);
-            setEditingShift(null);
-          }}
-          onSuccess={handleShiftCreated}
-          context={shiftContext}
-          editMode={isEditMode}
-          existingShift={editingShift}
+        {/* Shift Audit Trail Sheet */}
+        <ShiftAuditSheet
+          shiftId={auditShiftId}
+          open={auditShiftId !== null}
+          onClose={() => setAuditShiftId(null)}
         />
 
-        {/* Bulk Actions */}
-        {
-          isBulkMode && selectedShiftIds.size > 0 && (
-            <BulkActionsToolbar
-              selectedCount={selectedShiftIds.size}
-              selectedShiftIds={Array.from(selectedShiftIds)}
-              onClearSelection={() => setSelectedShiftIds(new Set())}
-              onSelectAll={handleSelectAll}
-              onDelete={handleBulkDelete}
-              onPublish={async (shiftIds) => {
-                try {
-                  const result = await bulkPublishMutation.mutateAsync(shiftIds);
-                  const count = (result as any).success_count || shiftIds.length;
-                  toast({
-                    title: "Shifts Published",
-                    description: `Successfully published ${count} shift${count !== 1 ? 's' : ''}.`
-                  });
-                  setSelectedShiftIds(new Set());
-                } catch (error: any) {
-                  console.error('[GroupModeView] Publish failed:', error);
-                  toast({
-                    title: "Publish Failed",
-                    description: "Some shifts could not be published.",
-                    variant: "destructive"
-                  });
-                }
-              }}
-              onUnpublish={async (shiftIds) => {
-                try {
-                  await Promise.all(shiftIds.map(id => unpublishShiftMutation.mutateAsync({ shiftId: id })));
-                  toast({
-                    title: "Shifts Unpublished",
-                    description: `Successfully unpublished ${shiftIds.length} shift${shiftIds.length !== 1 ? 's' : ''}.`
-                  });
-                  setSelectedShiftIds(new Set());
-                } catch (error: any) {
-                  console.error('[GroupModeView] Unpublish failed:', error);
-                  toast({
-                    title: "Unpublish Failed",
-                    description: "Some shifts could not be unpublished.",
-                    variant: "destructive"
-                  });
-                }
-              }}
-              allowedActions={(() => {
-                const selected = externalShifts.filter(s => selectedShiftIds.has(s.id));
-                const canUnpublish = selected.length > 0 && selected.every(s => s.lifecycle_status === 'Published');
+      {/* Add/Edit Shift Modal */}
+      <EnhancedAddShiftModal
+        isOpen={isAddShiftOpen}
+        onClose={() => {
+          setIsAddShiftOpen(false);
+          setShiftContext(null);
+          setIsEditMode(false);
+          setEditingShift(null);
+        }}
+        onSuccess={handleShiftCreated}
+        context={shiftContext}
+        editMode={isEditMode}
+        existingShift={editingShift}
+      />
 
-                return {
-                  canPublish: selected.length > 0 && selected.every(s => !s.is_published),
-                  canUnpublish,
-                  canUnpublishReason: canUnpublish ? undefined : 'Only Published shifts can be unpublished',
-                };
-              })()}
-            />
-          )
-        }
-      </div >
+      {/* Bulk actions toolbar removed - now rendered in RostersPlannerPage */}
+    </div>
 
       {/* Confirmation Dialog */}
       <AlertDialog open={confirmActionOpen} onOpenChange={setConfirmActionOpen}>
@@ -1951,6 +2091,64 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           open={isAddSubGroupOpen}
           onOpenChange={setIsAddSubGroupOpen}
         />
+      )}
+
+      {/* SubGroup Actions Dialogs */}
+      {activeSubGroup && (
+        <>
+          <RenameSubGroupDialog
+            subgroupId={activeSubGroup.id}
+            currentName={activeSubGroup.name}
+            isOpen={isRenameOpen}
+            onOpenChange={setIsRenameOpen}
+            onRename={async (newName) => {
+              await renameSubGroupMutation.mutateAsync({ 
+                orgId: organizationId || '',
+                deptId: departmentId || '',
+                groupExternalId: activeSubGroup.groupExternalId,
+                oldName: activeSubGroup.name,
+                newName,
+                startDate: dateRangeStart || '',
+                endDate: dateRangeEnd || ''
+              });
+            }}
+          />
+          <CloneSubGroupDialog
+            subgroupId={activeSubGroup.id}
+            currentName={activeSubGroup.name}
+            isOpen={isCloneOpen}
+            onOpenChange={setIsCloneOpen}
+            onClone={async (newName) => {
+              await cloneSubGroupMutation.mutateAsync({ 
+                orgId: organizationId || '',
+                deptId: departmentId || '',
+                groupExternalId: activeSubGroup.groupExternalId,
+                sourceName: activeSubGroup.name,
+                newName,
+                startDate: dateRangeStart || '',
+                endDate: dateRangeEnd || ''
+              });
+            }}
+          />
+          <DeleteSubGroupDialog
+            subgroupId={activeSubGroup.id}
+            subGroupName={activeSubGroup.name}
+            isOpen={isDeleteOpen}
+            onOpenChange={setIsDeleteOpen}
+            onConfirm={async () => {
+              await deleteSubGroupMutation.mutateAsync({
+                orgId: organizationId || '',
+                deptId: departmentId || '',
+                groupExternalId: activeSubGroup.groupExternalId,
+                name: activeSubGroup.name,
+                startDate: dateRangeStart || '',
+                endDate: dateRangeEnd || ''
+              });
+              setIsDeleteOpen(false);
+            }}
+            isDeleting={deleteSubGroupMutation.isPending}
+          />
+        </>
       )}
 
     </DndProvider>

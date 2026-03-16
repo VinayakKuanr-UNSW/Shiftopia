@@ -14,10 +14,8 @@ import {
     ShiftTimeRange
 } from '../types';
 import { checkCompliance } from '../engine';
-import { logComplianceCheck } from '../api/compliance.api';
 
 interface UseComplianceOptions {
-    autoLog?: boolean;     // Automatically log to database
     debounceMs?: number;   // Debounce delay in ms (default: 300)
 }
 
@@ -29,20 +27,9 @@ interface UseComplianceReturn {
     reset: () => void;
 }
 
-/**
- * Hash an input for idempotency check
- */
-function hashInput(input: ComplianceCheckInput): string {
-    return JSON.stringify({
-        e: input.employee_id,
-        a: input.action_type,
-        c: input.candidate_shift,
-        x: input.existing_shifts_for_day.length
-    });
-}
 
 export function useCompliance(options: UseComplianceOptions = {}): UseComplianceReturn {
-    const { autoLog = false, debounceMs = 300 } = options;
+    const { debounceMs = 300 } = options;
 
     const [result, setResult] = useState<ComplianceCheckResult | null>(null);
     const [loading, setLoading] = useState(false);
@@ -51,8 +38,6 @@ export function useCompliance(options: UseComplianceOptions = {}): UseCompliance
     // For debouncing
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // For idempotency - track last logged input hash
-    const lastLoggedHash = useRef<string | null>(null);
 
     // Cleanup debounce on unmount
     useEffect(() => {
@@ -80,17 +65,6 @@ export function useCompliance(options: UseComplianceOptions = {}): UseCompliance
                     const checkResult = checkCompliance(input);
                     setResult(checkResult);
 
-                    // Optionally log to database (with idempotency)
-                    if (autoLog) {
-                        const inputHash = hashInput(input);
-
-                        // Only log if input changed
-                        if (inputHash !== lastLoggedHash.current) {
-                            await logComplianceCheck(input, checkResult);
-                            lastLoggedHash.current = inputHash;
-                        }
-                    }
-
                     resolve(checkResult);
                 } catch (err) {
                     const e = err as Error;
@@ -101,7 +75,7 @@ export function useCompliance(options: UseComplianceOptions = {}): UseCompliance
                 }
             }, debounceMs);
         });
-    }, [autoLog, debounceMs]);
+    }, [debounceMs]);
 
     const reset = useCallback(() => {
         if (debounceRef.current) {
@@ -110,7 +84,6 @@ export function useCompliance(options: UseComplianceOptions = {}): UseCompliance
         setResult(null);
         setError(null);
         setLoading(false);
-        lastLoggedHash.current = null;
     }, []);
 
     return {
@@ -130,12 +103,14 @@ export function buildComplianceInput(params: {
     actionType: 'add' | 'assign' | 'swap' | 'bid';
     candidateShift: ShiftTimeRange;
     existingShifts: ShiftTimeRange[];
+    shiftId?: string;
 }): ComplianceCheckInput {
     return {
         employee_id: params.employeeId,
         action_type: params.actionType,
         candidate_shift: params.candidateShift,
-        existing_shifts: params.existingShifts
+        existing_shifts: params.existingShifts,
+        shift_id: params.shiftId
     };
 }
 

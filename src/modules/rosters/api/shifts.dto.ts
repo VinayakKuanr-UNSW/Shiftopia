@@ -29,8 +29,17 @@ export interface CreateShiftData {
     template_sub_group?: string | null;
     is_from_template?: boolean;
     template_instance_id?: string | null;
+    /** How the shift was created: 'manual' | 'template' | 'autoscheduler' */
+    creation_source?: string;
+    /** How the employee was assigned: 'direct' | 'manual' | 'autoscheduler' | 'dnd' */
+    assignment_source?: string | null;
 }
 
 export interface UpdateShiftData extends Partial<CreateShiftData> {
     cancellation_reason?: string | null;
+    /** Current version read from the shift — enables optimistic concurrency.
+     *  If provided and the DB version has moved on, the server returns a
+     *  VERSION_CONFLICT error (SQLSTATE 40001 → AppError code 'CONFLICT').
+     *  Omit (undefined) to skip the check for non-critical updates. */
+    expectedVersion?: number;
 }

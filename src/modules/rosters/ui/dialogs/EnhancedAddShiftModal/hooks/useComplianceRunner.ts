@@ -1,10 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
-    getRegisteredRules,
-    runRule,
     ComplianceResult,
     ComplianceCheckInput,
-    HardValidationResult
+    HardValidationResult,
+    assignmentEvaluator,
+    assignmentResultToComplianceResults,
 } from '@/modules/compliance';
 import { validateCompliance, type QualificationViolation } from '@/modules/rosters/services/compliance.service';
 
@@ -48,21 +48,45 @@ export function useComplianceRunner({
     shiftId
 }: UseComplianceRunnerProps) {
     const [isRunning, setIsRunning] = useState(false);
-    const rules = getRegisteredRules();
+    // Monotonically-increasing counter. Each call to runChecks captures its
+    // own runId. After any async work, we check whether this is still the
+    // most-recent invocation before committing state — cancelling stale runs.
+    const runIdRef = useRef(0);
 
-    const runChecks = useCallback(async () => {
+    const runChecks = useCallback(async (overrideEmployeeId?: string) => {
+        const runId = ++runIdRef.current;
         setIsRunning(true);
-        // Small delay to allow UI to update if needed
         await new Promise(resolve => setTimeout(resolve, 10));
 
         try {
             const input = buildComplianceInput();
-            const newResults: Record<string, ComplianceResult | null> = {};
+            if (overrideEmployeeId) {
+                input.employee_id = overrideEmployeeId;
+            }
 
-            // ── 1. Client-side rules (fast, uses local data) ──────────────────
-            rules.forEach(rule => {
-                newResults[rule.id] = runRule(rule.id, input);
+            // ── 1. Constraint Solver — all constraints simultaneously ──────────
+            //
+            // Replaces the old sequential runRule() loop with the constraint
+            // solver (Google OR-Tools CP-SAT pattern). All 8 constraints are
+            // evaluated simultaneously against the hypothetical schedule.
+            const solverResult = assignmentEvaluator.evaluate({
+                employee_id:    input.employee_id,
+                name:           input.employee_id,   // name shown in violation details
+                current_shifts: input.existing_shifts.map(s => ({ ...s })),
+                candidate_shift: { ...input.candidate_shift },
+                action_type:    (input.action_type as 'add' | 'assign' | 'bid') ?? 'assign',
+                config: {
+                    rest_gap_hours:           input.rest_gap_hours,
+                    averaging_cycle_weeks:    input.averaging_cycle_weeks,
+                    student_visa_enforcement: input.student_visa_enforcement,
+                    public_holiday_dates:     input.public_holiday_dates,
+                    candidate_is_training:    input.candidate_is_training,
+                },
             });
+
+            const newResults: Record<string, ComplianceResult | null> = {
+                ...assignmentResultToComplianceResults(solverResult, input.employee_id),
+            };
 
             // ── 2. Server-side authoritative checks (when employee assigned) ──
             // The client-side NO_OVERLAP rule relies on employeeExistingShifts
@@ -89,6 +113,9 @@ export function useComplianceRunner({
                         const hasOverlap = serverResult.violations.some(v =>
                             v.toLowerCase().includes('overlap')
                         );
+                        // Preserve client-side calculation (which has existing/candidate time fields
+                        // for visualization). Server is authoritative for pass/fail only.
+                        const clientCalc = newResults['NO_OVERLAP']?.calculation;
                         newResults['NO_OVERLAP'] = {
                             rule_id: 'NO_OVERLAP',
                             rule_name: 'No Overlapping Shifts',
@@ -100,7 +127,15 @@ export function useComplianceRunner({
                                 ? (serverResult.violations.find(v => v.toLowerCase().includes('overlap'))
                                     ?? 'Shift overlap detected in database')
                                 : 'No overlapping shifts found.',
-                            calculation: { existing_hours: 0, candidate_hours: 0, total_hours: 0, limit: 0 },
+                            calculation: hasOverlap
+                                ? (clientCalc ?? {
+                                    existing_hours: 0, candidate_hours: 0, total_hours: 0, limit: 0,
+                                    existing_start_time: '',
+                                    existing_end_time: '',
+                                    candidate_start_time: input.candidate_shift.start_time,
+                                    candidate_end_time: input.candidate_shift.end_time,
+                                })
+                                : { existing_hours: 0, candidate_hours: 0, total_hours: 0, limit: 0 },
                             blocking: true,
                         };
                     }
@@ -108,29 +143,50 @@ export function useComplianceRunner({
                     // ── 3. Qualification compliance (role/license/skill) ──────────
                     if (serverResult.checksPerformed.includes('qualification')) {
                         const qualViolations = serverResult.qualificationViolations || [];
-                        const hasViolation = qualViolations.length > 0;
-                        newResults['QUALIFICATION_COMPLIANCE'] = {
-                            rule_id: 'QUALIFICATION_COMPLIANCE',
-                            rule_name: 'Qualification Compliance',
-                            status: hasViolation ? 'fail' : 'pass',
-                            summary: buildQualificationSummary(qualViolations),
-                            details: hasViolation
-                                ? qualViolations.map(v => v.message).join('\n')
-                                : 'All role, license, and skill requirements met.',
-                            calculation: {
-                                existing_hours: 0,
-                                candidate_hours: 0,
-                                total_hours: 0,
-                                limit: 0,
-                                violations: qualViolations,
-                            },
+                        
+                        // Rule 1: Role Contract Match
+                        const roleViolations = qualViolations.filter(v => v.type === 'ROLE_MISMATCH');
+                        newResults['ROLE_CONTRACT_MATCH'] = {
+                            rule_id: 'ROLE_CONTRACT_MATCH',
+                            rule_name: 'Role Contract Match',
+                            status: roleViolations.length > 0 ? 'fail' : 'pass',
+                            summary: roleViolations.length > 0 ? 'Contract mismatch detected' : 'Active contract found',
+                            details: roleViolations.length > 0 ? roleViolations.map(v => v.message).join('\n') : 'Employee holds an active contract for this role.',
+                            calculation: { existing_hours: 0, candidate_hours: 0, total_hours: 0, limit: 0, violations: roleViolations },
+                            blocking: true,
+                        };
+
+                        // Rule 2: Qualification Match (Missing skills/licenses)
+                        const missingViolations = qualViolations.filter(v => v.type === 'SKILL_MISSING' || v.type === 'LICENSE_MISSING');
+                        newResults['QUALIFICATION_MATCH'] = {
+                            rule_id: 'QUALIFICATION_MATCH',
+                            rule_name: 'Qualification & Certification',
+                            status: missingViolations.length > 0 ? 'fail' : 'pass',
+                            summary: missingViolations.length > 0 ? 'Missing requirements' : 'All qualifications held',
+                            details: missingViolations.length > 0 ? missingViolations.map(v => v.message).join('\n') : 'Employee holds all required skills and licenses.',
+                            calculation: { existing_hours: 0, candidate_hours: 0, total_hours: 0, limit: 0, violations: missingViolations },
+                            blocking: true,
+                        };
+
+                        // Rule 3: Qualification Expiry (Expired skills/licenses)
+                        const expiryViolations = qualViolations.filter(v => v.type === 'SKILL_EXPIRED' || v.type === 'LICENSE_EXPIRED');
+                        newResults['QUALIFICATION_EXPIRY'] = {
+                            rule_id: 'QUALIFICATION_EXPIRY',
+                            rule_name: 'Qualification Expiry',
+                            status: expiryViolations.length > 0 ? 'fail' : 'pass',
+                            summary: expiryViolations.length > 0 ? 'Expired requirements' : 'All qualifications valid',
+                            details: expiryViolations.length > 0 ? expiryViolations.map(v => v.message).join('\n') : 'All required qualifications are valid and not expired.',
+                            calculation: { existing_hours: 0, candidate_hours: 0, total_hours: 0, limit: 0, violations: expiryViolations },
                             blocking: true,
                         };
                     }
-                } catch {
+                } catch (err) {
                     // Server unavailable — keep client-side result as best-effort
                 }
             }
+
+            // Discard results if a newer runChecks call has already fired
+            if (runId !== runIdRef.current) return;
 
             setComplianceResults(newResults);
             setHasRun(true);
@@ -138,12 +194,19 @@ export function useComplianceRunner({
         } catch (error) {
             console.error('[useComplianceRunner] Error running checks:', error);
         } finally {
-            setIsRunning(false);
+            if (runId === runIdRef.current) setIsRunning(false);
         }
-    }, [buildComplianceInput, rules, setComplianceResults, setHasRun, setNeedsRerun, shiftId]);
+    }, [buildComplianceInput, setComplianceResults, setHasRun, setNeedsRerun, shiftId]);
+
+    const clearResults = useCallback(() => {
+        setComplianceResults({});
+        setHasRun(false);
+        setNeedsRerun(false);
+    }, [setComplianceResults, setHasRun, setNeedsRerun]);
 
     return {
         runChecks,
+        clearResults,
         isRunning
     };
 }

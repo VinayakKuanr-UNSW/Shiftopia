@@ -27,8 +27,6 @@ import {
     AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from '@/modules/core/ui/primitives/alert-dialog';
 import { BidComplianceModal } from '../components/BidComplianceModal';
-import { BidComplianceBadge } from '../components/BidComplianceBadge';
-import { useBulkBidCompliance, BulkComplianceShift } from '../../hooks/useBulkBidCompliance';
 
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
@@ -64,6 +62,7 @@ interface ShiftData {
     isUrgent?: boolean;
     stateId?: string;
     subGroupColor?: string;
+    droppedById?: string | null;
 }
 
 interface BidData {
@@ -244,7 +243,8 @@ export const EmployeeBidsPage: React.FC = () => {
                 biddingWindowCloses: (s as any).bidding_close_at || null,
                 isUrgent,
                 stateId: determineShiftState(s as any),
-                subGroupColor: getDeptColor(s.group_type, s.departments?.name || '')
+                subGroupColor: getDeptColor(s.group_type, s.departments?.name || ''),
+                droppedById: (s as any).dropped_by_id
             };
         });
     }, [rawAvailableShifts]);
@@ -294,24 +294,6 @@ export const EmployeeBidsPage: React.FC = () => {
         }).filter(Boolean) as BidData[];
     }, [rawMyBids]);
 
-    // ========================================================================
-    // BULK COMPLIANCE CHECKS
-    // ========================================================================
-    const bulkComplianceShifts: BulkComplianceShift[] = React.useMemo(() => {
-        return availableShifts.map(s => ({
-            id: s.id,
-            date: s.date,
-            startTime: s.startTime,
-            endTime: s.endTime,
-            unpaidBreak: s.unpaidBreak,
-        }));
-    }, [availableShifts]);
-
-    const {
-        results: bulkComplianceResults,
-        isLoading: isLoadingCompliance,
-        getResultForShift,
-    } = useBulkBidCompliance(bulkComplianceShifts);
 
     // ========================================================================
     // SORTING
@@ -336,7 +318,10 @@ export const EmployeeBidsPage: React.FC = () => {
     // SELECTION HANDLERS
     // ========================================================================
     const handleSelectAllAvailable = (isChecked: boolean) => {
-        const eligibleShifts = availableShifts.filter(s => s.isEligible).map(s => s.id);
+        const eligibleShifts = availableShifts.filter(s => {
+            const isDroppedByMe = user?.id === s.droppedById;
+            return s.isEligible && !isDroppedByMe;
+        }).map(s => s.id);
         setSelectedBidIds(isChecked ? eligibleShifts : []);
     };
 
@@ -421,9 +406,24 @@ export const EmployeeBidsPage: React.FC = () => {
     };
 
     const handleBulkExpressInterest = () => {
-        // For bulk, run compliance check on first, then proceed sequentially
-        // Simplified: just bid without check for bulk (can be enhanced later)
-        selectedBidIds.forEach(id => placeBidMutation.mutate(id));
+        // Filter out shifts that the user has dropped or are otherwise ineligible
+        const validIds = selectedBidIds.filter(id => {
+            const shift = availableShifts.find(s => s.id === id);
+            if (!shift) return false;
+            const isDroppedByMe = user?.id === shift.droppedById;
+            return !isDroppedByMe;
+        });
+
+        if (validIds.length === 0 && selectedBidIds.length > 0) {
+            toast({ 
+                title: 'Bidding Restricted', 
+                description: 'None of the selected shifts can be bid on (compliance or previously dropped).',
+                variant: 'destructive'
+            });
+            return;
+        }
+
+        validIds.forEach(id => placeBidMutation.mutate(id));
         setSelectedBidIds([]);
     };
 
@@ -470,27 +470,6 @@ export const EmployeeBidsPage: React.FC = () => {
                     />
                     <span className="text-xs text-slate-500 dark:text-white/60">Select</span>
 
-                    {/* Compliance Badge - only for available shifts */}
-                    {!isBidCard && (
-                        <div className="ml-auto">
-                            {(() => {
-                                const compResult = getResultForShift(shift.id);
-                                if (isLoadingCompliance) {
-                                    return <BidComplianceBadge status="loading" passedCount={0} totalCount={8} />;
-                                }
-                                if (!compResult) {
-                                    return <BidComplianceBadge status="unknown" passedCount={0} totalCount={8} />;
-                                }
-                                return (
-                                    <BidComplianceBadge
-                                        status={compResult.status}
-                                        passedCount={compResult.passedCount}
-                                        totalCount={compResult.totalCount}
-                                    />
-                                );
-                            })()}
-                        </div>
-                    )}
 
                     {/* Bid Status Badge - only for my bids */}
                     {isBidCard && bidStatus && (
@@ -643,58 +622,27 @@ export const EmployeeBidsPage: React.FC = () => {
                         <Ban className="mr-2 h-4 w-4" /> Closed
                     </Button>
                 ) : (
-                    // Available shifts: Two-button layout
                     <div className="flex gap-2">
-                        {/* Check Compliance Button */}
-                        <Button
-                            variant="outline"
-                            className="flex-1 border-white/10 hover:bg-purple-500/10 hover:text-purple-400"
-                            onClick={() => {
-                                setComplianceModalShift(shift);
-                                setIsComplianceModalOpen(true);
-                            }}
-                        >
-                            <Shield className="mr-1.5 h-4 w-4" /> Check
-                        </Button>
-
-                        {/* Express Interest / Withdraw Button */}
+                        {/* Integrated Check & Bid Button */}
                         {isBidPlaced ? (
                             <Button
                                 variant="outline"
-                                className="flex-1 border-white/10 hover:bg-red-500/10 hover:text-red-400"
+                                className="w-full border-white/10 hover:bg-red-500/10 hover:text-red-400"
                                 onClick={() => handleWithdrawBid(existingBid!.id)}
                             >
-                                <XCircle className="mr-1.5 h-4 w-4" /> Withdraw
+                                <XCircle className="mr-1.5 h-4 w-4" /> Withdraw Interest
                             </Button>
-                        ) : (() => {
-                            const compResult = getResultForShift(shift.id);
-                            const canBid = !compResult || compResult.status !== 'fail';
-                            const isBlocked = compResult?.status === 'fail';
-
-                            return (
-                                <Button
-                                    className={cn(
-                                        "flex-1",
-                                        canBid
-                                            ? "bg-purple-600 hover:bg-purple-700 text-white"
-                                            : "bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-white/50 cursor-not-allowed"
-                                    )}
-                                    disabled={isBlocked || placeBidMutation.isPending}
-                                    onClick={() => {
-                                        if (canBid) {
-                                            placeBidMutation.mutate(shift.id);
-                                        }
-                                    }}
-                                    title={isBlocked ? "Compliance check failed - cannot bid" : "Express interest in this shift"}
-                                >
-                                    {placeBidMutation.isPending && placeBidMutation.variables === shift.id ? (
-                                        <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Bidding...</>
-                                    ) : (
-                                        <><ThumbsUp className="mr-1.5 h-4 w-4" /> Interest</>
-                                    )}
-                                </Button>
-                            );
-                        })()}
+                        ) : (
+                            <Button
+                                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/20 font-bold"
+                                onClick={() => {
+                                    setComplianceModalShift(shift);
+                                    setIsComplianceModalOpen(true);
+                                }}
+                            >
+                                <Shield className="mr-1.5 h-4 w-4" /> Check Compliance & Bid
+                            </Button>
+                        )}
                     </div>
                 )}
             </motion.div>
@@ -772,7 +720,7 @@ export const EmployeeBidsPage: React.FC = () => {
                             <div className="space-y-1">
                                 <h4 className="text-sm font-medium text-blue-700 dark:text-blue-200">Available Shifts</h4>
                                 <p className="text-sm text-blue-600/80 dark:text-blue-200/70 leading-relaxed max-w-2xl">
-                                    Browse and express interest in shifts matching your role and department. Use the global scope to refine your view.
+                                    Browse and bid on shifts matching your role and department. Use the global scope to refine your view.
                                 </p>
                             </div>
                         </div>
@@ -818,7 +766,6 @@ export const EmployeeBidsPage: React.FC = () => {
                                         <SortableTableHeader sortKey="date" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Date</SortableTableHeader>
                                         <th className="p-3 text-left">Time</th>
                                         <th className="p-3 text-left">Net</th>
-                                        <th className="p-3 text-left">Compliance</th>
                                         <th className="p-3 text-left w-[200px]">Actions</th>
                                     </tr>
                                 </thead>
@@ -826,9 +773,9 @@ export const EmployeeBidsPage: React.FC = () => {
                                     {filteredAvailableShifts.map(shift => {
                                         const existingBid = myBids.find(b => String(b.shiftId) === String(shift.id) && b.status !== 'withdrawn');
                                         const isBidPlaced = !!existingBid;
-                                        const compResult = getResultForShift(shift.id);
-                                        const canBid = !compResult || compResult.status !== 'fail';
-                                        const isBlocked = compResult?.status === 'fail';
+                                        const isDroppedByMe = user?.id === shift.droppedById;
+                                        const canBid = !isDroppedByMe;
+                                        const blockReason = "You cannot bid on a shift you dropped";
 
                                         // Calculate expired status securely using ZonedDateTime
                                         const shiftStart = parseZonedDateTime(shift.date, shift.startTime, SYDNEY_TZ);
@@ -845,19 +792,6 @@ export const EmployeeBidsPage: React.FC = () => {
                                                 <td className="p-3">{shift.date}</td>
                                                 <td className="p-3">{shift.startTime}-{shift.endTime}</td>
                                                 <td className="p-3">{Math.round(shift.netLength)}m</td>
-                                                <td className="p-3">
-                                                    {isLoadingCompliance ? (
-                                                        <BidComplianceBadge status="loading" passedCount={0} totalCount={8} />
-                                                    ) : compResult ? (
-                                                        <BidComplianceBadge
-                                                            status={compResult.status}
-                                                            passedCount={compResult.passedCount}
-                                                            totalCount={compResult.totalCount}
-                                                        />
-                                                    ) : (
-                                                        <BidComplianceBadge status="unknown" passedCount={0} totalCount={8} />
-                                                    )}
-                                                </td>
                                                 <td className="p-3">
                                                     {isExpired ? (
                                                         <Button disabled size="sm" className="w-full bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-white/50 h-8 text-xs">
@@ -897,11 +831,11 @@ export const EmployeeBidsPage: React.FC = () => {
                                                                             ? "bg-purple-600 hover:bg-purple-700 text-white"
                                                                             : "bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-white/50 cursor-not-allowed"
                                                                     )}
-                                                                    disabled={isBlocked || placeBidMutation.isPending}
+                                                                    disabled={!canBid || placeBidMutation.isPending}
                                                                     onClick={() => {
                                                                         if (canBid) placeBidMutation.mutate(shift.id);
                                                                     }}
-                                                                    title={isBlocked ? "Compliance check failed" : "Express interest"}
+                                                                    title={!canBid ? blockReason : "Express interest"}
                                                                 >
                                                                     {placeBidMutation.isPending && placeBidMutation.variables === shift.id ? (
                                                                         <Loader2 className="mr-1 h-3 w-3 animate-spin" />

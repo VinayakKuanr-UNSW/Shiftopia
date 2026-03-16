@@ -46,6 +46,7 @@ import {
     HelpCircle,
     Lock,
     CopyPlus,
+    Loader2,
 } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
@@ -96,6 +97,11 @@ export interface SmartShiftCardProps {
     isLocked?: boolean;
     /** Additional class names */
     className?: string;
+    /**
+     * When true, compliance is still being evaluated (map entry not yet populated).
+     * Renders a loading spinner in the compliance icon slot instead of a result.
+     */
+    compliancePending?: boolean;
 }
 
 // ============================================================================
@@ -150,6 +156,7 @@ function getComplianceIcon(status?: ComplianceInfo['status']) {
 const CompactCard: React.FC<SmartShiftCardProps> = ({
     shift,
     compliance,
+    compliancePending,
     onClick,
     isSelected,
     isDragging,
@@ -188,8 +195,8 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
         <div
             className={cn(
                 'relative flex flex-col rounded-lg overflow-hidden border bg-card shadow-sm transition-all h-full group select-none',
-                onClick && !isLocked && 'cursor-pointer hover:shadow-md hover:ring-1 hover:ring-primary/30',
-                isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background',
+                onClick && (!isLocked || isSelected) && 'cursor-pointer hover:shadow-md hover:ring-1 hover:ring-primary/30',
+                isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background border-primary/50 bg-primary/5 dark:bg-primary/20',
                 isDragging && 'opacity-50 scale-95',
                 isDragOver && 'ring-2 ring-blue-400 ring-offset-1',
                 hasComplianceIssue && 'border-amber-500/40',
@@ -212,7 +219,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                     )}>
                         {stateId}
                     </span>
-                    <span className="text-[10px] font-bold uppercase tracking-widest truncate opacity-80">
+                    <span className="text-[11px] font-bold uppercase tracking-widest truncate opacity-80">
                         {shift.roster_subgroup?.name || shift.sub_group_name || roleName}
                     </span>
                 </div>
@@ -223,18 +230,31 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                         </div>
                     )}
                     {shift.bidding_status === 'bidding_closed_no_winner' ? (
-                        <TooltipProvider>
+                        <TooltipProvider delayDuration={0}>
                             <Tooltip>
-                                <TooltipTrigger>
+                                <TooltipTrigger asChild>
                                     <Lock className="h-3 w-3 text-orange-600 dark:text-orange-400" />
                                 </TooltipTrigger>
                                 <TooltipContent className="bg-orange-600 text-white border-none py-1 px-2">
-                                    <p className="text-[10px] font-medium">Locked (Emergency)</p>
+                                    <p className="text-[10px] font-medium">Locked (Emergency Only)</p>
                                 </TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
                     ) : (
-                        isLocked && <Lock className="h-3 w-3 opacity-70" />
+                        isLocked && (
+                            <TooltipProvider delayDuration={0}>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <div className="flex items-center justify-center bg-amber-500/10 rounded p-0.5">
+                                            <Lock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                                        </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="bg-amber-600 text-white border-none py-1 px-2">
+                                        <p className="text-[10px] font-medium">Shift Started & Locked (Read-Only)</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )
                     )}
                     {headerAction || (!isLocked && <MoreHorizontal className="h-3.5 w-3.5 opacity-40" />)}
                 </div>
@@ -268,12 +288,12 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                 <div className="grid grid-cols-6 gap-0.5 mt-auto pt-1 border-t border-border/50">
 
                     {/* 1. Lifecycle */}
-                    <div className="flex justify-center" title={`Lifecycle: ${shift.lifecycle_status}`}>
+                    <div className="flex justify-center" title={`Lifecycle: ${shift.lifecycle_status}`} aria-label={`Lifecycle: ${shift.lifecycle_status}`}>
                         {getLifecycleIcon(shift.lifecycle_status)}
                     </div>
 
                     {/* 2. Assignment */}
-                    <div className="flex justify-center" title={`Assignment: ${shift.assigned_employee_id ? 'Assigned' : 'Unassigned'}`}>
+                    <div className="flex justify-center" title={`Assignment: ${shift.assigned_employee_id ? 'Assigned' : 'Unassigned'}`} aria-label={`Assignment: ${shift.assigned_employee_id ? 'assigned' : 'unassigned'}`}>
                         {shift.assigned_employee_id ? (
                             <UserCheck className="h-3.5 w-3.5 text-emerald-500" />
                         ) : (
@@ -282,7 +302,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                     </div>
 
                     {/* 3. Helper for Offer */}
-                    <div className="flex justify-center" title={`Offer: ${shift.assignment_outcome || 'None'}`}>
+                    <div className="flex justify-center" title={`Offer: ${shift.assignment_outcome || 'None'}`} aria-label={`Offer: ${shift.assignment_outcome || 'none'}`}>
                         {(() => {
                             const o = shift.assignment_outcome;
                             if (!o) return <Circle className="h-3.5 w-3.5 text-muted-foreground/30" />; // Grey 0
@@ -295,7 +315,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                     </div>
 
                     {/* 4. Helper for Bidding */}
-                    <div className="flex justify-center" title={`Bidding: ${shift.bidding_status || 'None'}`}>
+                    <div className="flex justify-center" title={`Bidding: ${shift.bidding_status || 'None'}`} aria-label={`Bidding: ${shift.bidding_status || 'none'}`}>
                         {(() => {
                             const b = shift.bidding_status;
                             if (!b || b === 'not_on_bidding') return <Ban className="h-3.5 w-3.5 text-muted-foreground/30" />; // Grey 0
@@ -307,7 +327,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                     </div>
 
                     {/* 5. Helper for Trade */}
-                    <div className="flex justify-center" title={`Trade: ${(shift.trade_requested_at || shift.is_trade_requested) ? 'Requested' : 'None'}`}>
+                    <div className="flex justify-center" title={`Trade: ${(shift.trade_requested_at || shift.is_trade_requested) ? 'Requested' : 'None'}`} aria-label={`Trade: ${(shift.trade_requested_at || shift.is_trade_requested) ? 'requested' : 'none'}`}>
                         {(shift.trade_requested_at || shift.is_trade_requested) ? (
                             <ArrowLeftRight className="h-3.5 w-3.5 text-purple-500" />
                         ) : (
@@ -316,9 +336,15 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                     </div>
 
                     {/* 6. Helper for Compliance */}
-                    <div className="flex justify-center" title={`Compliance: ${compliance?.status || 'Compliant'}`}>
-                        {/* Always show icon. If undefined, assume compliant. */}
-                        {getComplianceIcon(compliance?.status)}
+                    <div
+                        className="flex justify-center"
+                        title={compliancePending ? 'Checking compliance…' : `Compliance: ${compliance?.status || 'Compliant'}`}
+                        aria-label={compliancePending ? 'Compliance check in progress' : `Compliance: ${compliance?.status || 'compliant'}`}
+                    >
+                        {compliancePending
+                            ? <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                            : getComplianceIcon(compliance?.status)
+                        }
                     </div>
 
                 </div>
@@ -359,7 +385,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
             className={cn(
                 'relative flex flex-col rounded-xl overflow-hidden border bg-card shadow-sm transition-all group select-none',
                 onClick && !isLocked && 'cursor-pointer hover:shadow-lg hover:ring-1 hover:ring-primary/30',
-                isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
+                isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background border-primary/50 bg-primary/5 dark:bg-primary/20',
                 isDragging && 'opacity-50 scale-95',
                 isDragOver && 'ring-2 ring-blue-400 ring-offset-2',
                 hasComplianceIssue && compliance?.status === 'violation' && 'border-red-500/50',
@@ -389,9 +415,9 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         </Badge>
                     )}
                     {shift.bidding_status === 'bidding_closed_no_winner' ? (
-                        <TooltipProvider>
+                        <TooltipProvider delayDuration={0}>
                             <Tooltip>
-                                <TooltipTrigger>
+                                <TooltipTrigger asChild>
                                     <Lock className="h-4 w-4 text-orange-600 dark:text-orange-400 mr-1" />
                                 </TooltipTrigger>
                                 <TooltipContent className="bg-orange-600 text-white border-none py-1 px-2">
@@ -400,7 +426,20 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                             </Tooltip>
                         </TooltipProvider>
                     ) : (
-                        isLocked && <Lock className="h-4 w-4 opacity-70 mr-1" />
+                        isLocked && (
+                            <TooltipProvider delayDuration={0}>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <div className="flex items-center justify-center bg-amber-500/10 rounded p-1 mr-1">
+                                            <Lock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                                        </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="bg-amber-600 text-white border-none py-1 px-2">
+                                        <p className="text-xs font-medium">Shift Started & Locked (Read-Only)</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )
                     )}
                     {getLifecycleIcon(shift.lifecycle_status)}
                     {headerAction || (!isLocked && <MoreHorizontal className="h-4 w-4 opacity-50" />)}

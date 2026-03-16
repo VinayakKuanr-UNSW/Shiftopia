@@ -5,7 +5,7 @@
  * Reuses the visual ComplianceTabContent for consistent UI/UX with EnhancedAddShiftModal.
  */
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -17,19 +17,26 @@ import {
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ComplianceTabContent } from '@/modules/rosters/ui/components/ComplianceTabContent';
 import {
-    getRegisteredRules,
-    runRule,
     ComplianceResult,
     ComplianceCheckInput,
     HardValidationResult,
+    assignmentEvaluator,
+    assignmentResultToComplianceResults,
+    getScenarioWindow,
 } from '@/modules/compliance';
-import { complianceService } from '@/modules/rosters/services/compliance.service';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/platform/realtime/client';
-import { format, parseISO, addDays, subDays } from 'date-fns';
-import { ThumbsUp, Loader2, Shield, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { ThumbsUp, Loader2, Shield, AlertTriangle, XCircle, Play } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
+import { validateCompliance } from '@/modules/rosters/services/compliance.service';
+
+function calcNetMinutes(s: { startTime: string; endTime: string; unpaidBreak?: number }): number {
+    const parse = (t: string) => { const [h, m] = (t || '00:00').split(':').map(Number); return h * 60 + (m || 0); };
+    let gross = parse(s.endTime) - parse(s.startTime);
+    if (gross < 0) gross += 24 * 60;
+    return Math.max(0, gross - (s.unpaidBreak ?? 0));
+}
 
 // =============================================================================
 // TYPES
@@ -59,6 +66,7 @@ interface ShiftData {
     isUrgent?: boolean;
     stateId?: string;
     subGroupColor?: string;
+    droppedById?: string | null;
 }
 
 interface BidComplianceModalProps {
@@ -86,14 +94,16 @@ export function BidComplianceModal({
     const [checksComplete, setChecksComplete] = useState(false);
 
     // Fetch existing shifts for the employee around the target date
-    const { data: existingShifts = [], isLoading: isLoadingShifts } = useQuery({
+    const {
+        data: existingShifts = [],
+        isLoading: isLoadingShifts,
+    } = useQuery({
         queryKey: ['employeeShiftsForCompliance', user?.id, shift?.date],
         queryFn: async () => {
             if (!user?.id || !shift?.date) return [];
 
-            // Fetch shifts 30 days before and after to check consecutive days, rest gaps, student visa, etc.
-            const startDate = format(subDays(parseISO(shift.date), 30), 'yyyy-MM-dd');
-            const endDate = format(addDays(parseISO(shift.date), 30), 'yyyy-MM-dd');
+            // Fetch shifts ±28 days — covers every constraint's required window.
+            const { start: startDate, end: endDate } = getScenarioWindow(shift.date);
 
             console.log('[BidComplianceModal] Fetching shifts for employee:', user.id);
             console.log('[BidComplianceModal] Date range:', startDate, 'to', endDate);
@@ -118,22 +128,10 @@ export function BidComplianceModal({
         enabled: isOpen && !!user?.id && !!shift?.date,
     });
 
-    // Build hard validation result (overlap check)
+    // Hard validation — kept minimal for bid flow (overlap is handled by solver)
     const hardValidation: HardValidationResult = useMemo(() => {
-        if (!shift) return { passed: true, errors: [] };
-
-        // Check for overlapping shifts on the same day
-        const sameDayShifts = existingShifts.filter(s => s.shift_date === shift.date);
-        const errors: { code: string; message: string; context?: any }[] = [];
-
-        const candidateStart = shift.startTime;
-        const candidateEnd = shift.endTime;
-
-        return {
-            passed: true,
-            errors: []
-        };
-    }, [shift, existingShifts]);
+        return { passed: true, errors: [] };
+    }, []);
 
     // Build compliance input for the rule engine
     // IMPORTANT: The compliance engine expects snake_case property names
@@ -171,12 +169,88 @@ export function BidComplianceModal({
         };
     }, [shift, existingShifts, user]);
 
-    // Auto-run checks when modal opens and data is ready
-    useEffect(() => {
-        if (isOpen && shift && !isLoadingShifts && !checksComplete) {
-            handleRunAllChecks();
+    const handleRunAllChecks = useCallback(async () => {
+        if (!shift || !user) return;
+
+        setIsRunningChecks(true);
+        await new Promise(resolve => setTimeout(resolve, 400));
+
+        const input = buildComplianceInput();
+
+        // ── 1. Constraint Solver — all constraints simultaneously (OR-Tools pattern) ──
+        //
+        // Bidding uses the same AssignmentEvaluator as assignment/add.
+        // WORKING_DAYS_CAP is excluded for 'bid' (bids don't commit to days worked yet).
+        const solverResult = assignmentEvaluator.evaluate({
+            employee_id:     input.employee_id,
+            name:            input.employee_id,
+            current_shifts:  input.existing_shifts,
+            candidate_shift: input.candidate_shift,
+            action_type:     'bid',
+        });
+
+        const newResults: Record<string, ComplianceResult | null> = {
+            ...assignmentResultToComplianceResults(solverResult, input.employee_id),
+        };
+
+        // 2. Server-side checks
+        try {
+            const serverResult = await validateCompliance({
+                employeeId: user.id,
+                shiftDate: shift.date,
+                startTime: shift.startTime + ':00',
+                endTime: shift.endTime + ':00',
+                netLengthMinutes: calcNetMinutes(shift),
+                shiftId: shift.id
+            });
+
+            // Rules 1–3: update with server results
+            const updateServerRule = (ruleId: string, name: string) => {
+                const violations = serverResult.qualificationViolations.filter(v => 
+                    ruleId === 'ROLE_CONTRACT_MATCH' ? v.type === 'ROLE_MISMATCH' :
+                    ruleId === 'QUALIFICATION_MATCH' ? (v.type === 'LICENSE_MISSING' || v.type === 'SKILL_MISSING') :
+                    v.type === 'LICENSE_EXPIRED' || v.type === 'SKILL_EXPIRED'
+                );
+
+                newResults[ruleId] = {
+                    rule_id: ruleId,
+                    rule_name: name,
+                    status: violations.length > 0 ? 'fail' : 'pass',
+                    summary: violations.length > 0
+                        ? `${violations.length} issue(s) detected`
+                        : 'Rule passed successfully',
+                    details: violations.length > 0
+                        ? violations.map(v => v.message).join('\n')
+                        : 'Validation confirmed by server.',
+                    blocking: true,
+                    calculation: { existing_hours: 0, candidate_hours: 0, total_hours: 0, limit: 0, violations }
+                };
+            };
+
+            updateServerRule('ROLE_CONTRACT_MATCH', 'Role Contract Match');
+            updateServerRule('QUALIFICATION_MATCH', 'Qualification & Certification');
+            updateServerRule('QUALIFICATION_EXPIRY', 'Qualification Expiry');
+
+            // Override overlap with server result for accuracy if available
+            if (serverResult.checksPerformed.includes('overlap')) {
+                const hasOverlap = serverResult.violations.some(v => v.toLowerCase().includes('overlap'));
+                newResults['NO_OVERLAP'] = {
+                    ...newResults['NO_OVERLAP']!,
+                    status: hasOverlap ? 'fail' : 'pass',
+                    summary: hasOverlap ? 'Overlap detected by server' : 'No overlap confirmed',
+                    details: hasOverlap ? 'The server confirms this employee is already scheduled during this time.' : 'Server verified schedule availability.',
+                    blocking: true
+                };
+            }
+
+        } catch (err) {
+            console.error('[BidComplianceModal] Server check failed:', err);
         }
-    }, [isOpen, shift, isLoadingShifts]);
+
+        setRuleResults(newResults);
+        setIsRunningChecks(false);
+        setChecksComplete(true);
+    }, [buildComplianceInput, shift, user]);
 
     // Reset state when modal closes
     useEffect(() => {
@@ -186,32 +260,13 @@ export function BidComplianceModal({
         }
     }, [isOpen]);
 
-    const handleRunAllChecks = useCallback(() => {
-        setIsRunningChecks(true);
-        setTimeout(() => {
-            const input = buildComplianceInput();
-            console.log('[BidComplianceModal] Running compliance checks with input:', input);
-
-            const rules = getRegisteredRules();
-            console.log('[BidComplianceModal] Registered rules:', rules.map(r => r.id));
-
-            const newResults: Record<string, ComplianceResult | null> = {};
-
-            rules.forEach(rule => {
-                const result = runRule(rule.id, input);
-                console.log(`[BidComplianceModal] Rule ${rule.id} result:`, result);
-                newResults[rule.id] = result;
-            });
-
-            console.log('[BidComplianceModal] All results:', newResults);
-            setRuleResults(newResults);
-            setIsRunningChecks(false);
-            setChecksComplete(true);
-        }, 100);
-    }, [buildComplianceInput]);
+    const isDroppedByMe = useMemo(() => {
+        return user?.id === shift?.droppedById;
+    }, [user?.id, shift?.droppedById]);
 
     // Determine if user can proceed
     const canProceed = useMemo(() => {
+        if (isDroppedByMe) return false;
         if (!checksComplete) return false;
         if (!hardValidation.passed) return false;
 
@@ -221,7 +276,7 @@ export function BidComplianceModal({
         );
 
         return !hasBlockingFailure;
-    }, [checksComplete, hardValidation, ruleResults]);
+    }, [isDroppedByMe, checksComplete, hardValidation, ruleResults]);
 
     const hasWarnings = useMemo(() => {
         return Object.values(ruleResults).some(r => r?.status === 'warning');
@@ -260,33 +315,65 @@ export function BidComplianceModal({
                 </div>
 
                 {/* Loading State */}
-                {(isLoadingShifts || isRunningChecks || !checksComplete) && (
+                {(isLoadingShifts || isRunningChecks) && (
                     <div className="flex flex-col items-center justify-center py-16 animate-in fade-in zoom-in duration-300">
                         <div className="relative">
                             <div className="absolute inset-0 bg-indigo-500/20 blur-xl rounded-full animate-pulse" />
                             <Loader2 className="h-10 w-10 animate-spin text-indigo-600 dark:text-indigo-400 relative z-10" />
                         </div>
-                        <p className="text-muted-foreground mt-4 font-medium">Analyzing compliance rules...</p>
+                        <p className="text-muted-foreground mt-4 font-medium">
+                            {isLoadingShifts ? "Preparing compliance data..." : "Analyzing compliance rules..."}
+                        </p>
                     </div>
                 )}
 
-                {/* Compliance Content - Only show after checks complete */}
-                {checksComplete && !isRunningChecks && (
+                {/* Dropped Shift Block Alert */}
+                {isDroppedByMe && (
+                    <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                            <h4 className="text-sm font-black text-rose-700 dark:text-rose-400 uppercase tracking-wider">Bidding Restricted</h4>
+                            <p className="text-sm text-rose-600/80 dark:text-rose-400/70 font-medium">
+                                You previously dropped this shift. Employees are not permitted to bid on shifts they have recently dropped.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Compliance Content - Show whenever not actively running */}
+                {!isRunningChecks && !isLoadingShifts && (
                     <ComplianceTabContent
                         hardValidation={hardValidation}
                         ruleResults={ruleResults}
                         setRuleResults={setRuleResults}
                         buildComplianceInput={buildComplianceInput}
-                        needsRerun={false}
                         onChecksComplete={() => setChecksComplete(true)}
+                        onRunAll={handleRunAllChecks}
                         shiftId={shift?.id}
                     />
                 )}
 
                 <DialogFooter className="mt-8 gap-3">
-                    <Button variant="outline" onClick={onClose} className="border-border hover:bg-muted font-bold px-6">
-                        Cancel
-                    </Button>
+                        <div className="flex gap-2">
+                             <Button 
+                                variant="outline" 
+                                onClick={onClose} 
+                                className="border-border hover:bg-muted font-bold px-6"
+                            >
+                                Cancel
+                            </Button>
+                            {checksComplete && (
+                                <Button
+                                    variant="secondary"
+                                    onClick={handleRunAllChecks}
+                                    disabled={isRunningChecks}
+                                    className="gap-2 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-bold"
+                                >
+                                    <Play className="h-4 w-4 fill-current" />
+                                    Re-Run Checks
+                                </Button>
+                            )}
+                        </div>
 
                     {checksComplete && (
                         <Button

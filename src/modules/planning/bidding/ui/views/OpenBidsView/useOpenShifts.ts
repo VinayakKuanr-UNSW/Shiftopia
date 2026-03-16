@@ -37,7 +37,7 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
     refetch,
     isError,
   } = useQuery({
-    queryKey: shiftKeys.managerBidShifts(queryFilters.organizationId),
+    queryKey: shiftKeys.managerBidShifts(queryFilters.organizationId, queryFilters),
     queryFn: async () => {
       if (!queryFilters.organizationId) return [];
       const data = await shiftsQueries.getManagerBidShifts(queryFilters as any);

@@ -31,7 +31,7 @@ const SHIFT_SELECT = `
 ` as const;
 
 /** Normalise a raw supabase row into our Shift interface shape */
-function normalizeShiftRow(row: Record<string, unknown>): Shift {
+export function normalizeShiftRow(row: Record<string, unknown>): Shift {
     return {
         ...row,
         is_trade_requested:
@@ -707,20 +707,13 @@ export const shiftsQueries = {
                 throw error;
             }
 
-            // Join with events to get the performer
-            const { data: events } = await supabase
-                .from('shift_audit_events')
-                .select('shift_id, performed_by_name')
-                .in('event_type', ['offer_sent', 'shift_published'])
-                .in('shift_id', (data || []).map(s => s.id));
-
             return (data || []).map(shift => ({
                 id: shift.id,
                 shift_id: shift.id,
                 status: 'Pending' as const,
                 offered_at: shift.published_at,
                 offer_expires_at: (shift as any).offer_expires_at,
-                offered_by_name: events?.find(e => e.shift_id === shift.id)?.performed_by_name ?? 'Admin',
+                offered_by_name: 'Admin',
                 shift: {
                     id: shift.id,
                     shift_date: shift.shift_date,
@@ -751,18 +744,7 @@ export const shiftsQueries = {
         try {
             if (!isValidUuid(employeeId)) return [];
 
-            const eventType = status === 'Accepted' ? 'offer_accepted' : 'offer_rejected';
-
-            const { data: events } = await supabase
-                .from('shift_audit_events')
-                .select('shift_id, created_at, performed_by_name')
-                .eq('performed_by_id', employeeId)
-                .eq('event_type', eventType)
-                .order('created_at', { ascending: false })
-                .limit(50);
-
-            const shiftIds = events?.map(e => e.shift_id) ?? [];
-            if (shiftIds.length === 0) return [];
+            const outcome = status === 'Accepted' ? 'confirmed' : 'rejected';
 
             let query = supabase
                 .from('shifts')
@@ -773,7 +755,7 @@ export const shiftsQueries = {
                 end_time,
                 notes,
                 assignment_outcome,
-                created_at,
+                published_at,
                 paid_break_minutes,
                 unpaid_break_minutes,
                 break_minutes,
@@ -787,28 +769,33 @@ export const shiftsQueries = {
                 organizations(id, name),
                 remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max)
             `)
-                .in('id', shiftIds)
+                .eq('assigned_employee_id', employeeId)
+                .eq('lifecycle_status', 'Published')
+                .eq('assignment_outcome', outcome)
                 .is('deleted_at', null);
 
             if (filters?.organizationId && isValidUuid(filters.organizationId)) {
                 query = query.eq('organization_id', filters.organizationId);
             }
             if (filters?.departmentId && isValidUuid(filters.departmentId)) {
-                query = query.eq('department_id', filters.departmentId);
+                query = query.or(`department_id.eq.${filters.departmentId},department_id.is.null`);
             }
 
-            const { data, error } = await query.order('shift_date', { ascending: false });
-            if (error) throw error;
+            const { data, error } = await query
+                .order('shift_date', { ascending: false });
+
+            if (error) {
+                console.error(`Error fetching my offer history (${status}):`, error);
+                throw error;
+            }
 
             return (data || []).map(shift => ({
                 id: shift.id,
                 shift_id: shift.id,
-                status,
-                offered_at: events?.find(e => e.shift_id === shift.id)?.created_at
-                    ?? shift.created_at
-                    ?? new Date().toISOString(),
+                status: status,
+                offered_at: shift.published_at,
                 offer_expires_at: (shift as any).offer_expires_at,
-                offered_by_name: events?.find(e => e.shift_id === shift.id)?.performed_by_name ?? 'Admin',
+                offered_by_name: 'Admin',
                 shift: {
                     id: shift.id,
                     shift_date: shift.shift_date,
@@ -980,8 +967,8 @@ export const shiftsQueries = {
                 .eq('organization_id', organizationId)
                 .is('deleted_at', null)
                 .eq('is_cancelled', false)
-                // Shifts that are/were in bidding OR have been assigned from bidding
-                .or('bidding_status.eq.on_bidding_normal,bidding_status.eq.on_bidding_urgent,assigned_employee_id.not.is.null');
+                // Fetch shifts that are or were on bidding
+                .eq('is_on_bidding', true);
 
             if (subDepartmentId && isValidUuid(subDepartmentId)) {
                 query = query.eq('sub_department_id', subDepartmentId);
@@ -1004,5 +991,57 @@ export const shiftsQueries = {
             return [];
         }
     },
+
+    /* ============================================================
+       GET SHIFT DELTA  (delta-sync)
+       Returns only rows that changed since a given cursor timestamp.
+       Client applies these surgically to the TanStack Query cache
+       instead of invalidating the full shift list.
+       ============================================================ */
+
+    async getShiftDelta(params: {
+        orgId: string;
+        since: string;           // ISO 8601 timestamptz
+        deptIds?: string[];
+        startDate?: string;
+        endDate?: string;
+    }): Promise<ShiftDeltaRow[]> {
+        if (!isValidUuid(params.orgId)) return [];
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error } = await (supabase.rpc as any)('get_shift_delta', {
+            p_org_id:    params.orgId,
+            p_since:     params.since,
+            p_dept_ids:  params.deptIds ?? null,
+            p_start_date: params.startDate ?? null,
+            p_end_date:   params.endDate ?? null,
+        });
+
+        if (error) {
+            console.error('[getShiftDelta] RPC error:', error);
+            return [];
+        }
+
+        return (data ?? []) as ShiftDeltaRow[];
+    },
 };
+
+// ── Delta sync types ──────────────────────────────────────────────────────────
+
+/** Lightweight row returned by get_shift_delta — only changed fields */
+export interface ShiftDeltaRow {
+    id: string;
+    updated_at: string;
+    deleted_at: string | null;
+    shift_date: string | null;
+    start_time: string | null;
+    end_time: string | null;
+    lifecycle_status: string | null;
+    assignment_status: string | null;
+    assigned_employee_id: string | null;
+    version: number;
+    department_id: string | null;
+    sub_department_id: string | null;
+    role_id: string | null;
+}
 

@@ -29,7 +29,7 @@ import {
   isTempId,
   formatDateForDb,
 } from '@/modules/templates/model/templates.types';
-import { getDayBoundsInUTC, DEFAULT_TIMEZONE, getZonedNow } from '@/modules/core/lib/date.utils';
+import { SYDNEY_TZ, getTodayInTimezone, getNowInTimezone } from '@/modules/core/lib/date.utils';
 import { parse, isSameMonth, startOfMonth, endOfMonth, format as formatCb } from 'date-fns';
 
 /* ============================================================
@@ -113,6 +113,7 @@ export interface UseTemplatesReturn {
   fetchTemplate: (id: string) => Promise<Template | null>;
   createTemplate: (input: CreateTemplateInput) => Promise<Template | null>;
   saveTemplate: () => Promise<boolean>;
+  renameTemplate: (id: string, newName: string) => Promise<boolean>;
   deleteTemplate: (id: string) => Promise<boolean>;
   duplicateTemplate: (id: string) => Promise<Template | null>;
   updateTemplateStatus: (id: string, status: string) => Promise<boolean>;
@@ -246,8 +247,9 @@ export function useTemplates(): UseTemplatesReturn {
       }
 
       const { data, error: err } = await query;
-
       const duration = Math.round(performance.now() - startTime);
+
+      console.log('[Templates] Raw fetch result:', { data, error: err, options });
 
       if (err) {
         log('error', `Fetch failed: ${err.message}`);
@@ -1263,6 +1265,60 @@ export function useTemplates(): UseTemplatesReturn {
     [currentTemplate?.id, safeSetState, toast]
   );
 
+  const renameTemplate = useCallback(
+    async (id: string, newName: string): Promise<boolean> => {
+      const sanitizedName = sanitizeTemplateName(newName);
+      const validation = validateTemplateName(sanitizedName);
+      
+      if (!validation.valid) {
+        toast({
+          title: 'Invalid name',
+          description: validation.errors[0],
+          variant: 'destructive',
+        });
+        return false;
+      }
+
+      log('network', `📤 Renaming template ${id} to "${sanitizedName}"...`);
+      try {
+        const { error: err } = await supabase
+          .from('roster_templates')
+          .update({ name: sanitizedName })
+          .eq('id', id);
+
+        if (err) throw err;
+
+        safeSetState(setTemplates, (prev) =>
+          prev.map((t) => (String(t.id) === id ? { ...t, name: sanitizedName } : t))
+        );
+
+        if (String(currentTemplate?.id) === id) {
+          setCurrentTemplateState((prev) =>
+            prev ? { ...prev, name: sanitizedName } : null
+          );
+          setLocalTemplate((prev) =>
+            prev ? { ...prev, name: sanitizedName } : null
+          );
+        }
+
+        toast({
+          title: 'Template renamed',
+        });
+
+        return true;
+      } catch (err: any) {
+        log('error', `Rename failed: ${err.message}`);
+        toast({
+          title: 'Rename failed',
+          description: err.message,
+          variant: 'destructive',
+        });
+        return false;
+      }
+    },
+    [currentTemplate?.id, safeSetState, toast]
+  );
+
   /* ============================================================
      RETURN
      ============================================================ */
@@ -1285,6 +1341,7 @@ export function useTemplates(): UseTemplatesReturn {
     deleteTemplate,
     duplicateTemplate,
     updateTemplateStatus,
+    renameTemplate,
 
     // Local editing
     setCurrentTemplate,

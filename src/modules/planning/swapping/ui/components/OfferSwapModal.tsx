@@ -40,7 +40,7 @@ import {
     Building,
     Shield,
 } from 'lucide-react';
-import { format, addDays, parse } from 'date-fns';
+import { format, addDays, parse, differenceInHours } from 'date-fns';
 import { swapsApi } from '../../api/swaps.api';
 import { shiftsApi } from '@/modules/rosters';
 import { useQuery } from '@tanstack/react-query';
@@ -53,6 +53,8 @@ import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { SwapComplianceModal } from './SwapComplianceModal';
 import { useMinuteTick } from '@/modules/core/hooks/useMinuteTick';
 import { getSwapTimer } from '../pages/EmployeeSwaps.page';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { Lock } from 'lucide-react';
 
 interface OfferSwapModalProps {
     isOpen: boolean;
@@ -157,6 +159,11 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
     });
 
     const selectedShift = myShifts?.find(s => s.id === selectedShiftId);
+    const selectedShiftIsLocked = selectedShift ? (() => {
+        const start = parseZonedDateTime(selectedShift.shift_date, (selectedShift as any).start_time);
+        const hours = differenceInHours(start, now);
+        return hours >= 0 && hours < 4;
+    })() : false;
 
     // Timer calculation for original request
     const timerText = getSwapTimer(
@@ -242,7 +249,14 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                     myShifts.map((shift) => {
                                         const isOfferedHere = alreadyOfferedForThisSwapIds.has(shift.id);
                                         const isOfferedElsewhere = offeredElsewhereIds.has(shift.id);
-                                        const isUnavailable = isOfferedHere || isOfferedElsewhere;
+                                        
+                                        // §9 Time Lock Check
+                                        const shiftStart = parseZonedDateTime(shift.shift_date, (shift as any).start_time);
+                                        const hoursUntilStart = differenceInHours(shiftStart, now);
+                                        const isLocked = hoursUntilStart >= 0 && hoursUntilStart < 4;
+                                        const isPast = hoursUntilStart < 0;
+                                        
+                                        const isUnavailable = isOfferedHere || isOfferedElsewhere || isLocked || isPast;
                                         const isSelected = selectedShiftId === shift.id;
 
                                         return (
@@ -266,8 +280,16 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                                         {shift.roles?.name || 'Shift'}
                                                     </span>
                                                     {isUnavailable && (
-                                                        <Badge className="text-[7px] h-3.5 px-1 font-black uppercase tracking-widest bg-slate-500/10 text-slate-500 border-none">
-                                                            {isOfferedHere ? 'Offered' : 'Elsewhere'}
+                                                        <Badge className={cn(
+                                                            "text-[7px] h-3.5 px-1 font-black uppercase tracking-widest border-none",
+                                                            isLocked ? "bg-rose-500/10 text-rose-500" : "bg-slate-500/10 text-slate-500"
+                                                        )}>
+                                                            {isLocked ? (
+                                                                <div className="flex items-center gap-1">
+                                                                    <Lock className="w-2 h-2" />
+                                                                    <span>Locked</span>
+                                                                </div>
+                                                            ) : isPast ? 'Past' : isOfferedHere ? 'Offered' : 'Elsewhere'}
                                                         </Badge>
                                                     )}
                                                 </div>
@@ -346,7 +368,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
 
                                         <div className={cn(
                                             "flex-1 p-5 rounded-3xl border flex flex-col items-center gap-3",
-                                            getGroupColor(theirShift?.group_type || theirShift?.roles?.groupType, theirShift?.departments?.name)
+                                            getGroupColor((theirShift as any)?.group_type || (theirShift as any)?.roles?.groupType, (theirShift as any)?.departments?.name)
                                         )}>
                                             <span className="text-[9px] font-black uppercase tracking-widest opacity-60">You Get</span>
                                             <div className="text-center">
@@ -406,7 +428,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                     <div className="flex flex-col gap-3 mt-auto mb-4">
                                         <Button
                                             onClick={handleOpenComplianceCheck}
-                                            disabled={isSubmitting || !selectedShiftId || isExpired}
+                                            disabled={isSubmitting || !selectedShiftId || isExpired || selectedShiftIsLocked}
                                             className="h-14 rounded-2xl font-black text-sm uppercase tracking-[0.2em] bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_10px_30px_-10px_rgba(79,70,229,0.3)] border-b-4 border-indigo-800 active:scale-[0.98] active:border-b-0 transition-all disabled:opacity-50 disabled:grayscale"
                                         >
                                             {isSubmitting ? (
@@ -414,7 +436,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                             ) : (
                                                 <div className="flex items-center gap-2">
                                                     <Shield className="h-5 w-5" />
-                                                    <span>Run Compliance & Offer</span>
+                                                    <span>Check Compliance & Offer</span>
                                                 </div>
                                             )}
                                         </Button>

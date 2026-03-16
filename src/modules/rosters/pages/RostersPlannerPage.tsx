@@ -1,13 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { format, addDays, startOfWeek } from 'date-fns';
 import { Loader2 } from 'lucide-react';
-import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
-import { Calendar, Users, CalendarDays, Briefcase } from 'lucide-react';
+import { Button } from '@/modules/core/ui/primitives/button';
 import { Separator } from '@/modules/core/ui/primitives/separator';
 import { cn } from '@/modules/core/lib/utils';
 
 // Components
+import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 import {
   RosterFunctionBar,
   ViewType,
@@ -20,11 +20,10 @@ import UnfilledShiftsPanel, {
 import { GroupModeView } from '@/modules/rosters/ui/modes/GroupModeView';
 import { EventsModeView } from '@/modules/rosters/ui/modes/EventsModeView';
 import { RolesModeView } from '@/modules/rosters/ui/modes/RolesModeView';
-import {
-  EnhancedAddShiftModal,
-  ShiftContext,
-} from '@/modules/rosters/ui/dialogs/EnhancedAddShiftModal';
+import type { ShiftContext } from '@/modules/rosters/ui/dialogs/EnhancedAddShiftModal';
 import { BulkActionsToolbar } from '@/modules/rosters/ui/components/BulkActionsToolbar';
+import { RosterModals, type RosterModalsHandle } from '@/modules/rosters/ui/components/RosterModals';
+import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 
 // Hooks & Services - Enterprise TanStack Query hooks
 import { useAuth } from '@/platform/auth/useAuth';
@@ -42,10 +41,13 @@ import {
   useBulkAssignShifts,
   useBulkPublishShifts,
   useBulkDeleteShifts,
+  useBulkUnassignShifts,
+  useBulkUnpublishShifts,
   useAcceptOffer,
   useRequestTrade,
   useCancelShift,
   useUnpublishShift,
+  useShiftDeltaSync,
 } from '@/modules/rosters/state/useRosterShifts';
 import { useRosterUI, RosterMode, CalendarView } from '@/modules/rosters/contexts/RosterUIContext';
 import {
@@ -56,6 +58,7 @@ import { useRosterStructure } from '@/modules/rosters/state/useRosterStructure';
 import { useRostersByDateRange } from '@/modules/rosters/state/useEnhancedRosters';
 import { usePublishRoster } from '@/modules/rosters/state/useRosterMutations';
 import { usePeopleModeData } from '@/modules/rosters/hooks/usePeopleModeData';
+import { useRosterViewPrefetch } from '@/modules/rosters/hooks/useRosterViewPrefetch';
 import { shiftKeys, type ShiftFilters } from '@/modules/rosters/api/queryKeys';
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
@@ -85,7 +88,15 @@ const NewRostersPage: React.FC = () => {
     setSelectedDepartmentIds,
     selectedSubDepartmentIds,
     setSelectedSubDepartmentIds,
+    bulkModeActive,
+    setBulkModeActive,
+    selectedShiftIds,
+    setSelectedShiftIds,
+    toggleShiftSelection,
+    clearSelection,
   } = useRosterUI();
+
+  const selectedCount = selectedShiftIds.length;
 
   // ==================== SYNC SCOPE FILTER → ROSTER UI CONTEXT ====================
   // When the scope filter changes (user selects different dept/subdept), propagate
@@ -117,16 +128,11 @@ const NewRostersPage: React.FC = () => {
   const [showUnfilledPanel, setShowUnfilledPanel] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
-  // ==================== MODAL & BULK STATE ====================
-  const [isAddShiftOpen, setIsAddShiftOpen] = useState(false);
-  const [addShiftContext, setAddShiftContext] = useState<ShiftContext | null>(null);
+  // ==================== MODAL REF ====================
+  // All modal open/close state lives in RosterModals; page calls imperative methods.
+  const modalsRef = useRef<RosterModalsHandle>(null);
 
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editShiftData, setEditShiftData] = useState<any>(null);
-  const [editShiftContext, setEditShiftContext] = useState<ShiftContext | null>(null);
-
-  const [bulkModeActive, setBulkModeActive] = useState(false);
-  const [selectedShifts, setSelectedShifts] = useState<string[]>([]);
+  const [dayZoom, setDayZoom] = useState<60>(60);
 
   // ==================== DERIVED ====================
 
@@ -179,12 +185,37 @@ const NewRostersPage: React.FC = () => {
     dates.length > 0 ? format(dates[dates.length - 1], 'yyyy-MM-dd') : null
     , [dates]);
 
+  // ==================== BFF PREFETCH ====================
+  // Single round-trip that seeds the shift list + lookup caches before the
+  // individual hooks fire. On navigation back to this page the caches are
+  // already warm — no waterfall of 5-7 separate network requests.
+  useRosterViewPrefetch({
+    orgId: selectedOrganizationId,
+    startDate,
+    endDate,
+    deptIds: selectedDepartmentIds,
+    subDeptIds: selectedSubDepartmentIds,
+    shiftFilters: queryFilters,
+  });
+
+  // ==================== DELTA SYNC ====================
+  // Subscribes to Realtime and applies surgical cache patches instead of
+  // full list invalidations when shifts change in the background.
+  useShiftDeltaSync({
+    orgId: selectedOrganizationId,
+    deptIds: selectedDepartmentIds.length > 0 ? selectedDepartmentIds : undefined,
+    startDate,
+    endDate,
+  });
+
   // ==================== LOCK STATUS ====================
   // Fetch Rosters for Lock Status
   const { data: rosters = [] } = useRostersByDateRange(
     startDate || '',
     endDate || '',
-    selectedDepartmentIds[0] || ''
+    selectedDepartmentIds[0] || '',
+    selectedOrganizationId || undefined,
+    selectedSubDepartmentIds[0] || undefined
   );
 
   // Derive lock status from fetched rosters
@@ -213,6 +244,8 @@ const NewRostersPage: React.FC = () => {
   const swapShiftMutation = useRequestTrade();
   const cancelShiftMutation = useCancelShift();
   const unpublishShiftMutation = useUnpublishShift();
+  const bulkUnassign = useBulkUnassignShifts();
+  const bulkUnpublishByHook = useBulkUnpublishShifts();
 
 
   // Employees lookup
@@ -221,6 +254,18 @@ const NewRostersPage: React.FC = () => {
     selectedDepartmentIds[0] || undefined,
     selectedSubDepartmentIds[0] || undefined,
   );
+
+  // Escape key exits bulk selection mode
+  React.useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && bulkModeActive) {
+        setBulkModeActive(false);
+        clearSelection();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [bulkModeActive, setBulkModeActive, clearSelection]);
 
   // Roster structures for Group mode projection
   const { data: rosterStructures = [] } = useRosterStructure(
@@ -292,8 +337,7 @@ const NewRostersPage: React.FC = () => {
       departmentIds: selectedDepartmentIds,
       subDepartmentIds: selectedSubDepartmentIds,
     };
-    setAddShiftContext(context);
-    setIsAddShiftOpen(true);
+    modalsRef.current?.openAddShift(context);
   };
 
   const handleAddShiftWithGroup = (
@@ -315,8 +359,7 @@ const NewRostersPage: React.FC = () => {
       subGroupName,
       groupColor,
     };
-    setAddShiftContext(context);
-    setIsAddShiftOpen(true);
+    modalsRef.current?.openAddShift(context);
   };
 
   const handlePickUnfilled = (shift: UnfilledShift) => {
@@ -329,8 +372,7 @@ const NewRostersPage: React.FC = () => {
       departmentIds: selectedDepartmentIds,
       subDepartmentIds: selectedSubDepartmentIds,
     };
-    setAddShiftContext(context);
-    setIsAddShiftOpen(true);
+    modalsRef.current?.openAddShift(context);
   };
 
   const handleShiftCreated = () => {
@@ -342,7 +384,7 @@ const NewRostersPage: React.FC = () => {
   };
 
   const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: [shiftKeys.all[0]] });
+    queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
     toast({
       title: 'Refreshed',
       description: 'Roster data has been refreshed.',
@@ -363,29 +405,69 @@ const NewRostersPage: React.FC = () => {
 
   // ==================== BULK HANDLERS ====================
   const handleToggleShiftSelection = (shiftId: string) => {
-    setSelectedShifts((prev) =>
-      prev.includes(shiftId)
-        ? prev.filter((id) => id !== shiftId)
-        : [...prev, shiftId]
-    );
+    toggleShiftSelection(shiftId);
   };
 
+  const handleClearSelection = () => {
+    clearSelection();
+  };
 
+  const handleBulkModeToggle = (active: boolean) => {
+    setBulkModeActive(active);
+  };
+
+  const selectedShiftsData = useMemo(() => {
+    return shifts.filter(s => selectedShiftIds.includes(s.id));
+  }, [shifts, selectedShiftIds]);
+
+  const stateCounts = useMemo(() => {
+    const counts = {
+      assignedCount: 0,
+      unassignedCount: 0,
+      draftCount: 0,
+      publishedCount: 0,
+    };
+
+    selectedShiftsData.forEach(s => {
+      if (s.assigned_employee_id) counts.assignedCount++;
+      else counts.unassignedCount++;
+
+      if (s.lifecycle_status === 'Published') counts.publishedCount++;
+      else counts.draftCount++;
+    });
+
+    return counts;
+  }, [selectedShiftsData]);
+
+  const handleSelectAll = () => {
+    // visibleShifts depends on current filters and view. 
+    // The `shifts` variable in this component is already filtered by date range and queryFilters.
+    const visibleAndUnlockedIds = shifts
+      .filter(s => !isShiftLocked(s.shift_date, s.start_time, 'roster_management'))
+      .map(s => s.id);
+
+    setBulkModeActive(true);
+    setSelectedShiftIds(visibleAndUnlockedIds);
+  };
 
   const handleBulkPublish = async (shiftIds: string[]) => {
-    try {
-      const result = await bulkPublish.mutateAsync(shiftIds);
+    // Only target Draft shifts
+    const draftIds = selectedShiftsData
+      .filter(s => s.lifecycle_status !== 'Published')
+      .map(s => s.id);
 
-      // result matches { success_count: number, failure_count: number, results: ... }
-      // but type might be inferred as 'any' or the shape from commands.
-      // We'll safely access it.
-      const count = (result as any).success_count ?? shiftIds.length;
+    if (draftIds.length === 0) return;
+
+    try {
+      const result = await bulkPublish.mutateAsync(draftIds);
+      const count = (result as any).success_count ?? draftIds.length;
+      const skipped = shiftIds.length - count;
 
       toast({
         title: 'Published',
-        description: `Published ${count} shifts successfully.`,
+        description: `Published ${count} shifts successfully.${skipped > 0 ? ` Skipped ${skipped} already published.` : ''}`,
       });
-      setSelectedShifts([]);
+      clearSelection();
       setBulkModeActive(false);
     } catch (error) {
       console.error(error);
@@ -393,19 +475,67 @@ const NewRostersPage: React.FC = () => {
     }
   };
 
+  const handleBulkUnpublish = async (shiftIds: string[]) => {
+    const publishedIds = selectedShiftsData
+      .filter(s => s.lifecycle_status === 'Published')
+      .map(s => s.id);
+
+    if (publishedIds.length === 0) return;
+
+    // We don't have a bulkUnpublish hook explicitly, but assume we can reuse logic or call individual unpublish in loop (not ideal)
+    // Let's check if useBulkPublishShifts has a direction or if there's useBulkUnpublish.
+    // Assuming for now we might need to implement bulk unpublish or call in loop if small count.
+    
+    try {
+      await bulkUnpublishByHook.mutateAsync(publishedIds);
+      
+      toast({
+        title: 'Unpublished',
+        description: `Unpublished ${publishedIds.length} shifts.`,
+      });
+      clearSelection();
+      setBulkModeActive(false);
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Error', description: 'Failed to unpublish shifts', variant: 'destructive' });
+    }
+  };
+
+  const handleBulkUnassign = async () => {
+    const assignedIds = selectedShiftsData
+      .filter(s => s.assigned_employee_id)
+      .map(s => s.id);
+
+    if (assignedIds.length === 0) return;
+
+    try {
+      await bulkUnassign.mutateAsync(assignedIds);
+      
+      toast({
+        title: 'Unassigned',
+        description: `Unassigned ${assignedIds.length} shifts successfully.`,
+      });
+      clearSelection();
+      setBulkModeActive(false);
+    } catch (error) {
+      console.error(error);
+      toast({ title: 'Error', description: 'Failed to unassign shifts', variant: 'destructive' });
+    }
+  };
+
 
 
   const handleBulkDelete = async () => {
-    if (selectedShifts.length === 0) return;
+    if (selectedShiftIds.length === 0) return;
     try {
-      const successCount = await bulkDelete.mutateAsync(selectedShifts);
+      const successCount = await bulkDelete.mutateAsync(selectedShiftIds);
 
       if (successCount > 0) {
         toast({
           title: 'Deleted',
           description: `Deleted ${successCount} shifts.`,
         });
-        setSelectedShifts([]);
+        clearSelection();
         setBulkModeActive(false);
       } else {
         toast({
@@ -512,12 +642,23 @@ const NewRostersPage: React.FC = () => {
   };
 
   const handleUnpublishShift = async (shiftId: string) => {
+    // Determine the shift from the collection to check for locking
+    const shift = shifts.find(s => s.id === shiftId);
+    if (shift && isShiftLocked(shift.shift_date, shift.start_time, 'roster_management')) {
+      toast({
+        title: 'Action Locked',
+        description: 'Cannot unpublish a shift that has already started.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       await unpublishShiftMutation.mutateAsync({ shiftId, reason: 'Unpublished via Roster' });
       toast({ title: 'Shift Unpublished', description: 'Shift reverted to Draft.' });
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast({ title: 'Error', description: 'Failed to unpublish shift', variant: 'destructive' });
+      toast({ title: 'Error', description: error.message || 'Failed to unpublish shift', variant: 'destructive' });
     }
   };
 
@@ -525,7 +666,7 @@ const NewRostersPage: React.FC = () => {
     if (!canEdit) return;
     const rawShift = shift.rawShift || shift;
 
-    setEditShiftContext({
+    modalsRef.current?.openEditShift(rawShift, {
       mode: activeMode,
       launchSource: 'edit',
       date: rawShift.shift_date,
@@ -538,8 +679,6 @@ const NewRostersPage: React.FC = () => {
       group_type: rawShift.group_type || undefined,
       sub_group_name: rawShift.sub_group_name || undefined,
     });
-    setEditShiftData(rawShift);
-    setIsEditModalOpen(true);
   };
 
   // ==================== RENDER ====================
@@ -586,11 +725,32 @@ const NewRostersPage: React.FC = () => {
           canEdit={canEdit}
           // Bulk Mode
           isBulkMode={bulkModeActive}
-          onBulkModeToggle={() => setBulkModeActive(!bulkModeActive)}
+          onBulkModeToggle={() => handleBulkModeToggle(!bulkModeActive)}
+          onAutoScheduleClick={() => modalsRef.current?.openAutoScheduler()}
         />
       </div>
 
       {/* Mode Selector row REMOVED - now integrated into FunctionBar */}
+
+      {/* Bulk Mode Banner — sticky amber bar shown while bulk selection is active */}
+      {bulkModeActive && (
+        <div className="flex-shrink-0 bg-amber-500/10 border-b border-amber-500/30 px-6 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-3 text-amber-700 dark:text-amber-300 text-sm font-medium">
+            <span>Bulk selection active — click shifts to select</span>
+            {selectedShiftIds.length > 0 && (
+              <span className="bg-amber-500/20 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-full text-xs font-bold">
+                {selectedShiftIds.length} selected
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => { setBulkModeActive(false); clearSelection(); }}
+            className="text-xs text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 transition-colors"
+          >
+            Press Esc to exit
+          </button>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="flex-1 min-h-0 overflow-hidden flex relative">
@@ -619,7 +779,7 @@ const NewRostersPage: React.FC = () => {
               canEdit={canEdit}
               showAvailabilities={showAvailabilities}
               bulkModeActive={bulkModeActive}
-              selectedShifts={selectedShifts}
+              selectedShifts={selectedShiftIds}
               onToggleShiftSelection={handleToggleShiftSelection}
               onAddShift={(employee, date) => {
                 const context: ShiftContext = {
@@ -632,8 +792,7 @@ const NewRostersPage: React.FC = () => {
                   subDepartmentIds: selectedSubDepartmentIds,
                   employeeId: employee?.id,
                 };
-                setAddShiftContext(context);
-                setIsAddShiftOpen(true);
+                modalsRef.current?.openAddShift(context);
               }}
               onViewShift={(shift: EmployeeShift) => {
                 handleEditShift(shift);
@@ -642,6 +801,7 @@ const NewRostersPage: React.FC = () => {
               onSwapShift={handleSwapShift}
               onCancelShift={handleCancelSingleShift}
               onUnpublishShift={handleUnpublishShift}
+              onViewAudit={(id) => modalsRef.current?.openAudit(id)}
             />
           )}
 
@@ -665,7 +825,10 @@ const NewRostersPage: React.FC = () => {
               onAddShift={handleAddShiftWithGroup}
               // Bulk Mode
               isBulkMode={bulkModeActive}
-              onBulkModeToggle={setBulkModeActive}
+              onBulkModeToggle={handleBulkModeToggle}
+              selectedShiftIds={selectedShiftIds}
+              // Day zoom
+              dayZoom={dayZoom}
               // Data from unified hook
               shifts={shifts}
               isShiftsLoading={isLoading}
@@ -699,6 +862,7 @@ const NewRostersPage: React.FC = () => {
               shifts={shifts}
               projection={projection.roles ?? undefined}
               onEditShift={handleEditShift}
+              selectedShiftIds={selectedShiftIds}
             />
           )}
         </div>
@@ -724,38 +888,54 @@ const NewRostersPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Shift Modal */}
-      <EnhancedAddShiftModal
-        isOpen={isAddShiftOpen}
-        onClose={() => setIsAddShiftOpen(false)}
-        onSuccess={handleShiftCreated}
-        context={addShiftContext}
-      />
-
-      <EnhancedAddShiftModal
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        onSuccess={handleShiftCreated}
-        context={editShiftContext}
-        editMode={true}
-        existingShift={editShiftData}
-      />
-
       {/* Bulk Toolbar */}
-      {bulkModeActive && selectedShifts.length > 0 && (
+      {bulkModeActive && selectedShiftIds.length > 0 && (
         <BulkActionsToolbar
-          selectedCount={selectedShifts.length}
-          selectedShiftIds={selectedShifts}
-          onClearSelection={() => setSelectedShifts([])}
-
+          selectedCount={selectedCount}
+          selectedShiftIds={selectedShiftIds}
+          stateCounts={stateCounts}
+          onClearSelection={handleClearSelection}
+          onSelectAll={handleSelectAll}
           onDelete={handleBulkDelete}
           onPublish={handleBulkPublish}
+          onUnpublish={handleBulkUnpublish}
+          onAssign={() => modalsRef.current?.openBulkAssign()}
+          onUnassign={handleBulkUnassign}
           allowedActions={{
-            canPublish: true,
-            canUnpublish: false,
+            canPublish: stateCounts.draftCount > 0,
+            canUnpublish: stateCounts.publishedCount > 0,
           }}
         />
       )}
+
+      {/* Modals (audit, add/edit shift, bulk assign, auto-scheduler) */}
+      <RosterModals
+        ref={modalsRef}
+        selectedShiftIds={selectedShiftIds}
+        employees={employees.map((e) => ({
+          id: e.id,
+          name: `${e.first_name} ${e.last_name}`.trim() || e.id,
+          avatarUrl: (e as any).avatar_url ?? undefined,
+          role: (e as any).role_name ?? undefined,
+        }))}
+        autoSchedulerShifts={shifts
+          .filter((s) => !s.assigned_employee_id && !s.is_cancelled && !s.deleted_at)
+          .map((s) => ({
+            id: s.id,
+            shift_date: s.shift_date,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            role_id: (s as any).role_id ?? null,
+            unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
+          }))}
+        autoSchedulerEmployees={employees.map((e) => ({
+          id: e.id,
+          name: `${e.first_name} ${e.last_name}`.trim() || e.id,
+        }))}
+        onShiftSaved={handleShiftCreated}
+        onAssignComplete={() => { clearSelection(); setBulkModeActive(false); }}
+        onAutoScheduleComplete={() => {}}
+      />
 
       {/* Footer Summary */}
       <div className="border-t border-slate-200 dark:border-white/5 bg-white dark:bg-black/20 backdrop-blur-md px-6 py-3 flex-shrink-0">
@@ -778,6 +958,7 @@ const NewRostersPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-6">
+            {/* Redundant Auto-Schedule button removed (now in Function Bar) */}
             <div>
               <span className="text-muted-foreground/60">Est. Cost:</span>
               <span className="ml-2 font-medium text-foreground">${estimatedCost.toFixed(2)}</span>

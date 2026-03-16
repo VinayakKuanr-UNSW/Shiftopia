@@ -71,6 +71,8 @@ interface RosterState {
   selectedSubDepartmentIds: string[];
   advancedFilters: AdvancedFilters;
   isBucketView: boolean;
+  bulkModeActive: boolean;
+  selectedShiftIds: string[];
 
   // ── Session state (not persisted — resets each tab/reload) ────────────────
   /** ISO date string 'YYYY-MM-DD', restored as Date in getters */
@@ -89,6 +91,10 @@ interface RosterState {
   setAdvancedFilters: (partial: Partial<AdvancedFilters>) => void;
   resetAdvancedFilters: () => void;
   setIsBucketView: (value: boolean) => void;
+  setBulkModeActive: (active: boolean) => void;
+  setSelectedShiftIds: (ids: string[]) => void;
+  toggleShiftSelection: (id: string) => void;
+  clearSelection: () => void;
 
   // ── Navigation ────────────────────────────────────────────────────────────
   navigatePrevious: () => void;
@@ -116,14 +122,28 @@ export const useRosterStore = create<RosterState>()(
       selectedSubDepartmentIds: [],
       advancedFilters: DEFAULT_ADVANCED_FILTERS,
       isBucketView: false,
+      bulkModeActive: false,
+      selectedShiftIds: [],
 
       // ── Session-only (today, not persisted) ────────────────────────────────
       _selectedDateISO: format(new Date(), 'yyyy-MM-dd'),
 
       // ── Actions ────────────────────────────────────────────────────────────
       setViewType: (view) => set({ viewType: view }),
-      setActiveMode: (mode) => set({ activeMode: mode }),
+      setActiveMode: (mode) => set({ activeMode: mode, selectedShiftIds: [], bulkModeActive: false }),
       setIsBucketView: (v) => set({ isBucketView: v }),
+
+      setBulkModeActive: (active) => set({ bulkModeActive: active, selectedShiftIds: [] }),
+
+      setSelectedShiftIds: (ids) => set({ selectedShiftIds: ids }),
+
+      toggleShiftSelection: (id) => set((s) => ({
+        selectedShiftIds: s.selectedShiftIds.includes(id)
+          ? s.selectedShiftIds.filter((sid) => sid !== id)
+          : [...s.selectedShiftIds, id],
+      })),
+
+      clearSelection: () => set({ selectedShiftIds: [] }),
 
       setSelectedDate: (date) =>
         set({ _selectedDateISO: format(date, 'yyyy-MM-dd') }),

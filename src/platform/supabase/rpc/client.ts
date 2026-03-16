@@ -44,6 +44,7 @@ const SUPABASE_CODE_MAP: Record<string, RPCErrorCode> = {
   '23505': 'CONFLICT',          // unique_violation
   '23503': 'VALIDATION',        // foreign_key_violation
   'P0001': 'STATE_TRANSITION',  // raise_exception from PL/pgSQL
+  '40001': 'CONFLICT',          // serialization_failure — optimistic concurrency version mismatch
 };
 
 function mapSupabaseError(error: { code?: string; message: string; hint?: string }, rpcName: string): AppError {

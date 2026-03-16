@@ -26,6 +26,7 @@ import {
     Gavel,
     X,
     Zap,
+    MousePointer2,
 } from 'lucide-react';
 import type { AssignmentStepProps } from '../types';
 
@@ -114,6 +115,8 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
     complianceResults,
     setComplianceResults,
     buildComplianceInput,
+    runChecks,
+    clearResults,
     complianceNeedsRerun,
     onChecksComplete,
     shiftId,
@@ -122,6 +125,22 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
     const [hoveredEmployeeId, setHoveredEmployeeId] = useState<string | null>(null);
 
     const selectedEmployeeId = form.watch('assigned_employee_id');
+
+    // Debounced compliance run on hover
+    React.useEffect(() => {
+        const targetId = hoveredEmployeeId || selectedEmployeeId;
+        
+        if (!targetId) {
+            // No target, clear if there were results (prevent leak)
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            runChecks(targetId);
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [hoveredEmployeeId, selectedEmployeeId, runChecks]);
 
     // Filtered employees
     const filteredEmployees = useMemo(() => {
@@ -137,6 +156,14 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
     const handleSelectEmployee = (employeeId: string | null) => {
         if (isReadOnly || isEmployeeLocked) return;
         form.setValue('assigned_employee_id', employeeId, { shouldDirty: true });
+        
+        if (employeeId) {
+            // Trigger immediately on click
+            runChecks(employeeId);
+        } else {
+            // Unassigned selected
+            clearResults();
+        }
     };
 
     // Active employee for the compliance pane (hovered or selected)
@@ -253,6 +280,7 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
                             type="button"
                             onClick={() => handleSelectEmployee(null)}
                             disabled={isReadOnly || isEmployeeLocked || isTemplateMode}
+                            onMouseEnter={() => setHoveredEmployeeId(null)}
                             className={cn(
                                 'w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left',
                                 !selectedEmployeeId
@@ -326,12 +354,12 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
                                 ? `Inspecting: ${inspectedEmployee.profiles?.full_name || inspectedEmployee.full_name || `${inspectedEmployee.first_name} ${inspectedEmployee.last_name}`}`
                                 : hoveredEmployeeId
                                     ? 'Loading...'
-                                    : 'Select or hover over an employee'}
+                                    : 'Select an employee first!'}
                         </p>
                     </div>
 
                     {/* Compliance status indicator */}
-                    {hardValidation.passed && Object.keys(complianceResults).length > 0 && (
+                    {inspectedEmployee && hardValidation.passed && Object.keys(complianceResults).length > 0 && (
                         <div className={cn(
                             "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border",
                             Object.values(complianceResults).some(r => r?.status === 'fail' && r?.blocking)
@@ -351,7 +379,7 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
 
                 {/* Compliance Content */}
                 <ScrollArea className="flex-1">
-                    <div className="p-4">
+                    <div className="p-4 h-full">
                         {isTemplateMode && !watchEmployeeId ? (
                             <div className="text-center py-16 border border-border rounded-xl bg-muted/50">
                                 <Shield className="h-12 w-12 text-emerald-500 mx-auto mb-4 opacity-60" />
@@ -361,11 +389,23 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
                                     You can proceed without further checks.
                                 </p>
                             </div>
+                        ) : !inspectedEmployeeId ? (
+                             <div className="flex flex-col items-center justify-center py-20 text-center opacity-60">
+                                <div className="p-4 rounded-full bg-muted mb-4">
+                                    <MousePointer2 className="h-8 w-8 text-muted-foreground/50" />
+                                </div>
+                                <h4 className="text-sm font-bold text-foreground mb-1 uppercase tracking-wider">Select an employee first!</h4>
+                                <p className="text-xs text-muted-foreground max-w-[200px]">
+                                    Hover over or select an employee from the pool to run compliance checks.
+                                </p>
+                            </div>
                         ) : (
                             <ComplianceTabContent
                                 hardValidation={hardValidation}
                                 ruleResults={complianceResults}
-                                setRuleResults={setComplianceResults}
+                                onRuleResult={(ruleId, result) =>
+                                    setComplianceResults(prev => ({ ...prev, [ruleId]: result }))
+                                }
                                 buildComplianceInput={buildComplianceInput}
                                 needsRerun={complianceNeedsRerun}
                                 onChecksComplete={onChecksComplete}

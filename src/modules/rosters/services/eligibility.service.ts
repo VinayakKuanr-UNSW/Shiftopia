@@ -63,7 +63,7 @@ export const EligibilityService = {
                 .from('user_contracts')
                 .select(`
                     user_id,
-                    profiles:profiles!user_id (
+                    profiles:profiles!user_contracts_user_id_profiles_fkey (
                         id,
                         first_name,
                         last_name
@@ -78,8 +78,10 @@ export const EligibilityService = {
 
             // Dept / Sub-dept filter
             if (context.subDepartmentId && isValidUuid(context.subDepartmentId)) {
-                query = query.eq('department_id', context.departmentId)
-                    .or(`sub_department_id.eq.${context.subDepartmentId},sub_department_id.is.null`);
+                if (context.departmentId && isValidUuid(context.departmentId)) {
+                    query = query.eq('department_id', context.departmentId);
+                }
+                query = query.or(`sub_department_id.eq.${context.subDepartmentId},sub_department_id.is.null`);
             } else if (context.departmentId && isValidUuid(context.departmentId)) {
                 query = query.eq('department_id', context.departmentId);
             }
@@ -96,12 +98,14 @@ export const EligibilityService = {
                 return [];
             }
 
-            // Deduplicate by user_id (an employee may have multiple contracts)
+            // Deduplicate by user_id
             const profilesMap = new Map<string, EligibleEmployee>();
             data?.forEach(row => {
-                const profile = (row as { profiles?: EligibleEmployee | null }).profiles;
+                const rawProfile = (row as any).profiles;
+                const profile = Array.isArray(rawProfile) ? rawProfile[0] : rawProfile;
+                
                 if (profile?.id) {
-                    profilesMap.set(profile.id, profile);
+                    profilesMap.set(profile.id, profile as EligibleEmployee);
                 }
             });
 
@@ -130,8 +134,10 @@ export const EligibilityService = {
             }
 
             if (context.subDepartmentId && isValidUuid(context.subDepartmentId)) {
-                query = query.eq('department_id', context.departmentId)
-                    .or(`sub_department_id.eq.${context.subDepartmentId},sub_department_id.is.null`);
+                if (context.departmentId && isValidUuid(context.departmentId)) {
+                    query = query.eq('department_id', context.departmentId);
+                }
+                query = query.or(`sub_department_id.eq.${context.subDepartmentId},sub_department_id.is.null`);
             } else if (context.departmentId && isValidUuid(context.departmentId)) {
                 query = query.eq('department_id', context.departmentId);
             }
@@ -178,8 +184,10 @@ export const EligibilityService = {
             }
 
             if (context.subDepartmentId && isValidUuid(context.subDepartmentId)) {
-                query = query.eq('department_id', context.departmentId!)
-                    .or(`sub_department_id.eq.${context.subDepartmentId},sub_department_id.is.null`);
+                if (context.departmentId && isValidUuid(context.departmentId)) {
+                    query = query.eq('department_id', context.departmentId);
+                }
+                query = query.or(`sub_department_id.eq.${context.subDepartmentId},sub_department_id.is.null`);
             } else if (context.departmentId && isValidUuid(context.departmentId)) {
                 query = query.eq('department_id', context.departmentId);
             }
@@ -191,11 +199,14 @@ export const EligibilityService = {
                 return [];
             }
 
-            // Deduplicate by user_id — keep first record per person (role from first matching contract)
+            // Deduplicate by user_id
             const staffMap = new Map<string, ContractedStaffMember>();
             (data ?? []).forEach((row: any) => {
-                const profile = row.profiles;
+                const rawProfile = row.profiles;
+                const profile = Array.isArray(rawProfile) ? rawProfile[0] : rawProfile;
+
                 if (!profile?.id || staffMap.has(profile.id)) return;
+                
                 staffMap.set(profile.id, {
                     id: profile.id,
                     first_name: profile.first_name || '',

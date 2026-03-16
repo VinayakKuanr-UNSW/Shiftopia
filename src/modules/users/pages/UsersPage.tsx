@@ -4,7 +4,6 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/mod
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/modules/core/ui/primitives/select';
 import { Shield, User, Filter, Download } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { getQuarterOptions, formatQuarter } from '@/modules/users/hooks/usePerformanceMetrics';
 import { Switch } from '@/modules/core/ui/primitives/switch';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -15,9 +14,9 @@ import { motion } from 'framer-motion';
 import SkillsSection from '@/modules/users/ui/components/SkillsSection';
 import LicensesSection from '@/modules/users/ui/components/LicensesSection';
 import WorkRightsSection from '@/modules/users/ui/components/WorkRightsSection';
-import PerformanceSection from '@/modules/users/ui/components/PerformanceSection';
-import RiskAlertsSection from '@/modules/users/ui/components/RiskAlertsSection';
-import ContractsSection from '@/modules/users/ui/components/ContractsSection';
+import { PositionContractsSection, AccessCertificatesSection } from '@/modules/users/ui/components/ContractsSection';
+import { DeleteUserDialog } from '@/modules/users/ui/components/DeleteUserDialog';
+import { useAuth } from '@/platform/auth/useAuth';
 
 interface Profile {
     id: string;
@@ -28,14 +27,14 @@ interface Profile {
 }
 
 const UsersPage: React.FC = () => {
+    const { user: currentUser } = useAuth();
+    const isZeta = currentUser?.highestAccessLevel === 'zeta';
 
     // State
     const [selectedUserId, setSelectedUserId] = useState<string>('');
-    const [selectedQuarter, setSelectedQuarter] = useState<string>('Q1_2026');
-    const [isAllTime, setIsAllTime] = useState(false);
 
     // Fetch all profiles
-    const { data: profiles, isLoading } = useQuery({
+    const profilesResult = useQuery({
         queryKey: ['profiles', 'all'],
         queryFn: async () => {
             const { data, error } = await supabase
@@ -61,103 +60,79 @@ const UsersPage: React.FC = () => {
         },
     });
 
+    const { refetch: refetchProfiles } = profilesResult;
+    const profiles = profilesResult.data;
+    const isLoading = profilesResult.isLoading;
+
     const selectedUser = profiles?.find(p => p.id === selectedUserId);
-    const quarterOptions = getQuarterOptions();
-    const effectiveQuarter = isAllTime ? 'ALL_TIME' : selectedQuarter;
 
     return (
-        <div className="w-full min-h-screen p-4 md:p-6 lg:p-8 space-y-8">
-            {/* Header Section */}
+        <div className="w-full min-h-screen p-6 md:p-10 space-y-6 bg-[#f8f9fa] dark:bg-slate-950 font-sans selection:bg-indigo-100 selection:text-indigo-900">
+            {/* Header Section (Not in a card) */}
             <motion.div
-                initial={{ opacity: 0, y: -20 }}
+                initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                className="relative overflow-hidden rounded-[2.5rem] bg-card p-8 border border-border/50 shadow-2xl shadow-primary/5"
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2"
             >
-                <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                    <div>
-                        <div className="flex items-center gap-3 mb-2">
-                            <h1 className="text-4xl font-black text-foreground tracking-tight leading-none">
-                                User Management
-                            </h1>
-                        </div>
-                        <p className="text-muted-foreground max-w-xl font-medium">
-                            Comprehensive employee profiles, performance metrics, and compliance management.
-                        </p>
-                    </div>
-
-                    <div className="flex gap-3">
-                        <Button variant="outline" className="bg-muted/40 border-border/50 hover:bg-muted/60 text-foreground gap-2 rounded-xl h-11 px-5">
-                            <Filter className="w-4 h-4" />
-                            Filters
-                        </Button>
-                        <Button variant="default" className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-glow gap-2 rounded-xl h-11 px-6 text-[11px] font-black uppercase tracking-[0.2em] shadow-lg shadow-primary/20">
-                            <Download className="w-4 h-4" />
-                            Export Data
-                        </Button>
-                    </div>
+                <div>
+                    <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 mb-1">
+                        User Management
+                    </h1>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+                        Comprehensive employee profiles, performance metrics, and compliance management.
+                    </p>
                 </div>
 
-                {/* Filters Bar */}
-                <div className="mt-8 p-5 rounded-2xl bg-muted/30 border border-border/50 backdrop-blur-md flex flex-wrap gap-6 items-end">
-                    {/* User Selector */}
-                    <div className="flex-1 min-w-[300px]">
-                        <Label className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mb-3 flex items-center gap-2">
-                            <User className="w-3.5 h-3.5 text-primary" />
-                            Select Employee
-                        </Label>
+                <div className="flex items-center gap-3">
+                    {selectedUserId && isZeta && selectedUser && (
+                        <DeleteUserDialog 
+                            userId={selectedUserId}
+                            userName={selectedUser.full_name}
+                            onSuccess={() => {
+                                setSelectedUserId('');
+                                refetchProfiles();
+                            }}
+                        />
+                    )}
+                    <Button variant="outline" className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 h-9 px-4 rounded-lg font-medium text-xs shadow-sm transition-all focus:ring-2 focus:ring-slate-200">
+                        <Filter className="w-3.5 h-3.5 mr-2" />
+                        Filters
+                    </Button>
+                    <Button className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-200 dark:shadow-none h-9 px-4 rounded-lg font-medium text-xs transition-all focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 dark:focus:ring-offset-slate-950">
+                        <Download className="w-3.5 h-3.5 mr-2" />
+                        Export Data
+                    </Button>
+                </div>
+            </motion.div>
+
+            {/* Select Employee Card */}
+            <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.05, ease: "easeOut" }}
+            >
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm transition-shadow hover:shadow-md">
+                    <Label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 tracking-wider uppercase mb-2.5 flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-slate-400" />
+                        Select Employee
+                    </Label>
+                    <div className="max-w-full">
                         <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                            <SelectTrigger className="w-full bg-card border border-border/50 text-foreground h-12 rounded-xl focus:ring-2 focus:ring-primary/30 text-sm font-semibold hover:border-primary/30 transition-all shadow-sm">
+                            <SelectTrigger className="w-full h-11 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm font-medium shadow-sm">
                                 <SelectValue placeholder="Choose a user to manage..." />
                             </SelectTrigger>
-                            <SelectContent className="bg-card border-border text-foreground shadow-2xl rounded-xl">
+                            <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-xl shadow-lg">
                                 {profiles?.map(profile => (
-                                    <SelectItem key={profile.id} value={profile.id} className="focus:bg-muted/50 focus:text-foreground cursor-pointer py-2.5 rounded-lg">
-                                        <span className="font-semibold">{profile.full_name || `${profile.first_name} ${profile.last_name}`}</span>
-                                        <span className="text-muted-foreground ml-2 text-xs font-medium">— {profile.email}</span>
+                                    <SelectItem key={profile.id} value={profile.id} className="py-2.5 px-3 focus:bg-slate-50 dark:focus:bg-slate-800 cursor-pointer rounded-lg transition-colors">
+                                        <div className="flex items-center">
+                                            <span className="font-semibold text-slate-900 dark:text-slate-100">{profile.full_name || `${profile.first_name} ${profile.last_name}`}</span>
+                                            <span className="text-slate-400 dark:text-slate-500 ml-2 font-normal text-xs">— {profile.email}</span>
+                                        </div>
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-                    </div>
-
-                    {/* Quarter Selector */}
-                    <div className="w-48">
-                        <Label className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mb-3 block">Period</Label>
-                        <Select
-                            value={selectedQuarter}
-                            onValueChange={setSelectedQuarter}
-                            disabled={isAllTime}
-                        >
-                            <SelectTrigger className="w-full bg-card border border-border/50 text-foreground h-12 rounded-xl disabled:opacity-50 text-sm font-semibold hover:border-primary/30 transition-all shadow-sm">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="bg-card border-border text-foreground shadow-2xl rounded-xl">
-                                {quarterOptions.map(quarter => (
-                                    <SelectItem key={quarter} value={quarter} className="focus:bg-muted/50 focus:text-foreground cursor-pointer py-2.5 rounded-lg font-semibold">
-                                        {formatQuarter(quarter)}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {/* All Time Toggle */}
-                    <div className="flex items-center space-x-3 pb-3 px-2 h-12">
-                        <Switch
-                            id="all-time-mode"
-                            checked={isAllTime}
-                            onCheckedChange={setIsAllTime}
-                            className="data-[state=checked]:bg-primary"
-                        />
-                        <Label
-                            htmlFor="all-time-mode"
-                            className="text-xs font-black uppercase tracking-widest text-foreground cursor-pointer select-none"
-                        >
-                            All Time View
-                        </Label>
                     </div>
                 </div>
             </motion.div>
@@ -168,14 +143,14 @@ const UsersPage: React.FC = () => {
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        className="flex flex-col items-center justify-center py-20 text-center space-y-6 rounded-[2.5rem] border border-border/50 bg-muted/10 border-dashed"
+                        className="flex flex-col items-center justify-center py-24 text-center space-y-4 rounded-xl border border-slate-200 dark:border-slate-800 border-dashed bg-slate-50/50 dark:bg-slate-900/50"
                     >
-                        <div className="w-20 h-20 rounded-[2rem] bg-primary/5 flex items-center justify-center mb-2 shadow-inner">
-                            <User className="w-10 h-10 text-primary/60" />
+                        <div className="w-16 h-16 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm border border-slate-100 dark:border-slate-700">
+                            <User className="w-8 h-8 text-slate-300 dark:text-slate-600" />
                         </div>
-                        <div className="space-y-2">
-                            <h3 className="text-xl font-black text-foreground">No Employee Selected</h3>
-                            <p className="text-muted-foreground max-w-sm mx-auto font-medium">
+                        <div className="space-y-1">
+                            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">No Employee Selected</h3>
+                            <p className="text-slate-500 dark:text-slate-400 text-sm max-w-sm mx-auto">
                                 Select an employee from the dropdown above to view their skills, compliance status, and performance metrics.
                             </p>
                         </div>
@@ -184,75 +159,57 @@ const UsersPage: React.FC = () => {
 
                 {selectedUserId && (
                     <motion.div
-                        initial={{ opacity: 0, y: 20 }}
+                        initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="space-y-8"
+                        transition={{ duration: 0.5, ease: "easeOut" }}
+                        className="space-y-6"
                     >
-                        {/* Grid Layout for Sections */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            {/* Skills & Competencies */}
+                        {/* Row 1: 3x1 Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <motion.div
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: 0.1 }}
+                                initial={{ opacity: 0, scale: 0.98 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: 0.1, duration: 0.4 }}
                             >
                                 <SkillsSection employeeId={selectedUserId} />
                             </motion.div>
 
-                            {/* Licenses */}
                             <motion.div
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: 0.2 }}
+                                initial={{ opacity: 0, scale: 0.98 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: 0.15, duration: 0.4 }}
                             >
                                 <LicensesSection employeeId={selectedUserId} />
                             </motion.div>
+
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.98 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ delay: 0.2, duration: 0.4 }}
+                            >
+                                <WorkRightsSection employeeId={selectedUserId} />
+                            </motion.div>
                         </div>
 
-                        {/* Work Rights - Full Width */}
+                        {/* Row 2: Position Contracts */}
                         <motion.div
-                            initial={{ opacity: 0, y: 20 }}
+                            initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.3 }}
+                            transition={{ delay: 0.25, duration: 0.4 }}
                         >
-                            <WorkRightsSection employeeId={selectedUserId} />
+                            <PositionContractsSection
+                                employeeId={selectedUserId}
+                                employeeName={selectedUser?.full_name || `${selectedUser?.first_name} ${selectedUser?.last_name}`}
+                            />
                         </motion.div>
 
-                        {/* Performance & Risk - Grid */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                            {/* Performance takes 2 columns */}
-                            <motion.div
-                                className="lg:col-span-2"
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: 0.4 }}
-                            >
-                                <PerformanceSection
-                                    employeeId={selectedUserId}
-                                    quarterYear={effectiveQuarter}
-                                />
-                            </motion.div>
-
-                            {/* Risk & Alerts takes 1 column */}
-                            <motion.div
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: 0.5 }}
-                            >
-                                <RiskAlertsSection
-                                    employeeId={selectedUserId}
-                                    quarterYear={effectiveQuarter}
-                                />
-                            </motion.div>
-                        </div>
-
-                        {/* Contracts - Full Width */}
+                        {/* Row 3: Access Certificates */}
                         <motion.div
-                            initial={{ opacity: 0, y: 20 }}
+                            initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.6 }}
+                            transition={{ delay: 0.3, duration: 0.4 }}
                         >
-                            <ContractsSection
+                            <AccessCertificatesSection
                                 employeeId={selectedUserId}
                                 employeeName={selectedUser?.full_name || `${selectedUser?.first_name} ${selectedUser?.last_name}`}
                             />

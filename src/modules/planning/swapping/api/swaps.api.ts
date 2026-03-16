@@ -3,7 +3,7 @@ import { SwapRequestWithDetails } from '../model/swap.types';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 
 import { shiftsApi } from '@/modules/rosters';
-import { checkCompliance, ComplianceCheckInput, ShiftTimeRange } from '@/modules/compliance';
+import { ShiftTimeRange, swapEvaluator, runSwapGuards, SwapGuardError } from '@/modules/compliance';
 import { addDays, subDays, format, parseISO, differenceInHours, parse } from 'date-fns';
 
 // Type assertion helper for Supabase queries with tables not in generated types
@@ -30,78 +30,70 @@ const assertNotTimeLocked = (shiftDate: string, startTime: string) => {
     }
 };
 
-// Helper: Run compliance check for a swap transaction
+/**
+ * Validate swap compliance using the Constraint Solver.
+ *
+ * Replaces sequential per-employee rule checks with a simultaneous scenario
+ * evaluation — all constraints applied to both parties' hypothetical schedules
+ * at once.
+ *
+ * @returns SolverResult (feasible = no blocking violations for either party)
+ */
 const validateSwapCompliance = async (
     requesterId: string,
-    requesterShift: any, // Shift object
+    requesterShift: any,
     offererId: string,
-    offeredShift: any | null // Shift object or null
+    offeredShift: any,
+    options: { swapId?: string; shiftSnapshot?: Array<{ id: string; shift_date: string; start_time: string; end_time: string }> } = {}
 ) => {
-    // 3. Define date range for roster fetch (surrounding the shifts)
-    // We need rosters for BOTH employees to check compliance for receiving the new shift.
-    // Range: +/- 30 days from the earliest shift date involved.
     const dateRef = parse(requesterShift.shift_date, 'yyyy-MM-dd', new Date());
     const start = format(subDays(dateRef, 30), 'yyyy-MM-dd');
     const end = format(addDays(dateRef, 30), 'yyyy-MM-dd');
 
-    // 2. Fetch Rosters
-    const requesterRoster = await shiftsApi.getEmployeeShifts(requesterId, start, end);
-    const offererRoster = await shiftsApi.getEmployeeShifts(offererId, start, end);
+    // Fetch rosters for BOTH parties (cross-department — no department filter)
+    const [requesterRoster, offererRoster] = await Promise.all([
+        shiftsApi.getEmployeeShifts(requesterId, start, end),
+        shiftsApi.getEmployeeShifts(offererId, start, end),
+    ]);
 
-    // 3. Check Offerer receiving Requester's Shift (Always happens in a swap)
-    const offererExistingShifts: ShiftTimeRange[] = offererRoster
-        .filter(s => s.id !== offeredShift?.id) // Exclude the shift they are giving away (if any)
-        .map(s => ({
-            shift_date: s.shift_date,
-            start_time: s.start_time,
-            end_time: s.end_time,
-            unpaid_break_minutes: s.unpaid_break_minutes || 0,
-        }));
+    // Pre-flight guards: entity validity, concurrency, locks, drift (#1, #2, #16, #20, #21)
+    const guardResult = await runSwapGuards({
+        shiftIds: [requesterShift.id, offeredShift?.id].filter(Boolean),
+        employeeIds: [requesterId, offererId],
+        currentSwapId: options.swapId,
+        shiftSnapshot: options.shiftSnapshot,
+    });
 
-    const offererCheckInput: ComplianceCheckInput = {
-        employee_id: offererId,
-        action_type: 'assign',
-        candidate_shift: {
-            shift_date: requesterShift.shift_date,
-            start_time: requesterShift.start_time,
-            end_time: requesterShift.end_time,
-            unpaid_break_minutes: requesterShift.unpaid_break_minutes || 0,
-        },
-        existing_shifts: offererExistingShifts,
-    };
+    if (!guardResult.passed) throw new SwapGuardError(guardResult);
 
-    const offererResult = checkCompliance(offererCheckInput);
+    // Map rosters to ShiftTimeRange[]
+    const toTimeRange = (s: any): ShiftTimeRange => ({
+        shift_date: s.shift_date,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        unpaid_break_minutes: s.unpaid_break_minutes || 0,
+    });
 
-    // 4. Check Requester receiving Offered Shift (Only if 2-way)
-    let requesterResult = null;
-    if (offeredShift) {
-        const requesterExistingShifts: ShiftTimeRange[] = requesterRoster
-            .filter(s => s.id !== requesterShift.id) // Exclude shift they are giving away
-            .map(s => ({
-                shift_date: s.shift_date,
-                start_time: s.start_time,
-                end_time: s.end_time,
-                unpaid_break_minutes: s.unpaid_break_minutes || 0,
-            }));
-
-        const requesterCheckInput: ComplianceCheckInput = {
+    // Run the constraint solver — all 8 constraints simultaneously on both parties
+    const solverResult = swapEvaluator.evaluate({
+        partyA: {
             employee_id: requesterId,
-            action_type: 'assign',
-            candidate_shift: {
-                shift_date: offeredShift.shift_date,
-                start_time: offeredShift.start_time,
-                end_time: offeredShift.end_time,
-                unpaid_break_minutes: offeredShift.unpaid_break_minutes || 0,
-            },
-            existing_shifts: requesterExistingShifts,
-        };
-        requesterResult = checkCompliance(requesterCheckInput);
-    }
+            name: 'Requester',
+            current_shifts: requesterRoster.map(s => ({ ...toTimeRange(s), id: s.id })),
+            shift_to_give: { ...toTimeRange(requesterShift), id: requesterShift.id },
+        },
+        partyB: {
+            employee_id: offererId,
+            name: 'Offerer',
+            current_shifts: offererRoster.map(s => ({ ...toTimeRange(s), id: s.id })),
+            shift_to_give: { ...toTimeRange(offeredShift), id: offeredShift?.id },
+        },
+    });
 
     return {
-        offererResult,
-        requesterResult,
-        timestamp: new Date().toISOString()
+        solverResult,
+        feasible: solverResult.feasible,
+        timestamp: new Date().toISOString(),
     };
 };
 
@@ -198,10 +190,11 @@ export const swapsApi = {
 
             if (shiftUpdateError) {
                 console.error('[API] Failed to update shift trading status:', shiftUpdateError);
-                // Note: ideally we would rollback the swap request creation here, 
+                // Note: ideally we would rollback the swap request creation here,
                 // but for now we log the error as this is a non-transactional client-side operation.
             }
-        }
+
+            }
 
         return data;
     },
@@ -395,10 +388,15 @@ export const swapsApi = {
             swap_request_id: swapId,
             offerer_id: targetId,
             status: 'SUBMITTED',
-            // TODO: compliance_snapshot: ... (captured from frontend or re-run on backend)
         };
 
+        // §9 Time Lock Check: Prevent offering a shift that starts within 4 hours
         if (targetShiftId) {
+            const { data: shift, error: shiftErr } = await supabase
+                .from('shifts').select('shift_date, start_time').eq('id', targetShiftId).single();
+            if (shiftErr || !shift) throw shiftErr || new Error('Shift not found');
+            assertNotTimeLocked(shift.shift_date, shift.start_time);
+            
             offerData.offered_shift_id = targetShiftId;
         }
 
@@ -411,8 +409,6 @@ export const swapsApi = {
             throw error;
         }
 
-        // Optimistically update request status to 'OPEN' or specific state if needed, 
-        // but explicit state change should happen on selection.
     },
 
     /**
@@ -471,7 +467,7 @@ export const swapsApi = {
                 offerer:profiles!offerer_id(*),
                 offered_shift:shifts!offered_shift_id(
                     *,
-                    roles(name),
+                    roles(name, group_type),
                     departments(name),
                     sub_departments(name)
                 )
@@ -486,6 +482,7 @@ export const swapsApi = {
 
         return (data || []).map(offer => ({
             ...offer,
+            offerer: mapDbEmployee(offer.offerer),
             offered_shift: mapDbShift(offer.offered_shift)
         }));
     },
@@ -608,20 +605,37 @@ export const swapsApi = {
             offeredShiftData = shiftRow;
         }
 
-        // 4. Re-Verify Compliance (Drift Check per §8)
+        // 4. Re-Verify Compliance at approval time with drift check (#2, #22)
+        // Snapshot the original shift times so the drift guard can detect schedule changes
+        const shiftSnapshot = [
+            swap.originalShift && {
+                id: swap.original_shift_id,
+                shift_date: swap.originalShift.shift_date ?? swap.originalShift.shiftDate,
+                start_time: swap.originalShift.start_time ?? swap.originalShift.startTime,
+                end_time: swap.originalShift.end_time ?? swap.originalShift.endTime,
+            },
+            offeredShiftData && {
+                id: offeredShiftId,
+                shift_date: offeredShiftData.shift_date,
+                start_time: offeredShiftData.start_time,
+                end_time: offeredShiftData.end_time,
+            },
+        ].filter(Boolean) as Array<{ id: string; shift_date: string; start_time: string; end_time: string }>;
+
         const complianceCheck = await validateSwapCompliance(
             swap.requested_by_employee_id,
             swap.originalShift,
             effectiveTargetId,
-            offeredShiftData
+            offeredShiftData,
+            { swapId: requestId, shiftSnapshot }
         );
 
-        const hasBlockingError =
-            (complianceCheck.offererResult?.overallStatus === 'fail') ||
-            (complianceCheck.requesterResult?.overallStatus === 'fail');
-
-        if (hasBlockingError) {
-            throw new Error("Compliance violation detected. Cannot approve swap.");
+        if (!complianceCheck.feasible) {
+            const blockers = complianceCheck.solverResult.violations
+                .filter(v => v.blocking)
+                .map(v => `[${v.employee_name}] ${v.summary}`)
+                .join('; ');
+            throw new Error(`Compliance violation detected. Cannot approve swap. ${blockers}`);
         }
 
         // 5. Execute Trade via SM (Atomic 2-way swap) — §4 T5
@@ -679,6 +693,7 @@ export const swapsApi = {
             if (shiftUpdateError) {
                 console.error('[API] Failed to revert shift trading status on rejection:', shiftUpdateError);
             }
+
         }
     },
 
@@ -714,6 +729,7 @@ export const swapsApi = {
             if (shiftUpdateError) {
                 console.error('[API] Failed to revert shift trading status on cancellation:', shiftUpdateError);
             }
+
         }
     },
 
@@ -750,17 +766,16 @@ export const swapsApi = {
             swapRequest.requester_id,
             swapRequest.requester_shift,
             offererId,
-            offeredShift
+            offeredShift,
+            { swapId: swapId }
         );
 
-        // 3. Identify if Compliance Failed (Block accept if critical?)
-        if (
-            (complianceSnapshot.offererResult?.overallStatus === 'fail') ||
-            (complianceSnapshot.requesterResult?.overallStatus === 'fail')
-        ) {
-            // Optional: You could allow forcing through warnings, but usually we block violations.
-            // For now, let's block on violation.
-            throw new Error("Compliance violation detected. Cannot accept offer.");
+        if (!complianceSnapshot.feasible) {
+            const blockers = complianceSnapshot.solverResult.violations
+                .filter(v => v.blocking)
+                .map(v => `[${v.employee_name}] ${v.summary}`)
+                .join('; ');
+            throw new Error(`Compliance violation detected. Cannot accept offer. ${blockers}`);
         }
 
         // 4. Update the Swap Request to lock in the target and move to Manager Approval
@@ -782,6 +797,16 @@ export const swapsApi = {
             .eq('status', 'OPEN');
 
         if (swapError) throw swapError;
+
+        // 4b. Update shift trail info so the audit log captures the partner
+        const { data: offererProfile } = await db.from('profiles').select('first_name, last_name').eq('id', offererId).single();
+        const offererName = offererProfile ? `${offererProfile.first_name} ${offererProfile.last_name}` : 'Unknown';
+        
+        await db.from('shifts')
+            .update({ 
+                last_modified_reason: `Swap accepted with ${offererName}` 
+            })
+            .eq('id', swapRequest.requester_shift_id);
 
         // 5. Mark the selected offer as SELECTED and save Snapshot
         const { error: offerError } = await db
@@ -808,6 +833,13 @@ export const swapsApi = {
             .update({ status: 'REJECTED' })
             .eq('swap_request_id', swapId)
             .neq('id', offerId);
+
+        // 7. Update shift trading_status to TradeAccepted (S9 → S10)
+        await db
+            .from('shifts')
+            .update({ trading_status: 'TradeAccepted' })
+            .eq('id', swapRequest.requester_shift_id);
+
     },
 
     /**
@@ -815,6 +847,7 @@ export const swapsApi = {
      */
     async rejectTrade(offerId: string): Promise<void> {
         console.log('[API] Rejecting trade offer:', offerId);
+
         const { error } = await db
             .from('swap_offers')
             .update({ status: 'REJECTED' })
@@ -871,6 +904,7 @@ function mapDbShift(shift: any): any {
         roles: shift.roles,
         departments: shift.departments,
         sub_departments: shift.sub_departments,
+        organizations: shift.organizations,
         tz_identifier: shift.tz_identifier // Keep raw for utils if needed
     };
 }

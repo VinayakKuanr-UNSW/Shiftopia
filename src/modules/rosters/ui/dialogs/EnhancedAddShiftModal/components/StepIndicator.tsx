@@ -1,15 +1,14 @@
 /**
  * StepIndicator — WCAG 2.1 AA compliant step progress component.
  *
- * Redesigned for 3-step flow:
+ * 2-step flow:
  *   1. Schedule & Details
  *   2. Assignment & Compliance
- *   3. Review Logs
  */
 
 import React, { useEffect, useRef } from 'react';
 import { cn } from '@/modules/core/lib/utils';
-import { Check, LayoutGrid, Users, ClipboardList } from 'lucide-react';
+import { Check, LayoutGrid, Users } from 'lucide-react';
 
 export interface Step {
     id: number;
@@ -19,8 +18,7 @@ export interface Step {
 
 export const SHIFT_STEPS: Step[] = [
     { id: 1, name: 'Schedule & Details', icon: <LayoutGrid className="h-4 w-4" aria-hidden /> },
-    { id: 2, name: 'Assignment', icon: <Users className="h-4 w-4" aria-hidden /> },
-    { id: 3, name: 'Review Logs', icon: <ClipboardList className="h-4 w-4" aria-hidden /> },
+    { id: 2, name: 'Assignment & Compliance', icon: <Users className="h-4 w-4" aria-hidden /> },
 ];
 
 export interface StepIndicatorProps {
@@ -36,12 +34,8 @@ export function StepIndicator({
     completedSteps,
     onStepClick,
     disabled = false,
-    editMode = false,
 }: StepIndicatorProps) {
-    const steps = SHIFT_STEPS.map(step => ({
-        ...step,
-        name: step.id === 3 && !editMode ? 'Review Details' : step.name,
-    }));
+    const steps = SHIFT_STEPS;
 
     const totalSteps = steps.length;
 

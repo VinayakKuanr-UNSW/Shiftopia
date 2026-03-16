@@ -1,5 +1,4 @@
 import React from 'react';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/modules/core/ui/primitives/card';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/core/ui/primitives/table';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -10,7 +9,7 @@ import { useToast } from '@/modules/core/ui/primitives/use-toast';
 import { AddContractDialog } from './AddContractDialog';
 import { AccessCertificateDialog } from './AddAccessCertificateDialog';
 
-interface ContractsSectionProps {
+interface SectionProps {
     employeeId: string;
     employeeName?: string;
 }
@@ -55,11 +54,10 @@ const AccessIcon = ({ level }: { level: string }) => {
     }
 }
 
-const ContractsSection: React.FC<ContractsSectionProps> = ({ employeeId, employeeName = 'User' }) => {
+export const PositionContractsSection: React.FC<SectionProps> = ({ employeeId, employeeName = 'User' }) => {
     const { toast } = useToast();
     const queryClient = useQueryClient();
 
-    // 1. Fetch HR Contracts
     const { data: contracts, isLoading: isLoadingContracts } = useQuery({
         queryKey: ['user_contracts', employeeId],
         queryFn: async () => {
@@ -90,7 +88,88 @@ const ContractsSection: React.FC<ContractsSectionProps> = ({ employeeId, employe
         enabled: !!employeeId,
     });
 
-    // 2. Fetch Access Certificates
+    const handleDeleteContract = async (contractId: string) => {
+        if (!confirm('Are you sure you want to delete this contract?')) return;
+
+        try {
+            const { error } = await (supabase as any).from('user_contracts').delete().eq('id', contractId);
+            if (error) throw error;
+            toast({ title: 'Success', description: 'Contract deleted' });
+            queryClient.invalidateQueries({ queryKey: ['user_contracts', employeeId] });
+        } catch (error) {
+            console.error('Error deleting contract:', error);
+            toast({ title: 'Error', description: 'Failed to delete contract', variant: 'destructive' });
+        }
+    };
+
+    return (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden flex flex-col h-full">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/60 bg-white dark:bg-slate-900 flex items-center justify-between">
+                <div className="space-y-0.5">
+                    <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                        <Briefcase className="w-4 h-4 text-slate-500" />
+                        Position Contracts
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-medium pl-6 uppercase tracking-wider">
+                        HR & Employment Position Details
+                    </p>
+                </div>
+                <AddContractDialog employeeId={employeeId} employeeName={employeeName} />
+            </div>
+            <div>
+                {isLoadingContracts ? (
+                    <div className="p-8 text-center text-sm text-slate-400 animate-pulse">Loading contracts...</div>
+                ) : !contracts || contracts.length === 0 ? (
+                    <div className="p-8 text-center text-sm font-medium text-slate-400">
+                        No active positions recorded.
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <Table className="px-4">
+                            <TableHeader className="bg-slate-50/50 dark:bg-slate-900/50">
+                                <TableRow className="border-b-slate-100 dark:border-b-slate-800/60">
+                                    <TableHead className="text-xs text-slate-500 font-semibold h-10">Organization</TableHead>
+                                    <TableHead className="text-xs text-slate-500 font-semibold h-10">Department</TableHead>
+                                    <TableHead className="text-xs text-slate-500 font-semibold h-10">Sub-Department</TableHead>
+                                    <TableHead className="text-xs text-slate-500 font-semibold h-10">Role</TableHead>
+                                    <TableHead className="text-xs text-slate-500 font-semibold h-10">Level</TableHead>
+                                    <TableHead className="text-xs text-slate-500 font-semibold h-10">Status</TableHead>
+                                    <TableHead className="text-xs text-slate-500 font-semibold h-10 text-right">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {contracts.map(contract => (
+                                    <TableRow key={contract.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b-slate-100 dark:border-b-slate-800/60">
+                                        <TableCell className="font-semibold text-sm text-slate-800 dark:text-slate-200">{contract.organization_name}</TableCell>
+                                        <TableCell className="text-sm text-slate-600 dark:text-slate-400">{contract.department_name}</TableCell>
+                                        <TableCell className="text-sm text-slate-600 dark:text-slate-400">{contract.sub_department_name}</TableCell>
+                                        <TableCell className="text-sm text-slate-600 dark:text-slate-400">{contract.role_name}</TableCell>
+                                        <TableCell className="text-sm text-slate-600 dark:text-slate-400">{contract.level_name}</TableCell>
+                                        <TableCell>
+                                            <Badge variant="secondary" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-none font-medium text-xs">
+                                                {contract.employment_status || 'Full-Time'}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <Button variant="ghost" size="sm" onClick={() => handleDeleteContract(contract.id)} className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 h-8 w-8 p-0 border border-transparent shadow-none">
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+export const AccessCertificatesSection: React.FC<SectionProps> = ({ employeeId, employeeName = 'User' }) => {
+    const { toast } = useToast();
+    const queryClient = useQueryClient();
+
     const { data: certificates, isLoading: isLoadingCerts } = useQuery({
         queryKey: ['access_certificates', employeeId],
         queryFn: async () => {
@@ -117,20 +196,6 @@ const ContractsSection: React.FC<ContractsSectionProps> = ({ employeeId, employe
         enabled: !!employeeId,
     });
 
-    const handleDeleteContract = async (contractId: string) => {
-        if (!confirm('Are you sure you want to delete this contract?')) return;
-
-        try {
-            const { error } = await (supabase as any).from('user_contracts').delete().eq('id', contractId);
-            if (error) throw error;
-            toast({ title: 'Success', description: 'Contract deleted' });
-            queryClient.invalidateQueries({ queryKey: ['user_contracts', employeeId] });
-        } catch (error) {
-            console.error('Error deleting contract:', error);
-            toast({ title: 'Error', description: 'Failed to delete contract', variant: 'destructive' });
-        }
-    };
-
     const handleDeleteCertificate = async (certId: string) => {
         if (certificates && certificates.length <= 1) {
             toast({
@@ -148,7 +213,6 @@ const ContractsSection: React.FC<ContractsSectionProps> = ({ employeeId, employe
             if (error) throw error;
             toast({ title: 'Success', description: 'Access revoked' });
             queryClient.invalidateQueries({ queryKey: ['access_certificates', employeeId] });
-            // Also invalidate profile/contracts to refresh derived auth state
             queryClient.invalidateQueries({ queryKey: ['user_contracts', employeeId] });
         } catch (error) {
             console.error('Error deleting certificate:', error);
@@ -157,164 +221,104 @@ const ContractsSection: React.FC<ContractsSectionProps> = ({ employeeId, employe
     };
 
     return (
-        <div className="space-y-6">
-            {/* Position Contracts Section */}
-            <Card className="border border-border bg-card">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <div className="space-y-1">
-                        <CardTitle className="flex items-center gap-2">
-                            <Briefcase className="w-5 h-5" />
-                            Position Contracts
-                        </CardTitle>
-                        <CardDescription>
-                            HR & Employment Position Details
-                        </CardDescription>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden flex flex-col h-full">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/60 bg-white dark:bg-slate-900 flex items-center justify-between">
+                <div className="space-y-0.5">
+                    <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-slate-500" />
+                        Access Certificates
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-medium pl-6 uppercase tracking-wider">
+                        System Permissions & Scope
+                    </p>
+                </div>
+                <AccessCertificateDialog
+                    employeeId={employeeId}
+                    employeeName={employeeName}
+                    existingCertificates={certificates || []}
+                    onSuccess={() => {
+                        queryClient.invalidateQueries({ queryKey: ['access_certificates', employeeId] });
+                    }}
+                />
+            </div>
+            <div>
+                {isLoadingCerts ? (
+                    <div className="p-8 text-center text-sm text-slate-400 animate-pulse">Loading certificates...</div>
+                ) : !certificates || certificates.length === 0 ? (
+                    <div className="p-8 text-center text-sm font-medium text-slate-400">
+                        No access certificates. User has no system access.
                     </div>
-                    <AddContractDialog employeeId={employeeId} employeeName={employeeName} />
-                </CardHeader>
-                <CardContent className="p-0">
-                    {isLoadingContracts ? (
-                        <div className="p-6 text-sm text-muted-foreground">Loading contracts...</div>
-                    ) : !contracts || contracts.length === 0 ? (
-                        <div className="p-6 text-center text-sm text-muted-foreground">
-                            No active positions.
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Organization</TableHead>
-                                        <TableHead>Department</TableHead>
-                                        <TableHead>Sub-Department</TableHead>
-                                        <TableHead>Role</TableHead>
-                                        <TableHead>Level</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {contracts.map(contract => (
-                                        <TableRow key={contract.id} className="hover:bg-muted/50 transition-colors">
-                                            <TableCell className="font-medium">{contract.organization_name}</TableCell>
-                                            <TableCell>{contract.department_name}</TableCell>
-                                            <TableCell>{contract.sub_department_name}</TableCell>
-                                            <TableCell>{contract.role_name}</TableCell>
-                                            <TableCell>{contract.level_name}</TableCell>
-                                            <TableCell>
-                                                <Badge variant="outline" className="bg-muted/50 text-muted-foreground border-border">
-                                                    {contract.employment_status || 'Full-Time'}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <Button variant="ghost" size="sm" onClick={() => handleDeleteContract(contract.id)} className="text-muted-foreground hover:text-destructive h-8 w-8 p-0">
-                                                    <Trash2 className="w-4 h-4" />
+                ) : (
+                    <div className="overflow-x-auto">
+                        <Table className="px-4">
+                            <TableHeader className="bg-slate-50/50 dark:bg-slate-900/50">
+                                <TableRow className="border-b-slate-100 dark:border-b-slate-800/60">
+                                    <TableHead className="text-xs text-slate-500 font-semibold h-10">Access Level</TableHead>
+                                    <TableHead className="text-xs text-slate-500 font-semibold h-10">Scope</TableHead>
+                                    <TableHead className="text-xs text-slate-500 font-semibold h-10 text-right">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {certificates.map(cert => (
+                                    <TableRow key={cert.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b-slate-100 dark:border-b-slate-800/60">
+                                        <TableCell>
+                                            <Badge className={`pl-1.5 flex w-fit items-center font-medium text-[10px] tracking-wider uppercase rounded-[4px] py-1 ${ACCESS_LEVEL_STYLES[cert.access_level]?.color || ACCESS_LEVEL_STYLES.alpha.color}`}>
+                                                <AccessIcon level={cert.access_level} />
+                                                {cert.access_level}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                                            <span className="text-slate-800 dark:text-slate-200">{cert.organization_name}</span>
+                                            {cert.department_name ? (
+                                                <> <span className="opacity-40">/</span> {cert.department_name}</>
+                                            ) : cert.access_level === 'epsilon' ? (
+                                                <span className="text-emerald-600 dark:text-emerald-400 ml-2 font-bold text-[9px] uppercase tracking-wide border border-emerald-500/20 px-1.5 py-0.5 rounded bg-emerald-500/10">Global</span>
+                                            ) : null}
+                                            {cert.sub_department_name ? (
+                                                <> <span className="opacity-40">/</span> {cert.sub_department_name}</>
+                                            ) : (
+                                                cert.department_name && ['delta'].includes(cert.access_level) ? (
+                                                    <span className="text-amber-600 dark:text-amber-400 ml-2 font-bold text-[9px] uppercase tracking-wide border border-amber-500/20 px-1.5 py-0.5 rounded bg-amber-500/10">Full Dept</span>
+                                                ) : null
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex justify-end gap-1">
+                                                <AccessCertificateDialog
+                                                    employeeId={employeeId}
+                                                    employeeName={employeeName}
+                                                    existingCertificates={certificates || []}
+                                                    certificateToEdit={cert}
+                                                    trigger={
+                                                        <Button variant="ghost" size="sm" className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 h-8 w-8 p-0 border border-transparent shadow-none">
+                                                            <Pencil className="w-3.5 h-3.5" />
+                                                        </Button>
+                                                    }
+                                                    onSuccess={() => {
+                                                        queryClient.invalidateQueries({ queryKey: ['access_certificates', employeeId] });
+                                                    }}
+                                                />
+                                                <Button variant="ghost" size="sm" onClick={() => handleDeleteCertificate(cert.id)} className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 h-8 w-8 p-0 border border-transparent shadow-none">
+                                                    <Trash2 className="w-3.5 h-3.5" />
                                                 </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* Access Certificates Section */}
-            <Card className="border border-border bg-card">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <div className="space-y-1">
-                        <CardTitle className="flex items-center gap-2">
-                            <Shield className="w-5 h-5" />
-                            Access Certificates
-                        </CardTitle>
-                        <CardDescription>
-                            System Permissions & Scope
-                        </CardDescription>
-                    </div>
-                    {/* Add Certificate Dialog */}
-                    <AccessCertificateDialog
-                        employeeId={employeeId}
-                        employeeName={employeeName}
-                        existingCertificates={certificates || []}
-                        onSuccess={() => {
-                            queryClient.invalidateQueries({ queryKey: ['access_certificates', employeeId] });
-                        }}
-                    />
-                </CardHeader>
-                <CardContent className="p-0">
-                    {isLoadingCerts ? (
-                        <div className="p-6 text-sm text-muted-foreground">Loading certificates...</div>
-                    ) : !certificates || certificates.length === 0 ? (
-                        <div className="p-6 text-center text-sm text-muted-foreground">
-                            No access certificates. User has no system access.
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Access Level</TableHead>
-                                        <TableHead>Scope</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
+                                            </div>
+                                        </TableCell>
                                     </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {certificates.map(cert => (
-                                        <TableRow key={cert.id} className="hover:bg-muted/50 transition-colors">
-                                            <TableCell>
-                                                <Badge className={`pl-1.5 flex w-fit items-center ${ACCESS_LEVEL_STYLES[cert.access_level]?.color || ACCESS_LEVEL_STYLES.alpha.color}`}>
-                                                    <AccessIcon level={cert.access_level} />
-                                                    {cert.access_level}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-sm font-light text-muted-foreground">
-                                                {/* Smart Scope Display */}
-                                                <span className="text-foreground font-medium">{cert.organization_name}</span>
-                                                {cert.department_name ? (
-                                                    <> <span className="text-muted-foreground/40">/</span> {cert.department_name}</>
-                                                ) : cert.access_level === 'epsilon' ? (
-                                                    <span className="text-emerald-500/60 ml-2 italic text-xs border border-emerald-500/20 px-1.5 py-0.5 rounded bg-emerald-500/5">Global</span>
-                                                ) : null}
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
 
-                                                {cert.sub_department_name ? (
-                                                    <> <span className="text-muted-foreground/40">/</span> {cert.sub_department_name}</>
-                                                ) : (
-                                                    cert.department_name && ['delta'].includes(cert.access_level) ? (
-                                                        <span className="text-amber-500/60 ml-2 italic text-xs border border-amber-500/20 px-1.5 py-0.5 rounded bg-amber-500/5">Full Dept</span>
-                                                    ) : null
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex justify-end gap-1">
-                                                    {/* Edit Dialog */}
-                                                    <AccessCertificateDialog
-                                                        employeeId={employeeId}
-                                                        employeeName={employeeName}
-                                                        existingCertificates={certificates || []}
-                                                        certificateToEdit={cert}
-                                                        trigger={
-                                                            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary h-8 w-8 p-0">
-                                                                <Pencil className="w-4 h-4" />
-                                                            </Button>
-                                                        }
-                                                        onSuccess={() => {
-                                                            queryClient.invalidateQueries({ queryKey: ['access_certificates', employeeId] });
-                                                        }}
-                                                    />
-                                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteCertificate(cert.id)} className="text-muted-foreground hover:text-destructive h-8 w-8 p-0">
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </Button>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+const ContractsSection: React.FC<SectionProps> = (props) => {
+    return (
+        <div className="space-y-6">
+            <PositionContractsSection {...props} />
+            <AccessCertificatesSection {...props} />
         </div>
     );
 };

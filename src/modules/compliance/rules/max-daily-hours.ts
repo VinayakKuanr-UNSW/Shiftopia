@@ -44,11 +44,6 @@ export const MaxDailyHoursRule: ComplianceRule = {
         // Calculate total
         const totalHours = Math.round((existingHours + candidateHours) * 100) / 100;
 
-        // DEBUG: Trace why it might be blocking incorrectly
-        if (totalHours > MAX_DAILY_HOURS || totalHours === 5) {
-            console.log(`[MaxDailyHours] Date: ${targetDate} | Exist: ${existingHours} | Cand: ${candidateHours} | Total: ${totalHours} | Limit: ${MAX_DAILY_HOURS}`);
-        }
-
         // Determine status
         const exceedsLimit = totalHours > MAX_DAILY_HOURS;
 

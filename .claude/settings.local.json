@@ -27,7 +27,10 @@
       "Bash(grep:*)",
       "mcp__supabase__deploy_edge_function",
       "mcp__supabase__get_logs",
-      "mcp__supabase__get_edge_function"
+      "mcp__supabase__get_edge_function",
+      "mcp__supabase__list_edge_functions",
+      "Bash(ls:*)",
+      "Bash(test:*)"
     ]
   }
 }

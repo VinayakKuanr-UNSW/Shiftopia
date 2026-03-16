@@ -1,5 +1,5 @@
 import React from 'react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, getDay } from 'date-fns';
 import {
     FormControl,
     FormField,
@@ -40,7 +40,9 @@ import {
     Star,
     Shield,
     CalendarCheck,
+    GraduationCap,
 } from 'lucide-react';
+import { Switch } from '@/modules/core/ui/primitives/switch';
 import {
     HierarchyColumn
 } from './HierarchyColumn';
@@ -107,8 +109,10 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
     selectedRemLevel,
     isRoleLocked,
 }) => {
-    const watchPaidBreak = form.watch('paid_break_minutes');
+        const watchPaidBreak = form.watch('paid_break_minutes');
     const watchUnpaidBreak = form.watch('unpaid_break_minutes');
+    const watchIsTraining = form.watch('is_training');
+    const watchShiftDate = form.watch('shift_date');
     const watchGroupType = form.watch('group_type');
     const watchSubGroup = form.watch('sub_group_name');
     const watchRoleId = form.watch('role_id');
@@ -162,6 +166,14 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
             onRosterChange(match.id);
         }
     }, [isTemplateMode, rosters, onRosterChange, context?.date]);
+
+    // Min shift length validation (inline Step 1 feedback)
+    const minShiftHours = React.useMemo(() => {
+        if (watchIsTraining) return 2;
+        if (watchShiftDate && getDay(watchShiftDate) === 0) return 4; // Sunday
+        return 3; // Weekday default
+    }, [watchIsTraining, watchShiftDate]);
+    const isShiftTooShort = !isTemplateMode && netLength > 0 && netLength < minShiftHours;
 
     // Resolve names for badge display
     const selectedRole = roles.find(r => r.id === watchRoleId);
@@ -584,6 +596,50 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
                                 </div>
                             </div>
                         </div>
+
+                        {/* Training Shift Toggle */}
+                        <div className={cn(
+                            "rounded-xl border px-3 py-2.5 flex items-center justify-between transition-all duration-300",
+                            watchIsTraining
+                                ? "bg-violet-500/[0.08] border-violet-500/30"
+                                : "bg-muted/40 border-border"
+                        )}>
+                            <div className="flex items-center gap-2">
+                                <GraduationCap className={cn(
+                                    "h-3.5 w-3.5 transition-colors",
+                                    watchIsTraining ? "text-violet-500" : "text-muted-foreground/40"
+                                )} />
+                                <div>
+                                    <span className={cn(
+                                        "text-[10px] font-black uppercase tracking-wider",
+                                        watchIsTraining ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground/60"
+                                    )}>Training</span>
+                                    {watchIsTraining && (
+                                        <div className="text-[9px] text-violet-500/70 font-medium leading-none mt-0.5">2h min applies</div>
+                                    )}
+                                </div>
+                            </div>
+                            <Switch
+                                checked={watchIsTraining || false}
+                                onCheckedChange={(checked) => form.setValue('is_training', checked)}
+                                disabled={isReadOnly}
+                                className="data-[state=checked]:bg-violet-500 scale-75"
+                            />
+                        </div>
+
+                        {/* Inline min shift length warning */}
+                        {isShiftTooShort && !isReadOnly && (
+                            <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-red-500/10 border border-red-500/25 animate-in fade-in duration-200">
+                                <AlertTriangle className="h-3.5 w-3.5 text-red-400 flex-shrink-0" />
+                                <div className="min-w-0">
+                                    <p className="text-[9px] font-black uppercase tracking-wider text-red-400 leading-none">Too Short</p>
+                                    <p className="text-[8px] text-red-400/70 leading-tight mt-0.5">
+                                        {netLength.toFixed(1)}h · min {minShiftHours}h{' '}
+                                        ({watchIsTraining ? 'training' : watchShiftDate && getDay(watchShiftDate) === 0 ? 'Sunday' : 'weekday'})
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 

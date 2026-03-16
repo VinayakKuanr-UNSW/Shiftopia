@@ -33,22 +33,20 @@ export const useAuth = () => {
     return roles.includes(user.systemRole);
   };
 
-  // Check if active contract OR certificate is delta or epsilon
+  // Check if active contract OR certificate is delta, epsilon or zeta
   const isAdmin = (): boolean =>
-    activeContract?.accessLevel === 'delta' ||
-    activeContract?.accessLevel === 'epsilon' ||
-    user?.highestAccessLevel === 'delta' ||
-    user?.highestAccessLevel === 'epsilon';
+    ['delta', 'epsilon', 'zeta'].includes(activeContract?.accessLevel || '') ||
+    ['delta', 'epsilon', 'zeta'].includes(user?.highestAccessLevel || '');
 
   // Check if active contract OR certificate is gamma or above
   const isManagerOrAbove = (): boolean =>
-    (!!activeContract && ['gamma', 'delta', 'epsilon'].includes(activeContract.accessLevel)) ||
-    (!!user && ['gamma', 'delta', 'epsilon'].includes(user.highestAccessLevel));
+    (!!activeContract && ['gamma', 'delta', 'epsilon', 'zeta'].includes(activeContract.accessLevel)) ||
+    (!!user && ['gamma', 'delta', 'epsilon', 'zeta'].includes(user.highestAccessLevel));
 
   // Check if active contract OR certificate is beta or above
   const isTeamLeadOrAbove = (): boolean =>
-    (!!activeContract && ['beta', 'gamma', 'delta', 'epsilon'].includes(activeContract.accessLevel)) ||
-    (!!user && ['beta', 'gamma', 'delta', 'epsilon'].includes(user.highestAccessLevel));
+    (!!activeContract && ['beta', 'gamma', 'delta', 'epsilon', 'zeta'].includes(activeContract.accessLevel)) ||
+    (!!user && ['beta', 'gamma', 'delta', 'epsilon', 'zeta'].includes(user.highestAccessLevel));
 
   /* ============================================================
      Feature Permission Checking
@@ -58,55 +56,54 @@ export const useAuth = () => {
     // Use contract level by default
     let level = activeContract?.accessLevel || 'alpha';
 
-    // Superuser Fallback: If user is epsilon or delta, they use their certificate rank
+    // Superuser Fallback: If user is epsilon, zeta or delta, they use their certificate rank
     // to bypass site-contract restrictions.
-    if (user?.highestAccessLevel === 'epsilon' || user?.highestAccessLevel === 'delta') {
-      level = user.highestAccessLevel;
+    if (['delta', 'epsilon', 'zeta'].includes(user?.highestAccessLevel || '')) {
+      level = user!.highestAccessLevel;
     }
 
     // Define feature permissions based on AccessLevel
     const permissions: Record<string, AccessLevel[]> = {
       // Everyone (alpha+)
-      dashboard: ['alpha', 'beta', 'gamma', 'delta', 'epsilon'],
-      'my-roster': ['alpha', 'beta', 'gamma', 'delta', 'epsilon'],
-      availabilities: ['alpha', 'beta', 'gamma', 'delta', 'epsilon'],
-      bids: ['alpha', 'beta', 'gamma', 'delta', 'epsilon'],
-      'my-swaps': ['alpha', 'beta', 'gamma', 'delta', 'epsilon'],
-      'my-broadcasts': ['alpha', 'beta', 'gamma', 'delta', 'epsilon'],
-      profile: ['alpha', 'beta', 'gamma', 'delta', 'epsilon'],
+      dashboard: ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
+      'my-roster': ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
+      availabilities: ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
+      bids: ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
+      'my-swaps': ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
+      'my-broadcasts': ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
+      profile: ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
 
       // Beta and above
-      'timesheet-view': ['beta', 'gamma', 'delta', 'epsilon'],
+      'timesheet-view': ['beta', 'gamma', 'delta', 'epsilon', 'zeta'],
 
       // Gamma and above
-      templates: ['gamma', 'delta', 'epsilon'],
-      rosters: ['gamma', 'delta', 'epsilon'],
-      'timesheet-edit': ['gamma', 'delta', 'epsilon'],
-      management: ['gamma', 'delta', 'epsilon'],
-      broadcast: ['gamma', 'delta', 'epsilon'],
-      insights: ['gamma', 'delta', 'epsilon'],
+      templates: ['gamma', 'delta', 'epsilon', 'zeta'],
+      rosters: ['gamma', 'delta', 'epsilon', 'zeta'],
+      'timesheet-edit': ['gamma', 'delta', 'epsilon', 'zeta'],
+      management: ['gamma', 'delta', 'epsilon', 'zeta'],
+      broadcast: ['gamma', 'delta', 'epsilon', 'zeta'],
+      insights: ['gamma', 'delta', 'epsilon', 'zeta'],
 
       // Delta and above (Managers)
+      audit: ['delta', 'epsilon', 'zeta'],
 
-      audit: ['delta', 'epsilon'],
+      // Epsilon and above
+      users: ['epsilon', 'zeta'],
 
-      // Epsilon Only
-      users: ['epsilon'],
-
-      read: ['alpha', 'beta', 'gamma', 'delta', 'epsilon'],
-      create: ['gamma', 'delta', 'epsilon'],
-      update: ['gamma', 'delta', 'epsilon'],
-      delete: ['delta', 'epsilon'],
+      read: ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'],
+      create: ['gamma', 'delta', 'epsilon', 'zeta'],
+      update: ['gamma', 'delta', 'epsilon', 'zeta'],
+      delete: ['delta', 'epsilon', 'zeta'],
     };
 
     const allowedLevels = permissions[feature];
 
     if (!allowedLevels) {
-      // Unknown feature - default to delta/epsilon only
+      // Unknown feature - default to delta/epsilon/zeta only
       console.warn(
-        `[Auth] Unknown feature: ${feature}, defaulting to delta/epsilon only`
+        `[Auth] Unknown feature: ${feature}, defaulting to delta/epsilon/zeta only`
       );
-      return level === 'delta' || level === 'epsilon';
+      return ['delta', 'epsilon', 'zeta'].includes(level);
     }
 
     return allowedLevels.includes(level);

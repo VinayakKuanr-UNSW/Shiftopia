@@ -1,161 +1,182 @@
 /**
- * Max Consecutive Working Days Rule
- * 
+ * Maximum Consecutive Working Days Rule
+ *
  * RULE_ID: MAX_CONSECUTIVE_DAYS
- * LIMIT: 12 consecutive working days (block on 13th)
  * APPLIES_TO: add, assign, swap, bid
  * BLOCKING: true
- * 
- * Implementation follows the 15-step specification:
- * - Multiple shifts on same calendar day = 1 working day
- * - A single gap day resets the streak completely
- * - Only past days + candidate day are evaluated
- * - Rule based on calendar days, not hours or shifts
+ *
+ * An employee must not work more than MAX_CONSECUTIVE (20) consecutive
+ * calendar days without at least one full day off.
+ *
+ * Algorithm:
+ * ──────────
+ * 1. Collect all unique working dates from existing_shifts plus the candidate.
+ * 2. Walk forward and backward from the candidate date, counting how many
+ *    consecutive dates in the working-date set adjoin the candidate.
+ * 3. If the resulting streak exceeds MAX_CONSECUTIVE, the assignment fails.
+ *
+ * The walk is bounded to the 28-day context window so we don't have to
+ * iterate the entire calendar. Any existing streak that already exceeds the
+ * limit in historical data will still be caught when the candidate shift is
+ * the "last" day of that streak.
+ *
+ * F11 — if the caller declares shifts_window_days < MAX_CONSECUTIVE, we
+ * surface a data-quality warning because the streak could be longer than
+ * the history we can see.
  */
-
 
 import {
     ComplianceRule,
     ComplianceCheckInput,
-    ComplianceResult,
-    ShiftTimeRange
+    ComplianceResult
 } from '../types';
-import { parseISO, subDays, addDays, format, differenceInCalendarDays } from 'date-fns';
-import { splitShiftByDay } from '../utils';
 
-const MAX_CONSECUTIVE_DAYS = 20;
+const MAX_CONSECUTIVE = 20;
 
 // =============================================================================
-// HELPER FUNCTIONS
+// DATE HELPERS
 // =============================================================================
 
-/**
- * Extract unique calendar dates from shifts, handling cross-midnight
- */
-function extractUniqueDates(shifts: ShiftTimeRange[]): Set<string> {
-    const dates = new Set<string>();
-
-    for (const shift of shifts) {
-        // Handle cross-midnight shifts
-        const dayRanges = splitShiftByDay(shift);
-        for (const range of dayRanges) {
-            dates.add(range.shift_date);
-        }
-    }
-
-    return dates;
+/** Add N calendar days to a YYYY-MM-DD string. */
+function addDays(dateStr: string, n: number): string {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d + n));
+    return dt.toISOString().slice(0, 10);
 }
 
-/**
- * Count consecutive days surrounding the candidate date (backwards AND forwards).
- * This is crucial for bulk assignments where the candidate might be the start of a sequence.
- */
-function countConsecutiveDaysSurrounding(
-    candidateDate: string,
-    workingDates: Set<string>
-): { consecutiveDays: number; streakStart: string; streakEnd: string } {
-    let consecutiveDays = 1; // Start with candidate day
-    let streakStart = candidateDate;
-    let streakEnd = candidateDate;
+/** Subtract 1 calendar day from a YYYY-MM-DD string. */
+function prevDay(dateStr: string): string {
+    return addDays(dateStr, -1);
+}
 
-    const candidateDateParsed = parseISO(candidateDate);
-
-    // Look Backwards
-    let backDate = subDays(candidateDateParsed, 1);
-    while (true) {
-        const dateStr = format(backDate, 'yyyy-MM-dd');
-        if (workingDates.has(dateStr)) {
-            consecutiveDays++;
-            streakStart = dateStr;
-            backDate = subDays(backDate, 1);
-        } else {
-            break;
-        }
-    }
-
-    // Look Forwards
-    let forwardDate = addDays(candidateDateParsed, 1);
-    while (true) {
-        const dateStr = format(forwardDate, 'yyyy-MM-dd');
-        if (workingDates.has(dateStr)) {
-            consecutiveDays++;
-            streakEnd = dateStr; // Update end of streak
-            forwardDate = addDays(forwardDate, 1);
-        } else {
-            break;
-        }
-    }
-
-    return { consecutiveDays, streakStart, streakEnd };
+/** Add 1 calendar day to a YYYY-MM-DD string. */
+function nextDay(dateStr: string): string {
+    return addDays(dateStr, 1);
 }
 
 // =============================================================================
-// MAIN RULE
+// RULE
 // =============================================================================
 
 export const MaxConsecutiveDaysRule: ComplianceRule = {
     id: 'MAX_CONSECUTIVE_DAYS',
-    name: 'Max consecutive working days',
-    description: `Employees cannot work more than ${MAX_CONSECUTIVE_DAYS} consecutive days.`,
+    name: 'Maximum Consecutive Working Days',
+    description:
+        `Employees must not work more than ${MAX_CONSECUTIVE} consecutive ` +
+        'calendar days without a full day off.',
     appliesTo: ['add', 'assign', 'swap', 'bid'],
     blocking: true,
 
     evaluate(input: ComplianceCheckInput): ComplianceResult {
+        if (!input.employee_id) {
+            return {
+                rule_id:   this.id,
+                rule_name: this.name,
+                status:    'pass',
+                summary:   'Shift is unassigned — consecutive-day check skipped',
+                details:   'Consecutive-day limits only apply to assigned shifts.',
+                calculation: {
+                    existing_hours: 0, candidate_hours: 0,
+                    total_hours:    0, limit: MAX_CONSECUTIVE
+                },
+                blocking: false
+            };
+        }
+
         const { candidate_shift, existing_shifts } = input;
-
-        // Step 3: Extract candidate shift date
         const candidateDate = candidate_shift.shift_date;
-        const candidateDateParsed = parseISO(candidateDate);
 
-        // Step 4: Filter existing shifts to a safe wider window (30 days both sides)
-        // We look forward too because in bulk assignments, "existing_shifts" includes other candidates!
-        const windowStart = subDays(candidateDateParsed, 30);
-        const windowEnd = addDays(candidateDateParsed, 30);
+        // F11 — data-quality guard: warn if history might be too short to
+        // detect a streak that started before the provided window.
+        const insufficientWindow =
+            input.shifts_window_days !== undefined &&
+            input.shifts_window_days < MAX_CONSECUTIVE;
 
-        const relevantShifts = existing_shifts.filter(shift => {
-            const shiftDate = parseISO(shift.shift_date);
-            return shiftDate >= windowStart && shiftDate <= windowEnd;
-        });
-
-        // Step 5: Derive unique working dates from existing shifts
-        const workingDates = extractUniqueDates(relevantShifts);
-
-        // Step 6: Add candidate shift date to the set
+        // Build a fast-lookup set of all working dates.
+        const workingDates = new Set<string>(existing_shifts.map(s => s.shift_date));
         workingDates.add(candidateDate);
 
-        // Step 7-11: Count consecutive days surrounding the candidate
-        const { consecutiveDays, streakStart, streakEnd } = countConsecutiveDaysSurrounding(
-            candidateDate,
-            workingDates
-        );
+        // Walk backward from candidateDate counting consecutive days.
+        let streakBefore = 0;
+        let cur = prevDay(candidateDate);
+        // Limit the walk to MAX_CONSECUTIVE steps to avoid unbounded iteration.
+        for (let i = 0; i < MAX_CONSECUTIVE; i++) {
+            if (!workingDates.has(cur)) break;
+            streakBefore++;
+            cur = prevDay(cur);
+        }
 
-        // Step 12: Evaluate result
-        const violates = consecutiveDays > MAX_CONSECUTIVE_DAYS;
+        // Walk forward from candidateDate counting consecutive days.
+        let streakAfter = 0;
+        cur = nextDay(candidateDate);
+        for (let i = 0; i < MAX_CONSECUTIVE; i++) {
+            if (!workingDates.has(cur)) break;
+            streakAfter++;
+            cur = nextDay(cur);
+        }
 
-        // Format dates for display
-        const streakStartFormatted = format(parseISO(streakStart), 'EEE d MMM');
-        const streakEndFormatted = format(parseISO(streakEnd), 'EEE d MMM');
+        // Total consecutive streak including candidate day itself.
+        const totalStreak = streakBefore + 1 + streakAfter;
 
-        // Step 14-15: Return structured result
+        // Compute the actual start/end date of the streak for the message.
+        const streakStart = addDays(candidateDate, -streakBefore);
+        const streakEnd   = addDays(candidateDate,  streakAfter);
+
+        // ── PASS ────────────────────────────────────────────────────────────
+        if (totalStreak <= MAX_CONSECUTIVE) {
+            const warningNote = insufficientWindow
+                ? ` (Note: only ${input.shifts_window_days}d of history provided — ` +
+                  'streak may extend further back.)'
+                : '';
+
+            return {
+                rule_id:   this.id,
+                rule_name: this.name,
+                status:    insufficientWindow ? 'warning' : 'pass',
+                summary:   insufficientWindow
+                    ? `${totalStreak} consecutive days — history may be incomplete`
+                    : `${totalStreak} consecutive day(s) — within ${MAX_CONSECUTIVE}-day limit`,
+                details:
+                    `Consecutive streak: ${streakStart} → ${streakEnd} ` +
+                    `(${totalStreak} day(s)).${warningNote}`,
+                calculation: {
+                    existing_hours:   0,
+                    candidate_hours:  0,
+                    total_hours:      0,
+                    limit:            MAX_CONSECUTIVE,
+                    consecutive_days: totalStreak,
+                    streak_start:     streakStart,
+                    streak_end:       streakEnd,
+                    streak_before:    streakBefore,
+                    streak_after:     streakAfter,
+                    data_quality_warning: insufficientWindow
+                },
+                blocking: false
+            };
+        }
+
+        // ── FAIL ─────────────────────────────────────────────────────────────
         return {
-            rule_id: this.id,
+            rule_id:   this.id,
             rule_name: this.name,
-            status: violates ? 'fail' : 'pass',
-            summary: violates
-                ? `Streak of ${consecutiveDays} days exceeds limit`
-                : `Within ${MAX_CONSECUTIVE_DAYS} consecutive days limit`,
-            details: violates
-                ? `Adding this shift contributes to a ${consecutiveDays}-day streak from ${streakStartFormatted} to ${streakEndFormatted}. Maximum allowed is ${MAX_CONSECUTIVE_DAYS} days.`
-                : `Current streak: ${consecutiveDays} day${consecutiveDays !== 1 ? 's' : ''} (${streakStartFormatted} — ${streakEndFormatted})`,
+            status:    'fail',
+            summary:
+                `Exceeds ${MAX_CONSECUTIVE} consecutive days ` +
+                `(${totalStreak} days: ${streakStart} → ${streakEnd})`,
+            details:
+                `Assigning this shift would create ${totalStreak} consecutive working days ` +
+                `(${streakStart} to ${streakEnd}) without a day off. ` +
+                `Maximum allowed is ${MAX_CONSECUTIVE} consecutive days.`,
             calculation: {
-                existing_hours: 0,
-                candidate_hours: 0,
-                total_hours: 0,
-                limit: MAX_CONSECUTIVE_DAYS,
-                streak_days: consecutiveDays,
-                streak_start: streakStart,
-                streak_end: streakEnd,
-                all_working_dates: Array.from(workingDates).sort()
+                existing_hours:   0,
+                candidate_hours:  0,
+                total_hours:      0,
+                limit:            MAX_CONSECUTIVE,
+                consecutive_days: totalStreak,
+                streak_start:     streakStart,
+                streak_end:       streakEnd,
+                streak_before:    streakBefore,
+                streak_after:     streakAfter
             },
             blocking: this.blocking
         };

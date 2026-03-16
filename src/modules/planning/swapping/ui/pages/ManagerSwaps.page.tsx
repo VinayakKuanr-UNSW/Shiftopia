@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Check, X, ChevronRight, ArrowLeftRight, Clock, CheckCircle, XCircle, Calendar, AlertTriangle, Shield, Gavel, RefreshCw } from 'lucide-react';
+import { ManagerComplianceApprovalModal } from '../components/ManagerComplianceApprovalModal';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
@@ -329,6 +330,11 @@ interface SwapRequestManagement {
     shiftStateId: string;
     combinedStateId: string;
     deptName: string;
+    // Raw IDs needed for manager compliance re-check
+    requesterEmployeeId: string;
+    offererEmployeeId: string | null;
+    requesterShiftId: string;
+    offererShiftId: string | null;
 }
 
 const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement => {
@@ -365,7 +371,7 @@ const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement =>
             avatar: apiData.requestorEmployee?.avatarUrl,
             deptName: apiData.originalShift?.departments?.name || 'General',
             orgName: apiData.originalShift?.organizations?.name || '',
-            groupType: apiData.originalShift?.roles?.group_type || '',
+            groupType: apiData.originalShift?.group_type || '',
             organizationId: apiData.originalShift?.organizationId,
             subDepartmentId: apiData.originalShift?.subDepartmentId,
         },
@@ -373,19 +379,19 @@ const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement =>
 
 
 
-        recipient: apiData.requestedShift ? {
-            employeeName: apiData.targetEmployee?.fullName || 'Open Swap',
+        recipient: (apiData.requestedShift || apiData.targetEmployee) ? {
+            employeeName: apiData.targetEmployee?.fullName || (apiData.requestedShift ? 'Open Swap' : 'Unknown'),
             roleName: apiData.requestedShift?.roles?.name || 'Any Role',
             date: apiData.requestedShift?.shiftDate || '',
             formattedDate: apiData.requestedShift?.shiftDate ? format(parse(apiData.requestedShift.shiftDate, 'yyyy-MM-dd', new Date()), 'EEE, MMM d') : '',
-            time: `${apiData.requestedShift?.startTime} - ${apiData.requestedShift?.endTime}`,
-            duration: `${recVal.durationHours.toFixed(1)}h`,
+            time: apiData.requestedShift ? `${apiData.requestedShift.startTime} - ${apiData.requestedShift.endTime}` : 'No Shift',
+            duration: recVal.durationHours > 0 ? `${recVal.durationHours.toFixed(1)}h` : '0h',
             durationNum: recVal.durationHours,
             hourlyRate: recVal.rate,
             avatar: apiData.targetEmployee?.avatarUrl,
             deptName: apiData.requestedShift?.departments?.name || 'General',
             orgName: apiData.requestedShift?.organizations?.name || '',
-            groupType: apiData.requestedShift?.roles?.group_type || '',
+            groupType: apiData.requestedShift?.group_type || '',
             organizationId: apiData.requestedShift?.organizationId,
             subDepartmentId: apiData.requestedShift?.subDepartmentId,
         } : null,
@@ -401,6 +407,10 @@ const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement =>
         compliancePassed,
         deptName: apiData.originalShift?.departments?.name || 'General',
         ...deriveStateIds(apiData.status),
+        requesterEmployeeId: apiData.requested_by_employee_id,
+        offererEmployeeId: apiData.swap_with_employee_id || null,
+        requesterShiftId: apiData.original_shift_id,
+        offererShiftId: apiData.offered_shift_id || null,
     };
 };
 
@@ -438,6 +448,8 @@ export const ManagerSwapsPage: React.FC = () => {
         ids: string[];
         status: 'approved' | 'rejected';
     } | null>(null);
+    // Single-item compliance approval modal (replaces simple confirm for single approvals)
+    const [complianceApprovalTarget, setComplianceApprovalTarget] = useState<SwapRequestManagement | null>(null);
     const [swapRequests, setSwapRequests] = useState<SwapRequestManagement[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -448,7 +460,6 @@ export const ManagerSwapsPage: React.FC = () => {
         setIsLoading(true);
         try {
             const apiData = await swapsApi.fetchSwapRequests({
-                status: statusFilter === 'all' ? undefined : statusFilter,
                 organizationId: currentOrgId,
                 departmentId: currentDeptId,
                 subDepartmentId: currentSubDeptId
@@ -480,25 +491,33 @@ export const ManagerSwapsPage: React.FC = () => {
     }, [statusFilter, scopeKey]);
 
     // ==================== COMPUTED ====================
-    const filteredRequests = swapRequests;
+    const filteredRequests = useMemo(() => {
+        if (statusFilter === 'all') return swapRequests;
+        return swapRequests.filter(r => r.status === statusFilter);
+    }, [swapRequests, statusFilter]);
 
     const statusCounts = useMemo(() => {
         const counts: Record<string, number> = {
             MANAGER_PENDING: 0, OPEN: 0, APPROVED: 0, REJECTED: 0, all: 0
         };
-        if (statusFilter === 'all') {
-            swapRequests.forEach(r => {
-                if (counts[r.status] !== undefined) counts[r.status]++;
-            });
-            counts.all = swapRequests.length;
-        } else {
-            counts[statusFilter] = swapRequests.length;
-        }
+        swapRequests.forEach(r => {
+            if (counts[r.status] !== undefined) counts[r.status]++;
+        });
+        counts.all = swapRequests.length;
         return counts;
-    }, [swapRequests, statusFilter]);
+    }, [swapRequests]);
 
     // ==================== HANDLERS ====================
     const handleAction = (ids: string[], status: 'approved' | 'rejected') => {
+        // Single-item approval → open compliance gate modal
+        if (status === 'approved' && ids.length === 1) {
+            const target = swapRequests.find(r => r.id === ids[0]);
+            if (target) {
+                setComplianceApprovalTarget(target);
+                return;
+            }
+        }
+        // Batch or rejection → simple confirm dialog
         setActionConfirm({ ids, status });
     };
 
@@ -817,6 +836,47 @@ export const ManagerSwapsPage: React.FC = () => {
                             </div>
                         </div>
                     </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ── COMPLIANCE APPROVAL MODAL (single-item approve) ── */}
+            <AnimatePresence>
+                {complianceApprovalTarget && (
+                    <ManagerComplianceApprovalModal
+                        isOpen={!!complianceApprovalTarget}
+                        onClose={() => setComplianceApprovalTarget(null)}
+                        onApprove={async () => {
+                            const id = complianceApprovalTarget.id;
+                            const previousState = [...swapRequests];
+                            setSwapRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'APPROVED' } : r));
+                            setComplianceApprovalTarget(null);
+                            try {
+                                await swapsApi.approveSwapRequest(id);
+                                toast({ title: 'Approved', description: 'Swap request approved successfully.' });
+                                fetchData();
+                            } catch (error) {
+                                setSwapRequests(previousState);
+                                toast({
+                                    title: 'Approval Failed',
+                                    description: error instanceof Error ? error.message : 'Could not approve swap.',
+                                    variant: 'destructive',
+                                });
+                            }
+                            setSelectedIds(new Set());
+                        }}
+                        onReject={() => {
+                            const id = complianceApprovalTarget.id;
+                            setComplianceApprovalTarget(null);
+                            setActionConfirm({ ids: [id], status: 'rejected' });
+                        }}
+                        swapId={complianceApprovalTarget.id}
+                        requesterEmployeeId={complianceApprovalTarget.requesterEmployeeId}
+                        requesterName={complianceApprovalTarget.requestor.employeeName}
+                        requesterShiftId={complianceApprovalTarget.requesterShiftId}
+                        offererEmployeeId={complianceApprovalTarget.offererEmployeeId}
+                        offererName={complianceApprovalTarget.recipient?.employeeName ?? 'Offerer'}
+                        offererShiftId={complianceApprovalTarget.offererShiftId}
+                    />
                 )}
             </AnimatePresence>
 

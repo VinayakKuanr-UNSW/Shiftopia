@@ -2,27 +2,11 @@
 import React, { useState, useMemo } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import {
-  ArrowLeft,
-  ChevronDown,
-  ChevronRight,
   Plus,
-  Edit2,
-  Copy,
-  Trash2,
-  Clock,
   Users,
-  Lock,
-  Upload,
   Building2,
   LayoutGrid,
   Theater,
-  Save,
-  Loader2,
-  RotateCcw,
-  AlertTriangle,
-  CheckCircle,
-  Calendar,
-  Shield,
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
@@ -53,6 +37,7 @@ import ShiftCard from './ShiftCard';
 import { EnhancedAddShiftModal } from '@/modules/rosters';
 import { TemplateGroupCard } from './editor/TemplateGroupCard';
 import { TemplateSubgroupCard } from './editor/TemplateSubgroupCard';
+import { TemplateHeader } from './TemplateHeader';
 
 interface TemplateEditorProps {
   template: Template;
@@ -314,272 +299,20 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="bg-card border-b border-border">
-        {/* Top Bar */}
-        <div className="px-6 py-3 flex items-center justify-between border-b border-border/50">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onBack}
-              className="text-muted-foreground hover:text-foreground hover:bg-muted/50 gap-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </Button>
-
-            <Separator orientation="vertical" className="h-5 bg-border" />
-
-            <span className="text-muted-foreground text-sm uppercase tracking-wider font-medium">
-              Template Editor
-            </span>
-
-            {hasUnsavedChanges && (
-              <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 animate-pulse">
-                <AlertTriangle className="h-3 w-3 mr-1" />
-                Unsaved Changes
-              </Badge>
-            )}
-
-            {isPublished && (
-              <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
-                <CheckCircle className="h-3 w-3 mr-1" />
-                Ready for Use
-              </Badge>
-            )}
-
-            {isArchived && (
-              <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 font-bold uppercase tracking-widest px-3">
-                <Lock className="h-3.5 w-3.5 mr-2" />
-                ARCHIVED
-              </Badge>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* DRAFT MODE ACTIONS */}
-            {isDraft && (
-              <>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={onDiscardChanges}
-                        disabled={!hasUnsavedChanges || isSaving}
-                        className="bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:text-white disabled:opacity-30"
-                      >
-                        <RotateCcw className="h-4 w-4 mr-2" />
-                        Discard
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Revert to last saved version</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="sm"
-                        onClick={onSaveChanges}
-                        disabled={!hasUnsavedChanges || isSaving}
-                        className={cn(
-                          'min-w-[120px]',
-                          hasUnsavedChanges
-                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                            : 'bg-white/10 text-white/50 cursor-not-allowed'
-                        )}
-                      >
-                        {isSaving ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <Save className="h-4 w-4 mr-2" />
-                            Save
-                          </>
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Save changes to library</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                <Separator orientation="vertical" className="h-6 bg-border" />
-
-                <Button
-                  size="sm"
-                  onClick={() => onUpdateStatus(String(template.id), 'published')}
-                  disabled={isSaving || hasUnsavedChanges}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  Mark as Ready
-                </Button>
-
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => onUpdateStatus(String(template.id), 'archived')}
-                  disabled={isSaving}
-                  className="text-muted-foreground hover:text-purple-600 hover:bg-purple-100 dark:hover:text-purple-400 dark:hover:bg-purple-500/10 gap-2"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Archive
-                </Button>
-              </>
-            )}
-
-            {/* READY (PUBLISHED) MODE ACTIONS */}
-            {isPublished && (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => onUpdateStatus(String(template.id), 'draft')}
-                  disabled={isSaving}
-                  className="bg-transparent border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground gap-2"
-                >
-                  <Edit2 className="h-4 w-4" />
-                  Unlock to Edit
-                </Button>
-
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => onUpdateStatus(String(template.id), 'archived')}
-                  disabled={isSaving}
-                  className="text-muted-foreground hover:text-purple-600 hover:bg-purple-100 dark:hover:text-purple-400 dark:hover:bg-purple-500/10 gap-2"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Archive
-                </Button>
-              </>
-            )}
-
-            {/* ARCHIVED MODE ACTIONS */}
-            {isArchived && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onUpdateStatus(String(template.id), 'draft')}
-                disabled={isSaving}
-                className="bg-purple-500/20 border-purple-500/30 text-purple-200 hover:bg-purple-500/30 gap-2"
-              >
-                <RotateCcw className="h-4 w-4" />
-                Restore from Archive
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Template Info */}
-        <div className="px-6 py-4">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <span className="text-xs text-muted-foreground uppercase tracking-wider">
-                  Template Name
-                </span>
-                <Badge
-                  className={cn(
-                    'text-[10px] px-2 py-0 h-4 border-none flex items-center gap-1 uppercase tracking-wider',
-                    isPublished && 'text-emerald-500 bg-emerald-500/10',
-                    isDraft && 'text-amber-500 bg-amber-500/10',
-                    isArchived && 'text-purple-500 bg-purple-500/10'
-                  )}
-                >
-                  <div className={cn(
-                    "h-1 w-1 rounded-full",
-                    isPublished && "bg-emerald-500",
-                    isDraft && "bg-amber-500",
-                    isArchived && "bg-purple-500"
-                  )} />
-                  {template.status === 'published' ? 'Ready' : template.status}
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className="text-xs text-white/50 border-white/20"
-                >
-                  v{template.version}
-                </Badge>
-              </div>
-              <h1 className="text-2xl font-bold text-foreground">{template.name}</h1>
-              {template.description && (
-                <p className="text-muted-foreground text-sm mt-1">
-                  {template.description}
-                </p>
-              )}
-            </div>
-
-            {/* Stats */}
-            <div className="text-right">
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <span>{stats.groupCount} groups</span>
-                <span>{stats.subgroupCount} subgroups</span>
-                <span>{stats.shiftCount} shifts</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <Separator className="bg-border" />
-
-        {/* Metadata Row */}
-        <div className="px-6 py-3 flex items-center justify-between text-sm">
-          <div className="flex items-center gap-6">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Clock className="h-4 w-4" />
-                    <span>Saved {lastSavedAgo}</span>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>
-                    {format(
-                      new Date(template.updatedAt),
-                      "EEEE, MMMM d, yyyy 'at' h:mm a"
-                    )}
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-
-            {template.startDate && template.endDate === 'NEVER_MIND' && (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                <span>
-                  {template.startDate} - {template.endDate}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {isPublished && (
-            <div className="flex items-center gap-2 text-emerald-400/90 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-              <Shield className="h-4 w-4" />
-              <span className="text-xs font-medium">
-                GOLD STANDARD: This template is verified and ready for use. Unlock to make adjustments.
-              </span>
-            </div>
-          )}
-
-          {isArchived && (
-            <div className="flex items-center gap-2 text-purple-400/90 bg-purple-500/10 px-3 py-1 rounded-full border border-purple-500/20">
-              <AlertTriangle className="h-4 w-4" />
-              <span className="text-xs font-medium">
-                ARCHIVED: This template is hidden from the library. Restore it to use or edit.
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* REDESIGNED HEADER */}
+      <TemplateHeader
+        template={template}
+        stats={stats}
+        hasUnsavedChanges={hasUnsavedChanges}
+        isSaving={isSaving}
+        lastSavedAgo={lastSavedAgo}
+        onBack={onBack}
+        onSave={onSaveChanges}
+        onDiscard={onDiscardChanges}
+        onArchive={() => onUpdateStatus(String(template.id), 'archived')}
+        onDownload={() => console.log('[TemplateEditor] Download requested')}
+        onUpdateStatus={(status) => onUpdateStatus(String(template.id), status)}
+      />
 
       {/* Groups Content */}
       <ScrollArea className="flex-1">

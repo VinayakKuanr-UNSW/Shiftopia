@@ -39,14 +39,13 @@ import {
   useTemplates,
   useRostersLookup,
 } from '@/modules/rosters/state/useRosterShifts';
-import { ActivateRosterDialog } from '../dialogs/ActivateRosterDialog';
-import { AutoScheduleModal } from '@/modules/rosters/ui/dialogs/AutoScheduleModal';
 import { CalendarRangePicker } from './CalendarRangePicker';
 import { RosterFilterPopover } from './RosterFilterPopover';
 import { useRosterUI, RosterMode } from '@/modules/rosters/contexts/RosterUIContext';
 import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
 import { Separator } from '@/modules/core/ui/primitives/separator';
 import { ApplyTemplateDialog } from '@/modules/rosters/ui/dialogs/ApplyTemplateDialog';
+import { PlanRosterPeriodDialog } from '@/modules/rosters/ui/dialogs/PlanRosterPeriodDialog';
 import { useRosterStructure } from '../../state/useRosterStructure';
 
 /* ============================================================
@@ -108,6 +107,10 @@ export interface RosterFunctionBarProps {
 
   isBulkMode?: boolean;
   onBulkModeToggle?: () => void;
+  onAutoScheduleClick?: () => void;
+
+  /** Number of active filters — shows an orange dot badge on the Filter button when > 0 */
+  activeFilterCount?: number;
 }
 
 /* ============================================================
@@ -196,6 +199,8 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
   canEdit = true,
   isBulkMode = false,
   onBulkModeToggle,
+  onAutoScheduleClick,
+  activeFilterCount = 0,
 }) => {
   const {
     activeMode,
@@ -219,9 +224,8 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
   );
   const { data: templates = [] } = useTemplates(selectedSubDepartmentId || undefined, selectedDepartmentId || undefined);
 
-  const [isActivateDialogOpen, setIsActivateDialogOpen] = useState(false);
+  const [isPlanPeriodDialogOpen, setIsPlanPeriodDialogOpen] = useState(false);
   const [isApplyTemplateDialogOpen, setIsApplyTemplateDialogOpen] = useState(false);
-  const [isAutoScheduleOpen, setIsAutoScheduleOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
   // Auto-select template
@@ -310,58 +314,62 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
 
         {/* Left Section: Context & Modes */}
         <div className="flex items-center gap-2">
-
-          <ToggleGroup
-            type="single"
-            value={activeMode}
-            onValueChange={(v) => v && setActiveMode(v as RosterMode)}
-            className="bg-slate-100 dark:bg-black/20 border border-slate-200 dark:border-white/5 rounded-xl p-1"
-          >
-            {[
-              { id: 'group', icon: <Box className="h-4 w-4" />, label: 'Group' },
-              { id: 'people', icon: <Users className="h-4 w-4" />, label: 'People' },
-              { id: 'events', icon: <CalendarDays className="h-4 w-4" />, label: 'Events' },
-              { id: 'roles', icon: <Briefcase className="h-4 w-4" />, label: 'Roles' },
-            ].map((m) => (
-              <ToggleGroupItem
-                key={m.id}
-                value={m.id}
-                className="h-8 px-4 text-[11px] font-black uppercase tracking-wider rounded-lg data-[state=on]:bg-white dark:data-[state=on]:bg-white/10 data-[state=on]:text-slate-900 dark:data-[state=on]:text-white text-slate-400 dark:text-white/40 hover:text-slate-600 dark:hover:text-white/60 transition-all"
-              >
-                <div className="flex items-center gap-2">
-                  {m.icon}
-                  <span className="hidden xl:inline">{m.label}</span>
-                </div>
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-[8px] uppercase tracking-widest text-muted-foreground/50 font-bold select-none">View By</span>
+            <ToggleGroup
+              type="single"
+              value={activeMode}
+              onValueChange={(v) => v && setActiveMode(v as RosterMode)}
+              className="bg-slate-100 dark:bg-black/20 border border-slate-200 dark:border-white/5 rounded-xl p-1"
+            >
+              {[
+                { id: 'group', icon: <Box className="h-4 w-4" />, label: 'Group' },
+                { id: 'people', icon: <Users className="h-4 w-4" />, label: 'People' },
+                { id: 'events', icon: <CalendarDays className="h-4 w-4" />, label: 'Events' },
+                { id: 'roles', icon: <Briefcase className="h-4 w-4" />, label: 'Roles' },
+              ].map((m) => (
+                <ToggleGroupItem
+                  key={m.id}
+                  value={m.id}
+                  className="h-7 px-4 text-[11px] font-black uppercase tracking-wider rounded-lg data-[state=on]:bg-white dark:data-[state=on]:bg-white/10 data-[state=on]:text-slate-900 dark:data-[state=on]:text-white text-slate-400 dark:text-white/40 hover:text-slate-600 dark:hover:text-white/60 transition-all"
+                >
+                  <div className="flex items-center gap-2">
+                    {m.icon}
+                    <span className="hidden xl:inline">{m.label}</span>
+                  </div>
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
         </div>
 
         {/* Center Section: Navigation & View */}
         <div className="flex items-center gap-6">
-          <ToggleGroup
-            type="single"
-            value={viewType}
-            onValueChange={(v) => v && onViewTypeChange(v as ViewType)}
-            className="bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-lg p-0.5 h-9"
-          >
-            {[
-              { id: 'day', label: 'D' },
-              { id: '3day', label: '3D' },
-              { id: 'week', label: 'W' },
-              { id: 'month', label: 'M' }
-            ].map((v) => (
-              <ToggleGroupItem
-                key={v.id}
-                value={v.id}
-                className={cn(
-                  'px-2.5 py-1 text-[10px] uppercase font-black rounded-md transition-all h-7 grow min-w-[32px] data-[state=on]:bg-blue-600 data-[state=on]:text-white text-slate-300 dark:text-white/20 hover:text-slate-500 dark:hover:text-white/40',
-                )}
-              >
-                {v.label}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-[8px] uppercase tracking-widest text-muted-foreground/50 font-bold select-none">Time Range</span>
+            <ToggleGroup
+              type="single"
+              value={viewType}
+              onValueChange={(v) => v && onViewTypeChange(v as ViewType)}
+              className="bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-lg p-0.5"
+            >
+              {[
+                { id: 'day',   label: 'Day' },
+                { id: '3day',  label: '3D' },
+                { id: 'week',  label: 'Week' },
+                { id: 'month', label: 'Month' },
+              ].map((v) => (
+                <ToggleGroupItem
+                  key={v.id}
+                  value={v.id}
+                  className="px-2.5 py-1 text-[10px] uppercase font-black rounded-md transition-all h-7 min-w-[40px] data-[state=on]:bg-blue-600 data-[state=on]:text-white text-slate-300 dark:text-white/20 hover:text-slate-500 dark:hover:text-white/40"
+                >
+                  {v.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+
 
           <div className="flex items-center gap-1 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-1 h-8">
             <IconButton
@@ -401,44 +409,67 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
 
         {/* Right Section: Actions */}
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-2 py-1 h-10">
-            <IconButton icon={<RefreshCw className="h-4 w-4" />} tooltip="Reload" onClick={onRefresh} isLoading={isRefreshing} />
-            <RosterFilterPopover />
-            <Separator orientation="vertical" className="h-5 bg-slate-200 dark:bg-white/10 mx-1" />
+          <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-2 py-1.5">
+
+            {/* ── Data group: Refresh + Filter ───────────────────────── */}
+            <IconButton icon={<RefreshCw className="h-4 w-4" />} tooltip="Reload data" onClick={onRefresh} isLoading={isRefreshing} />
+            <div className="relative">
+              <RosterFilterPopover />
+              {activeFilterCount > 0 && (
+                <span className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-orange-500 rounded-full border border-slate-100 dark:border-slate-900 flex items-center justify-center pointer-events-none">
+                  <span className="text-[8px] font-black text-white leading-none">{activeFilterCount > 9 ? '9+' : activeFilterCount}</span>
+                </span>
+              )}
+            </div>
+
+            <Separator orientation="vertical" className="h-5 bg-slate-200 dark:bg-white/10 mx-0.5" />
+
+            {/* ── People tools group ──────────────────────────────────── */}
             <IconButton
               icon={<CalendarCheck className="h-4 w-4" />}
-              tooltip={activeMode === 'people' ? "Availabilities" : "Availabilities (People Mode Only)"}
-              onClick={onAvailabilitiesToggle}
+              tooltip={activeMode === 'people'
+                ? "Availabilities"
+                : "Availabilities — switch to People mode to enable"}
+              onClick={() => {
+                if (activeMode !== 'people') { setActiveMode('people'); }
+                onAvailabilitiesToggle();
+              }}
               isActive={showAvailabilities}
               variant="success"
               disabled={activeMode !== 'people'}
             />
             <IconButton
               icon={<Activity className="h-4 w-4" />}
-              tooltip={activeMode === 'people' ? "Fatigue Score Placeholder" : "Fatigue Score (People Mode Only)"}
+              tooltip={activeMode === 'people'
+                ? "Fatigue Score"
+                : "Fatigue Score — switch to People mode to enable"}
               onClick={() => { }}
               isActive={false}
               variant="success"
               disabled={activeMode !== 'people'}
             />
+
+            <Separator orientation="vertical" className="h-5 bg-slate-200 dark:bg-white/10 mx-0.5" />
+
+            {/* ── Planning group ─────────────────────────────────────── */}
             <IconButton
               icon={<Zap className="h-4 w-4" />}
-              tooltip="Activate"
-              onClick={() => setIsActivateDialogOpen(true)}
+              tooltip={selectedDepartmentId ? "Plan Roster Period" : "Plan Period — select a department first"}
+              onClick={() => setIsPlanPeriodDialogOpen(true)}
               variant="success"
               disabled={!selectedDepartmentId}
             />
             <IconButton
               icon={<Wand2 className="h-4 w-4" />}
-              tooltip="AutoSchedule"
-              onClick={() => setIsAutoScheduleOpen(true)}
+              tooltip={selectedDepartmentId ? "Auto-Schedule" : "Auto-Schedule — select a department first"}
+              onClick={() => onAutoScheduleClick?.()}
               variant="success"
               disabled={!selectedDepartmentId}
             />
             <div className="relative">
               <IconButton
                 icon={<CopyPlus className="h-4 w-4" />}
-                tooltip="Apply Template"
+                tooltip={selectedDepartmentId ? "Apply Template" : "Apply Template — select a department first"}
                 onClick={() => setIsApplyTemplateDialogOpen(true)}
                 variant="success"
                 disabled={!selectedDepartmentId}
@@ -451,23 +482,37 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
             </div>
             <IconButton
               icon={<PanelRight className="h-4 w-4" />}
-              tooltip={activeMode === 'events' ? 'Panel not available in Events mode' : (activeMode === 'group' || activeMode === 'roles' ? 'Contracted Staff' : 'Unfilled Shifts')}
+              tooltip={
+                activeMode === 'events'
+                  ? 'Side panel — not available in Events mode'
+                  : activeMode === 'group' || activeMode === 'roles'
+                    ? 'Contracted Staff panel'
+                    : 'Unfilled Shifts panel'
+              }
               onClick={onUnfilledPanelToggle}
               isActive={showUnfilledPanel}
               disabled={activeMode === 'events'}
             />
-            <Separator orientation="vertical" className="h-5 bg-slate-200 dark:bg-white/10 mx-1" />
-            {activeMode === 'group' && (
-              <IconButton
-                icon={<Box className="h-4 w-4" />}
-                tooltip="Buckets"
-                onClick={() => setIsBucketView(!isBucketView)}
-                isActive={isBucketView}
-              />
-            )}
+
+            <Separator orientation="vertical" className="h-5 bg-slate-200 dark:bg-white/10 mx-0.5" />
+
+            {/* ── View group ─────────────────────────────────────────── */}
+            <IconButton
+              icon={<Box className="h-4 w-4" />}
+              tooltip={
+                activeMode !== 'group'
+                  ? "Buckets — switch to Group mode to enable"
+                  : viewType === 'day'
+                    ? "Buckets — not available in Day view"
+                    : "Shift Buckets"
+              }
+              onClick={() => setIsBucketView(!isBucketView)}
+              isActive={isBucketView}
+              disabled={activeMode !== 'group' || viewType === 'day'}
+            />
             <IconButton
               icon={<Layers className="h-4 w-4" />}
-              tooltip="Bulk"
+              tooltip={isBulkMode ? "Exit Bulk Selection (Esc)" : "Bulk Selection mode"}
               onClick={onBulkModeToggle || (() => { })}
               isActive={isBulkMode}
             />
@@ -476,16 +521,15 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
         </div>
       </div>
 
-      {/* Roster Initialization Dialog */}
+      {/* Plan Roster Period Dialog (replaces old per-sub-dept Activate dialog) */}
       {selectedOrganizationId && selectedDepartmentId && (
-        <ActivateRosterDialog
-          open={isActivateDialogOpen}
-          onOpenChange={setIsActivateDialogOpen}
+        <PlanRosterPeriodDialog
+          open={isPlanPeriodDialogOpen}
+          onOpenChange={setIsPlanPeriodDialogOpen}
           organizationId={selectedOrganizationId}
           departmentId={selectedDepartmentId}
-          subDepartmentId={selectedSubDepartmentId}
-          startDate={startOfMonth(selectedDate)}
-          endDate={endOfMonth(selectedDate)}
+          preSelectedSubDeptId={selectedSubDepartmentId}
+          selectedDate={selectedDate}
         />
       )}
 
@@ -503,22 +547,6 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
         />
       )}
 
-      {/* AutoSchedule Modal */}
-      <AutoScheduleModal
-        isOpen={isAutoScheduleOpen}
-        onOpenChange={setIsAutoScheduleOpen}
-        context={{
-          organizationId: selectedOrganizationId,
-          departmentId: selectedDepartmentId,
-          subDepartmentId: selectedSubDepartmentId,
-          dateStart: format(autoScheduleRange.start, 'yyyy-MM-dd'),
-          dateEnd: format(autoScheduleRange.end, 'yyyy-MM-dd')
-        }}
-        onAssignmentsApplied={() => {
-          queryClient.invalidateQueries({ queryKey: ['shifts'] });
-          onRefresh();
-        }}
-      />
     </div>
   );
 };

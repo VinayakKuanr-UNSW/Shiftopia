@@ -34,6 +34,7 @@ import {
 import { cn } from '@/modules/core/lib/utils';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { useAuth } from '@/platform/auth/useAuth';
+import { getSydneyNow, isSydneyPast } from '@/modules/core/lib/date.utils';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -151,15 +152,17 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
     const isRangeValid = useMemo(() => parsedStart <= parsedEnd, [parsedStart, parsedEnd]);
     const daysCount = useMemo(() => isRangeValid ? differenceInDays(parsedEnd, parsedStart) + 1 : 0, [isRangeValid, parsedStart, parsedEnd]);
 
-    const { data: existingRostersByRange = [] } = useRostersByDateRange(
+    const { data: rangeRosters = [], isLoading: isLoadingRosters } = useRostersByDateRange(
         startDate,
         endDate,
-        departmentId || ''
+        departmentId,
+        organizationId,
+        subDepartmentId || undefined
     );
 
     const { data: history = [], isLoading: isLoadingHistory } = useTemplateHistory(selectedId || undefined);
 
-    const activatedDays = useMemo(() => new Set(existingRostersByRange?.map(r => r.startDate)), [existingRostersByRange]);
+    const activatedDays = useMemo(() => new Set(rangeRosters?.map(r => r.startDate)), [rangeRosters]);
     const isFullyActivated = useMemo(() => {
         if (!isRangeValid || daysCount <= 0) return false;
         return Array.from({ length: daysCount }).every((_, i) => {
@@ -169,8 +172,13 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
     }, [isRangeValid, daysCount, parsedStart, activatedDays]);
 
     const isRangeOverMonth = daysCount > 31;
-    const error = !isRangeValid ? "End date precedes start date" :
+    const isPastRange = useMemo(() => isSydneyPast(parsedStart), [parsedStart]);
+
+    const error = (isLoadingRosters || !organizationId || !departmentId) ? null : 
+        !isRangeValid ? "End date precedes start date" :
         !isFullyActivated ? "Range contains unactivated rosters" : null;
+
+    const warning = !error && isPastRange ? "Range includes past dates" : null;
 
     const filteredTemplates = useMemo(() =>
         templates.filter(t =>
@@ -374,16 +382,29 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                                                             <span className="text-[11px] font-black uppercase tracking-tight">{error}</span>
                                                         </motion.div>
                                                     ) : (
-                                                        <motion.div
-                                                            initial={{ opacity: 0 }}
-                                                            animate={{ opacity: 1 }}
-                                                            className="flex items-center gap-3 px-2 py-1"
-                                                        >
-                                                            <div className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-[0_0_10px_rgba(var(--primary),0.8)]" />
-                                                            <span className="text-[11px] font-bold text-muted-foreground">
-                                                                Ready to inject <span className="text-foreground text-xs px-1.5 py-0.5 bg-muted rounded-md border border-border mx-0.5">{daysCount}</span> shifts instances
-                                                            </span>
-                                                        </motion.div>
+                                                        <>
+                                                            {warning && (
+                                                                <motion.div
+                                                                    initial={{ height: 0, opacity: 0 }}
+                                                                    animate={{ height: "auto", opacity: 1 }}
+                                                                    exit={{ height: 0, opacity: 0 }}
+                                                                    className="flex items-center gap-3 p-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl text-amber-600 mb-2"
+                                                                >
+                                                                    <Info className="h-4 w-4 flex-shrink-0" />
+                                                                    <span className="text-[11px] font-black uppercase tracking-tight">{warning}. Shifts starting in the past will be blocked.</span>
+                                                                </motion.div>
+                                                            )}
+                                                            <motion.div
+                                                                initial={{ opacity: 0 }}
+                                                                animate={{ opacity: 1 }}
+                                                                className="flex items-center gap-3 px-2 py-1"
+                                                            >
+                                                                <div className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-[0_0_10px_rgba(var(--primary),0.8)]" />
+                                                                <span className="text-[11px] font-bold text-muted-foreground">
+                                                                    Ready to inject <span className="text-foreground text-xs px-1.5 py-0.5 bg-muted rounded-md border border-border mx-0.5">{daysCount}</span> shifts instances
+                                                                </span>
+                                                            </motion.div>
+                                                        </>
                                                     )}
                                                 </AnimatePresence>
                                             </div>

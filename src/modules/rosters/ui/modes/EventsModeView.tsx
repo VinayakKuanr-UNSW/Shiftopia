@@ -416,7 +416,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
 
                 {/* Shift grid (collapsible) */}
                 {!isCollapsed && (
-                  <div className="px-5 pb-5 pt-2 border-t border-border relative group/event">
+                  <div className="px-5 pb-5 pt-2 border-t border-border relative group/cell">
                     {group.unassignedCount > 0 && (
                       <div className="mb-3 px-3 py-2 bg-red-500/5 border border-red-500/20 rounded-md flex items-center gap-2">
                         <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
@@ -446,20 +446,28 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                       ))}
                     </div>
 
-                    {/* Unified Add Shift Button — Perfectly Centered Glassmorphed Purple Circle */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 pt-10">
+                    {/* Unified Add Shift Button — Repositioned to corner if shifts exist */}
+                    <div className={cn(
+                      "absolute inset-0 flex pointer-events-none z-10",
+                      group.shifts.length > 0 ? "items-end justify-end p-4" : "items-center justify-center pt-10"
+                    )}>
                       <button
                         onClick={() => handleAddShiftClick(group)}
                         className={cn(
-                          "w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 pointer-events-auto",
+                          "flex items-center justify-center rounded-full transition-all duration-300 pointer-events-auto",
                           "bg-primary/30 text-primary border border-primary/40 backdrop-blur-md",
                           "hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]",
-                          group.shifts.length > 0 ? "opacity-100 scale-100" : "opacity-40 scale-90 hover:opacity-100",
+                          group.shifts.length > 0 
+                            ? "w-8 h-8 opacity-0 scale-75 group-hover/cell:opacity-100 group-hover/cell:scale-100" 
+                            : "w-10 h-10 opacity-40 scale-90 hover:opacity-100",
                           "group/add"
                         )}
                         title="Add shift to event"
                       >
-                        <Plus className="h-6 w-6 transition-transform group-hover/add:rotate-90" />
+                        <Plus className={cn(
+                          group.shifts.length > 0 ? "h-5 w-5" : "h-6 w-6",
+                          "transition-transform group-hover/add:rotate-90"
+                        )} />
                       </button>
                     </div>
                   </div>

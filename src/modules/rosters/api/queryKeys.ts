@@ -101,8 +101,10 @@ export const shiftKeys = {
   offerCount: (empId: string) => ['shifts', 'offerCount', empId] as const,
 
   // ── Level 1: open / bidding ───────────────────────────────────────────────
-  openShifts: (orgId?: string) => ['shifts', 'open', orgId ?? null] as const,
-  managerBidShifts: (orgId?: string) => ['shifts', 'managerBids', orgId ?? null] as const,
+  openShifts: (orgId?: string, filters?: { departmentId?: string | null; subDepartmentId?: string | null }) =>
+    ['shifts', 'open', orgId ?? null, filters?.departmentId ?? null, filters?.subDepartmentId ?? null] as const,
+  managerBidShifts: (orgId?: string, filters?: { departmentId?: string | null; subDepartmentId?: string | null }) =>
+    ['shifts', 'managerBids', orgId ?? null, filters?.departmentId ?? null, filters?.subDepartmentId ?? null] as const,
   bids: (shiftId: string) => ['shifts', 'bids', shiftId] as const,
 
   // ── Level 1: lookups — reference / master data ───────────────────────────

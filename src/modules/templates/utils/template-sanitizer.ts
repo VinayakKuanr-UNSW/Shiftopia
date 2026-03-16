@@ -17,6 +17,6 @@ export function sanitizeString(input: string | undefined | null): string {
 export function sanitizeTemplateName(name: string): string {
     return name
         .trim()
-        .replace(/[<>"'\\]/g, '')
+        .replace(/[<>\\]/g, '')
         .slice(0, 100);
 }
