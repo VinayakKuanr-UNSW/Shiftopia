@@ -88,7 +88,7 @@ export const BroadcastNotificationsList: React.FC = () => {
                                 <div className="flex justify-between items-start mb-2">
                                     <div className="flex items-center gap-2">
                                         <Badge variant={notification.isRead ? "secondary" : "default"}>
-                                            {notification.type.replace('_', ' ')}
+                                            {notification.priority.replace('_', ' ')}
                                         </Badge>
                                         {!notification.isRead && (
                                             <Badge variant="destructive" className="text-xs">
@@ -104,10 +104,10 @@ export const BroadcastNotificationsList: React.FC = () => {
 
                                 <div className="mb-3">
                                     <div className="font-medium mb-1">
-                                        {notification.title}
+                                        {notification.subject}
                                     </div>
                                     <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                                        {notification.message}
+                                        {notification.authorName}
                                     </p>
                                 </div>
 

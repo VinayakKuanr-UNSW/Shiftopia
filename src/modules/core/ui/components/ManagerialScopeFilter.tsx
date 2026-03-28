@@ -20,7 +20,7 @@ interface ManagerialScopeFilterProps {
 
 export const ManagerialScopeFilter: React.FC<ManagerialScopeFilterProps> = ({
     onScopeChange,
-    multiSelect = true,
+    multiSelect = false,
     className,
 }) => {
     const context = useContext(AuthContext);

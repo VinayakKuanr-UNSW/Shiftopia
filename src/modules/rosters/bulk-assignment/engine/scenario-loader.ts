@@ -5,10 +5,16 @@
  *   - candidateShifts:  The specific shifts being bulk-assigned (from shiftIds)
  *   - existingShifts:   All shifts assigned to the employee in the scenario window
  *   - employee:         Profile including role and qualifications
+ *
+ * IMPORTANT: existingShifts are fetched via the SECURITY DEFINER RPC
+ * `get_employee_shift_window`, NOT a direct table query.  This ensures that
+ * cross-department shifts are always visible regardless of the calling
+ * manager's RLS scope, preventing false-pass compliance results.
  */
 
 import { supabase } from '@/platform/realtime/client';
 import { getScenarioWindow } from '@/modules/compliance';
+import { fetchEmployeeContextV2 } from '@/modules/compliance/employee-context';
 import type { CandidateShift, EmployeeInfo } from '../types';
 
 export interface LoadedScenario {
@@ -46,7 +52,7 @@ export class ScenarioLoader {
 
         const { data, error } = await (supabase as any)
             .from('shifts')
-            .select('id, shift_date, start_time, end_time, assigned_employee_id, lifecycle_status, role_id, unpaid_break_minutes, required_skills, required_licenses')
+            .select('id, shift_date, start_time, end_time, assigned_employee_id, lifecycle_status, role_id, organization_id, department_id, sub_department_id, unpaid_break_minutes, required_skills, required_licenses')
             .in('id', shiftIds)
             .is('deleted_at', null);
 
@@ -76,63 +82,71 @@ export class ScenarioLoader {
             ? earliestWindow.end
             : latestWindow.end;
 
-        const { data, error } = await (supabase as any)
-            .from('shifts')
-            .select('id, shift_date, start_time, end_time, assigned_employee_id, lifecycle_status, role_id, unpaid_break_minutes')
-            .eq('assigned_employee_id', employeeId)
-            .gte('shift_date', windowStart)
-            .lte('shift_date', windowEnd)
-            .is('deleted_at', null)
-            .neq('is_cancelled', true);
+        // Use SECURITY DEFINER RPC so cross-department shifts are visible
+        // regardless of the calling manager's RLS scope.  A direct table query
+        // (.from('shifts').eq('assigned_employee_id', ...)) is RLS-scoped and
+        // silently omits shifts from other departments, producing false-pass
+        // compliance results (e.g. rest-gap violations not detected).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error } = await (supabase.rpc as any)('get_employee_shift_window', {
+            p_employee_id: employeeId,
+            p_start_date:  windowStart,
+            p_end_date:    windowEnd,
+            p_exclude_id:  null,
+        });
 
         if (error) {
-            console.error('[ScenarioLoader] Error fetching existing shifts:', error);
+            console.error('[ScenarioLoader] Error fetching existing shifts via RPC:', error);
             return [];
         }
-        return (data ?? []) as CandidateShift[];
+
+        // Map RPC result to CandidateShift shape
+        return ((data ?? []) as Array<{
+            id:                   string;
+            shift_date:           string;
+            start_time:           string;
+            end_time:             string;
+            unpaid_break_minutes: number | null;
+        }>).map(s => ({
+            id:                   s.id,
+            shift_date:           s.shift_date,
+            start_time:           s.start_time,
+            end_time:             s.end_time,
+            assigned_employee_id: employeeId,
+            lifecycle_status:     null,
+            role_id:              null,
+            unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
+        }));
     }
 
     private async _fetchEmployee(employeeId: string): Promise<EmployeeInfo> {
-        const { data, error } = await (supabase as any)
-            .from('profiles')
-            .select('id, full_name, role_id, employment_end_date')
-            .eq('id', employeeId)
-            .single();
-
-        if (error || !data) {
-            console.error('[ScenarioLoader] Error fetching employee:', error);
-            return { id: employeeId, name: employeeId };
-        }
-
-        // Fetch qualifications (skills + licenses) separately
-        const [skillsRes, licensesRes] = await Promise.all([
+        // Fetch profile (name + employment end date) in parallel with v2 context
+        // (contracts, qualifications, visa status via fetchEmployeeContextV2).
+        const [profileRes, ctx] = await Promise.all([
             (supabase as any)
-                .from('employee_skills')
-                .select('skill_id, expires_at')
-                .eq('employee_id', employeeId),
-            (supabase as any)
-                .from('employee_licenses')
-                .select('license_id, expires_at')
-                .eq('employee_id', employeeId),
+                .from('profiles')
+                .select('id, full_name, employment_end_date')
+                .eq('id', employeeId)
+                .single(),
+            fetchEmployeeContextV2(employeeId),
         ]);
 
-        const qualifications = [
-            ...((skillsRes.data ?? []) as any[]).map((s: any) => ({
-                qualification_id: s.skill_id,
-                expires_at: s.expires_at,
-            })),
-            ...((licensesRes.data ?? []) as any[]).map((l: any) => ({
-                qualification_id: l.license_id,
-                expires_at: l.expires_at,
-            })),
-        ];
+        if (profileRes.error) {
+            console.error('[ScenarioLoader] Error fetching employee profile:', profileRes.error);
+        }
+
+        const profile = profileRes.data;
 
         return {
-            id: data.id,
-            name: data.full_name ?? data.id,
-            role_id: data.role_id,
-            employment_end_date: data.employment_end_date,
-            qualifications,
+            id:                  employeeId,
+            name:                profile?.full_name ?? employeeId,
+            employment_end_date: profile?.employment_end_date ?? null,
+            // contracts → source of truth for R10 role/hierarchy match
+            contracts:           ctx.contracts,
+            qualifications:      ctx.qualifications.map(q => ({
+                qualification_id: q.qualification_id,
+                expires_at:       q.expires_at,
+            })),
         };
     }
 }

@@ -4,11 +4,11 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/modules/core/ui/primitives/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/modules/core/ui/primitives/table';
 import { Badge } from '@/modules/core/ui/primitives/badge';
-import { BroadcastGroup, GroupParticipant as GroupMember } from '../../model/broadcast.types';
+import { BroadcastGroup, GroupParticipantWithDetails } from '../../model/broadcast.types';
 
 interface GroupMembersProps {
     selectedGroup: BroadcastGroup | null;
-    groupMembers: GroupMember[];
+    groupMembers: GroupParticipantWithDetails[];
     onAddMember: () => void;
     onRemoveMember: (memberId: string) => void;
     onToggleAdminStatus: (memberId: string, currentStatus: boolean) => void;
@@ -61,14 +61,12 @@ export const GroupMembers: React.FC<GroupMembersProps> = ({
                                 <TableRow key={member.id}>
                                     <TableCell>
                                         <div>
-                                            {/* Note: the old GroupMember interface had user.name, but the new GroupParticipantWithDetails has employee.name */}
-                                            {/* For now I'll use any or cast if needed, but I'll try to match the expected UI structure */}
-                                            <div className="font-medium">{(member as any).employee?.name || (member as any).user?.name}</div>
-                                            <div className="text-sm text-muted-foreground">{(member as any).employee?.email || (member as any).user?.email}</div>
+                                            <div className="font-medium">{member.employee?.name}</div>
+                                            <div className="text-sm text-muted-foreground">{member.employee?.email}</div>
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        {(member as any).role === 'admin' || (member as any).is_admin ? (
+                                        {member.role === 'admin' ? (
                                             <Badge variant="default">Group Admin</Badge>
                                         ) : (
                                             <Badge variant="outline">Member</Badge>
@@ -79,10 +77,10 @@ export const GroupMembers: React.FC<GroupMembersProps> = ({
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                onClick={() => onToggleAdminStatus(member.id, (member as any).role === 'admin' || (member as any).is_admin)}
-                                                title={(member as any).role === 'admin' || (member as any).is_admin ? "Remove admin rights" : "Make admin"}
+                                                onClick={() => onToggleAdminStatus(member.id, member.role === 'admin')}
+                                                title={member.role === 'admin' ? "Remove admin rights" : "Make admin"}
                                             >
-                                                {(member as any).role === 'admin' || (member as any).is_admin ? (
+                                                {member.role === 'admin' ? (
                                                     <Shield className="h-4 w-4" />
                                                 ) : (
                                                     <ShieldAlert className="h-4 w-4" />

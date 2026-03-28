@@ -9,7 +9,7 @@ export type ShiftStatus =
     | 'completed'
     | 'cancelled';
 
-export type AttendanceStatus = 'scheduled' | 'checked_in' | 'checked_out' | 'absent' | 'late';
+export type AttendanceStatus = 'unknown' | 'checked_in' | 'no_show' | 'late' | 'excused';
 
 export type TemplateGroupType = 'convention_centre' | 'exhibition_centre' | 'theatre';
 
@@ -96,12 +96,13 @@ export interface Shift {
     fulfillment_status: 'scheduled' | 'bidding' | 'offered' | 'none';
     is_draft: boolean;
     is_cancelled: boolean;
+    is_on_bidding: boolean;
     cancelled_at: string | null;
     cancelled_by_user_id: string | null;
     cancellation_reason: string | null;
 
     offer_expires_at?: string | null; // Made optional as not in all views
-    bidding_status: 'not_on_bidding' | 'on_bidding_normal' | 'on_bidding_urgent' | 'bidding_closed_no_winner';
+    bidding_status: 'not_on_bidding' | 'on_bidding' | 'on_bidding_normal' | 'on_bidding_urgent' | 'bidding_closed_no_winner';
     bidding_priority_text: string;
 
     trade_requested_at: string | null;
@@ -129,6 +130,7 @@ export interface Shift {
     actual_start: string | null;
     actual_end: string | null;
     actual_net_minutes: number | null;
+    attendance_note: string | null;
     payroll_exported: boolean;
     last_modified_by: string | null;
     last_modified_reason: string | null;

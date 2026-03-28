@@ -1,4 +1,5 @@
 import { supabase } from '@/platform/realtime/client';
+import { processInChunks } from '../domain/bulk-action-engine';
 import { Shift, isValidUuid, safeUuid, calculateMinutesBetweenTimes } from '../domain/shift.entity';
 import { CreateShiftData, UpdateShiftData } from './shifts.dto';
 import { complianceService } from '../services/compliance.service';
@@ -9,7 +10,6 @@ import {
     CreateShiftResponseSchema,
     UpdateShiftResponseSchema,
     PublishShiftResponseSchema,
-    BulkPublishResponse,
     BulkPublishResponseSchema,
     BulkAssignResponse,
     BulkAssignResponseSchema,
@@ -23,7 +23,80 @@ import {
     CloseBiddingResponseSchema,
 } from './contracts';
 
+// ============================================================
+// BULK ACTION PARTIAL RESULT TYPES
+// ============================================================
+
+/** Publish — compliance checked per-shift, partial success supported. */
+export type BulkPublishPartialResult = {
+    /** IDs that were fully published in the DB */
+    publishedIds: string[];
+    /** IDs that failed the client-side compliance pre-check */
+    complianceFailed: Array<{ id: string; reason: string }>;
+    /** IDs that passed compliance but failed in the DB RPC */
+    dbFailed: Array<{ id: string; reason: string }>;
+};
+
+/** Unpublish — per-shift via processInChunks, partial success supported. */
+export type BulkUnpublishPartialResult = {
+    unpublishedIds: string[];
+    failed: Array<{ id: string; reason: string }>;
+};
+
+/** Delete — per-item via processInChunks, partial success supported. */
+export type BulkDeletePartialResult = {
+    deletedIds: string[];
+    failed: Array<{ id: string; reason: string }>;
+};
+
+/**
+ * Publish validation result — returned by validateBulkPublishCompliance.
+ * Mirrors the shape expected by BulkActionsToolbar's onValidatePublish prop.
+ */
+export type BulkPublishValidationResult = {
+    eligible: string[];
+    complianceFailed: Array<{ id: string; reason: string }>;
+    skipped: Array<{ id: string; reason: string }>;
+};
+
 export const shiftsCommands = {
+    /* ============================================================
+       MOVE SHIFT (DnD position change)
+       Uses dedicated sm_move_shift RPC to bypass the broken
+       notify_user trigger on the shifts table.
+       ============================================================ */
+
+    async moveShift(shiftId: string, params: {
+        groupType?: string | null;
+        subGroupName?: string | null;
+        shiftGroupId?: string | null;
+        rosterSubgroupId?: string | null;
+        shiftDate?: string | null;
+    }): Promise<{ success: boolean; error?: string }> {
+        const user = await requireUser();
+
+        const { data, error } = await supabase.rpc('sm_move_shift', {
+            p_shift_id: shiftId,
+            p_group_type: params.groupType ?? null,
+            p_sub_group_name: params.subGroupName ?? null,
+            p_shift_group_id: safeUuid(params.shiftGroupId) ?? null,
+            p_roster_subgroup_id: safeUuid(params.rosterSubgroupId) ?? null,
+            p_shift_date: params.shiftDate ?? null,
+            p_user_id: user.id,
+        });
+
+        if (error) {
+            throw new Error(error.message);
+        }
+
+        const result = data as { success: boolean; error?: string };
+        if (!result.success) {
+            throw new Error(result.error ?? 'Failed to move shift');
+        }
+
+        return result;
+    },
+
     /* ============================================================
        CREATE SHIFT
        ============================================================ */
@@ -70,6 +143,8 @@ export const shiftsCommands = {
             unpaid_break_minutes: shiftData.unpaid_break_minutes || 0,
             break_minutes: (shiftData.paid_break_minutes || 0) + (shiftData.unpaid_break_minutes || 0),
             timezone: shiftData.timezone || 'Australia/Sydney',
+            start_at: shiftData.start_at || null,
+            end_at: shiftData.end_at || null,
             assigned_employee_id: safeUuid(shiftData.assigned_employee_id),
             required_skills: shiftData.required_skills || [],
             required_licenses: shiftData.required_licenses || [],
@@ -128,7 +203,7 @@ export const shiftsCommands = {
             if (updates.shift_group_id !== undefined)
                 payload.shift_group_id = safeUuid(updates.shift_group_id);
             if (updates.shift_subgroup_id !== undefined)
-                payload.shift_subgroup_id = safeUuid(updates.shift_subgroup_id);
+                payload.roster_subgroup_id = safeUuid(updates.shift_subgroup_id);
             if (updates.role_id !== undefined)
                 payload.role_id = safeUuid(updates.role_id);
             if (updates.remuneration_level_id !== undefined)
@@ -145,6 +220,8 @@ export const shiftsCommands = {
             if (updates.unpaid_break_minutes !== undefined)
                 payload.unpaid_break_minutes = updates.unpaid_break_minutes;
             if (updates.timezone !== undefined) payload.timezone = updates.timezone;
+            if (updates.start_at !== undefined) payload.start_at = updates.start_at;
+            if (updates.end_at !== undefined) payload.end_at = updates.end_at;
             if (updates.assigned_employee_id !== undefined) {
                 payload.assigned_employee_id = safeUuid(updates.assigned_employee_id);
                 if (updates.assigned_employee_id) {
@@ -164,15 +241,30 @@ export const shiftsCommands = {
             if (updates.cancellation_reason !== undefined)
                 payload.cancellation_reason = updates.cancellation_reason;
 
-            const success = await callRpc('sm_update_shift', {
-                p_shift_id: shiftId,
-                p_shift_data: payload,
-                p_user_id: user.id,
-                p_expected_version: updates.expectedVersion ?? null,
-            }, UpdateShiftResponseSchema);
+            // 4. Execute DB write — direct UPDATE on shifts table.
+            //    The legacy RPC `sm_update_shift` fails because it tries to call
+            //     a non-existent `notify_user` function. Direct update bypasses it.
+            let query = supabase
+                .from('shifts')
+                .update({
+                    ...payload,
+                    updated_at:       new Date().toISOString(),
+                    last_modified_by: user.id,
+                })
+                .eq('id', shiftId);
 
-            if (!success) {
-                throw new Error('Shift update failed in database');
+            if (updates.expectedVersion !== undefined) {
+                query = query.eq('version', updates.expectedVersion);
+            }
+
+            const { data: updatedRows, error: updateError } = await query.select('id');
+
+            if (updateError) {
+                throw new Error(updateError.message);
+            }
+
+            if (!updatedRows || updatedRows.length === 0) {
+                throw new Error('No rows were updated. The shift may have been modified by another user.');
             }
 
             const updatedShift = await shiftsQueries.getShiftById(shiftId);
@@ -276,12 +368,15 @@ export const shiftsCommands = {
         return result;
     },
 
-    async bulkPublishShifts(shiftIds: string[]): Promise<BulkPublishResponse> {
-        // Compliance pre-check for all assigned shifts
-        const checks = await Promise.allSettled(
+    async bulkPublishShifts(shiftIds: string[]): Promise<BulkPublishPartialResult> {
+        // Per-shift compliance pre-check — does NOT block the whole batch on a single failure.
+        const complianceChecks = await Promise.allSettled(
             shiftIds.map(async (id) => {
                 const shift = await shiftsQueries.getShiftById(id);
-                if (!shift?.assigned_employee_id || !isValidUuid(shift.assigned_employee_id)) return null;
+                // Unassigned shifts: no compliance needed, always pass
+                if (!shift?.assigned_employee_id || !isValidUuid(shift.assigned_employee_id)) {
+                    return { id, pass: true as const, reason: '' };
+                }
                 const netMinutes =
                     calculateMinutesBetweenTimes(shift.start_time, shift.end_time)
                     - (shift.unpaid_break_minutes || 0);
@@ -293,30 +388,71 @@ export const shiftsCommands = {
                     netMinutes,
                     id,
                 );
-                if (!validation.isValid) return validation.violations;
-                return null;
+                if (!validation.isValid) {
+                    const rules = validation.violations.map(v => v.rule ?? 'violation').join(', ');
+                    return { id, pass: false as const, reason: rules };
+                }
+                return { id, pass: true as const, reason: '' };
             })
         );
 
-        const allViolations = checks.flatMap(r =>
-            r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : []
-        );
-        if (allViolations.length > 0) {
-            throw new ComplianceError(allViolations, 'sm_bulk_publish_shifts');
+        const complianceFailed: Array<{ id: string; reason: string }> = [];
+        const passIds: string[] = [];
+
+        complianceChecks.forEach((check, i) => {
+            const id = shiftIds[i];
+            if (check.status === 'rejected') {
+                complianceFailed.push({ id, reason: 'Compliance check error' });
+            } else if (!check.value.pass) {
+                complianceFailed.push({ id, reason: check.value.reason });
+            } else {
+                passIds.push(id);
+            }
+        });
+
+        // Nothing passes compliance — skip the DB round-trip entirely
+        if (passIds.length === 0) {
+            return { publishedIds: [], complianceFailed, dbFailed: [] };
         }
 
-        return callAuthenticatedRpc(
+        // Call RPC only with compliant IDs
+        const dbResult = await callAuthenticatedRpc(
             'sm_bulk_publish_shifts',
-            (userId) => ({ p_shift_ids: shiftIds, p_actor_id: userId }),
+            (userId) => ({ p_shift_ids: passIds, p_actor_id: userId }),
             BulkPublishResponseSchema,
         );
+
+        const dbFailed: Array<{ id: string; reason: string }> = (dbResult.errors ?? []).map(e => ({
+            id: e.shift_id,
+            reason: e.reason,
+        }));
+        const dbFailedSet = new Set(dbFailed.map(f => f.id));
+        const publishedIds = passIds.filter(id => !dbFailedSet.has(id));
+
+        return { publishedIds, complianceFailed, dbFailed };
     },
 
-    async bulkUnpublishShifts(shiftIds: string[]): Promise<void> {
-        if (!shiftIds || shiftIds.length === 0) return;
-        await Promise.all(
-            shiftIds.map(id => this.unpublishShift(id, 'Bulk unpublish from bucket'))
+    async bulkUnpublishShifts(shiftIds: string[]): Promise<BulkUnpublishPartialResult> {
+        if (!shiftIds || shiftIds.length === 0) return { unpublishedIds: [], failed: [] };
+
+        // processInChunks: 20 at a time, fully parallel within each chunk
+        const results = await processInChunks(
+            shiftIds,
+            (id) => this.unpublishShift(id, 'Bulk unpublish'),
         );
+
+        const unpublishedIds: string[] = [];
+        const failed: Array<{ id: string; reason: string }> = [];
+
+        for (const r of results) {
+            if (r.ok) {
+                unpublishedIds.push(r.id);
+            } else {
+                failed.push({ id: r.id, reason: r.error });
+            }
+        }
+
+        return { unpublishedIds, failed };
     },
 
     async unpublishShift(shiftId: string, reason?: string) {
@@ -414,6 +550,96 @@ export const shiftsCommands = {
         return result.success_count;
     },
 
+    /**
+     * Per-item bulk delete using processInChunks.
+     * Returns structured { deletedIds, failed } — caller knows EXACTLY which shifted deleted.
+     * Replaces the coarse bulk RPC (which only returned a count) for bulk mode UI.
+     */
+    async bulkDeleteShiftsPerItem(shiftIds: string[]): Promise<BulkDeletePartialResult> {
+        if (!shiftIds || shiftIds.length === 0) return { deletedIds: [], failed: [] };
+
+        const results = await processInChunks(shiftIds, async (id) => {
+            await this.deleteShift(id);
+            return id;
+        });
+
+        const deletedIds: string[] = [];
+        const failed: Array<{ id: string; reason: string }> = [];
+
+        for (const r of results) {
+            if (r.ok) deletedIds.push(r.id);
+            else failed.push({ id: r.id, reason: r.error });
+        }
+
+        return { deletedIds, failed };
+    },
+
+    /**
+     * Async compliance pre-check for a set of shifts BEFORE the user confirms publish.
+     * Runs per-shift compliance in parallel chunks (20 at a time).
+     * Returns eligible IDs, compliance-failed IDs, and already-published (skipped) IDs.
+     *
+     * Used by the VALIDATING phase in BulkActionsToolbar to surface compliance results
+     * to the user BEFORE they click "Confirm Publish".
+     */
+    async validateBulkPublishCompliance(shifts: Shift[]): Promise<BulkPublishValidationResult> {
+        const eligible: string[] = [];
+        const complianceFailed: Array<{ id: string; reason: string }> = [];
+        const skipped: Array<{ id: string; reason: string }> = [];
+
+        const checks = await processInChunks(
+            shifts.map(s => s.id),
+            async (id) => {
+                const shift = shifts.find(s => s.id === id)!;
+
+                // Already published → skip
+                if (shift.lifecycle_status === 'Published') {
+                    return { id, category: 'skipped' as const, reason: 'Already published' };
+                }
+
+                // Unassigned draft → eligible (compliance only applies to assigned shifts)
+                if (!shift.assigned_employee_id || !isValidUuid(shift.assigned_employee_id)) {
+                    return { id, category: 'eligible' as const, reason: '' };
+                }
+
+                // Assigned draft → run compliance check
+                const netMinutes =
+                    calculateMinutesBetweenTimes(shift.start_time, shift.end_time)
+                    - (shift.unpaid_break_minutes || 0);
+
+                const validation = await complianceService.validateShiftCompliance(
+                    shift.assigned_employee_id,
+                    shift.shift_date,
+                    shift.start_time,
+                    shift.end_time,
+                    netMinutes,
+                    id,
+                );
+
+                if (!validation.isValid) {
+                    const rules = validation.violations.map(v => v.rule ?? 'violation').join(', ');
+                    return { id, category: 'compliance_failed' as const, reason: rules };
+                }
+
+                return { id, category: 'eligible' as const, reason: '' };
+            },
+        );
+
+        for (const r of checks) {
+            if (!r.ok) {
+                complianceFailed.push({ id: r.id, reason: r.error });
+            } else {
+                switch (r.value.category) {
+                    case 'eligible':          eligible.push(r.id); break;
+                    case 'compliance_failed': complianceFailed.push({ id: r.id, reason: r.value.reason }); break;
+                    case 'skipped':           skipped.push({ id: r.id, reason: r.value.reason }); break;
+                }
+            }
+        }
+
+        return { eligible, complianceFailed, skipped };
+    },
+
     /* ============================================================
        DELETE SHIFTS BY TEMPLATE
        ============================================================ */
@@ -457,6 +683,27 @@ export const shiftsCommands = {
     },
 
     async rejectOffer(shiftId: string, reason: string) {
+        // TTS-aware routing:
+        //   TTS > 4h → sm_reject_offer → bidding (S5) — peers can still bid
+        //   TTS ≤ 4h → sm_expire_offer_now → draft+unassigned (S1) — bidding window closed,
+        //              manager must use emergency assignment
+        const { data: shift } = await (supabase as any)
+            .from('shifts')
+            .select('shift_date, start_time, start_at')
+            .eq('id', shiftId)
+            .single();
+
+        if (shift) {
+            const tts = shift.start_at
+                ? new Date(shift.start_at).getTime() - Date.now()
+                : new Date(`${shift.shift_date}T${shift.start_time}`).getTime() - Date.now();
+
+            if (tts <= 4 * 60 * 60 * 1000) {
+                // Window closed — expire the offer, notify manager for emergency assignment
+                return this.expireOfferNow(shiftId);
+            }
+        }
+
         return callAuthenticatedRpc(
             'sm_reject_offer',
             (userId) => ({ p_shift_id: shiftId, p_employee_id: userId, p_reason: reason }),

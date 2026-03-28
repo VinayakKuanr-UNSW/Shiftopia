@@ -51,7 +51,11 @@ export const useMyRoster = (view: CalendarView, selectedDate: Date, scope?: Scop
     };
 
     // Update date range when view or selectedDate changes
-    const { start, end } = calculateDateRange();
+    const { start: rawStart, end } = calculateDateRange();
+    
+    // Buffer for overnight shifts (catch shifts starting day before but ending today)
+    const start = subDays(rawStart, 1);
+    
     const startDateStr = format(start, 'yyyy-MM-dd');
     const endDateStr = format(end, 'yyyy-MM-dd');
 
@@ -72,9 +76,22 @@ export const useMyRoster = (view: CalendarView, selectedDate: Date, scope?: Scop
     // Get shifts for a specific date
     const getShiftsForDate = (date: Date): ShiftWithDetails[] => {
         const dateStr = format(date, 'yyyy-MM-dd');
+        const prevDateStr = format(subDays(date, 1), 'yyyy-MM-dd');
 
         // Filter from the cached array
-        let daysShifts = shifts.filter(s => s.shift_date === dateStr);
+        let daysShifts = shifts.filter(s => {
+            // Exclude offered shifts — employee must accept first; they appear in MyOffers modal only
+            if ((s as any).assignment_outcome === 'offered') return false;
+
+            // Include shifts starting today
+            if (s.shift_date === dateStr) return true;
+
+            // Include shifts starting yesterday that span into today
+            const crossesMidnight = s.is_overnight || s.end_time < s.start_time;
+            if (s.shift_date === prevDateStr && crossesMidnight) return true;
+
+            return false;
+        });
 
         // Apply Scope Filters
         if (daysShifts.length > 0) {
@@ -118,8 +135,12 @@ export const useMyRoster = (view: CalendarView, selectedDate: Date, scope?: Scop
 
         return daysShifts.map(shift => ({
             shift,
-            groupName: shift.group_type || 'General',
-            groupColor: getDepartmentColor(shift.group_type || 'general'),
+            groupName: shift.group_type === 'convention_centre' ? 'Convention' :
+                shift.group_type === 'exhibition_centre' ? 'Exhibition' :
+                    shift.group_type === 'theatre' ? 'Theatre' : 'General',
+            groupColor: (shift.group_type === 'convention_centre' ? 'convention' :
+                shift.group_type === 'exhibition_centre' ? 'exhibition' :
+                    shift.group_type === 'theatre' ? 'theatre' : 'default') as string,
             subGroupName: shift.sub_group_name || ''
         }));
     };

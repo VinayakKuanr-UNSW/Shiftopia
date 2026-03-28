@@ -1,6 +1,7 @@
 import { supabase } from '@/platform/realtime/client';
 import { Shift } from '@/modules/rosters';
 import { Bid, BidStatus } from '../model/bid.types';
+import { computeBiddingUrgency } from '@/modules/rosters/domain/bidding-urgency';
 
 // --- Helper Functions ---
 const mapDbStatusToBidStatus = (dbStatus: string): BidStatus => {
@@ -69,7 +70,7 @@ export const biddingApi = {
                 roles(id, name),
                 remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max)
             `)
-            .in('bidding_status', ['on_bidding_normal', 'on_bidding_urgent'])
+            .in('bidding_status', ['on_bidding_normal', 'on_bidding_urgent', 'on_bidding'])
             .is('assigned_employee_id', null)
             .is('deleted_at', null);
 
@@ -94,7 +95,7 @@ export const biddingApi = {
 
         return (queryData || []).map((row: any) => ({
             ...row,
-            is_urgent: row.bidding_status === 'on_bidding_urgent'
+            is_urgent: computeBiddingUrgency(row.shift_date, row.start_time) === 'urgent'
         })) as unknown as Shift[];
     },
 
@@ -124,7 +125,16 @@ export const biddingApi = {
             throw error;
         }
 
-        return data as unknown as Bid[];
+        // Filter out stale "accepted" bids where the employee no longer owns the shift
+        // (happens after an employee drops a shift — bid stays accepted but shift reassigned)
+        const filtered = (data as unknown as Bid[]).filter((bid: any) => {
+            if (bid.status === 'accepted') {
+                return bid.shift?.assigned_employee_id === userId;
+            }
+            return true;
+        });
+
+        return filtered;
     },
 
     /**
@@ -193,9 +203,35 @@ export const biddingApi = {
      * Update bid status (MANAGER ACTION)
      * When status = 'selected'/'accepted': assigns the winning employee to the shift (S5/S6 → S4)
      * and logs A21 (manager selects) + A22 (system finalizes).
+     *
+     * Final commit rule: bid acceptance is blocked if TTS ≤ 4h (bidding window closed).
+     * Manager must use emergency assignment instead.
      */
     async updateBidStatus(id: string, status: BidStatus): Promise<Bid> {
         const dbStatus = mapBidStatusToDbStatus(status);
+
+        // ── TTS guard: fetch shift before accepting ───────────────────────────
+        if (status === 'selected' || status === 'accepted') {
+            const { data: bidRow } = await (supabase as any)
+                .from('shift_bids')
+                .select('shift_id, shift:shifts(shift_date, start_time, start_at)')
+                .eq('id', id)
+                .single();
+
+            if (bidRow?.shift) {
+                const s = bidRow.shift as any;
+                const tts = s.start_at
+                    ? new Date(s.start_at).getTime() - Date.now()
+                    : new Date(`${s.shift_date}T${s.start_time}`).getTime() - Date.now();
+
+                if (tts <= 4 * 60 * 60 * 1000) {
+                    throw new Error(
+                        'Bidding window closed: shift starts in less than 4 hours. ' +
+                        'Use emergency assignment instead.'
+                    );
+                }
+            }
+        }
 
         const { data, error } = await supabase
             .from('shift_bids')

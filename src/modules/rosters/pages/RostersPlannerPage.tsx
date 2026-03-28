@@ -1,4 +1,6 @@
 import React, { useMemo, useState, useRef } from 'react';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useQueryClient } from '@tanstack/react-query';
 import { format, addDays, startOfWeek } from 'date-fns';
 import { Loader2 } from 'lucide-react';
@@ -21,9 +23,11 @@ import { GroupModeView } from '@/modules/rosters/ui/modes/GroupModeView';
 import { EventsModeView } from '@/modules/rosters/ui/modes/EventsModeView';
 import { RolesModeView } from '@/modules/rosters/ui/modes/RolesModeView';
 import type { ShiftContext } from '@/modules/rosters/ui/dialogs/EnhancedAddShiftModal';
-import { BulkActionsToolbar } from '@/modules/rosters/ui/components/BulkActionsToolbar';
+import { BulkActionsToolbar, type BulkActionResult, type BulkPublishValidationResult } from '@/modules/rosters/ui/components/BulkActionsToolbar';
 import { RosterModals, type RosterModalsHandle } from '@/modules/rosters/ui/components/RosterModals';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
+import { DndAssignModal } from '@/modules/rosters/ui/dialogs/DndAssignModal';
+import { UNASSIGNED_BUCKET_ID } from '@/modules/rosters/domain/projections/constants';
 
 // Hooks & Services - Enterprise TanStack Query hooks
 import { useAuth } from '@/platform/auth/useAuth';
@@ -49,6 +53,7 @@ import {
   useUnpublishShift,
   useShiftDeltaSync,
 } from '@/modules/rosters/state/useRosterShifts';
+import { EligibilityService } from '@/modules/rosters/services/eligibility.service';
 import { useRosterUI, RosterMode, CalendarView } from '@/modules/rosters/contexts/RosterUIContext';
 import {
   Shift,
@@ -62,6 +67,15 @@ import { useRosterViewPrefetch } from '@/modules/rosters/hooks/useRosterViewPref
 import { shiftKeys, type ShiftFilters } from '@/modules/rosters/api/queryKeys';
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import {
+  preflightPublish,
+  preflightUnpublish,
+  preflightDelete,
+  preflightUnassign,
+} from '@/modules/rosters/domain/bulk-action-engine';
+import type { ToolbarPreflightData } from '@/modules/rosters/ui/components/BulkActionsToolbar';
+import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
+import { executeAssignShift } from '@/modules/rosters/domain/commands/assignShift.command';
 
 /* ============================================================
    MAIN COMPONENT
@@ -73,6 +87,7 @@ const NewRostersPage: React.FC = () => {
   const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
   const queryClient = useQueryClient();
 
+  const { showUnfilledPanel, setShowUnfilledPanel, isDnDModeActive } = useRosterStore();
   // ==================== SESSION-SCOPED STATE FROM CONTEXT ====================
   // These persist across navigation but reset on browser refresh
   const {
@@ -88,13 +103,28 @@ const NewRostersPage: React.FC = () => {
     setSelectedDepartmentIds,
     selectedSubDepartmentIds,
     setSelectedSubDepartmentIds,
-    bulkModeActive,
-    setBulkModeActive,
-    selectedShiftIds,
-    setSelectedShiftIds,
     toggleShiftSelection,
     clearSelection,
   } = useRosterUI();
+
+  // Sync Unfilled/Contracted Panel with DnD Mode
+  React.useEffect(() => {
+    if (isDnDModeActive && (activeMode === 'people' || activeMode === 'roles')) {
+      setShowUnfilledPanel(true);
+    }
+  }, [isDnDModeActive, activeMode, setShowUnfilledPanel]);
+
+  const [bulkModeActive, setBulkModeActive] = useState(false);
+  const [selectedShiftIds, setSelectedShiftIds] = useState<string[]>([]);
+  
+  // Pending DnD Assignment (Compliance-gated)
+  const [pendingDndAssign, setPendingDndAssign] = useState<{
+    shift: UnfilledShift | (PeopleModeShift & { id: string }) | Shift | any;
+    employeeId: string;
+    employeeName: string;
+    dateKey: string;
+  } | null>(null);
+  const [isExecutingDnd, setIsExecutingDnd] = useState(false);
 
   const selectedCount = selectedShiftIds.length;
 
@@ -125,7 +155,6 @@ const NewRostersPage: React.FC = () => {
   // ==================== TOGGLE STATES ====================
   // const [isLocked, setIsLocked] = useState(false); // REMOVED local state
   const [showAvailabilities, setShowAvailabilities] = useState(false);
-  const [showUnfilledPanel, setShowUnfilledPanel] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   // ==================== MODAL REF ====================
@@ -246,6 +275,7 @@ const NewRostersPage: React.FC = () => {
   const unpublishShiftMutation = useUnpublishShift();
   const bulkUnassign = useBulkUnassignShifts();
   const bulkUnpublishByHook = useBulkUnpublishShifts();
+  const updateShiftMutation = useUpdateShift();
 
 
   // Employees lookup
@@ -296,7 +326,7 @@ const NewRostersPage: React.FC = () => {
   // Derive unfilled shifts from cached query data
   const unfilledShifts: UnfilledShift[] = useMemo(() => {
     return shifts
-      .filter((s: Shift) => !s.assigned_employee_id && !s.is_cancelled && !s.deleted_at)
+      .filter((s: Shift) => !s.assigned_employee_id && !s.is_cancelled && !s.deleted_at && (s.is_draft ?? true))
       .map((s: Shift) => ({
         id: s.id,
         title: s.sub_group_name || 'Shift',
@@ -305,6 +335,9 @@ const NewRostersPage: React.FC = () => {
         date: s.shift_date,
         start: s.start_time,
         end: s.end_time,
+        // DnD fields — used by DroppableDateCell to validate before calling onAssign
+        isDraft: s.is_draft ?? true,
+        isPublished: s.is_published ?? false,
       }));
   }, [shifts]);
 
@@ -375,6 +408,7 @@ const NewRostersPage: React.FC = () => {
     modalsRef.current?.openAddShift(context);
   };
 
+
   const handleShiftCreated = () => {
     // Mutation hooks auto-invalidate; no manual refresh needed
     toast({
@@ -439,9 +473,48 @@ const NewRostersPage: React.FC = () => {
     return counts;
   }, [selectedShiftsData]);
 
+  /**
+   * Pre-flight summary computed from local shift data (sync, no network).
+   * Passed to BulkActionsToolbar so each action button can show
+   * "N eligible, M blocked" before the user confirms.
+   */
+  const preflightData = useMemo((): ToolbarPreflightData | undefined => {
+    if (selectedShiftsData.length === 0) return undefined;
+
+    const pub     = preflightPublish(selectedShiftsData);
+    const unpub   = preflightUnpublish(selectedShiftsData);
+    const del     = preflightDelete(selectedShiftsData);
+    const unassign = preflightUnassign(selectedShiftsData);
+
+    return {
+      publish:   { eligible: pub.eligibleIds.length,     blocked: pub.blocked.length,     warned: pub.warned.length },
+      unpublish: { eligible: unpub.eligibleIds.length,   blocked: unpub.blocked.length,   warned: unpub.warned.length },
+      delete:    { eligible: del.eligibleIds.length,     warned: del.warned.length },
+      unassign:  { eligible: unassign.eligibleIds.length, blocked: unassign.blocked.length },
+    };
+  }, [selectedShiftsData]);
+
+  /**
+   * Async compliance pre-validation for Publish action.
+   * Called by the toolbar's VALIDATING phase — runs compliance for all selected shifts
+   * and returns eligible/blocked counts BEFORE the user confirms.
+   */
+  const handleValidatePublish = async (shiftIds: string[]): Promise<BulkPublishValidationResult> => {
+    const shiftsToValidate = selectedShiftsData.filter(s => shiftIds.includes(s.id));
+    return shiftsCommands.validateBulkPublishCompliance(shiftsToValidate);
+  };
+
+  /**
+   * Total selectable shifts in the current view (not locked).
+   * Passed to the toolbar so it can show "Select All (N)" and flip to "Deselect All"
+   * when all N are selected.
+   */
+  const totalSelectableCount = useMemo(() => {
+    return shifts.filter(s => !isShiftLocked(s.shift_date, s.start_time, 'roster_management')).length;
+  }, [shifts]);
+
   const handleSelectAll = () => {
-    // visibleShifts depends on current filters and view. 
-    // The `shifts` variable in this component is already filtered by date range and queryFilters.
+    // `shifts` is already filtered by date range and queryFilters — select all unlocked.
     const visibleAndUnlockedIds = shifts
       .filter(s => !isShiftLocked(s.shift_date, s.start_time, 'roster_management'))
       .map(s => s.id);
@@ -450,55 +523,39 @@ const NewRostersPage: React.FC = () => {
     setSelectedShiftIds(visibleAndUnlockedIds);
   };
 
-  const handleBulkPublish = async (shiftIds: string[]) => {
-    // Only target Draft shifts
-    const draftIds = selectedShiftsData
-      .filter(s => s.lifecycle_status !== 'Published')
-      .map(s => s.id);
+  // Toolbar owns result feedback; page owns data and cache management.
+  // `shiftIds` are pre-validated by the toolbar's VALIDATING phase — use them directly.
+  const handleBulkPublish = async (shiftIds: string[]): Promise<BulkActionResult> => {
+    if (shiftIds.length === 0) return { successCount: 0, failedCount: 0 };
 
-    if (draftIds.length === 0) return;
-
-    try {
-      const result = await bulkPublish.mutateAsync(draftIds);
-      const count = (result as any).success_count ?? draftIds.length;
-      const skipped = shiftIds.length - count;
-
-      toast({
-        title: 'Published',
-        description: `Published ${count} shifts successfully.${skipped > 0 ? ` Skipped ${skipped} already published.` : ''}`,
-      });
-      clearSelection();
-      setBulkModeActive(false);
-    } catch (error) {
-      console.error(error);
-      toast({ title: 'Error', description: 'Failed to publish shifts', variant: 'destructive' });
-    }
+    const result = await bulkPublish.mutateAsync(shiftIds);
+    clearSelection();
+    setBulkModeActive(false);
+    return {
+      successCount: result.publishedIds.length,
+      failedCount: result.complianceFailed.length + result.dbFailed.length,
+      failedDetails: [...result.complianceFailed, ...result.dbFailed],
+    };
   };
 
-  const handleBulkUnpublish = async (shiftIds: string[]) => {
-    const publishedIds = selectedShiftsData
-      .filter(s => s.lifecycle_status === 'Published')
-      .map(s => s.id);
+  const handleBulkUnpublish = async (_shiftIds: string[]): Promise<BulkActionResult> => {
+    // Use preflight-eligible IDs only (published, not in bidding)
+    const eligibleIds = preflightData?.unpublish.eligible
+      ? selectedShiftsData
+          .filter(s => s.lifecycle_status === 'Published' && s.bidding_status === 'not_on_bidding')
+          .map(s => s.id)
+      : selectedShiftsData.filter(s => s.lifecycle_status === 'Published').map(s => s.id);
 
-    if (publishedIds.length === 0) return;
+    if (eligibleIds.length === 0) return { successCount: 0, failedCount: 0 };
 
-    // We don't have a bulkUnpublish hook explicitly, but assume we can reuse logic or call individual unpublish in loop (not ideal)
-    // Let's check if useBulkPublishShifts has a direction or if there's useBulkUnpublish.
-    // Assuming for now we might need to implement bulk unpublish or call in loop if small count.
-    
-    try {
-      await bulkUnpublishByHook.mutateAsync(publishedIds);
-      
-      toast({
-        title: 'Unpublished',
-        description: `Unpublished ${publishedIds.length} shifts.`,
-      });
-      clearSelection();
-      setBulkModeActive(false);
-    } catch (error) {
-      console.error(error);
-      toast({ title: 'Error', description: 'Failed to unpublish shifts', variant: 'destructive' });
-    }
+    const result = await bulkUnpublishByHook.mutateAsync(eligibleIds);
+    clearSelection();
+    setBulkModeActive(false);
+    return {
+      successCount: result.unpublishedIds.length,
+      failedCount:  result.failed.length,
+      failedDetails: result.failed,
+    };
   };
 
   const handleBulkUnassign = async () => {
@@ -510,10 +567,9 @@ const NewRostersPage: React.FC = () => {
 
     try {
       await bulkUnassign.mutateAsync(assignedIds);
-      
       toast({
         title: 'Unassigned',
-        description: `Unassigned ${assignedIds.length} shifts successfully.`,
+        description: `Unassigned ${assignedIds.length} shift${assignedIds.length !== 1 ? 's' : ''} successfully.`,
       });
       clearSelection();
       setBulkModeActive(false);
@@ -523,31 +579,16 @@ const NewRostersPage: React.FC = () => {
     }
   };
 
-
-
-  const handleBulkDelete = async () => {
-    if (selectedShiftIds.length === 0) return;
-    try {
-      const successCount = await bulkDelete.mutateAsync(selectedShiftIds);
-
-      if (successCount > 0) {
-        toast({
-          title: 'Deleted',
-          description: `Deleted ${successCount} shifts.`,
-        });
-        clearSelection();
-        setBulkModeActive(false);
-      } else {
-        toast({
-          title: 'Delete Failed',
-          description: "No shifts were deleted. They may have been lock or already removed.",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error(error);
-      toast({ title: 'Error', description: 'Failed to delete shifts', variant: 'destructive' });
-    }
+  const handleBulkDelete = async (): Promise<BulkActionResult> => {
+    if (selectedShiftIds.length === 0) return { successCount: 0, failedCount: 0 };
+    const result = await bulkDelete.mutateAsync(selectedShiftIds);
+    clearSelection();
+    setBulkModeActive(false);
+    return {
+      successCount: result.deletedIds.length,
+      failedCount: result.failed.length,
+      failedDetails: result.failed,
+    };
   };
 
   // ==================== EMPLOYEES WITH SHIFTS ====================
@@ -599,6 +640,186 @@ const NewRostersPage: React.FC = () => {
     }
     return legacyEmployeesWithShifts;
   }, [projection.people, legacyEmployeesWithShifts]);
+
+  // ── Drag-and-drop assignment ─────────────────────────────────────────
+  // handleDndAssign: Used in People Mode (Unfilled Shift -> Employee row)
+  const handleDndAssign = React.useCallback(
+    async (shift: UnfilledShift, employeeId: string, dateKey: string) => {
+      const employee = employees.find(e => e.id === employeeId);
+      if (!employee) return;
+      setPendingDndAssign({
+        shift,
+        employeeId,
+        employeeName: `${employee.first_name} ${employee.last_name}`,
+        dateKey,
+      });
+    },
+    [employees],
+  );
+
+  // handleDndAssignToShift: Used in Group/Roles Mode (Staff Member -> Shift Card)
+  const handleDndAssignToShift = React.useCallback(
+    async (shiftId: string, employeeId: string, employeeName: string) => {
+      const shift = shifts.find(s => s.id === shiftId);
+      if (!shift) return;
+      setPendingDndAssign({
+        shift,
+        employeeId,
+        employeeName,
+        dateKey: shift.shift_date,
+      });
+    },
+    [shifts],
+  );
+
+  const handleDndMove = React.useCallback(
+    async (shiftId: string, targetContext: { employeeId?: string; roleId?: string; roleName?: string; shiftDate: string }) => {
+      const shift = shifts.find(s => s.id === shiftId);
+      if (!shift) return;
+
+      const { employeeId, roleId, roleName, shiftDate } = targetContext;
+
+      // Special Case: Unassigning (drag to Open Shifts)
+      if (employeeId === UNASSIGNED_BUCKET_ID) {
+        try {
+          setIsExecutingDnd(true);
+          await updateShiftMutation.mutateAsync({
+            shiftId: shiftId,
+            updates: { 
+              assigned_employee_id: null,
+              shift_date: shiftDate 
+            },
+          });
+          toast({ title: 'Shift updated', description: 'Moved to open shifts on ' + shiftDate });
+          queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+        } catch (error) {
+          toast({ title: 'Failed to unassign', variant: 'destructive' });
+        } finally {
+          setIsExecutingDnd(false);
+        }
+        return;
+      }
+
+      // Reassignment or date/role move
+      if (employeeId) {
+        const targetEmployee = employees.find(e => e.id === employeeId);
+        if (!targetEmployee) return;
+        setPendingDndAssign({
+          shift,
+          employeeId,
+          employeeName: `${targetEmployee.first_name} ${targetEmployee.last_name}`,
+          dateKey: shiftDate,
+        });
+      } else if (roleId) {
+        // Roles Mode Move
+        // If the shift is assigned, we should check hierarchy (Org -> Dept -> SubDept -> Role)
+        if (shift.assigned_employee_id) {
+          try {
+            setIsExecutingDnd(true);
+            const eligibleEmployees = await EligibilityService.getEligibleEmployees({
+              organizationId: shift.organization_id || '',
+              departmentId: shift.department_id || '',
+              subDepartmentId: shift.sub_department_id || '',
+              roleId: roleId
+            });
+            
+            const isEligible = eligibleEmployees.some(e => e.id === shift.assigned_employee_id);
+            
+            if (!isEligible) {
+              toast({
+                title: 'Invalid Move',
+                description: `Employee is not contracted for the ${roleName || 'selected'} role.`,
+                variant: 'destructive',
+              });
+              return;
+            }
+
+            // If eligible, we still trigger the compliance modal for date/time changes
+            const profile = (shift as any).profiles || (shift as any).assigned_profiles;
+            const employeeName = profile ? `${profile.first_name} ${profile.last_name}` : 'Employee';
+            
+            setPendingDndAssign({
+              shift: { ...shift, role_id: roleId, roleName: roleName || (shift as any).role_name },
+              employeeId: shift.assigned_employee_id,
+              employeeName,
+              dateKey: shiftDate,
+            });
+          } catch (error) {
+            console.error('Hierarchy check failed:', error);
+            toast({ title: 'Validation Error', description: 'Could not verify role eligibility.', variant: 'destructive' });
+          } finally {
+            setIsExecutingDnd(false);
+          }
+        } else {
+          // Unassigned shift move to different role/date
+          try {
+            setIsExecutingDnd(true);
+            await updateShiftMutation.mutateAsync({
+              shiftId,
+              updates: {
+                role_id: roleId,
+                shift_date: shiftDate,
+              }
+            });
+            toast({ title: 'Shift moved' });
+            queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+          } catch {
+            toast({ title: 'Move failed', variant: 'destructive' });
+          } finally {
+            setIsExecutingDnd(false);
+          }
+        }
+      }
+    },
+    [shifts, employees, updateShiftMutation, toast, queryClient],
+  );
+
+  const executePendingAssignment = async (options: { ignoreWarnings: boolean }) => {
+    if (!pendingDndAssign) return;
+    setIsExecutingDnd(true);
+    try {
+      const { shift, employeeId, dateKey } = pendingDndAssign;
+      const originalDate = (shift as any).rawShift?.shift_date || (shift as any).date;
+      const dateChanged = originalDate !== dateKey;
+
+      if (dateChanged) {
+        await updateShiftMutation.mutateAsync({
+          shiftId: shift.id,
+          updates: {
+            shift_date: dateKey,
+            assigned_employee_id: employeeId,
+          },
+        });
+      } else {
+        const result = await executeAssignShift({
+          shiftId: shift.id,
+          employeeId,
+          context: 'MANUAL',
+          ignoreWarnings: options.ignoreWarnings,
+        });
+        if (!result.success) {
+          toast({
+            title: 'Assignment blocked',
+            description: result.error ?? 'Compliance check failed.',
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
+
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      toast({ title: 'Success', description: 'Shift updated successfully.' });
+      setPendingDndAssign(null);
+    } catch (error) {
+      toast({
+        title: 'Action failed',
+        description: 'An unexpected error occurred.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsExecutingDnd(false);
+    }
+  };
 
   // ==================== COMPUTED STATS (from projection engine) ====================
   const {
@@ -752,7 +973,8 @@ const NewRostersPage: React.FC = () => {
         </div>
       )}
 
-      {/* Main Content */}
+      {/* Main Content — single DndProvider covers all mode views + side panel */}
+      <DndProvider backend={HTML5Backend}>
       <div className="flex-1 min-h-0 overflow-hidden flex relative">
         {/* Loading Overlay */}
         {isLoading && (
@@ -773,10 +995,13 @@ const NewRostersPage: React.FC = () => {
         >
           {activeMode === 'people' && (
             <PeopleModeGrid
-
               employees={employeesWithShifts}
-              dates={dates}
+              onAssignShift={handleDndAssign}
+              onMoveShift={(shiftId, targetEmployeeId, targetDate) =>
+                handleDndMove(shiftId, { employeeId: targetEmployeeId, shiftDate: targetDate })
+              }
               canEdit={canEdit}
+              dates={dates}
               showAvailabilities={showAvailabilities}
               bulkModeActive={bulkModeActive}
               selectedShifts={selectedShiftIds}
@@ -834,6 +1059,8 @@ const NewRostersPage: React.FC = () => {
               isShiftsLoading={isLoading}
               showLegend={true}
               projection={projection.group ?? undefined}
+              // Centralized DnD assignment (employee → shift card)
+              onAssignShift={handleDndAssignToShift}
             />
           )}
 
@@ -862,6 +1089,8 @@ const NewRostersPage: React.FC = () => {
               shifts={shifts}
               projection={projection.roles ?? undefined}
               onEditShift={handleEditShift}
+              onMoveShift={handleDndMove}
+              onAssignShift={handleDndAssignToShift}
               selectedShiftIds={selectedShiftIds}
             />
           )}
@@ -887,6 +1116,7 @@ const NewRostersPage: React.FC = () => {
           </div>
         </div>
       </div>
+      </DndProvider>
 
       {/* Bulk Toolbar */}
       {bulkModeActive && selectedShiftIds.length > 0 && (
@@ -894,6 +1124,8 @@ const NewRostersPage: React.FC = () => {
           selectedCount={selectedCount}
           selectedShiftIds={selectedShiftIds}
           stateCounts={stateCounts}
+          preflightData={preflightData}
+          totalVisibleCount={totalSelectableCount}
           onClearSelection={handleClearSelection}
           onSelectAll={handleSelectAll}
           onDelete={handleBulkDelete}
@@ -901,6 +1133,7 @@ const NewRostersPage: React.FC = () => {
           onUnpublish={handleBulkUnpublish}
           onAssign={() => modalsRef.current?.openBulkAssign()}
           onUnassign={handleBulkUnassign}
+          onValidatePublish={handleValidatePublish}
           allowedActions={{
             canPublish: stateCounts.draftCount > 0,
             canUnpublish: stateCounts.publishedCount > 0,
@@ -936,6 +1169,23 @@ const NewRostersPage: React.FC = () => {
         onAssignComplete={() => { clearSelection(); setBulkModeActive(false); }}
         onAutoScheduleComplete={() => {}}
       />
+
+      {/* DnD Assignment Modal */}
+      {pendingDndAssign && (
+        <DndAssignModal
+          open={!!pendingDndAssign}
+          onClose={() => setPendingDndAssign(null)}
+          onConfirm={executePendingAssignment}
+          isAssigning={isExecutingDnd}
+          shiftId={pendingDndAssign.shift.id}
+          employeeId={pendingDndAssign.employeeId}
+          employeeName={pendingDndAssign.employeeName}
+          shiftRole={(pendingDndAssign.shift as any).role || (pendingDndAssign.shift as any).roleName || 'Shift'}
+          shiftDate={pendingDndAssign.dateKey}
+          shiftStartTime={(pendingDndAssign.shift as any).startTime || (pendingDndAssign.shift as any).start_time}
+          shiftEndTime={(pendingDndAssign.shift as any).endTime || (pendingDndAssign.shift as any).end_time}
+        />
+      )}
 
       {/* Footer Summary */}
       <div className="border-t border-slate-200 dark:border-white/5 bg-white dark:bg-black/20 backdrop-blur-md px-6 py-3 flex-shrink-0">

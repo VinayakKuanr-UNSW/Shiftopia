@@ -12,7 +12,10 @@
  *        (so next shift is validated against the updated roster)
  *
  * On commit():
- *   - PARTIAL_APPLY: assign only passedShiftIds
+ *   - ALWAYS re-simulates with fresh data before writing to DB (TOCTOU guard).
+ *     If the employee's schedule changed since simulate() was called, stale
+ *     results are discarded and only the freshly-validated passing set is committed.
+ *   - PARTIAL_APPLY: assign only freshly-passing shiftIds
  *   - ALL_OR_NOTHING: fail if any shift has a blocking violation
  *
  * Usage:
@@ -167,10 +170,15 @@ export class BulkAssignmentController {
     /**
      * Commit the assignment to the database.
      *
-     * In PARTIAL_APPLY mode → commits only passedShiftIds.
-     * In ALL_OR_NOTHING mode → commits all shifts if canCommit, else returns failure.
+     * TOCTOU GUARD: always re-simulates with fresh data immediately before
+     * writing.  Any shifts that were passing at simulate() time but are now
+     * non-compliant (because another assignment changed the employee's schedule)
+     * are dropped from the commit set.
      *
-     * @param simulationResult - Output from simulate()
+     * In PARTIAL_APPLY mode → commits freshly-passing shiftIds only.
+     * In ALL_OR_NOTHING mode → fails if any shift now has a blocking violation.
+     *
+     * @param simulationResult - Original output from simulate() (used only for shift IDs + mode)
      * @param employeeId       - Target employee
      */
     async commit(
@@ -186,11 +194,40 @@ export class BulkAssignmentController {
             };
         }
 
-        const shiftIds = simulationResult.mode === 'ALL_OR_NOTHING'
-            ? simulationResult.passedShiftIds.concat(simulationResult.failedShiftIds)
-            : simulationResult.passedShiftIds;
+        // Re-simulate with fresh DB data to catch any schedule changes since
+        // the original simulation (another manager, another assignment flow, etc.)
+        const allCandidateIds = [
+            ...simulationResult.passedShiftIds,
+            ...simulationResult.failedShiftIds,
+        ];
 
-        return assignmentCommitter.commit(shiftIds, employeeId);
+        console.debug('[BulkAssignmentController] Re-simulating before commit (TOCTOU guard)');
+
+        const freshResult = await this.simulate(
+            allCandidateIds,
+            employeeId,
+            { mode: simulationResult.mode },
+        );
+
+        if (freshResult.passing === 0) {
+            return {
+                success:   false,
+                committed: [],
+                failed:    allCandidateIds,
+                message:   'All shifts became non-compliant since validation — please re-check.',
+            };
+        }
+
+        if (simulationResult.mode === 'ALL_OR_NOTHING' && freshResult.failing > 0) {
+            return {
+                success:   false,
+                committed: [],
+                failed:    freshResult.failedShiftIds,
+                message:   `${freshResult.failing} shift(s) have blocking violations — all-or-nothing mode requires all shifts to pass.`,
+            };
+        }
+
+        return assignmentCommitter.commit(freshResult.passedShiftIds, employeeId);
     }
 }
 

@@ -39,6 +39,7 @@ import {
     Sparkles,
     Building,
     Shield,
+    Lock
 } from 'lucide-react';
 import { format, addDays, parse, differenceInHours } from 'date-fns';
 import { swapsApi } from '../../api/swaps.api';
@@ -50,11 +51,10 @@ import { getTodayInTimezone } from '@/modules/core/lib/date.utils';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
-import { SwapComplianceModal } from './SwapComplianceModal';
+import { SwapComplianceReviewModal } from './SwapComplianceReviewModal';
 import { useMinuteTick } from '@/modules/core/hooks/useMinuteTick';
 import { getSwapTimer } from '../pages/EmployeeSwaps.page';
 import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
-import { Lock } from 'lucide-react';
 
 interface OfferSwapModalProps {
     isOpen: boolean;
@@ -530,7 +530,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
             </Dialog>
 
             {selectedShift && theirShift && (
-                <SwapComplianceModal
+                <SwapComplianceReviewModal
                     isOpen={showComplianceModal}
                     onClose={() => setShowComplianceModal(false)}
                     offeredShift={{

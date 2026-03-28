@@ -106,8 +106,8 @@ const TimesheetPageInner: React.FC = () => {
             scheduledStart: shift.scheduledStart,
             scheduledEnd: shift.scheduledEnd,
 
-            clockIn: shift.clockIn || '-',
-            clockOut: shift.clockOut || '-',
+            clockIn: formatClockDisplay(shift.clockIn),
+            clockOut: formatClockDisplay(shift.clockOut),
 
             adjustedStart: shift.adjustedStart || shift.scheduledStart,
             adjustedEnd: shift.adjustedEnd || shift.scheduledEnd,
@@ -122,6 +122,10 @@ const TimesheetPageInner: React.FC = () => {
 
             liveStatus: shift.lifecycleStatus || shift.shiftStatus || 'Active',
             timesheetStatus: shift.timesheetStatus?.toUpperCase() || 'DRAFT',
+            attendanceStatus: shift.attendanceStatus || null,
+            varianceMinutes: shift.varianceMinutes ?? null,
+            notes: shift.notes || null,
+            rejectedReason: shift.rejectedReason || null,
         }));
     }, [shifts]);
 
@@ -178,6 +182,8 @@ const TimesheetPageInner: React.FC = () => {
                 clockIn: updates.clockIn,
                 clockOut: updates.clockOut,
                 status: updates.timesheetStatus?.toLowerCase(),
+                notes: updates.notes,
+                rejectedReason: updates.rejectedReason,
             });
 
             if (success) {
@@ -293,6 +299,28 @@ function formatMinutes(minutes: number): string {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return `${hours}:${mins.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Format a clock value which may be:
+ *  - null / '-'          → '-'
+ *  - ISO datetime string → '11:30 AM'  (from actual_start / start_at)
+ *  - HH:MM[:SS] string  → '11:30 AM'  (from timesheet.clock_in)
+ */
+function formatClockDisplay(value: string | null | undefined): string {
+    if (!value || value === '-') return '-';
+    const d = new Date(value);
+    if (!isNaN(d.getTime())) {
+        return format(d, 'h:mm a');
+    }
+    // Plain time string HH:MM or HH:MM:SS
+    const parts = value.split(':').map(Number);
+    if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        const h = parts[0];
+        const m = parts[1];
+        return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+    }
+    return value;
 }
 
 export default TimesheetPageInner;

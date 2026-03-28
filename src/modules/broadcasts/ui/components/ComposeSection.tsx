@@ -17,7 +17,7 @@ import {
 } from '@/modules/core/ui/primitives/alert-dialog';
 import { cn } from '@/modules/core/lib/utils';
 import { RichTextEditor } from './RichTextEditor';
-import { BroadcastPriority } from '../../model/broadcast.types';
+import { BroadcastPriority, CreateBroadcastRequest } from '../../model/broadcast.types';
 
 const PRIORITY_CONFIG: Record<
     BroadcastPriority,
@@ -65,7 +65,7 @@ interface ComposeSectionProps {
     channelName: string;
     groupName: string;
     totalRecipients: number;
-    onSend: (data: any) => Promise<void>;
+    onSend: (data: Omit<CreateBroadcastRequest, 'channelId'>) => Promise<void>;
     isLoading?: boolean;
 }
 

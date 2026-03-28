@@ -148,7 +148,7 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
                 <DialogHeader>
                     <DialogTitle>{isVisa ? 'Add Work Rights' : 'Add License'}</DialogTitle>
                     <DialogDescription>
-                        Record {isVisa ? 'visa details' : 'a new license'} for {employeeName}
+                        Select a {isVisa ? 'visa' : 'license'} to add to {employeeName}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -191,7 +191,7 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
                         </div>
                         <div className="space-y-2">
                             <Label className="text-muted-foreground">
-                                Expiration Date
+                                Expiry Date
                                 {selectedLicense?.requires_expiration && <span className="text-red-400 ml-1">*</span>}
                             </Label>
                             <div className="relative">
@@ -204,39 +204,20 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
                             </div>
                         </div>
                     </div>
-
-                    {/* Status */}
-                    <div className="space-y-2">
-                        <Label className="text-muted-foreground">Status</Label>
-                        <Select
-                            value={formData.status}
-                            onValueChange={(val) => setFormData({ ...formData, status: val })}
-                        >
-                            <SelectTrigger className="bg-muted/30 border-border">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Active">Active</SelectItem>
-                                <SelectItem value="Pending">Pending</SelectItem>
-                                <SelectItem value="Expired">Expired</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
                 </div>
 
-                <DialogFooter>
-                    <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSubmit} disabled={isSubmitting || isLoadingRefs}>
+                <div className="pt-2">
+                    <Button onClick={handleSubmit} disabled={isSubmitting || isLoadingRefs} className="w-full">
                         {isSubmitting ? (
                             <>
                                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                                 Adding...
                             </>
                         ) : (
-                            'Add Record'
+                            isVisa ? 'Add Work Rights' : 'Add License'
                         )}
                     </Button>
-                </DialogFooter>
+                </div>
             </DialogContent>
         </Dialog>
     );

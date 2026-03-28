@@ -60,7 +60,12 @@ export type ShiftAction =
   | 'CHECK_IN'
   | 'MARK_NO_SHOW'
   | 'DELETE'
-  | 'EDIT';
+  | 'EDIT'
+  // Timer-driven actions — executed only by the shift-state-processor cron, never by UI
+  | 'EXPIRE_OFFER'      // S3 → S1: offer expired at TTS=4h (Draft+Unassigned)
+  | 'EXPIRE_BIDDING'    // S5/S6 → S1: bidding closed at TTS=4h with no winner (Draft+Unassigned)
+  | 'ESCALATE_URGENCY'  // S5 → S6: bidding crossed 24h threshold (Normal→Urgent)
+  | 'CHECK_OUT';        // S11/S12 → S11/S12: employee clocks out (records actual_end)
 
 // ── Field lock matrix ──────────────────────────────────────────────────────
 
@@ -125,16 +130,16 @@ const STATES: Record<Exclude<ShiftStateID, 'UNKNOWN'>, ShiftStateDef> = {
 const TRANSITIONS: Partial<Record<ShiftStateID, Partial<Record<ShiftAction, ShiftStateID>>>> = {
   S1:  { ASSIGN: 'S2',        PUBLISH: 'S5',  DELETE: 'S15', CANCEL: 'S15' },
   S2:  { ASSIGN: 'S2',        UNASSIGN: 'S1', PUBLISH: 'S3', DELETE: 'S15', CANCEL: 'S15' },
-  S3:  { ACCEPT_OFFER: 'S4',  REJECT_OFFER: 'S5', UNPUBLISH: 'S2', DELETE: 'S15', CANCEL: 'S15' },
+  S3:  { ACCEPT_OFFER: 'S4',  REJECT_OFFER: 'S5', EXPIRE_OFFER: 'S1', UNPUBLISH: 'S2', DELETE: 'S15', CANCEL: 'S15' },
   S4:  { REQUEST_TRADE: 'S9', CANCEL: 'S15',  DELETE: 'S15', EDIT: 'S4' },
-  S5:  { SELECT_BID_WINNER: 'S4', CLOSE_BIDDING: 'S8', UNPUBLISH: 'S1', DELETE: 'S15', CANCEL: 'S15' },
-  S6:  { SELECT_BID_WINNER: 'S4', CLOSE_BIDDING: 'S8', UNPUBLISH: 'S1', DELETE: 'S15', CANCEL: 'S15' },
+  S5:  { SELECT_BID_WINNER: 'S4', CLOSE_BIDDING: 'S8', ESCALATE_URGENCY: 'S6', EXPIRE_BIDDING: 'S1', UNPUBLISH: 'S1', DELETE: 'S15', CANCEL: 'S15' },
+  S6:  { SELECT_BID_WINNER: 'S4', CLOSE_BIDDING: 'S8', EXPIRE_BIDDING: 'S1', UNPUBLISH: 'S1', DELETE: 'S15', CANCEL: 'S15' },
   S7:  { CANCEL: 'S15', DELETE: 'S15', EDIT: 'S7' },
   S8:  { UNPUBLISH: 'S1', DELETE: 'S15', CANCEL: 'S15' },
   S9:  { ACCEPT_TRADE: 'S10' },
   S10: { APPROVE_TRADE: 'S4' }, // reverts to S4 if compliance fails
-  S11: { CHECK_IN: 'S11', MARK_NO_SHOW: 'S11', EMERGENCY_ASSIGN: 'S12' },
-  S12: { CHECK_IN: 'S12', MARK_NO_SHOW: 'S12' },
+  S11: { CHECK_IN: 'S11', CHECK_OUT: 'S11', MARK_NO_SHOW: 'S11', EMERGENCY_ASSIGN: 'S12' },
+  S12: { CHECK_IN: 'S12', CHECK_OUT: 'S12', MARK_NO_SHOW: 'S12' },
   // S13, S14, S15: terminal — no transitions
 };
 
@@ -249,6 +254,7 @@ export function determineShiftState(shift: {
     if (!ao || as_ === 'unassigned') {
       if (bs === 'on_bidding_normal')        return 'S5';
       if (bs === 'on_bidding_urgent')        return 'S6';
+      if (bs === 'on_bidding')               return 'S5'; // unified — client derives urgency from TTS
       if (bs === 'bidding_closed_no_winner') return 'S8';
     }
   }

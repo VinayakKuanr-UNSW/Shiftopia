@@ -17,6 +17,7 @@
 
 import type { Shift, TemplateGroupType } from '../../shift.entity';
 import type { RosterStructure }          from '../../../model/roster.types';
+import { computeBiddingUrgency, isOnBidding } from '../../bidding-urgency';
 import { parseZonedDateTime, getNowInTimezone } from '@/modules/core/lib/date.utils';
 import type {
   ProjectedShift,
@@ -78,8 +79,8 @@ function toProjectedShift(shift: Shift): ProjectedShift {
     employeeName:   resolveEmployeeName(shift),
     employeeId:     shift.assigned_employee_id,
     isLocked,
-    isUrgent:       shift.bidding_status === 'on_bidding_urgent',
-    isOnBidding:    shift.bidding_status !== 'not_on_bidding',
+    isUrgent:       isOnBidding(shift.bidding_status) && computeBiddingUrgency(shift.shift_date, shift.start_time) === 'urgent',
+    isOnBidding:    isOnBidding(shift.bidding_status),
     isTrading:      !!shift.trade_requested_at,
     isCancelled:    shift.is_cancelled,
     isPublished:    shift.lifecycle_status === 'Published',
@@ -171,18 +172,40 @@ export function projectGroup(
 
   skeleton.forEach((_, gk) => projectedByGroupAndSubGroup.set(gk, new Map()));
 
+  // Build a canonical lookup: subGroupName → the group key from the skeleton.
+  // This lets us correct shifts whose group_type was stored incorrectly —
+  // e.g. a shift with group_type='theatre' but sub_group_name='ICCS_PROD'
+  // where ICCS_PROD actually belongs to an AV group (→ 'unassigned') in the
+  // roster skeleton. Skeleton membership always wins over shift.group_type.
+  const subGroupToCanonical = new Map<string, TemplateGroupType | 'unassigned'>();
+  skeleton.forEach((subMap, gk) => {
+    subMap.forEach((_, sgName) => {
+      if (!subGroupToCanonical.has(sgName)) {
+        subGroupToCanonical.set(sgName, gk);
+      }
+    });
+  });
+
   shifts.forEach(shift => {
-    const groupKey: TemplateGroupType | 'unassigned' =
+    const rawGroupKey: TemplateGroupType | 'unassigned' =
       (shift.group_type && ALL_GROUP_TYPES.includes(shift.group_type))
         ? shift.group_type
         : 'unassigned';
 
     const subGroupName = shift.sub_group_name?.trim() || 'General';
-    const date         = shift.shift_date;
 
-    const groupMap     = projectedByGroupAndSubGroup.get(groupKey)!;
+    // Prefer the canonical group from the skeleton over the shift's stored
+    // group_type so that a mismatched shift ends up in the right row.
+    // If the subgroup is purely ad-hoc (not in any skeleton), fall back to
+    // the shift's own group_type.
+    const canonicalKey = subGroupToCanonical.get(subGroupName);
+    const groupKey: TemplateGroupType | 'unassigned' =
+      canonicalKey !== undefined ? canonicalKey : rawGroupKey;
+
+    const date     = shift.shift_date;
+    const groupMap = projectedByGroupAndSubGroup.get(groupKey)!;
     if (!groupMap.has(subGroupName)) groupMap.set(subGroupName, new Map());
-    const dateMap      = groupMap.get(subGroupName)!;
+    const dateMap  = groupMap.get(subGroupName)!;
     if (!dateMap.has(date)) dateMap.set(date, []);
     dateMap.get(date)!.push(toProjectedShift(shift));
   });

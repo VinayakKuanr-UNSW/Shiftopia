@@ -1,108 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { BarChart3, TrendingUp, Users, MessageSquare, Eye, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/modules/core/ui/primitives/card';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
-import { useAuth } from '@/platform/auth/useAuth';
-import { BroadcastDbClient } from '@/platform/supabase/client';
-
-interface AnalyticsData {
-    totalGroups: number;
-    totalBroadcasts: number;
-    totalMembers: number;
-    recentBroadcasts: Array<{
-        id: string;
-        message: string;
-        groupName: string;
-        sentAt: string;
-        memberCount: number;
-    }>;
-}
+import { useBroadcastAnalytics } from '../../state/useBroadcastAnalytics';
 
 export const BroadcastAnalytics: React.FC = () => {
-    const { user } = useAuth();
-    const [analytics, setAnalytics] = useState<AnalyticsData>({
-        totalGroups: 0,
-        totalBroadcasts: 0,
-        totalMembers: 0,
-        recentBroadcasts: []
-    });
-    const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        const fetchAnalytics = async () => {
-            if (!user?.id) return;
-
-            try {
-                setIsLoading(true);
-                console.log('Fetching broadcast analytics...');
-
-                // Fetch user groups
-                const userGroups = await BroadcastDbClient.fetchUserGroups(user.id);
-                const adminGroups = userGroups.filter(group => (group as any).is_admin);
-
-                // Fetch all broadcasts for admin groups
-                let totalBroadcasts = 0;
-                let totalMembers = 0;
-                const recentBroadcasts: any[] = [];
-
-                for (const group of adminGroups) {
-                    const broadcasts = await BroadcastDbClient.fetchGroupBroadcasts(group.id);
-                    const members = await BroadcastDbClient.fetchGroupMembers(group.id);
-
-                    totalBroadcasts += broadcasts.length;
-                    totalMembers += members.length;
-
-                    // Add recent broadcasts
-                    broadcasts.slice(0, 3).forEach(broadcast => {
-                        recentBroadcasts.push({
-                            id: (broadcast as any).id,
-                            message: (broadcast as any).message.length > 100
-                                ? (broadcast as any).message.substring(0, 100) + '...'
-                                : (broadcast as any).message,
-                            groupName: (group as any).name,
-                            sentAt: (broadcast as any).created_at,
-                            memberCount: members.length
-                        });
-                    });
-                }
-
-                // Sort recent broadcasts by date
-                recentBroadcasts.sort((a, b) =>
-                    new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime()
-                );
-
-                setAnalytics({
-                    totalGroups: adminGroups.length,
-                    totalBroadcasts,
-                    totalMembers,
-                    recentBroadcasts: recentBroadcasts.slice(0, 5)
-                });
-
-            } catch (error) {
-                console.error('Error fetching analytics:', error);
-                // Set fallback data
-                setAnalytics({
-                    totalGroups: 2,
-                    totalBroadcasts: 15,
-                    totalMembers: 45,
-                    recentBroadcasts: [
-                        {
-                            id: '1',
-                            message: 'Welcome to our new broadcast system! This is a demo message.',
-                            groupName: 'General Announcements',
-                            sentAt: new Date().toISOString(),
-                            memberCount: 25
-                        }
-                    ]
-                });
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchAnalytics();
-    }, [user?.id]);
+    const { analytics, isLoading, error, refetch } = useBroadcastAnalytics();
 
     if (isLoading) {
         return (
@@ -114,6 +18,22 @@ export const BroadcastAnalytics: React.FC = () => {
             </div>
         );
     }
+
+    if (error) {
+        return (
+            <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                <p className="text-destructive font-medium">{error}</p>
+                <button
+                    onClick={refetch}
+                    className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm hover:opacity-90"
+                >
+                    Retry
+                </button>
+            </div>
+        );
+    }
+
+    if (!analytics) return null;
 
     return (
         <div className="space-y-6">
@@ -165,7 +85,9 @@ export const BroadcastAnalytics: React.FC = () => {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">
-                            {analytics.totalGroups > 0 ? Math.round(analytics.totalMembers / analytics.totalGroups) : 0}
+                            {analytics.totalGroups > 0
+                                ? Math.round(analytics.totalMembers / analytics.totalGroups)
+                                : 0}
                         </div>
                         <p className="text-xs text-muted-foreground">
                             Members per group
@@ -196,10 +118,10 @@ export const BroadcastAnalytics: React.FC = () => {
                                     <div className="flex justify-between items-start mb-2">
                                         <Badge variant="outline">{broadcast.groupName}</Badge>
                                         <div className="text-sm text-muted-foreground">
-                                            {new Date(broadcast.sentAt).toLocaleDateString()} - {broadcast.memberCount} members
+                                            {new Date(broadcast.sentAt).toLocaleDateString()}
                                         </div>
                                     </div>
-                                    <p className="text-sm">{broadcast.message}</p>
+                                    <p className="text-sm">{broadcast.subject}</p>
                                 </div>
                             ))}
                         </div>

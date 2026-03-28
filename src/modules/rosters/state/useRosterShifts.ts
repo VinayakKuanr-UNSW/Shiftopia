@@ -548,6 +548,13 @@ export function useUnpublishShift() {
  * Bulk unpublish shifts.
  * Reverts lifecycle_status to Draft for all selected IDs instantly.
  */
+/**
+ * Bulk unpublish shifts — supports partial success.
+ *
+ * Optimistically marks all attempted IDs as Draft, then:
+ * - On partial result: reverts only failed IDs back to Published.
+ * - On hard error: rolls back all.
+ */
 export function useBulkUnpublishShifts() {
   const queryClient = useQueryClient();
 
@@ -561,10 +568,10 @@ export function useBulkUnpublishShifts() {
       patchLists(queryClient, (old) =>
         old.map(s =>
           shiftIds.includes(s.id)
-            ? { 
-                ...s, 
-                lifecycle_status: 'Draft' as const, 
-                is_published: false, 
+            ? {
+                ...s,
+                lifecycle_status: 'Draft' as const,
+                is_published: false,
                 is_draft: true,
                 assignment_outcome: null,
                 assignment_status: s.assigned_employee_id ? 'assigned' : 'unassigned',
@@ -574,6 +581,20 @@ export function useBulkUnpublishShifts() {
       );
 
       return { snapshot };
+    },
+
+    onSuccess: (result) => {
+      // Revert only failed IDs back to Published — successful ones keep Draft
+      if (result.failed.length > 0) {
+        const failedIds = result.failed.map(f => f.id);
+        patchLists(queryClient, (old) =>
+          old.map(s =>
+            failedIds.includes(s.id)
+              ? { ...s, lifecycle_status: 'Published' as const, is_published: true, is_draft: false }
+              : s,
+          ),
+        );
+      }
     },
 
     onError: (_err, _vars, context) => {
@@ -590,9 +611,11 @@ export function useBulkUnpublishShifts() {
 }
 
 /**
- * Bulk publish shifts.
- * Instant lifecycle_status update for all selected IDs — the UI responds
- * before the server round-trip completes.
+ * Bulk publish shifts — supports partial success.
+ *
+ * Optimistically marks all attempted IDs as Published, then:
+ * - On partial result: reverts only the IDs that failed compliance or the DB RPC.
+ * - On hard error: rolls back all.
  */
 export function useBulkPublishShifts() {
   const queryClient = useQueryClient();
@@ -615,6 +638,23 @@ export function useBulkPublishShifts() {
       return { snapshot };
     },
 
+    onSuccess: (result) => {
+      // Revert only the shifts that failed — compliant+published ones keep the optimistic state
+      const failedIds = [
+        ...result.complianceFailed.map(f => f.id),
+        ...result.dbFailed.map(f => f.id),
+      ];
+      if (failedIds.length > 0) {
+        patchLists(queryClient, (old) =>
+          old.map(s =>
+            failedIds.includes(s.id)
+              ? { ...s, lifecycle_status: 'Draft' as const }
+              : s,
+          ),
+        );
+      }
+    },
+
     onError: (_err, _ids, context) => {
       if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
     },
@@ -627,27 +667,33 @@ export function useBulkPublishShifts() {
 }
 
 /**
- * Bulk delete shifts.
- * Removes IDs from all list views instantly — no flicker, instant feedback.
+ * Bulk delete shifts — per-item via processInChunks.
+ *
+ * Surgical removal strategy: shifts are NOT removed optimistically.
+ * Only confirmed-deleted shifts are removed from the cache on success.
+ * This eliminates the "pop-in" flicker that occurs when a partial failure
+ * causes failed shifts to reappear after optimistic removal.
+ *
+ * Result: { deletedIds, failed } — caller knows exactly which shifts failed.
  */
 export function useBulkDeleteShifts() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (shiftIds: string[]) => shiftsCommands.bulkDeleteShifts(shiftIds),
+    mutationFn: (shiftIds: string[]) => shiftsCommands.bulkDeleteShiftsPerItem(shiftIds),
 
-    onMutate: async (shiftIds) => {
+    onMutate: async () => {
+      // Cancel in-flight queries to prevent stale-over-delete races.
+      // No optimistic removal — wait for actual result to avoid flicker on partial failure.
       await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
-      const snapshot = snapshotLists(queryClient);
-
-      patchLists(queryClient, (old) => old.filter(s => !shiftIds.includes(s.id)));
-      shiftIds.forEach(id => queryClient.removeQueries({ queryKey: shiftKeys.detail(id) }));
-
-      return { snapshot };
     },
 
-    onError: (_err, _ids, context) => {
-      if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
+    onSuccess: (result) => {
+      // Surgically remove only confirmed-deleted shifts from all list caches.
+      if (result.deletedIds.length > 0) {
+        patchLists(queryClient, (old) => old.filter(s => !result.deletedIds.includes(s.id)));
+        result.deletedIds.forEach(id => queryClient.removeQueries({ queryKey: shiftKeys.detail(id) }));
+      }
     },
 
     onSettled: () => {
@@ -741,7 +787,7 @@ export function useDropShift() {
               ...s,
               assigned_employee_id: null,
               assignment_status: 'unassigned' as const,
-              bidding_status: 'on_bidding_urgent' as const,
+              bidding_status: 'on_bidding' as const,
             }
             : s,
         ),
@@ -757,6 +803,8 @@ export function useDropShift() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
       queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+      // Invalidate employee bids so stale "Accepted — Assigned to You" entries disappear
+      queryClient.invalidateQueries({ queryKey: ['myBids'] });
     },
   });
 }

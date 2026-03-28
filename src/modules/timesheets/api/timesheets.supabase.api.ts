@@ -58,9 +58,18 @@ export interface TimesheetShiftRow {
     lifecycleStatus: string;
     timesheetStatus: string | null;
 
+    // Attendance (from shifts table)
+    attendanceStatus: string | null;
+    // Minutes between actual_start and scheduled start (positive = late, negative = early)
+    varianceMinutes: number | null;
+
     // Pay
     hourlyRate: number | null;
     estimatedPay: number | null;
+
+    // Manager notes (override reason on approve / rejection reason)
+    notes: string | null;
+    rejectedReason: string | null;
 }
 
 export interface TimesheetFilters {
@@ -91,8 +100,14 @@ export async function getShiftsForTimesheet(
                 shift_date,
                 start_time,
                 end_time,
+                start_at,
+                end_at,
                 assignment_status,
                 lifecycle_status,
+                attendance_status,
+                attendance_note,
+                actual_start,
+                actual_end,
                 group_type,
                 sub_group_name,
                 paid_break_minutes,
@@ -225,8 +240,10 @@ export async function getShiftsForTimesheet(
                 scheduledStart: shift.start_time,
                 scheduledEnd: shift.end_time,
 
-                clockIn: timesheet?.clock_in || null,
-                clockOut: timesheet?.clock_out || null,
+                // Attendance data is source of truth; timesheet edits layer on top
+                // Fallback chain: manual edit → actual (GPS) → scheduled UTC
+                clockIn: timesheet?.clock_in ?? shift.actual_start ?? shift.start_at ?? null,
+                clockOut: timesheet?.clock_out ?? shift.actual_end ?? shift.end_at ?? null,
 
                 adjustedStart: timesheet?.start_time || null,
                 adjustedEnd: timesheet?.end_time || null,
@@ -241,8 +258,20 @@ export async function getShiftsForTimesheet(
                 lifecycleStatus: shift.lifecycle_status || 'scheduled',
                 timesheetStatus: timesheet?.status || null,
 
+                attendanceStatus: shift.attendance_status || null,
+                varianceMinutes: (() => {
+                    if (!shift.actual_start) return null;
+                    const scheduledMs = new Date(
+                        shift.start_at || `${shift.shift_date}T${shift.start_time}`
+                    ).getTime();
+                    return Math.round((new Date(shift.actual_start).getTime() - scheduledMs) / 60000);
+                })(),
+
                 hourlyRate,
                 estimatedPay: Math.round(estimatedPay * 100) / 100,
+
+                notes: timesheet?.notes || null,
+                rejectedReason: timesheet?.rejected_reason || null,
             };
         });
 
@@ -284,6 +313,11 @@ function calculateMinutes(start: string, end: string): number {
     return endMins - startMins;
 }
 
+/** Returns true if value looks like an ISO datetime string (not a plain HH:MM time) */
+function isIsoTimestamp(value: string): boolean {
+    return value.includes('T') || value.includes(' ') || /^\d{4}-/.test(value);
+}
+
 /**
  * Update timesheet for a shift
  */
@@ -296,6 +330,7 @@ export async function updateTimesheetEntry(
         adjustedEnd?: string;
         status?: string;
         notes?: string;
+        rejectedReason?: string;
     }
 ): Promise<boolean> {
     try {
@@ -310,12 +345,18 @@ export async function updateTimesheetEntry(
             updated_at: new Date().toISOString(),
         };
 
-        if (updates.clockIn !== undefined) payload.clock_in = updates.clockIn;
-        if (updates.clockOut !== undefined) payload.clock_out = updates.clockOut;
+        // clock_in/clock_out are timestamptz — only set if value is a proper ISO timestamp
+        if (updates.clockIn !== undefined && updates.clockIn && isIsoTimestamp(updates.clockIn)) {
+            payload.clock_in = updates.clockIn;
+        }
+        if (updates.clockOut !== undefined && updates.clockOut && isIsoTimestamp(updates.clockOut)) {
+            payload.clock_out = updates.clockOut;
+        }
         if (updates.adjustedStart !== undefined) payload.start_time = updates.adjustedStart;
         if (updates.adjustedEnd !== undefined) payload.end_time = updates.adjustedEnd;
         if (updates.status !== undefined) payload.status = updates.status;
         if (updates.notes !== undefined) payload.notes = updates.notes;
+        if (updates.rejectedReason !== undefined) payload.rejected_reason = updates.rejectedReason;
 
         if (existing) {
             // Update existing
@@ -329,11 +370,24 @@ export async function updateTimesheetEntry(
             // Get shift details for new timesheet
             const { data: shift } = await supabase
                 .from('shifts')
-                .select('assigned_employee_id, shift_date, start_time, end_time')
+                .select('assigned_employee_id, shift_date, start_time, end_time, start_at, end_at, actual_start, actual_end')
                 .eq('id', shiftId)
                 .single();
 
             if (!shift) throw new Error('Shift not found');
+
+            // clock_in is timestamptz NOT NULL — build a proper ISO timestamp
+            // Priority: explicit update → actual_start (GPS) → start_at (UTC) → construct from shift_date+start_time
+            const clockInTs: string = updates.clockIn
+                ? (isIsoTimestamp(updates.clockIn)
+                    ? updates.clockIn
+                    : `${shift.shift_date}T${shift.start_time}`)
+                : (shift.actual_start ?? shift.start_at ?? `${shift.shift_date}T${shift.start_time}`);
+
+            // clock_out is nullable timestamptz — populate from actual_end if available
+            const clockOutTs: string | null = updates.clockOut
+                ? (isIsoTimestamp(updates.clockOut) ? updates.clockOut : null)
+                : (shift.actual_end ?? shift.end_at ?? null);
 
             // Create new timesheet
             const { error } = await supabase
@@ -345,12 +399,33 @@ export async function updateTimesheetEntry(
                     work_date: shift.shift_date,
                     start_time: updates.adjustedStart || shift.start_time,
                     end_time: updates.adjustedEnd || shift.end_time,
-                    clock_in: updates.clockIn || shift.start_time,
+                    clock_in: clockInTs,
+                    ...(clockOutTs ? { clock_out: clockOutTs } : {}),
                     status: updates.status || 'draft',
                     ...payload,
                 });
 
             if (error) throw error;
+        }
+
+        // When a timesheet is approved, mark the shift as Completed (if it has ended)
+        if (updates.status === 'approved') {
+            const { data: shiftData } = await supabase
+                .from('shifts')
+                .select('lifecycle_status, end_at, shift_date, end_time')
+                .eq('id', shiftId)
+                .single();
+
+            if (shiftData && !['Completed', 'Cancelled', 'Draft'].includes(shiftData.lifecycle_status)) {
+                const effectiveEnd = shiftData.end_at ||
+                    `${shiftData.shift_date}T${shiftData.end_time}`;
+                if (new Date(effectiveEnd) <= new Date()) {
+                    await supabase
+                        .from('shifts')
+                        .update({ lifecycle_status: 'Completed', updated_at: new Date().toISOString() })
+                        .eq('id', shiftId);
+                }
+            }
         }
 
         return true;

@@ -31,6 +31,7 @@ import {
   CopyPlus,
   Wand2,
   Activity,
+  Hand,
 } from 'lucide-react';
 import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, isSameMonth } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
@@ -47,6 +48,7 @@ import { Separator } from '@/modules/core/ui/primitives/separator';
 import { ApplyTemplateDialog } from '@/modules/rosters/ui/dialogs/ApplyTemplateDialog';
 import { PlanRosterPeriodDialog } from '@/modules/rosters/ui/dialogs/PlanRosterPeriodDialog';
 import { useRosterStructure } from '../../state/useRosterStructure';
+import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 
 /* ============================================================
    TYPES
@@ -212,6 +214,12 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
     navigateNext,
     navigatePrevious,
   } = useRosterUI();
+
+  const {
+    isDnDModeActive,
+    setIsDnDModeActive,
+    setShowUnfilledPanel,
+  } = useRosterStore();
 
   const queryClient = useQueryClient();
 
@@ -481,16 +489,25 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
               )}
             </div>
             <IconButton
-              icon={<PanelRight className="h-4 w-4" />}
+              icon={<Hand className="h-4 w-4" />}
               tooltip={
                 activeMode === 'events'
-                  ? 'Side panel — not available in Events mode'
-                  : activeMode === 'group' || activeMode === 'roles'
-                    ? 'Contracted Staff panel'
-                    : 'Unfilled Shifts panel'
+                  ? 'DnD Mode — not available in Events mode'
+                  : isDnDModeActive
+                    ? 'Deactivate DnD Mode'
+                    : 'Activate DnD Mode'
               }
-              onClick={onUnfilledPanelToggle}
-              isActive={showUnfilledPanel}
+              onClick={() => {
+                const nextActive = !isDnDModeActive;
+                setIsDnDModeActive(nextActive);
+                if (nextActive) {
+                  setShowUnfilledPanel(true);
+                } else {
+                  setShowUnfilledPanel(false);
+                }
+              }}
+              isActive={isDnDModeActive}
+              variant={isDnDModeActive ? 'warning' : 'default'}
               disabled={activeMode === 'events'}
             />
 

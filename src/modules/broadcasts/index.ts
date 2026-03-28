@@ -8,7 +8,6 @@ export {
     useBroadcastGroup,
     useBroadcasts,
     useEmployeeBroadcasts,
-    useBroadcastAcknowledgements,
     useBroadcastNotifications
 } from './state/useBroadcasts';
 
@@ -20,18 +19,8 @@ export { MyBroadcastsPage } from './ui/pages/MyBroadcastsPage';
 export { BroadcastsManagerScreen } from './ui/screens/BroadcastsManagerScreen';
 export { MyBroadcastsScreen } from './ui/screens/MyBroadcastsScreen';
 
-// Layout Components
-export {
-    BroadcastsManagerDesktopLayout,
-    BroadcastsManagerTabletLayout,
-    BroadcastsManagerMobileLayout,
-    MyBroadcastsDesktopLayout,
-    MyBroadcastsTabletLayout,
-    MyBroadcastsMobileLayout,
-} from './layout';
-
 // Shared Components
-export { EmployeeSelector } from './ui/components/EmployeeSelector';
+export { EmployeeSelector } from '@/modules/core/ui/components/EmployeeSelector';
 export { GroupsList } from './ui/components/GroupsList';
 export { GroupMembers } from './ui/components/GroupMembers';
 export { StatCard } from './ui/components/StatCard';
@@ -51,8 +40,50 @@ export { EditGroupDialog } from './ui/dialogs/EditGroupDialog';
 export { BroadcastGroupsView } from './ui/views/BroadcastGroups.view';
 export { BroadcastNotificationsList } from './ui/views/BroadcastNotificationsList.view';
 export { BroadcastAnalytics } from './ui/views/BroadcastAnalytics.view';
-export { ControlRoom } from './ui/views/ControlRoom.view';
+export { ControlRoom } from './ui/screens/ControlRoom';
 
-// Types
-export * from './model/broadcast.types';
-export * from './api/broadcasts.api';
+// Types — explicit named exports only (no internal-only types leaked)
+export type {
+    BroadcastPriority,
+    BroadcastStatus,
+    AcknowledgementStatus,
+    BroadcastParticipantRole,
+    BroadcastParticipantStatus,
+    BroadcastFileType,
+    BroadcastAttachment,
+    Broadcast,
+    BroadcastWithDetails,
+    BroadcastChannel,
+    BroadcastChannelWithStats,
+    GroupParticipant,
+    GroupParticipantWithDetails,
+    BroadcastGroup,
+    BroadcastGroupWithStats,
+    BroadcastGroupFull,
+    EmployeeBroadcastGroup,
+    BroadcastAcknowledgement,
+    BroadcastAcknowledgementWithDetails,
+    BroadcastAckStats,
+    BroadcastNotification,
+    CreateBroadcastGroupRequest,
+    UpdateBroadcastGroupRequest,
+    CreateBroadcastChannelRequest,
+    CreateBroadcastRequest,
+    AddParticipantRequest,
+    BroadcastFilters,
+    PaginationOptions,
+    Employee,
+    PaginatedResponse,
+} from './model/broadcast.types';
+
+// Services — public service objects only; internal query/command/DTO objects are not exposed
+export {
+    broadcastGroupService,
+    broadcastChannelService,
+    broadcastService,
+    broadcastAttachmentService,
+    groupParticipantService,
+    broadcastNotificationService,
+    broadcastRealtimeService,
+    broadcastServices,
+} from './api/broadcasts.api';

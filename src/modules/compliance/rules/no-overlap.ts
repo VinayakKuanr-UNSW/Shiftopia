@@ -58,6 +58,7 @@ export const NoOverlapRule: ComplianceRule = {
                     candidate_hours: minutesToHours(candidateMinutes),
                     total_hours: minutesToHours(overlapMinutes), // Using total_hours for overlap duration
                     limit: 0,
+                    existing_shift_id: overlappingShift.shift_id,
                     existing_start_time: overlappingShift.start_time,
                     existing_end_time: overlappingShift.end_time,
                     candidate_start_time: candidate_shift.start_time,

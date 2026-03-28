@@ -6,27 +6,34 @@
  *   - context resolution (UUID lookup from names)
  *   - read-only & lock rules
  *   - step navigation wiring
- *   - compliance lifecycle
+ *   - compliance lifecycle (v2 engine)
  *   - create / update submission
  *
  * The modal component itself becomes a pure rendering layer that
  * spreads these values into its JSX.
  */
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { isEqual } from 'lodash';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format, startOfDay, parse, getDay } from 'date-fns';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useCreateShift, useUpdateShift, useUnpublishShift } from '@/modules/rosters/state/useRosterShifts';
-import { formatInTimezone, isPastInTimezone } from '@/modules/core/lib/date.utils';
+import { formatInTimezone, isPastInTimezone, isPublicHoliday, parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 import { calculateShiftLength, isDateInPast, isShiftStarted } from '../utils';
 import { formSchema, FormValues, EnhancedAddShiftModalProps, ShiftContext } from '../types';
 import { useShiftFormData } from './useShiftFormData';
 import { useHardValidation } from './useHardValidation';
-import { useStepNavigation } from './useStepNavigation';
 import { useComplianceRunner } from './useComplianceRunner';
+import { evaluateCompliance } from '@/modules/compliance/v2';
+import type { ComplianceInputV2, ComplianceResultV2 } from '@/modules/compliance/v2/types';
+import { useCompliancePanel } from '@/modules/compliance/ui/useCompliancePanel';
+import type { UseCompliancePanelReturn } from '@/modules/compliance/ui/useCompliancePanel';
+import { fetchEmployeeContextV2 } from '@/modules/compliance/employee-context';
+import { getAvailabilityView } from '@/modules/availability/api/availability-view.api';
 
 const SYDNEY_TZ = 'Australia/Sydney';
 
@@ -61,6 +68,14 @@ export function useShiftFormOrchestrator({
     const [complianceHasRun, setComplianceHasRun] = useState(false);
     const [complianceNeedsRerun, setComplianceNeedsRerun] = useState(false);
     const [complianceResults, setComplianceResults] = useState<Record<string, any>>({});
+
+    // Stable setter with equality guard (takes full results map)
+    const setComplianceResultsWithGuard = useCallback((results: Record<string, any>) => {
+        setComplianceResults(prev => {
+            if (isEqual(prev, results)) return prev;
+            return results;
+        });
+    }, []);
 
     // ── Form ─────────────────────────────────────────────────────────────────
     const form = useForm<FormValues>({
@@ -125,12 +140,11 @@ export function useShiftFormOrchestrator({
         const subDeptId = safeContext.subDepartmentId || safeContext.subDepartmentIds?.[0];
 
         const orgInfo = scopeTree?.organizations?.find(o => o.id === orgId);
-        const deptInfo = orgInfo?.departments?.find(d => d.id === deptId);
 
         const roster = rosters.find(r => r.id === (selectedRosterId || safeContext.rosterId));
 
-        let groupId = safeContext.groupId;
-        let subGroupId = safeContext.subGroupId;
+        let groupId = isValidUuid(safeContext.groupId) ? safeContext.groupId : null;
+        let subGroupId = isValidUuid(safeContext.subGroupId) ? safeContext.subGroupId : null;
 
         if (roster && (safeContext.groupName || safeContext.group_type) && !groupId) {
             const searchName = safeContext.groupName?.trim().toLowerCase();
@@ -188,8 +202,8 @@ export function useShiftFormOrchestrator({
             departmentName: effectiveDeptInfo?.name || (effectiveDeptId === null ? 'All Departments' : safeContext.departmentName),
             subDepartmentId: effectiveSubDeptId,
             subDepartmentName: effectiveSubDeptInfo?.name || (effectiveSubDeptId === null ? 'All Sub-Departments' : safeContext.subDepartmentName),
-            groupId: groupId || safeContext.groupId,
-            subGroupId: subGroupId || safeContext.subGroupId,
+            groupId: groupId || (isValidUuid(safeContext.groupId) ? safeContext.groupId : undefined),
+            subGroupId: subGroupId || (isValidUuid(safeContext.subGroupId) ? safeContext.subGroupId : undefined),
         };
     }, [scopeTree, rosters, selectedRosterId, safeContext, watchGroup, watchSubGroupName]);
 
@@ -220,7 +234,8 @@ export function useShiftFormOrchestrator({
         if (watchIsTraining) return 2.0;
         if (!watchShiftDate) return 3.0;
         const day = getDay(watchShiftDate);
-        return day === 0 ? 4.0 : 3.0; // Sunday=0
+        if (day === 0 || isPublicHoliday(watchShiftDate)) return 4.0;
+        return 3.0;
     }, [watchIsTraining, watchShiftDate]);
 
     const isMinLengthValid = netLength >= minShiftHours;
@@ -249,7 +264,7 @@ export function useShiftFormOrchestrator({
         // S3: Offered — allowed
         if (outcome === 'offered') return true;
         // S5/S6: OnBidding — allowed
-        if (bidding === 'on_bidding_normal' || bidding === 'on_bidding_urgent') return true;
+        if (bidding === 'on_bidding_normal' || bidding === 'on_bidding_urgent' || bidding === 'on_bidding') return true;
         // S8: BiddingClosedNoWinner — allowed
         if (bidding === 'bidding_closed_no_winner') return true;
         return false;
@@ -276,59 +291,25 @@ export function useShiftFormOrchestrator({
     const isRoleLocked = isContextInherited && safeContext.mode === 'roles' && !!safeContext.roleId;
     const isEmployeeLocked = isContextInherited && safeContext.mode === 'people' && !!safeContext.employeeId;
 
-    const tabCompletion = useMemo(() => {
-        if (isReadOnly) {
-            return { schedule: true, role: true, requirements: true, notes: true, system: true };
-        }
-        return {
-            schedule: isTemplateMode
-                ? !!(watchStart && watchEnd && watchGroup && watchSubGroupName)
-                : !!(watchStart && watchEnd && watchShiftDate && hasRoster && isRosterActive && watchGroup && watchSubGroupName),
-            role: !!watchRoleId,
-            requirements: (watchSkills?.length || 0) > 0 || (watchLicenses?.length || 0) > 0,
-            notes: !!form.watch('notes'),
-            system: true,
-        };
-    }, [isReadOnly, watchStart, watchEnd, watchRoleId, watchSkills, watchLicenses, watchShiftDate, form, isTemplateMode, hasRoster, isRosterActive, watchGroup, watchSubGroupName]);
-
-    // ── Step navigation ──────────────────────────────────────────────────────
-    const {
-        currentStep,
-        completedSteps,
-        setCurrentStep,
-        handleNextStep,
-        handlePrevStep,
-        handleStepClick,
-        isStepValid,
-        hasBlockingComplianceFailures,
-    } = useStepNavigation({
-        isTemplateMode,
-        tabCompletion,
-        isNetLengthValid: isReadOnly ? true : isNetLengthValid,
-        isMinLengthValid: isReadOnly ? true : isMinLengthValid,
-        watchRoleId: isReadOnly ? 'read-only' : watchRoleId,
-        complianceHasRun: isReadOnly ? true : complianceHasRun,
-        hardValidation,
-        complianceResults,
-    });
-
-    // ── Save guard ───────────────────────────────────────────────────────────
-    const canSave = useMemo(() => {
-        const coreStepsValid = [1, 2].every(step => isStepValid(step));
-        return coreStepsValid && hardValidation.passed && hasDepartment && (hasRoster || isTemplateMode);
-    }, [isStepValid, hardValidation.passed, hasDepartment, hasRoster, isTemplateMode]);
+    // ── Dependency Ordering ──────────────────────────────────────────────────
+    // Assignment is disabled until Role, Date, and Times are set.
+    const isScheduleDefined = !!watchRoleId && !!watchShiftDate && !!watchStart && !!watchEnd;
+    const isAssignmentEnabled = isReadOnly || isScheduleDefined;
 
     // ── Effects ──────────────────────────────────────────────────────────────
 
-    // Invalidate compliance when key scheduling fields change
+    // Invalidate compliance whenever any scheduling input changes
     useEffect(() => {
         setComplianceNeedsRerun(true);
         setComplianceHasRun(false);
+        compliancePanel.markStale();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         watchStart, watchEnd,
         watchShiftDate?.toISOString(),
         watchRoleId, watchEmployeeId,
+        watchUnpaidBreak,
+        watchIsTraining,
         // stringify to avoid object identity issues
         JSON.stringify(watchSkills),
         JSON.stringify(watchLicenses),
@@ -360,7 +341,6 @@ export function useShiftFormOrchestrator({
     // Reset on open / mode change
     useEffect(() => {
         if (!isOpen) return;
-        setCurrentStep(1);
 
         if (editMode && existingShift) {
             form.reset({
@@ -406,7 +386,7 @@ export function useShiftFormOrchestrator({
         }// eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, editMode, existingShift, context]);
 
-    // ── Compliance ───────────────────────────────────────────────────────────
+    // ── Compliance (v1 runner — used by AssignmentStep hover/select flow) ────
     const buildComplianceInput = useCallback(() => ({
         employee_id: watchEmployeeId || 'preview',
         action_type: 'add' as const,
@@ -434,31 +414,267 @@ export function useShiftFormOrchestrator({
     } = useComplianceRunner({
         buildComplianceInput,
         hardValidation,
-        setComplianceResults,
+        setComplianceResults: setComplianceResultsWithGuard,
         needsRerun: complianceNeedsRerun,
         setNeedsRerun: setComplianceNeedsRerun,
         setHasRun: setComplianceHasRun,
         shiftId: existingShift?.id,
     });
 
-    // Debounced auto-run
-    useEffect(() => {
-        if (complianceNeedsRerun && !isTemplateMode && watchStart && watchEnd && watchRoleId) {
-            const timer = setTimeout(() => { runChecks(); }, 500);
-            return () => clearTimeout(timer);
-        }
-    }, [complianceNeedsRerun, isTemplateMode, watchStart, watchEnd, watchRoleId, runChecks]);
+    // ── Compliance v2 engine integration ─────────────────────────────────────
 
-    // Auto-run all compliance checks whenever the user enters Step 2
-    const prevStepRef = useRef<number>(currentStep);
+    // Build the v2 ComplianceInputV2 from current form state.
+    // Returns null if required fields are missing.
+    const buildV2ComplianceInput = useCallback((): ComplianceInputV2 | null => {
+        if (!watchEmployeeId || !watchStart || !watchEnd || !watchShiftDate || !watchRoleId) return null;
+
+        const shiftDateStr = format(watchShiftDate, 'yyyy-MM-dd');
+
+        return {
+            employee_id: watchEmployeeId,
+            // employee_context is a placeholder — buildInputs replaces it with
+            // the real context fetched from fetchEmployeeContextV2()
+            employee_context: {
+                employee_id:             watchEmployeeId || 'unassigned',
+                contract_type:           'CASUAL',
+                contracted_weekly_hours: 0,
+                assigned_role_ids:       [],
+                contracts:               [],
+                qualifications:          [],
+            },
+            existing_shifts: (employeeExistingShifts || [])
+                .filter((s: any) => s.shift_id !== existingShift?.id && s.id !== existingShift?.id)
+                .map((s: any) => ({
+                    shift_id: s.shift_id || s.id || String(Math.random()),
+                    shift_date: s.shift_date,
+                    start_time: (s.start_time || '').replace(/:\d{2}$/, ''),
+                    end_time: (s.end_time || '').replace(/:\d{2}$/, ''),
+                    role_id: s.role_id || watchRoleId || '',
+                    required_qualifications: [],
+                    is_ordinary_hours: s.is_ordinary_hours ?? true,
+                    break_minutes: s.unpaid_break_minutes || 0,
+                    unpaid_break_minutes: s.unpaid_break_minutes || 0,
+                })),
+            candidate_changes: {
+                add_shifts: [{
+                    shift_id:          existingShift?.id ?? `candidate-${Date.now()}`,
+                    shift_date:        shiftDateStr,
+                    start_time:        watchStart.replace(/:\d{2}$/, ''),
+                    end_time:          watchEnd.replace(/:\d{2}$/, ''),
+                    role_id:           watchRoleId,
+                    // Org/dept hierarchy for R10 contract matching
+                    organization_id:   resolvedContext.organizationId ?? undefined,
+                    department_id:     resolvedContext.departmentId ?? undefined,
+                    sub_department_id: resolvedContext.subDepartmentId ?? undefined,
+                    required_qualifications: [],
+                    is_ordinary_hours: true,
+                    break_minutes:     0,
+                    unpaid_break_minutes: Number(watchUnpaidBreak) || 0,
+                }],
+                remove_shifts: existingShift?.id ? [existingShift.id] : [],
+            },
+            mode: 'SIMULATED',
+            operation_type: 'ASSIGN',
+            stage: 'DRAFT',
+            // Pass training-aware minimum so the engine uses the correct threshold
+            config: { min_shift_hours: minShiftHours },
+        };
+    }, [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchRoleId, watchUnpaidBreak, employeeExistingShifts, existingShift, resolvedContext, minShiftHours]);
+
+    // v2 CompliancePanel hook — single source of truth for compliance state
+    const compliancePanel = useCompliancePanel({
+        buildInputs: useCallback(async () => {
+            const input = buildV2ComplianceInput();
+            if (!input) {
+                // Return a "Skeleton" input for shift-only checks if we have times
+                if (watchStart && watchEnd && watchShiftDate && watchRoleId) {
+                    return [{
+                        employee_id: 'skeleton',
+                        employee_context: {
+                            employee_id: 'skeleton',
+                            contract_type: 'CASUAL',
+                            contracted_weekly_hours: 0,
+                            assigned_role_ids: [],
+                            contracts: [],
+                            qualifications: [],
+                        },
+                        existing_shifts: [],
+                        candidate_changes: {
+                            add_shifts: [{
+                                shift_id: existingShift?.id ?? 'candidate',
+                                shift_date: format(watchShiftDate, 'yyyy-MM-dd'),
+                                start_time: watchStart,
+                                end_time: watchEnd,
+                                role_id: watchRoleId,
+                                required_qualifications: [],
+                                is_ordinary_hours: true,
+                                break_minutes: 0,
+                                unpaid_break_minutes: Number(watchUnpaidBreak) || 0,
+                            }],
+                            remove_shifts: existingShift?.id ? [existingShift.id] : [],
+                        },
+                        mode: 'SIMULATED',
+                        operation_type: 'ASSIGN',
+                        config: { min_shift_hours: minShiftHours },
+                    }] as [ComplianceInputV2];
+                }
+                throw new Error('Fill in role, date and shift times first.');
+            }
+            // Fetch real employee context (contracts, qualifications, visa flag) from DB
+            const employeeCtx = await fetchEmployeeContextV2(input.employee_id);
+
+            // Fetch declared availability + assigned shifts so R_AVAILABILITY_MATCH can run
+            let availabilityData: ComplianceInputV2['availability_data'] | undefined;
+            if (input.employee_id && watchShiftDate) {
+                try {
+                    const shiftDateStr = format(watchShiftDate, 'yyyy-MM-dd');
+                    const avView = await getAvailabilityView(input.employee_id, shiftDateStr, shiftDateStr);
+                    availabilityData = {
+                        declared_slots: avView.declaredSlots.map(s => ({
+                            slot_date:  s.slot_date,
+                            start_time: s.start_time,
+                            end_time:   s.end_time,
+                        })),
+                        assigned_shifts: avView.assignedShifts
+                            // Exclude the shift being edited so we don't flag its own slot
+                            .filter(s => s.id !== existingShift?.id)
+                            .map(s => ({
+                                shift_id:   s.id,
+                                shift_date: s.shift_date,
+                                start_time: s.start_time,
+                                end_time:   s.end_time,
+                            })),
+                    };
+                } catch {
+                    // Availability fetch failed — skip AV rule silently (don't block compliance)
+                }
+            }
+
+            return [{ ...input, employee_context: employeeCtx, availability_data: availabilityData }] as [ComplianceInputV2];
+        }, [buildV2ComplianceInput, watchStart, watchEnd, watchShiftDate, watchRoleId, watchUnpaidBreak, existingShift?.id, minShiftHours]),
+        stage: 'DRAFT',
+    });
+
+    // ── Sync v2 panel → legacy complianceHasRun ──────────────────────────────
+    // The RE-RUN button calls compliancePanel.run() directly (v2 path).
+    // Without this sync, complianceHasRun (v1 flag used by isStepValid) would
+    // never become true after the panel run, keeping canSave = false even when
+    // all 9 rules pass.
     useEffect(() => {
-        const prev = prevStepRef.current;
-        prevStepRef.current = currentStep;
-        if (currentStep === 2 && prev !== 2 && !isTemplateMode && watchStart && watchEnd && watchRoleId) {
-            runChecks();
+        if (compliancePanel.status === 'results') {
+            setComplianceHasRun(true);
+            setComplianceNeedsRerun(false);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentStep]);
+    }, [compliancePanel.status]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+    // ── Save guard ───────────────────────────────────────────────────────────
+    // All four gates must pass for the Create Shift button to be enabled:
+    //   1. Step 1 complete (schedule fields + valid duration)
+    //   2. Hard validation (no time/overlap errors)
+    //   3. Department + roster selected
+    //   4. Compliance run and passed (skipped in template mode or unassigned)
+    const canSave = useMemo(() => {
+        // Required fields check
+        const hasBaseFields = !!watchRoleId && !!watchShiftDate && !!watchStart && !!watchEnd && hasDepartment && (hasRoster || isTemplateMode);
+        if (!hasBaseFields) return false;
+
+        // Hard validation check
+        if (!hardValidation.passed) return false;
+
+        if (isTemplateMode) return true;
+
+        // Compliance check
+        if (compliancePanel.status !== 'results') return false;
+        
+        // If employee assigned, must pass all checks (including employee-specific)
+        // If no employee, must pass shift-level checks (which are the only ones that run)
+        return compliancePanel.canProceed;
+    }, [watchRoleId, watchShiftDate, watchStart, watchEnd, hasDepartment, hasRoster, isTemplateMode, hardValidation.passed, compliancePanel.status, compliancePanel.canProceed]);
+
+    // v2-powered "Run All" — replaces v1 rule runners in ComplianceTabContent.
+    // Maps v2 RuleHitV2[] results back to the v1 ComplianceResult format so
+    // existing rule card visualizations continue to work unchanged.
+    const runV2Compliance = useCallback(async (): Promise<void> => {
+        const v2Input = buildV2ComplianceInput();
+        if (!v2Input) return;
+
+        const v2Result = evaluateCompliance(v2Input, { stage: 'DRAFT' }) as ComplianceResultV2;
+        const hits = v2Result.rule_hits;
+        const hitMap = new Map(hits.map(h => [h.rule_id.toUpperCase(), h]));
+
+        // Map v2 rule IDs → v1 rule IDs used by ComplianceTabContent cards
+        // R02 removed (duration validated in Step 1; training exemption handled there)
+        // R09 removed (R04 is the authoritative work-pattern limit)
+        // R12 removed (merged into R11 — single "qualifications" rule)
+        const V2_TO_V1: Record<string, string> = {
+            'R01_NO_OVERLAP':          'NO_OVERLAP',
+            'R03_MAX_DAILY_HOURS':     'MAX_DAILY_HOURS',
+            'R04_MAX_WORKING_DAYS':    'WORKING_DAYS_CAP',
+            'R05_STUDENT_VISA':        'STUDENT_VISA_48H',
+            'R06_ORD_HOURS_AVG':       'AVG_FOUR_WEEK_CYCLE',
+            'R07_REST_GAP':            'MIN_REST_GAP',
+            'R10_ROLE_CONTRACT_MATCH': 'ROLE_CONTRACT_MATCH',
+            'R11_QUALIFICATIONS':      'QUALIFICATION_MATCH',
+        };
+
+        const delta = v2Result.delta_explanation;
+
+        // Build a full v1 results map — one entry per mapped v1 rule ID.
+        const newResults: Record<string, any> = {};
+
+        Object.entries(V2_TO_V1).forEach(([v2Id, v1Id]) => {
+            const hit = hitMap.get(v2Id);
+
+            if (!hit) {
+                // Rule passed — mark as pass with a minimal valid calculation
+                newResults[v1Id] = {
+                    rule_id: v1Id,
+                    rule_name: v1Id.replace(/_/g, ' '),
+                    status: 'pass',
+                    summary: 'Check passed',
+                    details: '',
+                    calculation: { existing_hours: 0, candidate_hours: 0, total_hours: 0, limit: 0 },
+                    blocking: false,
+                };
+            } else {
+                // Rule fired — map severity to v1 status
+                const isBlocking = hit.severity === 'BLOCKING';
+
+                // Build calculation object enriched for specific rule visualizations
+                const calculation: Record<string, unknown> = {
+                    existing_hours: delta?.before?.peak_daily_hours ?? 0,
+                    candidate_hours: 0,
+                    total_hours: delta?.after?.peak_daily_hours ?? 0,
+                    limit: 12,
+                };
+
+                if (v1Id === 'WORKING_DAYS_CAP' && delta) {
+                    calculation.days_worked = delta.after.working_days_28d;
+                    calculation.limit = 20;
+                    calculation.period_days = 28;
+                } else if (v1Id === 'AVG_FOUR_WEEK_CYCLE' && delta) {
+                    calculation.total_hours = delta.after.total_hours_28d;
+                    calculation.limit = 38 * 4;
+                    calculation.average_weekly_hours = delta.after.total_hours_28d / 4;
+                }
+
+                newResults[v1Id] = {
+                    rule_id: v1Id,
+                    rule_name: v1Id.replace(/_/g, ' '),
+                    status: isBlocking ? 'fail' : 'warning',
+                    summary: hit.message,
+                    details: hit.resolution_hint || hit.message,
+                    calculation,
+                    blocking: isBlocking,
+                };
+            }
+        });
+
+        // Commit all results atomically
+        setComplianceResultsWithGuard(newResults);
+        setComplianceHasRun(true);
+        setComplianceNeedsRerun(false);
+    }, [buildV2ComplianceInput, setComplianceResultsWithGuard, setComplianceHasRun, setComplianceNeedsRerun]);
 
     // ── Handlers ─────────────────────────────────────────────────────────────
     const handleComplianceComplete = useCallback(() => {
@@ -509,6 +725,12 @@ export function useShiftFormOrchestrator({
                 toast({
                     title: 'Validation Failed',
                     description: hardValidation.errors.join('. ') || 'Hard validation failed.',
+                    variant: 'destructive',
+                });
+            } else if (!isTemplateMode && !complianceHasRun) {
+                toast({
+                    title: 'Compliance Required',
+                    description: 'Please run compliance checks before saving this shift.',
                     variant: 'destructive',
                 });
             } else {
@@ -627,11 +849,34 @@ export function useShiftFormOrchestrator({
                         ? (editMode ? 'manual' : 'direct')
                         : null,
                 };
+
+                // Calculate UTC canonical timestamps (start_at, end_at)
+                const shiftDateStr = format(values.shift_date!, 'yyyy-MM-dd');
+                const tzone = values.timezone || SYDNEY_TZ;
+                const startAtDate = parseZonedDateTime(shiftDateStr, values.start_time, tzone);
+
+                const [sh, sm] = values.start_time.split(':').map(Number);
+                const [eh, em] = values.end_time.split(':').map(Number);
+                const startMin = sh * 60 + sm;
+                let endMin = eh * 60 + em;
+                const isOvernight = endMin <= startMin;
+
+                let endAtDate = parseZonedDateTime(shiftDateStr, values.end_time, tzone);
+                if (isOvernight) {
+                    endAtDate.setDate(endAtDate.getDate() + 1);
+                }
+
+                const basePayloadWithUtc = {
+                    ...basePayload,
+                    start_at: startAtDate.toISOString(),
+                    end_at: endAtDate.toISOString(),
+                };
+
                 // Only include lifecycle_status for new shifts — updateShift ignores it
                 // and including it causes the optimistic cache to flash wrong status.
                 const payload = editMode
-                    ? basePayload
-                    : { ...basePayload, lifecycle_status: 'Draft' as const, fulfillment_status: (values.assigned_employee_id ? 'scheduled' : 'none') as 'scheduled' | 'none' };
+                    ? basePayloadWithUtc
+                    : { ...basePayloadWithUtc, lifecycle_status: 'Draft' as const, fulfillment_status: (values.assigned_employee_id ? 'scheduled' : 'none') as 'scheduled' | 'none' };
 
                 if (editMode && existingShift?.id) {
                     updateShiftMutation.mutate(
@@ -659,7 +904,7 @@ export function useShiftFormOrchestrator({
         resolvedContext, selectedRosterId, isTemplateMode, editMode, watchTimezone,
         onShiftCreated, roles, remunerationLevels, employees, netLength,
         onSuccess, form, onClose, createShiftMutation, updateShiftMutation,
-        existingShift, toast,
+        existingShift, toast, complianceHasRun,
     ]);
 
     // ── Return ────────────────────────────────────────────────────────────────
@@ -689,13 +934,7 @@ export function useShiftFormOrchestrator({
         safeContext,
 
         // Step navigation
-        currentStep,
-        completedSteps,
-        handleNextStep,
-        handlePrevStep,
-        handleStepClick,
-        isStepValid,
-        hasBlockingComplianceFailures,
+        isAssignmentEnabled,
 
         // Computed values
         shiftLength,
@@ -724,6 +963,8 @@ export function useShiftFormOrchestrator({
 
         // Validation
         canSave,
+        hasDepartment,
+        hasRoster,
         hardValidation,
         studentVisaEnforcement,
 
@@ -737,6 +978,7 @@ export function useShiftFormOrchestrator({
         clearResults,
         buildComplianceInput,
         handleComplianceComplete,
+        compliancePanel,
 
         // Watched fields passed to steps
         watchEmployeeId,

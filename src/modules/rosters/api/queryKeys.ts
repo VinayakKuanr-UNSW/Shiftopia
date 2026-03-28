@@ -92,6 +92,10 @@ export const shiftKeys = {
   byEmployee: (empId: string, startDate: string, endDate: string) =>
     ['shifts', 'list', 'byEmployee', empId, startDate, endDate] as const,
 
+  // Includes Published + InProgress + Completed — used by AttendancePage
+  attendance: (empId: string, startDate: string, endDate: string) =>
+    ['shifts', 'list', 'attendance', empId, startDate, endDate] as const,
+
   // ── Level 1: detail — single shift detail views ───────────────────────────
   details: ['shifts', 'detail'] as const,
   detail: (shiftId: string) => ['shifts', 'detail', shiftId] as const,

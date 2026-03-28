@@ -32,9 +32,8 @@ import {
 } from '@/modules/core/ui/primitives/dropdown-menu';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
-import { format, addDays, startOfWeek, isToday, isBefore, startOfDay, parseISO, isSameDay, differenceInHours, differenceInMinutes } from 'date-fns';
-import { DndProvider, useDrag, useDrop } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
+import { format, addDays, startOfWeek, isToday, isBefore, startOfDay, parseISO, isSameDay, differenceInHours, differenceInMinutes, parse } from 'date-fns';
+import { useDrag, useDrop } from 'react-dnd';
 import {
   EnhancedAddShiftModal,
   ShiftContext,
@@ -79,6 +78,7 @@ import {
 import {
   getAllowedActions
 } from '../../domain/bulk-validation';
+import { computeBiddingUrgency, isOnBidding } from '../../domain/bidding-urgency';
 import DayTimelineView from './DayTimelineView';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { startOfMonth, endOfMonth } from 'date-fns';
@@ -93,10 +93,26 @@ import {
   AlertDialogTitle,
 } from '@/modules/core/ui/primitives/alert-dialog';
 import { useRosterUI } from '@/modules/rosters/contexts/RosterUIContext';
+import { executeAssignShift } from '@/modules/rosters/domain/commands/assignShift.command';
+import { shiftKeys } from '@/modules/rosters/api/queryKeys';
+import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
+import { 
+  PeopleModeEmployee, 
+  PeopleModeShift, 
+  DND_SHIFT_TYPE, 
+  DND_EMPLOYEE_TYPE,
+  EmployeeDragItem,
+  ShiftDragItem,
+} from './people-mode.types';
+import { DndAssignModal } from '@/modules/rosters/ui/dialogs/DndAssignModal';
 import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
+import { complianceService } from '@/modules/rosters/services/compliance.service';
+import { calculateMinutesBetweenTimes } from '@/modules/rosters/domain/shift.entity';
 import { groupShiftsIntoBuckets, type ShiftBucket as ShiftBucketType } from '@/modules/rosters/utils/bucket.utils';
 import { ShiftBucket, type BucketShiftData } from '@/modules/rosters/ui/components/ShiftBucket';
+import { canDragShift, canDropOnTarget } from '@/modules/rosters/utils/dnd.utils';
+import { ToastAction } from '@/modules/core/ui/primitives/toast';
 import type { GroupProjection } from '@/modules/rosters/domain/projections/types';
 import type { CoverageHealth } from '@/modules/rosters/domain/projections/utils/coverage';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
@@ -105,14 +121,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modu
 // DRAG & DROP TYPE
 // ============================================================================
 
-const DND_SHIFT_TYPE = 'SHIFT_CARD';
+// ============================================================================
 
-interface DragItem {
-  shiftId: string;
-  sourceGroupType: TemplateGroupType | 'unassigned';
-  sourceSubGroup: string;
-  shiftDate: string;
-}
+type DragItem = ShiftDragItem;
 
 // ============================================================================
 // DRAGGABLE SHIFT CARD WRAPPER
@@ -123,14 +134,18 @@ interface DraggableShiftCardProps {
   groupType: TemplateGroupType | 'unassigned';
   subGroupName: string;
   children: React.ReactNode;
+  disabled?: boolean;
 }
 
-const DraggableShiftCard: React.FC<DraggableShiftCardProps> = ({
+const DraggableShiftCard: React.FC<DraggableShiftCardProps> = React.memo(({
   shift,
   groupType,
   subGroupName,
   children,
+  disabled,
 }) => {
+  const isDnDModeActive = useRosterStore(s => s.isDnDModeActive);
+
   const [{ isDragging }, drag] = useDrag(() => ({
     type: DND_SHIFT_TYPE,
     item: {
@@ -138,18 +153,30 @@ const DraggableShiftCard: React.FC<DraggableShiftCardProps> = ({
       sourceGroupType: groupType,
       sourceSubGroup: subGroupName,
       shiftDate: shift.rawShift.shift_date,
+      startTime: shift.startTime,
+      endTime: shift.endTime,
+      lifecycle_status: shift.status === 'Published' ? 'Published' : 'Draft',
+      is_cancelled: shift.isCancelled,
     } as DragItem,
+    canDrag: () => canDragShift(shift, isDnDModeActive) && !disabled,
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
-  }), [shift.id, groupType, subGroupName]);
+  }), [shift.id, groupType, subGroupName, disabled, isDnDModeActive, shift.status, shift.isCancelled]);
 
   return (
-    <div ref={drag} className={cn(isDragging && 'opacity-50 cursor-grabbing')}>
+    <div 
+      ref={drag} 
+      className={cn(
+        !disabled && isDragging && 'opacity-50 cursor-grabbing scale-105 rotate-1 shadow-2xl transition-transform'
+      )}
+    >
       {children}
     </div>
   );
-};
+});
+
+DraggableShiftCard.displayName = 'DraggableShiftCard';
 
 // ============================================================================
 // DROPPABLE CELL WRAPPER
@@ -158,45 +185,113 @@ const DraggableShiftCard: React.FC<DraggableShiftCardProps> = ({
 interface DroppableCellProps {
   groupType: TemplateGroupType | 'unassigned';
   subGroupName: string;
+  groupId: string;
+  subGroupId: string;
   date: string;
-  onDrop: (item: DragItem, targetGroupType: TemplateGroupType | 'unassigned', targetSubGroup: string) => void;
+  onDrop: (item: DragItem, targetGroupType: TemplateGroupType | 'unassigned', targetSubGroup: string, targetDate: string, targetGroupId: string, targetSubGroupId: string) => void;
   children: React.ReactNode;
   className?: string;
+  disabled?: boolean;
 }
 
 const DroppableCell: React.FC<DroppableCellProps> = ({
   groupType,
   subGroupName,
+  groupId,
+  subGroupId,
   date,
   onDrop,
   children,
   className,
+  disabled,
 }) => {
+  const isDnDModeActive = useRosterStore(s => s.isDnDModeActive);
+
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: DND_SHIFT_TYPE,
     drop: (item: DragItem) => {
-      // Only trigger drop if moving to a different group/subgroup
-      if (item.sourceGroupType !== groupType || item.sourceSubGroup !== subGroupName) {
-        onDrop(item, groupType, subGroupName);
+      if (disabled) return;
+      const movingGroup = item.sourceGroupType !== groupType || item.sourceSubGroup !== subGroupName;
+      const movingDate = item.shiftDate !== date;
+      if (movingGroup || movingDate) {
+        onDrop(item, groupType, subGroupName, date, groupId, subGroupId);
       }
     },
     canDrop: (item: DragItem) => {
-      // Can drop if same date (for now) or allow cross-date in future
-      return item.shiftDate === date;
+      // Single logic source: dnd.utils.ts
+      return canDropOnTarget(
+        isDnDModeActive,
+        {
+          lifecycle_status: item.lifecycle_status,
+          is_cancelled: item.is_cancelled,
+        },
+        { isLocked: disabled, isPast: isSydneyPast(parse(date, 'yyyy-MM-dd', new Date())) }
+      );
     },
     collect: (monitor) => ({
       isOver: monitor.isOver(),
       canDrop: monitor.canDrop(),
     }),
-  }), [groupType, subGroupName, date, onDrop]);
+  }), [groupType, subGroupName, groupId, subGroupId, date, onDrop, disabled, isDnDModeActive]);
 
   return (
     <div
       ref={drop}
       className={cn(
         className,
-        isOver && canDrop && 'ring-2 ring-emerald-400 ring-inset bg-emerald-500/10',
-        isOver && !canDrop && 'ring-2 ring-red-400 ring-inset bg-red-500/10'
+        !disabled && isOver && canDrop && 'ring-2 ring-emerald-400 ring-inset bg-emerald-500/10',
+        !disabled && isOver && !canDrop && 'ring-2 ring-red-400 ring-inset bg-red-500/10'
+      )}
+    >
+      {children}
+    </div>
+  );
+};
+
+// ============================================================================
+// DROPPABLE SHIFT ASSIGN WRAPPER (Group Mode — employee-to-shift DnD)
+// ============================================================================
+
+interface DroppableShiftAssignProps {
+  shiftId: string;
+  /** Role name of the shift — used for lightweight UI role-match hint */
+  shiftRole: string;
+  canAccept: boolean;
+  onAssign: (shiftId: string, dragItem: EmployeeDragItem) => void;
+  children: React.ReactNode;
+}
+
+const DroppableShiftAssign: React.FC<DroppableShiftAssignProps> = ({
+  shiftId,
+  shiftRole,
+  canAccept,
+  onAssign,
+  children,
+}) => {
+  const [{ isOver, canDrop }, drop] = useDrop<EmployeeDragItem, void, { isOver: boolean; canDrop: boolean }>(
+    () => ({
+      accept: DND_EMPLOYEE_TYPE,
+      // Role match: allow if employee has no role OR role name matches shift role.
+      // Backend compliance engine is the definitive gate; this is a UX hint only.
+      canDrop: (item: EmployeeDragItem) =>
+        canAccept && (!item.roleName || item.roleName === shiftRole),
+      drop: (item: EmployeeDragItem) => {
+        onAssign(shiftId, item);
+      },
+      collect: (monitor) => ({
+        isOver: monitor.isOver(),
+        canDrop: monitor.canDrop(),
+      }),
+    }),
+    [shiftId, shiftRole, canAccept, onAssign],
+  );
+
+  return (
+    <div
+      ref={drop}
+      className={cn(
+        isOver && canDrop  && 'ring-2 ring-emerald-400 ring-inset rounded-lg bg-emerald-500/5',
+        isOver && !canDrop && 'ring-2 ring-red-400 ring-inset rounded-lg opacity-60',
       )}
     >
       {children}
@@ -272,6 +367,8 @@ interface GroupModeViewProps {
   /** Zoom level for Day Timeline View (1h fixed) */
   dayZoom?: 60;
   selectedShiftIds?: string[];
+  /** Centralized employee-to-shift assignment handler (from RostersPlannerPage) */
+  onAssignShift?: (shiftId: string, employeeId: string, employeeName: string) => void;
 }
 
 interface VisualGroup {
@@ -460,6 +557,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   dayZoom = 60,
   projection,
   selectedShiftIds: propsSelectedShiftIds, // Destructure the prop and rename it
+  onAssignShift,
 }) => {
   const { toast } = useToast();
   const { isDark } = useTheme();
@@ -472,6 +570,11 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     toggleShiftSelection,
     clearSelection
   } = useRosterUI();
+
+  const isDnDModeActive = useRosterStore(s => s.isDnDModeActive);
+  const setLastShiftMove = useRosterStore(s => s.setLastShiftMove);
+  const lastShiftMove = useRosterStore(s => s.lastShiftMove);
+  const clearLastShiftMove = useRosterStore(s => s.clearLastShiftMove);
 
   // Use props if provided, otherwise fallback to context
   const selectedShiftIds = propsSelectedShiftIds ?? globalSelectedShiftIds;
@@ -489,10 +592,36 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   const unpublishShiftMutation = useUnpublishShift();
   const addSubGroupMutation = useAddSubGroup();
   const addSubGroupRangeMutation = useAddSubGroupRange();
+  const queryClient = useQueryClient();
+
+  // ==================== UNDO HANDLER ====================
+  const handleUndoMove = useCallback(async () => {
+    if (!lastShiftMove) return;
+
+    try {
+      const { shiftId, prevData } = lastShiftMove;
+      await shiftsCommands.moveShift(shiftId, prevData);
+      
+      toast({
+        title: 'Move Undone',
+        description: 'Shift has been restored to its previous position.',
+      });
+
+      clearLastShiftMove();
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      queryClient.invalidateQueries({ queryKey: shiftKeys.detail(shiftId) });
+    } catch (error) {
+      toast({
+        title: 'Undo Failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+  }, [lastShiftMove, clearLastShiftMove, queryClient, toast]);
 
   // ==================== DND DROP HANDLER ====================
   const handleShiftDrop = useCallback(
-    (item: DragItem, targetGroupType: TemplateGroupType | 'unassigned', targetSubGroup: string) => {
+    async (item: DragItem, targetGroupType: TemplateGroupType | 'unassigned', targetSubGroup: string, targetDate: string, targetGroupId: string, targetSubGroupId: string) => {
       // Find the shift in our data
       const shift = externalShifts.find(s => s.id === item.shiftId);
       if (!shift) {
@@ -504,33 +633,86 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         return;
       }
 
-      // Update the shift with new group/subgroup
-      updateShiftMutation.mutate(
-        {
-          shiftId: item.shiftId,
-          updates: {
-            group_type: targetGroupType === 'unassigned' ? null : targetGroupType,
-            sub_group_name: targetSubGroup === 'Unassigned' ? null : targetSubGroup,
-          },
-        },
-        {
-          onSuccess: () => {
+      // --- Compliance check for assigned draft shifts (ONLY on date change) ---
+      if (shift.assigned_employee_id && isValidUuid(shift.assigned_employee_id) && shift.lifecycle_status === 'Draft' && targetDate !== item.shiftDate) {
+        try {
+          const netMinutes =
+            calculateMinutesBetweenTimes(shift.start_time, shift.end_time)
+            - (shift.unpaid_break_minutes || 0);
+
+          const validation = await complianceService.validateShiftCompliance(
+            shift.assigned_employee_id,
+            targetDate, // Always use targetDate here as we're in the "date changed" block
+            shift.start_time,
+            shift.end_time,
+            netMinutes,
+            shift.id,
+          );
+
+          if (!validation.isValid) {
+            const reasons = validation.violations.map((v: any) => v.message || v.rule || 'Compliance violation').join('; ');
             toast({
-              title: 'Shift Moved',
-              description: `Shifted moved to ${targetGroupType === 'unassigned' ? 'Unassigned' : GROUP_DISPLAY_NAMES[targetGroupType]} / ${targetSubGroup}`,
-            });
-          },
-          onError: (error) => {
-            toast({
-              title: 'Failed to move shift',
-              description: error instanceof Error ? error.message : 'Unknown error',
+              title: 'Compliance Check Failed',
+              description: `Cannot move shift to different date: ${reasons}`,
               variant: 'destructive',
             });
-          },
+            return;
+          }
+        } catch (compErr) {
+          console.error('Compliance check error during DnD:', compErr);
+          toast({
+            title: 'Compliance Warning',
+            description: 'Could not verify compliance for the new date. Proceeding.',
+          });
         }
-      );
+      }
+
+      try {
+        // Capture previous state for Undo
+        const prevData = {
+          groupType: shift.group_type || null,
+          subGroupName: shift.sub_group_name || null,
+          shiftGroupId: shift.shift_group_id || null,
+          rosterSubgroupId: (shift as any).roster_subgroup_id || shift.shift_subgroup_id || null,
+          shiftDate: shift.shift_date || null,
+        };
+
+        await shiftsCommands.moveShift(item.shiftId, {
+          groupType: targetGroupType === 'unassigned' ? null : targetGroupType,
+          subGroupName: targetSubGroup === 'Unassigned' ? null : targetSubGroup,
+          shiftGroupId: targetGroupType === 'unassigned' ? null : targetGroupId,
+          rosterSubgroupId: targetGroupType === 'unassigned' ? null : targetSubGroupId,
+          shiftDate: targetDate !== item.shiftDate ? targetDate : null,
+        });
+
+        // Store for Undo
+        setLastShiftMove({
+          shiftId: item.shiftId,
+          prevData,
+        });
+
+        toast({
+          title: 'Shift Moved',
+          description: `Shift moved to ${targetGroupType === 'unassigned' ? 'Unassigned' : GROUP_DISPLAY_NAMES[targetGroupType]} / ${targetSubGroup}${targetDate !== item.shiftDate ? ` on ${targetDate}` : ''}`,
+          action: (
+            <ToastAction altText="Undo" onClick={handleUndoMove}>
+              Undo
+            </ToastAction>
+          ),
+        });
+
+        // Invalidate caches so the grid refetches with the new position
+        queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+        queryClient.invalidateQueries({ queryKey: shiftKeys.detail(item.shiftId) });
+      } catch (error) {
+        toast({
+          title: 'Failed to move shift',
+          description: error instanceof Error ? error.message : 'Unknown error',
+          variant: 'destructive',
+        });
+      }
     },
-    [externalShifts, updateShiftMutation, toast]
+    [externalShifts, queryClient, toast]
   );
 
   // ==================== REFS FOR CLOSURE STABILITY ====================
@@ -538,7 +720,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   const departmentNameRef = useRef<string | undefined>(departmentName);
   const subDepartmentIdRef = useRef<string | undefined>(subDepartmentId);
   const subDepartmentNameRef = useRef<string | undefined>(subDepartmentName);
-  const queryClient = useQueryClient();
   const organizationIdRef = useRef<string | undefined>(organizationId);
   const organizationNameRef = useRef<string | undefined>(organizationName);
   const rosterIdRef = useRef<string | undefined>(rosterId);
@@ -550,6 +731,84 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   useEffect(() => { organizationIdRef.current = organizationId; }, [organizationId]);
   useEffect(() => { organizationNameRef.current = organizationName; }, [organizationName]);
   useEffect(() => { rosterIdRef.current = rosterId; }, [rosterId]);
+
+  // ==================== EMPLOYEE DnD ASSIGNMENT (MODAL-GATED) ====================
+  const [pendingDndAssign, setPendingDndAssign] = useState<{
+    shiftId: string;
+    employeeId: string;
+    employeeName: string;
+    shiftDisplay: ShiftDisplay;
+  } | null>(null);
+  const [isDndAssigning, setIsDndAssigning] = useState(false);
+
+  const handleEmployeeDrop = useCallback((shiftId: string, dragItem: EmployeeDragItem) => {
+    // Delegate to centralized parent handler if available
+    if (onAssignShift) {
+      onAssignShift(shiftId, dragItem.employeeId, dragItem.employeeName);
+      return;
+    }
+    // Fallback: local modal (legacy path)
+    const matchedShift = externalShifts.find(s => s.id === shiftId);
+    if (!matchedShift) {
+      toast({ title: 'Error', description: 'Could not find shift details.', variant: 'destructive' });
+      return;
+    }
+    const shiftDisplay: ShiftDisplay = {
+      id: matchedShift.id,
+      role: (matchedShift as any).roles?.name || 'Shift',
+      startTime: matchedShift.start_time,
+      endTime: matchedShift.end_time,
+      status: 'Open',
+      isPublished: false,
+      isDraft: true,
+      isOnBidding: false,
+      isTrading: false,
+      isCancelled: false,
+      groupColor: '',
+      rawShift: matchedShift,
+      isUrgent: false,
+    };
+    setPendingDndAssign({
+      shiftId,
+      employeeId: dragItem.employeeId,
+      employeeName: dragItem.employeeName,
+      shiftDisplay,
+    });
+  }, [externalShifts, toast, onAssignShift]);
+
+  const handleDndAssignConfirm = useCallback(async (options: { ignoreWarnings: boolean }) => {
+    if (!pendingDndAssign) return;
+    setIsDndAssigning(true);
+    try {
+      const result = await executeAssignShift({
+        shiftId: pendingDndAssign.shiftId,
+        employeeId: pendingDndAssign.employeeId,
+        context: 'MANUAL',
+        ignoreWarnings: options.ignoreWarnings,
+      });
+      if (!result.success) {
+        toast({
+          title: 'Assignment blocked',
+          description: result.error ?? 'Compliance check failed.',
+          variant: 'destructive',
+        });
+        queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      toast({ title: 'Shift assigned', description: 'Employee successfully assigned.' });
+      setPendingDndAssign(null);
+    } catch {
+      queryClient.invalidateQueries({ queryKey: shiftKeys.all });
+      toast({
+        title: 'Assignment failed',
+        description: 'An unexpected error occurred. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDndAssigning(false);
+    }
+  }, [pendingDndAssign, queryClient, toast]);
 
   // ==================== GHOST CELL HELPER ====================
   // Check if a date is within the active template's bounds (normalized to start of day)
@@ -827,8 +1086,8 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           role: (shift as any).roles?.name || 'Shift',
           isPublished,
           isDraft: isPublished ? false : isDraft,
-          isOnBidding: shift.bidding_status !== 'not_on_bidding',
-          isUrgent: shift.bidding_status === 'on_bidding_urgent',
+          isOnBidding: isOnBidding(shift.bidding_status),
+          isUrgent: isOnBidding(shift.bidding_status) && computeBiddingUrgency(shift.shift_date, shift.start_time) === 'urgent',
           isTrading: !!shift.trade_requested_at,
           isCancelled: shift.is_cancelled,
           groupColor: groupDef.type,
@@ -1216,12 +1475,12 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     const shiftIdsArray = Array.from(selectedShiftIds);
 
     try {
-      const successCount = await bulkDeleteMutation.mutateAsync(shiftIdsArray);
+      const result = await bulkDeleteMutation.mutateAsync(shiftIdsArray);
 
-      if (successCount > 0) {
+      if (result.deletedIds.length > 0) {
         toast({
           title: "Shifts Deleted",
-          description: `Successfully deleted ${successCount} shift${successCount !== 1 ? 's' : ''}.`,
+          description: `Successfully deleted ${result.deletedIds.length} shift${result.deletedIds.length !== 1 ? 's' : ''}.`,
         });
         // Only clear selection if something was actually deleted
         clearSelection();
@@ -1521,7 +1780,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           className={cn(isPastDate && "opacity-60")}
                             isSelected={isBulkMode && selectedShiftIds.includes(shift.id)}
           onClick={() => isBulkMode && handleToggleShiftSelection(shift.id)}
-          isLocked={isLocked}
+          isLocked={isLocked || (isDnDModeActive && !shift.isDraft)}
         />
       </div>
     );
@@ -1541,8 +1800,17 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
   // ==================== MAIN RENDER ====================
   return (
-    <DndProvider backend={HTML5Backend}>
-      <div className="flex flex-col h-full transition-colors bg-background">
+    <>
+      <div className="flex flex-col h-full transition-colors bg-background relative overflow-hidden">
+        {/* DnD Mode Indicator */}
+        {isDnDModeActive && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-500">
+            <Badge className="px-6 py-2 bg-emerald-500/90 text-white backdrop-blur-md border border-emerald-400/50 shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center gap-2 text-sm font-medium rounded-full">
+              <Zap className="h-4 w-4 animate-pulse" />
+              DnD Mode Active
+            </Badge>
+          </div>
+        )}
 
         {/* ── Day Timeline View (replaces grid for day view) ── */}
         {viewType === 'day' && (
@@ -1844,7 +2112,16 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                       </div>
                                     ) : (
                                       // Active Cell Content - Shifts and Add button
-                                      <div className="grid grid-cols-1 gap-1.5 min-h-[60px]">
+                                      <DroppableCell
+                                        groupType={group.type}
+                                        subGroupName={subGroup.name}
+                                        groupId={group.id}
+                                        subGroupId={subGroup.id}
+                                        date={dateKey}
+                                        onDrop={handleShiftDrop}
+                                        disabled={isBulkMode || !canEdit || cellIsPast || !isDnDModeActive}
+                                        className="grid grid-cols-1 gap-1.5 min-h-[60px]"
+                                      >
                                         {isBucketView ? (() => {
                                           // Bucket View: group cellShifts into buckets and render ShiftBucket components
                                           const bucketInputShifts = cellShifts.map(s => ({
@@ -1916,7 +2193,25 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                               style={{ '--i': shiftIdx, animationDelay: `calc(${shiftIdx} * 40ms)` } as React.CSSProperties}
                                               className="animate-[slideUpFade_0.25s_ease_forwards]"
                                             >
-                                              {renderShiftCard(shift, group, subGroup, date)}
+                                                <DraggableShiftCard
+                                                  shift={shift}
+                                                  groupType={group.type}
+                                                  subGroupName={subGroup.name}
+                                                  disabled={isBulkMode || cellIsPast || !canEdit || !isDnDModeActive || (isDnDModeActive && !shift.isDraft)}
+                                                >
+                                                  {(canEdit && !cellIsPast && shift.isDraft) ? (
+                                                    <DroppableShiftAssign
+                                                      shiftId={shift.id}
+                                                      shiftRole={shift.role}
+                                                      canAccept={!shift.isLocked}
+                                                      onAssign={handleEmployeeDrop}
+                                                    >
+                                                      {renderShiftCard(shift, group, subGroup, date)}
+                                                    </DroppableShiftAssign>
+                                                  ) : (
+                                                    renderShiftCard(shift, group, subGroup, date)
+                                                  )}
+                                                </DraggableShiftCard>
                                             </div>
                                           ))
                                         )}
@@ -1947,7 +2242,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                             </button>
                                           </div>
                                         )}
-                                      </div>
+                                      </DroppableCell>
                                     )}
                                   </td>
                                 );
@@ -2151,7 +2446,23 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         </>
       )}
 
-    </DndProvider>
+      {/* DnD Assign Compliance Modal — only rendered when NOT using centralized parent handler */}
+      {!onAssignShift && pendingDndAssign && (
+        <DndAssignModal
+          open={!!pendingDndAssign}
+          onClose={() => setPendingDndAssign(null)}
+          onConfirm={handleDndAssignConfirm}
+          isAssigning={isDndAssigning}
+          shiftId={pendingDndAssign.shiftId}
+          employeeId={pendingDndAssign.employeeId}
+          employeeName={pendingDndAssign.employeeName}
+          shiftRole={pendingDndAssign.shiftDisplay.role}
+          shiftDate={pendingDndAssign.shiftDisplay.rawShift.shift_date}
+          shiftStartTime={pendingDndAssign.shiftDisplay.startTime}
+          shiftEndTime={pendingDndAssign.shiftDisplay.endTime}
+        />
+      )}
+    </>
   );
 };
 

@@ -23,9 +23,8 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [newSkill, setNewSkill] = useState({
         skill_id: '',
-        proficiency_level: 'Competent' as const,
+        issue_date: '',
         expiration_date: '',
-        notes: '',
     });
 
     const { toast } = useToast();
@@ -46,14 +45,13 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
         await addSkillMutation.mutateAsync({
             employee_id: employeeId,
             skill_id: newSkill.skill_id,
-            proficiency_level: newSkill.proficiency_level,
+            issue_date: newSkill.issue_date || undefined,
             expiration_date: newSkill.expiration_date || undefined,
-            notes: newSkill.notes || undefined,
             verified_at: new Date().toISOString(),
         });
 
         setIsAddDialogOpen(false);
-        setNewSkill({ skill_id: '', proficiency_level: 'Competent', expiration_date: '', notes: '' });
+        setNewSkill({ skill_id: '', issue_date: '', expiration_date: '' });
     };
 
     const handleRemoveSkill = async (skillId: string) => {
@@ -82,7 +80,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
         Novice: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700',
         Competent: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20',
         Proficient: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20',
-        Expert: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20',
+        Expert: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20',
     };
 
     // Group skills by category
@@ -99,7 +97,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
                 <div className="space-y-0.5">
                     <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                         <Zap className="w-4 h-4 text-slate-500" />
-                        Skills & Competencies
+                        Skills
                     </h3>
                     <p className="text-[10px] text-slate-400 font-medium pl-6 uppercase tracking-wider">
                         {employeeSkills?.length || 0} skills recorded
@@ -115,11 +113,11 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
                     <DialogContent>
                         <DialogHeader>
                             <DialogTitle>Add Skill</DialogTitle>
-                            <DialogDescription>Add a new skill or competency</DialogDescription>
+                            <DialogDescription>Add a new skill for the user</DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4 mt-4">
                             <div>
-                                <Label>Skill</Label>
+                                <Label>Select Skill</Label>
                                 <Select value={newSkill.skill_id} onValueChange={(val) => setNewSkill({ ...newSkill, skill_id: val })}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select skill..." />
@@ -133,35 +131,23 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div>
-                                <Label>Proficiency Level</Label>
-                                <Select value={newSkill.proficiency_level} onValueChange={(val: any) => setNewSkill({ ...newSkill, proficiency_level: val })}>
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Novice">Novice</SelectItem>
-                                        <SelectItem value="Competent">Competent</SelectItem>
-                                        <SelectItem value="Proficient">Proficient</SelectItem>
-                                        <SelectItem value="Expert">Expert</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div>
-                                <Label>Expiration Date (Optional)</Label>
-                                <Input
-                                    type="date"
-                                    value={newSkill.expiration_date}
-                                    onChange={(e) => setNewSkill({ ...newSkill, expiration_date: e.target.value })}
-                                />
-                            </div>
-                            <div>
-                                <Label>Notes (Optional)</Label>
-                                <Input
-                                    placeholder="Add any notes..."
-                                    value={newSkill.notes}
-                                    onChange={(e) => setNewSkill({ ...newSkill, notes: e.target.value })}
-                                />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <Label>Issue Date</Label>
+                                    <Input
+                                        type="date"
+                                        value={newSkill.issue_date}
+                                        onChange={(e) => setNewSkill({ ...newSkill, issue_date: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <Label>Expiry Date</Label>
+                                    <Input
+                                        type="date"
+                                        value={newSkill.expiration_date}
+                                        onChange={(e) => setNewSkill({ ...newSkill, expiration_date: e.target.value })}
+                                    />
+                                </div>
                             </div>
                             <Button onClick={handleAddSkill} className="w-full">
                                 Add Skill
@@ -213,7 +199,9 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ employeeId }) => {
                                                 </div>
                                             </div>
                                             <div className="flex gap-4 text-[10px] text-slate-400 uppercase tracking-widest font-semibold mt-3">
-                                                {skill.verified_at && (
+                                                {skill.issue_date ? (
+                                                    <span>Issued: {format(parseISO(skill.issue_date), 'MMM d, yyyy')}</span>
+                                                ) : skill.verified_at && (
                                                     <span>Verified: {format(parseISO(skill.verified_at), 'MMM d, yyyy')}</span>
                                                 )}
                                                 {skill.expiration_date && (

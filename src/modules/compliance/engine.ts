@@ -26,8 +26,6 @@ import { NoOverlapRule } from './rules/no-overlap';
 import { MinShiftLengthRule } from './rules/min-shift-length';
 import { WorkingDaysCapRule } from './rules/working-days-cap';
 import { AvgFourWeekCycleRule } from './rules/avg-four-week-cycle';
-import { BreakRequirementsRule } from './rules/break-requirements';
-import { MaxConsecutiveDaysRule } from './rules/max-consecutive-days';
 
 // =============================================================================
 // RULE REGISTRY  (maps directly to the 10 compliance user stories)
@@ -54,18 +52,11 @@ const rules: ComplianceRule[] = [
 
     // Rule 8 – Student Visa 48h/fortnight (toggle-based blocking)
     StudentVisa48hRule,
-
     // Rule 9 – Ordinary Hours Averaging (configurable cycle, default 4-week / 152h)
     AvgFourWeekCycleRule,
 
     // Rule 10 – Rest Gap Between Shifts (default 10h, configurable to 8h relaxed)
     MinRestGapRule,
-
-    // Rule 11 – Mandatory Meal Break (NES s.101: >5h shift → 30 min break)
-    BreakRequirementsRule,
-
-    // Rule 12 – Maximum Consecutive Working Days (cap at 20 consecutive days)
-    MaxConsecutiveDaysRule,
 ];
 
 // =============================================================================

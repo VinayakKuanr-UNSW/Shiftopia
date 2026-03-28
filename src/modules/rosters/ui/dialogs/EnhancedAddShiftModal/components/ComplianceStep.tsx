@@ -1,18 +1,12 @@
 import React from 'react';
 import { Shield } from 'lucide-react';
-import { ComplianceTabContent } from '@/modules/rosters/ui/components/ComplianceTabContent';
+import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
 import { ComplianceStepProps } from '../types';
 
 export const ComplianceStep: React.FC<ComplianceStepProps> = ({
     isTemplateMode,
     watchEmployeeId,
-    hardValidation,
-    complianceResults,
-    setComplianceResults,
-    buildComplianceInput,
-    complianceNeedsRerun,
-    onChecksComplete,
-    shiftId,
+    compliancePanel,
 }) => {
     return (
         <div className="space-y-6">
@@ -26,15 +20,7 @@ export const ComplianceStep: React.FC<ComplianceStepProps> = ({
                     </p>
                 </div>
             ) : (
-                <ComplianceTabContent
-                    hardValidation={hardValidation}
-                    ruleResults={complianceResults}
-                    setRuleResults={setComplianceResults}
-                    buildComplianceInput={buildComplianceInput}
-                    needsRerun={complianceNeedsRerun}
-                    onChecksComplete={onChecksComplete}
-                    shiftId={shiftId}
-                />
+                <CompliancePanel hook={compliancePanel} />
             )}
         </div>
     );

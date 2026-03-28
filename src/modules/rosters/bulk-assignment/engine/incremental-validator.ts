@@ -84,21 +84,39 @@ function checkOverlap(
     return null;
 }
 
-function checkRoleMatch(
+/**
+ * R10 — Role Contract Match (partial hierarchy).
+ * Mirrors the v2 engine's R10_role_contract_match rule.
+ * Only enforces dimensions the candidate shift provides.
+ * BLOCKING: no assignment without a matching active contract.
+ */
+function checkRoleContractMatch(
     shift: CandidateShift,
     employee: EmployeeInfo,
     skipQualChecks: boolean,
 ): ShiftViolation | null {
     if (skipQualChecks) return null;
-    if (!shift.role_id) return null;  // Shift has no role requirement
-    if (!employee.role_id) return null; // Employee has no contracted role (flexible)
-    if (employee.role_id === shift.role_id) return null;
+    if (!shift.role_id) return null;  // No role requirement on shift → skip
 
-    return {
-        violation_type: 'ROLE_MISMATCH',
-        description: `Employee's contracted role does not match the shift's required role.`,
-        blocking: false, // Warning — manager may override
-    };
+    const contracts = employee.contracts ?? [];
+    if (contracts.length === 0) return null;  // No contract data → cannot enforce, skip
+
+    const isValid = contracts.some(c => {
+        if (c.role_id !== shift.role_id) return false;
+        if (shift.organization_id && c.organization_id !== shift.organization_id) return false;
+        if (shift.department_id && c.department_id !== shift.department_id) return false;
+        if (shift.sub_department_id && c.sub_department_id && c.sub_department_id !== shift.sub_department_id) return false;
+        return true;
+    });
+
+    if (!isValid) {
+        return {
+            violation_type: 'ROLE_MISMATCH',
+            description: `Employee is not contracted for this position on ${shift.shift_date} — no active contract matches the shift's role and department.`,
+            blocking: true,
+        };
+    }
+    return null;
 }
 
 function checkQualificationMatch(
@@ -193,8 +211,8 @@ export class IncrementalValidator {
             // Continue — collect all violations even if overlap found
         }
 
-        // Rule 4: Role match (non-blocking warning)
-        const roleViolation = checkRoleMatch(shift, employee, skipQualChecks);
+        // Rule 4: Role contract match — R10 (blocking)
+        const roleViolation = checkRoleContractMatch(shift, employee, skipQualChecks);
         if (roleViolation) violations.push(roleViolation);
 
         // Rule 5: Qualification match

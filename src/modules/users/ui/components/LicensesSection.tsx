@@ -30,7 +30,10 @@ const LicensesSection: React.FC<LicensesSectionProps> = ({ employeeId, employeeN
 
         if (expirationDate) {
             const daysUntilExpiry = differenceInDays(parseISO(expirationDate), new Date());
-            if (daysUntilExpiry <= 60 && daysUntilExpiry > 0) {
+            if (daysUntilExpiry <= 0) {
+                return <Badge className="bg-destructive/10 text-destructive border border-destructive/20">Expired</Badge>;
+            }
+            if (daysUntilExpiry <= 60) {
                 return <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">Expiring Soon</Badge>;
             }
         }

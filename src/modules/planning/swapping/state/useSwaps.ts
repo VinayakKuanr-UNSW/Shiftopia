@@ -55,6 +55,13 @@ export const useSwaps = (scopeOverrides?: { organizationId?: string; departmentI
         enabled: !!hierarchy.organizationId,
     });
 
+    // Query: Get full offer details for the current user's active offers (locked shifts)
+    const myActiveOfferDetailsQuery = useQuery({
+        queryKey: ['myActiveOfferDetails', userId],
+        queryFn: () => userId ? swapsApi.getMyActiveOfferDetails(userId) : Promise.resolve([]),
+        enabled: !!userId,
+    });
+
     // Query: Get swap IDs where I have an active offer (for "Already Offered" badge)
     const myActiveOffersQuery = useQuery({
         queryKey: ['myActiveOffers', userId],
@@ -255,6 +262,8 @@ export const useSwaps = (scopeOverrides?: { organizationId?: string; departmentI
         availableSwaps: availableSwapsQuery.data || [],
         pendingApprovals: pendingApprovalsQuery.data || [],
         myActiveOfferSwapIds: myActiveOffersQuery.data || new Set<string>(),
+        myActiveOfferDetails: myActiveOfferDetailsQuery.data || [],
+        isLoadingOfferDetails: myActiveOfferDetailsQuery.isLoading,
         isLoading: mySwapRequestsQuery.isLoading || availableSwapsQuery.isLoading,
         isLoadingApprovals: pendingApprovalsQuery.isLoading,
         error: mySwapRequestsQuery.error || availableSwapsQuery.error,

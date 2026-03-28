@@ -65,7 +65,7 @@ function makeShift(overrides: Partial<Shift> = {}): Shift {
     bidding_status: 'not_on_bidding',
     bidding_priority_text: 'normal',
     trade_requested_at: null,
-    attendance_status: 'scheduled',
+    attendance_status: 'unknown',
     required_skills: [],
     required_licenses: [],
     eligibility_snapshot: null,

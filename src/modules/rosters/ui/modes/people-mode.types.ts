@@ -35,3 +35,37 @@ export interface PeopleModeEmployee {
     overHoursWarning?: boolean;
     shifts: Record<string, PeopleModeShift[]>;
 }
+
+// ── DnD type constants for People Mode ───────────────────────────────────────
+/** Drag type for unfilled shift cards dragged from the side panel */
+export const DND_UNFILLED_SHIFT = 'UNFILLED_SHIFT' as const;
+
+/** Drag type for employee cards dragged from the side panel (Group Mode) */
+export const DND_EMPLOYEE_TYPE = 'EMPLOYEE_CARD' as const;
+
+/** Drag type for existing shift cards (shared between modes) */
+export const DND_SHIFT_TYPE = 'SHIFT_CARD' as const;
+
+export interface EmployeeDragItem {
+  employeeId: string;
+  employeeName: string;
+  /** Role name from the employee's contract — used for lightweight UI-level role match hint */
+  roleName: string | null;
+}
+
+export interface ShiftDragItem {
+  shiftId: string;
+  sourceGroupType: string | 'unassigned'; // Can be TemplateGroupType or 'people-mode'
+  sourceSubGroup: string;
+  shiftDate: string;
+  startTime: string;
+  endTime: string;
+  lifecycle_status: 'Draft' | 'Published';
+  is_cancelled: boolean;
+}
+
+// ============================================================================
+// DRAG & DROP TYPE
+// ============================================================================
+
+type DragItem = ShiftDragItem;

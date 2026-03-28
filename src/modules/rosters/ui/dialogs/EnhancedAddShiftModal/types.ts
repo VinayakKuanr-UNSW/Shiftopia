@@ -1,11 +1,13 @@
+import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { ShiftTimeRange, HardValidationResult, ComplianceResult } from '@/modules/compliance';
+import type { UseCompliancePanelReturn } from '@/modules/compliance/ui/useCompliancePanel';
 
 /* ============================================================
    FORM SCHEMA
    ============================================================ */
 export const formSchema = z.object({
-    group_type: z.enum(['convention_centre', 'exhibition_centre', 'theatre'], { required_error: 'Group is required' }),
+    group_type: z.string().min(1, 'Group is required'),
     sub_group_name: z.string().min(1, 'Sub-group is required'),
     role_id: z.string().min(1, 'Role is required'),
     remuneration_level_id: z.string().optional(),
@@ -146,27 +148,51 @@ export interface StepProps {
     isTemplateMode: boolean;
 }
 
-export interface ScheduleStepProps extends StepProps {
-    shiftLength: number;
-    netLength: number;
-    hardValidation: HardValidationResult;
-    rosters: Roster[];
-    rosterStructure: { groupType: string; subGroupName: string }[];
-    selectedRosterId: string;
-    onRosterChange: (id: string) => void;
-    isGroupLocked?: boolean;
-    isSubGroupLocked?: boolean;
-    isRosterLocked?: boolean;
-    context?: ShiftContext;
-    activeSubGroups?: Record<string, string[]>;
-    // Column 5: Assignment Criteria
-    roles: Role[];
-    remunerationLevels: RemunerationLevel[];
-    skills: Skill[];
+export interface ShiftFormDrawerContentProps {
+    form: ReturnType<typeof useForm<FormValues>>;
+    isReadOnly: boolean;
+    isPast?: boolean;
+    isStarted?: boolean;
+    isPublished?: boolean;
+    isTemplateMode: boolean;
+    editMode: boolean;
+    existingShift?: any;
+    
+    // Data
+    roles: any[];
+    remunerationLevels: any[];
+    employees: any[];
+    skills: any[];
     licenses: License[];
     events: Event[];
+    rosters: any[];
+    rosterStructure: any;
+    activeSubGroups: any[];
+    isLoadingData: boolean;
+    isGroupLocked: boolean;
+    isSubGroupLocked: boolean;
+
+    // Derived / Computed
+    resolvedContext: any;
+    selectedRosterId: string;
+    setSelectedRosterId: (id: string) => void;
+    shiftLength: number;
+    netLength: number;
+    hardValidation: any;
+    isAssignmentEnabled: boolean;
+    minShiftHours: number;
+
+    // Compliance
+    compliancePanel: any;
+    runV2Compliance: () => void;
+    
+    // Handlers
+    onUnpublish?: () => void;
+    canUnpublish?: boolean;
+
     selectedRemLevel?: RemunerationLevel;
     isRoleLocked?: boolean;
+    isEmployeeLocked?: boolean;
 }
 
 export interface RoleStepProps extends StepProps {
@@ -181,6 +207,10 @@ export interface RoleStepProps extends StepProps {
     isEmployeeLocked?: boolean;
 }
 
+export interface BreakStepProps extends StepProps {
+    shiftLength: number;
+}
+
 export interface RequirementsStepProps extends StepProps {
     skills: Skill[];
     licenses: License[];
@@ -190,15 +220,7 @@ export interface RequirementsStepProps extends StepProps {
 export interface ComplianceStepProps {
     isTemplateMode: boolean;
     watchEmployeeId: string | null | undefined;
-    hardValidation: HardValidationResult;
-    complianceResults: Record<string, ComplianceResult | null>;
-    setComplianceResults: (results: Record<string, any>) => void;
-    buildComplianceInput: () => any;
-    runChecks: (overrideEmployeeId?: string) => Promise<void>;
-    clearResults: () => void;
-    complianceNeedsRerun: boolean;
-    onChecksComplete: () => void;
-    shiftId?: string;
+    compliancePanel: UseCompliancePanelReturn;
 }
 
 export interface AssignmentStepProps {
@@ -212,12 +234,8 @@ export interface AssignmentStepProps {
     // Compliance
     watchEmployeeId: string | null | undefined;
     hardValidation: HardValidationResult;
-    complianceResults: Record<string, ComplianceResult | null>;
-    setComplianceResults: (results: Record<string, any>) => void;
-    buildComplianceInput: () => any;
+    compliancePanel: UseCompliancePanelReturn;
+    /** v1 per-employee compliance runner for hover/inspect flow */
     runChecks: (overrideEmployeeId?: string) => Promise<void>;
     clearResults: () => void;
-    complianceNeedsRerun: boolean;
-    onChecksComplete: () => void;
-    shiftId?: string;
 }

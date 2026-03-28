@@ -8,7 +8,6 @@ import {
     MoreVertical,
     Eye,
     BellRing,
-    Archive,
     FileText,
     Image,
     FileSpreadsheet,
@@ -17,6 +16,7 @@ import {
     CheckCircle2,
     Shield,
     Crown,
+    Trash2,
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
@@ -26,7 +26,6 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/modules/core/ui/primitives/dropdown-menu';
 import { cn } from '@/modules/core/lib/utils';
@@ -86,6 +85,11 @@ const ROLE_CONFIG: Record<
         icon: <Crown className="h-3 w-3" />,
         color: 'text-amber-400',
     },
+    lead: {
+        label: 'Lead',
+        icon: <Shield className="h-3 w-3 text-blue-400" />,
+        color: 'text-blue-400',
+    },
     member: { label: 'Member', icon: null, color: 'text-muted-foreground' },
 };
 
@@ -105,19 +109,16 @@ const formatFileSizeLocal = (bytes: number): string => {
 
 interface BroadcastItemProps {
     broadcast: BroadcastWithDetails;
-    onArchive: () => void;
     onTogglePin: () => void;
+    onDelete: () => void;
 }
 
 export const BroadcastItem: React.FC<BroadcastItemProps> = ({
     broadcast,
-    onArchive,
     onTogglePin,
+    onDelete,
 }) => {
     const priorityConfig = PRIORITY_CONFIG[broadcast.priority];
-    const ackPercent = broadcast.ackStats?.ackPercentage || 0;
-    const acknowledgedCount = broadcast.ackStats?.acknowledgedCount || 0;
-    const totalRecipients = broadcast.ackStats?.totalRecipients || 0;
 
     return (
         <div
@@ -193,9 +194,12 @@ export const BroadcastItem: React.FC<BroadcastItemProps> = ({
                                 <Pin className="h-4 w-4 mr-2" />
                                 {broadcast.isPinned ? 'Unpin' : 'Pin'}
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={onArchive}>
-                                <Archive className="h-4 w-4 mr-2" />
-                                Archive
+                            <DropdownMenuItem
+                                onClick={onDelete}
+                                className="text-destructive focus:text-destructive"
+                            >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>

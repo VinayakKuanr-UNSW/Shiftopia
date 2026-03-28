@@ -134,4 +134,6 @@ export interface AuditFilters {
     fromDate?:  string;  // ISO date
     toDate?:    string;  // ISO date
     limit?:     number;
+    orgIds?:    string[];
+    deptIds?:   string[];
 }

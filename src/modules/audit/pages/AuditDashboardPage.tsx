@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
+import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import {
     Activity, Clock, CheckCircle2, XCircle, ArrowLeftRight,
     Gavel, RefreshCw, Filter,
@@ -129,19 +131,25 @@ const DATE_RANGE_OPTIONS = [
 const AuditDashboardPage: React.FC = () => {
     const [days,     setDays]     = useState('7');
     const [category, setCategory] = useState('all');
+    const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
 
     const today    = format(endOfDay(new Date()),         "yyyy-MM-dd'T'HH:mm:ss'Z'");
     const fromDate = format(startOfDay(subDays(new Date(), Number(days))), 'yyyy-MM-dd');
     const toDate   = format(new Date(), 'yyyy-MM-dd');
+
+    const orgIds  = scope.org_ids.length  ? scope.org_ids  : undefined;
+    const deptIds = scope.dept_ids.length ? scope.dept_ids : undefined;
 
     const { data: activity = [], isLoading, refetch } = useRecentAuditActivity({
         category: category !== 'all' ? category as AuditCategory : undefined,
         fromDate,
         toDate,
         limit: 200,
+        orgIds,
+        deptIds,
     });
 
-    const { data: counts = {} } = useAuditActionCounts(fromDate, toDate);
+    const { data: counts = {} } = useAuditActionCounts(fromDate, toDate, orgIds, deptIds);
 
     // Summary stats from counts
     const totalEvents      = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -153,6 +161,13 @@ const AuditDashboardPage: React.FC = () => {
     return (
         <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
             <main className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
+
+                {/* Scope Filter */}
+                <ScopeFilterBanner
+                    mode="managerial"
+                    onScopeChange={setScope}
+                    hidden={isGammaLocked}
+                />
 
                 {/* Header */}
                 <div className="rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-white/5 backdrop-blur-xl p-6">

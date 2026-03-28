@@ -17,6 +17,7 @@ interface UseStepNavigationProps {
     complianceHasRun: boolean;
     hardValidation: HardValidationResult;
     complianceResults: Record<string, ComplianceResult | null>;
+    assignedEmployeeId?: string | null;
 }
 
 export function useStepNavigation({
@@ -28,6 +29,7 @@ export function useStepNavigation({
     complianceHasRun,
     hardValidation,
     complianceResults,
+    assignedEmployeeId,
 }: UseStepNavigationProps) {
     const [currentStep, setCurrentStep] = useState<number>(1);
     const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
@@ -41,19 +43,21 @@ export function useStepNavigation({
     /**
      * New 2-step validation:
      *  Step 1 (Schedule & Details): Schedule + Role + Length (net & min)
-     *  Step 2 (Assignment & Compliance): Compliance must pass
+     *  Step 2 (Assignment & Compliance): Compliance must pass OR be Unassigned
      */
     const isStepValid = (step: number): boolean => {
         let isValid = false;
         switch (step) {
             case 1: // Schedule & Details
-                isValid = tabCompletion.schedule && isNetLengthValid && isMinLengthValid && !!watchRoleId;
+                // Relaxed: Role is required for Save, but let them go to Step 2 to see employees
+                isValid = tabCompletion.schedule && isNetLengthValid && isMinLengthValid;
                 break;
             case 2: // Assignment & Compliance
                 if (isTemplateMode) {
                     isValid = true;
                 } else {
-                    isValid = complianceHasRun && !hasBlockingComplianceFailures;
+                    const isUnassigned = !assignedEmployeeId;
+                    isValid = isUnassigned ? true : (complianceHasRun && !hasBlockingComplianceFailures);
                 }
                 break;
             default:

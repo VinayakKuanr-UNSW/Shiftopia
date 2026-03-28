@@ -1,7 +1,7 @@
 import React, { Suspense, lazy } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import AppLayout from '@/modules/core/ui/layout/AppLayout';
-import ProtectedRoute from '@/modules/auth/ui/ProtectedRoute';
+import { useAuth } from '@/platform/auth/useAuth';
 
 /* =======================
    EAGER LOADED PAGES
@@ -28,23 +28,24 @@ const AvailabilityPage = lazy(() => import('@/modules/availability/pages/Availab
 const EmployeeBidsPage = lazy(() => import('@/modules/planning/bidding/ui/pages/EmployeeBids.page'));
 const EmployeeSwapsPage = lazy(() => import('@/modules/planning/swapping/ui/pages/EmployeeSwaps.page'));
 const MyBroadcastsPage = lazy(() => import('@/modules/broadcasts/ui/pages/MyBroadcastsPage'));
+const AttendancePage = lazy(() => import('@/modules/rosters/pages/AttendancePage'));
+const MyNotificationsPage = lazy(() => import('@/modules/core/pages/MyNotificationsPage'));
 
 // Rostering
 const TemplatesPage = lazy(() => import('@/modules/templates/pages/TemplatesPage'));
 const RostersPlannerPage = lazy(() => import('@/modules/rosters/pages/RostersPlannerPage'));
 const LaborDemandForecastingPage = lazy(() => import('@/modules/rosters/pages/LaborDemandForecastingPage'));
 const TimesheetPage = lazy(() => import('@/modules/timesheets/ui/TimesheetPage'));
+
 // Management
 const ManagerBidsPage = lazy(() => import('@/modules/planning/bidding/ui/pages/ManagerBids.page'));
 const ManagerSwapsPage = lazy(() => import('@/modules/planning/swapping/ui/pages/ManagerSwaps.page'));
-
-// ✅ Broadcast (Manager)
 const BroadcastManagerPage = lazy(() => import('@/modules/broadcasts/ui/pages/BroadcastsManager.page'));
 
 // Features
 const InsightsPage = lazy(() => import('@/modules/insights/pages/InsightsPage'));
 const AnalysisPage = lazy(() => import('@/modules/insights/pages/AnalysisPage'));
-
+const GridPage = lazy(() => import('@/modules/insights/pages/GridPage'));
 const ContractsPage = lazy(() => import('@/modules/contracts/pages/ContractsPage'));
 const UsersPage = lazy(() => import('@/modules/users/pages/UsersPage'));
 const PerformancePage = lazy(() => import('@/modules/users/pages/PerformancePage'));
@@ -66,25 +67,60 @@ const PageLoader: React.FC = () => (
 );
 
 /* =======================
-   PROTECTED WRAPPER
+   ROUTES WHERE MAIN AREA HAS NO PADDING (fullscreen canvas pages)
    ======================= */
-interface ProtectedRouteWithLayoutProps {
-    children: React.ReactNode;
-    requiredFeature?: string;
-    noPadding?: boolean;
-}
+const NO_PADDING_ROUTES = new Set(['/my-roster', '/rosters']);
 
-const ProtectedRouteWithLayout: React.FC<ProtectedRouteWithLayoutProps> = ({
-    children,
-    requiredFeature,
-    noPadding = false,
-}) => (
-    <ProtectedRoute requiredFeature={requiredFeature}>
+/* =======================
+   PERSISTENT AUTH LAYOUT
+   Renders once and stays mounted across all protected navigations.
+   AppSidebar no longer remounts on every route change.
+   ======================= */
+const AuthLayout: React.FC = () => {
+    const { user, isAuthenticated, isLoading, hasActiveContracts } = useAuth();
+    const location = useLocation();
+    const noPadding = NO_PADDING_ROUTES.has(location.pathname);
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-background">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                    <p className="text-muted-foreground text-sm">Loading...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!isAuthenticated || !user) {
+        return <Navigate to="/login" state={{ from: location }} replace />;
+    }
+
+    if (!hasActiveContracts) {
+        return <Navigate to="/pending-access" replace />;
+    }
+
+    return (
         <AppLayout noPadding={noPadding}>
-            <Suspense fallback={<PageLoader />}>{children}</Suspense>
+            <Suspense fallback={<PageLoader />}>
+                <Outlet />
+            </Suspense>
         </AppLayout>
-    </ProtectedRoute>
-);
+    );
+};
+
+/* =======================
+   FEATURE GATE
+   Optional per-route permission check — wraps child routes that need
+   a specific feature permission. Redirects to /unauthorized if denied.
+   ======================= */
+const FeatureGate: React.FC<{ feature: string }> = ({ feature }) => {
+    const { hasPermission } = useAuth();
+    if (!hasPermission(feature)) {
+        return <Navigate to="/unauthorized" replace />;
+    }
+    return <Outlet />;
+};
 
 /* =======================
    APP ROUTER
@@ -99,205 +135,75 @@ const AppRouter: React.FC = () => {
             <Route path="/pending-access" element={<Suspense fallback={<PageLoader />}><PendingAccessPage /></Suspense>} />
             <Route path="/signup" element={<Suspense fallback={<PageLoader />}><SignUpPage /></Suspense>} />
 
-            {/* ================= Dashboard ================= */}
-            <Route
-                path="/dashboard"
-                element={
-                    <ProtectedRouteWithLayout>
-                        <Suspense fallback={<PageLoader />}>
-                            <DashboardPage />
-                        </Suspense>
-                    </ProtectedRouteWithLayout>
-                }
-            />
+            {/* ================= Protected (persistent layout) =================
+                All child routes share ONE AppLayout + AppSidebar instance.
+                Navigating between them no longer remounts the sidebar.
+            ================= */}
+            <Route element={<AuthLayout />}>
 
-            {/* ================= My Workspace ================= */}
-            <Route
-                path="/profile"
-                element={
-                    <ProtectedRouteWithLayout>
-                        <ProfilePage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
+                {/* ── Dashboard ── */}
+                <Route path="/dashboard" element={<DashboardPage />} />
 
-            <Route
-                path="/my-roster"
-                element={
-                    <ProtectedRouteWithLayout noPadding={true}>
-                        <MyRosterPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
+                {/* ── My Workspace ── */}
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/my-roster" element={<MyRosterPage />} />
+                <Route path="/attendance" element={<AttendancePage />} />
+                <Route path="/availabilities" element={<AvailabilityPage />} />
+                <Route path="/bids" element={<EmployeeBidsPage />} />
+                <Route path="/my-swaps" element={<EmployeeSwapsPage />} />
+                <Route path="/my-notifications" element={<MyNotificationsPage />} />
 
-            <Route
-                path="/availabilities"
-                element={
-                    <ProtectedRouteWithLayout>
-                        <AvailabilityPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
+                <Route element={<FeatureGate feature="my-broadcasts" />}>
+                    <Route path="/my-broadcasts" element={<MyBroadcastsPage />} />
+                </Route>
 
-            <Route
-                path="/bids"
-                element={
-                    <ProtectedRouteWithLayout>
-                        <EmployeeBidsPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
+                {/* ── Rostering ── */}
+                <Route element={<FeatureGate feature="templates" />}>
+                    <Route path="/templates" element={<TemplatesPage />} />
+                </Route>
 
-            <Route
-                path="/my-swaps"
-                element={
-                    <ProtectedRouteWithLayout>
-                        <EmployeeSwapsPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
+                <Route element={<FeatureGate feature="rosters" />}>
+                    <Route path="/rosters" element={<RostersPlannerPage />} />
+                    <Route path="/labor-demand" element={<LaborDemandForecastingPage />} />
+                </Route>
 
-            {/* ================= Employee Broadcasts ================= */}
-            <Route
-                path="/my-broadcasts"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="my-broadcasts">
-                        <MyBroadcastsPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
+                <Route element={<FeatureGate feature="timesheet-view" />}>
+                    <Route path="/timesheet" element={<TimesheetPage />} />
+                </Route>
 
-            {/* ================= Rostering ================= */}
-            <Route
-                path="/templates"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="templates">
-                        <TemplatesPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
+                {/* ── Management ── */}
+                <Route element={<FeatureGate feature="management" />}>
+                    <Route path="/management/bids" element={<ManagerBidsPage />} />
+                    <Route path="/management/swaps" element={<ManagerSwapsPage />} />
+                    <Route path="/performance" element={<PerformancePage />} />
+                    <Route path="/audit" element={<AuditDashboardPage />} />
+                </Route>
 
-            <Route
-                path="/rosters"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="rosters" noPadding>
-                        <RostersPlannerPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
+                {/* ── Broadcast ── */}
+                <Route element={<FeatureGate feature="broadcast" />}>
+                    <Route path="/broadcast" element={<BroadcastManagerPage />} />
+                </Route>
 
-            <Route
-                path="/labor-demand"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="rosters">
-                        <LaborDemandForecastingPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
+                {/* ── Insights ── */}
+                <Route element={<FeatureGate feature="insights" />}>
+                    <Route path="/insights" element={<InsightsPage />} />
+                    <Route path="/insights/:metricId" element={<AnalysisPage />} />
+                    <Route path="/grid" element={<GridPage />} />
+                </Route>
 
-            <Route
-                path="/timesheet"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="timesheet-view">
-                        <TimesheetPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
+                {/* ── Admin ── */}
+                <Route element={<FeatureGate feature="configurations" />}>
+                    <Route path="/contracts" element={<ContractsPage />} />
+                </Route>
 
+                <Route element={<FeatureGate feature="users" />}>
+                    <Route path="/users" element={<UsersPage />} />
+                </Route>
 
-            {/* ================= Management ================= */}
-            <Route
-                path="/management/bids"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="management">
-                        <ManagerBidsPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
+                {/* ── Utility ── */}
+                <Route path="/search" element={<SearchPage />} />
 
-            <Route
-                path="/management/swaps"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="management">
-                        <ManagerSwapsPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
-
-            {/* ================= Manager Broadcast ================= */}
-            <Route
-                path="/broadcast"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="broadcast">
-                        <BroadcastManagerPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
-
-            {/* ================= Admin / Analytics ================= */}
-            <Route
-                path="/insights"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="insights">
-                        <InsightsPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
-
-            <Route
-                path="/insights/:metricId"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="insights">
-                        <AnalysisPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
-
-            <Route
-                path="/contracts"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="configurations">
-                        <ContractsPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
-
-            <Route
-                path="/users"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="users">
-                        <UsersPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
-
-            <Route
-                path="/performance"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="management">
-                        <PerformancePage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
-
-            <Route
-                path="/audit"
-                element={
-                    <ProtectedRouteWithLayout requiredFeature="management">
-                        <AuditDashboardPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
-
-            {/* ================= Utility ================= */}
-            <Route
-                path="/search"
-                element={
-                    <ProtectedRouteWithLayout>
-                        <SearchPage />
-                    </ProtectedRouteWithLayout>
-                }
-            />
+            </Route>
 
             {/* ================= Catch All ================= */}
             <Route path="*" element={<NotFound />} />

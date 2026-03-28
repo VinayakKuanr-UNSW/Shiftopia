@@ -23,6 +23,7 @@ interface MultiSelectProps {
     placeholder?: string;
     isLoading?: boolean;
     disabled?: boolean;
+    className?: string;
 }
 
 export const MultiSelect: React.FC<MultiSelectProps> = ({
@@ -31,7 +32,8 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
     onChange,
     placeholder = 'Select...',
     isLoading,
-    disabled
+    disabled,
+    className
 }) => {
     const [open, setOpen] = useState(false);
     const selectedItems = options.filter((opt) => selected.includes(opt.id));
@@ -42,31 +44,21 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
                 <div
                     className={cn(
                         "flex w-full items-center justify-between min-h-[42px] px-3 py-2 rounded-lg border bg-muted/50 border-border text-foreground transition-colors",
-                        disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-foreground/20"
+                        disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-foreground/20",
+                        className
                     )}
                 >
                     <div className="flex flex-wrap gap-1 flex-1">
                         {isLoading ? (
-                            <span className="text-muted-foreground">Loading...</span>
+                            <span className="text-muted-foreground text-[11px]">Loading...</span>
                         ) : selectedItems.length > 0 ? (
-                            selectedItems.map((item) => (
-                                <Badge key={item.id} variant="secondary" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
-                                    {item.name}
-                                    <span
-                                        role="button"
-                                        className="ml-1 cursor-pointer hover:text-foreground"
-                                        onClick={(e) => {
-                                            if (disabled) return;
-                                            e.stopPropagation();
-                                            onChange(selected.filter((s) => s !== item.id));
-                                        }}
-                                    >
-                                        <X className="h-3 w-3" />
-                                    </span>
-                                </Badge>
-                            ))
+                            <span className="text-sm font-bold text-foreground truncate max-w-[200px]" title={selectedItems.map(item => item.name).join(', ')}>
+                                {selectedItems.length <= 2 
+                                    ? selectedItems.map(item => item.name).join(', ')
+                                    : `${selectedItems.length} selected`}
+                            </span>
                         ) : (
-                            <span className="text-muted-foreground">{placeholder}</span>
+                            <span className="text-muted-foreground text-sm font-bold">{placeholder}</span>
                         )}
                     </div>
                     <ChevronsUpDown className="ml-2 h-4 w-4 text-muted-foreground" />

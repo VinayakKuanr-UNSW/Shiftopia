@@ -21,6 +21,7 @@ export interface EmployeeSkill {
     expiration_date?: string;
     status: 'Active' | 'Expired' | 'Pending' | 'Revoked';
     notes?: string;
+    issue_date?: string;
     created_at: string;
     updated_at: string;
     // Joined fields
@@ -33,6 +34,7 @@ export interface NewEmployeeSkill {
     proficiency_level?: 'Novice' | 'Competent' | 'Proficient' | 'Expert';
     verified_at?: string;
     expiration_date?: string;
+    issue_date?: string;
     notes?: string;
 }
 

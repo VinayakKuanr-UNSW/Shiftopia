@@ -27,7 +27,8 @@ const SHIFT_SELECT = `
   sub_departments(id, name),
   roles(id, name),
   remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max),
-  assigned_profiles:profiles!assigned_employee_id(first_name, last_name)
+  assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
+  roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name))
 ` as const;
 
 /** Normalise a raw supabase row into our Shift interface shape */
@@ -228,6 +229,53 @@ export const shiftsQueries = {
             return (data || []).map(row => normalizeShiftRow(row as Record<string, unknown>));
         } catch (error) {
             console.error('Exception in getEmployeeShifts:', error);
+            return [];
+        }
+    },
+
+    /* ============================================================
+       GET SHIFTS FOR EMPLOYEE — ATTENDANCE (includes InProgress + Completed)
+       Used by AttendancePage so shifts are visible after cron moves them
+       out of 'Published' into 'InProgress' or 'Completed'.
+       ============================================================ */
+
+    async getEmployeeShiftsForAttendance(
+        employeeId: string,
+        startDate: string,
+        endDate: string
+    ): Promise<Shift[]> {
+        if (!isValidUuid(employeeId)) return [];
+
+        try {
+            const { data, error } = await supabase
+                .from('shifts')
+                .select(`
+                  *,
+                  assignment_outcome,
+                  organizations(id, name),
+                  departments(id, name),
+                  sub_departments(id, name),
+                  roles(id, name),
+                  remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max),
+                  assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
+                  roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name, external_id))
+                `)
+                .eq('assigned_employee_id', employeeId)
+                .in('lifecycle_status', ['Published', 'InProgress', 'Completed'])
+                .gte('shift_date', startDate)
+                .lte('shift_date', endDate)
+                .is('deleted_at', null)
+                .order('shift_date')
+                .order('start_time');
+
+            if (error) {
+                console.error('Error fetching employee attendance shifts:', error);
+                return [];
+            }
+
+            return (data || []).map(row => normalizeShiftRow(row as Record<string, unknown>));
+        } catch (error) {
+            console.error('Exception in getEmployeeShiftsForAttendance:', error);
             return [];
         }
     },
@@ -729,6 +777,7 @@ export const shiftsQueries = {
                     unpaid_break_minutes: shift.unpaid_break_minutes,
                     offer_expires_at: (shift as any).offer_expires_at,
                     remuneration_levels: shift.remuneration_levels,
+                    group_type: shift.group_type,
                 },
             }));
         } catch (error) {
@@ -744,7 +793,12 @@ export const shiftsQueries = {
         try {
             if (!isValidUuid(employeeId)) return [];
 
-            const outcome = status === 'Accepted' ? 'confirmed' : 'rejected';
+            // Temporary Fix: The DB enum shift_assignment_outcome does NOT contain 'rejected'.
+            // If status is 'Declined', we return an empty array for now to prevent 400 errors
+            // until the correct outcome/tracking mechanism is established.
+            if (status === 'Declined') return [];
+
+            const outcome = status === 'Accepted' ? 'confirmed' : 'pending';
 
             let query = supabase
                 .from('shifts')
@@ -811,6 +865,7 @@ export const shiftsQueries = {
                     unpaid_break_minutes: shift.unpaid_break_minutes,
                     offer_expires_at: (shift as any).offer_expires_at,
                     remuneration_levels: shift.remuneration_levels,
+                    group_type: shift.group_type,
                 },
             }));
         } catch (error) {
@@ -871,7 +926,7 @@ export const shiftsQueries = {
                 remuneration_levels(level_name, hourly_rate_min)
             `)
                 .eq('organization_id', organizationId)
-                .in('bidding_status', ['on_bidding_normal', 'on_bidding_urgent'])
+                .in('bidding_status', ['on_bidding_normal', 'on_bidding_urgent', 'on_bidding'])
                 .is('deleted_at', null)
                 .eq('is_cancelled', false);
 
@@ -968,7 +1023,7 @@ export const shiftsQueries = {
                 .is('deleted_at', null)
                 .eq('is_cancelled', false)
                 // Fetch shifts that are or were on bidding
-                .eq('is_on_bidding', true);
+                .eq('lifecycle_status', 'Published');
 
             if (subDepartmentId && isValidUuid(subDepartmentId)) {
                 query = query.eq('sub_department_id', subDepartmentId);

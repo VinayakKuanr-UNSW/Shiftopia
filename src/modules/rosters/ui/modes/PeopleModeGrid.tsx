@@ -1,18 +1,30 @@
 import React, { useState, useMemo, useEffect } from 'react';
+
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
-import { Plus, MoreHorizontal, Undo2, Edit2, History } from 'lucide-react';
+import { Plus, MoreHorizontal, Undo2, Edit2, History, Zap } from 'lucide-react';
+import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 import { format } from 'date-fns';
 import { SmartShiftCard, type ComplianceInfo } from '@/modules/rosters/ui/components/SmartShiftCard';
 import { AvailabilityBar } from '@/modules/rosters/ui/components/AvailabilityBar';
+import { DroppableDateCell } from '@/modules/rosters/ui/components/DroppableDateCell';
 import { useResolvedAvailability } from '@/modules/rosters/hooks/useResolvedAvailability';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 import { isSydneyPast } from '@/modules/core/lib/date.utils';
-import { PeopleModeEmployee, PeopleModeShift } from './people-mode.types';
+import { 
+  PeopleModeEmployee, 
+  PeopleModeShift, 
+  DND_UNFILLED_SHIFT, 
+  DND_SHIFT_TYPE,
+  ShiftDragItem
+} from './people-mode.types';
+import type { UnfilledShift } from './UnfilledShiftsPanel';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { useRosterUI } from '@/modules/rosters/contexts/RosterUIContext';
+import { useDrag } from 'react-dnd';
+import { canDragShift } from '@/modules/rosters/utils/dnd.utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,7 +66,67 @@ interface PeopleModeGridProps {
   onCancelShift?: (shiftId: string) => void;
   onUnpublishShift?: (shiftId: string) => void;
   onViewAudit?: (shiftId: string) => void;
+  /** Called when an unfilled shift is drag-dropped onto an employee date cell */
+  onAssignShift?: (shift: UnfilledShift, employeeId: string, dateKey: string) => void;
+  /** Called when an existing shift is moved */
+  onMoveShift?: (shiftId: string, targetEmployeeId: string, targetDate: string) => void;
 }
+
+/* ============================================================
+   DRAGGABLE SHIFT CARD WRAPPER
+   ============================================================ */
+
+interface DraggableShiftCardProps {
+  shift: PeopleModeShift;
+  employee: PeopleModeEmployee;
+  children: React.ReactNode;
+  disabled?: boolean;
+}
+
+const DraggableShiftCard: React.FC<DraggableShiftCardProps> = ({
+  shift,
+  employee,
+  children,
+  disabled,
+}) => {
+  const isDnDModeActive = useRosterStore(s => s.isDnDModeActive);
+
+  const [{ isDragging }, drag] = useDrag(() => ({
+    type: DND_SHIFT_TYPE,
+    item: {
+      shiftId: shift.id,
+      sourceGroupType: (shift as any).groupType || 'people-mode',
+      sourceSubGroup: shift.subGroup || 'Unassigned',
+      shiftDate: shift.rawShift?.shift_date || '',
+      startTime: shift.startTime,
+      endTime: shift.endTime,
+      lifecycle_status: shift.lifecycleStatus === 'published' ? 'Published' : 'Draft',
+      is_cancelled: shift.isCancelled,
+    } as ShiftDragItem,
+    canDrag: () => canDragShift(
+      { 
+        lifecycle_status: shift.lifecycleStatus === 'published' ? 'Published' : 'Draft',
+        is_cancelled: shift.isCancelled 
+      }, 
+      isDnDModeActive
+    ) && !disabled,
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  }), [shift, isDnDModeActive, disabled, employee.id]);
+
+  return (
+    <div
+      ref={drag}
+      className={cn(
+        'transition-all duration-300',
+        isDragging && 'opacity-40 scale-95 rotate-1 grayscale shadow-none'
+      )}
+    >
+      {React.cloneElement(children as React.ReactElement, { isDragging })}
+    </div>
+  );
+};
 
 /* ============================================================
    MAIN COMPONENT
@@ -76,6 +148,8 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   onCancelShift,
   onUnpublishShift,
   onViewAudit,
+  onAssignShift,
+  onMoveShift,
 }) => {
   const { 
     bulkModeActive: globalBulkModeActive, 
@@ -132,6 +206,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
       </DropdownMenuContent>
     </DropdownMenu>
   );
+  const isDnDModeActive = useRosterStore(s => s.isDnDModeActive);
   // Get all profile IDs for availability lookup
   const profileIds = useMemo(() => employees.map(e => e.id), [employees]);
 
@@ -143,8 +218,18 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   );
 
   return (
-    <div className="flex flex-col h-full">
-      <ScrollArea className="flex-1">
+    <>
+      {/* DnD Mode Indicator */}
+      {isDnDModeActive && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-500 pointer-events-none">
+          <Badge className="px-6 py-2 bg-emerald-500/90 text-white backdrop-blur-md border border-emerald-400/50 shadow-[0_0_20px_rgba(16,185,129,0.3)] flex items-center gap-2 text-sm font-medium rounded-full">
+            <Zap className="h-4 w-4 animate-pulse" />
+            DnD Mode Active
+          </Badge>
+        </div>
+      )}
+
+      <ScrollArea className="h-full custom-scrollbar">
         <div className="p-6">
           {/* ==================== TABLE CONTAINER ==================== */}
           <div className="border border-border rounded-lg overflow-hidden">
@@ -265,19 +350,28 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                           dateKey
                         );
 
+                        const cellClassName = cn(
+                          'px-3 py-3 align-top relative group/cell',
+                          dateIdx < dates.length - 1 && 'border-r border-border',
+                          canEdit && !isBulkMode && 'cursor-pointer',
+                        );
+                        const cellOnClick = () => {
+                          if (canEdit && !isBulkMode && shifts.length === 0 && !isSydneyPast(date)) {
+                            onAddShift(employee, date);
+                          }
+                        };
+
+                        // DroppableDateCell is always used — it is a plain <td> when
+                        // onAssignShift is absent or DnD is inactive (no-op handler).
                         return (
-                          <td
+                          <DroppableDateCell
                             key={dateIdx}
-                            className={cn(
-                              'px-3 py-3 align-top relative group/cell',
-                              dateIdx < dates.length - 1 && 'border-r border-border',
-                              canEdit && !isBulkMode && 'cursor-pointer'
-                            )}
-                            onClick={() => {
-                              if (canEdit && !isBulkMode && shifts.length === 0 && !isSydneyPast(date)) {
-                                onAddShift(employee, date);
-                              }
-                            }}
+                            employeeId={employee.id}
+                            dateKey={dateKey}
+                            className={cellClassName}
+                            onClick={cellOnClick}
+                            onAssign={onAssignShift ?? (() => {})}
+                            onMove={onMoveShift}
                           >
                             <div className={cn(
                               'space-y-2',
@@ -287,43 +381,49 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                               {/* ========== SHIFTS ========== */}
                               {shifts.length > 0 ? (
                                 shifts.map((shift) => (
-                                  <SmartShiftCard
+                                  <DraggableShiftCard
                                     key={shift.id}
-                                    headerAction={canEdit && !isBulkMode ? buildShiftMenu(shift) : undefined}
-                                    shift={shift.rawShift || ({
-                                      id: shift.id,
-                                      start_time: shift.startTime,
-                                      end_time: shift.endTime,
-                                      lifecycle_status: shift.lifecycleStatus === 'published' ? 'Published' : 'Draft',
-                                      assigned_employee_id: shift.assignmentStatus === 'assigned' ? employee.id : null,
-                                      bidding_status: shift.fulfillmentStatus === 'bidding' ? 'on_bidding_normal' : 'not_on_bidding',
-                                      is_trade_requested: shift.isTradeRequested,
-                                      is_cancelled: shift.isCancelled,
-                                      sub_group_name: shift.subGroup,
-                                      required_skills: shift.requiredSkills || [],
-                                      roles: { id: '', name: shift.role },
-                                      assigned_profiles: { first_name: employee.name.split(' ')[0], last_name: employee.name.split(' ').slice(1).join(' ') },
-                                    } as any)}
-                                    variant={cardVariant}
-                                    groupColor={shift.groupColor || 'blue'}
-                                    compliance={complianceMap?.[shift.id]}
-                                    isSelected={currentSelectedShifts.includes(shift.id)}
-                                    onClick={(e) => {
-                                      if (isBulkMode) {
-                                        // Prioritize prop-based toggle, then global store, then UI context
-                                        if (onToggleShiftSelection) {
-                                          onToggleShiftSelection(shift.id);
-                                        } else if (globalToggleShiftSelection) {
-                                          globalToggleShiftSelection(shift.id);
+                                    shift={shift}
+                                    employee={employee}
+                                    disabled={isShiftLocked(dateKey, shift.startTime, 'roster_management')}
+                                  >
+                                    <SmartShiftCard
+                                      headerAction={canEdit && !isBulkMode ? buildShiftMenu(shift) : undefined}
+                                      shift={shift.rawShift || ({
+                                        id: shift.id,
+                                        start_time: shift.startTime,
+                                        end_time: shift.endTime,
+                                        lifecycle_status: shift.lifecycleStatus === 'published' ? 'Published' : 'Draft',
+                                        assigned_employee_id: shift.assignmentStatus === 'assigned' ? employee.id : null,
+                                        bidding_status: shift.fulfillmentStatus === 'bidding' ? 'on_bidding' : 'not_on_bidding',
+                                        is_trade_requested: shift.isTradeRequested,
+                                        is_cancelled: shift.isCancelled,
+                                        sub_group_name: shift.subGroup,
+                                        required_skills: shift.requiredSkills || [],
+                                        roles: { id: '', name: shift.role },
+                                        assigned_profiles: { first_name: employee.name.split(' ')[0], last_name: employee.name.split(' ').slice(1).join(' ') },
+                                      } as any)}
+                                      variant={cardVariant}
+                                      groupColor={shift.groupColor || (shift.rawShift as any)?.template_groups?.type || 'blue'}
+                                      compliance={complianceMap?.[shift.id]}
+                                      isSelected={currentSelectedShifts.includes(shift.id)}
+                                      onClick={(e) => {
+                                        if (isBulkMode) {
+                                          // Prioritize prop-based toggle, then global store, then UI context
+                                          if (onToggleShiftSelection) {
+                                            onToggleShiftSelection(shift.id);
+                                          } else if (globalToggleShiftSelection) {
+                                            globalToggleShiftSelection(shift.id);
+                                          } else {
+                                            uiToggleShiftSelection(shift.id);
+                                          }
                                         } else {
-                                          uiToggleShiftSelection(shift.id);
+                                          onViewShift?.(shift);
                                         }
-                                      } else {
-                                        onViewShift?.(shift);
-                                      }
-                                    }}
-                                    isLocked={isShiftLocked(dateKey, shift.startTime, 'roster_management')}
-                                  />
+                                      }}
+                                       isLocked={isShiftLocked(dateKey, shift.startTime, 'roster_management') || (isDnDModeActive && shift.lifecycleStatus !== 'draft')}
+                                    />
+                                  </DraggableShiftCard>
                                 ))
                               ) : null}
 
@@ -365,7 +465,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                                 />
                               )}
                             </div>
-                          </td>
+                          </DroppableDateCell>
                         );
                       })}
                     </tr>
@@ -376,7 +476,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
           </div>
         </div>
       </ScrollArea>
-    </div>
+    </>
   );
 };
 

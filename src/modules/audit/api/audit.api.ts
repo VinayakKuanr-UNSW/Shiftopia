@@ -47,9 +47,20 @@ export const auditApi = {
 
     /**
      * Recent activity across all shifts — for the audit dashboard.
-     * Returns entries newest-first, optionally filtered by actor/action/category/dates.
+     * Returns entries newest-first, optionally filtered by actor/action/category/dates/scope.
      */
     async getRecentActivity(filters: AuditFilters = {}): Promise<AuditLogEntryWithActor[]> {
+        // Resolve org/dept scope to shift IDs first (two-query approach)
+        let scopedShiftIds: string[] | null = null;
+        if (filters.orgIds?.length || filters.deptIds?.length) {
+            let shiftsQuery = supabase.from('shifts').select('id');
+            if (filters.orgIds?.length)  shiftsQuery = shiftsQuery.in('organization_id', filters.orgIds);
+            if (filters.deptIds?.length) shiftsQuery = shiftsQuery.in('department_id',   filters.deptIds);
+            const { data: shiftRows } = await shiftsQuery;
+            scopedShiftIds = (shiftRows ?? []).map((s: { id: string }) => s.id);
+            if (scopedShiftIds.length === 0) return [];
+        }
+
         let query = supabase
             .from('shift_audit_log')
             .select(`
@@ -67,11 +78,12 @@ export const auditApi = {
             .order('occurred_at', { ascending: false })
             .limit(filters.limit ?? 100);
 
-        if (filters.shiftId)  query = query.eq('shift_id',  filters.shiftId);
-        if (filters.actorId)  query = query.eq('actor_id',  filters.actorId);
-        if (filters.action)   query = query.eq('action',    filters.action);
-        if (filters.fromDate) query = query.gte('occurred_at', filters.fromDate);
-        if (filters.toDate)   query = query.lte('occurred_at', filters.toDate + 'T23:59:59Z');
+        if (scopedShiftIds !== null)  query = query.in('shift_id',     scopedShiftIds);
+        if (filters.shiftId)          query = query.eq('shift_id',     filters.shiftId);
+        if (filters.actorId)          query = query.eq('actor_id',     filters.actorId);
+        if (filters.action)           query = query.eq('action',       filters.action);
+        if (filters.fromDate)         query = query.gte('occurred_at', filters.fromDate);
+        if (filters.toDate)           query = query.lte('occurred_at', filters.toDate + 'T23:59:59Z');
 
         if (filters.category) {
             const actions = actionsByCategory(filters.category);
@@ -134,19 +146,35 @@ export const auditApi = {
     },
 
     /**
-     * Count of events by action for a given date range.
+     * Count of events by action for a given date range, optionally scoped to orgs/depts.
      * Useful for summary cards on the audit dashboard.
      */
     async getActionCounts(
         fromDate: string,
         toDate: string,
+        orgIds?: string[],
+        deptIds?: string[],
     ): Promise<Record<string, number>> {
-        const { data, error } = await supabase
+        // Resolve org/dept scope to shift IDs first
+        let scopedShiftIds: string[] | null = null;
+        if (orgIds?.length || deptIds?.length) {
+            let shiftsQuery = supabase.from('shifts').select('id');
+            if (orgIds?.length)  shiftsQuery = shiftsQuery.in('organization_id', orgIds);
+            if (deptIds?.length) shiftsQuery = shiftsQuery.in('department_id',   deptIds);
+            const { data: shiftRows } = await shiftsQuery;
+            scopedShiftIds = (shiftRows ?? []).map((s: { id: string }) => s.id);
+            if (scopedShiftIds.length === 0) return {};
+        }
+
+        let query = supabase
             .from('shift_audit_log')
             .select('action')
             .gte('occurred_at', fromDate)
             .lte('occurred_at', toDate + 'T23:59:59Z');
 
+        if (scopedShiftIds !== null) query = query.in('shift_id', scopedShiftIds);
+
+        const { data, error } = await query;
         if (error) throw error;
         return (data ?? []).reduce<Record<string, number>>((acc, row) => {
             const a = (row as AuditLogEntry).action;

@@ -21,6 +21,9 @@ import type {
     ShiftContext
 } from '../types';
 
+const EMPTY_ARRAY: any[] = [];
+const EMPTY_OBJECT: any = {};
+
 interface UseShiftFormDataProps {
     isOpen: boolean;
     context: ShiftContext;
@@ -59,7 +62,7 @@ export function useShiftFormData({
     const contextSubDeptId = (editMode && existingShift?.sub_department_id) || context.subDepartmentId;
 
     // 2. Fetch Rosters first (to potentialy resolve department context)
-    const { data: rosters = [], isLoading: isLoadingRosters } = useRostersLookup(
+    const { data: rosters = EMPTY_ARRAY, isLoading: isLoadingRosters } = useRostersLookup(
         isOpen ? context.organizationId : undefined,
         {
             departmentId: isOpen ? contextDeptId : undefined,
@@ -79,10 +82,10 @@ export function useShiftFormData({
 
     // 3. Metadata Hooks (Restored)
     // 3. Metadata Hooks (Restored)
-    const { data: remunerationLevels = [], isLoading: isLoadingRem } = useRemunerationLevels();
-    const { data: skills = [], isLoading: isLoadingSkills } = useSkills();
-    const { data: licenses = [], isLoading: isLoadingLicenses } = useLicenses();
-    const { data: events = [], isLoading: isLoadingEvents } = useEvents();
+    const { data: remunerationLevels = EMPTY_ARRAY, isLoading: isLoadingRem } = useRemunerationLevels();
+    const { data: skills = EMPTY_ARRAY, isLoading: isLoadingSkills } = useSkills();
+    const { data: licenses = EMPTY_ARRAY, isLoading: isLoadingLicenses } = useLicenses();
+    const { data: events = EMPTY_ARRAY, isLoading: isLoadingEvents } = useEvents();
 
     // 4. Derive Role Context - Prefer specific roster context if available, fallback to global context
     const selectedRoster = rosters.find(r => r.id === (selectedRosterId || context.rosterId));
@@ -92,7 +95,7 @@ export function useShiftFormData({
     const roleDeptId = contextDeptId || selectedRoster?.department_id;
     const roleSubDeptId = contextSubDeptId || selectedRoster?.sub_department_id;
 
-    const { data: employees = [], isLoading: isLoadingEmps } = useEmployees(
+    const { data: employees = EMPTY_ARRAY, isLoading: isLoadingEmps } = useEmployees(
         isOpen ? context.organizationId : undefined,
         isOpen ? roleDeptId : undefined,
         isOpen ? roleSubDeptId : undefined,
@@ -100,31 +103,32 @@ export function useShiftFormData({
     );
 
     // All queries are enabled only when the modal is open
-    const { data: roles = [] } = useRoles(
+    const { data: roles = EMPTY_ARRAY } = useRoles(
         isOpen ? context.organizationId : undefined,
         isOpen ? roleDeptId : undefined,
         isOpen ? roleSubDeptId : undefined
     );
-    const { data: rosterStructure = [] } = useRosterStructure(selectedRosterId || context.rosterId);
+    const { data: rosterStructure = EMPTY_ARRAY } = useRosterStructure(selectedRosterId || context.rosterId);
 
     // 5. Active Sub-Groups Detection
     // Fetch all shifts for this day and roster to see what groups/subgroups are currently active
     // We fetch ALL shifts for the org/date to have the full picture
-    const { data: existingShifts = [] } = useShiftsByDate(
+    const { data: existingShifts = EMPTY_ARRAY } = useShiftsByDate(
         isOpen ? context.organizationId : undefined,
         isOpen ? context.date || null : null
     );
 
     // activeSubGroups is now a mapping of groupType -> uniqueSubGroupNames[]
     const activeSubGroups = React.useMemo(() => {
-        if (!existingShifts.length) return {};
+        if (!existingShifts.length) return EMPTY_OBJECT;
 
         const mapping: Record<string, Set<string>> = {};
 
         existingShifts
             .filter(s => s.roster_id === (selectedRosterId || context.rosterId) && s.sub_group_name && (s.group_type || (s as any).group_name))
             .forEach(s => {
-                const groupType = s.group_type || (s as any).group_name!;
+                const rawGroup = s.group_type || (s as any).group_name!;
+                const groupType = rawGroup.toLowerCase().replace(/\s+/g, '_');
                 if (!mapping[groupType]) mapping[groupType] = new Set();
                 mapping[groupType].add(s.sub_group_name!);
             });

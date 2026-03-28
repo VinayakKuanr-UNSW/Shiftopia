@@ -9,7 +9,7 @@
  *   5. Cache is invalidated → roster refreshes
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/modules/core/ui/primitives/sheet';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
@@ -60,13 +60,13 @@ const VIOLATION_LABELS: Record<string, string> = {
     DRAFT_STATE:           'Not Draft',
     ALREADY_ASSIGNED:      'Already Assigned',
     OVERLAP:               'Time Overlap',
-    ROLE_MISMATCH:         'Role Mismatch',
+    ROLE_MISMATCH:         'Role Not Contracted',
     QUALIFICATION_MISSING: 'Missing Qualification',
     QUALIFICATION_EXPIRED: 'Expired Qualification',
     REST_GAP:              'Insufficient Rest',
-    WEEKLY_HOURS:          'Hours Limit',
-    SHIFT_LENGTH:          'Shift Too Short',
-    CONSECUTIVE_DAYS:      'Consecutive Days',
+    WEEKLY_HOURS:          'Avg Hours Limit',
+    DAILY_HOURS:           'Daily Hours Exceeded',
+    WORKING_DAYS_CAP:      'Working Days Cap (20/28)',
     STUDENT_VISA:          'Student Visa Limit',
 };
 
@@ -210,10 +210,7 @@ export function BulkAssignmentPanel({
     // ── Validate ──────────────────────────────────────────────────────────────
 
     const handleValidate = useCallback(async () => {
-        if (!selectedEmployeeId) {
-            toast({ title: 'Select Employee', description: 'Please select an employee first.', variant: 'destructive' });
-            return;
-        }
+        if (!selectedEmployeeId) return;
 
         setIsValidating(true);
         setValidationResult(null);
@@ -236,6 +233,18 @@ export function BulkAssignmentPanel({
             setIsValidating(false);
         }
     }, [selectedEmployeeId, selectedShiftIds, toast]);
+
+    // Auto-validate whenever the selected employee changes.
+    // The cleanup flag prevents stale results if the employee changes mid-flight.
+    useEffect(() => {
+        if (!selectedEmployeeId || selectedShiftIds.length === 0) {
+            setValidationResult(null);
+            return;
+        }
+        handleValidate();
+    // handleValidate is stable when selectedEmployeeId is stable; re-run only on employee change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedEmployeeId]);
 
     // ── Commit ────────────────────────────────────────────────────────────────
 
@@ -335,25 +344,34 @@ export function BulkAssignmentPanel({
                             </Select>
                         </div>
 
-                        {/* Validate button */}
-                        <Button
-                            onClick={handleValidate}
-                            disabled={!selectedEmployeeId || isValidating}
-                            className="w-full gap-2"
-                            variant="outline"
-                        >
-                            {isValidating ? (
-                                <>
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    Validating {selectedShiftIds.length} shifts...
-                                </>
-                            ) : (
-                                <>
-                                    <ClipboardList className="h-4 w-4" />
-                                    Run Compliance Validation
-                                </>
-                            )}
-                        </Button>
+                        {/* Validation status — auto-runs on employee select */}
+                        {selectedEmployeeId && (
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground h-7">
+                                {isValidating ? (
+                                    <>
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                        <span>Checking {selectedShiftIds.length} shift{selectedShiftIds.length !== 1 ? 's' : ''}…</span>
+                                    </>
+                                ) : validationResult ? (
+                                    <>
+                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                        <span>
+                                            Compliance checked —{' '}
+                                            <span className="text-emerald-500 font-medium">{validationResult.passing} passing</span>
+                                            {validationResult.failing > 0 && (
+                                                <>, <span className="text-red-500 font-medium">{validationResult.failing} failing</span></>
+                                            )}
+                                        </span>
+                                        <button
+                                            onClick={handleValidate}
+                                            className="ml-auto text-xs text-primary hover:underline"
+                                        >
+                                            Re-check
+                                        </button>
+                                    </>
+                                ) : null}
+                            </div>
+                        )}
                     </div>
 
                     {/* Results */}

@@ -40,6 +40,8 @@ export interface SwapParty {
     received_shift: ShiftTimeRange;
     /** The shift this party GIVES AWAY (removed from their schedule). */
     given_shift: ShiftTimeRange;
+    /** When true, this employee holds a student visa with work-hour restrictions. */
+    is_student_visa?: boolean;
 }
 
 /**
@@ -144,6 +146,8 @@ export interface SwapPartyInput {
     current_shifts: RosterShift[];
     /** The shift this party is giving away. */
     shift_to_give: RosterShift;
+    /** When true, this employee holds a student visa with work-hour restrictions. */
+    is_student_visa?: boolean;
 }
 
 export interface SwapEvaluationInput {

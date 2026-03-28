@@ -195,7 +195,6 @@ export interface AddParticipantRequest {
 }
 
 export interface BroadcastFilters {
-    isArchived?: boolean;
     priority?: BroadcastPriority;
     isPinned?: boolean;
     requiresAcknowledgement?: boolean;

@@ -159,6 +159,8 @@ export interface AllowedActions {
     canAssign: boolean;
     canUnassign: boolean;
     canPublish: boolean;
+    canUnpublish: boolean;
+    canDelete: boolean;
 }
 
 /**
@@ -170,24 +172,17 @@ export function getAllowedActions(shifts: Shift[]): AllowedActions {
         return {
             canAssign: false,
             canUnassign: false,
-            canPushToBidding: false,
-            canPullFromBidding: false,
-            canCancel: false,
             canPublish: false,
+            canUnpublish: false,
+            canDelete: false,
         };
     }
 
     const hasAssigned = shifts.some(s => !!s.assigned_employee_id);
-    const hasUnassigned = shifts.some(s => !s.assigned_employee_id);
     const hasBidding = shifts.some(s => s.bidding_status !== 'not_on_bidding');
     const hasCancelled = shifts.some(s => !!s.is_cancelled);
-    const hasNonCancelled = shifts.some(s => !s.is_cancelled);
-    const allBidding = shifts.every(s => s.bidding_status !== 'not_on_bidding');
-    const allUnassignedNotBidding = shifts.every(s => !s.assigned_employee_id && s.bidding_status === 'not_on_bidding' && !s.is_cancelled);
-
-    // Publish allowed if there is at least one draft shift
-    // We check lifecycle_status if available, or fallback to is_draft
     const hasDraft = shifts.some(s => s.lifecycle_status === 'Draft' || s.is_draft);
+    const hasPublished = shifts.some(s => s.lifecycle_status === 'Published');
 
     return {
         // Can assign if NO shifts are in bidding or cancelled
@@ -196,7 +191,13 @@ export function getAllowedActions(shifts: Shift[]): AllowedActions {
         // Can unassign if there are assigned shifts and NO shifts are in bidding
         canUnassign: hasAssigned && !hasBidding && !hasCancelled,
 
-        // Can publish if there are draft shifts
+        // Can publish if there are draft shifts (partial — compliance checked per-shift)
         canPublish: hasDraft && !hasCancelled,
+
+        // Can unpublish if any published shifts exist
+        canUnpublish: hasPublished,
+
+        // Delete is always available (with confirmation)
+        canDelete: true,
     };
 }

@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Input } from '@/modules/core/ui/primitives/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/modules/core/ui/primitives/dialog';
+import { BroadcastGroupFormFields } from './BroadcastGroupFormFields';
+import type { BroadcastGroup, UpdateBroadcastGroupRequest } from '@/modules/broadcasts/model/broadcast.types';
 
 export interface EditGroupDialogProps {
     isOpen: boolean;
     onClose: () => void;
-    group: any;
-    onUpdate: (groupId: string, data: any) => Promise<void>;
+    group: BroadcastGroup | null;
+    onUpdate: (groupId: string, data: UpdateBroadcastGroupRequest) => Promise<void>;
 }
 
 export const EditGroupDialog: React.FC<EditGroupDialogProps> = ({
@@ -47,22 +48,13 @@ export const EditGroupDialog: React.FC<EditGroupDialogProps> = ({
                     <DialogTitle>Edit Broadcast Group</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                        <label htmlFor="edit-name">Group Name</label>
-                        <Input
-                            id="edit-name"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label htmlFor="edit-description">Description</label>
-                        <Input
-                            id="edit-description"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                        />
-                    </div>
+                    <BroadcastGroupFormFields
+                        name={name}
+                        onNameChange={setName}
+                        description={description}
+                        onDescriptionChange={setDescription}
+                        disabled={isUpdating}
+                    />
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose} disabled={isUpdating}>

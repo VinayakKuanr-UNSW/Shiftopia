@@ -238,6 +238,7 @@ export const swapsApi = {
         const offersQuery = db
             .from('swap_offers')
             .select(`
+                *,
                 swap_request:shift_swaps!swap_request_id(
                     *,
                     requester_shift:shifts!requester_shift_id(
@@ -274,7 +275,23 @@ export const swapsApi = {
 
         // Extract swap requests from my offers
         const myOffersAsSwaps = (offersResult.data || [])
-            .map((o: any) => o.swap_request)
+            .map((o: any) => {
+                const swapReq = o.swap_request;
+                if (!swapReq) return null;
+                
+                // Attach the offer details to the parent swap request so the UI can read myOffer?.status
+                swapReq.swap_offers = swapReq.swap_offers || [];
+                swapReq.swap_offers.push({
+                    id: o.id,
+                    swap_request_id: o.swap_request_id,
+                    offerer_id: o.offerer_id,
+                    offered_shift_id: o.offered_shift_id,
+                    status: o.status,
+                    created_at: o.created_at
+                });
+
+                return swapReq;
+            })
             .filter((s: any) => s !== null);
 
         // Deduplicate (unlikely to overlap unless I offered on my own request?)
@@ -466,8 +483,8 @@ export const swapsApi = {
                 *,
                 offerer:profiles!offerer_id(*),
                 offered_shift:shifts!offered_shift_id(
-                    *,
-                    roles(name, group_type),
+                    id, shift_date, start_time, end_time, unpaid_break_minutes, lifecycle_status,
+                    roles(name),
                     departments(name),
                     sub_departments(name)
                 )
@@ -511,19 +528,15 @@ export const swapsApi = {
                 *,
                 requester_shift:shifts!requester_shift_id${shiftJoinType}(
                     *,
-                    roles(
-                        name,
-                        remuneration_levels(hourly_rate_min)
-                    ),
+                    roles(name),
+                    remuneration_levels(hourly_rate_min),
                     departments(name),
                     sub_departments(name)
                 ),
                 target_shift:shifts!target_shift_id(
                     *,
-                    roles(
-                        name,
-                        remuneration_levels(hourly_rate_min)
-                    ),
+                    roles(name),
+                    remuneration_levels(hourly_rate_min),
                     departments(name),
                     sub_departments(name)
                 ),
@@ -533,7 +546,14 @@ export const swapsApi = {
                     id,
                     status,
                     compliance_snapshot,
-                    offered_shift_id
+                    offered_shift_id,
+                    offerer_id,
+                    offered_shift:shifts!offered_shift_id(
+                        id, shift_date, start_time, end_time, unpaid_break_minutes, lifecycle_status,
+                        roles(name),
+                        departments(name)
+                    ),
+                    offerer:profiles!offerer_id(id, first_name, last_name, avatar_url)
                 )
             `)
             .eq('requester_shift.organization_id', organizationId)
@@ -603,6 +623,11 @@ export const swapsApi = {
         if (!offeredShiftData && offeredShiftId) {
             const { data: shiftRow } = await db.from('shifts').select('*').eq('id', offeredShiftId).single();
             offeredShiftData = shiftRow;
+        }
+
+        // §9 Time Lock: also guard the offered shift — both shifts must be > 4h away
+        if (offeredShiftData?.shift_date && offeredShiftData?.start_time) {
+            assertNotTimeLocked(offeredShiftData.shift_date, offeredShiftData.start_time);
         }
 
         // 4. Re-Verify Compliance at approval time with drift check (#2, #22)
@@ -876,11 +901,16 @@ function mapDbToSwapRequest(row: any): SwapRequestWithDetails {
         requestedShift: mapDbShift(row.target_shift),
         requestorEmployee: mapDbEmployee(row.requested_by),
         targetEmployee: mapDbEmployee(row.swap_with),
+        swap_offers: (row.swap_offers || []).map((offer: any) => ({
+            ...offer,
+            offered_shift: mapDbShift(offer.offered_shift),
+            offerer: offer.offerer // already has some fields, mapDbEmployee might be overkill or not needed if only basic fields used
+        })),
 
         // Metadata
         managerApprovedAt: row.updated_at,
         createdAt: row.created_at,
-        priority: 'medium',
+        // priority is computed in UI from shift date/time — not stored in DB
     } as SwapRequestWithDetails;
 }
 
@@ -899,6 +929,8 @@ function mapDbShift(shift: any): any {
         endTime: shift.end_time,
         roleId: shift.role_id,
         netLength: shift.net_length_minutes,
+        lifecycleStatus: shift.lifecycle_status,
+        stateId: undefined,
 
         // Relations explicitly requested in SwapRequestWithDetails
         roles: shift.roles,

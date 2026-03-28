@@ -9,26 +9,20 @@
  * Step panels are lazy-loaded for fast initial paint.
  */
 
-import React, { Suspense, lazy } from 'react';
-import { Dialog, DialogContent } from '@/modules/core/ui/primitives/dialog';
+import { Sheet, SheetContent } from '@/modules/core/ui/primitives/sheet';
 import { Form } from '@/modules/core/ui/primitives/form';
-import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
-import { Loader2 } from 'lucide-react';
+import { Button } from '@/modules/core/ui/primitives/button';
+import { Loader2, X, Plus, Save, Undo2 } from 'lucide-react';
+import { cn } from '@/modules/core/lib/utils';
+import { ShiftFormDrawerContent } from './components/ShiftFormDrawerContent';
 
 import type { EnhancedAddShiftModalProps } from './types';
 import { useShiftFormOrchestrator } from './hooks/useShiftFormOrchestrator';
 
 // ── Always-visible chrome (imported eagerly — zero extra latency) ──────────
 import {
-    ModalHeader,
-    ModalFooter,
     CancelConfirmDialog,
-    StepIndicator,
 } from './components';
-
-// ── Step panels (lazy) ────────────────────────────────────────────────────
-const ScheduleStep = lazy(() => import('./components/ScheduleStep').then(m => ({ default: m.ScheduleStep })));
-const AssignmentStep = lazy(() => import('./components/AssignmentStep').then(m => ({ default: m.AssignmentStep })));
 
 // ── Fallback while a step chunk loads ─────────────────────────────────────
 function StepSkeleton() {
@@ -66,13 +60,9 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
         // Context
         resolvedContext,
 
-        // Step navigation
-        currentStep,
-        completedSteps,
-        handleNextStep,
-        handlePrevStep,
-        handleStepClick,
-        isStepValid,
+        // Statuses
+        isAssignmentEnabled,
+        minShiftHours,
 
         // Values
         shiftLength,
@@ -92,23 +82,21 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
         isPublished,
         isReadOnly,
 
+
         // Roster
         selectedRosterId,
         setSelectedRosterId,
-        derivedRosterId,
 
         // Validation
         canSave,
+        hasDepartment,
+        hasRoster,
         hardValidation,
 
         // Compliance
-        complianceResults,
-        setComplianceResults,
-        complianceNeedsRerun,
-        buildComplianceInput,
+        compliancePanel,
         runChecks,
         clearResults,
-        handleComplianceComplete,
 
         // Watched fields
         watchEmployeeId,
@@ -121,122 +109,113 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
     } = useShiftFormOrchestrator(props);
 
     return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent
-                className="sm:max-w-[1400px] h-[90vh] p-0 gap-0 bg-background border-border overflow-hidden flex flex-col"
-                aria-describedby={undefined}
-            >
-                <ModalHeader
-                    editMode={editMode}
-                    isReadOnly={isReadOnly}
-                    isPast={isPast}
-                    isStarted={isStarted}
-                    isPublished={isPublished}
-                    safeContext={resolvedContext}
-                    onUnpublish={handleUnpublish}
-                />
-
-                <Form {...form}>
-                    <form
-                        id="shift-form"
-                        onSubmit={form.handleSubmit(handleSubmit)}
-                        className="flex flex-col flex-1 min-h-0 overflow-hidden"
-                    >
-                        {/* Step indicator */}
-                        <div className="px-6 pt-4 pb-6 border-b border-border">
-                            <StepIndicator
-                                currentStep={currentStep}
-                                completedSteps={completedSteps}
-                                onStepClick={handleStepClick}
-                                disabled={isReadOnly}
+        <>
+            <Sheet open={isOpen} onOpenChange={onClose}>
+                <SheetContent
+                    side="right"
+                    className="sm:max-w-[600px] p-0 gap-0 bg-card dark:bg-slate-950 border-border overflow-hidden flex flex-col focus-visible:ring-0 focus:outline-none"
+                    aria-describedby={undefined}
+                >
+                    <Form {...form}>
+                        <form
+                            id="shift-form"
+                            onSubmit={form.handleSubmit(handleSubmit)}
+                            className="flex flex-col h-full overflow-hidden"
+                        >
+                            <ShiftFormDrawerContent
+                                form={form}
+                                isReadOnly={isReadOnly}
+                                isPast={isPast}
+                                isStarted={isStarted}
+                                isPublished={isPublished}
+                                isTemplateMode={isTemplateMode}
                                 editMode={editMode}
+                                existingShift={props.existingShift}
+                                roles={roles}
+                                remunerationLevels={remunerationLevels}
+                                employees={employees}
+                                skills={skills}
+                                licenses={licenses}
+                                events={events}
+                                rosters={rosters}
+                                rosterStructure={rosterStructure}
+                                activeSubGroups={Object.values(activeSubGroups).flat()}
+                                isLoadingData={isLoadingData}
+                                resolvedContext={resolvedContext}
+                                selectedRosterId={selectedRosterId}
+                                setSelectedRosterId={setSelectedRosterId}
+                                shiftLength={shiftLength}
+                                netLength={netLength}
+                                hardValidation={hardValidation}
+                                isAssignmentEnabled={isAssignmentEnabled}
+                                minShiftHours={minShiftHours}
+                                compliancePanel={compliancePanel}
+                                runV2Compliance={runChecks}
+                                onUnpublish={handleUnpublish}
+                                canUnpublish={canUnpublish}
+                                isGroupLocked={isGroupLocked}
+                                isSubGroupLocked={isSubGroupLocked}
+                                isRoleLocked={isRoleLocked}
+                                isEmployeeLocked={isEmployeeLocked}
                             />
-                        </div>
 
-                        {/* Step panel — lazy-loaded */}
-                        <ScrollArea className="flex-1">
-                            <div className="px-6 py-6">
-                                <Suspense fallback={<StepSkeleton />}>
-                                    {currentStep === 1 && (
-                                        <ScheduleStep
-                                            form={form}
-                                            isReadOnly={isReadOnly}
-                                            isLoadingData={isLoadingData}
-                                            isTemplateMode={isTemplateMode}
-                                            shiftLength={shiftLength}
-                                            netLength={netLength}
-                                            hardValidation={hardValidation}
-                                            rosters={rosters}
-                                            rosterStructure={rosterStructure}
-                                            selectedRosterId={selectedRosterId}
-                                            onRosterChange={setSelectedRosterId}
-                                            isGroupLocked={isGroupLocked}
-                                            isSubGroupLocked={isSubGroupLocked}
-                                            isRosterLocked={isRosterLocked}
-                                            context={resolvedContext}
-                                            activeSubGroups={activeSubGroups}
-                                            // Column 5 props
-                                            roles={roles}
-                                            remunerationLevels={remunerationLevels}
-                                            skills={skills}
-                                            licenses={licenses}
-                                            events={events}
-                                            selectedRemLevel={selectedRemLevel}
-                                            isRoleLocked={isRoleLocked}
-                                        />
+                            {/* STICKY FOOTER ACTIONS */}
+                            <div className="flex-shrink-0 px-6 py-4 border-t border-border bg-card/90 dark:bg-slate-900/80 backdrop-blur-xl flex items-center justify-between gap-4 z-20">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={handleCancel}
+                                    className="h-11 px-6 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 font-bold transition-all flex items-center gap-2"
+                                >
+                                    <X className="h-4 w-4" />
+                                    <span>Cancel</span>
+                                </Button>
+
+                                <div className="flex items-center gap-3">
+                                    {canUnpublish && (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={handleUnpublish}
+                                            className="h-11 px-6 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 font-bold transition-all flex items-center gap-2 border border-rose-500/20"
+                                        >
+                                            <Undo2 className="h-4 w-4" />
+                                            <span>Unpublish</span>
+                                        </Button>
                                     )}
 
-                                    {currentStep === 2 && (
-                                        <AssignmentStep
-                                            form={form}
-                                            isReadOnly={isReadOnly}
-                                            isLoadingData={isLoadingData}
-                                            isTemplateMode={isTemplateMode}
-                                            employees={employees}
-                                            isEmployeeLocked={isEmployeeLocked}
-                                            existingShift={props.existingShift}
-                                            watchEmployeeId={watchEmployeeId}
-                                            hardValidation={hardValidation}
-                                            complianceResults={complianceResults}
-                                            setComplianceResults={setComplianceResults}
-                                            buildComplianceInput={buildComplianceInput}
-                                            runChecks={runChecks}
-                                            clearResults={clearResults}
-                                            complianceNeedsRerun={complianceNeedsRerun}
-                                            onChecksComplete={handleComplianceComplete}
-                                            shiftId={props.existingShift?.id}
-                                        />
-                                    )}
-                                </Suspense>
+                                    <Button
+                                        type="submit"
+                                        disabled={!canSave || isLoading}
+                                        className={cn(
+                                            "h-11 px-8 rounded-xl font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg",
+                                            canSave 
+                                                ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20" 
+                                                : "bg-slate-800 text-slate-500 cursor-not-allowed border border-white/5"
+                                        )}
+                                    >
+                                        {isLoading ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : editMode ? (
+                                            <Save className="h-4 w-4" />
+                                        ) : (
+                                            <Plus className="h-4 w-4" />
+                                        )}
+                                        <span>{editMode ? 'Update Shift' : 'Create Shift'}</span>
+                                    </Button>
+                                </div>
                             </div>
-                        </ScrollArea>
-                    </form>
-                </Form>
-
-                <ModalFooter
-                    currentStep={currentStep}
-                    isStepValid={isStepValid}
-                    isLoading={isLoading}
-                    canSave={canSave}
-                    isPast={isPast}
-                    isStarted={isStarted}
-                    isPublished={isPublished}
-                    editMode={editMode}
-                    onCancel={handleCancel}
-                    onPrevStep={handlePrevStep}
-                    onNextStep={handleNextStep}
-                    onSubmit={form.handleSubmit(handleSubmit)}
-                    onUnpublish={handleUnpublish}
-                    canUnpublish={canUnpublish}
-                />
-            </DialogContent>
+                        </form>
+                    </Form>
+                </SheetContent>
+            </Sheet>
 
             <CancelConfirmDialog
                 open={showCancelConfirm}
                 onOpenChange={setShowCancelConfirm}
                 onConfirm={onClose}
             />
-        </Dialog>
+        </>
     );
 };
 

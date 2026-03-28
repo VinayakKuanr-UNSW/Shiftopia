@@ -35,6 +35,7 @@ export const insightsApi = {
         const { data, error } = await supabase.rpc('get_insights_trend', {
             p_start_date: filters.startDate,
             p_end_date:   filters.endDate,
+            p_org_ids:    filters.orgIds?.length  ? filters.orgIds  : null,
             p_dept_ids:   filters.deptIds?.length ? filters.deptIds : null,
         });
         if (error) throw error;

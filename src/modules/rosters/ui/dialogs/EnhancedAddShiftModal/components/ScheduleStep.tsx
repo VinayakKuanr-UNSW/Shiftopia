@@ -1,5 +1,5 @@
 import React from 'react';
-import { format, parseISO, getDay } from 'date-fns';
+import { format, parseISO, getDay, isAfter, isBefore, isSameDay } from 'date-fns';
 import {
     FormControl,
     FormField,
@@ -12,6 +12,7 @@ import { Label } from '@/modules/core/ui/primitives/label';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { cn } from '@/modules/core/lib/utils';
 import { formatHours, formatTimeDisplay } from '../utils';
+import { isPublicHoliday } from '@/modules/core/lib/date.utils';
 import type { ScheduleStepProps } from '../types';
 import {
     Select,
@@ -35,12 +36,17 @@ import {
     AlertTriangle,
     Briefcase,
     Tag,
-    Lock,
+    Lock as LockIcon,
     StickyNote,
     Star,
     Shield,
     CalendarCheck,
     GraduationCap,
+    Utensils,
+    Coffee,
+    Sparkles,
+    CheckCircle2,
+    Info,
 } from 'lucide-react';
 import { Switch } from '@/modules/core/ui/primitives/switch';
 import {
@@ -167,13 +173,15 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
         }
     }, [isTemplateMode, rosters, onRosterChange, context?.date]);
 
-    // Min shift length validation (inline Step 1 feedback)
-    const minShiftHours = React.useMemo(() => {
-        if (watchIsTraining) return 2;
-        if (watchShiftDate && getDay(watchShiftDate) === 0) return 4; // Sunday
-        return 3; // Weekday default
+    // Min/max shift length validation (inline Step 1 feedback)
+    const { minShiftHours, minShiftReason } = React.useMemo(() => {
+        if (watchIsTraining) return { minShiftHours: 2, minShiftReason: 'Training shifts' };
+        if (watchShiftDate && isPublicHoliday(watchShiftDate)) return { minShiftHours: 4, minShiftReason: 'Public holidays' };
+        if (watchShiftDate && getDay(watchShiftDate) === 0) return { minShiftHours: 4, minShiftReason: 'Sundays' };
+        return { minShiftHours: 3, minShiftReason: 'Weekdays' };
     }, [watchIsTraining, watchShiftDate]);
     const isShiftTooShort = !isTemplateMode && netLength > 0 && netLength < minShiftHours;
+    const isShiftTooLong  = !isTemplateMode && netLength > 12;
 
     // Resolve names for badge display
     const selectedRole = roles.find(r => r.id === watchRoleId);
@@ -181,649 +189,500 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
     const selectedLicenseNames = licenses.filter(l => watchLicenses.includes(l.id)).map(l => l.name);
     const selectedEventNames = events.filter(e => watchEvents.includes(e.id)).map(e => e.name);
 
+    // Break recommendation logic
+    const breakRecs = React.useMemo(() => {
+        if (shiftLength > 10) {
+            return {
+                unpaid: 60,
+                paid: 30,
+                label: 'Long Shift (> 10h)',
+                description: 'We recommend 2 unpaid meal breaks (total ~60 min) and optional paid rest breaks (20–30 min).',
+                icon: <Utensils className="h-4 w-4 text-amber-500" />
+            };
+        } else if (shiftLength > 5) {
+            return {
+                unpaid: 30,
+                paid: 15,
+                label: 'Standard Shift (> 5h)',
+                description: 'We recommend 1 unpaid meal break (~30 min) and an optional short paid rest break (10–15 min).',
+                icon: <Coffee className="h-4 w-4 text-blue-500" />
+            };
+        } else {
+            return {
+                unpaid: 0,
+                paid: 0,
+                label: 'Short Shift (≤ 5h)',
+                description: 'No mandatory breaks recommended for this shift length.',
+                icon: <Sparkles className="h-4 w-4 text-emerald-500" />
+            };
+        }
+    }, [shiftLength]);
+
+    // Intelligence feedback strings
+    const intelligenceStrings = React.useMemo(() => {
+        const isSunday = watchShiftDate && getDay(watchShiftDate) === 0;
+        const isPH = watchShiftDate && isPublicHoliday(watchShiftDate);
+        
+        if (watchIsTraining) {
+            return {
+                title: 'Training Exemption',
+                description: 'This is a training shift. Minimum duration is reduced to 2h.',
+                icon: <GraduationCap className="h-4 w-4 text-violet-500" />,
+                color: 'text-violet-500',
+                bgColor: 'bg-violet-500/10'
+            };
+        }
+
+        if (isPH) {
+            return {
+                title: 'Public Holiday Context',
+                description: 'Shift falls on a Public Holiday. 4h minimum net duration applies.',
+                icon: <AlertCircle className="h-4 w-4 text-orange-500" />,
+                color: 'text-orange-500',
+                bgColor: 'bg-orange-500/10'
+            };
+        }
+
+        if (isSunday) {
+            return {
+                title: 'Sunday Context',
+                description: 'Shift falls on a Sunday. 4h minimum net duration applies.',
+                icon: <AlertCircle className="h-4 w-4 text-orange-500" />,
+                color: 'text-orange-500',
+                bgColor: 'bg-orange-500/10'
+            };
+        }
+
+        return {
+            title: 'Standard Weekday',
+            description: 'Standard 3h minimum net duration applies for this roster day.',
+            icon: <Info className="h-4 w-4 text-blue-500" />,
+            color: 'text-blue-500',
+            bgColor: 'bg-blue-500/10'
+        };
+    }, [watchShiftDate, watchIsTraining]);
+
+    const isRoleMissing = !watchRoleId;
+
+    const applyBreakSuggestions = () => {
+        form.setValue('unpaid_break_minutes', breakRecs.unpaid, { shouldDirty: true });
+        form.setValue('paid_break_minutes', breakRecs.paid, { shouldDirty: true });
+    };
+
     return (
-        <div className="space-y-5">
-            {/* ───────── ROW 1: 6-COLUMN DENSE GRID ───────── */}
-            <div className="grid grid-cols-6 gap-3 auto-rows-fr">
-
-                {/* ── COL 1: HIERARCHY ─────────────────── */}
-                <HierarchyColumn
-                    orgId={context?.organizationId}
-                    deptId={context?.departmentId}
-                    subDeptId={context?.subDepartmentId}
-                    orgName={context?.organizationName}
-                    deptName={context?.departmentName}
-                    subDeptName={context?.subDepartmentName}
-                />
-
-                {/* ── COL 2: CONTEXT ──────────────────── */}
-                <div className="flex flex-col h-full rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-amber-500/20 group/card">
-                    <div className="p-3 border-b border-border bg-muted/50 flex items-center gap-2">
-                        <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.15)]">
-                            <Lock className="h-4 w-4" />
+        <div className="space-y-4">
+            <div className="grid grid-cols-4 gap-4 h-[550px]">
+                {/* ═══════════════════════════════════════════════════════════════════════
+                   PANE 1: SCOPE & CONTEXT (6 Rows)
+                   ═══════════════════════════════════════════════════════════════════════ */}
+                <div className="bg-card border border-border rounded-2xl shadow-sm flex flex-col overflow-hidden">
+                    <div className="p-3 border-b border-border bg-muted/30 flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500">
+                            <Shield className="h-4 w-4" />
                         </div>
-                        <div>
-                            <h3 className="text-[11px] font-bold text-foreground tracking-tight uppercase">Context</h3>
-                            <p className="text-[9px] text-muted-foreground font-medium">Assignment Details</p>
-                        </div>
+                        <h3 className="text-[11px] font-bold text-foreground tracking-tight uppercase">Scope & Context</h3>
                     </div>
-
-                    <div className="p-3 flex flex-col gap-4 flex-1">
-                        {/* Roster */}
-                        <div className="flex flex-col justify-center">
-                            {isTemplateMode ? (
-                                <div className="space-y-1">
-                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">Roster</Label>
-                                    <div className="flex items-center gap-1.5 p-2 text-muted-foreground/50 rounded-lg border border-border bg-muted/30 text-[10px]">
-                                        <Lock className="w-3 h-3 opacity-50" />
-                                        <span>N/A — templates</span>
-                                    </div>
-                                </div>
-                            ) : !isReadOnly ? (
-                                <div className="space-y-1">
-                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">Roster</Label>
-                                    {rosters?.length > 0 ? (
-                                        <Select
-                                            disabled={isReadOnly || isRosterLocked}
-                                            value={selectedRosterId}
-                                            onValueChange={onRosterChange}
-                                        >
-                                            <SelectTrigger className={cn(
-                                                "h-8 bg-muted/50 border-border text-foreground text-[11px] hover:bg-accent transition-all rounded-lg focus:ring-1 focus:ring-amber-500/30",
-                                                !selectedRosterId && "border-amber-500/50"
-                                            )}>
+                    <div className="p-4 space-y-3 flex-1">
+                        {/* Row 1: Org */}
+                        <div className="space-y-1">
+                            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Organization</Label>
+                            <Input value={context?.organizationName || 'DeepMind Global'} disabled className="h-9 bg-muted/20 border-border/50 font-bold text-sm" />
+                        </div>
+                        {/* Row 2: Dept */}
+                        <div className="space-y-1">
+                            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Department</Label>
+                            <Input value={context?.departmentName || 'Core Operations'} disabled className="h-9 bg-muted/20 border-border/50 font-bold text-sm" />
+                        </div>
+                        {/* Row 3: Sub-Dept */}
+                        <div className="space-y-1">
+                            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Sub-Department</Label>
+                            <Input value={context?.subDepartmentName || 'General Staffing'} disabled className="h-9 bg-muted/20 border-border/50 font-bold text-sm" />
+                        </div>
+                        {/* Row 4: Roster Selection */}
+                        <FormField
+                            control={form.control}
+                            name="roster_id"
+                            render={({ field }) => (
+                                <FormItem className="space-y-1">
+                                    <FormLabel className="text-[10px] font-bold uppercase tracking-wider">Roster / Date Context</FormLabel>
+                                    <Select
+                                        disabled={isReadOnly || isRosterLocked}
+                                        onValueChange={onRosterChange}
+                                        value={selectedRosterId || undefined}
+                                    >
+                                        <FormControl>
+                                            <SelectTrigger className="h-9 border-border/50 bg-background font-bold text-sm">
                                                 <SelectValue placeholder="Select roster" />
                                             </SelectTrigger>
-                                            <SelectContent className="bg-popover border-border backdrop-blur-xl">
-                                                {rosters.map((roster) => (
-                                                    <SelectItem key={roster.id} value={roster.id} className="text-[11px] focus:bg-amber-500/10 focus:text-amber-400">
-                                                        {roster.name || roster.description || (roster.start_date ? format(parseISO(roster.start_date), 'dd MMM yyyy') : 'Unknown Roster')}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    ) : (
-                                        <div className="flex items-center gap-1.5 p-2 text-amber-400 rounded-lg border border-amber-500/10 bg-amber-500/5 text-[10px]">
-                                            <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                                            <span>No rosters — activate first</span>
-                                        </div>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="space-y-1">
-                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">Roster</Label>
-                                    <div className="text-[11px] text-muted-foreground font-medium px-1">
-                                        {selectedRoster ? (selectedRoster.name || (selectedRoster.start_date ? format(parseISO(selectedRoster.start_date), 'dd MMM yyyy') : 'Unknown')) : 'None'}
-                                    </div>
-                                </div>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {rosters.map(r => (
+                                                <SelectItem key={r.id} value={r.id} className="text-sm font-medium">
+                                                    {r.name} ({format(parseISO(r.start_date), 'MMM d')})
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </FormItem>
                             )}
-                        </div>
-
-                        {/* Group */}
-                        <div className="flex flex-col justify-center">
-                            {!isReadOnly ? (
-                                <FormField
-                                    control={form.control}
-                                    name="group_type"
-                                    render={({ field }) => (
-                                        <FormItem className="space-y-1">
-                                            <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">Group</FormLabel>
-                                            {isGroupLocked ? (
-                                                <FormControl>
-                                                    <Input
-                                                        {...field}
-                                                        value={field.value ? field.value.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : context?.groupName || ''}
-                                                        disabled={true}
-                                                        className="h-8 bg-muted/40 border-border text-muted-foreground text-[11px] rounded-lg cursor-not-allowed"
-                                                    />
-                                                </FormControl>
-                                            ) : !isRosterActive ? (
-                                                <div className="flex items-center gap-1.5 p-2 text-amber-400 rounded-lg border border-amber-500/10 bg-amber-500/5 text-[10px] animate-pulse">
-                                                    <AlertTriangle className="w-3 h-3 flex-shrink-0" />
-                                                    <span>Activate roster</span>
-                                                </div>
-                                            ) : availableGroups.length === 0 ? (
-                                                <div className="flex items-center gap-1.5 p-2 text-amber-400 rounded-lg border border-amber-500/10 bg-amber-500/5 text-[10px]">
-                                                    <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                                                    <span>No groups</span>
-                                                </div>
+                        />
+                        {/* Row 5: Group */}
+                        <FormField
+                            control={form.control}
+                            name="group_type"
+                            render={({ field }) => (
+                                <FormItem className="space-y-1">
+                                    <FormLabel className="text-[10px] font-bold uppercase tracking-wider">Venue Group</FormLabel>
+                                    <Select
+                                        disabled={isReadOnly || isGroupLocked}
+                                        onValueChange={field.onChange}
+                                        value={field.value}
+                                    >
+                                        <FormControl>
+                                            <SelectTrigger className="h-9 border-border/50 bg-background font-bold text-sm">
+                                                <SelectValue placeholder="Select group" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {showDefaultGroups ? (
+                                                <>
+                                                    <SelectItem value="Front of House">Front of House</SelectItem>
+                                                    <SelectItem value="Back of House">Back of House</SelectItem>
+                                                    <SelectItem value="Management">Management</SelectItem>
+                                                </>
                                             ) : (
-                                                <Select
-                                                    disabled={isReadOnly || !isRosterActive}
-                                                    onValueChange={(val) => {
-                                                        field.onChange(val);
-                                                        form.setValue('sub_group_name', '');
-                                                    }}
-                                                    defaultValue={field.value}
-                                                    value={field.value}
-                                                >
-                                                    <FormControl>
-                                                        <SelectTrigger className={cn(
-                                                            "h-8 bg-muted/50 border-border text-foreground text-[11px] hover:bg-accent transition-all rounded-lg",
-                                                            !isRosterActive && "opacity-50 cursor-not-allowed"
-                                                        )}>
-                                                            <SelectValue placeholder="Select group" />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent className="bg-popover border-border backdrop-blur-xl">
-                                                        {showDefaultGroups ? (
-                                                            <>
-                                                                <SelectItem value="convention_centre">Convention Centre</SelectItem>
-                                                                <SelectItem value="exhibition_centre">Exhibition Centre</SelectItem>
-                                                                <SelectItem value="theatre">Theatre</SelectItem>
-                                                            </>
-                                                        ) : (
-                                                            availableGroups.map(g => (
-                                                                <SelectItem key={g} value={g} className="focus:bg-amber-500/10 focus:text-amber-400">
-                                                                    {g?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                                                </SelectItem>
-                                                            ))
-                                                        )}
-                                                    </SelectContent>
-                                                </Select>
+                                                availableGroups.map(g => (
+                                                    <SelectItem key={g} value={g} className="text-sm font-medium">{g}</SelectItem>
+                                                ))
                                             )}
-                                            <FormMessage className="text-[9px] text-amber-400/80" />
-                                        </FormItem>
-                                    )}
-                                />
-                            ) : (
-                                <div className="space-y-1">
-                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">Group</Label>
-                                    <div className="text-[11px] text-muted-foreground font-medium px-1">
-                                        {watchGroupType ? watchGroupType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Not specified'}
-                                    </div>
-                                </div>
+                                        </SelectContent>
+                                    </Select>
+                                </FormItem>
                             )}
-                        </div>
-
-                        {/* Sub-Group */}
-                        <div className="flex flex-col justify-center">
-                            {!isReadOnly ? (
-                                <FormField
-                                    control={form.control}
-                                    name="sub_group_name"
-                                    render={({ field }) => (
-                                        <FormItem className="space-y-1">
-                                            <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">Sub-Group</FormLabel>
-                                            {isSubGroupLocked ? (
-                                                <FormControl>
-                                                    <Input
-                                                        {...field}
-                                                        disabled={true}
-                                                        className="h-8 bg-muted/40 border-border text-muted-foreground text-[11px] rounded-lg cursor-not-allowed"
-                                                    />
-                                                </FormControl>
-                                            ) : !isRosterActive || !watchGroupType ? (
-                                                <div className="flex items-center gap-1.5 p-2 text-muted-foreground/30 rounded-lg border border-border bg-muted/20 text-[10px] italic">
-                                                    <Lock className="w-3 h-3 opacity-50" />
-                                                    <span>Select group first</span>
-                                                </div>
-                                            ) : availableSubGroups.length === 0 ? (
-                                                <div className="flex items-center gap-1.5 p-2 text-amber-400/70 rounded-lg border border-amber-500/10 bg-amber-500/5 text-[10px]">
-                                                    <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                                                    <span>No subgroups</span>
-                                                </div>
-                                            ) : (
-                                                <Select
-                                                    disabled={isReadOnly || !watchGroupType || !isRosterActive}
-                                                    onValueChange={(val) => { field.onChange(val); }}
-                                                    value={field.value}
-                                                >
-                                                    <FormControl>
-                                                        <SelectTrigger className="h-8 bg-muted/50 border-border text-foreground text-[11px] hover:bg-accent transition-all rounded-lg">
-                                                            <SelectValue placeholder="Select sub-group" />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent className="bg-popover border-border backdrop-blur-xl">
-                                                        {availableSubGroups.map((sg) => (
-                                                            <SelectItem key={sg} value={sg} className="focus:bg-amber-500/10 focus:text-amber-400">
-                                                                {sg}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            )}
-                                            <FormMessage className="text-[9px] text-amber-400/80" />
-                                        </FormItem>
-                                    )}
-                                />
-                            ) : (
-                                <div className="space-y-1">
-                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">Sub-Group</Label>
-                                    <div className="text-[11px] text-muted-foreground font-medium px-1">
-                                        {watchSubGroup || 'Not specified'}
-                                    </div>
-                                </div>
+                        />
+                        {/* Row 6: Sub-Group */}
+                        <FormField
+                            control={form.control}
+                            name="sub_group_name"
+                            render={({ field }) => (
+                                <FormItem className="space-y-1">
+                                    <FormLabel className="text-[10px] font-bold uppercase tracking-wider">Sub-Group / Area</FormLabel>
+                                    <Select
+                                        disabled={isReadOnly || isSubGroupLocked || !availableSubGroups.length}
+                                        onValueChange={field.onChange}
+                                        value={field.value}
+                                    >
+                                        <FormControl>
+                                            <SelectTrigger className="h-9 border-border/50 bg-background font-bold text-sm">
+                                                <SelectValue placeholder="Select sub-group" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {availableSubGroups.map(sg => (
+                                                <SelectItem key={sg} value={sg} className="text-sm font-medium">{sg}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </FormItem>
                             )}
-                        </div>
+                        />
                     </div>
                 </div>
 
-                {/* ── COL 3: TIMINGS ──────────────────── */}
-                <div className="flex flex-col h-full rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-emerald-500/20 group/card">
-                    <div className="p-3 border-b border-border bg-muted/50 flex items-center gap-2">
-                        <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.15)]">
+                {/* ═══════════════════════════════════════════════════════════════════════
+                   PANE 2: TIMING & METRICS (6 Rows)
+                   ═══════════════════════════════════════════════════════════════════════ */}
+                <div className="bg-card border border-border rounded-2xl shadow-sm flex flex-col overflow-hidden">
+                    <div className="p-3 border-b border-border bg-muted/30 flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500">
                             <Clock className="h-4 w-4" />
                         </div>
-                        <div>
-                            <h3 className="text-[11px] font-bold text-foreground tracking-tight uppercase">Timings</h3>
-                            <p className="text-[9px] text-muted-foreground font-medium">Start & End</p>
-                        </div>
+                        <h3 className="text-[11px] font-bold text-foreground tracking-tight uppercase">Timing & Metrics</h3>
                     </div>
-
-                    <div className="p-3 flex flex-col gap-4 flex-1">
-                        {/* Start Time */}
+                    <div className="p-4 space-y-3 flex-1">
+                        {/* Row 1: Start Time */}
                         <FormField
                             control={form.control}
                             name="start_time"
                             render={({ field }) => (
                                 <FormItem className="space-y-1">
-                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">Start Time</FormLabel>
-                                    <FormControl>
-                                        {!isReadOnly ? (
-                                            <Input
-                                                type="time"
-                                                step="900"
-                                                className="h-8 text-sm font-bold bg-muted/50 border-border text-foreground focus:bg-accent focus:border-emerald-500/50 transition-all rounded-lg"
-                                                disabled={isReadOnly}
-                                                {...field}
-                                            />
-                                        ) : (
-                                            <div className="text-base font-bold text-foreground px-1">
-                                                {formatTimeDisplay(field.value)}
-                                            </div>
-                                        )}
-                                    </FormControl>
-                                    <FormMessage className="text-[9px] text-emerald-500/80" />
+                                    <FormLabel className="text-[10px] font-bold uppercase tracking-wider">Start Time</FormLabel>
+                                    <Input {...field} type="time" disabled={isReadOnly} className="h-9 border-border/50 font-bold text-sm" />
                                 </FormItem>
                             )}
                         />
-
-                        {/* End Time */}
+                        {/* Row 2: End Time */}
                         <FormField
                             control={form.control}
                             name="end_time"
                             render={({ field }) => (
                                 <FormItem className="space-y-1">
-                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">End Time</FormLabel>
-                                    <FormControl>
-                                        {!isReadOnly ? (
-                                            <Input
-                                                type="time"
-                                                step="900"
-                                                className="h-8 text-sm font-bold bg-muted/50 border-border text-foreground focus:bg-accent focus:border-emerald-500/50 transition-all rounded-lg"
-                                                disabled={isReadOnly}
-                                                {...field}
-                                            />
-                                        ) : (
-                                            <div className="text-base font-bold text-foreground px-1">
-                                                {formatTimeDisplay(field.value)}
-                                            </div>
-                                        )}
-                                    </FormControl>
-                                    <FormMessage className="text-[9px] text-emerald-500/80" />
+                                    <FormLabel className="text-[10px] font-bold uppercase tracking-wider">End Time</FormLabel>
+                                    <Input {...field} type="time" disabled={isReadOnly} className="h-9 border-border/50 font-bold text-sm" />
                                 </FormItem>
                             )}
                         />
-
-                        {/* Length */}
-                        <div>
-                            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] mb-1 block">Length</Label>
-                            <div className={cn(
-                                "relative p-2.5 rounded-xl border transition-all duration-300",
-                                shiftLength > 0 ? "bg-emerald-500/[0.08] border-emerald-500/30" : "bg-muted/40 border-border"
-                            )}>
-                                <div className="flex items-baseline gap-1.5">
-                                    <p className="text-xl font-bold text-foreground tracking-tight">
-                                        {shiftLength.toFixed(1)}
-                                    </p>
-                                    <p className="text-[10px] font-medium text-emerald-400 uppercase tracking-widest">
-                                        Hours
-                                    </p>
-                                </div>
-                                {shiftLength > 12 && (
-                                    <div className="mt-1.5 p-1.5 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center gap-1.5">
-                                        <AlertTriangle className="h-3 w-3 text-red-400" />
-                                        <p className="text-[9px] font-bold text-red-400 uppercase">Long Shift</p>
-                                    </div>
-                                )}
+                        {/* Row 3: Total Gross */}
+                        <div className="space-y-1">
+                            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Total Duration (Gross)</Label>
+                            <div className="h-9 flex items-center px-3 bg-muted/20 border border-border/50 rounded-md font-bold text-sm text-foreground">
+                                {formatHours(shiftLength)}
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                {/* ── COL 4: BREAKS ───────────────────── */}
-                <div className="flex flex-col h-full rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-blue-500/20 group/card">
-                    <div className="p-3 border-b border-border bg-muted/50 flex items-center gap-2">
-                        <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.15)]">
-                            <Timer className="h-4 w-4" />
-                        </div>
-                        <div>
-                            <h3 className="text-[11px] font-bold text-foreground tracking-tight uppercase">Breaks</h3>
-                            <p className="text-[9px] text-muted-foreground font-medium">Pay Deductions</p>
-                        </div>
-                    </div>
-
-                    <div className="p-3 flex flex-col gap-4 flex-1">
-                        {/* Paid Break */}
+                        {/* Row 4: Paid Break */}
                         <FormField
                             control={form.control}
                             name="paid_break_minutes"
                             render={({ field }) => (
                                 <FormItem className="space-y-1">
-                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] flex justify-between">
-                                        Paid <span className="text-[8px] lowercase opacity-40">(min)</span>
+                                    <FormLabel className="text-[10px] font-bold uppercase tracking-wider flex justify-between">
+                                        Paid Break <span>(min)</span>
                                     </FormLabel>
-                                    <FormControl>
-                                        <div className="relative">
-                                            <Input
-                                                type="number"
-                                                min="0"
-                                                className="h-8 pl-3 bg-muted/50 border-border text-foreground focus:bg-accent focus:border-blue-500/50 transition-all rounded-lg text-[11px]"
-                                                disabled={isReadOnly}
-                                                value={field.value ?? ''}
-                                                onChange={(e) => {
-                                                    const val = e.target.valueAsNumber;
-                                                    field.onChange(isNaN(val) ? undefined : val);
-                                                }}
-                                            />
-                                            <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                                                <CheckCircle className={cn(
-                                                    "h-3 w-3 transition-all",
-                                                    (field.value ?? 0) > 0 ? "text-emerald-500" : "text-muted-foreground/10"
-                                                )} />
-                                            </div>
-                                        </div>
-                                    </FormControl>
+                                    <Input
+                                        type="number"
+                                        disabled={isReadOnly}
+                                        value={field.value}
+                                        onChange={e => field.onChange(parseInt(e.target.value) || 0)}
+                                        className="h-9 border-border/50 font-bold text-sm"
+                                    />
                                 </FormItem>
                             )}
                         />
-
-                        {/* Unpaid Break */}
+                        {/* Row 5: Unpaid Break */}
                         <FormField
                             control={form.control}
                             name="unpaid_break_minutes"
                             render={({ field }) => (
                                 <FormItem className="space-y-1">
-                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] flex justify-between">
-                                        Unpaid <span className="text-[8px] lowercase opacity-40">(min)</span>
+                                    <FormLabel className="text-[10px] font-bold uppercase tracking-wider flex justify-between">
+                                        Unpaid Break <span>(min)</span>
                                     </FormLabel>
-                                    <FormControl>
-                                        <div className="relative">
-                                            <Input
-                                                type="number"
-                                                min="0"
-                                                className="h-8 pl-3 bg-muted/50 border-border text-foreground focus:bg-accent focus:border-rose-500/50 transition-all rounded-lg text-[11px]"
-                                                disabled={isReadOnly}
-                                                value={field.value ?? ''}
-                                                onChange={(e) => {
-                                                    const val = e.target.valueAsNumber;
-                                                    field.onChange(isNaN(val) ? undefined : val);
-                                                }}
-                                            />
-                                            <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                                                <X className={cn(
-                                                    "h-3 w-3 transition-all",
-                                                    (field.value ?? 0) > 0 ? "text-rose-500" : "text-muted-foreground/10"
-                                                )} />
-                                            </div>
-                                        </div>
-                                    </FormControl>
+                                    <Input
+                                        type="number"
+                                        disabled={isReadOnly}
+                                        value={field.value}
+                                        onChange={e => field.onChange(parseInt(e.target.value) || 0)}
+                                        className="h-9 border-border/50 font-bold text-sm"
+                                    />
                                 </FormItem>
                             )}
                         />
-
-                        {/* Net Length */}
-                        <div>
-                            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] mb-1 block">Net Length</Label>
+                        {/* Row 6: Net Length */}
+                        <div className="space-y-1 pt-1">
+                            <Label className="text-[10px] font-bold uppercase tracking-wider text-emerald-500/80">Net Paid Length</Label>
                             <div className={cn(
-                                "h-12 px-3 rounded-xl border flex flex-col justify-center transition-all duration-500 relative overflow-hidden",
-                                netLength > 0 ? "bg-blue-500/[0.08] border-blue-500/30" : "bg-muted/40 border-border"
+                                "h-10 flex items-center justify-center rounded-xl font-black text-lg shadow-sm",
+                                isShiftTooShort
+                                    ? "bg-red-500/10 border border-red-500/30 text-red-500 shadow-red-500/5"
+                                    : isShiftTooLong
+                                        ? "bg-amber-500/10 border border-amber-500/30 text-amber-500 shadow-amber-500/5"
+                                        : "bg-emerald-500/5 border border-emerald-500/20 text-emerald-500 shadow-emerald-500/5",
                             )}>
-                                <div className="flex items-baseline gap-1.5">
-                                    <span className={cn(
-                                        "text-lg font-black tracking-tighter transition-all",
-                                        netLength > 0 ? "text-foreground" : "text-muted-foreground/10"
-                                    )}>
-                                        {formatHours(netLength)}
-                                    </span>
-                                    <span className={cn(
-                                        "text-[9px] font-black uppercase tracking-widest transition-colors",
-                                        netLength > 0 ? "text-blue-400/80" : "text-muted-foreground/10"
-                                    )}>
-                                        Paid
-                                    </span>
-                                </div>
+                                {formatHours(netLength)}
                             </div>
-                        </div>
-
-                        {/* Training Shift Toggle */}
-                        <div className={cn(
-                            "rounded-xl border px-3 py-2.5 flex items-center justify-between transition-all duration-300",
-                            watchIsTraining
-                                ? "bg-violet-500/[0.08] border-violet-500/30"
-                                : "bg-muted/40 border-border"
-                        )}>
-                            <div className="flex items-center gap-2">
-                                <GraduationCap className={cn(
-                                    "h-3.5 w-3.5 transition-colors",
-                                    watchIsTraining ? "text-violet-500" : "text-muted-foreground/40"
-                                )} />
-                                <div>
-                                    <span className={cn(
-                                        "text-[10px] font-black uppercase tracking-wider",
-                                        watchIsTraining ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground/60"
-                                    )}>Training</span>
-                                    {watchIsTraining && (
-                                        <div className="text-[9px] text-violet-500/70 font-medium leading-none mt-0.5">2h min applies</div>
-                                    )}
-                                </div>
-                            </div>
-                            <Switch
-                                checked={watchIsTraining || false}
-                                onCheckedChange={(checked) => form.setValue('is_training', checked)}
-                                disabled={isReadOnly}
-                                className="data-[state=checked]:bg-violet-500 scale-75"
-                            />
-                        </div>
-
-                        {/* Inline min shift length warning */}
-                        {isShiftTooShort && !isReadOnly && (
-                            <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-red-500/10 border border-red-500/25 animate-in fade-in duration-200">
-                                <AlertTriangle className="h-3.5 w-3.5 text-red-400 flex-shrink-0" />
-                                <div className="min-w-0">
-                                    <p className="text-[9px] font-black uppercase tracking-wider text-red-400 leading-none">Too Short</p>
-                                    <p className="text-[8px] text-red-400/70 leading-tight mt-0.5">
-                                        {netLength.toFixed(1)}h · min {minShiftHours}h{' '}
-                                        ({watchIsTraining ? 'training' : watchShiftDate && getDay(watchShiftDate) === 0 ? 'Sunday' : 'weekday'})
+                            {isShiftTooShort && (
+                                <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20">
+                                    <X className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                    <p className="text-[11px] font-bold text-red-500">
+                                        Min {minShiftHours}h — {minShiftReason} require at least {minShiftHours} hours (net paid).
                                     </p>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                            {isShiftTooLong && (
+                                <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                                    <p className="text-[11px] font-bold text-amber-500">
+                                        Max 12h — Net paid length exceeds 12 hours.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                {/* ── COL 5: ASSIGNMENT CRITERIA ─────── */}
-                <div className="flex flex-col h-full rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-cyan-500/20 group/card">
-                    <div className="p-3 border-b border-border bg-muted/50 flex items-center gap-2">
-                        <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-500 shadow-[0_0_12px_rgba(6,182,212,0.15)]">
-                            <Tag className="h-4 w-4" />
+                {/* ═══════════════════════════════════════════════════════════════════════
+                   PANE 3: CRITERIA & NOTES (6 Rows)
+                   ═══════════════════════════════════════════════════════════════════════ */}
+                <div className="bg-card border border-border rounded-2xl shadow-sm flex flex-col overflow-hidden">
+                    <div className="p-3 border-b border-border bg-muted/30 flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
+                            <Briefcase className="h-4 w-4" />
                         </div>
-                        <div>
-                            <h3 className="text-[11px] font-bold text-foreground tracking-tight uppercase">Criteria</h3>
-                            <p className="text-[9px] text-muted-foreground font-medium">Role & Requirements</p>
-                        </div>
+                        <h3 className="text-[11px] font-bold text-foreground tracking-tight uppercase">Criteria & Notes</h3>
                     </div>
-
-                    <div className="p-3 flex flex-col gap-3 flex-1 overflow-y-auto">
-                        {/* Role */}
+                    <div className="p-4 space-y-3 flex-1 overflow-y-auto custom-scrollbar">
+                        {/* Row 1: Role */}
                         <FormField
                             control={form.control}
                             name="role_id"
                             render={({ field }) => (
                                 <FormItem className="space-y-1">
-                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] flex items-center gap-1">
-                                        <Briefcase className="h-3 w-3" /> Role *
-                                    </FormLabel>
-                                    {!isReadOnly && !isRoleLocked ? (
-                                        <Select onValueChange={field.onChange} value={field.value || ''} disabled={isReadOnly || isRoleLocked}>
-                                            <FormControl>
-                                                <SelectTrigger className={cn(
-                                                    "h-8 bg-muted/50 border-border text-foreground text-[11px] hover:bg-accent transition-all rounded-lg",
-                                                    !field.value && "border-amber-500/50"
-                                                )}>
-                                                    <SelectValue placeholder="Select role" />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent className="bg-popover border-border">
-                                                {roles.map((role) => (
-                                                    <SelectItem key={role.id} value={role.id} className="text-[11px] text-foreground">
-                                                        {role.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    ) : (
-                                        <div className="text-[11px] font-medium text-foreground px-1">
-                                            {selectedRole?.name || 'No role'}
-                                        </div>
-                                    )}
-                                    <FormMessage className="text-[9px]" />
+                                    <FormLabel className="text-[10px] font-bold uppercase tracking-wider">Required Role</FormLabel>
+                                    <Select
+                                        disabled={isReadOnly || isRoleLocked}
+                                        onValueChange={field.onChange}
+                                        value={field.value}
+                                    >
+                                        <FormControl>
+                                            <SelectTrigger className="h-9 border-border/50 bg-background font-bold text-sm">
+                                                <SelectValue placeholder="Select role" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {roles.map(r => (
+                                                <SelectItem key={r.id} value={r.id} className="text-sm font-medium">{r.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </FormItem>
                             )}
                         />
-
-                        {/* Pay Level — derived from role */}
-                        {selectedRemLevel && (
-                            <div className="space-y-1">
-                                <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] flex items-center gap-1">
-                                    <Star className="h-3 w-3" /> Pay
-                                </Label>
-                                <MiniBadge label={`${selectedRemLevel.level_name} — $${selectedRemLevel.hourly_rate_min}/hr`} color="amber" />
-                            </div>
-                        )}
-
-                        {/* Skills */}
+                        {/* Row 2: Skills */}
+                        <div className="space-y-1">
+                            <Label className="text-[10px] font-bold uppercase tracking-wider">Required Skills</Label>
+                            <MultiSelect
+                                options={skills}
+                                selected={watchSkills}
+                                onChange={(val) => form.setValue('required_skills', val)}
+                                placeholder="Select skills..."
+                                className="min-h-[36px]"
+                            />
+                        </div>
+                        {/* Row 3: Licenses */}
+                        <div className="space-y-1">
+                            <Label className="text-[10px] font-bold uppercase tracking-wider">Certifications</Label>
+                            <MultiSelect
+                                options={licenses}
+                                selected={watchLicenses}
+                                onChange={(val) => form.setValue('required_licenses', val)}
+                                placeholder="Select licenses..."
+                                className="min-h-[36px]"
+                            />
+                        </div>
+                        {/* Row 4: Events */}
+                        <div className="space-y-1">
+                            <Label className="text-[10px] font-bold uppercase tracking-wider">Event Context</Label>
+                            <MultiSelect
+                                options={events}
+                                selected={watchEvents}
+                                onChange={(val) => form.setValue('event_ids', val)}
+                                placeholder="Link to event..."
+                                className="min-h-[36px]"
+                            />
+                        </div>
+                        {/* Row 5: Location Context (Static Placeholder as requested) */}
+                        <div className="space-y-1">
+                            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Location Context</Label>
+                            <Input value="Main Venue Context" disabled className="h-9 bg-muted/20 border-border/50 font-bold text-sm italic" />
+                        </div>
+                        {/* Row 6: Notes */}
                         <FormField
                             control={form.control}
-                            name="required_skills"
+                            name="notes"
                             render={({ field }) => (
                                 <FormItem className="space-y-1">
-                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] flex items-center gap-1">
-                                        <Shield className="h-3 w-3" /> Skills
-                                    </FormLabel>
-                                    {!isReadOnly ? (
-                                        <FormControl>
-                                            <MultiSelect
-                                                options={skills.map(s => ({ id: s.id, name: s.name }))}
-                                                selected={field.value || []}
-                                                onChange={field.onChange}
-                                                placeholder="Skills..."
-                                                disabled={isReadOnly}
-                                            />
-                                        </FormControl>
-                                    ) : (
-                                        <div className="flex flex-wrap gap-1">
-                                            {selectedSkillNames.length > 0
-                                                ? selectedSkillNames.map(name => <MiniBadge key={name} label={name} color="emerald" />)
-                                                : <span className="text-[10px] text-muted-foreground/30">None</span>}
-                                        </div>
-                                    )}
-                                </FormItem>
-                            )}
-                        />
-
-                        {/* Licenses */}
-                        <FormField
-                            control={form.control}
-                            name="required_licenses"
-                            render={({ field }) => (
-                                <FormItem className="space-y-1">
-                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] flex items-center gap-1">
-                                        <CalendarCheck className="h-3 w-3" /> Licenses
-                                    </FormLabel>
-                                    {!isReadOnly ? (
-                                        <FormControl>
-                                            <MultiSelect
-                                                options={licenses.map(l => ({ id: l.id, name: l.name }))}
-                                                selected={field.value || []}
-                                                onChange={field.onChange}
-                                                placeholder="Licenses..."
-                                                disabled={isReadOnly}
-                                            />
-                                        </FormControl>
-                                    ) : (
-                                        <div className="flex flex-wrap gap-1">
-                                            {selectedLicenseNames.length > 0
-                                                ? selectedLicenseNames.map(name => <MiniBadge key={name} label={name} color="blue" />)
-                                                : <span className="text-[10px] text-muted-foreground/30">None</span>}
-                                        </div>
-                                    )}
-                                </FormItem>
-                            )}
-                        />
-
-                        {/* Events */}
-                        <FormField
-                            control={form.control}
-                            name="event_ids"
-                            render={({ field }) => (
-                                <FormItem className="space-y-1">
-                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em] flex items-center gap-1">
-                                        <CalendarCheck className="h-3 w-3" /> Events
-                                    </FormLabel>
-                                    {!isReadOnly ? (
-                                        <FormControl>
-                                            <MultiSelect
-                                                options={events.map(e => ({ id: e.id, name: e.name }))}
-                                                selected={field.value || []}
-                                                onChange={field.onChange}
-                                                placeholder="Events..."
-                                                disabled={isReadOnly}
-                                            />
-                                        </FormControl>
-                                    ) : (
-                                        <div className="flex flex-wrap gap-1">
-                                            {selectedEventNames.length > 0
-                                                ? selectedEventNames.map(name => <MiniBadge key={name} label={name} color="violet" />)
-                                                : <span className="text-[10px] text-muted-foreground/30">None</span>}
-                                        </div>
-                                    )}
+                                    <FormLabel className="text-[10px] font-bold uppercase tracking-wider">Operational Notes</FormLabel>
+                                    <Textarea
+                                        {...field}
+                                        disabled={isReadOnly}
+                                        placeholder="Add shift notes..."
+                                        className="h-20 bg-background border-border/50 text-[11px] font-medium resize-none"
+                                    />
                                 </FormItem>
                             )}
                         />
                     </div>
                 </div>
 
-                {/* ── COL 6: NOTES ────────────────────── */}
-                <div className="flex flex-col h-full rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden shadow-2xl transition-all duration-300 hover:border-rose-500/20 group/card">
-                    <div className="p-3 border-b border-border bg-muted/50 flex items-center gap-2">
-                        <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.15)]">
-                            <StickyNote className="h-4 w-4" />
+                {/* ═══════════════════════════════════════════════════════════════════════
+                   PANE 4: INTELLIGENCE / RECOMMENDATIONS
+                   ═══════════════════════════════════════════════════════════════════════ */}
+                <div className="bg-card border border-border rounded-2xl shadow-sm flex flex-col overflow-hidden bg-gradient-to-br from-card to-muted/20">
+                    <div className="p-3 border-b border-border bg-muted/30 flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-violet-500/10 text-violet-500">
+                            <Sparkles className="h-4 w-4" />
                         </div>
-                        <div>
-                            <h3 className="text-[11px] font-bold text-foreground tracking-tight uppercase">Notes</h3>
-                            <p className="text-[9px] text-muted-foreground font-medium">Shift Remarks</p>
-                        </div>
+                        <h3 className="text-[11px] font-bold text-foreground tracking-tight uppercase">Intelligence</h3>
                     </div>
+                    <div className="flex-1 flex flex-col divide-y divide-border/50">
+                        {/* Segment 1: Warnings/Context */}
+                        <div className="p-4 space-y-3">
+                            <div className="flex items-start gap-3">
+                                <div className={cn("p-1.5 rounded-lg", intelligenceStrings.bgColor)}>
+                                    {intelligenceStrings.icon}
+                                </div>
+                                <div className="space-y-1">
+                                    <p className={cn("text-[10px] font-bold uppercase tracking-wider leading-none", intelligenceStrings.color)}>
+                                        {intelligenceStrings.title}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground font-medium leading-relaxed italic">
+                                        {intelligenceStrings.description}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
 
-                    <div className="p-3 flex-1">
-                        <FormField
-                            control={form.control}
-                            name="notes"
-                            render={({ field }) => (
-                                <FormItem className="h-full">
-                                    <FormControl>
-                                        <Textarea
-                                            placeholder="Add notes for this shift..."
-                                            className="h-full min-h-[200px] bg-muted/50 border-border text-foreground resize-none text-[11px] rounded-lg focus:border-rose-500/30"
-                                            disabled={isReadOnly}
-                                            {...field}
-                                        />
-                                    </FormControl>
-                                </FormItem>
-                            )}
-                        />
+                        {/* Segment 2: Training Toggle */}
+                        <div className="p-4">
+                            <div className="flex items-center justify-between p-3 rounded-xl bg-background border border-border/50 shadow-sm">
+                                <div className="flex items-center gap-2">
+                                    <GraduationCap className="h-4 w-4 text-violet-500" />
+                                    <span className="text-[10px] font-bold uppercase tracking-wider">Training Shift</span>
+                                </div>
+                                <FormField
+                                    control={form.control}
+                                    name="is_training"
+                                    render={({ field }) => (
+                                        <FormControl>
+                                            <Switch
+                                                checked={field.value}
+                                                onCheckedChange={field.onChange}
+                                                disabled={isReadOnly}
+                                            />
+                                        </FormControl>
+                                    )}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Segment 2: Missing Data */}
+                        {isRoleMissing && (
+                            <div className="mx-4 p-3 rounded-xl bg-orange-500/5 border border-orange-500/20 flex items-center gap-3">
+                                <div className="p-1.5 rounded-lg bg-orange-500/10">
+                                    <Shield className="h-4 w-4 text-orange-500" />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider leading-none">Role Required</p>
+                                    <p className="text-[10px] text-muted-foreground font-medium mt-1 italic">
+                                        Please select a role to finalize assignment and check full compliance.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Segment 3: Advice */}
+                        <div className="p-4 space-y-4">
+                            <div className="flex items-center gap-3">
+                                {breakRecs.icon}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider leading-none mb-1">{breakRecs.label}</p>
+                                    <p className="text-[10px] text-muted-foreground italic truncate leading-tight">{breakRecs.description}</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={applyBreakSuggestions}
+                                disabled={isReadOnly || breakRecs.unpaid === 0}
+                                className={cn(
+                                    "w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg",
+                                    "bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/20 active:scale-95",
+                                    (isReadOnly || breakRecs.unpaid === 0) && "opacity-30 grayscale cursor-not-allowed shadow-none"
+                                )}
+                            >
+                                <Sparkles className="h-3 w-3" />
+                                Apply Recommendations
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -854,3 +713,4 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
         </div>
     );
 };
+

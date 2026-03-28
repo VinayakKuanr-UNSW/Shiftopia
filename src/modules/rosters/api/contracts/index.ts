@@ -35,7 +35,7 @@ export const AssignmentOutcomeSchema = z.enum([
 ]).nullable();
 
 export const BiddingStatusSchema = z.enum([
-  'not_on_bidding', 'on_bidding_normal', 'on_bidding_urgent', 'bidding_closed_no_winner',
+  'not_on_bidding', 'on_bidding', 'on_bidding_normal', 'on_bidding_urgent', 'bidding_closed_no_winner',
 ]);
 
 export const TradingStatusSchema = z.enum([

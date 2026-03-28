@@ -75,6 +75,10 @@ export interface TimesheetRow {
     // Statuses
     liveStatus: 'Completed' | 'Cancelled' | 'Active' | 'No-Show' | 'Swapped' | string;
     timesheetStatus: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | string;
+    // Attendance (from shifts.attendance_status)
+    attendanceStatus?: string | null;
+    // Minutes delta: actual_start vs scheduled_start (positive = late, negative = early)
+    varianceMinutes?: number | null;
 }
 
 /**

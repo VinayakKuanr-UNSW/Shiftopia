@@ -34,6 +34,7 @@ import { cn } from '@/modules/core/lib/utils';
 
 import { useAvailability } from '../state/useAvailability';
 import { useAvailabilityEditing } from '../state/useAvailabilityEditing';
+import { useAssignedShiftsForAvailability } from '../state/useAssignedShiftsForAvailability';
 import { AvailabilityRule, AvailabilityFormPayload } from '../model/availability.types';
 
 import { CalendarPane } from './panes/CalendarPane';
@@ -93,6 +94,9 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
     cancelEdit,
     submitEdit,
   } = useAvailabilityEditing();
+
+  // Fetch assigned shifts for current month (locked intervals shown as purple overlay)
+  const { assignedShifts } = useAssignedShiftsForAvailability('current-user', currentMonth);
 
   // ========================================
   // HANDLERS
@@ -303,6 +307,7 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
           <div className="flex-[2] min-w-[400px] border-r overflow-hidden">
             <CalendarPane
               slots={slots}
+              assignedShifts={assignedShifts}
               currentMonth={currentMonth}
               isLoading={isLoadingSlots}
             />

@@ -21,7 +21,7 @@ import {
     ComplianceResult
 } from '../types';
 import { differenceInMinutes, parseISO, getDay } from 'date-fns';
-import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime, SYDNEY_TZ, isPublicHoliday } from '@/modules/core/lib/date.utils';
 
 type ShiftContext = 'training' | 'sunday_or_holiday' | 'weekday';
 
@@ -39,7 +39,7 @@ function resolveShiftContext(input: ComplianceCheckInput): { context: ShiftConte
     }
 
     // Public holiday
-    if (input.public_holiday_dates?.includes(shiftDate)) {
+    if (isPublicHoliday(parseISO(shiftDate))) {
         return { context: 'sunday_or_holiday', minHours: 4 };
     }
 

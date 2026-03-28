@@ -4,6 +4,7 @@ import {
     ArrowDown,
     CheckCircle,
     XCircle,
+    AlertTriangle,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useTheme } from "@/modules/core/contexts/ThemeContext";
@@ -189,6 +190,16 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
 
     const pendingCount = sortedEntries.filter(e => e.timesheetStatus === 'DRAFT' || e.timesheetStatus === 'SUBMITTED').length;
 
+    const attendanceSummary = useMemo(() => ({
+        late: sortedEntries.filter(e => e.attendanceStatus === 'late').length,
+        noShow: sortedEntries.filter(e => e.attendanceStatus === 'no_show').length,
+        missing: sortedEntries.filter(e => {
+            const isActiveOrComplete = e.liveStatus === 'InProgress' || e.liveStatus === 'Completed';
+            const noCheckIn = !e.clockIn || e.clockIn === '-';
+            return isActiveOrComplete && noCheckIn && e.attendanceStatus !== 'no_show';
+        }).length,
+    }), [sortedEntries]);
+
     return (
         <div className="overflow-x-auto mt-8">
             <Tabs value={viewMode} onValueChange={(v) => onViewChange(v as 'table' | 'group')}>
@@ -250,6 +261,32 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                             )}
                         </div>
 
+                        {/* Attendance issues summary bar */}
+                        {(attendanceSummary.late > 0 || attendanceSummary.noShow > 0 || attendanceSummary.missing > 0) && (
+                            <div className="px-6 py-2.5 border-b border-border bg-amber-500/5 flex items-center gap-3 flex-wrap">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                    <CheckCircle className="h-3 w-3" />Attendance Flags:
+                                </span>
+                                {attendanceSummary.late > 0 && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                        Late In · {attendanceSummary.late}
+                                    </span>
+                                )}
+                                {attendanceSummary.noShow > 0 && (
+                                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 shadow-sm animate-in fade-in slide-in-from-left-2">
+                                        <XCircle size={14} className="shrink-0" />
+                                        <span className="text-xs font-black uppercase tracking-tighter">{attendanceSummary.noShow} No Show</span>
+                                    </div>
+                                )}
+                                {attendanceSummary.missing > 0 && (
+                                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 shadow-sm animate-in fade-in slide-in-from-left-2">
+                                        <AlertTriangle size={14} className="shrink-0" />
+                                        <span className="text-xs font-black uppercase tracking-tighter">{attendanceSummary.missing} Missing Check-in</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         <div className="overflow-x-auto">
                             <table className="w-full border-collapse min-w-[2200px]">
                                 <thead>
@@ -268,7 +305,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                             Scheduled
                                         </th>
                                         <th colSpan={2} className={`p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 ${headerGroupStyles.geofenced}`}>
-                                            Geofenced
+                                            Attendance (Actual)
                                         </th>
                                         <th colSpan={6} className={`p-3 text-[10px] font-black uppercase tracking-widest text-primary text-center border-b-2 border-primary/20 ${headerGroupStyles.adjusted}`}>
                                             Adjusted (Inline Edit)
@@ -276,7 +313,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                         <th colSpan={2} className={`p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 ${headerGroupStyles.payroll}`}>
                                             Payroll
                                         </th>
-                                        <th colSpan={2} className={`p-3 text-[10px] font-black uppercase tracking-widest text-primary text-center border-b-2 border-primary/20 ${headerGroupStyles.statuses}`}>
+                                        <th colSpan={3} className={`p-3 text-[10px] font-black uppercase tracking-widest text-primary text-center border-b-2 border-primary/20 ${headerGroupStyles.statuses}`}>
                                             Statuses
                                         </th>
                                         <th className={`p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 ${headerGroupStyles.actions}`}>
@@ -321,7 +358,8 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                         <SortableHeader field="approximatePay" label="Approximate Pay" />
                                         <SortableHeader field="differential" label="Differential" />
                                         {/* Statuses */}
-                                        <SortableHeader field="liveStatus" label="Live Status" />
+                                        <SortableHeader field="liveStatus" label="Lifecycle" />
+                                        <SortableHeader field="attendanceStatus" label="Attendance" />
                                         <SortableHeader field="timesheetStatus" label="Timesheet Status" />
                                         {/* Actions */}
                                         <th className="p-3 text-[10px] font-black uppercase tracking-widest text-foreground/70 text-center border-b border-border/50">

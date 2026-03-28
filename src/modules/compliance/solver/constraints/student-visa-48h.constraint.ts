@@ -3,6 +3,21 @@ import type { ShiftTimeRange } from '../../types';
 import { StudentVisa48hRule } from '../../rules/student-visa-48h';
 
 function evaluateParty(party: SwapParty, config: SolverConfig): ConstraintViolation {
+    // Skip entirely for employees who do not hold a student visa with work restrictions.
+    if (!party.is_student_visa) {
+        return {
+            constraint_id: 'STUDENT_VISA_48H',
+            constraint_name: 'Student Visa 48h/Fortnight',
+            employee_id: party.employee_id,
+            employee_name: party.name,
+            status: 'pass',
+            summary: 'Not applicable — no student visa work restriction on file',
+            details: 'This employee does not hold a student visa with hour restrictions.',
+            calculation: { enforcement_enabled: false, not_applicable: true },
+            blocking: false,
+        };
+    }
+
     const existingWithoutReceived: ShiftTimeRange[] = party.hypothetical_schedule.filter(
         s => !(
             s.shift_date === party.received_shift.shift_date &&

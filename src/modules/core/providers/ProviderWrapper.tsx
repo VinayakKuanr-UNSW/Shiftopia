@@ -66,12 +66,12 @@ const ProviderWrapper: React.FC<ProviderWrapperProps> = ({ children }) => {
           <AuthProvider>
             <OrgSelectionProvider>
               <SearchProvider>
-                <SidebarProvider defaultOpen={false}>
+                <SidebarProvider defaultOpen={true}>
                   <div className="h-full w-full overflow-hidden">
                     <Toaster />
                     <Sonner />
                     <RosterUIProvider>
-                      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                      <BrowserRouter future={{ v7_relativeSplatPath: true }}>
                         {children}
                       </BrowserRouter>
                     </RosterUIProvider>

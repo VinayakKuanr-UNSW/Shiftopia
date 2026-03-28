@@ -85,6 +85,7 @@ export class ScenarioBuilder {
                 hypothetical_schedule: partyASchedule,
                 received_shift: partyB.shift_to_give,
                 given_shift: partyA.shift_to_give,
+                is_student_visa: partyA.is_student_visa,
             },
             partyB: {
                 employee_id: partyB.employee_id,
@@ -92,6 +93,7 @@ export class ScenarioBuilder {
                 hypothetical_schedule: partyBSchedule,
                 received_shift: partyA.shift_to_give,
                 given_shift: partyB.shift_to_give,
+                is_student_visa: partyB.is_student_visa,
             },
         };
     }

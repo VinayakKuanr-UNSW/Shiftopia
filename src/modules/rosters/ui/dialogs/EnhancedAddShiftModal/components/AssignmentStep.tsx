@@ -15,7 +15,7 @@ import {
 } from '@/modules/core/ui/primitives/form';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
-import { ComplianceTabContent } from '@/modules/rosters/ui/components/ComplianceTabContent';
+import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
 import {
     Users,
     Shield,
@@ -112,14 +112,9 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
     // Compliance
     watchEmployeeId,
     hardValidation,
-    complianceResults,
-    setComplianceResults,
-    buildComplianceInput,
+    compliancePanel,
     runChecks,
     clearResults,
-    complianceNeedsRerun,
-    onChecksComplete,
-    shiftId,
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [hoveredEmployeeId, setHoveredEmployeeId] = useState<string | null>(null);
@@ -357,24 +352,6 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
                                     : 'Select an employee first!'}
                         </p>
                     </div>
-
-                    {/* Compliance status indicator */}
-                    {inspectedEmployee && hardValidation.passed && Object.keys(complianceResults).length > 0 && (
-                        <div className={cn(
-                            "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border",
-                            Object.values(complianceResults).some(r => r?.status === 'fail' && r?.blocking)
-                                ? "bg-red-500/10 border-red-500/30 text-red-400"
-                                : Object.values(complianceResults).some(r => r?.status === 'fail')
-                                    ? "bg-amber-500/10 border-amber-500/30 text-amber-400"
-                                    : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                        )}>
-                            {Object.values(complianceResults).some(r => r?.status === 'fail' && r?.blocking)
-                                ? '⛔ Blocked'
-                                : Object.values(complianceResults).some(r => r?.status === 'fail')
-                                    ? '⚠ Warnings'
-                                    : '✓ Clear'}
-                        </div>
-                    )}
                 </div>
 
                 {/* Compliance Content */}
@@ -400,17 +377,7 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
                                 </p>
                             </div>
                         ) : (
-                            <ComplianceTabContent
-                                hardValidation={hardValidation}
-                                ruleResults={complianceResults}
-                                onRuleResult={(ruleId, result) =>
-                                    setComplianceResults(prev => ({ ...prev, [ruleId]: result }))
-                                }
-                                buildComplianceInput={buildComplianceInput}
-                                needsRerun={complianceNeedsRerun}
-                                onChecksComplete={onChecksComplete}
-                                shiftId={shiftId}
-                            />
+                            <CompliancePanel hook={compliancePanel} />
                         )}
                     </div>
                 </ScrollArea>

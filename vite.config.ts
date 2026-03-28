@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     mode === 'development' && componentTagger(),
-    visualizer({
+    mode !== 'production' && visualizer({
       filename: './dist/stats.html',
       open: false,
       gzipSize: true,
@@ -44,6 +44,11 @@ export default defineConfig(({ mode }) => ({
   optimizeDeps: {
     include: ['framer-motion', 'lucide-react', '@radix-ui/react-dialog'],
   },
+  ...(mode === 'production' && {
+    esbuild: {
+      drop: ['console', 'debugger'],
+    },
+  }),
   build: {
     rollupOptions: {
       output: {

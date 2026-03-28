@@ -18,7 +18,8 @@ export type SwapRequestStatus =
     | 'APPROVED'
     | 'REJECTED'
     | 'CANCELLED'
-    | 'COMPLETED';
+    | 'COMPLETED'
+    | 'EXPIRED';
 
 export interface SwapRequest {
     id: string;
@@ -62,6 +63,18 @@ export interface SwapRequestWithDetails extends SwapRequest {
         status: string;
         compliance_snapshot?: any;
         offered_shift_id?: string;
+        offerer_id?: string;
+        offered_shift?: {
+            shiftDate: string;
+            startTime: string;
+            endTime: string;
+            unpaidBreakMinutes?: number;
+            lifecycleStatus?: string;
+            stateId?: string;
+            roles?: { name: string } | null;
+            departments?: { name: string } | null;
+        } | null;
+        offerer?: { id: string; first_name: string; last_name: string; avatar_url?: string } | null;
     }[];
     managerApprovedAt?: string;
     priority?: string;

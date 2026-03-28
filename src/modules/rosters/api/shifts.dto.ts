@@ -18,6 +18,8 @@ export interface CreateShiftData {
     paid_break_minutes?: number;
     unpaid_break_minutes?: number;
     timezone?: string;
+    start_at?: string | null;
+    end_at?: string | null;
     assigned_employee_id?: string | null;
     required_skills?: string[];
     required_licenses?: string[];

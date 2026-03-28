@@ -5,6 +5,7 @@ import { Clock, MoreHorizontal, Gavel, ArrowLeftRight, Ban, X, Check, Flame, Edi
 import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
 import { determineShiftState, getShiftStateDebugString } from '../../domain/shift-state.utils';
 import { Shift } from '../../api/shifts.api';
+import { computeBiddingUrgency } from '../../domain/bidding-urgency';
 
 /* ============================================================
    TYPES
@@ -253,16 +254,16 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
             <div className="flex flex-col items-center gap-1">
               {(() => {
                 const b = rawShift.bidding_status;
-                if (b === 'on_bidding_normal') return <Gavel className="w-4 h-4 text-blue-500" />;
-                if (b === 'on_bidding_urgent') return <Flame className="w-4 h-4 text-red-600" />; // User said 'Flame Gavel'? Using Flame as established.
+                if (b === 'on_bidding_normal' || (b === 'on_bidding' && computeBiddingUrgency(rawShift.shift_date, rawShift.start_time) === 'normal')) return <Gavel className="w-4 h-4 text-blue-500" />;
+                if (b === 'on_bidding_urgent' || (b === 'on_bidding' && computeBiddingUrgency(rawShift.shift_date, rawShift.start_time) !== 'normal')) return <Flame className="w-4 h-4 text-red-600" />;
                 if (b === 'bidding_closed_no_winner') return <Lock className="w-4 h-4 text-gray-600" />;
                 return <Ban className="w-4 h-4 text-gray-400" />;
               })()}
               <span className="text-[9px] font-bold text-muted-foreground truncate w-full text-center">
                 {(() => {
                   const b = rawShift.bidding_status;
-                  if (b === 'on_bidding_normal') return 'OnBiddingNormal';
-                  if (b === 'on_bidding_urgent') return 'OnBiddingUrgent';
+                  if (b === 'on_bidding_normal' || (b === 'on_bidding' && computeBiddingUrgency(rawShift.shift_date, rawShift.start_time) === 'normal')) return 'OnBiddingNormal';
+                  if (b === 'on_bidding_urgent' || (b === 'on_bidding' && computeBiddingUrgency(rawShift.shift_date, rawShift.start_time) !== 'normal')) return 'OnBiddingUrgent';
                   if (b === 'bidding_closed_no_winner') return 'BiddingClosedNoWinner';
                   return 'NotOnBidding';
                 })()}

@@ -82,6 +82,7 @@ export async function callRpc<TOutput>(
 
   const parsed = outputSchema.safeParse(data);
   if (!parsed.success) {
+    console.error('RPC_VALIDATION mismatch for', rpcName, 'Received data:', data, 'Issues:', parsed.error.issues);
     throw new AppError({
       code: 'RPC_VALIDATION',
       message: `RPC '${rpcName}' returned an unexpected shape — types may be out of sync`,

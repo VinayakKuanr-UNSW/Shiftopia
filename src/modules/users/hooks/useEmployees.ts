@@ -1,13 +1,13 @@
 
 import { useQuery } from '@tanstack/react-query';
-import { employeeService } from '../services/employeeService';
+import { employeeService } from '../api/employee.service';
 
 export const useEmployees = () => {
-  // Get all employees
-  const useAllEmployees = () => {
+  // Get all employees, optionally scoped to specific orgs/depts
+  const useAllEmployees = (orgIds?: string[], deptIds?: string[]) => {
     return useQuery({
-      queryKey: ['employees'],
-      queryFn: employeeService.getAllEmployees
+      queryKey: ['employees', orgIds, deptIds],
+      queryFn: () => employeeService.getAllEmployees(orgIds, deptIds),
     });
   };
   

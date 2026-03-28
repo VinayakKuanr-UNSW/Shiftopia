@@ -36,6 +36,7 @@ export interface ShiftDisplay {
     isPublished: boolean;
     isDraft: boolean;
     isOnBidding: boolean;
+    isCancelled: boolean;
     rawShift: Shift;
 }
 
@@ -128,6 +129,7 @@ export function buildGroupsModeGrid(
                     isPublished: shift.is_published,
                     isDraft: shift.is_draft,
                     isOnBidding: shift.is_on_bidding,
+                    isCancelled: shift.is_cancelled,
                     rawShift: shift,
                 });
             });

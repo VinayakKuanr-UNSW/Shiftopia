@@ -1,7 +1,7 @@
 import React from 'react';
 import { Shift } from '@/modules/rosters';
 import { cn } from '@/modules/core/lib/utils';
-import { ArrowRightLeft, CheckCircle2 } from 'lucide-react';
+import { ArrowRightLeft, CheckCircle2, Inbox } from 'lucide-react';
 import { formatInTimezone } from '@/modules/core/lib/date.utils';
 
 interface MyRosterShiftProps {
@@ -25,11 +25,12 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
 }) => {
   // Format time helper using UTC-at-Rest where possible
   const formatTime = (utcTime?: string | null, localTimeString?: string, tzIdentifier?: string) => {
-    if (utcTime) {
+    // Favor local time string as it is the direct user intention and updated first.
+    // Falls back to UTC only if local string is missing.
+    if (!localTimeString && utcTime) {
       return formatInTimezone(new Date(utcTime), tzIdentifier || 'Australia/Sydney', 'h:mm a');
     }
 
-    // Fallback to local time strings if no UTC available yet
     if (!localTimeString) return '';
     try {
       const time = localTimeString.includes('T')
@@ -46,46 +47,46 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
 
   // Get gradient class based on group color
   const getGradientClass = () => {
+    const base = 'dept-card-glass-base';
     switch (groupColor?.toLowerCase()) {
-      case 'blue':
-        return 'bg-gradient-to-br from-blue-500 to-blue-700 border-blue-400/30 shadow-blue-500/20';
-      case 'green':
-        return 'bg-gradient-to-br from-green-500 to-green-700 border-green-400/30 shadow-green-500/20';
-      case 'red':
-        return 'bg-gradient-to-br from-red-500 to-red-700 border-red-400/30 shadow-red-500/20';
-      case 'purple':
-        return 'bg-gradient-to-br from-purple-500 to-purple-700 border-purple-400/30 shadow-purple-500/20';
-      case 'orange':
-        return 'bg-gradient-to-br from-orange-500 to-orange-700 border-orange-400/30 shadow-orange-500/20';
-      case 'yellow':
-        return 'bg-gradient-to-br from-yellow-500 to-yellow-700 border-yellow-400/30 shadow-yellow-500/20';
-      case 'sky':
-        return 'bg-gradient-to-br from-sky-500 to-sky-700 border-sky-400/30 shadow-sky-500/20';
-      case 'teal':
-        return 'bg-gradient-to-br from-teal-500 to-teal-700 border-teal-400/30 shadow-teal-500/20';
+      case 'convention':
+        return `${base} dept-card-glass-convention border-blue-400/30 shadow-blue-500/20`;
+      case 'exhibition':
+        return `${base} dept-card-glass-exhibition border-green-400/30 shadow-green-500/20`;
+      case 'theatre':
+        return `${base} dept-card-glass-theatre border-red-400/30 shadow-red-500/20`;
       default:
-        return 'bg-gradient-to-br from-blue-500 to-blue-700 border-blue-400/30 shadow-blue-500/20';
+        return `${base} dept-card-glass-default border-blue-400/30 shadow-blue-500/20`;
     }
   };
 
   const isTradeRequested = shift.trading_status === 'TradeRequested' || shift.trading_status === 'TradeAccepted';
   const isTradeAccepted = shift.trading_status === 'TradeAccepted';
+  const isPendingOffer = (shift as any).assignment_outcome === 'offered';
+
+  const cardClass = getGradientClass();
 
   // Compact view for week/month views
   if (compact) {
     return (
       <div
         className={cn(
-          'rounded-lg border text-white cursor-pointer transition-all duration-200',
+          'rounded-lg border cursor-pointer transition-all duration-200',
           'hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]',
           'flex flex-col justify-center px-2 py-1 h-full relative overflow-hidden',
           'shadow-md',
-          getGradientClass()
+          'text-white',
+          cardClass
         )}
         onClick={(e) => onClick?.(e)}
         style={style}
       >
-        {isTradeRequested && (
+        {isPendingOffer && (
+          <div className="absolute top-0 right-0 p-0.5 bg-slate-700/40 rounded-bl-lg">
+            <Inbox className="w-3 h-3 text-slate-400" />
+          </div>
+        )}
+        {isTradeRequested && !isPendingOffer && (
           <div className="absolute top-0 right-0 p-0.5 bg-black/20 rounded-bl-lg">
             <ArrowRightLeft className="w-3 h-3 text-amber-300" />
           </div>
@@ -104,17 +105,24 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
   return (
     <div
       className={cn(
-        'rounded-xl border text-white cursor-pointer transition-all duration-200',
+        'rounded-xl border cursor-pointer transition-all duration-200',
         'hover:scale-[1.01] hover:shadow-xl active:scale-[0.99]',
         'p-3 h-full flex flex-col justify-between relative overflow-hidden',
         'shadow-lg',
-        getGradientClass()
+        'text-white',
+        cardClass
       )}
       onClick={() => onClick?.()}
       style={style}
     >
       {/* Status Indicators */}
-      {isTradeRequested && (
+      {isPendingOffer && (
+        <div className="absolute top-0 right-0 bg-black/20 backdrop-blur-sm px-2 py-1 rounded-bl-xl border-l border-b border-white/10 flex items-center gap-1.5">
+          <Inbox className="w-3 h-3 text-white/80" />
+          <span className="text-[10px] font-medium text-white/80">Offer Pending</span>
+        </div>
+      )}
+      {isTradeRequested && !isPendingOffer && (
         <div className="absolute top-0 right-0 bg-black/30 backdrop-blur-sm px-2 py-1 rounded-bl-xl border-l border-b border-white/10 flex items-center gap-1.5">
           {isTradeAccepted ? (
             <>
@@ -130,7 +138,7 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
         </div>
       )}
 
-      <div className={cn(isTradeRequested && "mt-4")}>
+      <div className={cn((isTradeRequested || isPendingOffer) && "mt-4")}>
         {/* Role - Large and prominent */}
         <div className="font-bold text-sm mb-0.5 leading-tight">{shift.roles?.name || 'Shift'}</div>
         {/* Sub-group */}

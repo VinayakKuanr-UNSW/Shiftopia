@@ -13,28 +13,23 @@ import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { Label } from '@/modules/core/ui/primitives/label';
 import {
-  Clock,
   X,
-  Coffee,
-  Building,
-  Timer,
-  CalendarDays,
-  Loader2,
   ArrowLeftRight,
   History,
   ChevronDown,
+  Loader2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Shift } from '@/modules/rosters';
 import { useDropShift } from '@/modules/rosters/state/useRosterShifts';
+import { AttendanceBadge } from '@/modules/rosters/ui/components/AttendanceBadge';
 import { ShiftTimeline } from '@/modules/audit/components/ShiftTimeline';
 import { useSwaps } from '@/modules/planning';
 import { useToast } from '@/modules/core/hooks/use-toast';
-import { useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '@/platform/auth/useAuth';
 import CreateSwapRequestModal from './CreateSwapRequestModal';
+import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
+import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 
 interface ShiftWithDetails {
   shift: Shift;
@@ -50,354 +45,258 @@ interface ShiftDetailsDialogProps {
   shiftDate: Date;
 }
 
-// Helper to format time for display
-const formatTime = (time: string): string => {
-  const [h, m] = time.split(':').map(Number);
-  const period = h >= 12 ? 'PM' : 'AM';
-  const display = h % 12 || 12;
-  return `${display}:${m.toString().padStart(2, '0')} ${period} `;
-};
-
-// Get gradient class based on color
-const getGradientClass = (color: string): string => {
-  switch (color) {
-    case 'blue': return 'bg-gradient-to-br from-blue-600 to-blue-800';
-    case 'green': return 'bg-gradient-to-br from-green-600 to-green-800';
-    case 'red': return 'bg-gradient-to-br from-red-600 to-red-800';
-    case 'purple': return 'bg-gradient-to-br from-purple-600 to-purple-800';
-    default: return 'bg-gradient-to-br from-slate-600 to-slate-800';
-  }
-};
-
-// Calculate net length from times
-const calculateNetLength = (startTime: string, endTime: string, breakMinutes: number): string => {
-  const [sh, sm] = startTime.split(':').map(Number);
-  const [eh, em] = endTime.split(':').map(Number);
-
-  let total = eh * 60 + em - (sh * 60 + sm);
-  if (total < 0) total += 24 * 60; // Handle overnight
-
-  const net = total - breakMinutes;
-  const h = Math.floor(net / 60);
-  const m = net % 60;
-
-  return m ? `${h}h ${m} m` : `${h} h`;
-};
-
 const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   isOpen,
   onClose,
   shiftData,
 }) => {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const { mySwapRequests, isLoading: isSwapsLoading, refetchMySwaps } = useSwaps();
-  const { user } = useAuth();
+  const { mySwapRequests, myActiveOfferDetails, isLoadingOfferDetails } = useSwaps();
 
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [showHistory, setShowHistory] = useState(false);
 
-  // Use centralized hooks
   const dropShiftMutation = useDropShift();
   const isDropping = dropShiftMutation.isPending;
-
-  // Lock to prevent double submission race conditions
-  const isSubmittingRef = React.useRef(false);
 
   if (!shiftData) return null;
   const { shift, groupName, groupColor, subGroupName } = shiftData;
 
   const shiftDate = new Date(shift.shift_date);
 
-  // HOISTED: Check if shift is within 4 hours of start (Lockout period)
-  // CHECK LOCK STATUS (Strict Sydney Timezone) - EMPLOYEE CONTEXT
   const isWithinLockoutPeriod = isShiftLocked(shift.shift_date, shift.start_time, 'my_roster');
   const isCommenced = isShiftCommenced(shift.shift_date, shift.start_time);
 
-  console.log('[ShiftDetailsDialog] Lockout/Commence Check (Sydney/Employee):', {
-    shiftId: shift.id,
-    shiftDate: shift.shift_date,
-    startTime: shift.start_time,
-    isLocked: isWithinLockoutPeriod,
-    isCommenced
-  });
-
-  // Check if there is already an active swap request for this shift
-  // Status values match the DB enum: OPEN, MANAGER_PENDING, APPROVED
   const existingSwapRequest = mySwapRequests.find(
     s => (s.requester_shift_id === shift.id || s.original_shift_id === shift.id) &&
       (s.status === 'OPEN' || s.status === 'MANAGER_PENDING')
   );
 
-  const netLength = calculateNetLength(
-    shift.start_time,
-    shift.end_time,
-    shift.break_minutes || 0
-  );
+  const isPendingInOffer = isLoadingOfferDetails
+    ? true
+    : myActiveOfferDetails?.some(offer => offer.offered_shift_id === shift.id);
 
+  const isActiveOrCommenced = shift.lifecycle_status === 'InProgress' || shift.lifecycle_status === 'Completed' || isCommenced;
+  const hasCheckedIn = shift.attendance_status === 'checked_in' || shift.attendance_status === 'late';
+
+  const isLockedFromActions = shift.is_cancelled || !!existingSwapRequest || isPendingInOffer || isWithinLockoutPeriod || shift.assignment_outcome === 'offered' || isActiveOrCommenced || hasCheckedIn;
+
+  // ── SharedShiftCard props ──────────────────────────────────────────────────
+  const paidBreak = (shift as any).paid_break_minutes ?? 0;
+  const unpaidBreak = (shift as any).unpaid_break_minutes ?? shift.break_minutes ?? 0;
+
+  const [sh, sm] = shift.start_time.split(':').map(Number);
+  const [eh, em] = shift.end_time.split(':').map(Number);
+  let gross = (eh * 60 + em) - (sh * 60 + sm);
+  if (gross < 0) gross += 1440;
+  const netLengthMinutes = Math.max(0, gross - unpaidBreak);
+
+  const urgency = computeShiftUrgency(shift.shift_date, shift.start_time, (shift as any).start_at);
+
+  const groupVariant = (() => {
+    if (shift.group_type === 'convention_centre') return 'convention' as const;
+    if (shift.group_type === 'exhibition_centre') return 'exhibition' as const;
+    if (shift.group_type === 'theatre') return 'theatre' as const;
+
+    const name = (shift.departments?.name || '').toLowerCase();
+    if (name.includes('convention')) return 'convention' as const;
+    if (name.includes('exhibition')) return 'exhibition' as const;
+    if (name.includes('theatre') || name.includes('theater')) return 'theatre' as const;
+    return 'default' as const;
+  })();
+
+  // ── Status badge ───────────────────────────────────────────────────────────
+  const statusText = shift.is_cancelled ? 'Cancelled'
+    : shift.lifecycle_status === 'Completed' ? 'Completed'
+    : isActiveOrCommenced ? 'In Progress'
+    : hasCheckedIn ? 'Clocked In'
+    : existingSwapRequest ? (isWithinLockoutPeriod ? 'Swap Expired' : 'Swap Active')
+    : shift.assignment_outcome === 'offered' ? 'Offer Pending'
+    : 'Assigned';
+
+  const statusBadgeCls = shift.is_cancelled
+    ? 'bg-red-500/10 text-red-500 border-red-500/20'
+    : shift.lifecycle_status === 'Completed' || isActiveOrCommenced || hasCheckedIn
+      ? 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+      : existingSwapRequest
+        ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+        : shift.assignment_outcome === 'offered'
+          ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 animate-pulse'
+          : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
+
+  const scheduledStartISO = `${shift.shift_date}T${shift.start_time}`;
+  const scheduledEndISO = `${shift.shift_date}T${shift.end_time}`;
+  const showAttendanceBadge = shift.lifecycle_status === 'InProgress' || shift.lifecycle_status === 'Completed';
+
+  // ── Button labels ──────────────────────────────────────────────────────────
+  const swapLabel = isActiveOrCommenced || hasCheckedIn ? 'Locked'
+    : isPendingInOffer ? 'Offer Pending'
+    : existingSwapRequest ? (isWithinLockoutPeriod ? 'Expired' : 'Requested')
+    : isWithinLockoutPeriod ? 'Locked'
+    : shift.assignment_outcome === 'offered' ? 'Open Bid'
+    : 'Swap';
+
+  const dropLabel = isActiveOrCommenced || hasCheckedIn ? 'Locked'
+    : isPendingInOffer ? 'Locked via Offer'
+    : existingSwapRequest ? (isWithinLockoutPeriod ? 'Expired' : 'Swap Active')
+    : isWithinLockoutPeriod ? 'Locked'
+    : 'Drop';
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
   const handleDropShift = () => setIsCancelConfirmOpen(true);
   const handleSwapShift = () => setIsSwapModalOpen(true);
 
   const confirmDrop = async () => {
     if (!cancelReason.trim()) {
-      toast({
-        title: 'Reason Required',
-        description: 'Please provide a reason for dropping this shift.',
-        variant: 'destructive'
-      });
+      toast({ title: 'Reason Required', description: 'Please provide a reason for dropping this shift.', variant: 'destructive' });
       return;
     }
-
-    // CRITICAL: Check if shift is within 4 hours of start time
     if (isWithinLockoutPeriod) {
-      toast({
-        title: 'Drop Not Allowed',
-        description: `Cannot drop shift within 4 hours of start time.`,
-        variant: 'destructive'
-      });
+      toast({ title: 'Drop Not Allowed', description: 'Cannot drop shift within 4 hours of start time.', variant: 'destructive' });
       return;
     }
-
-    console.log('[ShiftDetailsDialog] Starting drop for shift:', shift.id, 'Reason:', cancelReason);
-
-    // Use the mutation hook
     dropShiftMutation.mutate(
       { shiftId: shift.id, reason: cancelReason.trim() },
       {
-        onSuccess: (result) => {
-          console.log('[ShiftDetailsDialog] Drop RPC Result:', result);
-          toast({
-            title: 'Shift Dropped',
-            description: 'You have successfully dropped this shift. It is now available for bidding.',
-          });
+        onSuccess: () => {
+          toast({ title: 'Shift Dropped', description: 'You have successfully dropped this shift. It is now available for bidding.' });
           setIsCancelConfirmOpen(false);
           setCancelReason('');
           onClose();
         },
         onError: (error: any) => {
-          console.error('[ShiftDetailsDialog] Error dropping shift:', error);
-          const errorMessage = error?.message || error?.error?.message || 'Failed to drop shift. Please try again.';
-          toast({
-            title: 'Drop Failed',
-            description: errorMessage,
-            variant: 'destructive'
-          });
+          toast({ title: 'Drop Failed', description: error?.message || error?.error?.message || 'Failed to drop shift.', variant: 'destructive' });
         }
       }
     );
   };
 
-  // Lock to prevent double submission race conditions - Moved to top
-
-
-
-
-
-
-  const getRemunerationColor = (levelName: string | undefined) => {
-    const level = levelName?.toUpperCase() || '';
-    if (level.includes('PLATINUM')) return 'bg-gradient-to-r from-slate-400 to-slate-500 text-white';
-    if (level.includes('GOLD')) return 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-black';
-    if (level.includes('SILVER')) return 'bg-gradient-to-r from-gray-400 to-gray-500 text-white';
-    if (level.includes('BRONZE')) return 'bg-gradient-to-r from-orange-700 to-orange-800 text-white';
-    return 'bg-gray-500 text-white';
-  };
-
-
-
   return (
     <>
-      <AnimatePresence>
-        {isOpen && (
-          <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent
-              className={cn(
-                'max-w-md text-white border-0 shadow-2xl p-0 overflow-hidden',
-                getGradientClass(groupColor)
-              )}
-            >
-              <DialogHeader className="sr-only">
-                <DialogTitle>{shift.roles?.name || 'Shift'} Details</DialogTitle>
-                <DialogDescription>
-                  Shift details for {format(shiftDate, 'EEEE, MMMM d, yyyy')} at{' '}
-                  {shift.organizations?.name || 'Unknown Organization'}
-                </DialogDescription>
-              </DialogHeader>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-md p-0 overflow-hidden bg-background border-border rounded-2xl">
+          <DialogHeader className="sr-only">
+            <DialogTitle>{shift.roles?.name || 'Shift'} Details</DialogTitle>
+            <DialogDescription>
+              Shift details for {format(shiftDate, 'EEEE, MMMM d, yyyy')}
+            </DialogDescription>
+          </DialogHeader>
 
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.2 }}
-              >
-                {/* Visual Header Section */}
-                <div className="p-5 pb-0">
-                  <motion.div
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="text-[10px] text-white/60 mb-3 flex items-center gap-1 flex-wrap"
-                  >
-                    <Building className="h-3 w-3" />
-                    <span>{shift.organizations?.name || 'Organization'}</span>
-                    <span className="text-white/30">|</span>
-                    <span>{shift.departments?.name || 'Department'}</span>
-                    <span className="text-white/30">|</span>
-                    <span>{shift.sub_departments?.name || subGroupName}</span>
-                  </motion.div>
-
-                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <Badge className="bg-black/20 text-white border-white/20 hover:bg-black/30">
-                      {subGroupName || shift.sub_group_name || 'General'}
+          {/* Shift Card */}
+          <div className="p-4 pb-0">
+            <SharedShiftCard
+              variant="default"
+              organization={shift.organizations?.name || ''}
+              department={shift.departments?.name || ''}
+              subGroup={shift.sub_departments?.name || subGroupName}
+              role={shift.roles?.name || 'Shift'}
+              shiftDate={format(shiftDate, 'EEE, MMM d, yyyy')}
+              startTime={shift.start_time.slice(0, 5)}
+              endTime={shift.end_time.slice(0, 5)}
+              netLength={netLengthMinutes}
+              paidBreak={paidBreak}
+              unpaidBreak={unpaidBreak}
+              urgency={urgency}
+              groupVariant={groupVariant}
+              statusIcons={
+                <div className="col-span-3 flex flex-wrap gap-2 items-center">
+                  <Badge variant="outline" className={cn('text-[9px] font-black uppercase tracking-wider', statusBadgeCls)}>
+                    {statusText}
+                  </Badge>
+                  {shift.remuneration_levels?.level_name && (
+                    <Badge className="text-[9px] font-black bg-primary/10 text-primary border-primary/20 border uppercase tracking-wider">
+                      {shift.remuneration_levels.level_name}
                     </Badge>
-                    {shift.assignment_outcome === 'offered' && (
-                      <Badge className="bg-amber-500 text-black border-amber-400 font-bold animate-pulse">
-                        Offer Pending
-                      </Badge>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between mb-1">
-                    <h2 className="text-2xl font-bold">{shift.roles?.name || 'No Role Assigned'}</h2>
-                    <div className="flex items-center gap-2">
-                      {shift.remuneration_levels?.level_name && (
-                        <Badge
-                          className={cn(
-                            'text-xs font-bold',
-                            getRemunerationColor(shift.remuneration_levels.level_name)
-                          )}
-                        >
-                          {shift.remuneration_levels.level_name}
-                        </Badge>
-                      )}
-                      {shift.remuneration_levels?.hourly_rate_min && (
-                        <span className="text-xs font-medium text-white/80 bg-white/10 px-2 py-0.5 rounded-full">
-                          ${shift.remuneration_levels.hourly_rate_min}/hr
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <p className="text-sm text-white/70 mb-4">
-                    {format(shiftDate, 'EEEE, MMMM d, yyyy')}
-                  </p>
-                </div>
-
-                {/* Info Cards Section */}
-                <div className="px-5 space-y-2">
-                  <div className="flex items-center gap-3 p-3 rounded-xl bg-black/20">
-                    <Clock className="h-5 w-5 text-white/70 flex-shrink-0" />
-                    <div className="font-semibold text-lg">
-                      {formatTime(shift.start_time)} -{' '}
-                      {formatTime(shift.end_time)}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex items-center gap-2 p-3 rounded-xl bg-black/20">
-                      <Coffee className="h-4 w-4 text-white/70 flex-shrink-0" />
-                      <div>
-                        <div className="text-[10px] text-white/50 uppercase">
-                          Break
-                        </div>
-                        <div className="font-medium text-sm">
-                          {shift.break_minutes > 0 ? `${shift.break_minutes} min` : 'N/A'}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 p-3 rounded-xl bg-black/20">
-                      <Timer className="h-4 w-4 text-white/70 flex-shrink-0" />
-                      <div>
-                        <div className="text-[10px] text-white/50 uppercase">
-                          Net Length
-                        </div>
-                        <div className="font-medium text-sm">{netLength}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 p-3 rounded-xl bg-black/20">
-                    <CalendarDays className="h-5 w-5 text-white/70 flex-shrink-0" />
-                    <div className="font-medium">
-                      {shift.is_cancelled
-                        ? 'Cancelled'
-                        : isCommenced
-                          ? 'Shift has commenced'
-                          : existingSwapRequest
-                            ? (isWithinLockoutPeriod ? 'Swap Expired' : 'Swap Active')
-                            : shift.assignment_outcome === 'offered'
-                              ? 'Offer Pending'
-                              : 'Assigned'}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Shift History */}
-                <div className="px-5 pt-3">
-                  <button
-                    onClick={() => setShowHistory(v => !v)}
-                    className="w-full flex items-center justify-between p-2.5 rounded-xl bg-black/20 hover:bg-black/30 transition-colors text-left"
-                  >
-                    <span className="flex items-center gap-2 text-xs font-medium text-white/70">
-                      <History className="h-3.5 w-3.5" />
-                      Shift History
+                  )}
+                  {shift.remuneration_levels?.hourly_rate_min && (
+                    <span className="text-[9px] font-mono font-black text-muted-foreground">
+                      ${shift.remuneration_levels.hourly_rate_min}/hr
                     </span>
-                    <ChevronDown className={cn('h-3.5 w-3.5 text-white/50 transition-transform', showHistory && 'rotate-180')} />
-                  </button>
-                  {showHistory && (
-                    <div className="mt-2 max-h-48 overflow-y-auto rounded-xl bg-black/20 px-3 py-2">
-                      <ShiftTimeline shiftId={shift.id} className="text-white/80" />
-                    </div>
+                  )}
+                  {showAttendanceBadge && (
+                    <AttendanceBadge
+                      attendanceStatus={shift.attendance_status ?? 'unknown'}
+                      actualStart={shift.actual_start}
+                      scheduledStart={scheduledStartISO}
+                      actualEnd={shift.actual_end}
+                      scheduledEnd={scheduledEndISO}
+                      lifecycleStatus={shift.lifecycle_status as 'InProgress' | 'Completed'}
+                    />
                   )}
                 </div>
+              }
+            />
+          </div>
 
-                {/* Action Buttons */}
-                <div className="p-5 pt-4">
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={onClose}
-                      variant="outline"
-                      className="flex-1 border-white/30 text-white bg-transparent hover:bg-white/10 rounded-full"
-                    >
-                      Close
-                    </Button>
-                    <Button
-                      onClick={handleSwapShift}
-                      disabled={shift.is_cancelled || !!existingSwapRequest || isWithinLockoutPeriod || shift.assignment_outcome === 'offered'}
-                      className={cn(
-                        "flex-1 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed",
-                        isWithinLockoutPeriod ? "bg-slate-600" : "bg-purple-600 hover:bg-purple-700 shadow-purple-500/30"
-                      )}
-                    >
-                      <ArrowLeftRight size={16} className="mr-2" />
-                      {isCommenced ? 'Active' : (existingSwapRequest ? (isWithinLockoutPeriod ? 'Expired' : 'Requested') : (isWithinLockoutPeriod ? 'Locked' : (shift.assignment_outcome === 'offered' ? 'Pending' : 'Swap')))}
-                    </Button>
-                    <Button
-                      onClick={handleDropShift}
-                      disabled={isWithinLockoutPeriod || !!existingSwapRequest || shift.assignment_outcome === 'offered' || isCommenced}
-                      className={cn(
-                        "flex-1 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed",
-                        isCommenced || isWithinLockoutPeriod ? "bg-slate-600" : "bg-red-600 hover:bg-red-500 shadow-red-500/30"
-                      )}
-                    >
-                      <X size={16} className="mr-2" />
-                      {isCommenced ? 'In Progress' : (existingSwapRequest ? (isWithinLockoutPeriod ? 'Expired' : 'Swap Active') : (isWithinLockoutPeriod ? 'Locked' : 'Drop'))}
-                    </Button>
-                  </div>
-                  {isWithinLockoutPeriod && (
-                    <p className="text-xs text-center text-white/50 mt-2">
-                      Actions locked 4 hours before shift start
-                    </p>
-                  )}
-                </div>
-              </motion.div>
-            </DialogContent>
-          </Dialog>
-        )}
-      </AnimatePresence>
+          {/* Shift History */}
+          <div className="px-4 pt-3">
+            <button
+              onClick={() => setShowHistory(v => !v)}
+              className="w-full flex items-center justify-between p-2.5 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+            >
+              <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <History className="h-3.5 w-3.5" />
+                Shift History
+              </span>
+              <ChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground/50 transition-transform', showHistory && 'rotate-180')} />
+            </button>
+            {showHistory && (
+              <div className="mt-2 max-h-48 overflow-y-auto rounded-xl bg-muted/20 px-3 py-2">
+                <ShiftTimeline shiftId={shift.id} className="text-foreground/80" />
+              </div>
+            )}
+          </div>
 
-      {/* Swap Request Modal - Using Enhanced Component */}
+          {/* Action Buttons */}
+          <div className="p-4 pt-3">
+            <div className="flex gap-2">
+              <Button
+                onClick={onClose}
+                variant="outline"
+                className="flex-1 border-border/50 bg-transparent hover:bg-muted rounded-full"
+              >
+                Close
+              </Button>
+              <Button
+                onClick={handleSwapShift}
+                disabled={isLockedFromActions}
+                className={cn(
+                  'flex-1 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed',
+                  isWithinLockoutPeriod ? 'bg-slate-600' : 'bg-purple-600 hover:bg-purple-700 shadow-purple-500/30'
+                )}
+              >
+                <ArrowLeftRight size={16} className="mr-2" />
+                {swapLabel}
+              </Button>
+              <Button
+                onClick={handleDropShift}
+                disabled={isLockedFromActions}
+                className={cn(
+                  'flex-1 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed',
+                  isActiveOrCommenced || hasCheckedIn || isWithinLockoutPeriod ? 'bg-slate-600' : 'bg-red-600 hover:bg-red-500 shadow-red-500/30'
+                )}
+              >
+                <X size={16} className="mr-2" />
+                {dropLabel}
+              </Button>
+            </div>
+            {isWithinLockoutPeriod && (
+              <p className="text-xs text-center text-muted-foreground mt-2">
+                Actions locked 4 hours before shift start
+              </p>
+            )}
+            {isPendingInOffer && !isWithinLockoutPeriod && (
+              <p className="text-xs text-center text-amber-500/80 mt-2 font-medium">
+                You have an active pending offer for this shift.
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Swap Request Modal */}
       <CreateSwapRequestModal
         isOpen={isSwapModalOpen}
         onClose={() => setIsSwapModalOpen(false)}
@@ -408,17 +307,15 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
         groupColor={groupColor}
       />
 
-      {/* Cancel Shift Confirmation Dialog */}
+      {/* Drop Shift Confirmation Dialog */}
       <Dialog open={isCancelConfirmOpen} onOpenChange={setIsCancelConfirmOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Cancel Shift Assignment</DialogTitle>
             <DialogDescription>
-              Are you sure you want to drop this shift?
-              Depending on the timing, this may require manager approval or affect your reliability score.
+              Are you sure you want to drop this shift? Depending on the timing, this may require manager approval or affect your reliability score.
             </DialogDescription>
           </DialogHeader>
-
           <div className="py-4 space-y-4">
             <div className="space-y-2">
               <Label htmlFor="cancel-reason">Reason for cancellation</Label>
@@ -435,25 +332,13 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
               </div>
             )}
           </div>
-
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsCancelConfirmOpen(false)}
-              disabled={isDropping}
-            >
+            <Button variant="outline" onClick={() => setIsCancelConfirmOpen(false)} disabled={isDropping}>
               Keep Shift
             </Button>
-            <Button
-              variant="destructive"
-              onClick={confirmDrop}
-              disabled={isDropping || !cancelReason.trim()}
-            >
+            <Button variant="destructive" onClick={confirmDrop} disabled={isDropping || !cancelReason.trim()}>
               {isDropping ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Dropping...
-                </>
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Dropping...</>
               ) : (
                 'Confirm Drop'
               )}
@@ -461,7 +346,6 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
     </>
   );
 };

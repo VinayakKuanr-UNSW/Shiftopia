@@ -329,6 +329,10 @@ interface ApplyTemplateVariables {
   source:                 'templates_page' | 'roster_modal';
   targetDepartmentId?:    string;
   targetSubDepartmentId?: string;
+  /** When true, bypasses the "shift already started" temporal guard so managers can
+   *  re-apply templates to today or past dates without an exception. The per-shift
+   *  template_instance_id duplicate check still prevents actual duplicates. */
+  forceStack?:            boolean;
 }
 
 export function useApplyTemplate() {
@@ -347,6 +351,7 @@ export function useApplyTemplate() {
         p_source:                   vars.source,
         p_target_department_id:     vars.targetDepartmentId,
         p_target_sub_department_id: vars.targetSubDepartmentId,
+        p_force_stack:              vars.forceStack ?? true,
       });
 
       if (error) throw error;

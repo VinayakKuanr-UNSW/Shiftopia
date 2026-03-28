@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Bold, Italic, Underline, Strikethrough } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -21,6 +21,23 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     placeholder,
 }) => {
     const editorRef = useRef<HTMLDivElement>(null);
+
+    // Initialize DOM content once on mount — do not use dangerouslySetInnerHTML
+    // alongside contentEditable as React's reconciler will overwrite DOM on every
+    // re-render, destroying the cursor position and causing input lag.
+    useEffect(() => {
+        if (editorRef.current && value) {
+            editorRef.current.innerHTML = DOMPurify.sanitize(value);
+        }
+    }, []); // mount only — eslint-disable-line react-hooks/exhaustive-deps
+
+    // Sync externally driven value changes (e.g. parent resets the field).
+    // Guard against echoing the user's own keystrokes back into the DOM.
+    useEffect(() => {
+        if (editorRef.current && editorRef.current.innerHTML !== value) {
+            editorRef.current.innerHTML = DOMPurify.sanitize(value || '');
+        }
+    }, [value]);
 
     const execCommand = (command: string) => {
         document.execCommand(command, false);
@@ -113,7 +130,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                 contentEditable
                 className="min-h-[120px] p-4 text-foreground focus:outline-none"
                 onInput={handleInput}
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(value) }}
                 data-placeholder={placeholder}
                 style={{ minHeight: '120px' }}
             />

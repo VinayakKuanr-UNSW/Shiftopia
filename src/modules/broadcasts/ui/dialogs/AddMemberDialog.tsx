@@ -1,23 +1,28 @@
 import React from 'react';
-import { useBroadcastGroup } from '../../state/useBroadcasts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/modules/core/ui/primitives/dialog';
-import { EmployeeSelector } from '../components/EmployeeSelector';
+import { EmployeeSelector } from '@/modules/core/ui/components/EmployeeSelector';
 import { useToast } from '@/modules/core/hooks/use-toast';
+import { BroadcastParticipantRole } from '../../model/broadcast.types';
 
 export interface AddMemberDialogProps {
     isOpen: boolean;
     onClose: () => void;
-    groupId: string;
+    addParticipant: (employeeId: string, role?: BroadcastParticipantRole) => Promise<void>;
+    groupName?: string;
+    departmentId?: string;
+    subDepartmentId?: string;
     onMemberAdded?: () => void;
 }
 
 export const AddMemberDialog: React.FC<AddMemberDialogProps> = ({
     isOpen,
     onClose,
-    groupId,
+    addParticipant,
+    groupName,
+    departmentId,
+    subDepartmentId,
     onMemberAdded
 }) => {
-    const { group, addParticipant } = useBroadcastGroup(groupId);
     const { toast } = useToast();
 
     const handleAddMember = async (userId: string, isAdmin: boolean) => {
@@ -46,7 +51,7 @@ export const AddMemberDialog: React.FC<AddMemberDialogProps> = ({
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Add Member to {group?.name || 'Group'}</DialogTitle>
+                    <DialogTitle>Add Member to {groupName || 'Group'}</DialogTitle>
                     <DialogDescription>
                         Search for an employee to add them to this broadcast group.
                     </DialogDescription>
@@ -54,8 +59,8 @@ export const AddMemberDialog: React.FC<AddMemberDialogProps> = ({
                 <div className="space-y-4 py-4">
                     <EmployeeSelector
                         onSelect={(userId, isAdmin) => handleAddMember(userId, isAdmin || false)}
-                        departmentId={group?.departmentId}
-                        subDepartmentId={group?.subDepartmentId}
+                        departmentId={departmentId}
+                        subDepartmentId={subDepartmentId}
                     />
                 </div>
             </DialogContent>

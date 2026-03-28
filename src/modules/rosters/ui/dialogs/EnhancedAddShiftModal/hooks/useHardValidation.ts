@@ -14,6 +14,9 @@ import { runHardValidation, HardValidationResult, ShiftTimeRange } from '@/modul
 import { format, addDays, subDays } from 'date-fns';
 import { getNowInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
+import { isEqual } from 'lodash';
+
+const EMPTY_ARRAY: any[] = [];
 
 interface UseHardValidationProps {
     watchStart: string;
@@ -60,7 +63,7 @@ export function useHardValidation({
     // This prevents false-pass on rest-gap / avg-4-week checks when the
     // employee works across multiple departments.
     // p_exclude_id filters out the shift being edited server-side.
-    const { data: rawShifts = [] } = useQuery({
+    const { data: rawShifts = EMPTY_ARRAY } = useQuery({
         queryKey: shiftKeys.byEmployee(watchEmployeeId ?? '', startDate, endDate),
         queryFn: async () => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -137,7 +140,11 @@ export function useHardValidation({
             is_template: isTemplateMode,
         });
 
-        setHardValidation(result);
+        // Only update if result actually changed to prevent render loops
+        setHardValidation(prev => {
+            if (isEqual(prev, result)) return prev;
+            return result;
+        });
     }, [watchStart, watchEnd, watchShiftDate, watchEmployeeId, employeeExistingShifts, isTemplateMode, timezone]);
 
     return { hardValidation, employeeExistingShifts, studentVisaEnforcement };

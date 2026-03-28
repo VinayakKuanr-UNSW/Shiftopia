@@ -167,8 +167,7 @@ export const RosterFilterPopover: React.FC = () => {
                                 <SelectContent>
                                     <SelectItem value="all">All</SelectItem>
                                     <SelectItem value="not_on_bidding">Not on Bidding</SelectItem>
-                                    <SelectItem value="on_bidding_normal">Normal Bidding</SelectItem>
-                                    <SelectItem value="on_bidding_urgent">Urgent Bidding</SelectItem>
+                                    <SelectItem value="on_bidding">On Bidding</SelectItem>
                                     <SelectItem value="bidding_closed_no_winner">Closed (No Winner)</SelectItem>
                                 </SelectContent>
                             </Select>

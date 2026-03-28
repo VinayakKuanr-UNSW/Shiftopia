@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ScopeTree, ScopeOrg, ScopeDept, ScopeSelection } from '@/platform/auth/types';
 import { ChevronDown, Lock, Building2, Layers, Users2 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
@@ -281,26 +281,41 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
         }
     }, [availableSubDepts, lockConfig.subDeptLocked, multiSelect]);
 
-    // Emit scope changes
-    const emitScope = useCallback(() => {
+    // Emit scope changes — debounced so rapid auto-select cascades
+    // (org → dept → subdept) collapse into a single parent update.
+    const emitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const onScopeChangeRef = useRef(onScopeChange);
+    useEffect(() => { onScopeChangeRef.current = onScopeChange; }, [onScopeChange]);
+
+    useEffect(() => {
+        const validOrgIds     = orgs.map(o => o.id);
+        const validDeptIds    = orgs.flatMap(o => o.departments.map(d => d.id));
+        const validSubDeptIds = orgs.flatMap(o =>
+            o.departments.flatMap(d => d.subdepartments.map(sd => sd.id))
+        );
+
         const scope: ScopeSelection = {
             org_ids: selectedOrgIds,
             dept_ids: selectedDeptIds,
             subdept_ids: selectedSubDeptIds,
         };
 
-        // Validate: all selected IDs must be in the allowed tree
-        const validOrgIds = orgs.map(o => o.id);
-        const validScope = scope.org_ids.every(id => validOrgIds.includes(id));
+        const isValid =
+            scope.org_ids.every(id => validOrgIds.includes(id)) &&
+            scope.dept_ids.every(id => validDeptIds.includes(id)) &&
+            scope.subdept_ids.every(id => validSubDeptIds.includes(id));
 
-        if (validScope) {
-            onScopeChange(scope);
-        }
-    }, [selectedOrgIds, selectedDeptIds, selectedSubDeptIds, orgs, onScopeChange]);
+        if (!isValid) return;
 
-    useEffect(() => {
-        emitScope();
-    }, [emitScope]);
+        if (emitTimerRef.current) clearTimeout(emitTimerRef.current);
+        emitTimerRef.current = setTimeout(() => {
+            onScopeChangeRef.current(scope);
+        }, 0);
+
+        return () => {
+            if (emitTimerRef.current) clearTimeout(emitTimerRef.current);
+        };
+    }, [selectedOrgIds, selectedDeptIds, selectedSubDeptIds, orgs]);
 
     if (hidden) return null;
 

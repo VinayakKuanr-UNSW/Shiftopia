@@ -1,5 +1,5 @@
 /**
- * ComplianceEvaluator — Rules 7–10 via the constraint solver.
+ * ComplianceEvaluator — Rules 7–12 via the constraint solver.
  *
  * Delegates to AssignmentEvaluator (the same engine used by the
  * EnhancedAddShiftModal) to evaluate scheduling constraints against
@@ -8,7 +8,9 @@
  *   Rule 7:  REST_GAP         — min 10h between shifts (blocking)
  *   Rule 8:  WEEKLY_HOURS     — max ordinary hours in 4-week rolling cycle
  *   Rule 9:  CONSECUTIVE_DAYS — max consecutive working days
- *   Rule 10: STUDENT_VISA     — 48h/fortnight limit (warning)
+ *   Rule 10: DAILY_HOURS      — max 12h in a single calendar day (blocking)
+ *   Rule 11: WORKING_DAYS_CAP — max 20 days in rolling 28-day window (EBA Cl 35.1e, blocking)
+ *   Rule 12: STUDENT_VISA     — 48h/fortnight limit (warning)
  *
  * The SimulatedRoster (existingShifts + proposedAssignments) is passed as
  * `current_shifts` so each new candidate is validated against the
@@ -19,14 +21,15 @@ import { assignmentEvaluator } from '@/modules/compliance';
 import type { RosterShift } from '@/modules/compliance';
 import type { CandidateShift, EmployeeInfo, ShiftViolation, SimulatedRoster, ViolationType } from '../types';
 
-// Map solver constraint IDs to our ViolationType codes
+// Map solver constraint IDs to our ViolationType codes.
+// MIN_SHIFT_LENGTH → removed (duration validated when the shift was created)
+// CONSECUTIVE_DAYS → removed (R04/28-day cap is the authoritative work-pattern limit)
 const CONSTRAINT_TO_VIOLATION: Record<string, ViolationType> = {
     MIN_REST_GAP:        'REST_GAP',
     AVG_FOUR_WEEK_CYCLE: 'WEEKLY_HOURS',
-    MIN_SHIFT_LENGTH:    'SHIFT_LENGTH',   // Distinct from hours cap — shift too short
+    MAX_DAILY_HOURS:     'DAILY_HOURS',       // 12h calendar-day cap (R03)
+    WORKING_DAYS_CAP:    'WORKING_DAYS_CAP',  // 20/28-day rolling cap (R04, EBA Cl 35.1e)
     STUDENT_VISA_48H:    'STUDENT_VISA',
-    // CONSECUTIVE_DAYS not in current solver but mapped here for future use
-    WORKING_DAYS_CAP:    'CONSECUTIVE_DAYS',
 };
 
 // =============================================================================

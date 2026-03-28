@@ -29,6 +29,8 @@ import {
   LogOut,
   Activity,
   BarChart3,
+  Grid3x3,
+  Fingerprint,
 } from 'lucide-react';
 import { useAuth } from '@/platform/auth/useAuth';
 import { cn } from '@/modules/core/lib/utils';
@@ -36,7 +38,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Separator } from '@/modules/core/ui/primitives/separator';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { ThemeSelector } from '@/modules/core/ui/components/ThemeSelector';
-import { BroadcastNotifications } from '@/modules/core/ui/components/broadcast/BroadcastNotifications';
+import { useNotifications } from '@/modules/core/hooks/useNotifications';
 import { ACCESS_LEVEL_CONFIG } from '@/platform/auth/constants';
 import { SidebarUser } from './SidebarUser';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/modules/core/ui/primitives/collapsible';
@@ -52,6 +54,7 @@ type IconColorKey =
   | 'myBids'
   | 'mySwaps'
   | 'myBroadcasts'
+  | 'attendance'
   | 'templates'
   | 'rosters'
   | 'timesheet'
@@ -59,6 +62,7 @@ type IconColorKey =
   | 'swapRequests'
   | 'broadcast'
   | 'insights'
+  | 'notifications'
 
   | 'management'
   | 'sectionMyWorkspace'
@@ -79,6 +83,7 @@ const iconColorMap: Record<IconColorKey, string> = {
   myBids: 'text-pink-400',
   mySwaps: 'text-orange-400',
   myBroadcasts: 'text-rose-400',
+  attendance: 'text-emerald-400',
   templates: 'text-sky-400',
   rosters: 'text-indigo-400',
   timesheet: 'text-amber-400',
@@ -86,6 +91,7 @@ const iconColorMap: Record<IconColorKey, string> = {
   swapRequests: 'text-rose-400',
   broadcast: 'text-red-400',
   insights: 'text-yellow-400',
+  notifications: 'text-orange-400',
 
   management: 'text-lime-400',
   sectionMyWorkspace: 'text-purple-400',
@@ -215,6 +221,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
 const AppSidebar: React.FC = () => {
   const location = useLocation();
   const { user, hasPermission, logout } = useAuth();
+  const { unreadCount } = useNotifications();
   const queryClient = useQueryClient();
 
   // Helper function to check if a route is active
@@ -305,6 +312,15 @@ const AppSidebar: React.FC = () => {
           />
 
           <NavigationItem
+            to="/attendance"
+            icon={Fingerprint}
+            iconColor={iconColorMap.attendance}
+            label="My Attendance"
+            isActive={isRouteActive('/attendance')}
+            description="Clock in & out"
+          />
+
+          <NavigationItem
             to="/availabilities"
             icon={CalendarDays}
             iconColor={iconColorMap.availabilities}
@@ -340,6 +356,16 @@ const AppSidebar: React.FC = () => {
             label="My Broadcasts"
             isActive={isRouteActive('/my-broadcasts')}
             description="View announcements"
+          />
+
+          <NavigationItem
+            to="/my-notifications"
+            icon={BellRing}
+            iconColor={iconColorMap.notifications}
+            label="My Notifications"
+            isActive={isRouteActive('/my-notifications')}
+            badge={unreadCount > 0 ? (unreadCount > 9 ? '9+' : String(unreadCount)) : undefined}
+            description="View workspace updates"
           />
         </CollapsibleSection>
 
@@ -449,6 +475,18 @@ const AppSidebar: React.FC = () => {
                 />
               )}
 
+              {/* Grid Page */}
+              {hasPermission('insights') && (
+                <NavigationItem
+                  to="/grid"
+                  icon={Grid3x3}
+                  iconColor={iconColorMap.insights}
+                  label="Grid"
+                  isActive={isRouteActive('/grid')}
+                  description="Annual Shift Grid"
+                />
+              )}
+
               {hasPermission('insights') && (
                 <NavigationItem
                   to="/insights"
@@ -492,7 +530,6 @@ const AppSidebar: React.FC = () => {
         {/* Quick Actions */}
         <div className="flex items-center justify-between">
           <ThemeSelector />
-          <BroadcastNotifications isCollapsed={false} />
         </div>
 
         <Separator className="bg-border/30" />

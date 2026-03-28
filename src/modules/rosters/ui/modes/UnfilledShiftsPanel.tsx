@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useDrag } from 'react-dnd';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { format } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
@@ -11,9 +12,13 @@ import {
   UserRound,
   Clock,
 } from 'lucide-react';
+import { useToast } from '@/modules/core/hooks/use-toast';
+import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { useRosterUI } from '@/modules/rosters/contexts/RosterUIContext';
 import { useContractedStaff } from '@/modules/rosters/state/useRosterShifts';
 import type { ContractedStaffMember } from '@/modules/rosters/services/eligibility.service';
+import { DND_UNFILLED_SHIFT, DND_EMPLOYEE_TYPE, type EmployeeDragItem } from './people-mode.types';
+import { canDragShift } from '@/modules/rosters/utils/dnd.utils';
 
 /* ── Types ──────────────────────────────────────────────────────────────────── */
 
@@ -25,6 +30,9 @@ export interface UnfilledShift {
   date: string;   // yyyy-MM-dd
   start: string;  // HH:MM
   end: string;    // HH:MM
+  // DnD-required fields (populated by RostersPlannerPage)
+  isDraft?: boolean;
+  isPublished?: boolean;
 }
 
 interface UnfilledShiftsPanelProps {
@@ -59,8 +67,27 @@ const StaffCard: React.FC<{ member: ContractedStaffMember }> = ({ member }) => {
   const initials = `${member.first_name?.[0] ?? ''}${member.last_name?.[0] ?? ''}`.toUpperCase();
   const roleColor = roleColorClass(member.role_code ?? member.role_name);
 
+  const [{ isDragging }, drag] = useDrag<EmployeeDragItem, void, { isDragging: boolean }>(
+    () => ({
+      type: DND_EMPLOYEE_TYPE,
+      item: {
+        employeeId: member.id,
+        employeeName: `${member.first_name} ${member.last_name}`,
+        roleName: member.role_name,
+      },
+      collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+    }),
+    [member.id, member.first_name, member.last_name, member.role_name],
+  );
+
   return (
-    <div className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 dark:border-white/[0.06] bg-white dark:bg-white/[0.03] hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-all">
+    <div
+      ref={drag}
+      className={cn(
+        'flex items-center gap-3 p-2.5 rounded-xl border border-slate-200 dark:border-white/[0.06] bg-white dark:bg-white/[0.03] hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-all cursor-grab',
+        isDragging && 'opacity-50 cursor-grabbing',
+      )}
+    >
       {/* Avatar */}
       <div className={cn('h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 border border-current/10', roleColor)}>
         {initials ? (
@@ -106,10 +133,7 @@ const DEPT_COLORS: Record<string, string> = {
   Theatre: 'bg-rose-500',
 };
 
-const ShiftCard: React.FC<{
-  shift: UnfilledShift;
-  onClick: () => void;
-}> = ({ shift, onClick }) => {
+const ShiftCard: React.FC<{ shift: UnfilledShift; onClick: () => void; disabled?: boolean }> = ({ shift, onClick, disabled }) => {
   const dateObj = new Date(`${shift.date}T00:00:00`);
   const barColor = DEPT_COLORS[shift.department ?? ''] ?? 'bg-amber-400';
 
@@ -118,15 +142,30 @@ const ShiftCard: React.FC<{
   const hrs = ((eh * 60 + em) - (sh * 60 + sm)) / 60;
   const hoursLabel = hrs > 0 ? `${hrs % 1 === 0 ? hrs : hrs.toFixed(1)}h` : '';
 
+  const isDnDModeActive = useRosterStore(s => s.isDnDModeActive);
+  const [{ isDragging }, dragRef] = useDrag({
+    type: DND_UNFILLED_SHIFT,
+    item: () => shift,
+    canDrag: () => canDragShift({
+      lifecycle_status: shift.isPublished ? 'Published' : 'Draft',
+      is_cancelled: false, // Unfilled shifts aren't cancelled yet
+    }, isDnDModeActive),
+    collect: (monitor) => ({
+      isDragging: !!monitor.isDragging(),
+    }),
+  }, [shift, isDnDModeActive]);
+
   return (
     <div
+      ref={dragRef}
       role="button"
       tabIndex={0}
-      draggable
       onClick={onClick}
       onKeyDown={(e) => e.key === 'Enter' && onClick()}
-      onDragStart={(e) => e.dataTransfer.setData('application/json', JSON.stringify(shift))}
-      className="flex items-stretch rounded-xl border border-slate-200 dark:border-white/[0.06] bg-white dark:bg-white/[0.03] hover:bg-slate-50 dark:hover:bg-white/[0.06] active:scale-[0.98] transition-all cursor-pointer overflow-hidden"
+      className={cn(
+        'flex items-stretch rounded-xl border border-slate-200 dark:border-white/[0.06] bg-white dark:bg-white/[0.03] hover:bg-slate-50 dark:hover:bg-white/[0.06] active:scale-[0.98] transition-all cursor-grab overflow-hidden',
+        isDragging && 'opacity-50 cursor-grabbing',
+      )}
     >
       {/* Left colour bar */}
       <div className={cn('w-1.5 flex-shrink-0', barColor)} />
@@ -210,7 +249,7 @@ export const UnfilledShiftsPanel: React.FC<UnfilledShiftsPanelProps> = ({
   const count = showStaff ? filteredStaff.length : filteredShifts.length;
 
   return (
-    <div className="w-80 h-full flex flex-col bg-slate-50 dark:bg-slate-950/60">
+    <div className="w-80 h-full flex flex-col bg-slate-50/80 dark:bg-slate-950/40 backdrop-blur-2xl border-l border-slate-200 dark:border-white/[0.08] shadow-[-8px_0_32px_rgba(0,0,0,0.1)]">
 
       {/* Header */}
       <div className="px-4 pt-4 pb-3 border-b border-slate-200 dark:border-white/[0.06]">
@@ -272,8 +311,14 @@ export const UnfilledShiftsPanel: React.FC<UnfilledShiftsPanelProps> = ({
                 </div>
               )}
               {!staffLoading &&
-                filteredStaff.map((member) => (
-                  <StaffCard key={member.id} member={member} />
+                filteredStaff.map((member, i) => (
+                  <div 
+                    key={member.id} 
+                    style={{ animationDelay: `${i * 30}ms` }}
+                    className="animate-in fade-in slide-in-from-right-4 fill-mode-both duration-300"
+                  >
+                    <StaffCard member={member} />
+                  </div>
                 ))}
             </>
           )}
@@ -289,8 +334,14 @@ export const UnfilledShiftsPanel: React.FC<UnfilledShiftsPanelProps> = ({
                   </p>
                 </div>
               )}
-              {filteredShifts.map((s) => (
-                <ShiftCard key={s.id} shift={s} onClick={() => onPickShift?.(s)} />
+              {filteredShifts.map((s, i) => (
+                <div 
+                  key={s.id} 
+                  style={{ animationDelay: `${i * 30}ms` }}
+                  className="animate-in fade-in slide-in-from-right-4 fill-mode-both duration-300"
+                >
+                  <ShiftCard shift={s} onClick={() => onPickShift?.(s)} />
+                </div>
               ))}
             </>
           )}

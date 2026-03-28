@@ -11,6 +11,9 @@
  *   3. Atomically committing passing shifts via Supabase RPC
  */
 
+import type { ContractRecordV2 } from '@/modules/compliance/v2/types';
+export type { ContractRecordV2 };
+
 // =============================================================================
 // CANDIDATE SHIFT
 // =============================================================================
@@ -27,6 +30,9 @@ export interface CandidateShift {
     assigned_employee_id: string | null;
     lifecycle_status?: string | null;
     role_id?: string | null;
+    organization_id?: string | null;
+    department_id?: string | null;
+    sub_department_id?: string | null;
     unpaid_break_minutes?: number;
     /** Qualification IDs required to work this shift (skill IDs). */
     required_skills?: string[] | null;
@@ -58,17 +64,22 @@ export interface SimulatedRoster {
 // =============================================================================
 
 /**
- * All 9 ordered validation rule codes, evaluated in this order:
- *   1. DRAFT_STATE          — shift must be in Draft (not Published/Cancelled)
- *   2. ALREADY_ASSIGNED     — shift must be unassigned
- *   3. OVERLAP              — no time overlap with existing/proposed shifts
- *   4. ROLE_MISMATCH        — employee role must match shift role
- *   5. QUALIFICATION_MISSING — employee has required skills/licenses
- *   6. QUALIFICATION_EXPIRED — no expired qualifications for this shift
- *   7. REST_GAP             — minimum rest between consecutive shifts (10h)
- *   8. WEEKLY_HOURS         — max ordinary hours per 4-week rolling cycle
- *   9. CONSECUTIVE_DAYS     — max consecutive working days
- *  10. STUDENT_VISA         — student visa 48h/fortnight limit (warning only)
+ * All ordered validation rule codes, evaluated in this order:
+ *   1.  DRAFT_STATE           — shift must be in Draft (not Published/Cancelled)
+ *   2.  ALREADY_ASSIGNED      — shift must be unassigned
+ *   3.  OVERLAP               — no time overlap with existing/proposed shifts
+ *   4.  ROLE_MISMATCH         — employee not contracted for this role/position (R10)
+ *   5.  QUALIFICATION_MISSING — employee lacks required skills/licenses
+ *   6.  QUALIFICATION_EXPIRED — employee has expired qualifications for this shift
+ *   7.  REST_GAP              — minimum rest between consecutive shifts (10h)
+ *   8.  WEEKLY_HOURS          — max ordinary hours per 4-week rolling cycle
+ *   9.  DAILY_HOURS           — max hours in a single calendar day (12h cap)
+ *   10. WORKING_DAYS_CAP      — max 20 working days in rolling 28-day window (EBA Cl 35.1e)
+ *   11. STUDENT_VISA          — student visa 48h/fortnight limit (warning only)
+ *
+ * Removed:
+ *   SHIFT_LENGTH     — duration validated when the shift was created in Step 1
+ *   CONSECUTIVE_DAYS — R04/28-day cap is the authoritative work-pattern limit
  */
 export type ViolationType =
     | 'DRAFT_STATE'
@@ -79,8 +90,8 @@ export type ViolationType =
     | 'QUALIFICATION_EXPIRED'
     | 'REST_GAP'
     | 'WEEKLY_HOURS'
-    | 'SHIFT_LENGTH'
-    | 'CONSECUTIVE_DAYS'
+    | 'DAILY_HOURS'
+    | 'WORKING_DAYS_CAP'
     | 'STUDENT_VISA';
 
 /**
@@ -153,11 +164,14 @@ export interface BulkAssignmentResult {
 export interface EmployeeInfo {
     id: string;
     name: string;
+    /** @deprecated Use contracts for role matching (R10). Kept for other callers. */
     role_id?: string | null;
     /** ISO-8601 string or null when still active. */
     employment_end_date?: string | null;
-    /** JSON of granted qualifications { qualification_id, expires_at? }[] */
+    /** Granted qualifications { qualification_id, expires_at? }[] */
     qualifications?: Array<{ qualification_id: string; expires_at?: string | null }>;
+    /** Active user_contracts rows — source of truth for R10 role contract match. */
+    contracts?: ContractRecordV2[];
 }
 
 // =============================================================================

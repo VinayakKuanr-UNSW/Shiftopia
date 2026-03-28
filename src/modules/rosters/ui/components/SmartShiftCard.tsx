@@ -23,6 +23,7 @@ import {
     User,
     UserCheck,
     UserPlus,
+    UserX,
     AlertTriangle,
     Shield,
     ShieldAlert,
@@ -59,6 +60,105 @@ import {
 import { cn } from '@/modules/core/lib/utils';
 import type { Shift } from '../../domain/shift.entity';
 import { determineShiftState } from '../../domain/shift-state.utils';
+import { computeBiddingUrgency, isOnBidding } from '../../domain/bidding-urgency';
+import { AttendanceBadge } from './AttendanceBadge';
+
+// ============================================================================
+// STATUS ICONS HELPER
+// ============================================================================
+
+const ShiftStatusIcons: React.FC<{ shift: Shift; isLocked?: boolean }> = ({ shift, isLocked }) => {
+    const isDraft = (shift.lifecycle_status?.toLowerCase() === 'draft');
+    const isPublished = shift.lifecycle_status === 'Published';
+    
+    const isAssigned = !!shift.assigned_employee_id;
+    
+    const _isOnBidding = isOnBidding(shift.bidding_status);
+    const _biddingUrgency = _isOnBidding ? computeBiddingUrgency(shift.shift_date, shift.start_time) : null;
+    const isBiddingNormal = _isOnBidding && _biddingUrgency === 'normal';
+    const isBiddingUrgent = _isOnBidding && _biddingUrgency === 'urgent';
+    const isBiddingOff = !isBiddingNormal && !isBiddingUrgent;
+    
+    const isTradeRequested = shift.trading_status === 'TradeRequested';
+    const isTradeAccepted = shift.trading_status === 'TradeAccepted';
+    const isTrading = isTradeRequested || isTradeAccepted;
+    const isTradeUrgent = (shift.bidding_priority_text?.toLowerCase() === 'urgent' || shift.bidding_priority_text?.toLowerCase() === 'critical') && isTrading;
+    const isTradingOff = !isTrading;
+
+    return (
+        <TooltipProvider delayDuration={0}>
+            <div className="flex items-center justify-around gap-1 mt-auto pt-1.5 border-t border-border/30 px-1">
+                {/* 1. Lifecycle Cluster: Draft/Published */}
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <div>
+                            {isPublished ? (
+                                <Megaphone className="h-3.5 w-3.5 text-blue-500" />
+                            ) : (
+                                <Edit className="h-3.5 w-3.5 text-muted-foreground/40" />
+                            )}
+                        </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="text-[10px] py-1 px-2">
+                        {isPublished ? 'Published Shift' : 'Draft Shift'}
+                    </TooltipContent>
+                </Tooltip>
+
+                {/* 2. Assignment Cluster: Assigned/Unassigned */}
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <div>
+                            {isAssigned ? (
+                                <UserCheck className="h-3.5 w-3.5 text-emerald-500" />
+                            ) : (
+                                <UserX className="h-3.5 w-3.5 text-muted-foreground/40" />
+                            )}
+                        </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="text-[10px] py-1 px-2">
+                        {isAssigned ? 'Assigned' : 'Unassigned'}
+                    </TooltipContent>
+                </Tooltip>
+
+                {/* 3. Bidding Cluster: Off/Normal/Urgent */}
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <div>
+                            {isBiddingUrgent ? (
+                                <Flame className="h-3.5 w-3.5 text-orange-600 animate-pulse" />
+                            ) : isBiddingNormal ? (
+                                <Gavel className="h-3.5 w-3.5 text-amber-500" />
+                            ) : (
+                                <Gavel className="h-3.5 w-3.5 text-muted-foreground/20" />
+                            )}
+                        </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="text-[10px] py-1 px-2">
+                        {isBiddingUrgent ? 'Urgent Bidding' : isBiddingNormal ? 'Normal Bidding' : 'Bidding Off'}
+                    </TooltipContent>
+                </Tooltip>
+
+                {/* 4. Trading Cluster: Normal/Urgent / Off */}
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <div>
+                            {isTradeUrgent ? (
+                                <Zap className="h-3.5 w-3.5 text-red-500" />
+                            ) : isTrading ? (
+                                <ArrowLeftRight className="h-3.5 w-3.5 text-amber-500" />
+                            ) : (
+                                <ArrowLeftRight className="h-3.5 w-3.5 text-muted-foreground/20" />
+                            )}
+                        </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="text-[10px] py-1 px-2">
+                        {isTradeUrgent ? 'Urgent Trade Requested' : isTrading ? 'Trade Requested' : 'Trading Off'}
+                    </TooltipContent>
+                </Tooltip>
+            </div>
+        </TooltipProvider>
+    );
+};
 
 // ============================================================================
 // TYPES
@@ -109,11 +209,40 @@ export interface SmartShiftCardProps {
 // ============================================================================
 
 const GROUP_COLORS: Record<string, { header: string; accent: string; text: string; badge: string }> = {
-    blue: { header: 'bg-blue-100 dark:bg-blue-900', accent: 'border-blue-500/30', text: 'text-blue-900 dark:text-blue-100', badge: 'bg-blue-200 dark:bg-black/30' },
-    green: { header: 'bg-emerald-100 dark:bg-emerald-900', accent: 'border-emerald-500/30', text: 'text-emerald-900 dark:text-emerald-100', badge: 'bg-emerald-200 dark:bg-black/30' },
-    red: { header: 'bg-red-100 dark:bg-red-900', accent: 'border-red-500/30', text: 'text-red-900 dark:text-red-100', badge: 'bg-red-200 dark:bg-black/30' },
-    orange: { header: 'bg-orange-100 dark:bg-orange-900', accent: 'border-orange-500/30', text: 'text-orange-900 dark:text-orange-100', badge: 'bg-orange-200 dark:bg-black/30' },
-    purple: { header: 'bg-purple-100 dark:bg-purple-900', accent: 'border-purple-500/30', text: 'text-purple-900 dark:text-purple-100', badge: 'bg-purple-200 dark:bg-black/30' },
+    blue: { 
+        header: 'bg-blue-600 dark:bg-blue-600', 
+        accent: 'border-blue-500/30', 
+        text: 'text-white', 
+        badge: 'bg-white/20 dark:bg-white/10' 
+    },
+    green: { 
+        header: 'bg-emerald-600 dark:bg-emerald-600', 
+        accent: 'border-emerald-500/30', 
+        text: 'text-white', 
+        badge: 'bg-white/20 dark:bg-white/10' 
+    },
+    red: { 
+        header: 'bg-red-600 dark:bg-red-600', 
+        accent: 'border-red-500/30', 
+        text: 'text-white', 
+        badge: 'bg-white/20 dark:bg-white/10' 
+    },
+    orange: { 
+        header: 'bg-orange-600 dark:bg-orange-600', 
+        accent: 'border-orange-500/30', 
+        text: 'text-white', 
+        badge: 'bg-white/20 dark:bg-white/10' 
+    },
+    purple: { 
+        header: 'bg-purple-600 dark:bg-purple-600', 
+        accent: 'border-purple-500/30', 
+        text: 'text-white', 
+        badge: 'bg-white/20 dark:bg-white/10' 
+    },
+    // Map template group types to colors
+    convention_centre: { header: 'bg-blue-600', accent: 'border-blue-500/30', text: 'text-white', badge: 'bg-white/20' },
+    exhibition_centre: { header: 'bg-emerald-600', accent: 'border-emerald-500/30', text: 'text-white', badge: 'bg-white/20' },
+    theatre: { header: 'bg-red-600', accent: 'border-red-500/30', text: 'text-white', badge: 'bg-white/20' },
 };
 
 function formatTime(time: string | null): string {
@@ -191,6 +320,8 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
         ],
     );
 
+    const isDraft = (shift.lifecycle_status?.toLowerCase() === 'draft');
+
     return (
         <div
             className={cn(
@@ -202,13 +333,17 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                 hasComplianceIssue && 'border-amber-500/40',
                 shift.bidding_status === 'bidding_closed_no_winner' && 'ring-2 ring-orange-500 ring-offset-1 border-orange-500/50 bg-orange-500/5',
                 isLocked && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
+                isDraft && 'border-dashed opacity-[0.98]',
+                !isDraft && !isLocked && 'border-solid',
                 className
             )}
             onClick={isLocked ? undefined : onClick}
         >
             {/* Header */}
-            <div className={cn('px-3 py-1.5 flex justify-between items-center',
+            <div className={cn('px-3 py-1.5 flex justify-between items-center transition-all duration-300',
                 shift.bidding_status === 'bidding_closed_no_winner' ? 'bg-orange-500/20 text-orange-900 dark:text-orange-100' : colors.header,
+                isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-40 backdrop-blur-[2px]',
+                !isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-100',
                 shift.bidding_status !== 'bidding_closed_no_winner' && colors.text,
                 isLocked && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-muted dark:bg-slate-700 text-muted-foreground')}>
                 {/* State ID Badge */}
@@ -284,70 +419,23 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                     </div>
                 </div>
 
-                {/* Status indicators row - All 6 Icons */}
-                <div className="grid grid-cols-6 gap-0.5 mt-auto pt-1 border-t border-border/50">
-
-                    {/* 1. Lifecycle */}
-                    <div className="flex justify-center" title={`Lifecycle: ${shift.lifecycle_status}`} aria-label={`Lifecycle: ${shift.lifecycle_status}`}>
-                        {getLifecycleIcon(shift.lifecycle_status)}
+                {/* Attendance Badge (InProgress / Completed only) */}
+                {(shift.lifecycle_status === 'InProgress' || shift.lifecycle_status === 'Completed') && (
+                    <div className="flex justify-center">
+                        <AttendanceBadge
+                            attendanceStatus={shift.attendance_status ?? 'unknown'}
+                            actualStart={shift.actual_start}
+                            scheduledStart={`${shift.shift_date}T${shift.start_time}`}
+                            actualEnd={shift.actual_end}
+                            scheduledEnd={`${shift.shift_date}T${shift.end_time}`}
+                            lifecycleStatus={shift.lifecycle_status as 'InProgress' | 'Completed'}
+                        />
                     </div>
+                )}
 
-                    {/* 2. Assignment */}
-                    <div className="flex justify-center" title={`Assignment: ${shift.assigned_employee_id ? 'Assigned' : 'Unassigned'}`} aria-label={`Assignment: ${shift.assigned_employee_id ? 'assigned' : 'unassigned'}`}>
-                        {shift.assigned_employee_id ? (
-                            <UserCheck className="h-3.5 w-3.5 text-emerald-500" />
-                        ) : (
-                            <UserPlus className="h-3.5 w-3.5 text-amber-500" />
-                        )}
-                    </div>
+                {/* Status Icons Footer */}
+                <ShiftStatusIcons shift={shift} isLocked={isLocked} />
 
-                    {/* 3. Helper for Offer */}
-                    <div className="flex justify-center" title={`Offer: ${shift.assignment_outcome || 'None'}`} aria-label={`Offer: ${shift.assignment_outcome || 'none'}`}>
-                        {(() => {
-                            const o = shift.assignment_outcome;
-                            if (!o) return <Circle className="h-3.5 w-3.5 text-muted-foreground/30" />; // Grey 0
-                            if (o === 'pending') return <Clock className="h-3.5 w-3.5 text-amber-500" />;
-                            if (o === 'offered') return <MailOpen className="h-3.5 w-3.5 text-blue-500" />;
-                            if (o === 'confirmed') return <BadgeCheck className="h-3.5 w-3.5 text-emerald-500" />;
-                            if (o === 'emergency_assigned') return <Zap className="h-3.5 w-3.5 text-red-500" />;
-                            return <Circle className="h-3.5 w-3.5 text-muted-foreground/30" />;
-                        })()}
-                    </div>
-
-                    {/* 4. Helper for Bidding */}
-                    <div className="flex justify-center" title={`Bidding: ${shift.bidding_status || 'None'}`} aria-label={`Bidding: ${shift.bidding_status || 'none'}`}>
-                        {(() => {
-                            const b = shift.bidding_status;
-                            if (!b || b === 'not_on_bidding') return <Ban className="h-3.5 w-3.5 text-muted-foreground/30" />; // Grey 0
-                            if (b === 'on_bidding_normal') return <Gavel className="h-3.5 w-3.5 text-blue-500" />;
-                            if (b === 'on_bidding_urgent') return <Flame className="h-3.5 w-3.5 text-red-500" />;
-                            if (b === 'bidding_closed_no_winner') return <Lock className="h-3.5 w-3.5 text-muted-foreground" />;
-                            return <Ban className="h-3.5 w-3.5 text-muted-foreground/30" />;
-                        })()}
-                    </div>
-
-                    {/* 5. Helper for Trade */}
-                    <div className="flex justify-center" title={`Trade: ${(shift.trade_requested_at || shift.is_trade_requested) ? 'Requested' : 'None'}`} aria-label={`Trade: ${(shift.trade_requested_at || shift.is_trade_requested) ? 'requested' : 'none'}`}>
-                        {(shift.trade_requested_at || shift.is_trade_requested) ? (
-                            <ArrowLeftRight className="h-3.5 w-3.5 text-purple-500" />
-                        ) : (
-                            <Minus className="h-3.5 w-3.5 text-muted-foreground/30" /> // Grey 0
-                        )}
-                    </div>
-
-                    {/* 6. Helper for Compliance */}
-                    <div
-                        className="flex justify-center"
-                        title={compliancePending ? 'Checking compliance…' : `Compliance: ${compliance?.status || 'Compliant'}`}
-                        aria-label={compliancePending ? 'Compliance check in progress' : `Compliance: ${compliance?.status || 'compliant'}`}
-                    >
-                        {compliancePending
-                            ? <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                            : getComplianceIcon(compliance?.status)
-                        }
-                    </div>
-
-                </div>
             </div>
         </div>
     );
@@ -380,6 +468,8 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
     const hasComplianceIssue = compliance && compliance.status !== 'compliant';
     const totalHours = shift.net_length_minutes ? (shift.net_length_minutes / 60).toFixed(1) : null;
 
+    const isDraft = (shift.lifecycle_status?.toLowerCase() === 'draft');
+
     return (
         <div
             className={cn(
@@ -392,13 +482,17 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                 hasComplianceIssue && compliance?.status === 'warning' && 'border-amber-500/40',
                 shift.bidding_status === 'bidding_closed_no_winner' && 'ring-2 ring-orange-500 ring-offset-1 border-orange-500/50 bg-orange-500/5',
                 isLocked && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
+                isDraft && 'border-dashed opacity-[0.98]',
+                !isDraft && !isLocked && 'border-solid',
                 className
             )}
             onClick={isLocked ? undefined : onClick}
         >
             {/* Header */}
-            <div className={cn('px-4 py-2.5 flex justify-between items-center',
+            <div className={cn('px-4 py-2.5 flex justify-between items-center transition-all duration-300',
                 shift.bidding_status === 'bidding_closed_no_winner' ? 'bg-orange-500/20 text-orange-900 dark:text-orange-100' : colors.header,
+                isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-40 backdrop-blur-[2px]',
+                !isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-100',
                 shift.bidding_status !== 'bidding_closed_no_winner' && colors.text,
                 isLocked && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-muted dark:bg-slate-700 text-muted-foreground')}>
                 <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -505,30 +599,19 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     </div>
                 </div>
 
-                {/* Status Badges Row */}
-                <div className="flex flex-wrap gap-1.5">
-                    {/* Lifecycle */}
-                    <Badge variant="outline" className="text-[10px] gap-1">
-                        {getLifecycleIcon(shift.lifecycle_status)}
-                        <span className="capitalize">{shift.lifecycle_status}</span>
-                    </Badge>
 
-                    {/* Bidding */}
-                    {shift.bidding_status !== 'not_on_bidding' && shift.bidding_status !== 'bidding_closed_no_winner' && (
-                        <Badge variant="outline" className="text-[10px] gap-1 border-blue-500/30 text-blue-600 dark:text-blue-400">
-                            <Gavel className="h-3 w-3" />
-                            {shift.bidding_status === 'on_bidding_urgent' ? 'Urgent Bidding' : 'On Bidding'}
-                        </Badge>
-                    )}
 
-                    {/* Trade */}
-                    {(shift.trade_requested_at || shift.is_trade_requested) && (
-                        <Badge variant="outline" className="text-[10px] gap-1 border-purple-500/30 text-purple-600 dark:text-purple-400">
-                            <ArrowLeftRight className="h-3 w-3" />
-                            Trade Requested
-                        </Badge>
-                    )}
-                </div>
+                {/* Attendance Badge (InProgress / Completed only) */}
+                {(shift.lifecycle_status === 'InProgress' || shift.lifecycle_status === 'Completed') && (
+                    <AttendanceBadge
+                        attendanceStatus={shift.attendance_status ?? 'unknown'}
+                        actualStart={shift.actual_start}
+                        scheduledStart={`${shift.shift_date}T${shift.start_time}`}
+                        actualEnd={shift.actual_end}
+                        scheduledEnd={`${shift.shift_date}T${shift.end_time}`}
+                        lifecycleStatus={shift.lifecycle_status as 'InProgress' | 'Completed'}
+                    />
+                )}
 
                 {/* Required Skills */}
                 {shift.required_skills && shift.required_skills.length > 0 && (
@@ -575,6 +658,9 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                 {shift.notes && (
                     <p className="text-xs text-muted-foreground italic truncate">{shift.notes}</p>
                 )}
+
+                {/* Status Icons Footer */}
+                <ShiftStatusIcons shift={shift} isLocked={isLocked} />
             </div>
         </div>
     );

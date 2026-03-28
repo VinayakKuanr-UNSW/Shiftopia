@@ -2,6 +2,8 @@
 // Roster & Shift Types
 // Extracted from src/api/models/types.ts
 
+import type { ShiftWorkflowStatus } from '@/modules/planning/unified/types';
+
 export type LifecycleStatus =
     | 'draft'
     | 'scheduled'
@@ -69,6 +71,7 @@ export interface Shift {
     remunerationLevelId: string;
     assigned_employee_id?: string;
     lifecycleStatus: LifecycleStatus;
+    stateId?: string;
     shiftGroupId?: string;
     shiftSubgroupId?: string;
     isDraft: boolean;
@@ -88,6 +91,7 @@ export interface Shift {
     notes?: string;
     templateBatchId?: string;
     group_type?: 'convention_centre' | 'exhibition_centre' | 'theatre';
+    workflow_status?: ShiftWorkflowStatus;
 }
 
 export interface Roster {

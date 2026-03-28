@@ -24,6 +24,7 @@ export function determineShiftState(shift: Partial<Shift>): ShiftStateID {
     // Unassigned Flow
     if (shift.assignment_status === 'unassigned') {
         if (shift.bidding_status === 'on_bidding_urgent') return 'S6';
+        if (shift.bidding_status === 'on_bidding') return 'S5'; // unified; client derives from TTS
         if (shift.bidding_status === 'bidding_closed_no_winner') return 'S8';
         // Default to S5 for published unassigned (Normal Bidding or just Open)
         if (isPublished) return 'S5';

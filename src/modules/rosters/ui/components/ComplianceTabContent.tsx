@@ -72,23 +72,37 @@ type RuleStatus = 'pass' | 'fail' | 'warning' | 'not-run';
 const SERVER_RULES = [
     {
         id: 'ROLE_CONTRACT_MATCH',
-        name: 'Role Contract Match',
-        description: 'Employee must have a contract matching the org/dept/subdept/role hierarchy of this shift.',
+        name: 'Position Contract Match',
+        description: "Employee must have a contract matching the org/dept/subdept/role hierarchy of this shift.",
         icon: <FileCheck className="h-5 w-5" />
     },
     {
         id: 'QUALIFICATION_MATCH',
-        name: 'Qualification & Certification',
-        description: 'Employee must hold all required skills, certifications, and licences for this shift.',
+        name: 'Qualification Match',
+        description: 'Employee must hold all required active skills and licences for this shift.',
         icon: <BadgeCheck className="h-5 w-5" />
-    },
-    {
-        id: 'QUALIFICATION_EXPIRY',
-        name: 'Qualification Expiry',
-        description: 'All required qualifications must be valid (not expired) on the shift date.',
-        icon: <Timer className="h-5 w-5" />
     }
 ] as const;
+
+type Bucket = 'Eligibility' | 'Legal' | 'Workload';
+
+const RULE_BUCKETS: Record<string, Bucket> = {
+    // Bucket A: Eligibility
+    ROLE_CONTRACT_MATCH: 'Eligibility',
+    QUALIFICATION_MATCH: 'Eligibility',
+
+    // Bucket B: Legal
+    STUDENT_VISA_48H: 'Legal',
+
+    // Bucket D: Workload
+    NO_OVERLAP: 'Workload',
+    MAX_DAILY_HOURS: 'Workload',
+    WORKING_DAYS_CAP: 'Workload',
+    AVG_FOUR_WEEK_CYCLE: 'Workload',
+    MIN_REST_GAP: 'Workload',
+};
+
+const BUCKET_ORDER: Bucket[] = ['Eligibility', 'Legal', 'Workload'];
 
 // =============================================================================
 // MAIN COMPONENT
@@ -213,7 +227,7 @@ export function ComplianceTabContent({
 
                         newResults['ROLE_CONTRACT_MATCH'] = {
                             rule_id: 'ROLE_CONTRACT_MATCH',
-                            rule_name: 'Role Contract Match',
+                            rule_name: 'Position Contract Match',
                             status: roleViolations.length > 0 ? 'fail' : 'pass',
                             summary: roleViolations.length > 0
                                 ? `Role mismatch: no contract found for this org/dept/role`
@@ -227,7 +241,7 @@ export function ComplianceTabContent({
 
                         newResults['QUALIFICATION_MATCH'] = {
                             rule_id: 'QUALIFICATION_MATCH',
-                            rule_name: 'Qualification & Certification',
+                            rule_name: 'Qualification Match',
                             status: missingViolations.length > 0 ? 'fail' : 'pass',
                             summary: missingViolations.length > 0
                                 ? `${missingViolations.length} missing qualification(s)`
@@ -236,20 +250,6 @@ export function ComplianceTabContent({
                                 ? missingViolations.map(v => v.message).join('\n')
                                 : 'All required skills, certifications, and licences confirmed.',
                             calculation: { existing_hours: 0, candidate_hours: 0, total_hours: 0, limit: 0, violations: missingViolations },
-                            blocking: true
-                        };
-
-                        newResults['QUALIFICATION_EXPIRY'] = {
-                            rule_id: 'QUALIFICATION_EXPIRY',
-                            rule_name: 'Qualification Expiry',
-                            status: expiredViolations.length > 0 ? 'fail' : 'pass',
-                            summary: expiredViolations.length > 0
-                                ? `${expiredViolations.length} expired qualification(s)`
-                                : 'All qualifications are current',
-                            details: expiredViolations.length > 0
-                                ? expiredViolations.map(v => v.message).join('\n')
-                                : 'No qualifications have expired prior to the shift date.',
-                            calculation: { existing_hours: 0, candidate_hours: 0, total_hours: 0, limit: 0, violations: expiredViolations },
                             blocking: true
                         };
                     }
@@ -384,53 +384,68 @@ export function ComplianceTabContent({
                 </div>
             </div>
 
-            {/* Rule Cards */}
-            <div className="space-y-3">
-                {/* Hard Validation — shown only if failed */}
-                {!hardValidation.passed && <HardValidationCard result={hardValidation} />}
+            {/* Rule Buckets */}
+            {BUCKET_ORDER.map(bucket => {
+                const bucketRules = rules.filter(r => RULE_BUCKETS[r.id] === bucket);
+                const bucketServerRules = SERVER_RULES.filter(r => RULE_BUCKETS[r.id] === bucket);
 
-                {/* Client-side rules (Rules 4–10) */}
-                {rules.map((rule: ComplianceRule) => (
-                    <ComplianceRuleCard
-                        key={rule.id}
-                        rule={rule}
-                        result={ruleResults[rule.id]}
-                        onRun={() => handleRunRule(rule.id)}
-                        isStale={staleRules.has(rule.id)}
-                        toggle={
-                            rule.id === 'STUDENT_VISA_48H'
-                                ? {
-                                    label: studentVisaEnforced ? 'Enforcement ON' : 'Enforcement OFF',
-                                    description: 'Configured on Users page › Work Rights (Subclass 500)',
-                                    enabled: studentVisaEnforced,
-                                    readOnly: true,
-                                }
-                                : rule.id === 'MIN_REST_GAP'
-                                    ? {
-                                        label: 'Relaxed mode (8h)',
-                                        description: 'Allow 8h rest gap instead of the default 10h',
-                                        enabled: restGapRelaxed,
-                                        onChange: handleRestGapToggle
+                if (bucketRules.length === 0 && bucketServerRules.length === 0) return null;
+
+                return (
+                    <div key={bucket} className="space-y-4">
+                        <div className="flex items-center gap-3 px-1">
+                            <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">
+                                {bucket}
+                            </h4>
+                            <div className="h-px flex-1 bg-gradient-to-r from-border/50 to-transparent" />
+                        </div>
+                        
+                        <div className="space-y-3">
+                            {/* Server-side Rules first within bucket */}
+                            {bucketServerRules.map(serverRule => (
+                                <ServerRuleCard
+                                    key={serverRule.id}
+                                    ruleId={serverRule.id}
+                                    ruleName={serverRule.name}
+                                    ruleDescription={serverRule.description}
+                                    ruleIcon={serverRule.icon}
+                                    result={ruleResults[serverRule.id]}
+                                    onRunAll={handleRunAll}
+                                    isRunningAll={isRunningAll}
+                                />
+                            ))}
+
+                            {/* Client-side Rules */}
+                            {bucketRules.map((rule: ComplianceRule) => (
+                                <ComplianceRuleCard
+                                    key={rule.id}
+                                    rule={rule}
+                                    result={ruleResults[rule.id]}
+                                    onRun={() => handleRunRule(rule.id)}
+                                    isStale={staleRules.has(rule.id)}
+                                    toggle={
+                                        rule.id === 'STUDENT_VISA_48H'
+                                            ? {
+                                                label: studentVisaEnforced ? 'Enforcement ON' : 'Enforcement OFF',
+                                                description: 'Configured on Users page › Work Rights (Subclass 500)',
+                                                enabled: studentVisaEnforced,
+                                                readOnly: true,
+                                            }
+                                            : rule.id === 'MIN_REST_GAP'
+                                                ? {
+                                                    label: 'Relaxed mode (8h)',
+                                                    description: 'Allow 8h rest gap instead of the default 10h',
+                                                    enabled: restGapRelaxed,
+                                                    onChange: handleRestGapToggle
+                                                }
+                                                : undefined
                                     }
-                                    : undefined
-                        }
-                    />
-                ))}
-
-                {/* Server-side rules (Rules 1–3): always show as pending until server check runs */}
-                {SERVER_RULES.map(serverRule => (
-                    <ServerRuleCard
-                        key={serverRule.id}
-                        ruleId={serverRule.id}
-                        ruleName={serverRule.name}
-                        ruleDescription={serverRule.description}
-                        ruleIcon={serverRule.icon}
-                        result={ruleResults[serverRule.id]}
-                        onRunAll={handleRunAll}
-                        isRunningAll={isRunningAll}
-                    />
-                ))}
-            </div>
+                                />
+                            ))}
+                        </div>
+                    </div>
+                );
+            })}
         </div>
     );
 }
@@ -1238,15 +1253,41 @@ function StudentVisaViz({ result }: { result: ComplianceResult }) {
 // --- DEFAULT ---
 
 function DefaultViz({ result }: { result: ComplianceResult }) {
+    const calc = result.calculation as Record<string, any>;
+
+    // Extract key numeric fields from calculation and render as readable pills
+    // Never dump raw JSON to the UI — extract only what's meaningful
+    type Pill = { label: string; value: string; highlight: boolean };
+    const pills: Pill[] = [];
+    if (typeof calc.existing_hours === 'number')        pills.push({ label: 'Current hours',  value: `${calc.existing_hours.toFixed(1)}h`,  highlight: false });
+    if (typeof calc.candidate_hours === 'number')       pills.push({ label: 'Added by shift', value: `+${calc.candidate_hours.toFixed(1)}h`, highlight: false });
+    if (typeof calc.total_hours === 'number')           pills.push({ label: 'Total projected', value: `${calc.total_hours.toFixed(1)}h`,     highlight: result.status === 'fail' });
+    if (typeof calc.limit === 'number')                 pills.push({ label: 'Limit',           value: `${calc.limit}h`,                      highlight: false });
+    if (typeof calc.average_weekly_hours === 'number')  pills.push({ label: 'Avg / wk',        value: `${calc.average_weekly_hours.toFixed(1)}h`, highlight: result.status === 'fail' });
+    if (typeof calc.days_worked === 'number')           pills.push({ label: 'Days worked',     value: `${calc.days_worked}`,                 highlight: result.status === 'fail' });
+    if (typeof calc.period_days === 'number')           pills.push({ label: 'Period',          value: `${calc.period_days} days`,            highlight: false });
+    if (typeof calc.shift_duration === 'number')        pills.push({ label: 'Duration',        value: `${calc.shift_duration.toFixed(1)}h`,  highlight: result.status === 'fail' });
+
     return (
         <div className="space-y-4">
-            <div className="text-sm font-medium text-muted-foreground leading-relaxed italic">{result.details}</div>
-            {result.calculation && Object.keys(result.calculation).length > 0 && (
-                <div className="p-4 bg-muted/50 rounded-xl border border-border shadow-inner">
-                    <pre className="text-[10px] text-muted-foreground/60 overflow-x-auto font-mono">
-                        {JSON.stringify(result.calculation, null, 2)}
-                    </pre>
+            {result.details && (
+                <div className="text-sm font-medium text-muted-foreground leading-relaxed italic">{result.details}</div>
+            )}
+            {pills.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                    {pills.map(p => (
+                        <div key={p.label} className={cn(
+                            'px-3 py-1.5 rounded-lg border text-center min-w-[72px]',
+                            p.highlight ? 'bg-red-500/5 border-red-500/20' : 'bg-muted/50 border-border'
+                        )}>
+                            <div className="text-[8px] font-black uppercase tracking-widest text-muted-foreground/50">{p.label}</div>
+                            <div className={cn('text-sm font-black mt-0.5', p.highlight ? 'text-red-600 dark:text-red-400' : 'text-foreground')}>{p.value}</div>
+                        </div>
+                    ))}
                 </div>
+            )}
+            {pills.length === 0 && !result.details && (
+                <p className="text-xs text-muted-foreground/50 italic">No additional details available.</p>
             )}
         </div>
     );

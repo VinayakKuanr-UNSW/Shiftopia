@@ -27,7 +27,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/modules/core/ui/primitives/tabs';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { cn } from '@/modules/core/lib/utils';
@@ -36,9 +35,10 @@ import { useBroadcastGroups } from '../../state/useBroadcasts';
 import { BroadcastGroupsView } from '../views/BroadcastGroups.view';
 import { BroadcastNotificationsList } from '../views/BroadcastNotificationsList.view';
 import { BroadcastAnalytics } from '../views/BroadcastAnalytics.view';
-import { ControlRoom } from '../views/ControlRoom.view';
+import { ControlRoom } from './ControlRoom';
 import { CreateGroupDialog } from '../dialogs/CreateGroupDialog';
 import { EditGroupDialog } from '../dialogs/EditGroupDialog';
+import { BroadcastGroupWithStats, CreateBroadcastGroupRequest } from '../../model/broadcast.types';
 
 
 // ============================================================================
@@ -54,6 +54,8 @@ export interface BroadcastsManagerScreenProps {
    */
   layout: 'desktop' | 'tablet' | 'mobile';
   scope?: import('@/platform/auth/types').ScopeSelection;
+  /** Notifies the parent when the ControlRoom opens/closes so it can hide the scope banner */
+  onControlRoomChange?: (open: boolean) => void;
 }
 
 type MobileTab = 'groups' | 'analytics' | 'activity';
@@ -62,7 +64,7 @@ type MobileTab = 'groups' | 'analytics' | 'activity';
 // COMPONENT
 // ============================================================================
 
-export function BroadcastsManagerScreen({ layout, scope }: BroadcastsManagerScreenProps) {
+export function BroadcastsManagerScreen({ layout, scope, onControlRoomChange }: BroadcastsManagerScreenProps) {
   const { toast } = useToast();
 
   // ========================================
@@ -88,6 +90,9 @@ export function BroadcastsManagerScreen({ layout, scope }: BroadcastsManagerScre
   // ========================================
   // DATA HOOKS
   // ========================================
+  // Groups are org-level entities — a manager sees all groups they admin in
+  // the org regardless of the current dept/subdept scope.  Dept/subdept scope
+  // applies to employee lookup (AddMemberDialog), not to group visibility.
   const {
     groups,
     isLoading,
@@ -97,16 +102,19 @@ export function BroadcastsManagerScreen({ layout, scope }: BroadcastsManagerScre
     refetch,
   } = useBroadcastGroups({
     organizationId: selectedOrgId || undefined,
-    departmentId: selectedDeptId || undefined,
-    subDepartmentId: selectedSubDeptId || undefined,
   });
 
   // ========================================
   // UI STATE
   // ========================================
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    onControlRoomChange?.(!!selectedGroupId);
+  }, [selectedGroupId, onControlRoomChange]);
+
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [editingGroup, setEditingGroup] = useState<any>(null);
+  const [editingGroup, setEditingGroup] = useState<BroadcastGroupWithStats | null>(null);
   const [mobileTab, setMobileTab] = useState<MobileTab>('groups');
   const [showAnalytics, setShowAnalytics] = useState(true);
 
@@ -122,9 +130,10 @@ export function BroadcastsManagerScreen({ layout, scope }: BroadcastsManagerScre
     });
   };
 
-  const handleCreateGroup = async (data: any) => {
+  const handleCreateGroup = async (data: CreateBroadcastGroupRequest) => {
     const newGroup = await createGroup({
       ...data,
+      organizationId: data.organizationId || selectedOrgId || undefined,
       departmentId: data.departmentId || undefined,
       subDepartmentId: data.subDepartmentId || undefined,
     });
@@ -139,10 +148,12 @@ export function BroadcastsManagerScreen({ layout, scope }: BroadcastsManagerScre
 
   if (selectedGroupId) {
     return (
-      <ControlRoom
-        groupId={selectedGroupId}
-        onBack={() => setSelectedGroupId(null)}
-      />
+      <div className="fixed inset-0 md:left-[280px] z-30 bg-background">
+        <ControlRoom
+          groupId={selectedGroupId}
+          onBack={() => setSelectedGroupId(null)}
+        />
+      </div>
     );
   }
 
@@ -268,7 +279,7 @@ export function BroadcastsManagerScreen({ layout, scope }: BroadcastsManagerScre
 
         {/* Analytics Section */}
         <div className="px-8 pt-6">
-          <BroadcastAnalytics />
+          {renderAnalyticsSection()}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-8 w-full">

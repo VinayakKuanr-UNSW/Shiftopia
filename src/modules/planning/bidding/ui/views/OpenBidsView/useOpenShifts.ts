@@ -6,6 +6,7 @@ import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
+import { computeBiddingUrgency, isOnBidding } from '@/modules/rosters/domain/bidding-urgency';
 import type { ManagerBidShift, BidToggle } from './types';
 
 interface UseManagerBidShiftsReturn {
@@ -62,7 +63,7 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
         let toggle: BidToggle = 'normal';
         if (s.assigned_employee_id) {
           toggle = 'resolved';
-        } else if (s.bidding_status === 'on_bidding_urgent' || s.is_urgent) {
+        } else if (isOnBidding(s.bidding_status) && (computeBiddingUrgency(s.shift_date, s.start_time) === 'urgent' || s.is_urgent)) {
           toggle = 'urgent';
         } else {
           toggle = 'normal';
@@ -79,6 +80,7 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
         return {
           id: s.id,
           role: s.roles?.name || 'Shift',
+          roleId: s.role_id || undefined,
           date: s.shift_date,
           dayLabel: new Date(s.shift_date + 'T00:00:00').toLocaleDateString('en-AU', {
             weekday: 'short',
@@ -105,6 +107,7 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
           departmentId: s.department_id,
           subDepartmentId: s.sub_department_id,
           groupType: s.group_type,
+          lifecycleStatus: s.lifecycle_status,
         };
       });
 

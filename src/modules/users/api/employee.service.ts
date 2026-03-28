@@ -8,15 +8,26 @@ import { Employee } from '../model/employee.types';
  * Fetches employee data from the profiles table.
  */
 export const employeeService = {
-    getAllEmployees: async (): Promise<Employee[]> => {
-        const { data, error } = await supabase
+    getAllEmployees: async (orgIds?: string[], deptIds?: string[]): Promise<Employee[]> => {
+        // When scope filters are provided, resolve matching user IDs via contracts first
+        let filteredUserIds: string[] | null = null;
+        if (orgIds?.length || deptIds?.length) {
+            let contractsQuery = supabase.from('user_contracts').select('user_id');
+            if (orgIds?.length)  contractsQuery = contractsQuery.in('organization_id', orgIds);
+            if (deptIds?.length) contractsQuery = contractsQuery.in('department_id',   deptIds);
+            const { data: contractRows } = await contractsQuery;
+            filteredUserIds = [...new Set((contractRows ?? []).map((c: { user_id: string }) => c.user_id))];
+            if (filteredUserIds.length === 0) return [];
+        }
+
+        let query = supabase
             .from('profiles')
             .select(`
-                id, 
-                first_name, 
-                last_name, 
-                full_name, 
-                email, 
+                id,
+                first_name,
+                last_name,
+                full_name,
+                email,
                 avatar_url,
                 user_contracts (
                     id,
@@ -27,6 +38,12 @@ export const employeeService = {
                 )
             `)
             .order('full_name');
+
+        if (filteredUserIds !== null) {
+            query = query.in('id', filteredUserIds);
+        }
+
+        const { data, error } = await query;
 
         if (error) {
             console.error('[employeeService] Error fetching employees:', error);

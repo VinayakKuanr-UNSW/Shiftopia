@@ -1,5 +1,7 @@
 // src/modules/planning/bidding/ui/views/OpenBidsView/types.ts
 
+export type GroupType = 'convention' | 'exhibition' | 'concert' | 'sports' | 'corporate';
+
 export interface OpenShift extends ManagerBidShift {
   location: string;
   shiftIdDisplay: string;
@@ -14,6 +16,7 @@ export interface OpenShift extends ManagerBidShift {
   netHours: string;
   stateId: string;
   biddingDeadline: string;
+  status: ShiftStatus;
 }
 
 export type ShiftStatus = 'all' | 'urgent' | 'pending' | 'resolved';
@@ -32,6 +35,7 @@ export interface StatusCounts {
 export interface ManagerBidShift {
   id: string;
   role: string;
+  roleId?: string;
   date: string;
   dayLabel: string;
   startTime: string;
@@ -54,6 +58,7 @@ export interface ManagerBidShift {
   departmentId?: string;
   subDepartmentId?: string;
   groupType?: string | null;
+  lifecycleStatus?: string;
 }
 
 export interface EmployeeBid {
@@ -72,8 +77,13 @@ export interface EmployeeBid {
 export type BidToggle = 'urgent' | 'normal' | 'resolved';
 
 export interface TimeRemaining {
+  years: number;
+  months: number;
+  weeks: number;
+  days: number;
   hours: number;
   minutes: number;
+  seconds: number;
   isExpired: boolean;
 }
 

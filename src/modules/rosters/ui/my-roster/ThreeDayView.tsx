@@ -4,6 +4,8 @@ import TimeGrid, { HOUR_HEIGHT } from '@/modules/rosters/ui/components/TimeGrid'
 import { Shift } from '@/modules/rosters';
 import ShiftDetailsDialog from './ShiftDetailsDialog';
 import { cn } from '@/modules/core/lib/utils';
+import { format } from 'date-fns';
+import { calculateShiftLayout } from '../../utils/shift-layout.utils';
 
 interface ShiftWithDetails {
   shift: Shift;
@@ -27,12 +29,16 @@ const formatTime = (time: string): string => {
 
 // Get gradient class based on color
 const getGradientClass = (color: string): string => {
-  switch (color) {
-    case 'blue': return 'bg-gradient-to-br from-blue-600 to-blue-800';
-    case 'green': return 'bg-gradient-to-br from-green-600 to-green-800';
-    case 'red': return 'bg-gradient-to-br from-red-600 to-red-800';
-    case 'purple': return 'bg-gradient-to-br from-purple-600 to-purple-800';
-    default: return 'bg-gradient-to-br from-slate-600 to-slate-800';
+  const base = 'dept-card-glass-base';
+  switch (color?.toLowerCase()) {
+    case 'convention':
+      return `${base} dept-card-glass-convention border-blue-400/30 shadow-blue-500/20`;
+    case 'exhibition':
+      return `${base} dept-card-glass-exhibition border-green-400/30 shadow-green-500/20`;
+    case 'theatre':
+      return `${base} dept-card-glass-theatre border-red-400/30 shadow-red-500/20`;
+    default:
+      return `${base} dept-card-glass-default border-slate-400/30 shadow-slate-500/20`;
   }
 };
 
@@ -47,11 +53,6 @@ const ThreeDayView: React.FC<ThreeDayViewProps> = ({
 
   const days = [startDate, addDays(startDate, 1), addDays(startDate, 2)];
 
-  // Convert time string to pixel position
-  const timeToPixels = (time: string): number => {
-    const [h, m] = time.split(':').map(Number);
-    return (h + m / 60) * HOUR_HEIGHT;
-  };
 
   return (
     <div className="h-full flex flex-col min-h-0">
@@ -60,9 +61,8 @@ const ThreeDayView: React.FC<ThreeDayViewProps> = ({
         renderShifts={(day) =>
           getShiftsForDate(day).map((shiftData) => {
             const { shift, groupColor } = shiftData;
-            const top = timeToPixels(shift.start_time);
-            const bottom = timeToPixels(shift.end_time);
-            const height = Math.max(bottom - top, 44);
+            const dateStr = format(day, 'yyyy-MM-dd');
+            const { top, height } = calculateShiftLayout(shift, dateStr, HOUR_HEIGHT, 44);
 
             return (
               <div

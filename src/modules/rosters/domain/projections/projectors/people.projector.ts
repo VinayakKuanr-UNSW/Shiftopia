@@ -17,6 +17,7 @@
 
 import type { Shift } from '../../shift.entity';
 import type { EmployeeRecord, PeopleProjection, ProjectedEmployee, ProjectedShift } from '../types';
+import { computeBiddingUrgency, isOnBidding } from '../../bidding-urgency';
 import { UNASSIGNED_BUCKET_ID, dicebearUrl } from '../constants';
 import { netMinutesFromShift, minutesToHours } from '../utils/duration';
 import { estimateCostFromShift } from '../utils/cost';
@@ -58,8 +59,8 @@ function toProjectedShift(shift: Shift): ProjectedShift {
     employeeName:   resolveEmployeeName(shift),
     employeeId:     shift.assigned_employee_id,
     isLocked:       shift.is_locked,
-    isUrgent:       shift.bidding_status === 'on_bidding_urgent',
-    isOnBidding:    shift.bidding_status !== 'not_on_bidding',
+    isUrgent:       isOnBidding(shift.bidding_status) && computeBiddingUrgency(shift.shift_date, shift.start_time) === 'urgent',
+    isOnBidding:    isOnBidding(shift.bidding_status),
     isTrading:      !!shift.trade_requested_at,
     isCancelled:    shift.is_cancelled,
     isPublished:    shift.lifecycle_status === 'Published',

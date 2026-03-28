@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Input } from '@/modules/core/ui/primitives/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/modules/core/ui/primitives/dialog';
-import { OrgDeptSelector } from '@/modules/core/ui/components/OrgDeptSelector';
+import { BroadcastGroupFormFields } from './BroadcastGroupFormFields';
 
 export interface CreateGroupDialogProps {
     isOpen: boolean;
@@ -14,6 +13,7 @@ export interface CreateGroupDialogProps {
         name: string;
         description: string;
         icon: string;
+        organizationId?: string | null;
         departmentId?: string | null;
         subDepartmentId?: string | null;
     }) => Promise<void>;
@@ -31,20 +31,6 @@ export const CreateGroupDialog: React.FC<CreateGroupDialogProps> = ({
     const [description, setDescription] = useState('');
     const [isCreating, setIsCreating] = useState(false);
 
-    // Hierarchy State
-    const [orgId, setOrgId] = useState<string | null>(initialOrganizationId || null);
-    const [deptId, setDeptId] = useState<string | null>(initialDepartmentId || null);
-    const [subDeptId, setSubDeptId] = useState<string | null>(initialSubDepartmentId || null);
-
-    // Sync with props when opened
-    React.useEffect(() => {
-        if (isOpen) {
-            setOrgId(initialOrganizationId || null);
-            setDeptId(initialDepartmentId || null);
-            setSubDeptId(initialSubDepartmentId || null);
-        }
-    }, [isOpen, initialOrganizationId, initialDepartmentId, initialSubDepartmentId]);
-
     const handleCreate = async () => {
         if (!name.trim()) return;
         setIsCreating(true);
@@ -53,8 +39,9 @@ export const CreateGroupDialog: React.FC<CreateGroupDialogProps> = ({
                 name: name.trim(),
                 description,
                 icon: 'megaphone',
-                departmentId: deptId,
-                subDepartmentId: subDeptId
+                organizationId: initialOrganizationId,
+                departmentId: initialDepartmentId,
+                subDepartmentId: initialSubDepartmentId,
             });
             setName('');
             setDescription('');
@@ -72,41 +59,17 @@ export const CreateGroupDialog: React.FC<CreateGroupDialogProps> = ({
                 <DialogHeader>
                     <DialogTitle>Create New Broadcast Group</DialogTitle>
                     <DialogDescription>
-                        Fill in the details below to create a new broadcast group.
+                        This group will be created under your current scope. Change the global scope filter to create groups in a different area.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">Organization Hierarchy</label>
-                        <OrgDeptSelector
-                            selectedOrganizationId={orgId}
-                            selectedDepartmentId={deptId}
-                            selectedSubDepartmentId={subDeptId}
-                            onOrganizationChange={setOrgId}
-                            onDepartmentChange={setDeptId}
-                            onSubDepartmentChange={setSubDeptId}
-                            className="bg-muted p-3 rounded-lg flex-col items-stretch gap-3"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <label htmlFor="name" className="text-sm font-medium">Group Name</label>
-                        <Input
-                            id="name"
-                            placeholder="Enter group name"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label htmlFor="description" className="text-sm font-medium">Description (optional)</label>
-                        <Input
-                            id="description"
-                            placeholder="Enter description"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                        />
-                    </div>
+                    <BroadcastGroupFormFields
+                        name={name}
+                        onNameChange={setName}
+                        description={description}
+                        onDescriptionChange={setDescription}
+                        disabled={isCreating}
+                    />
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose} disabled={isCreating}>

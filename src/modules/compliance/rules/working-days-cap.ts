@@ -10,7 +10,7 @@ export const WorkingDaysCapRule: ComplianceRule = {
     id: 'WORKING_DAYS_CAP',
     name: 'Maximum Working Days (20/28)',
     description: 'Maximum of 20 working days in any 28-day cycle (EBA Cl 35.1e).',
-    appliesTo: ['add', 'assign', 'swap'],
+    appliesTo: ['add', 'assign', 'swap', 'bid'],
     blocking: true, // Blocking check
 
     evaluate(input: ComplianceCheckInput): ComplianceResult {

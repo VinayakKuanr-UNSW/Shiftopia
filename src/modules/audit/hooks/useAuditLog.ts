@@ -37,10 +37,10 @@ export function useActorHistory(
 }
 
 /** Action counts for summary cards */
-export function useAuditActionCounts(fromDate: string, toDate: string) {
+export function useAuditActionCounts(fromDate: string, toDate: string, orgIds?: string[], deptIds?: string[]) {
     return useQuery({
-        queryKey: ['audit', 'counts', fromDate, toDate],
-        queryFn:  () => auditApi.getActionCounts(fromDate, toDate),
+        queryKey: ['audit', 'counts', fromDate, toDate, orgIds, deptIds],
+        queryFn:  () => auditApi.getActionCounts(fromDate, toDate, orgIds, deptIds),
         staleTime: 60_000,
     });
 }

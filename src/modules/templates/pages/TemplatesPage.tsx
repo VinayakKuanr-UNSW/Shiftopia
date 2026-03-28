@@ -26,7 +26,7 @@ import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 
 const TemplatesPage: React.FC = () => {
   const { toast } = useToast();
-  const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
+  const { scope, setScope, isGammaLocked, isLoading: isScopeLoading } = useScopeFilter('managerial');
 
   const {
     templates,
@@ -69,7 +69,7 @@ const TemplatesPage: React.FC = () => {
     serverVersion: number;
   } | null>(null);
 
-  const organizationId = scope.org_ids[0] || '00000000-0000-0000-0000-000000000001';
+  const organizationId = scope.org_ids[0] ?? '';
   const departmentId = scope.dept_ids[0] || '';
   const subDepartmentId = scope.subdept_ids[0] || '';
 
@@ -235,7 +235,7 @@ const TemplatesPage: React.FC = () => {
       );
     }
 
-    if (isLoading && templates.length === 0) {
+    if ((isLoading || isScopeLoading) && templates.length === 0) {
       return (
         <div className="flex items-center justify-center h-full w-full">
           <Loader2 className="h-8 w-8 animate-spin" />

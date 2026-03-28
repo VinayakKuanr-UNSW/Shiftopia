@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Check, X, ChevronRight, ArrowLeftRight, Clock, CheckCircle, XCircle, Calendar, AlertTriangle, Shield, Gavel, RefreshCw } from 'lucide-react';
+import { Check, X, ChevronRight, ArrowLeftRight, Clock, CheckCircle, XCircle, Calendar, AlertTriangle, Shield, Gavel, RefreshCw, ShieldCheck, ShieldAlert, ShieldX, ScanSearch, Megaphone, UserCheck as LucideUserCheck, Circle, Minus } from 'lucide-react';
 import { ManagerComplianceApprovalModal } from '../components/ManagerComplianceApprovalModal';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
@@ -14,9 +14,12 @@ import { swapsApi } from '../../api/swaps.api';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { SwapRequestWithDetails, SwapStatus } from '../../model/swap.types';
+import { SwapPriority, PRIORITY_CONFIG } from './EmployeeSwaps.page';
+import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { SharedShiftCard } from '../../../../planning/ui/components/SharedShiftCard';
 
 /* ============================================================
    DESIGN TOKENS (Deprecated hex scales, using theme-aware variables)
@@ -184,34 +187,27 @@ const ShiftPane: React.FC<{ data: any; label: string }> = ({ data, label }) => {
             </div>
 
             {/* Shift Details (Redesigned Table-like Grid) */}
-            <div className="space-y-3 relative z-10">
-                <div className="flex items-center justify-between px-1">
-                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase tracking-widest font-black opacity-50">
-                        <Calendar className="h-3 w-3" />
-                        <span>Date</span>
-                    </div>
-                    <span className="text-[11px] font-black text-foreground font-mono">{data.formattedDate || 'N/A'}</span>
-                </div>
+            <div className="relative z-10 px-1">
+                <SharedShiftCard
+                    variant="nested"
+                    organization={data.orgName || 'ICC Sydney'}
+                    department={data.deptName || 'Department'}
+                    subGroup={data.subGroupName}
+                    role={data.roleName || 'Shift'}
+                    shiftDate={data.formattedDate || 'N/A'}
+                    startTime={data.time?.split(' - ')[0] || '00:00'}
+                    endTime={data.time?.split(' - ')[1] || '00:00'}
+                    netLength={data.durationNum * 60}
+                    paidBreak={0}
+                    unpaidBreak={0}
+                    groupVariant={
+                        deptClass.includes('convention') ? 'convention' :
+                        deptClass.includes('exhibition') ? 'exhibition' :
+                        deptClass.includes('theatre') ? 'theatre' : 'default'
+                    }
+                    complianceLabel="Compliant"
 
-                <div className="flex items-center justify-between px-1">
-                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase tracking-widest font-black opacity-50">
-                        <Clock className="h-3 w-3" />
-                        <span>Time</span>
-                    </div>
-                    <span className="text-[11px] font-black text-foreground font-mono">{data.time}</span>
-                </div>
-
-                <div className="flex items-center justify-between px-1 pt-3 border-t border-border/30">
-                    <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-black opacity-50">Duration</span>
-                    <span className="text-[10px] font-black text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-md">{data.duration}</span>
-                </div>
-
-                {data.hourlyRate > 0 && (
-                    <div className="flex items-center justify-between px-1">
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-black opacity-50">Estimated Value</span>
-                        <span className="text-[12px] font-black text-foreground/40 font-mono">${(data.hourlyRate * data.durationNum).toFixed(0)}</span>
-                    </div>
-                )}
+                />
             </div>
         </div>
     );
@@ -222,9 +218,20 @@ const ShiftPane: React.FC<{ data: any; label: string }> = ({ data, label }) => {
    SWAP ARROW (center divider)
    ============================================================ */
 
-const SwapDivider: React.FC<{ hoursDiff: number; payDiff: number; compliance: boolean | null }> = ({ hoursDiff, payDiff, compliance }) => {
+type ComplianceStatus = 'PASS' | 'WARNING' | 'BLOCKING' | null;
+
+const COMPLIANCE_STYLES: Record<'PASS' | 'WARNING' | 'BLOCKING', {
+    ring: string; icon: React.ReactNode; label: string;
+}> = {
+    PASS:     { ring: 'bg-emerald-500/10 border-emerald-500/20', icon: <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />, label: 'Compliance Passed' },
+    WARNING:  { ring: 'bg-amber-500/10 border-amber-500/20',   icon: <ShieldAlert  className="h-3.5 w-3.5 text-amber-500"  />, label: 'Compliance Warnings' },
+    BLOCKING: { ring: 'bg-rose-500/10 border-rose-500/20',     icon: <ShieldX      className="h-3.5 w-3.5 text-rose-500"   />, label: 'Compliance Blocked' },
+};
+
+const SwapDivider: React.FC<{ hoursDiff: number; payDiff: number; compliance: ComplianceStatus }> = ({ hoursDiff, payDiff, compliance }) => {
     const hoursColor = hoursDiff > 0 ? 'text-emerald-600 dark:text-emerald-400' : hoursDiff < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground/30';
     const payColor = payDiff > 0 ? 'text-emerald-600 dark:text-emerald-400' : payDiff < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground/30';
+    const cStyle = compliance ? COMPLIANCE_STYLES[compliance] : null;
 
     return (
         <div className="flex sm:flex-col items-center justify-center px-4 py-6 gap-3 flex-shrink-0 relative">
@@ -244,26 +251,19 @@ const SwapDivider: React.FC<{ hoursDiff: number; payDiff: number; compliance: bo
                         {payDiff > 0 ? '+' : ''}${payDiff.toFixed(0)}
                     </span>
                 )}
-                {compliance !== null && (
+                {cStyle && (
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger className="mt-1">
-                                <div className={cn(
-                                    "h-6 w-6 rounded-full flex items-center justify-center border",
-                                    compliance
-                                        ? "bg-emerald-500/10 border-emerald-500/20"
-                                        : "bg-amber-500/10 border-amber-500/20"
-                                )}>
-                                    {compliance
-                                        ? <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
-                                        : <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                                    }
+                                <div className={cn("h-6 w-6 rounded-full flex items-center justify-center border", cStyle.ring)}>
+                                    {cStyle.icon}
                                 </div>
                             </TooltipTrigger>
                             <TooltipContent side="top" className="bg-popover text-popover-foreground border-border shadow-xl">
-                                <span className="text-[10px] font-black uppercase tracking-wider">
-                                    {compliance ? 'Compliance Passed' : 'Compliance Warnings Detected'}
-                                </span>
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] font-black uppercase tracking-wider">{cStyle.label}</span>
+                                    <span className="text-[9px] font-mono text-muted-foreground opacity-60">Engine v2</span>
+                                </div>
                             </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
@@ -295,6 +295,8 @@ interface SwapRequestManagement {
         groupType?: string;
         organizationId?: string;
         subDepartmentId?: string;
+        lifecycleStatus?: string;
+        stateId?: string;
     };
 
 
@@ -315,6 +317,8 @@ interface SwapRequestManagement {
         groupType?: string;
         organizationId?: string;
         subDepartmentId?: string;
+        lifecycleStatus?: string;
+        stateId?: string;
     } | null;
 
 
@@ -326,7 +330,8 @@ interface SwapRequestManagement {
     tags: string[];
     hoursDiff: number;
     payDiff: number;
-    compliancePassed: boolean | null;
+    complianceStatus: ComplianceStatus;
+    priority?: SwapPriority;
     shiftStateId: string;
     combinedStateId: string;
     deptName: string;
@@ -337,9 +342,20 @@ interface SwapRequestManagement {
     offererShiftId: string | null;
 }
 
+/** Compute duration hours from camelCase timing strings */
+const computeShiftHours = (s: { startTime: string; endTime: string; unpaidBreakMinutes?: number }): number => {
+    try {
+        const [sh, sm] = s.startTime.slice(0, 5).split(':').map(Number);
+        const [eh, em] = s.endTime.slice(0, 5).split(':').map(Number);
+        let mins = (eh * 60 + em) - (sh * 60 + sm);
+        if (mins < 0) mins += 1440;
+        return Math.max(0, mins - (s.unpaidBreakMinutes || 0)) / 60;
+    } catch { return 0; }
+};
+
 const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement => {
     const getShiftValue = (shift?: any) => {
-        const rate = shift?.roles?.remuneration_levels?.hourly_rate_min || 0;
+        const rate = shift?.remuneration_levels?.hourly_rate_min || 0;
         const netLength = shift?.netLength || 0;
         const durationHours = netLength / 60;
         return { rate, durationHours, value: rate * durationHours };
@@ -351,11 +367,77 @@ const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement =>
     const activeOffer = apiData.swap_offers?.find(o =>
         (o.offered_shift_id === apiData.offered_shift_id) ||
         (o.status === 'SELECTED')
-    );
-    const compliancePassed = activeOffer?.compliance_snapshot?.passed ?? null;
+    ) ?? apiData.swap_offers?.find(o => o.status !== 'rejected' && o.status !== 'withdrawn');
 
-    const hoursDiff = apiData.requestedShift ? (recVal.durationHours - reqVal.durationHours) : -reqVal.durationHours;
+    const snap = activeOffer?.compliance_snapshot;
+    let complianceStatus: ComplianceStatus = null;
+    if (snap !== null && snap !== undefined) {
+        if (snap.status === 'PASS' || snap.status === 'WARNING' || snap.status === 'BLOCKING') {
+            complianceStatus = snap.status as ComplianceStatus;
+        } else if (snap.passed === true) {
+            complianceStatus = (snap.warnings_count ?? 0) > 0 ? 'WARNING' : 'PASS';
+        } else if (snap.passed === false) {
+            complianceStatus = 'BLOCKING';
+        }
+    }
+
+    // Duration / pay delta — use offered_shift when requestedShift absent
+    const offerDurationHours = activeOffer?.offered_shift ? computeShiftHours(activeOffer.offered_shift) : 0;
+    const hoursDiff = apiData.requestedShift
+        ? (recVal.durationHours - reqVal.durationHours)
+        : activeOffer?.offered_shift
+            ? (offerDurationHours - reqVal.durationHours)
+            : -reqVal.durationHours;
     const payDiff = apiData.requestedShift ? (recVal.value - reqVal.value) : -reqVal.value;
+
+    // Auto-compute priority from shift date/time (shared TTS utility)
+    const priority: SwapPriority = computeShiftUrgency(
+        apiData.originalShift?.shiftDate ?? '',
+        apiData.originalShift?.startTime ?? '',
+    );
+
+    // Build recipient — fall back to activeOffer.offered_shift for open-market swaps
+    let recipient: SwapRequestManagement['recipient'] = null;
+    if (apiData.requestedShift || apiData.targetEmployee) {
+        recipient = {
+            employeeName: apiData.targetEmployee?.fullName || (apiData.requestedShift ? 'Open Swap' : 'Unknown'),
+            roleName: apiData.requestedShift?.roles?.name || 'Any Role',
+            date: apiData.requestedShift?.shiftDate || '',
+            formattedDate: apiData.requestedShift?.shiftDate ? format(parse(apiData.requestedShift.shiftDate, 'yyyy-MM-dd', new Date()), 'EEE, MMM d') : '',
+            time: apiData.requestedShift ? `${apiData.requestedShift.startTime} - ${apiData.requestedShift.endTime}` : 'No Shift',
+            duration: recVal.durationHours > 0 ? `${recVal.durationHours.toFixed(1)}h` : '0h',
+            durationNum: recVal.durationHours,
+            hourlyRate: recVal.rate,
+            avatar: apiData.targetEmployee?.avatarUrl,
+            deptName: apiData.requestedShift?.departments?.name || 'General',
+            orgName: apiData.requestedShift?.organizations?.name || '',
+            groupType: apiData.requestedShift?.group_type || '',
+            organizationId: apiData.requestedShift?.organizationId,
+            subDepartmentId: apiData.requestedShift?.subDepartmentId,
+            lifecycleStatus: apiData.requestedShift?.lifecycleStatus || 'Published',
+            stateId: apiData.requestedShift?.stateId || 'S?',
+        };
+    } else if (activeOffer?.offered_shift) {
+        // Open-market swap where an offer was accepted
+        const os = activeOffer.offered_shift;
+        const offererName = activeOffer.offerer
+            ? `${activeOffer.offerer.first_name} ${activeOffer.offerer.last_name}`.trim()
+            : 'Offerer';
+        recipient = {
+            employeeName: offererName,
+            roleName: os.roles?.name || 'Unknown Role',
+            date: os.shiftDate,
+            formattedDate: os.shiftDate ? format(parse(os.shiftDate, 'yyyy-MM-dd', new Date()), 'EEE, MMM d') : '',
+            time: `${os.startTime} - ${os.endTime}`,
+            duration: `${offerDurationHours.toFixed(1)}h`,
+            durationNum: offerDurationHours,
+            hourlyRate: 0,
+            avatar: activeOffer.offerer?.avatar_url,
+            deptName: os.departments?.name || 'General',
+            lifecycleStatus: os.lifecycleStatus || 'Published',
+            stateId: os.stateId || 'S?',
+        };
+    }
 
     return {
         id: apiData.id,
@@ -374,43 +456,24 @@ const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement =>
             groupType: apiData.originalShift?.group_type || '',
             organizationId: apiData.originalShift?.organizationId,
             subDepartmentId: apiData.originalShift?.subDepartmentId,
+            lifecycleStatus: apiData.originalShift?.lifecycleStatus || 'Published',
+            stateId: apiData.originalShift?.stateId || 'S?',
         },
-
-
-
-
-        recipient: (apiData.requestedShift || apiData.targetEmployee) ? {
-            employeeName: apiData.targetEmployee?.fullName || (apiData.requestedShift ? 'Open Swap' : 'Unknown'),
-            roleName: apiData.requestedShift?.roles?.name || 'Any Role',
-            date: apiData.requestedShift?.shiftDate || '',
-            formattedDate: apiData.requestedShift?.shiftDate ? format(parse(apiData.requestedShift.shiftDate, 'yyyy-MM-dd', new Date()), 'EEE, MMM d') : '',
-            time: apiData.requestedShift ? `${apiData.requestedShift.startTime} - ${apiData.requestedShift.endTime}` : 'No Shift',
-            duration: recVal.durationHours > 0 ? `${recVal.durationHours.toFixed(1)}h` : '0h',
-            durationNum: recVal.durationHours,
-            hourlyRate: recVal.rate,
-            avatar: apiData.targetEmployee?.avatarUrl,
-            deptName: apiData.requestedShift?.departments?.name || 'General',
-            orgName: apiData.requestedShift?.organizations?.name || '',
-            groupType: apiData.requestedShift?.group_type || '',
-            organizationId: apiData.requestedShift?.organizationId,
-            subDepartmentId: apiData.requestedShift?.subDepartmentId,
-        } : null,
-
-
-
+        recipient,
         status: apiData.status as any,
         reason: apiData.reason || '',
         requestedAt: apiData.created_at,
         tags: [apiData.originalShift?.departments?.name || 'General'],
         hoursDiff,
         payDiff,
-        compliancePassed,
+        complianceStatus,
+        priority,
         deptName: apiData.originalShift?.departments?.name || 'General',
         ...deriveStateIds(apiData.status),
         requesterEmployeeId: apiData.requested_by_employee_id,
-        offererEmployeeId: apiData.swap_with_employee_id || null,
+        offererEmployeeId: apiData.swap_with_employee_id || activeOffer?.offerer_id || null,
         requesterShiftId: apiData.original_shift_id,
-        offererShiftId: apiData.offered_shift_id || null,
+        offererShiftId: apiData.offered_shift_id || activeOffer?.offered_shift_id || null,
     };
 };
 
@@ -647,8 +710,8 @@ export const ManagerSwapsPage: React.FC = () => {
                 <div className="max-w-[1400px] mx-auto px-6 py-6">
                     {isLoading ? (
                         <div className="flex flex-col items-center justify-center py-32 gap-4">
-                            <div className="h-10 w-10 rounded-full border-2 border-white/10 border-t-indigo-500 animate-spin" />
-                            <span className="text-[10px] font-mono text-white/20 uppercase tracking-[0.3em]">Loading requests</span>
+                            <div className="h-10 w-10 rounded-full border-2 border-border border-t-indigo-500 animate-spin" />
+                            <span className="text-[10px] font-mono text-muted-foreground/40 uppercase tracking-[0.3em]">Loading requests</span>
                         </div>
                     ) : filteredRequests.length === 0 ? (
                         /* Empty State */
@@ -673,9 +736,9 @@ export const ManagerSwapsPage: React.FC = () => {
                                     <Checkbox
                                         checked={selectedIds.size === filteredRequests.length}
                                         onCheckedChange={handleSelectAll}
-                                        className="border-white/20"
+                                        className="border-border/50"
                                     />
-                                    <span className="text-[10px] font-mono text-white/30 uppercase tracking-wider">
+                                    <span className="text-[10px] font-mono text-muted-foreground/50 uppercase tracking-wider">
                                         Select All ({filteredRequests.length})
                                     </span>
                                 </div>
@@ -722,7 +785,7 @@ export const ManagerSwapsPage: React.FC = () => {
                                                 <SwapDivider
                                                     hoursDiff={request.hoursDiff}
                                                     payDiff={request.payDiff}
-                                                    compliance={request.compliancePassed}
+                                                    compliance={request.complianceStatus}
                                                 />
                                                 <ShiftPane data={request.recipient} label="OFFERER" />
                                             </div>
@@ -749,12 +812,35 @@ export const ManagerSwapsPage: React.FC = () => {
                                                                 {tag}
                                                             </Badge>
                                                         ))}
+                                                        {request.priority && (() => {
+                                                            const pc = PRIORITY_CONFIG[request.priority];
+                                                            const PIcon = pc.icon;
+                                                            return (
+                                                                <span className={cn(
+                                                                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[8px] font-black font-mono uppercase tracking-wider",
+                                                                    pc.badgeCls
+                                                                )}>
+                                                                    <PIcon className="h-2.5 w-2.5" />
+                                                                    {pc.label}
+                                                                </span>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 </div>
 
                                                 {/* Actions */}
                                                 {request.status === 'MANAGER_PENDING' ? (
                                                     <div className="flex lg:flex-col gap-2 w-full">
+                                                        {/* Re-check compliance */}
+                                                        <Button
+                                                            onClick={() => setComplianceApprovalTarget(request)}
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="flex-1 h-9 rounded-xl border-border/60 text-muted-foreground hover:bg-muted/50 hover:text-foreground text-[10px] font-black uppercase tracking-wider transition-all"
+                                                        >
+                                                            <ScanSearch className="h-3 w-3 mr-1.5" />
+                                                            Check Compliance
+                                                        </Button>
                                                         <Button
                                                             onClick={() => handleAction([request.id], 'rejected')}
                                                             size="sm"
@@ -762,14 +848,6 @@ export const ManagerSwapsPage: React.FC = () => {
                                                         >
                                                             <X className="h-3 w-3 mr-1.5" />
                                                             Reject
-                                                        </Button>
-                                                        <Button
-                                                            onClick={() => handleAction([request.id], 'approved')}
-                                                            size="sm"
-                                                            className="flex-1 h-9 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 text-[10px] font-black uppercase tracking-wider transition-all border-none"
-                                                        >
-                                                            <Check className="h-3 w-3 mr-1.5" />
-                                                            Approve
                                                         </Button>
                                                     </div>
                                                 ) : (

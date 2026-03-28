@@ -40,7 +40,7 @@ export interface AdvancedFilters {
   lifecycleStatus: 'all' | 'draft' | 'published' | 'cancelled';
   stateId: string | null;
   assignmentOutcome: 'all' | 'pending' | 'offered' | 'confirmed' | 'emergency_assigned' | 'none';
-  biddingStatus: 'all' | 'not_on_bidding' | 'on_bidding_normal' | 'on_bidding_urgent' | 'bidding_closed_no_winner';
+  biddingStatus: 'all' | 'not_on_bidding' | 'on_bidding' | 'on_bidding_normal' | 'on_bidding_urgent' | 'bidding_closed_no_winner';
   tradingStatus: 'all' | 'requested' | 'none';
   searchQuery: string;
 }
@@ -77,6 +77,18 @@ interface RosterState {
   // ── Session state (not persisted — resets each tab/reload) ────────────────
   /** ISO date string 'YYYY-MM-DD', restored as Date in getters */
   _selectedDateISO: string;
+  isDnDModeActive: boolean;
+  showUnfilledPanel: boolean;
+  lastShiftMove: {
+    shiftId: string;
+    prevData: {
+      groupType: string | null;
+      subGroupName: string | null;
+      shiftGroupId: string | null;
+      rosterSubgroupId: string | null;
+      shiftDate: string | null;
+    };
+  } | null;
 
   // ── Actions ───────────────────────────────────────────────────────────────
   setViewType: (view: CalendarView) => void;
@@ -95,6 +107,10 @@ interface RosterState {
   setSelectedShiftIds: (ids: string[]) => void;
   toggleShiftSelection: (id: string) => void;
   clearSelection: () => void;
+  setIsDnDModeActive: (active: boolean) => void;
+  setShowUnfilledPanel: (show: boolean) => void;
+  setLastShiftMove: (move: RosterState['lastShiftMove']) => void;
+  clearLastShiftMove: () => void;
 
   // ── Navigation ────────────────────────────────────────────────────────────
   navigatePrevious: () => void;
@@ -127,6 +143,9 @@ export const useRosterStore = create<RosterState>()(
 
       // ── Session-only (today, not persisted) ────────────────────────────────
       _selectedDateISO: format(new Date(), 'yyyy-MM-dd'),
+      isDnDModeActive: false,
+      showUnfilledPanel: false,
+      lastShiftMove: null,
 
       // ── Actions ────────────────────────────────────────────────────────────
       setViewType: (view) => set({ viewType: view }),
@@ -144,6 +163,18 @@ export const useRosterStore = create<RosterState>()(
       })),
 
       clearSelection: () => set({ selectedShiftIds: [] }),
+
+      setIsDnDModeActive: (active) => set((s) => ({
+        isDnDModeActive: active,
+        showUnfilledPanel: active ? true : s.showUnfilledPanel,
+      })),
+      setShowUnfilledPanel: (show) => set((s) => ({
+        showUnfilledPanel: show,
+        // Option C: Closing panel automatically disables DnD
+        isDnDModeActive: show ? s.isDnDModeActive : false,
+      })),
+      setLastShiftMove: (move) => set({ lastShiftMove: move }),
+      clearLastShiftMove: () => set({ lastShiftMove: null }),
 
       setSelectedDate: (date) =>
         set({ _selectedDateISO: format(date, 'yyyy-MM-dd') }),
