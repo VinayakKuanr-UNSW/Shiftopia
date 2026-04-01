@@ -64,6 +64,8 @@ export const biddingApi = {
             .select(`
                 *,
                 dropped_by_id,
+                last_dropped_by,
+                bidding_iteration,
                 organizations(id, name),
                 departments(id, name),
                 sub_departments(id, name),
@@ -125,16 +127,13 @@ export const biddingApi = {
             throw error;
         }
 
-        // Filter out stale "accepted" bids where the employee no longer owns the shift
-        // (happens after an employee drops a shift — bid stays accepted but shift reassigned)
-        const filtered = (data as unknown as Bid[]).filter((bid: any) => {
-            if (bid.status === 'accepted') {
-                return bid.shift?.assigned_employee_id === userId;
-            }
-            return true;
-        });
-
-        return filtered;
+        // Return all non-withdrawn bids, including past accepted bids.
+        // History rendering depends on seeing the winning bid from a round where
+        // the employee was selected and later dropped the shift. Filtering it out
+        // caused the history to show DNB instead of Accepted for that round.
+        // The participation status is now derived from last_dropped_by + current
+        // iteration, so stale accepted bids don't pollute the active state.
+        return data as unknown as Bid[];
     },
 
     /**
@@ -164,15 +163,26 @@ export const biddingApi = {
      * Place a bid on a shift (EMPLOYEE ACTION)
      */
     async placeBid(shiftId: string, userId: string, notes?: string): Promise<Bid> {
+        // Fetch current iteration from shift
+        const { data: shiftData, error: shiftError } = await supabase
+            .from('shifts')
+            .select('bidding_iteration')
+            .eq('id', shiftId)
+            .single();
+
+        if (shiftError) throw shiftError;
+        const currentIteration = (shiftData as any).bidding_iteration || 1;
+
         const { data, error } = await supabase
             .from('shift_bids')
             .upsert({
                 shift_id: shiftId,
                 employee_id: userId,
+                bidding_iteration: currentIteration,
                 status: 'pending',
                 notes: notes,
                 created_at: new Date().toISOString()
-            } as any, { onConflict: 'shift_id, employee_id' })
+            } as any, { onConflict: 'shift_id, employee_id, bidding_iteration' })
             .select()
             .single();
 
@@ -249,32 +259,25 @@ export const biddingApi = {
             const shiftId = (data as any).shift_id;
             const employeeId = (data as any).employee_id;
 
-            // Reject all other pending bids for this shift
-            await supabase
-                .from('shift_bids')
-                .update({ status: 'rejected' } as any)
-                .eq('shift_id', shiftId)
-                .neq('id', id)
-                .eq('status', 'pending');
+            // Delegate entirely to sm_select_bid_winner RPC — it handles:
+            //   - FOR UPDATE locking to prevent race conditions (RC5)
+            //   - bid status updates (accept winner, reject others)
+            //   - shift FSM transition (S5 → S4) with correct field values
+            //   - emergency_source write-once logic
+            //   - audit log entry
+            const { data: rpcResult, error: rpcError } = await (supabase as any)
+                .rpc('sm_select_bid_winner', {
+                    p_shift_id:  shiftId,
+                    p_winner_id: employeeId,
+                });
 
-            // Assign the winning employee to the shift (S5/S6 → S4)
-            const { error: shiftUpdateError } = await (supabase as any)
-                .from('shifts')
-                .update({
-                    assigned_employee_id: employeeId,
-                    assignment_status: 'assigned',
-                    assignment_outcome: 'confirmed',
-                    bidding_status: 'not_on_bidding',
-                    is_on_bidding: false,
-                    assigned_at: new Date().toISOString(),
-                })
-                .eq('id', shiftId);
-
-            if (shiftUpdateError) {
-                console.error('[bidding] Failed to assign winning employee to shift:', shiftUpdateError);
-                throw shiftUpdateError;
+            if (rpcError) {
+                console.error('[bidding] sm_select_bid_winner failed:', rpcError);
+                throw rpcError;
             }
-
+            if (rpcResult && rpcResult.success === false) {
+                throw new Error(rpcResult.error ?? 'sm_select_bid_winner returned failure');
+            }
         }
 
         return data as Bid;

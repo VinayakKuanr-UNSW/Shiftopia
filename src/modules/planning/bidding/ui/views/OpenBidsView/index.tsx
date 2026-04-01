@@ -12,7 +12,7 @@ import {
   Search, Flame, Clock, CheckCircle, Loader2, Inbox,
   Users, Zap, ShieldCheck, ShieldAlert, Shield,
   CircleCheck, CircleX, TriangleAlert, ChevronDown, ChevronRight,
-  Sparkles, UserCheck as LucideUserCheck,
+  Sparkles, UserCheck as LucideUserCheck, History,
 } from 'lucide-react';
 import {
   Tooltip,
@@ -38,7 +38,7 @@ import { validateCompliance } from '@/modules/rosters/services/compliance.servic
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import type { ShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { calculateTimeRemaining, formatTimeRemaining } from './utils';
-import type { BidToggle, ManagerBidShift, EmployeeBid, ToggleCounts } from './types';
+import type { BidToggle, ManagerBidShift, EmployeeBid, ToggleCounts, IterationHistoryEntry } from './types';
 import { useManagerBidShifts } from './useOpenShifts';
 import { useShiftBids } from './useShiftBids';
 import { useTimeTicker } from './useTimeTicker';
@@ -484,6 +484,11 @@ const RoleCard: React.FC<RoleCardProps> = ({
             <span className="text-[10px] font-bold tabular-nums text-muted-foreground/60">
               {shift.bidCount} {shift.bidCount === 1 ? 'bid' : 'bids'}
             </span>
+            {(shift.biddingIteration ?? 1) > 1 && (
+              <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 leading-none uppercase tracking-wider font-mono">
+                ITR {shift.biddingIteration}
+              </span>
+            )}
           </div>
           {isResolved && (
             <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 leading-none uppercase tracking-wider">Filled</span>
@@ -587,7 +592,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     subDepartmentId: subDepartmentId ?? undefined,
   });
 
-  const { bids, isLoading: isLoadingBids } = useShiftBids(expandedShiftId);
+  const { bids, iterationHistory, currentIteration: shiftCurrentIteration, isLoading: isLoadingBids } = useShiftBids(expandedShiftId);
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const expandedShift = useMemo(
@@ -969,6 +974,52 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              {/* ── ITERATION HISTORY — all past ITRs ── */}
+              {iterationHistory.length > 0 && (
+                <div className="mt-4 border-t border-white/[0.05] pt-4">
+                  <div className="flex items-center gap-2 px-1 mb-3">
+                    <History className="h-3 w-3 text-white/20" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/25">
+                      Past Iterations
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    {iterationHistory.map(entry => (
+                      <div key={entry.iteration} className="rounded-xl border border-white/[0.05] bg-white/[0.02] p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-[9px] font-black font-mono uppercase tracking-widest text-white/30 bg-white/5 px-2 py-0.5 rounded-md">
+                            ITR {entry.iteration}
+                          </span>
+                          <span className="text-[9px] text-white/20 font-mono">
+                            {entry.bids.length} {entry.bids.length === 1 ? 'bid' : 'bids'}
+                          </span>
+                        </div>
+                        {entry.bids.length === 0 ? (
+                          <p className="text-[9px] text-white/15 font-mono">No bids received</p>
+                        ) : (
+                          <div className="space-y-1">
+                            {entry.bids.map((b, i) => (
+                              <div key={i} className="flex items-center justify-between">
+                                <span className="text-[10px] text-white/40 truncate">{b.employeeName}</span>
+                                <span className={cn(
+                                  'text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded',
+                                  b.status === 'accepted' ? 'bg-emerald-500/15 text-emerald-400' :
+                                  b.status === 'rejected' ? 'bg-red-500/15 text-red-400' :
+                                  b.status === 'withdrawn' ? 'bg-slate-500/15 text-slate-400' :
+                                  'bg-white/5 text-white/25'
+                                )}>
+                                  {b.status}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </ScrollArea>
         </div>

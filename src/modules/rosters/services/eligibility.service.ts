@@ -35,6 +35,8 @@ export interface EligibleEmployee {
     id: string;
     first_name: string;
     last_name: string;
+    department_name?: string;
+    sub_department_name?: string;
 }
 
 export interface EligibleContract {
@@ -59,54 +61,70 @@ export const EligibilityService = {
      */
     async getEligibleEmployees(context: EligibilityContext): Promise<EligibleEmployee[]> {
         try {
+            // We start from profiles to ensure we can find all users, 
+            // but we use an inner join on user_contracts to maintain organizational scoping.
+            // By removing the .eq('status', 'Active') filter, we include all members 
+            // regardless of their current contract state (Expired, Pending, etc).
             let query = supabase
-                .from('user_contracts')
+                .from('profiles')
                 .select(`
-                    user_id,
-                    profiles:profiles!user_contracts_user_id_profiles_fkey (
-                        id,
-                        first_name,
-                        last_name
+                    id,
+                    first_name,
+                    last_name,
+                    contracts:user_contracts!inner (
+                        organization_id,
+                        department_id,
+                        sub_department_id,
+                        role_id,
+                        status,
+                        department:departments(name),
+                        sub_department:sub_departments(name)
                     )
-                `)
-                .eq('status', 'Active');
+                `);
 
             // Org filter
             if (context.organizationId && isValidUuid(context.organizationId)) {
-                query = query.eq('organization_id', context.organizationId);
+                query = query.eq('contracts.organization_id', context.organizationId);
             }
 
             // Dept / Sub-dept filter
             if (context.subDepartmentId && isValidUuid(context.subDepartmentId)) {
                 if (context.departmentId && isValidUuid(context.departmentId)) {
-                    query = query.eq('department_id', context.departmentId);
+                    query = query.eq('contracts.department_id', context.departmentId);
                 }
-                query = query.or(`sub_department_id.eq.${context.subDepartmentId},sub_department_id.is.null`);
+                query = query.or(`sub_department_id.eq.${context.subDepartmentId},sub_department_id.is.null`, { foreignTable: 'contracts' });
             } else if (context.departmentId && isValidUuid(context.departmentId)) {
-                query = query.eq('department_id', context.departmentId);
+                query = query.eq('contracts.department_id', context.departmentId);
             }
 
-            // Role filter — the key addition
+            // Role filter — only apply if explicitly requested (usually from role-specific lookups)
             if (context.roleId && isValidUuid(context.roleId)) {
-                query = query.eq('role_id', context.roleId);
+                query = query.eq('contracts.role_id', context.roleId);
             }
 
             const { data, error } = await query;
 
             if (error) {
-                console.error('[EligibilityService] Error fetching contracts:', error);
+                console.error('[EligibilityService] Error fetching eligible profiles:', error);
                 return [];
             }
 
             // Deduplicate by user_id
             const profilesMap = new Map<string, EligibleEmployee>();
-            data?.forEach(row => {
-                const rawProfile = (row as any).profiles;
-                const profile = Array.isArray(rawProfile) ? rawProfile[0] : rawProfile;
+            (data as any[])?.forEach(row => {
+                if (!row.id || profilesMap.has(row.id)) return;
                 
-                if (profile?.id) {
-                    profilesMap.set(profile.id, profile as EligibleEmployee);
-                }
+                // Get the most relevant contract for display metadata (prefer Active if possible)
+                const contracts = Array.isArray(row.contracts) ? row.contracts : [row.contracts];
+                const displayContract = contracts.find((c: any) => c.status === 'Active') || contracts[0];
+
+                profilesMap.set(row.id, {
+                    id: row.id,
+                    first_name: row.first_name,
+                    last_name: row.last_name,
+                    department_name: displayContract?.department?.name,
+                    sub_department_name: displayContract?.sub_department?.name,
+                } as EligibleEmployee);
             });
 
             return Array.from(profilesMap.values())
@@ -126,8 +144,7 @@ export const EligibilityService = {
         try {
             let query = supabase
                 .from('user_contracts')
-                .select('user_id, role_id')
-                .eq('status', 'Active');
+                .select('user_id, role_id');
 
             if (context.organizationId && isValidUuid(context.organizationId)) {
                 query = query.eq('organization_id', context.organizationId);
@@ -176,8 +193,7 @@ export const EligibilityService = {
                         name,
                         code
                     )
-                `)
-                .eq('status', 'Active');
+                `);
 
             if (context.organizationId && isValidUuid(context.organizationId)) {
                 query = query.eq('organization_id', context.organizationId);

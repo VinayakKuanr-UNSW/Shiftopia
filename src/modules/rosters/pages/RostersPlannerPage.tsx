@@ -76,6 +76,7 @@ import {
 import type { ToolbarPreflightData } from '@/modules/rosters/ui/components/BulkActionsToolbar';
 import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import { executeAssignShift } from '@/modules/rosters/domain/commands/assignShift.command';
+import { resolveGroupType } from '@/modules/rosters/utils/roster-utils';
 
 /* ============================================================
    MAIN COMPONENT
@@ -105,6 +106,10 @@ const NewRostersPage: React.FC = () => {
     setSelectedSubDepartmentIds,
     toggleShiftSelection,
     clearSelection,
+    bulkModeActive,
+    setBulkModeActive,
+    selectedShiftIds,
+    selectMultiple,
   } = useRosterUI();
 
   // Sync Unfilled/Contracted Panel with DnD Mode
@@ -113,9 +118,6 @@ const NewRostersPage: React.FC = () => {
       setShowUnfilledPanel(true);
     }
   }, [isDnDModeActive, activeMode, setShowUnfilledPanel]);
-
-  const [bulkModeActive, setBulkModeActive] = useState(false);
-  const [selectedShiftIds, setSelectedShiftIds] = useState<string[]>([]);
   
   // Pending DnD Assignment (Compliance-gated)
   const [pendingDndAssign, setPendingDndAssign] = useState<{
@@ -126,7 +128,7 @@ const NewRostersPage: React.FC = () => {
   } | null>(null);
   const [isExecutingDnd, setIsExecutingDnd] = useState(false);
 
-  const selectedCount = selectedShiftIds.length;
+  const selectedCount = selectedShiftIds.size;
 
   // ==================== SYNC SCOPE FILTER → ROSTER UI CONTEXT ====================
   // When the scope filter changes (user selects different dept/subdept), propagate
@@ -451,7 +453,7 @@ const NewRostersPage: React.FC = () => {
   };
 
   const selectedShiftsData = useMemo(() => {
-    return shifts.filter(s => selectedShiftIds.includes(s.id));
+    return shifts.filter(s => selectedShiftIds.has(s.id));
   }, [shifts, selectedShiftIds]);
 
   const stateCounts = useMemo(() => {
@@ -520,7 +522,7 @@ const NewRostersPage: React.FC = () => {
       .map(s => s.id);
 
     setBulkModeActive(true);
-    setSelectedShiftIds(visibleAndUnlockedIds);
+    selectMultiple(visibleAndUnlockedIds);
   };
 
   // Toolbar owns result feedback; page owns data and cache management.
@@ -580,8 +582,8 @@ const NewRostersPage: React.FC = () => {
   };
 
   const handleBulkDelete = async (): Promise<BulkActionResult> => {
-    if (selectedShiftIds.length === 0) return { successCount: 0, failedCount: 0 };
-    const result = await bulkDelete.mutateAsync(selectedShiftIds);
+    if (selectedShiftIds.size === 0) return { successCount: 0, failedCount: 0 };
+    const result = await bulkDelete.mutateAsync(Array.from(selectedShiftIds));
     clearSelection();
     setBulkModeActive(false);
     return {
@@ -597,9 +599,9 @@ const NewRostersPage: React.FC = () => {
 
   // When projection.people is available, adapt ProjectedEmployee → PeopleModeEmployee
   const GROUP_ACCENT: Record<string, string> = {
-    convention_centre: 'blue',
-    exhibition_centre: 'emerald',
-    theatre: 'red',
+    convention_centre: 'convention_centre',
+    exhibition_centre: 'exhibition_centre',
+    theatre: 'theatre',
   };
   const employeesWithShifts = useMemo((): PeopleModeEmployee[] => {
     if (projection.people) {
@@ -623,7 +625,7 @@ const NewRostersPage: React.FC = () => {
               department: ps.raw.group_type ?? 'General',
               subGroup: ps.subGroupName ?? '',
               group: ps.groupType ?? 'convention_centre',
-              groupColor: GROUP_ACCENT[ps.groupType ?? ''] ?? 'blue',
+              groupColor: resolveGroupType(ps.raw),
               hours: ps.netMinutes / 60,
               pay: (ps.netMinutes / 60) * (ps.raw.remuneration_rate ?? 25),
               status: ps.employeeId ? (ps.isDraft ? 'Draft' : 'Assigned') : 'Open',
@@ -958,9 +960,9 @@ const NewRostersPage: React.FC = () => {
         <div className="flex-shrink-0 bg-amber-500/10 border-b border-amber-500/30 px-6 py-2 flex items-center justify-between">
           <div className="flex items-center gap-3 text-amber-700 dark:text-amber-300 text-sm font-medium">
             <span>Bulk selection active — click shifts to select</span>
-            {selectedShiftIds.length > 0 && (
+            {selectedShiftIds.size > 0 && (
               <span className="bg-amber-500/20 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-full text-xs font-bold">
-                {selectedShiftIds.length} selected
+                {selectedShiftIds.size} selected
               </span>
             )}
           </div>
@@ -1004,7 +1006,7 @@ const NewRostersPage: React.FC = () => {
               dates={dates}
               showAvailabilities={showAvailabilities}
               bulkModeActive={bulkModeActive}
-              selectedShifts={selectedShiftIds}
+              selectedShifts={Array.from(selectedShiftIds)}
               onToggleShiftSelection={handleToggleShiftSelection}
               onAddShift={(employee, date) => {
                 const context: ShiftContext = {
@@ -1051,7 +1053,8 @@ const NewRostersPage: React.FC = () => {
               // Bulk Mode
               isBulkMode={bulkModeActive}
               onBulkModeToggle={handleBulkModeToggle}
-              selectedShiftIds={selectedShiftIds}
+              selectedShiftIds={Array.from(selectedShiftIds)}
+              onToggleShiftSelection={handleToggleShiftSelection}
               // Day zoom
               dayZoom={dayZoom}
               // Data from unified hook
@@ -1091,7 +1094,9 @@ const NewRostersPage: React.FC = () => {
               onEditShift={handleEditShift}
               onMoveShift={handleDndMove}
               onAssignShift={handleDndAssignToShift}
-              selectedShiftIds={selectedShiftIds}
+              selectedShiftIds={Array.from(selectedShiftIds)}
+              isBulkMode={bulkModeActive}
+              onToggleShiftSelection={handleToggleShiftSelection}
             />
           )}
         </div>
@@ -1119,10 +1124,10 @@ const NewRostersPage: React.FC = () => {
       </DndProvider>
 
       {/* Bulk Toolbar */}
-      {bulkModeActive && selectedShiftIds.length > 0 && (
+      {bulkModeActive && selectedShiftIds.size > 0 && (
         <BulkActionsToolbar
           selectedCount={selectedCount}
-          selectedShiftIds={selectedShiftIds}
+          selectedShiftIds={Array.from(selectedShiftIds)}
           stateCounts={stateCounts}
           preflightData={preflightData}
           totalVisibleCount={totalSelectableCount}
@@ -1144,7 +1149,7 @@ const NewRostersPage: React.FC = () => {
       {/* Modals (audit, add/edit shift, bulk assign, auto-scheduler) */}
       <RosterModals
         ref={modalsRef}
-        selectedShiftIds={selectedShiftIds}
+        selectedShiftIds={Array.from(selectedShiftIds)}
         employees={employees.map((e) => ({
           id: e.id,
           name: `${e.first_name} ${e.last_name}`.trim() || e.id,

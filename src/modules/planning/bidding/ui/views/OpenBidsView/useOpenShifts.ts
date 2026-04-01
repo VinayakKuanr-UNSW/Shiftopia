@@ -108,6 +108,7 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
           subDepartmentId: s.sub_department_id,
           groupType: s.group_type,
           lifecycleStatus: s.lifecycle_status,
+          biddingIteration: s.bidding_iteration || 1,
         };
       });
 

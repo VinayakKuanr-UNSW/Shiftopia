@@ -18,11 +18,13 @@ import { isEqual } from 'lodash';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format, startOfDay, parse, getDay } from 'date-fns';
+import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useCreateShift, useUpdateShift, useUnpublishShift } from '@/modules/rosters/state/useRosterShifts';
 import { formatInTimezone, isPastInTimezone, isPublicHoliday, parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
+import type { TemplateGroupType } from '@/modules/rosters/domain/shift.entity';
 import { calculateShiftLength, isDateInPast, isShiftStarted } from '../utils';
 import { formSchema, FormValues, EnhancedAddShiftModalProps, ShiftContext } from '../types';
 import { useShiftFormData } from './useShiftFormData';
@@ -248,6 +250,20 @@ export function useShiftFormOrchestrator({
     // Published shifts are now read-only per user request
     const isReadOnly = isPast || isStarted || isPublished;
 
+    // ── Emergency assignment detection ───────────────────────────────────────
+    // True when TTS ≤ 4h OR bidding closed without winner — assigning in this
+    // state bypasses standard bidding and writes 'emergency_assigned' as outcome.
+    const isEmergencyAssignment = useMemo(() => {
+        if (!editMode || !existingShift) return false;
+        if (existingShift.bidding_status === 'bidding_closed_no_winner') return true;
+        if (watchShiftDate && watchStart) {
+            const shiftDateStr = format(watchShiftDate, 'yyyy-MM-dd');
+            const urgency = computeShiftUrgency(shiftDateStr, watchStart, existingShift.start_at ?? undefined);
+            if (urgency === 'locked') return true;
+        }
+        return false;
+    }, [editMode, existingShift, watchShiftDate, watchStart]);
+
     // ── Unpublish eligibility (state-machine.md §8.1) ───────────────────────
     // Unpublish is allowed from: S3 (Offered), S5/S6 (OnBidding), S8 (BiddingClosedNoWinner)
     // Blocked for: S4 (Confirmed), S7 (EmergencyAssigned), InProgress, Completed, Cancelled
@@ -294,7 +310,7 @@ export function useShiftFormOrchestrator({
     // ── Dependency Ordering ──────────────────────────────────────────────────
     // Assignment is disabled until Role, Date, and Times are set.
     const isScheduleDefined = !!watchRoleId && !!watchShiftDate && !!watchStart && !!watchEnd;
-    const isAssignmentEnabled = isReadOnly || isScheduleDefined;
+    const isAssignmentEnabled = !isReadOnly && isScheduleDefined;
 
     // ── Effects ──────────────────────────────────────────────────────────────
 
@@ -574,6 +590,7 @@ export function useShiftFormOrchestrator({
     //   3. Department + roster selected
     //   4. Compliance run and passed (skipped in template mode or unassigned)
     const canSave = useMemo(() => {
+        if (isReadOnly) return false;
         // Required fields check
         const hasBaseFields = !!watchRoleId && !!watchShiftDate && !!watchStart && !!watchEnd && hasDepartment && (hasRoster || isTemplateMode);
         if (!hasBaseFields) return false;
@@ -828,7 +845,7 @@ export function useShiftFormOrchestrator({
                     organization_id: resolvedContext.organizationId || null,
                     department_id: resolvedContext.departmentId,
                     sub_department_id: resolvedContext.subDepartmentId || null,
-                    group_type: (values.group_type || (resolvedContext.groupName?.toLowerCase().replace(/\s+/g, '_') || null)) as FormValues['group_type'],
+                    group_type: (values.group_type || (resolvedContext.groupName?.toLowerCase().replace(/\s+/g, '_') || null)) as TemplateGroupType | null,
                     sub_group_name: values.sub_group_name || resolvedContext.subGroupName || null,
                     shift_group_id: resolvedContext.groupId || null,
                     shift_subgroup_id: resolvedContext.subGroupId || null,
@@ -848,6 +865,11 @@ export function useShiftFormOrchestrator({
                     assignment_source: values.assigned_employee_id
                         ? (editMode ? 'manual' : 'direct')
                         : null,
+                    // Emergency assignment — set when manager assigns within the 4H lockout
+                    // or after bidding closed with no winner (bypasses standard bidding flow)
+                    assignment_outcome: (values.assigned_employee_id
+                        ? (isEmergencyAssignment ? 'emergency_assigned' : 'pending')
+                        : null) as 'emergency_assigned' | 'pending' | null,
                 };
 
                 // Calculate UTC canonical timestamps (start_at, end_at)
@@ -904,7 +926,7 @@ export function useShiftFormOrchestrator({
         resolvedContext, selectedRosterId, isTemplateMode, editMode, watchTimezone,
         onShiftCreated, roles, remunerationLevels, employees, netLength,
         onSuccess, form, onClose, createShiftMutation, updateShiftMutation,
-        existingShift, toast, complianceHasRun,
+        existingShift, toast, complianceHasRun, isEmergencyAssignment,
     ]);
 
     // ── Return ────────────────────────────────────────────────────────────────
@@ -983,6 +1005,9 @@ export function useShiftFormOrchestrator({
         // Watched fields passed to steps
         watchEmployeeId,
         watchTimezone,
+
+        // Emergency state
+        isEmergencyAssignment,
 
         // Handlers
         handleSubmit,

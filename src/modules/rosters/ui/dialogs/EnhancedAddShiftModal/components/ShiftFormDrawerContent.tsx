@@ -1010,6 +1010,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                             ? 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-300 dark:border-indigo-500/25'
                                                             : 'bg-muted/30 border-border hover:bg-muted/50',
                                                     )}
+                                                    disabled={isReadOnly}
                                                 >
                                                     <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center border border-border shrink-0">
                                                         <Search className="h-3 w-3 text-muted-foreground/50" />
@@ -1048,6 +1049,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                                                     ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/25'
                                                                     : 'bg-muted/30 border-border hover:bg-muted/50',
                                                             )}
+                                                            disabled={isReadOnly}
                                                         >
                                                             <div
                                                                 className={cn(
@@ -1097,6 +1099,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                             <CompliancePanel
                                 hook={compliancePanel}
                                 className="compliance-panel-integrated"
+                                disabled={isReadOnly}
                             />
                         </div>
                     </section>

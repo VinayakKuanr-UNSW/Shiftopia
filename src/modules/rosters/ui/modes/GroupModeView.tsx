@@ -367,6 +367,7 @@ interface GroupModeViewProps {
   /** Zoom level for Day Timeline View (1h fixed) */
   dayZoom?: 60;
   selectedShiftIds?: string[];
+  onToggleShiftSelection?: (shiftId: string) => void;
   /** Centralized employee-to-shift assignment handler (from RostersPlannerPage) */
   onAssignShift?: (shiftId: string, employeeId: string, employeeName: string) => void;
 }
@@ -557,6 +558,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   dayZoom = 60,
   projection,
   selectedShiftIds: propsSelectedShiftIds, // Destructure the prop and rename it
+  onToggleShiftSelection,
   onAssignShift,
 }) => {
   const { toast } = useToast();
@@ -566,9 +568,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     advancedFilters,
     hasActiveFilters,
     isBucketView,
-    selectedShiftIds: globalSelectedShiftIds,
-    toggleShiftSelection,
-    clearSelection
   } = useRosterUI();
 
   const isDnDModeActive = useRosterStore(s => s.isDnDModeActive);
@@ -577,7 +576,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   const clearLastShiftMove = useRosterStore(s => s.clearLastShiftMove);
 
   // Use props if provided, otherwise fallback to context
-  const selectedShiftIds = propsSelectedShiftIds ?? globalSelectedShiftIds;
+  const selectedShiftIds = propsSelectedShiftIds ?? [];
 
   // Collapsible group state (persisted to localStorage)
   const [collapsedGroups, toggleGroupCollapse] = useCollapsedGroups();
@@ -1420,86 +1419,25 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     }
   };
 
-  const handleToggleShiftSelection = (id: string) => {
-    // Check if shift is locked before toggling
+  const handleToggleShiftSelection = useCallback((id: string) => {
     const shift = externalShifts.find(s => s.id === id);
-    if (shift) {
-      if (isShiftLocked(shift.shift_date, shift.start_time, 'roster_management')) {
-        return;
-      }
-    }
-    toggleShiftSelection(id);
-  };
-
-  const currentVisibleShiftIds = useMemo(() => {
-    const ids: string[] = [];
-    visualGroups.forEach(g => {
-      g.subGroups.forEach(sg => {
-        Object.values(sg.shifts).forEach(dayShifts => {
-          dayShifts.forEach(s => {
-            // Only include unlock shifts in bulk selection
-            if (!s.isLocked) {
-              ids.push(s.id);
-            }
-          });
-        });
-      });
-    });
-    return ids;
-  }, [visualGroups]);
-
-  const handleSelectAll = () => {
-    const currentVisibleShiftIds = visualGroups
-      .flatMap(g => g.subGroups)
-      .flatMap(sg => Object.values(sg.shifts).flat())
-      .map(s => s.id);
-
-    if (selectedShiftIds.length === currentVisibleShiftIds.length) {
-      clearSelection();
-    } else {
-      // In a real scenario we'd want a bulk select action in the store
-      visualGroups
-        .flatMap(g => g.subGroups)
-        .flatMap(sg => Object.values(sg.shifts).flat())
-        .forEach(s => {
-          if (!selectedShiftIds.includes(s.id)) handleToggleShiftSelection(s.id);
-        });
-    }
-  };
-
-
-
-  const handleBulkDelete = async () => {
-    if (selectedShiftIds.length === 0) return;
-
-    const shiftIdsArray = Array.from(selectedShiftIds);
-
-    try {
-      const result = await bulkDeleteMutation.mutateAsync(shiftIdsArray);
-
-      if (result.deletedIds.length > 0) {
-        toast({
-          title: "Shifts Deleted",
-          description: `Successfully deleted ${result.deletedIds.length} shift${result.deletedIds.length !== 1 ? 's' : ''}.`,
-        });
-        // Only clear selection if something was actually deleted
-        clearSelection();
-      } else {
-        toast({
-          title: "Delete Failed",
-          description: "No shifts were deleted. They may have been locked or already removed.",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error('[GroupModeView] Bulk delete failed:', error);
+    // Safely extract date and time to avoid undefined which would cause isShiftLocked to artificially lock the shift
+    const shiftDate = shift?.shiftDate || shift?.rawShift?.shift_date || (shift as any)?.shift_date;
+    const startTime = shift?.startTime || shift?.rawShift?.start_time || (shift as any)?.start_time;
+    
+    // Check if shift is locked before toggling
+    if (shift && shiftDate && startTime && isShiftLocked(shiftDate, startTime, 'roster_management')) {
       toast({
-        title: "Delete Error",
-        description: "An unexpected error occurred while deleting shifts.",
-        variant: "destructive"
+        title: 'Selection Blocked',
+        description: 'You cannot select a locked shift.',
+        variant: 'destructive',
       });
+      return;
     }
-  };
+    if (onToggleShiftSelection) {
+      onToggleShiftSelection(id);
+    }
+  }, [externalShifts, onToggleShiftSelection, toast]);
 
   const handleAddSubGroup = (group: VisualGroup, dateContext?: Date) => {
     const targetDate = dateContext || selectedDate;
@@ -1781,6 +1719,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                             isSelected={isBulkMode && selectedShiftIds.includes(shift.id)}
           onClick={() => isBulkMode && handleToggleShiftSelection(shift.id)}
           isLocked={isLocked || (isDnDModeActive && !shift.isDraft)}
+          isDnDActive={isDnDModeActive}
         />
       </div>
     );

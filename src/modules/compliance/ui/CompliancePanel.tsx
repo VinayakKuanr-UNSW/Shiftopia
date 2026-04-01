@@ -33,6 +33,7 @@ export interface CompliancePanelProps {
     /** For swaps: labels for the two parties in the 3-column view */
     partyAName?: string;
     partyBName?: string;
+    disabled?: boolean;
 }
 
 // =============================================================================
@@ -118,6 +119,7 @@ export function CompliancePanel({
     className,
     partyAName = 'Requester',
     partyBName = 'Offerer',
+    disabled = false,
 }: CompliancePanelProps) {
     const { status, result, error, warningsAcknowledged, canProceed, run, acknowledgeWarnings } = hook;
     const isSwap = !!result?.partyB;
@@ -136,6 +138,7 @@ export function CompliancePanel({
                         size="sm"
                         variant="ghost"
                         onClick={() => run()}
+                        disabled={disabled}
                         className="h-7 px-2 text-[10px] font-black uppercase tracking-widest text-amber-600 hover:bg-amber-500/20"
                     >
                         <RefreshCw className="h-3 w-3 mr-1" />
@@ -145,12 +148,18 @@ export function CompliancePanel({
             )}
 
             {/* Header banner */}
-            <HeaderBanner status={status} result={result} canProceed={canProceed} onRun={run} />
+            <HeaderBanner 
+                status={status} 
+                result={result} 
+                canProceed={canProceed} 
+                onRun={run} 
+                disabled={disabled}
+            />
 
             {/* Content by state */}
             {(status === 'idle') && <IdleRuleList />}
             {(status === 'running') && <RunningState />}
-            {(status === 'error') && <ErrorState error={error} onRetry={run} />}
+            {(status === 'error') && <ErrorState error={error} onRetry={run} disabled={disabled} />}
             {(status === 'results' || status === 'stale') && result && (
                 <div className="space-y-6">
                     {/* Column Headers for Swap */}
@@ -168,6 +177,7 @@ export function CompliancePanel({
                         onAcknowledge={acknowledgeWarnings}
                         isStale={status === 'stale'}
                         isSwap={isSwap}
+                        disabled={disabled}
                     />
                 </div>
             )}
@@ -180,12 +190,13 @@ export function CompliancePanel({
 // =============================================================================
 
 function HeaderBanner({
-    status, result, canProceed, onRun,
+    status, result, canProceed, onRun, disabled,
 }: {
     status: UseCompliancePanelReturn['status'];
     result: UseCompliancePanelReturn['result'];
     canProceed: boolean;
     onRun: () => void;
+    disabled: boolean;
 }) {
     const isRunning = status === 'running';
     const hasResults = status === 'results' || status === 'stale';
@@ -273,6 +284,7 @@ function HeaderBanner({
                         type="button"
                         size="sm"
                         onClick={onRun}
+                        disabled={disabled}
                         className={cn(
                             'h-9 px-5 font-black uppercase tracking-widest text-[10px] shadow-lg transition-all active:scale-95 shrink-0',
                             isIdle
@@ -363,7 +375,7 @@ function RunningState() {
 // ERROR STATE
 // =============================================================================
 
-function ErrorState({ error, onRetry }: { error: string | null; onRetry: () => void }) {
+function ErrorState({ error, onRetry, disabled }: { error: string | null; onRetry: () => void; disabled: boolean }) {
     return (
         <div className="flex items-start gap-3 p-4 bg-red-500/5 border border-red-500/20 rounded-xl">
             <AlertOctagon className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
@@ -371,7 +383,7 @@ function ErrorState({ error, onRetry }: { error: string | null; onRetry: () => v
                 <p className="text-sm font-bold text-red-700 dark:text-red-400">Compliance Check Failed</p>
                 <p className="text-xs text-muted-foreground mt-1">{error ?? 'An unexpected error occurred.'}</p>
             </div>
-            <Button size="sm" variant="ghost" onClick={onRetry} className="text-red-600 hover:bg-red-500/10 text-[10px] font-black uppercase tracking-widest h-7 px-2">
+            <Button size="sm" variant="ghost" onClick={onRetry} disabled={disabled} className="text-red-600 hover:bg-red-500/10 text-[10px] font-black uppercase tracking-widest h-7 px-2">
                 Retry
             </Button>
         </div>
@@ -383,13 +395,14 @@ function ErrorState({ error, onRetry }: { error: string | null; onRetry: () => v
 // =============================================================================
 
 function ResultBuckets({
-    result, warningsAcknowledged, onAcknowledge, isStale, isSwap,
+    result, warningsAcknowledged, onAcknowledge, isStale, isSwap, disabled,
 }: {
     result: NonNullable<UseCompliancePanelReturn['result']>;
     warningsAcknowledged: boolean;
     onAcknowledge: (v: boolean) => void;
     isStale: boolean;
     isSwap: boolean;
+    disabled: boolean;
 }) {
     const { buckets } = result;
     const [passedExpanded, setPassedExpanded] = useState(false);
@@ -424,11 +437,12 @@ function ResultBuckets({
                                 ? 'border-amber-500/30 bg-amber-500/10'
                                 : 'border-border bg-muted/30 hover:bg-muted/50',
                         )}>
-                            <input
+                             <input
                                 type="checkbox"
                                 checked={warningsAcknowledged}
                                 onChange={e => onAcknowledge(e.target.checked)}
-                                className="h-4 w-4 rounded border-border accent-amber-500"
+                                disabled={disabled}
+                                className="h-4 w-4 rounded border-border accent-amber-500 cursor-pointer disabled:cursor-not-allowed"
                             />
                             <div>
                                 <p className="text-xs font-black uppercase tracking-widest text-foreground">Acknowledge Warnings</p>

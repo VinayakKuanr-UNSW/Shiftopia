@@ -207,6 +207,9 @@ export async function executeAssignShift(
                 id,
                 lifecycle_status,
                 is_published,
+                is_cancelled,
+                assignment_status,
+                bidding_status,
                 shift_date,
                 start_time,
                 end_time,
@@ -220,6 +223,24 @@ export async function executeAssignShift(
 
         if (fetchError || !shift) {
             return { success: false, error: fetchError?.message ?? 'Shift not found' };
+        }
+
+        // 1b. FSM pre-guard — fail fast before touching the DB or running compliance.
+        //     Mirrors the DB trigger rules but catches obvious mistakes client-side.
+        if (employeeId) {
+            const s = shift as any;
+            // Cannot assign to a cancelled shift
+            if (s.is_cancelled) {
+                return { success: false, error: 'Cannot assign a cancelled shift' };
+            }
+            // Cannot assign to a terminal (completed) shift
+            if (s.lifecycle_status === 'Completed') {
+                return { success: false, error: 'Cannot assign a completed shift' };
+            }
+            // Assigned shift must not be on bidding at the same time
+            if (s.assignment_status === 'assigned' && s.bidding_status !== 'not_on_bidding') {
+                return { success: false, error: 'Cannot re-assign a shift that is still open for bidding' };
+            }
         }
 
         // 2. Full V2 compliance pre-check (all rules) when assigning
@@ -245,15 +266,24 @@ export async function executeAssignShift(
         //    `roster_shifts` table, so we use a direct update instead.
         const userId = (await supabase.auth.getUser()).data.user?.id;
 
+        // Build update payload — always set assignment_status explicitly so the
+        // FSM validator (validate_shift_state_invariants trigger) sees a consistent row.
+        // On unassign: clear assignment_outcome too (cross-field rule: unassigned → null).
+        const updatePayload: Record<string, unknown> = {
+            assigned_employee_id: employeeId,
+            assigned_at:          employeeId ? new Date().toISOString() : null,
+            assignment_status:    employeeId ? 'assigned' : 'unassigned',
+            assignment_source:    employeeId ? 'manual' : null,
+            last_modified_by:     userId,
+            updated_at:           new Date().toISOString(),
+        };
+        if (!employeeId) {
+            updatePayload.assignment_outcome = null;
+        }
+
         const { error: updateError } = await supabase
             .from('shifts')
-            .update({
-                assigned_employee_id: employeeId,
-                assigned_at:          employeeId ? new Date().toISOString() : null,
-                assignment_source:    employeeId ? 'manual' : null,
-                last_modified_by:     userId,
-                updated_at:           new Date().toISOString(),
-            })
+            .update(updatePayload)
             .eq('id', shiftId);
 
         if (updateError) {

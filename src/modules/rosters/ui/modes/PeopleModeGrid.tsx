@@ -8,6 +8,7 @@ import { cn } from '@/modules/core/lib/utils';
 import { format } from 'date-fns';
 import { SmartShiftCard, type ComplianceInfo } from '@/modules/rosters/ui/components/SmartShiftCard';
 import { AvailabilityBar } from '@/modules/rosters/ui/components/AvailabilityBar';
+import { resolveGroupType, resolveShiftStatus } from '@/modules/rosters/utils/roster-utils';
 import { DroppableDateCell } from '@/modules/rosters/ui/components/DroppableDateCell';
 import { useResolvedAvailability } from '@/modules/rosters/hooks/useResolvedAvailability';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
@@ -159,8 +160,8 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
 
   const { toggleShiftSelection: uiToggleShiftSelection } = useRosterUI();
 
-  const isBulkMode = bulkModeActive || globalBulkModeActive;
-  const currentSelectedShifts = propsSelectedShifts.length > 0 ? propsSelectedShifts : globalSelectedShiftIds;
+  const isBulkMode = bulkModeActive;
+  const currentSelectedShifts = propsSelectedShifts;
 
   const buildShiftMenu = (shift: PeopleModeShift) => (
     <DropdownMenu>
@@ -380,51 +381,58 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                             )}>
                               {/* ========== SHIFTS ========== */}
                               {shifts.length > 0 ? (
-                                shifts.map((shift) => (
-                                  <DraggableShiftCard
-                                    key={shift.id}
-                                    shift={shift}
-                                    employee={employee}
-                                    disabled={isShiftLocked(dateKey, shift.startTime, 'roster_management')}
-                                  >
-                                    <SmartShiftCard
-                                      headerAction={canEdit && !isBulkMode ? buildShiftMenu(shift) : undefined}
-                                      shift={shift.rawShift || ({
-                                        id: shift.id,
-                                        start_time: shift.startTime,
-                                        end_time: shift.endTime,
-                                        lifecycle_status: shift.lifecycleStatus === 'published' ? 'Published' : 'Draft',
-                                        assigned_employee_id: shift.assignmentStatus === 'assigned' ? employee.id : null,
-                                        bidding_status: shift.fulfillmentStatus === 'bidding' ? 'on_bidding' : 'not_on_bidding',
-                                        is_trade_requested: shift.isTradeRequested,
-                                        is_cancelled: shift.isCancelled,
-                                        sub_group_name: shift.subGroup,
-                                        required_skills: shift.requiredSkills || [],
-                                        roles: { id: '', name: shift.role },
-                                        assigned_profiles: { first_name: employee.name.split(' ')[0], last_name: employee.name.split(' ').slice(1).join(' ') },
-                                      } as any)}
-                                      variant={cardVariant}
-                                      groupColor={shift.groupColor || (shift.rawShift as any)?.template_groups?.type || 'blue'}
-                                      compliance={complianceMap?.[shift.id]}
-                                      isSelected={currentSelectedShifts.includes(shift.id)}
-                                      onClick={(e) => {
-                                        if (isBulkMode) {
-                                          // Prioritize prop-based toggle, then global store, then UI context
-                                          if (onToggleShiftSelection) {
-                                            onToggleShiftSelection(shift.id);
-                                          } else if (globalToggleShiftSelection) {
-                                            globalToggleShiftSelection(shift.id);
-                                          } else {
-                                            uiToggleShiftSelection(shift.id);
-                                          }
-                                        } else {
-                                          onViewShift?.(shift);
-                                        }
-                                      }}
-                                       isLocked={isShiftLocked(dateKey, shift.startTime, 'roster_management') || (isDnDModeActive && shift.lifecycleStatus !== 'draft')}
-                                    />
-                                  </DraggableShiftCard>
-                                ))
+                                shifts.map((shift) => {
+                                    const { isPast, isLocked: isManagementLocked } = resolveShiftStatus(shift);
+                                    const isLocked = isManagementLocked || (isDnDModeActive && shift.lifecycleStatus !== 'draft');
+
+                                    return (
+                                      <DraggableShiftCard
+                                        key={shift.id}
+                                        shift={shift}
+                                        employee={employee}
+                                        disabled={isManagementLocked}
+                                      >
+                                        <SmartShiftCard
+                                          headerAction={canEdit && !isBulkMode ? buildShiftMenu(shift) : undefined}
+                                          shift={shift.rawShift || ({
+                                            id: shift.id,
+                                            start_time: shift.startTime,
+                                            end_time: shift.endTime,
+                                            lifecycle_status: shift.lifecycleStatus === 'published' ? 'Published' : 'Draft',
+                                            assigned_employee_id: shift.assignmentStatus === 'assigned' ? employee.id : null,
+                                            bidding_status: shift.fulfillmentStatus === 'bidding' ? 'on_bidding' : 'not_on_bidding',
+                                            is_trade_requested: shift.isTradeRequested,
+                                            is_cancelled: shift.isCancelled,
+                                            sub_group_name: shift.subGroup,
+                                            required_skills: shift.requiredSkills || [],
+                                            roles: { id: '', name: shift.role },
+                                            assigned_profiles: { first_name: employee.name.split(' ')[0], last_name: employee.name.split(' ').slice(1).join(' ') },
+                                          } as any)}
+                                          variant={cardVariant}
+                                          groupColor={resolveGroupType(shift.rawShift || shift)}
+                                          compliance={complianceMap?.[shift.id]}
+                                          isSelected={currentSelectedShifts.includes(shift.id)}
+                                          isLocked={isLocked}
+                                          isPast={isPast}
+                                          isDnDActive={isDnDModeActive}
+                                          onClick={(e) => {
+                                            if (isBulkMode) {
+                                              // Prioritize prop-based toggle, then global store, then UI context
+                                              if (onToggleShiftSelection) {
+                                                onToggleShiftSelection(shift.id);
+                                              } else if (globalToggleShiftSelection) {
+                                                globalToggleShiftSelection(shift.id);
+                                              } else {
+                                                uiToggleShiftSelection(shift.id);
+                                              }
+                                            } else {
+                                              onViewShift?.(shift);
+                                            }
+                                          }}
+                                        />
+                                      </DraggableShiftCard>
+                                    );
+                                })
                               ) : null}
 
                               {/* Unified Add Shift Button — Repositioned to corner if shifts exist */}

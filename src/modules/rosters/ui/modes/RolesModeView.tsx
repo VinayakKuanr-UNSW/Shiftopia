@@ -19,6 +19,7 @@ import { EnhancedAddShiftModal, ShiftContext } from '@/modules/rosters/ui/dialog
 import { SmartShiftCard } from '@/modules/rosters/ui/components/SmartShiftCard';
 import { useShiftsByDateRange, useRemunerationLevels, useRoles, useUnpublishShift } from '@/modules/rosters/state/useRosterShifts';
 import { Shift } from '@/modules/rosters/api/shifts.api';
+import { resolveGroupType, resolveShiftStatus } from '@/modules/rosters/utils/roster-utils';
 import { 
   DND_SHIFT_TYPE, 
   DND_UNFILLED_SHIFT, 
@@ -64,6 +65,8 @@ interface RolesModeViewProps {
   onMoveShift?: (shiftId: string, targetContext: any) => void;
   onAssignShift?: (shiftId: string, employeeId: string, employeeName: string) => void;
   selectedShiftIds?: string[];
+  isBulkMode?: boolean;
+  onToggleShiftSelection?: (shiftId: string) => void;
 }
 
 interface FlatRole {
@@ -135,7 +138,8 @@ const DraggableShiftCard: React.FC<{
   isBulkMode: boolean;
   onAssignEmployee: (shiftId: string, employeeId: string, employeeName: string) => void;
 }> = ({ shift, isDnDModeActive, onEdit, isSelected, onToggleSelection, isBulkMode, onAssignEmployee }) => {
-  const isLocked = isShiftLocked(shift.shift_date, shift.start_time, 'roster_management') || (isDnDModeActive && shift.lifecycle_status !== 'Draft');
+  const { isPast, isLocked: isManagementLocked } = resolveShiftStatus(shift);
+  const isLocked = isManagementLocked || (isDnDModeActive && shift.lifecycle_status !== 'Published');
 
   const [{ isDragging }, drag] = useDrag({
     type: DND_SHIFT_TYPE,
@@ -149,13 +153,13 @@ const DraggableShiftCard: React.FC<{
       lifecycle_status: shift.lifecycle_status as any,
       is_cancelled: shift.is_cancelled || false,
     }),
-    canDrag: () => canDragShift(shift, isDnDModeActive) && !isLocked,
+    canDrag: () => canDragShift(shift, isDnDModeActive) && !isManagementLocked,
     collect: (monitor) => ({
       isDragging: !!monitor.isDragging(),
     }),
-  }, [shift, isDnDModeActive, isLocked]);
+  }, [shift, isDnDModeActive, isManagementLocked]);
 
-  const groupColor = (shift as any).roster_subgroup?.roster_group?.color || (shift as any).group_type || (shift as any).group_color || (shift as any).template_groups?.color || 'blue';
+  const groupColor = resolveGroupType(shift);
   
   return (
     <div ref={drag} className={cn(isDragging && 'opacity-50')}>
@@ -174,8 +178,10 @@ const DraggableShiftCard: React.FC<{
           onClick={() => isBulkMode ? onToggleSelection(shift.id) : onEdit(shift)}
           isDragging={isDragging}
           isLocked={isLocked}
-          isSelected={isSelected}
+          isPast={isPast}
+          isDnDActive={isDnDModeActive}
           groupColor={groupColor}
+          isSelected={isSelected}
         />
       </DroppableShiftAssign>
     </div>
@@ -250,19 +256,15 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   onMoveShift,
   onAssignShift,
   selectedShiftIds: propsSelectedShiftIds,
+  isBulkMode,
+  onToggleShiftSelection,
 }) => {
   const activeDeptId = departmentIds[0];
   const activeSubDeptId = subDepartmentIds[0];
 
-  const {
-    bulkModeActive,
-    selectedShiftIds: globalSelectedShiftIds,
-    toggleShiftSelection,
-  } = useRosterUI();
   const { isDnDModeActive } = useRosterStore();
 
-  const selectedShiftIds = propsSelectedShiftIds ?? globalSelectedShiftIds;
-  const isBulkMode = bulkModeActive;
+  const selectedShiftIds = propsSelectedShiftIds ?? [];
 
   const { data: levels = [], isLoading: isLoadingLevels } = useRemunerationLevels();
   const { data: roles = [], isLoading: isLoadingRoles } = useRoles(organizationId, activeDeptId, activeSubDeptId);
@@ -454,7 +456,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                                 isDnDModeActive={isDnDModeActive} 
                                 onEdit={sh => onEditShift?.(sh)} 
                                 isSelected={selectedShiftIds.includes(s.id)}
-                                onToggleSelection={toggleShiftSelection}
+                                onToggleSelection={onToggleShiftSelection || (() => {})}
                                 isBulkMode={isBulkMode}
                                 onAssignEmployee={onAssignShift || (() => {})}
                               />

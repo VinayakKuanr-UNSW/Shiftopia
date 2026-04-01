@@ -64,9 +64,10 @@ interface RosterUIContextValue {
   setIsBucketView:             (value: boolean) => void;
   bulkModeActive:              boolean;
   setBulkModeActive:           (active: boolean) => void;
-  selectedShiftIds:            string[];
-  setSelectedShiftIds:         (ids: string[]) => void;
+  selectedShiftIds:            Set<string>;
+  setSelectedShiftIds:         (ids: Set<string>) => void;
   toggleShiftSelection:        (id: string) => void;
+  selectMultiple:              (ids: string[]) => void;
   clearSelection:              () => void;
   navigatePrevious:            () => void;
   navigateNext:                () => void;
@@ -163,6 +164,7 @@ export const useRosterUI = (): RosterUIContextValue => {
   const setBulkModeActive           = useRosterStore(s => s.setBulkModeActive);
   const setSelectedShiftIds         = useRosterStore(s => s.setSelectedShiftIds);
   const toggleShiftSelection        = useRosterStore(s => s.toggleShiftSelection);
+  const selectMultiple              = useRosterStore(s => s.selectMultiple);
   const clearSelection              = useRosterStore(s => s.clearSelection);
   const navigatePrevious            = useRosterStore(s => s.navigatePrevious);
   const navigateNext                = useRosterStore(s => s.navigateNext);
@@ -209,6 +211,7 @@ export const useRosterUI = (): RosterUIContextValue => {
     selectedShiftIds,
     setSelectedShiftIds,
     toggleShiftSelection,
+    selectMultiple,
     clearSelection,
     navigatePrevious,
     navigateNext,
@@ -230,7 +233,7 @@ export const useRosterUI = (): RosterUIContextValue => {
     isBucketView, setIsBucketView,
     bulkModeActive, setBulkModeActive,
     selectedShiftIds, setSelectedShiftIds,
-    toggleShiftSelection, clearSelection,
+    toggleShiftSelection, selectMultiple, clearSelection,
     navigatePrevious, navigateNext, navigateToToday,
     getDateRange, getDaysInRange,
   ]);

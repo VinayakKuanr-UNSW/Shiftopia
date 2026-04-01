@@ -475,18 +475,6 @@ const AppSidebar: React.FC = () => {
                 />
               )}
 
-              {/* Grid Page */}
-              {hasPermission('insights') && (
-                <NavigationItem
-                  to="/grid"
-                  icon={Grid3x3}
-                  iconColor={iconColorMap.insights}
-                  label="Grid"
-                  isActive={isRouteActive('/grid')}
-                  description="Annual Shift Grid"
-                />
-              )}
-
               {hasPermission('insights') && (
                 <NavigationItem
                   to="/insights"
@@ -495,19 +483,6 @@ const AppSidebar: React.FC = () => {
                   label="Insights"
                   isActive={isRouteActive('/insights')}
                   description="Analytics & reports"
-                />
-              )}
-
-              {/* Audit Trail removed in favor of contextual drawer */}
-
-              {hasPermission('management') && (
-                <NavigationItem
-                  to="/users"
-                  icon={Users}
-                  iconColor={iconColorMap.contracts}
-                  label="Users"
-                  isActive={isRouteActive('/users')}
-                  description="Manage users"
                 />
               )}
 
@@ -523,6 +498,38 @@ const AppSidebar: React.FC = () => {
               )}
             </CollapsibleSection>
           )}
+
+        {/* ---------- Admin Section ---------- */}
+        {(hasPermission('insights') || hasPermission('management')) && (
+          <CollapsibleSection
+            icon={Shield}
+            title="Admin"
+            color={iconColorMap.sectionManagement}
+            defaultOpen={true}
+          >
+            {hasPermission('insights') && (
+              <NavigationItem
+                to="/grid"
+                icon={Grid3x3}
+                iconColor={iconColorMap.insights}
+                label="Grid"
+                isActive={isRouteActive('/grid')}
+                description="Annual Shift Grid"
+              />
+            )}
+
+            {hasPermission('management') && (
+              <NavigationItem
+                to="/users"
+                icon={Users}
+                iconColor={iconColorMap.contracts}
+                label="Users"
+                isActive={isRouteActive('/users')}
+                description="Manage users"
+              />
+            )}
+          </CollapsibleSection>
+        )}
       </div>
 
       {/* ==================== FOOTER ==================== */}

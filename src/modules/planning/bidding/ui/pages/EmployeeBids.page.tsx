@@ -4,7 +4,7 @@ import { useAuth } from '@/platform/auth/useAuth';
 import { useTableSorting } from '@/modules/core/hooks/useTableSorting';
 import { SortableTableHeader } from '@/modules/core/ui/primitives/sortable-table-header';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, parseISO, parse } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { SYDNEY_TZ, parseZonedDateTime, formatInTimezone } from '@/modules/core/lib/date.utils';
 import { biddingApi } from '../../api/bidding.api';
 import { validateCompliance, type ComplianceResult, type QualificationViolation } from '@/modules/rosters/services/compliance.service';
@@ -13,10 +13,9 @@ import {
     Info, User,
     Calendar, Clock, ThumbsUp, ShieldAlert, Ban, Flame,
     Megaphone, UserPlus, UserCheck as LucideUserCheck, Circle, Minus, Gavel, Coffee, Shield, Loader2, AlertTriangle, CheckCircle, XCircle,
-    Filter, Zap, Signal
+    Filter, Zap, Signal, History, ChevronDown, ChevronRight
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Tabs, TabsContent } from '@/modules/core/ui/primitives/tabs';
 import { BidStatusBadge } from '../components/BidStatusBadge';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
@@ -35,6 +34,7 @@ import { BidComplianceModal } from '../components/BidComplianceModal';
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { FunctionBar } from '@/modules/core/ui/components/FunctionBar';
+import type { ParticipationStatus } from '../../model/bid.types';
 
 // ============================================================================
 // INTERFACES
@@ -68,6 +68,8 @@ interface ShiftData {
     lifecycleStatus?: string;
     subGroupColor?: string;
     droppedById?: string | null;
+    last_dropped_by?: string | null;
+    bidding_iteration?: number;
 }
 
 interface BidData {
@@ -94,6 +96,15 @@ interface BidData {
     groupType?: string | null;
     stateId?: string;
     subGroupColor?: string;
+    bidding_iteration?: number;
+}
+
+/** Atomic shift opportunity — shift + per-user participation for current iteration */
+interface ShiftOpportunity extends ShiftData {
+    participationStatus: ParticipationStatus;
+    currentBid: BidData | null;
+    /** Bids from previous iterations (read-only history) */
+    bidHistory: BidData[];
 }
 
 // ============================================================================
@@ -129,14 +140,14 @@ export const getBidPriority = (
     const shiftStart = (shift as any).startAt
         ? new Date((shift as any).startAt)
         : parseZonedDateTime(shift.date, shift.startTime, SYDNEY_TZ);
-    
+
     if (isNaN(shiftStart.getTime())) return 'normal';
     const hoursUntil = (shiftStart.getTime() - now.getTime()) / (1000 * 60 * 60);
-    
-    // Urgent if within 24h
+
     if (hoursUntil <= 24) return 'urgent';
     return 'normal';
 };
+
 // Department badge classes — uses CSS defined in index.css (light + dark adaptive)
 function getDeptColor(groupType: string | null | undefined, dept: string): string {
     if (groupType === 'convention_centre' || dept.toLowerCase().includes('convention'))
@@ -148,7 +159,6 @@ function getDeptColor(groupType: string | null | undefined, dept: string): strin
     return 'dept-badge-default';
 }
 
-// Department card classes — uses CSS defined in index.css (light + dark adaptive)
 function getCardBg(groupType: string | null | undefined, dept: string): string {
     const base = 'dept-card-base';
     if (groupType === 'convention_centre' || dept.toLowerCase().includes('convention'))
@@ -160,10 +170,43 @@ function getCardBg(groupType: string | null | undefined, dept: string): string {
     return `${base} dept-card-default`;
 }
 
-function toSeconds(t: string): number {
-    if (!t) return 0;
-    const [h, m] = t.split(':').map(Number);
-    return h * 3600 + (m || 0) * 60;
+/**
+ * Derive participation status for the CURRENT bidding iteration.
+ * History (past iterations) is handled separately by bidHistory.
+ */
+function getParticipationStatus(
+    shift: ShiftData,
+    allMyBids: BidData[],
+    userId: string
+): ParticipationStatus {
+    // Not eligible: user dropped this shift
+    if (shift.last_dropped_by === userId || shift.droppedById === userId) {
+        return 'not_eligible';
+    }
+
+    const currentIteration = shift.bidding_iteration || 1;
+
+    // Find user's bid for the CURRENT iteration only
+    const currentBid = allMyBids.find(b =>
+        String(b.shiftId) === String(shift.id) &&
+        b.bidding_iteration === currentIteration &&
+        b.status !== 'withdrawn'
+    );
+
+    if (!currentBid) {
+        // Check if bidding window has closed
+        const shiftStart = shift.startAt
+            ? new Date(shift.startAt)
+            : parseZonedDateTime(shift.date, shift.startTime, SYDNEY_TZ);
+        const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
+        if (new Date() >= biddingCloses) return 'expired';
+        return 'not_participated';
+    }
+
+    if (currentBid.status === 'pending') return 'pending';
+    if (currentBid.status === 'accepted' || currentBid.status === 'selected') return 'selected';
+    if (currentBid.status === 'rejected') return 'rejected';
+    return 'not_participated';
 }
 
 // ============================================================================
@@ -174,13 +217,12 @@ export const EmployeeBidsPage: React.FC = () => {
     const { scope, setScope, scopeKey, isGammaLocked, isLoading: isScopeLoading } = useScopeFilter('personal');
     const { toast } = useToast();
     const queryClient = useQueryClient();
-    const [activeTab, setActiveTab] = useState<'available' | 'myBids'>('available');
     const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
     const [priorityFilter, setPriorityFilter] = useState<BidPriority | 'all'>('all');
+    const [expandedHistoryIds, setExpandedHistoryIds] = useState<Set<string>>(new Set());
 
-
-    // Selection
-    const [selectedBidIds, setSelectedBidIds] = useState<any[]>([]);
+    // Selection (for bulk bid on not_participated eligible shifts)
+    const [selectedShiftIds, setSelectedShiftIds] = useState<any[]>([]);
 
     // Compliance Check State
     const [checkingShiftId, setCheckingShiftId] = useState<string | null>(null);
@@ -188,7 +230,7 @@ export const EmployeeBidsPage: React.FC = () => {
     const [showComplianceDialog, setShowComplianceDialog] = useState(false);
     const [pendingBidShift, setPendingBidShift] = useState<ShiftData | null>(null);
 
-    // NEW: Compliance Modal State
+    // Compliance Modal State
     const [complianceModalShift, setComplianceModalShift] = useState<ShiftData | null>(null);
     const [isComplianceModalOpen, setIsComplianceModalOpen] = useState(false);
 
@@ -198,6 +240,9 @@ export const EmployeeBidsPage: React.FC = () => {
         subDepartmentId: scope.subdept_ids[0] ?? undefined,
     };
 
+    // ========================================================================
+    // DATA FETCHING
+    // ========================================================================
     const { data: rawAvailableShifts = [] } = useQuery({
         queryKey: ['openBidShifts', scopeKey, hierarchyFilters.organizationId, hierarchyFilters.departmentId, hierarchyFilters.subDepartmentId],
         queryFn: () => biddingApi.getOpenBidShifts(hierarchyFilters),
@@ -211,10 +256,7 @@ export const EmployeeBidsPage: React.FC = () => {
     });
 
     // ========================================================================
-    // BUCKET A: ELIGIBILITY SCAN
-    // Stable query — React Query handles dependency tracking, caching, and
-    // cancellation. The queryKey string is a primitive so React Query only
-    // re-fetches when the actual set of shift IDs changes, not on every render.
+    // BUCKET A: ELIGIBILITY SCAN (5-min cache)
     // ========================================================================
     const eligibilityQueryKey = rawAvailableShifts.map(s => s.id).join('|');
 
@@ -258,14 +300,13 @@ export const EmployeeBidsPage: React.FC = () => {
                         newMap.set(s.id, { eligible: true, reasons: [] });
                     }
                 } else {
-                    // Edge function unreachable → optimistic pass (fail-open)
                     newMap.set(s.id, { eligible: true, reasons: [] });
                 }
             });
             return newMap;
         },
         enabled: !!user && rawAvailableShifts.length > 0,
-        staleTime: 5 * 60_000,   // re-use cached result for 5 min
+        staleTime: 5 * 60_000,
         gcTime:    10 * 60_000,
     });
 
@@ -278,7 +319,7 @@ export const EmployeeBidsPage: React.FC = () => {
             toast({ title: 'Bid Submitted', description: 'Your bid has been placed successfully.' });
             queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
             queryClient.invalidateQueries({ queryKey: ['myBids'] });
-            setSelectedBidIds([]);
+            setSelectedShiftIds([]);
         },
         onError: (error: any) => {
             toast({ title: 'Bid Failed', description: error.message || 'Failed to place bid.', variant: 'destructive' });
@@ -290,7 +331,7 @@ export const EmployeeBidsPage: React.FC = () => {
         onSuccess: () => {
             toast({ title: 'Bid Withdrawn', description: 'You have withdrawn from the bid.' });
             queryClient.invalidateQueries({ queryKey: ['myBids'] });
-            setSelectedBidIds([]);
+            setSelectedShiftIds([]);
         },
         onError: () => {
             toast({ title: 'Withdraw Failed', description: 'Failed to withdraw bid.', variant: 'destructive' });
@@ -305,7 +346,6 @@ export const EmployeeBidsPage: React.FC = () => {
             const shiftStartAt = (s as any).start_at ? new Date((s as any).start_at) : parseZonedDateTime(s.shift_date, s.start_time, (s as any).tz_identifier || SYDNEY_TZ);
             const shiftEndAt = (s as any).end_at ? new Date((s as any).end_at) : parseZonedDateTime(s.shift_date, s.end_time, (s as any).tz_identifier || SYDNEY_TZ);
 
-            // Adjust end time if shift passes midnight and no UTC end_at is provided
             if (!(s as any).end_at && shiftEndAt < shiftStartAt) {
                 shiftEndAt.setDate(shiftEndAt.getDate() + 1);
             }
@@ -336,7 +376,7 @@ export const EmployeeBidsPage: React.FC = () => {
                 netLength,
                 remunerationLevel: s.remuneration_levels?.level_name || 'Level-4',
                 assignedTo: s.assigned_employee_id,
-                isEligible:          eligibilityMap.get(s.id)?.eligible ?? true,   // optimistic until scan completes
+                isEligible:          eligibilityMap.get(s.id)?.eligible ?? true,
                 ineligibilityReason: eligibilityMap.get(s.id)?.reasons.join(' · ') ?? undefined,
                 groupType: s.group_type,
                 priority: isUrgent ? 'urgent' : 'normal',
@@ -345,7 +385,9 @@ export const EmployeeBidsPage: React.FC = () => {
                 isUrgent,
                 stateId: determineShiftState(s as any),
                 subGroupColor: getDeptColor(s.group_type, s.departments?.name || ''),
-                droppedById: (s as any).dropped_by_id
+                droppedById: (s as any).dropped_by_id,
+                last_dropped_by: (s as any).last_dropped_by,
+                bidding_iteration: (s as any).bidding_iteration || 1
             };
         });
     }, [rawAvailableShifts, eligibilityMap]);
@@ -357,7 +399,6 @@ export const EmployeeBidsPage: React.FC = () => {
             const shiftStartAt = (s as any).start_at ? new Date((s as any).start_at) : parseZonedDateTime(s.shift_date, s.start_time, (s as any).tz_identifier || SYDNEY_TZ);
             const shiftEndAt = (s as any).end_at ? new Date((s as any).end_at) : parseZonedDateTime(s.shift_date, s.end_time, (s as any).tz_identifier || SYDNEY_TZ);
 
-            // Adjust end time if shift passes midnight and no UTC end_at is provided
             if (!(s as any).end_at && shiftEndAt < shiftStartAt) {
                 shiftEndAt.setDate(shiftEndAt.getDate() + 1);
             }
@@ -390,96 +431,75 @@ export const EmployeeBidsPage: React.FC = () => {
                 notes: b.notes,
                 groupType: s.group_type,
                 stateId: (s as any).stateId || determineShiftState(s as any),
-                subGroupColor: getDeptColor(s.group_type, s.departments?.name || '')
+                subGroupColor: getDeptColor(s.group_type, s.departments?.name || ''),
+                bidding_iteration: b.bidding_iteration || 1
             };
         }).filter(Boolean) as BidData[];
     }, [rawMyBids]);
-
 
     // ========================================================================
     // SORTING
     // ========================================================================
     const shiftsTableSort = useTableSorting(availableShifts, { key: 'date', direction: 'asc' });
-    const bidsTableSort = useTableSorting(myBids, { key: 'bidTime', direction: 'desc' });
 
     // ========================================================================
-    // FILTERS — NO DUPLICATES: Available excludes shifts with active bids
+    // UNIFIED BID OPPORTUNITIES
+    // Each open shift enriched with current-iteration participation status + history
     // ========================================================================
-    const myBidShiftIds = React.useMemo(() => {
-        return new Set(myBids.filter(b => b.status !== 'withdrawn').map(b => String(b.shiftId)));
-    }, [myBids]);
+    const bidOpportunities: ShiftOpportunity[] = React.useMemo(() => {
+        return shiftsTableSort.sortedData
+            .filter(shift => {
+                if (priorityFilter !== 'all') {
+                    if (getBidPriority(shift) !== priorityFilter) return false;
+                }
+                return true;
+            })
+            .map(shift => {
+                const currentIteration = shift.bidding_iteration || 1;
 
-    const filteredAvailableShifts = React.useMemo(() => {
-        return shiftsTableSort.sortedData.filter(s => {
-            // Priority Filter
-            if (priorityFilter !== 'all') {
-                const p = getBidPriority(s);
-                if (p !== priorityFilter) return false;
-            }
+                const currentBid = myBids.find(b =>
+                    String(b.shiftId) === String(shift.id) &&
+                    b.bidding_iteration === currentIteration &&
+                    b.status !== 'withdrawn'
+                ) || null;
 
-            // ISSUE 3: Filter OUT expired shifts from Available Bids
-            const shiftStart = s.startAt
-                ? new Date(s.startAt)
-                : parseZonedDateTime(s.date, s.startTime, SYDNEY_TZ);
-            const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
-            const isExpired = new Date() >= biddingCloses;
-            if (isExpired) return false;
+                const bidHistory = myBids.filter(b =>
+                    String(b.shiftId) === String(shift.id) &&
+                    b.bidding_iteration !== currentIteration &&
+                    b.status !== 'withdrawn'
+                );
 
-            // Exclude shifts the user already has active bids on
-            return !myBidShiftIds.has(String(s.id));
+                const participationStatus = getParticipationStatus(shift, myBids, user?.id || '');
+
+                return { ...shift, participationStatus, currentBid, bidHistory };
+            });
+    }, [shiftsTableSort.sortedData, myBids, priorityFilter, user?.id]);
+
+    // ========================================================================
+    // SELECTION HANDLERS (only applicable to not_participated eligible shifts)
+    // ========================================================================
+    const handleSelectAll = (isChecked: boolean) => {
+        const eligible = bidOpportunities
+            .filter(o => o.participationStatus === 'not_participated' && o.isEligible)
+            .map(o => o.id);
+        setSelectedShiftIds(isChecked ? eligible : []);
+    };
+
+    const handleSelectShift = (id: any) => {
+        setSelectedShiftIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    };
+
+    const toggleHistory = (shiftId: string) => {
+        setExpandedHistoryIds(prev => {
+            const next = new Set(prev);
+            if (next.has(shiftId)) next.delete(shiftId);
+            else next.add(shiftId);
+            return next;
         });
-    }, [shiftsTableSort.sortedData, myBidShiftIds, priorityFilter]);
-
-    // My Bids: ISSUE 3 — filter out expired pending bids, keep accepted/rejected
-    const filteredMyBids = React.useMemo(() => {
-        return bidsTableSort.sortedData.filter(bid => {
-            // Priority Filter
-            if (priorityFilter !== 'all') {
-                const p = getBidPriority(bid);
-                if (bid.status === 'pending' && p !== priorityFilter) return false;
-                // For accepted/selected/rejected, we might still want to filter by priority if the user expects it
-                // but usually priority is a "live" thing. Let's filter it consistently.
-                if (p !== priorityFilter) return false;
-            }
-
-            // Terminal outcomes (accepted/rejected) always shown
-            if (bid.status === 'accepted' || bid.status === 'selected') return true;
-            if (bid.status === 'rejected') return true;
-            // Pending bids: only show if NOT expired
-            if (bid.status === 'pending') {
-                const shiftStart = bid.startAt
-                    ? new Date(bid.startAt)
-                    : parseZonedDateTime(bid.date, bid.startTime, SYDNEY_TZ);
-                const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
-                return new Date() < biddingCloses;
-            }
-            // Withdrawn bids: don't show
-            return false;
-        });
-    }, [bidsTableSort.sortedData, priorityFilter]);
-
-    // ========================================================================
-    // SELECTION HANDLERS
-    // ========================================================================
-    const handleSelectAllAvailable = (isChecked: boolean) => {
-        const eligibleShifts = availableShifts.filter(s => {
-            const isDroppedByMe = user?.id === s.droppedById;
-            return s.isEligible && !isDroppedByMe;
-        }).map(s => s.id);
-        setSelectedBidIds(isChecked ? eligibleShifts : []);
-    };
-
-    const handleSelectAllMyBids = (isChecked: boolean) => {
-        const allBidIds = myBids.map(b => b.id);
-        setSelectedBidIds(isChecked ? allBidIds : []);
-    };
-
-    const handleSelectBid = (id: any) => {
-        setSelectedBidIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
     };
 
     // ========================================================================
-    // COMPLIANCE CHECK HANDLER
+    // COMPLIANCE HANDLERS
     // ========================================================================
     const checkComplianceAndBid = async (shift: ShiftData) => {
         if (!user) return;
@@ -495,32 +515,22 @@ export const EmployeeBidsPage: React.FC = () => {
             });
             setCheckingShiftId(null);
 
-            if (result.status === 'violated') {
-                // Blocking violation
-                setComplianceResult(result);
-                setPendingBidShift(shift);
-                setShowComplianceDialog(true);
-            } else if (result.status === 'warned') {
-                // Soft warning - show dialog but allow proceed
+            if (result.status === 'violated' || result.status === 'warned') {
                 setComplianceResult(result);
                 setPendingBidShift(shift);
                 setShowComplianceDialog(true);
             } else {
-                // All clear - proceed to bid
                 placeBidMutation.mutate(shift.id);
             }
-        } catch (e) {
+        } catch {
             setCheckingShiftId(null);
-            // If compliance check fails, allow bid anyway with toast warning
             toast({ title: 'Compliance Check Unavailable', description: 'Proceeding with bid.', variant: 'default' });
             placeBidMutation.mutate(shift.id);
         }
     };
 
     const handleConfirmBidWithWarning = () => {
-        if (pendingBidShift) {
-            placeBidMutation.mutate(pendingBidShift.id);
-        }
+        if (pendingBidShift) placeBidMutation.mutate(pendingBidShift.id);
         setShowComplianceDialog(false);
         setPendingBidShift(null);
         setComplianceResult(null);
@@ -535,22 +545,10 @@ export const EmployeeBidsPage: React.FC = () => {
     // ========================================================================
     // ACTION HANDLERS
     // ========================================================================
-    const handleBidForShift = (shiftId: string) => {
-        // Find the shift data to pass to compliance check
-        const shift = availableShifts.find(s => String(s.id) === String(shiftId));
-        if (shift) {
-            checkComplianceAndBid(shift);
-        } else {
-            placeBidMutation.mutate(shiftId);
-        }
-    };
-
-    // Direct bid — no compliance gate (Bucket A already checked at scan time)
-    // After success, run B/C/D in background and show advisory toast if needed
+    // Quick bid — Bucket A already checked at scan time; B/C/D advisory in background
     const handleQuickBid = (shift: ShiftData) => {
         placeBidMutation.mutate(shift.id, {
             onSuccess: () => {
-                // Background soft check for Buckets B/C/D (fire-and-forget)
                 validateCompliance({
                     employeeId: user!.id,
                     shiftDate: shift.date,
@@ -559,7 +557,6 @@ export const EmployeeBidsPage: React.FC = () => {
                     netLengthMinutes: shift.netLength,
                     shiftId: shift.id,
                 }).then(result => {
-                    // Only advisory for B/C/D — qualification issues are already surfaced via badge
                     const hasNonEligibilityIssues =
                         (result.violations.length > 0 || result.warnings.length > 0) &&
                         result.qualificationViolations.length === 0;
@@ -570,7 +567,7 @@ export const EmployeeBidsPage: React.FC = () => {
                             variant: 'default',
                         });
                     }
-                }).catch(() => { /* ignore background check failures */ });
+                }).catch(() => {});
             },
         });
     };
@@ -582,20 +579,13 @@ export const EmployeeBidsPage: React.FC = () => {
     const handleBulkBid = async () => {
         if (!user) return;
 
-        // Only bid on eligible, non-dropped shifts
-        const validIds = selectedBidIds.filter(id => {
-            const shift = availableShifts.find(s => s.id === id);
-            if (!shift) return false;
-            const isDroppedByMe = user.id === shift.droppedById;
-            return !isDroppedByMe && (eligibilityMap.get(id)?.eligible !== false);
+        const validIds = selectedShiftIds.filter(id => {
+            const opp = bidOpportunities.find(o => o.id === id);
+            return opp?.participationStatus === 'not_participated' && opp?.isEligible !== false;
         });
 
         if (validIds.length === 0) {
-            toast({
-                title: 'No eligible shifts selected',
-                description: 'All selected shifts are either ineligible or previously dropped.',
-                variant: 'destructive',
-            });
+            toast({ title: 'No eligible shifts selected', variant: 'destructive' });
             return;
         }
 
@@ -608,159 +598,206 @@ export const EmployeeBidsPage: React.FC = () => {
 
         toast({
             title: `${succeeded} bid${succeeded !== 1 ? 's' : ''} placed`,
-            description: failed > 0 ? `${failed} shift${failed !== 1 ? 's' : ''} failed to submit` : undefined,
+            description: failed > 0 ? `${failed} failed` : undefined,
         });
 
-        setSelectedBidIds([]);
+        setSelectedShiftIds([]);
         queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
         queryClient.invalidateQueries({ queryKey: ['myBids'] });
     };
 
-    const handleBulkWithdraw = () => {
-        selectedBidIds.forEach(id => handleWithdrawBid(id));
-        setSelectedBidIds([]);
-    };
-
-
     // ========================================================================
-    // RENDER CARD (Shared between Available and My Bids)
+    // RENDER: Shift Opportunity Card
     // ========================================================================
-    const renderShiftCard = (shift: ShiftData, isBidCard: boolean = false, bidStatus?: string) => {
-        const existingBid = myBids.find(b => String(b.shiftId) === String(shift.id) && b.status !== 'withdrawn');
-        const isBidPlaced = !!existingBid;
-        const isDroppedByMe = user?.id === shift.droppedById;
+    const renderOpportunityCard = (opp: ShiftOpportunity) => {
+        const { participationStatus, currentBid, bidHistory } = opp;
+        const currentIteration = opp.bidding_iteration || 1;
+        const isHistoryExpanded = expandedHistoryIds.has(String(opp.id));
 
-        // Calculate bidding closes:
-        const shiftStart = shift.startAt
-            ? new Date(shift.startAt)
-            : parseZonedDateTime(shift.date, shift.startTime, SYDNEY_TZ);
-
-        // Bidding closes 4 hours before shift start
+        const shiftStart = opp.startAt
+            ? new Date(opp.startAt)
+            : parseZonedDateTime(opp.date, opp.startTime, SYDNEY_TZ);
         const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
         const tr = calculateTimeRemaining(biddingCloses.toISOString());
 
-        // ── DERIVE TIMER DISPLAY ──
-        // ISSUE 2: Only show timer for pending, non-expired bids. Terminal states are handled by footer badges/actions.
-        const isTerminalBid = isBidCard && (bidStatus === 'accepted' || bidStatus === 'selected' || bidStatus === 'rejected');
-        const timerDisplay = isTerminalBid
-            ? null
-            : tr.isExpired
-                ? 'Bidding Closed'
-                : `Closes in ${formatTimeRemaining(tr)}`;
+        const isTerminal = participationStatus === 'selected' ||
+                           participationStatus === 'not_eligible' ||
+                           participationStatus === 'expired';
+        const timerDisplay = isTerminal ? null
+            : tr.isExpired ? 'Bidding Closed'
+            : `Closes in ${formatTimeRemaining(tr)}`;
+
+        const canSelect = participationStatus === 'not_participated' && opp.isEligible;
+
+        const footerActions = (
+            <div className="flex flex-col gap-2">
+
+                {/* ── CURRENT ITERATION STATUS ── */}
+                {participationStatus === 'not_eligible' && (
+                    <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-medium">
+                        <XCircle className="h-4 w-4 shrink-0" /> You dropped this shift
+                    </div>
+                )}
+
+                {participationStatus === 'not_participated' && (
+                    opp.isEligible ? (
+                        <Button
+                            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/20 font-bold h-10 transition-all active:scale-[0.98]"
+                            onClick={() => handleQuickBid(opp)}
+                            disabled={placeBidMutation.isPending}
+                        >
+                            {placeBidMutation.isPending && placeBidMutation.variables === opp.id ? (
+                                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                            ) : (
+                                <ThumbsUp className="mr-1.5 h-4 w-4" />
+                            )}
+                            {placeBidMutation.isPending && placeBidMutation.variables === opp.id ? 'Placing…' : 'Bid Now'}
+                        </Button>
+                    ) : (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <span className="w-full">
+                                        <Button
+                                            disabled
+                                            className="w-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 cursor-not-allowed opacity-90 pointer-events-none h-10"
+                                        >
+                                            <Ban className="mr-1.5 h-4 w-4" /> Ineligible
+                                        </Button>
+                                    </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="max-w-[220px] text-xs">
+                                    {opp.ineligibilityReason ?? 'You are not eligible for this shift'}
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )
+                )}
+
+                {participationStatus === 'pending' && (
+                    <>
+                        <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm font-medium">
+                            <Clock className="h-4 w-4 shrink-0" /> Awaiting Manager Review
+                        </div>
+                        {!tr.isExpired && currentBid && (
+                            <Button
+                                variant="outline"
+                                className="w-full border-slate-200 dark:border-white/10 hover:bg-red-500/10 hover:text-red-400 h-10"
+                                onClick={() => handleWithdrawBid(currentBid.id)}
+                                disabled={withdrawBidMutation.isPending}
+                            >
+                                <XCircle className="mr-1.5 h-4 w-4" /> Withdraw
+                            </Button>
+                        )}
+                    </>
+                )}
+
+                {participationStatus === 'selected' && (
+                    <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-sm font-medium">
+                        <CheckCircle className="h-4 w-4 shrink-0" /> Bid Selected — Assigned to You
+                    </div>
+                )}
+
+                {participationStatus === 'rejected' && (
+                    <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/40 text-sm">
+                        <Ban className="h-4 w-4 shrink-0" /> Not Selected This Round
+                    </div>
+                )}
+
+                {participationStatus === 'expired' && (
+                    <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40 text-sm">
+                        <Ban className="h-4 w-4 shrink-0" /> Bidding Closed
+                    </div>
+                )}
+
+                {/* ── ITERATION HISTORY — ALL past ITRs, DNB for missed ── */}
+                {currentIteration > 1 && (
+                    <div className="mt-1 border-t border-slate-100 dark:border-white/[0.06] pt-2">
+                        <button
+                            onClick={() => toggleHistory(String(opp.id))}
+                            className="flex items-center gap-1.5 w-full text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                        >
+                            {isHistoryExpanded
+                                ? <ChevronDown className="h-3 w-3" />
+                                : <ChevronRight className="h-3 w-3" />
+                            }
+                            <History className="h-3 w-3" />
+                            History ({currentIteration - 1} round{currentIteration - 1 !== 1 ? 's' : ''})
+                        </button>
+                        <AnimatePresence>
+                            {isHistoryExpanded && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.15 }}
+                                    className="overflow-hidden"
+                                >
+                                    <div className="mt-1.5 space-y-0.5">
+                                        {Array.from({ length: currentIteration - 1 }, (_, i) => i + 1).map(itr => {
+                                            const bid = bidHistory.find(b => b.bidding_iteration === itr);
+                                            return (
+                                                <div key={itr} className="flex items-center justify-between text-xs py-0.5">
+                                                    <span className="text-muted-foreground/60 font-mono">ITR {itr}</span>
+                                                    {bid ? (
+                                                        <BidStatusBadge status={bid.status} />
+                                                    ) : (
+                                                        <span className="text-[10px] font-bold uppercase tracking-tight px-1.5 py-0.5 rounded bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-white/30">DNB</span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+                )}
+            </div>
+        );
+
+        const topContent = (
+            <div className="flex items-center gap-2">
+                <input
+                    type="checkbox"
+                    checked={selectedShiftIds.includes(opp.id)}
+                    onChange={() => handleSelectShift(opp.id)}
+                    disabled={!canSelect}
+                    className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary focus:ring-primary/30"
+                />
+                <span className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-wider">Select</span>
+                {currentIteration > 1 && (
+                    <span className="ml-auto text-[9px] font-mono font-bold text-muted-foreground/40 bg-muted/20 px-1.5 py-0.5 rounded uppercase">
+                        ITR {currentIteration}
+                    </span>
+                )}
+            </div>
+        );
 
         return (
             <SharedShiftCard
-                key={shift.id}
-                organization={shift.organization}
-                department={shift.department}
-                subGroup={shift.subGroup}
-                role={shift.role}
-                shiftDate={shift.date}
-                startTime={shift.startTime}
-                endTime={shift.endTime}
-                netLength={shift.netLength}
-                paidBreak={shift.paidBreak}
-                unpaidBreak={shift.unpaidBreak}
+                key={opp.id}
+                organization={opp.organization}
+                department={opp.department}
+                subGroup={opp.subGroup}
+                role={opp.role}
+                shiftDate={opp.date}
+                startTime={opp.startTime}
+                endTime={opp.endTime}
+                netLength={opp.netLength}
+                paidBreak={opp.paidBreak}
+                unpaidBreak={opp.unpaidBreak}
                 timerText={timerDisplay}
-                isExpired={isTerminalBid ? false : tr.isExpired}
-                isUrgent={shift.isUrgent}
-                lifecycleStatus={shift.lifecycleStatus || 'Published'}
+                isExpired={isTerminal ? false : tr.isExpired}
+                isUrgent={opp.isUrgent}
+                lifecycleStatus={opp.lifecycleStatus || 'Published'}
                 groupVariant={
-                    shift.groupType === 'convention_centre' ? 'convention' :
-                    shift.groupType === 'exhibition_centre' ? 'exhibition' :
-                    shift.groupType === 'theatre' ? 'theatre' : 'default'
+                    opp.groupType === 'convention_centre' ? 'convention' :
+                    opp.groupType === 'exhibition_centre' ? 'exhibition' :
+                    opp.groupType === 'theatre' ? 'theatre' : 'default'
                 }
-
-                footerActions={
-                    <div className="flex flex-col gap-2">
-                        {isBidCard ? (
-                            /* ── MY BIDS STATE MACHINE ── */
-                            <>
-                                {/* Status Badge — deterministic from bid.status */}
-                                {bidStatus === 'pending' ? (
-                                    <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm font-medium">
-                                        <Clock className="h-4 w-4" /> Awaiting Manager Review
-                                    </div>
-                                ) : (bidStatus === 'selected' || bidStatus === 'accepted') ? (
-                                    <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-sm font-medium">
-                                        <CheckCircle className="h-4 w-4" />
-                                        {bidStatus === 'selected' ? 'Selected | Awaiting Manager Review' : 'Accepted — Assigned to You'}
-                                    </div>
-                                ) : (
-                                    <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40 text-sm">
-                                        <Ban className="h-4 w-4" /> Bid Not Selected
-                                    </div>
-                                )}
-                                {/* ISSUE 1: Withdraw ONLY when pending AND not expired — terminal states have NO actions */}
-                                {bidStatus === 'pending' && !tr.isExpired && (
-                                    <Button
-                                        variant="outline"
-                                        className="w-full border-slate-200 dark:border-white/10 hover:bg-red-500/10 hover:text-red-400 h-10"
-                                        onClick={() => {
-                                            const bid = myBids.find(b => String(b.shiftId) === String(shift.id) && b.status !== 'withdrawn');
-                                            if (bid) handleWithdrawBid(bid.id);
-                                        }}
-                                        disabled={withdrawBidMutation.isPending}
-                                    >
-                                        <XCircle className="mr-1.5 h-4 w-4" /> Withdraw
-                                    </Button>
-                                )}
-                            </>
-                        ) : (
-                            /* ── AVAILABLE BIDS ACTIONS (expired already filtered out in filteredAvailableShifts) ── */
-                            isDroppedByMe ? (
-                                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-medium">
-                                    <XCircle className="h-4 w-4" /> Shift Dropped (Cannot Re-bid)
-                                </div>
-                            ) : shift.isEligible ? (
-                                <Button
-                                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/20 font-bold h-10 transition-all active:scale-[0.98]"
-                                    onClick={() => handleQuickBid(shift)}
-                                    disabled={placeBidMutation.isPending}
-                                >
-                                    {eligibilityLoading && !eligibilityMap.has(shift.id) ? (
-                                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                                    ) : placeBidMutation.isPending && placeBidMutation.variables === shift.id ? (
-                                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <ThumbsUp className="mr-1.5 h-4 w-4" />
-                                    )}
-                                    {placeBidMutation.isPending && placeBidMutation.variables === shift.id ? 'Placing…' : 'Bid Now'}
-                                </Button>
-                            ) : (
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <span className="w-full">
-                                                <Button
-                                                    disabled
-                                                    className="w-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 cursor-not-allowed opacity-90 pointer-events-none h-10"
-                                                >
-                                                    <Ban className="mr-1.5 h-4 w-4" /> Ineligible
-                                                </Button>
-                                            </span>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="top" className="max-w-[220px] text-xs">
-                                            {shift.ineligibilityReason ?? 'You are not eligible for this shift'}
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                            )
-                        )}
-                    </div>
-                }
-                topContent={
-                    <div className="flex items-center gap-2">
-                        <input
-                            type="checkbox"
-                            checked={selectedBidIds.includes(shift.id)}
-                            onChange={() => handleSelectBid(shift.id)}
-                            disabled={!isBidCard && !shift.isEligible}
-                            className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary focus:ring-primary/30"
-                        />
-                        <span className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-wider">Select</span>
-                    </div>
-                }
+                footerActions={footerActions}
+                topContent={topContent}
             />
         );
     };
@@ -770,8 +807,6 @@ export const EmployeeBidsPage: React.FC = () => {
     // ========================================================================
     return (
         <div className="w-full text-foreground">
-            {/* FILTER BAR */}
-            {/* Scope Filter */}
             <ScopeFilterBanner
                 mode="personal"
                 onScopeChange={setScope}
@@ -779,14 +814,10 @@ export const EmployeeBidsPage: React.FC = () => {
                 className="mb-6"
             />
 
-            {/* Function Bar */}
             <FunctionBar
-                tabs={[
-                    { id: 'available', label: 'Available Shifts', count: filteredAvailableShifts.length },
-                    { id: 'myBids', label: 'My Bids', count: filteredMyBids.length }
-                ]}
-                activeTab={activeTab}
-                onTabChange={(id) => setActiveTab(id as any)}
+                tabs={[{ id: 'all', label: 'Open Shifts', count: bidOpportunities.length }]}
+                activeTab="all"
+                onTabChange={() => {}}
                 viewMode={viewMode}
                 onViewModeChange={setViewMode}
                 onRefresh={() => {
@@ -830,241 +861,142 @@ export const EmployeeBidsPage: React.FC = () => {
                 }
             />
 
+            {/* Eligibility scan indicator */}
+            {eligibilityLoading && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60 mb-4">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Checking eligibility…
+                </div>
+            )}
 
-
-
-            {/* NEW: Tabs Wrapper */}
-            <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)} className="space-y-4">
-                {/* TAB: Available Shifts */}
-                <TabsContent value="available" className="space-y-4">
-                    <div className="relative mb-6 overflow-hidden rounded-xl border-l-[3px] border-l-blue-500 bg-gradient-to-r from-blue-50 dark:from-blue-500/10 via-blue-50/50 dark:via-blue-900/5 to-transparent p-4 backdrop-blur-sm">
-                        <div className="flex items-start gap-3">
-                            <div className="rounded-full bg-blue-100 dark:bg-blue-500/20 p-1.5 ring-1 ring-blue-200 dark:ring-blue-500/30">
-                                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                            </div>
-                            <div className="space-y-1">
-                                <h4 className="text-sm font-medium text-blue-700 dark:text-blue-200">Available Shifts</h4>
-                                <p className="text-sm text-blue-600/80 dark:text-blue-200/70 leading-relaxed max-w-2xl">
-                                    Browse and bid on shifts matching your role and department. Use the global scope to refine your view.
-                                </p>
-                            </div>
+            {/* ── UNIFIED SHIFT OPPORTUNITIES GRID ── */}
+            {viewMode === 'card' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {bidOpportunities.map(opp => renderOpportunityCard(opp))}
+                    {bidOpportunities.length === 0 && (
+                        <div className="col-span-full text-center py-16 text-muted-foreground/50">
+                            No open shifts match your filters.
                         </div>
-                    </div>
+                    )}
+                </div>
+            ) : (
+                /* ── TABLE VIEW ── */
+                <div className="overflow-x-auto border border-slate-200 dark:border-white/10 rounded-lg">
+                    <table className="w-full text-sm text-slate-800 dark:text-white">
+                        <thead className="bg-slate-100 dark:bg-black/40 text-xs">
+                            <tr>
+                                <th className="p-3 text-left w-[40px]">
+                                    <input
+                                        type="checkbox"
+                                        checked={
+                                            bidOpportunities.some(o => o.participationStatus === 'not_participated' && o.isEligible) &&
+                                            bidOpportunities
+                                                .filter(o => o.participationStatus === 'not_participated' && o.isEligible)
+                                                .every(o => selectedShiftIds.includes(o.id))
+                                        }
+                                        onChange={(e) => handleSelectAll(e.target.checked)}
+                                    />
+                                </th>
+                                <SortableTableHeader sortKey="department" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Dept</SortableTableHeader>
+                                <SortableTableHeader sortKey="subGroup" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Sub</SortableTableHeader>
+                                <SortableTableHeader sortKey="role" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Role</SortableTableHeader>
+                                <SortableTableHeader sortKey="date" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Date</SortableTableHeader>
+                                <th className="p-3 text-left">Time</th>
+                                <th className="p-3 text-left">Net</th>
+                                <th className="p-3 text-left">ITR</th>
+                                <th className="p-3 text-left w-[200px]">Status / Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {bidOpportunities.map(opp => {
+                                const { participationStatus, currentBid } = opp;
+                                const shiftStart = opp.startAt
+                                    ? new Date(opp.startAt)
+                                    : parseZonedDateTime(opp.date, opp.startTime, SYDNEY_TZ);
+                                const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
+                                const isExpired = new Date() >= biddingCloses;
+                                const canSelect = participationStatus === 'not_participated' && opp.isEligible;
 
-                    <div className="flex gap-2 items-center flex-wrap mb-4">
-                        {/* Eligibility loading indicator */}
-                        {eligibilityLoading && (
-                            <span className="flex items-center gap-1 text-xs text-slate-400 dark:text-white/40">
-                                <Loader2 className="h-3 w-3 animate-spin" /> Checking eligibility…
-                            </span>
-                        )}
-                    </div>
-
-                    {viewMode === 'card' ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                            {filteredAvailableShifts.map(shift => renderShiftCard(shift, false))}
-                            {filteredAvailableShifts.length === 0 && (
-                                <div className="col-span-full text-center py-8 text-slate-400 dark:text-white/50">No shifts match filters.</div>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto border border-slate-200 dark:border-white/10 rounded-lg">
-                            <table className="w-full text-sm text-slate-800 dark:text-white">
-                                <thead className="bg-slate-100 dark:bg-black/40 text-xs">
-                                    <tr>
-                                        <th className="p-3 text-left w-[40px]">
+                                return (
+                                    <tr key={opp.id} className="border-t border-slate-100 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5">
+                                        <td className="p-3">
                                             <input
                                                 type="checkbox"
-                                                checked={filteredAvailableShifts.length > 0 && filteredAvailableShifts.every(s => selectedBidIds.includes(s.id))}
-                                                onChange={(e) => handleSelectAllAvailable(e.target.checked)}
+                                                checked={selectedShiftIds.includes(opp.id)}
+                                                onChange={() => handleSelectShift(opp.id)}
+                                                disabled={!canSelect}
                                             />
-                                        </th>
-                                        <SortableTableHeader sortKey="department" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Dept</SortableTableHeader>
-                                        <SortableTableHeader sortKey="subGroup" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Sub</SortableTableHeader>
-                                        <SortableTableHeader sortKey="role" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Role</SortableTableHeader>
-                                        <SortableTableHeader sortKey="date" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Date</SortableTableHeader>
-                                        <th className="p-3 text-left">Time</th>
-                                        <th className="p-3 text-left">Net</th>
-                                        <th className="p-3 text-left w-[200px]">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredAvailableShifts.map(shift => {
-                                        const existingBid = myBids.find(b => String(b.shiftId) === String(shift.id) && b.status !== 'withdrawn');
-                                        const isBidPlaced = !!existingBid;
-                                        const isDroppedByMe = user?.id === shift.droppedById;
-                                        const canBid = !isDroppedByMe;
-                                        const blockReason = "You cannot bid on a shift you dropped";
-
-                                        // Calculate expired status securely using ZonedDateTime
-                                        const shiftStart = parseZonedDateTime(shift.date, shift.startTime, SYDNEY_TZ);
-                                        const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
-                                        const now = new Date();
-                                        const isExpired = now >= biddingCloses;
-
-                                        return (
-                                            <tr key={shift.id} className="border-t border-slate-100 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5">
-                                                <td className="p-3"><input type="checkbox" checked={selectedBidIds.includes(shift.id)} onChange={() => handleSelectBid(shift.id)} disabled={!shift.isEligible} /></td>
-                                                <td className="p-3">{shift.department}</td>
-                                                <td className="p-3">{shift.subGroup}</td>
-                                                <td className="p-3">{shift.role}</td>
-                                                <td className="p-3">{shift.date}</td>
-                                                <td className="p-3">{shift.startTime}-{shift.endTime}</td>
-                                                <td className="p-3">{Math.round(shift.netLength)}m</td>
-                                                <td className="p-3">
-                                                    {isExpired ? (
-                                                        <Button disabled size="sm" className="w-full bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-white/50 h-8 text-xs">
-                                                            <Ban className="mr-1.5 h-3 w-3" /> Closed
+                                        </td>
+                                        <td className="p-3">{opp.department}</td>
+                                        <td className="p-3">{opp.subGroup}</td>
+                                        <td className="p-3">{opp.role}</td>
+                                        <td className="p-3">{opp.date}</td>
+                                        <td className="p-3">{opp.startTime}–{opp.endTime}</td>
+                                        <td className="p-3">{Math.round(opp.netLength)}m</td>
+                                        <td className="p-3 text-xs font-mono text-muted-foreground">
+                                            {(opp.bidding_iteration || 1) > 1 ? `ITR ${opp.bidding_iteration}` : '—'}
+                                        </td>
+                                        <td className="p-3">
+                                            {participationStatus === 'not_eligible' && (
+                                                <span className="text-xs text-rose-500 flex items-center gap-1"><XCircle size={12} /> Dropped</span>
+                                            )}
+                                            {participationStatus === 'not_participated' && !isExpired && (
+                                                opp.isEligible ? (
+                                                    <Button
+                                                        size="sm"
+                                                        className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
+                                                        disabled={placeBidMutation.isPending}
+                                                        onClick={() => handleQuickBid(opp)}
+                                                    >
+                                                        {placeBidMutation.isPending && placeBidMutation.variables === opp.id
+                                                            ? <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                                            : <ThumbsUp className="mr-1 h-3 w-3" />
+                                                        }
+                                                        Bid
+                                                    </Button>
+                                                ) : (
+                                                    <span className="text-xs text-rose-500 flex items-center gap-1"><Ban size={12} /> Ineligible</span>
+                                                )
+                                            )}
+                                            {participationStatus === 'not_participated' && isExpired && (
+                                                <span className="text-xs text-slate-400 flex items-center gap-1"><Ban size={12} /> Closed</span>
+                                            )}
+                                            {participationStatus === 'pending' && (
+                                                <div className="flex gap-2 items-center">
+                                                    <span className="text-xs text-amber-500 flex items-center gap-1"><Clock size={12} /> Pending</span>
+                                                    {!isExpired && currentBid && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-7 text-xs border-white/10 hover:bg-red-500/10 hover:text-red-400"
+                                                            onClick={() => handleWithdrawBid(currentBid.id)}
+                                                            disabled={withdrawBidMutation.isPending}
+                                                        >
+                                                            <XCircle className="mr-1 h-3 w-3" /> Withdraw
                                                         </Button>
-                                                    ) : (
-                                                        <div className="flex gap-2">
-                                                            {isDroppedByMe ? (
-                                                                <div className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-md bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-[10px] font-medium">
-                                                                    <XCircle className="h-3 w-3" /> Dropped
-                                                                </div>
-                                                            ) : isBidPlaced ? (
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="outline"
-                                                                    className="h-8 text-xs flex-1 border-slate-200 dark:border-white/10 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
-                                                                    onClick={() => handleWithdrawBid(existingBid!.id)}
-                                                                >
-                                                                    <XCircle className="mr-1 h-3 w-3" /> Withdraw
-                                                                </Button>
-                                                            ) : shift.isEligible ? (
-                                                                <Button
-                                                                    size="sm"
-                                                                    className="h-8 text-xs flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
-                                                                    disabled={!canBid || placeBidMutation.isPending}
-                                                                    onClick={() => { if (canBid) handleQuickBid(shift); }}
-                                                                    title={!canBid ? blockReason : 'Bid on this shift'}
-                                                                >
-                                                                    {placeBidMutation.isPending && placeBidMutation.variables === shift.id ? (
-                                                                        <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                                                                    ) : (
-                                                                        <ThumbsUp className="mr-1 h-3 w-3" />
-                                                                    )}
-                                                                    Bid
-                                                                </Button>
-                                                            ) : (
-                                                                <TooltipProvider>
-                                                                    <Tooltip>
-                                                                        <TooltipTrigger asChild>
-                                                                            <span className="flex-1">
-                                                                                <Button
-                                                                                    size="sm"
-                                                                                    disabled
-                                                                                    className="h-8 text-xs w-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 cursor-not-allowed pointer-events-none"
-                                                                                >
-                                                                                    <Ban className="mr-1 h-3 w-3" /> Ineligible
-                                                                                </Button>
-                                                                            </span>
-                                                                        </TooltipTrigger>
-                                                                        <TooltipContent side="top" className="max-w-[200px] text-xs">
-                                                                            {shift.ineligibilityReason ?? 'Not eligible for this shift'}
-                                                                        </TooltipContent>
-                                                                    </Tooltip>
-                                                                </TooltipProvider>
-                                                            )}
-                                                        </div>
                                                     )}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </TabsContent>
-
-                {/* TAB: My Bids */}
-                <TabsContent value="myBids" className="space-y-4">
-                    {viewMode === 'card' ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                            {filteredMyBids.map(bid => {
-                                const shiftData: ShiftData = {
-                                    ...bid,
-                                    assignedTo: null,
-                                    isEligible: true,
-                                    isUrgent: false,
-                                    biddingWindowCloses: null,
-                                    biddingWindowOpens: null,
-                                    priority: 'normal'
-                                };
-                                return renderShiftCard(shiftData, true, bid.status);
-                            })}
-                            {filteredMyBids.length === 0 && (
-                                <div className="col-span-full text-center py-8 text-slate-400 dark:text-white/50">No bids yet.</div>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto border border-slate-200 dark:border-white/10 rounded-lg">
-                            <table className="w-full text-sm text-slate-800 dark:text-white">
-                                <thead className="bg-slate-100 dark:bg-black/40 text-xs">
-                                    <tr>
-                                        <th className="p-3 text-left w-[40px]">
-                                        </th>
-                                        <th className="p-3 text-left">Bid Time</th>
-                                        <th className="p-3 text-left">Details</th>
-                                        <th className="p-3 text-left">Status</th>
-                                        <th className="p-3 text-left">Actions</th>
+                                                </div>
+                                            )}
+                                            {participationStatus === 'selected' && (
+                                                <span className="text-xs text-emerald-400 flex items-center gap-1"><CheckCircle size={12} /> Selected</span>
+                                            )}
+                                            {participationStatus === 'rejected' && (
+                                                <span className="text-xs text-slate-400 flex items-center gap-1"><Ban size={12} /> Not Selected</span>
+                                            )}
+                                            {participationStatus === 'expired' && (
+                                                <span className="text-xs text-slate-400 flex items-center gap-1"><Ban size={12} /> Expired</span>
+                                            )}
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredMyBids.map(bid => (
-                                        <tr key={bid.id} className="border-t border-slate-100 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5">
-                                            <td className="p-3"></td>
-                                            <td className="p-3 text-xs">{bid.bidTime}</td>
-                                            <td className="p-3">
-                                                <div className="font-medium">{bid.role}</div>
-                                                <div className="text-xs text-slate-500 dark:text-white/50">{bid.department} • {bid.date}</div>
-                                            </td>
-                                            <td className="p-3"><BidStatusBadge status={bid.status} /></td>
-                                            <td className="p-3">
-                                                {(() => {
-                                                    // ISSUE 1 (table): Withdraw only for pending + non-expired
-                                                    const bidShiftStart = bid.startAt
-                                                        ? new Date(bid.startAt)
-                                                        : parseZonedDateTime(bid.date, bid.startTime, SYDNEY_TZ);
-                                                    const bidBiddingCloses = new Date(bidShiftStart.getTime() - 4 * 60 * 60 * 1000);
-                                                    const bidIsExpired = new Date() >= bidBiddingCloses;
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            )}
 
-                                                    if (bid.status === 'pending' && !bidIsExpired) {
-                                                        return (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
-                                                                className="h-7 text-xs border-slate-200 dark:border-white/10 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
-                                                                onClick={() => handleWithdrawBid(bid.id)}
-                                                                disabled={withdrawBidMutation.isPending}
-                                                            >
-                                                                <XCircle className="mr-1 h-3 w-3" /> Withdraw
-                                                            </Button>
-                                                        );
-                                                    }
-                                                    if (bid.status === 'selected' || bid.status === 'accepted') {
-                                                        return <span className="text-xs text-emerald-400 flex items-center gap-1"><CheckCircle size={14} /> {bid.status === 'selected' ? 'Selected' : 'Won'}</span>;
-                                                    }
-                                                    if (bid.status === 'rejected') {
-                                                        return <span className="text-xs text-slate-400 dark:text-white/40 flex items-center gap-1"><Ban size={14} /> Rejected</span>;
-                                                    }
-                                                    // Default: no action for terminal/expired
-                                                    return <span className="text-xs text-slate-400 dark:text-white/40">—</span>;
-                                                })()}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </TabsContent>
-            </Tabs>
-
-            {/* FLOATING BULK ACTION BAR */}
+            {/* ── FLOATING BULK ACTION BAR ── */}
             <AnimatePresence>
-                {selectedBidIds.length > 0 && (
+                {selectedShiftIds.length > 0 && (
                     <motion.div
                         initial={{ opacity: 0, y: 50, x: '-50%' }}
                         animate={{ opacity: 1, y: 0, x: '-50%' }}
@@ -1073,134 +1005,89 @@ export const EmployeeBidsPage: React.FC = () => {
                     >
                         <div className="flex items-center gap-2">
                             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500 text-[12px] font-bold text-white shadow-sm">
-                                {selectedBidIds.length}
+                                {selectedShiftIds.length}
                             </span>
                             <span className="text-sm font-semibold">Selected</span>
                         </div>
-                        
+
                         <div className="h-5 w-[1px] bg-white/20 dark:bg-black/10 mx-1" />
-                        
+
                         <div className="flex items-center gap-1">
-                            <Button 
-                                size="sm" 
-                                variant="ghost" 
-                                className="hover:bg-white/10 dark:hover:bg-slate-100 text-white dark:text-slate-900 rounded-full h-8 px-3 text-xs font-medium" 
-                                onClick={() => activeTab === 'available' ? handleSelectAllAvailable(true) : handleSelectAllMyBids(true)}
-                            >
-                                Select All
-                            </Button>
-                            <Button 
-                                size="sm" 
-                                variant="ghost" 
-                                className="hover:bg-white/10 dark:hover:bg-slate-100 text-white dark:text-slate-900 rounded-full h-8 px-3 text-xs font-medium" 
-                                onClick={() => setSelectedBidIds([])}
-                            >
-                                Deselect All
-                            </Button>
-                            
-                            <Button 
-                                size="sm" 
-                                className="bg-indigo-500 hover:bg-indigo-600 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white rounded-full h-8 px-5 text-xs font-bold ml-2 shadow-md transition-transform active:scale-95" 
-                                onClick={activeTab === 'available' ? handleBulkBid : handleBulkWithdraw}
+                            <Button
+                                size="sm"
+                                className="h-8 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 rounded-full"
+                                onClick={handleBulkBid}
                                 disabled={placeBidMutation.isPending}
                             >
-                                {activeTab === 'available' ? (
-                                    <><ThumbsUp className="mr-1.5 h-3.5 w-3.5" /> Bid Selected</>
-                                ) : (
-                                    <><XCircle className="mr-1.5 h-3.5 w-3.5" /> Withdraw Selected</>
-                                )}
+                                {placeBidMutation.isPending ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : <ThumbsUp className="mr-1.5 h-3.5 w-3.5" />}
+                                Bid All
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 text-white/70 dark:text-slate-500 hover:text-white dark:hover:text-slate-900 text-xs rounded-full px-3"
+                                onClick={() => setSelectedShiftIds([])}
+                            >
+                                Clear
                             </Button>
                         </div>
                     </motion.div>
                 )}
             </AnimatePresence>
 
-            {/* COMPLIANCE CHECK DIALOG */}
+            {/* ── COMPLIANCE WARNING DIALOG ── */}
             <AlertDialog open={showComplianceDialog} onOpenChange={setShowComplianceDialog}>
-                <AlertDialogContent className="bg-background border-border text-foreground max-w-md">
+                <AlertDialogContent className="bg-background border-border text-foreground">
                     <AlertDialogHeader>
-                        {complianceResult && complianceResult.status === 'violated' ? (
-                            <>
-                                <AlertDialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
-                                    <XCircle className="h-5 w-5" />
-                                    Cannot Place Bid
-                                </AlertDialogTitle>
-                                <AlertDialogDescription asChild>
-                                    <div className="text-muted-foreground">
-                                        <span>This shift cannot be accepted due to compliance violations:</span>
-                                        <ul className="mt-2 space-y-1 text-red-600 dark:text-red-300">
-                                            {complianceResult.violations.map((v, i) => (
-                                                <li key={i} className="flex items-start gap-2">
-                                                    <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
-                                                    <span>{v}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                </AlertDialogDescription>
-                            </>
-                        ) : complianceResult && complianceResult.warnings.length > 0 ? (
-                            <>
-                                <AlertDialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                                    <AlertTriangle className="h-5 w-5" />
-                                    Compliance Warnings
-                                </AlertDialogTitle>
-                                <AlertDialogDescription asChild>
-                                    <div className="text-muted-foreground">
-                                        <span>There are potential issues with this shift:</span>
-                                        <ul className="mt-2 space-y-1 text-amber-600 dark:text-amber-300">
-                                            {complianceResult.warnings.map((w, i) => (
-                                                <li key={i} className="flex items-start gap-2">
-                                                    <Shield className="h-4 w-4 shrink-0 mt-0.5" />
-                                                    <span>{w}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                        <p className="mt-3 text-muted-foreground">Do you want to proceed anyway?</p>
-                                    </div>
-                                </AlertDialogDescription>
-                            </>
-                        ) : null}
+                        <AlertDialogTitle className="flex items-center gap-2">
+                            <ShieldAlert className="h-5 w-5 text-amber-500" />
+                            {complianceResult?.status === 'violated' ? 'Compliance Issue' : 'Advisory Notice'}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {complianceResult?.status === 'violated'
+                                ? 'This shift has a blocking compliance issue. You cannot bid on this shift.'
+                                : 'This shift has a compliance warning. You may still proceed, but your bid may be reviewed.'}
+                        </AlertDialogDescription>
+                        <div className="space-y-1 mt-2">
+                            {complianceResult?.violations.map((v, i) => (
+                                <div key={i} className="flex items-center gap-2 text-sm text-red-500">
+                                    <XCircle className="h-4 w-4 shrink-0" /> {v}
+                                </div>
+                            ))}
+                            {complianceResult?.warnings.map((w, i) => (
+                                <div key={i} className="flex items-center gap-2 text-sm text-amber-500">
+                                    <AlertTriangle className="h-4 w-4 shrink-0" /> {w}
+                                </div>
+                            ))}
+                        </div>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        {complianceResult && complianceResult.status === 'violated' ? (
-                            <AlertDialogAction onClick={handleCancelBid} className="bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-foreground">
-                                Understood
+                        <AlertDialogCancel onClick={handleCancelBid}>Cancel</AlertDialogCancel>
+                        {complianceResult?.status !== 'violated' && (
+                            <AlertDialogAction onClick={handleConfirmBidWithWarning}>
+                                Proceed Anyway
                             </AlertDialogAction>
-                        ) : (
-                            <>
-                                <AlertDialogCancel onClick={handleCancelBid} className="bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 border-slate-200 dark:border-white/10">
-                                    Cancel
-                                </AlertDialogCancel>
-                                <AlertDialogAction onClick={handleConfirmBidWithWarning} className="bg-amber-600 hover:bg-amber-700">
-                                    Proceed Anyway
-                                </AlertDialogAction>
-                            </>
                         )}
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
 
-            {/* NEW: Compliance Check Modal */}
-            <BidComplianceModal
-                isOpen={isComplianceModalOpen}
-                onClose={() => {
-                    setIsComplianceModalOpen(false);
-                    setComplianceModalShift(null);
-                }}
-                shift={complianceModalShift}
-                onConfirmBid={() => {
-                    if (complianceModalShift) {
-                        placeBidMutation.mutate(complianceModalShift.id);
-                    }
-                    setIsComplianceModalOpen(false);
-                    setComplianceModalShift(null);
-                }}
-                isPending={placeBidMutation.isPending}
-            />
-        </div >
+            {/* ── COMPLIANCE DETAIL MODAL ── */}
+            {complianceModalShift && (
+                <BidComplianceModal
+                    isOpen={isComplianceModalOpen}
+                    onClose={() => { setIsComplianceModalOpen(false); setComplianceModalShift(null); }}
+                    shift={complianceModalShift as any}
+                    onConfirmBid={() => {
+                        if (complianceModalShift) placeBidMutation.mutate(complianceModalShift.id);
+                        setIsComplianceModalOpen(false);
+                        setComplianceModalShift(null);
+                    }}
+                    isPending={placeBidMutation.isPending}
+                />
+            )}
+        </div>
     );
 };
 
 export default EmployeeBidsPage;
-

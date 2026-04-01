@@ -92,7 +92,8 @@ export interface Shift {
 
     lifecycle_status: 'Draft' | 'Published' | 'InProgress' | 'Completed' | 'Cancelled';
     assignment_status?: AssignmentStatusText; // Made optional as sometimes missing from simple queries
-    assignment_outcome?: 'pending' | 'offered' | 'confirmed' | 'emergency_assigned';
+    assignment_outcome?: 'confirmed' | 'no_show' | 'offered' | 'pending' | 'emergency_assigned' | 'declined' | 'withdrawn' | null;
+    emergency_source?: 'manual' | 'auto' | null;
     fulfillment_status: 'scheduled' | 'bidding' | 'offered' | 'none';
     is_draft: boolean;
     is_cancelled: boolean;
@@ -213,3 +214,32 @@ export function calculateMinutesBetweenTimes(
 
     return endMinutes - startMinutes;
 }
+
+/**
+ * A shift truly crosses midnight if it has duration in the day AFTER its start day.
+ * 
+ * Logic:
+ * 1. If explicitly marked as `is_overnight`, it's overnight.
+ * 2. If `end_time < start_time` (chronologically), it's overnight UNLESS the
+ *    end time is exactly midnight (00:00:00), as that has zero duration in the next day.
+ */
+export function doesShiftTrulyCrossMidnight(shift: {
+    start_time: string;
+    end_time: string;
+    is_overnight?: boolean;
+}): boolean {
+    if (shift.is_overnight) return true;
+
+    // Use minutes for robust comparison regardless of string formatting/padding
+    const [startH, startM] = (shift.start_time || '00:00').split(':').map(Number);
+    const [endH, endM] = (shift.end_time || '00:00').split(':').map(Number);
+
+    const startMinutes = startH * 60 + startM;
+    const endMinutes = endH * 60 + endM;
+
+    // If it ends exactly at midnight (0), it doesn't "cross" into the next day with duration
+    if (endMinutes === 0 && startMinutes > 0) return false;
+
+    return endMinutes < startMinutes;
+}
+

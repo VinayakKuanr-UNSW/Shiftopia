@@ -9,7 +9,9 @@ import { EnhancedAddShiftModal } from '@/modules/rosters/ui/dialogs/EnhancedAddS
 import { Shift } from '@/modules/rosters/api/shifts.api';
 import { useEvents, useUnpublishShift } from '@/modules/rosters/state/useRosterShifts';
 import { SmartShiftCard, ComplianceInfo } from '@/modules/rosters/ui/components/SmartShiftCard';
+import { resolveGroupType, resolveShiftStatus } from '@/modules/rosters/utils/roster-utils';
 import { cn } from '@/modules/core/lib/utils';
+import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { isShiftLocked } from '@/modules/rosters/domain/policies/canEditShift.policy';
 import type { EventsProjection } from '@/modules/rosters/domain/projections/types';
 import { coverageVariant } from '@/modules/rosters/domain/projections/utils/coverage';
@@ -112,6 +114,9 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
   const [isAddShiftOpen, setIsAddShiftOpen] = useState(false);
   const [shiftContext, setShiftContext] = useState<any>({});
   const [collapsedEvents, setCollapsedEvents] = useState<Set<string>>(new Set());
+
+  // ── Roster Store ────────────────────────────────────────────────────────────
+  const { isDnDModeActive } = useRosterStore();
 
   // ── Unpublish ────────────────────────────────────────────────────────────────
   const unpublishMutation = useUnpublishShift();
@@ -427,23 +432,30 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                     )}
 
                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                      {group.shifts.map((shift, shiftIdx) => (
-                        <div
-                          key={shift.id}
-                          style={{ animationDelay: `calc(${shiftIdx} * 35ms)` }}
-                          className="animate-[slideUpFade_0.2s_ease_forwards]"
-                        >
-                          <SmartShiftCard
-                            shift={shift}
-                            variant="compact"
-                            groupColor="blue"
-                            compliance={complianceMap?.[shift.id]}
-                            isLocked={isShiftLocked(shift.shift_date, shift.end_time || shift.start_time)}
-                            headerAction={buildShiftMenu(shift)}
-                            onClick={() => onEditShift?.(shift)}
-                          />
-                        </div>
-                      ))}
+                      {group.shifts.map((shift, shiftIdx) => {
+                        const { isPast, isLocked: isManagementLocked } = resolveShiftStatus(shift);
+                        const isLocked = isManagementLocked || (isDnDModeActive && shift.lifecycle_status !== 'Published');
+
+                        return (
+                          <div
+                            key={shift.id}
+                            style={{ animationDelay: `calc(${shiftIdx} * 35ms)` }}
+                            className="animate-[slideUpFade_0.2s_ease_forwards]"
+                          >
+                            <SmartShiftCard
+                              shift={shift}
+                              variant="compact"
+                              groupColor={resolveGroupType(shift)}
+                              compliance={complianceMap?.[shift.id]}
+                              isLocked={isLocked}
+                              isPast={isPast}
+                              isDnDActive={isDnDModeActive}
+                              headerAction={buildShiftMenu(shift)}
+                              onClick={() => onEditShift?.(shift)}
+                            />
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {/* Unified Add Shift Button — Repositioned to corner if shifts exist */}

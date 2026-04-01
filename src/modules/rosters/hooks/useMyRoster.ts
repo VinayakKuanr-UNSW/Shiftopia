@@ -6,7 +6,7 @@ import { useAuth } from '@/modules/auth/hooks/useAuth';
 import { CalendarView } from '@/modules/rosters/contexts/RosterUIContext';
 import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
-import { Shift } from '@/modules/rosters/domain/shift.entity';
+import { Shift, doesShiftTrulyCrossMidnight } from '@/modules/rosters/domain/shift.entity';
 import { getDepartmentColor } from '@/modules/core/lib/utils';
 
 interface ShiftWithDetails {
@@ -87,7 +87,7 @@ export const useMyRoster = (view: CalendarView, selectedDate: Date, scope?: Scop
             if (s.shift_date === dateStr) return true;
 
             // Include shifts starting yesterday that span into today
-            const crossesMidnight = s.is_overnight || s.end_time < s.start_time;
+            const crossesMidnight = doesShiftTrulyCrossMidnight(s);
             if (s.shift_date === prevDateStr && crossesMidnight) return true;
 
             return false;

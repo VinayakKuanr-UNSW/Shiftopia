@@ -92,6 +92,8 @@ export interface Shift {
     templateBatchId?: string;
     group_type?: 'convention_centre' | 'exhibition_centre' | 'theatre';
     workflow_status?: ShiftWorkflowStatus;
+    bidding_iteration?: number;
+    last_dropped_by?: string;
 }
 
 export interface Roster {

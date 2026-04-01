@@ -9,10 +9,10 @@
  * Step panels are lazy-loaded for fast initial paint.
  */
 
-import { Sheet, SheetContent } from '@/modules/core/ui/primitives/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/modules/core/ui/primitives/sheet';
 import { Form } from '@/modules/core/ui/primitives/form';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Loader2, X, Plus, Save, Undo2 } from 'lucide-react';
+import { Loader2, X, Plus, Save, Undo2, Zap, ShieldAlert } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { ShiftFormDrawerContent } from './components/ShiftFormDrawerContent';
 
@@ -101,6 +101,9 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
         // Watched fields
         watchEmployeeId,
 
+        // Emergency state
+        isEmergencyAssignment,
+
         // Handlers
         handleSubmit,
         handleCancel,
@@ -113,15 +116,40 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
             <Sheet open={isOpen} onOpenChange={onClose}>
                 <SheetContent
                     side="right"
-                    className="sm:max-w-[600px] p-0 gap-0 bg-card dark:bg-slate-950 border-border overflow-hidden flex flex-col focus-visible:ring-0 focus:outline-none"
+                    className={cn(
+                        "sm:max-w-[600px] p-0 gap-0 overflow-hidden flex flex-col focus-visible:ring-0 focus:outline-none transition-colors duration-300",
+                        isEmergencyAssignment
+                            ? "bg-[#120505] dark:bg-[#120505] border-red-900/60"
+                            : "bg-card dark:bg-slate-950 border-border"
+                    )}
                     aria-describedby={undefined}
                 >
+                    <SheetHeader className="sr-only">
+                        <SheetTitle>
+                            {isEmergencyAssignment
+                                ? (editMode ? 'Emergency Update' : 'Emergency Assign')
+                                : (editMode ? 'Update Shift' : 'Create Shift')}
+                        </SheetTitle>
+                    </SheetHeader>
                     <Form {...form}>
                         <form
                             id="shift-form"
                             onSubmit={form.handleSubmit(handleSubmit)}
                             className="flex flex-col h-full overflow-hidden"
                         >
+                            {/* ── Emergency mode banner ───────────────────── */}
+                            {isEmergencyAssignment && (
+                                <div className="flex-shrink-0 flex items-center gap-2.5 px-5 py-2 bg-red-950/80 border-b border-red-800/50">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <Zap className="h-3.5 w-3.5 text-red-400 flex-shrink-0" />
+                                        <span className="text-[11px] font-black uppercase tracking-[0.15em] text-red-400">Emergency Assignment</span>
+                                    </div>
+                                    <div className="flex items-center gap-1 ml-auto flex-shrink-0">
+                                        <ShieldAlert className="h-3 w-3 text-red-500/70" />
+                                        <span className="text-[10px] text-red-500/70 font-medium">Bidding window closed · Direct assign only</span>
+                                    </div>
+                                </div>
+                            )}
                             <ShiftFormDrawerContent
                                 form={form}
                                 isReadOnly={isReadOnly}
@@ -160,7 +188,12 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                             />
 
                             {/* STICKY FOOTER ACTIONS */}
-                            <div className="flex-shrink-0 px-6 py-4 border-t border-border bg-card/90 dark:bg-slate-900/80 backdrop-blur-xl flex items-center justify-between gap-4 z-20">
+                            <div className={cn(
+                                "flex-shrink-0 px-6 py-4 border-t backdrop-blur-xl flex items-center justify-between gap-4 z-20 transition-colors duration-300",
+                                isEmergencyAssignment
+                                    ? "border-red-900/40 bg-[#1a0606]/90"
+                                    : "border-border bg-card/90 dark:bg-slate-900/80"
+                            )}>
                                 <Button
                                     type="button"
                                     variant="ghost"
@@ -189,19 +222,27 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                                         disabled={!canSave || isLoading}
                                         className={cn(
                                             "h-11 px-8 rounded-xl font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg",
-                                            canSave 
-                                                ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20" 
+                                            canSave
+                                                ? isEmergencyAssignment
+                                                    ? "bg-red-700 hover:bg-red-600 text-white shadow-red-900/40 border border-red-600/30"
+                                                    : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20"
                                                 : "bg-slate-800 text-slate-500 cursor-not-allowed border border-white/5"
                                         )}
                                     >
                                         {isLoading ? (
                                             <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : isEmergencyAssignment ? (
+                                            <Zap className="h-4 w-4" />
                                         ) : editMode ? (
                                             <Save className="h-4 w-4" />
                                         ) : (
                                             <Plus className="h-4 w-4" />
                                         )}
-                                        <span>{editMode ? 'Update Shift' : 'Create Shift'}</span>
+                                        <span>
+                                            {isEmergencyAssignment
+                                                ? (editMode ? 'Emergency Update' : 'Emergency Assign')
+                                                : (editMode ? 'Update Shift' : 'Create Shift')}
+                                        </span>
                                     </Button>
                                 </div>
                             </div>

@@ -31,7 +31,7 @@ export const LifecycleStatusSchema = z.enum([
 export const AssignmentStatusSchema = z.enum(['assigned', 'unassigned']);
 
 export const AssignmentOutcomeSchema = z.enum([
-  'pending', 'offered', 'confirmed', 'emergency_assigned',
+  'pending', 'offered', 'confirmed', 'emergency_assigned', 'declined', 'withdrawn', 'no_show', 'cancelled',
 ]).nullable();
 
 export const BiddingStatusSchema = z.enum([

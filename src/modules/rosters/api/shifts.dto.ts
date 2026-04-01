@@ -35,6 +35,9 @@ export interface CreateShiftData {
     creation_source?: string;
     /** How the employee was assigned: 'direct' | 'manual' | 'autoscheduler' | 'dnd' */
     assignment_source?: string | null;
+    assignment_outcome?: 'confirmed' | 'no_show' | 'offered' | 'pending' | 'emergency_assigned' | null;
+    /** null = normal assignment, manual = forced, auto = assigned when TTS < 4h */
+    emergency_source?: 'manual' | 'auto' | null;
 }
 
 export interface UpdateShiftData extends Partial<CreateShiftData> {

@@ -12,7 +12,13 @@ export interface RoleSummary { id: string; name: string; department_id: string |
 export interface RemunerationLevel { id: string; level_number: number; level_name: string; hourly_rate_min: number; hourly_rate_max: number; description: string | null }
 export interface SkillSummary { id: string; name: string; description: string | null; category: string | null }
 export interface LicenseSummary { id: string; name: string; description: string | null; category: string | null; issuing_authority: string | null }
-export interface ProfileSummary { id: string; first_name: string; last_name: string }
+export interface ProfileSummary {
+    id: string;
+    first_name: string;
+    last_name: string;
+    department_name?: string;
+    sub_department_name?: string;
+}
 export interface TemplateSummary { id: string; name: string; description: string | null; department_id: string; sub_department_id: string | null; status: string; organization_id: string; applied_count: number | null }
 export interface RosterSlot { groupType: string; subGroupName: string }
 
@@ -958,21 +964,33 @@ export const shiftsQueries = {
         shift_id: string;
         employee_id: string;
         status: string;
+        bidding_iteration: number;
         created_at: string;
         profiles: { id: string; full_name: string | null; first_name: string | null; last_name: string | null; employment_type: string | null } | null;
     }[]> {
         try {
             if (!isValidUuid(shiftId)) return [];
 
+            // 1. Fetch current iteration from shift
+            const { data: shift } = await supabase
+                .from('shifts')
+                .select('bidding_iteration')
+                .eq('id', shiftId)
+                .single();
+            
+            const currentIteration = (shift as any)?.bidding_iteration || 1;
+
+            // 2. Fetch bids matching that iteration
             const { data, error } = await supabase
                 .from('shift_bids')
                 .select(`
-                id, shift_id, employee_id, status, created_at,
+                id, shift_id, employee_id, status, bidding_iteration, created_at,
                 profiles!shift_bids_employee_id_fkey(
                     id, full_name, first_name, last_name, employment_type
                 )
             `)
                 .eq('shift_id', shiftId)
+                .eq('bidding_iteration', currentIteration)
                 .order('created_at', { ascending: false });
 
             if (error) {

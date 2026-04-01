@@ -72,8 +72,7 @@ interface RosterState {
   advancedFilters: AdvancedFilters;
   isBucketView: boolean;
   bulkModeActive: boolean;
-  selectedShiftIds: string[];
-
+  selectedShiftIds: Set<string>;
   // ── Session state (not persisted — resets each tab/reload) ────────────────
   /** ISO date string 'YYYY-MM-DD', restored as Date in getters */
   _selectedDateISO: string;
@@ -104,8 +103,9 @@ interface RosterState {
   resetAdvancedFilters: () => void;
   setIsBucketView: (value: boolean) => void;
   setBulkModeActive: (active: boolean) => void;
-  setSelectedShiftIds: (ids: string[]) => void;
+  setSelectedShiftIds: (ids: Set<string>) => void;
   toggleShiftSelection: (id: string) => void;
+  selectMultiple: (ids: string[]) => void;
   clearSelection: () => void;
   setIsDnDModeActive: (active: boolean) => void;
   setShowUnfilledPanel: (show: boolean) => void;
@@ -139,7 +139,7 @@ export const useRosterStore = create<RosterState>()(
       advancedFilters: DEFAULT_ADVANCED_FILTERS,
       isBucketView: false,
       bulkModeActive: false,
-      selectedShiftIds: [],
+      selectedShiftIds: new Set(),
 
       // ── Session-only (today, not persisted) ────────────────────────────────
       _selectedDateISO: format(new Date(), 'yyyy-MM-dd'),
@@ -149,20 +149,30 @@ export const useRosterStore = create<RosterState>()(
 
       // ── Actions ────────────────────────────────────────────────────────────
       setViewType: (view) => set({ viewType: view }),
-      setActiveMode: (mode) => set({ activeMode: mode, selectedShiftIds: [], bulkModeActive: false }),
+      setActiveMode: (mode) => set({ activeMode: mode, selectedShiftIds: new Set(), bulkModeActive: false }),
       setIsBucketView: (v) => set({ isBucketView: v }),
 
-      setBulkModeActive: (active) => set({ bulkModeActive: active, selectedShiftIds: [] }),
+      setBulkModeActive: (active) => set((s) => ({
+        bulkModeActive: active,
+        selectedShiftIds: active ? s.selectedShiftIds : new Set(),
+      })),
 
       setSelectedShiftIds: (ids) => set({ selectedShiftIds: ids }),
 
-      toggleShiftSelection: (id) => set((s) => ({
-        selectedShiftIds: s.selectedShiftIds.includes(id)
-          ? s.selectedShiftIds.filter((sid) => sid !== id)
-          : [...s.selectedShiftIds, id],
-      })),
+      toggleShiftSelection: (id) => set((s) => {
+        const current = new Set(s.selectedShiftIds);
+        if (current.has(id)) current.delete(id);
+        else current.add(id);
+        return { selectedShiftIds: current };
+      }),
 
-      clearSelection: () => set({ selectedShiftIds: [] }),
+      selectMultiple: (ids) => set((s) => {
+        const current = new Set(s.selectedShiftIds);
+        ids.forEach((id) => current.add(id));
+        return { selectedShiftIds: current };
+      }),
+
+      clearSelection: () => set({ selectedShiftIds: new Set() }),
 
       setIsDnDModeActive: (active) => set((s) => ({
         isDnDModeActive: active,

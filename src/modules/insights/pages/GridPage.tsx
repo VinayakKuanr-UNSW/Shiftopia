@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import { format, eachDayOfInterval, startOfYear, endOfYear, getISOWeek } from 'date-fns';
-import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useEmployees, useShiftsByDateRange } from '@/modules/rosters/state/useRosterShifts';
 import {
@@ -11,6 +10,29 @@ import { calculateMinutesBetweenTimes } from '@/modules/rosters/domain/shift.ent
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { supabase } from '@/platform/realtime/client';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/modules/core/ui/primitives/tooltip';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/modules/core/ui/primitives/popover';
+
+// ── Types ──────────────────────────────────────────────────────────────
+
+interface ShiftPillData {
+    id: string;
+    netHours: number;
+    orgName?: string;
+    deptName?: string;
+    subDeptName?: string;
+    roleName?: string;
+    isDraft: boolean;
+}
 
 // ── Compliance types ──────────────────────────────────────────────────────────
 
@@ -54,13 +76,14 @@ const ROLLING_WINDOWS = [
 
 function computeEmpComp(
     byWeek: Record<number, number>,
-    byDate: Record<string, number>,
+    byDate: Record<string, ShiftPillData[]>,
     sortedWeekNums: number[],
 ): EmpComp {
     // 1. Daily cap checks
     const dailyViolations = new Set<string>();
     const dailyWarnings   = new Set<string>();
-    for (const [date, hours] of Object.entries(byDate)) {
+    for (const [date, shifts] of Object.entries(byDate)) {
+        const hours = shifts.reduce((sum, s) => sum + s.netHours, 0);
         if (hours > DAILY_CAP_HARD)       dailyViolations.add(date);
         else if (hours > DAILY_CAP_SOFT)  dailyWarnings.add(date);
     }
@@ -206,7 +229,7 @@ const GridPage: React.FC = () => {
     const endDate   = useMemo(() => format(endOfYear(new Date(year, 0, 1)),  'yyyy-MM-dd'), [year]);
 
     const { data: employeesByContract = [], isLoading: isLoadingEmployees } = useEmployees(
-        scope.org_ids[0], scope.dept_ids[0], scope.subdept_ids[0],
+        scope.org_ids[0], undefined, undefined,
     );
 
     const shiftFilters = useMemo(() => ({
@@ -237,14 +260,18 @@ const GridPage: React.FC = () => {
 
     const { aggregatedData, finalEmployees } = useMemo(() => {
         const data: Record<string, { 
-            byDate: Record<string, number>; 
+            byDate: Record<string, ShiftPillData[]>; 
             byWeek: Record<number, number>;
             draftDates: Set<string>;
         }> = {};
         const empMap = new Map<string, { id: string; first_name: string; last_name: string }>();
 
         employeesByContract.forEach(emp => {
-            empMap.set(emp.id, { id: emp.id, first_name: emp.first_name, last_name: emp.last_name });
+            empMap.set(emp.id, { 
+                id: emp.id, 
+                first_name: emp.first_name, 
+                last_name: emp.last_name,
+            });
             data[emp.id] = { byDate: {}, byWeek: {}, draftDates: new Set() };
         });
 
@@ -270,11 +297,25 @@ const GridPage: React.FC = () => {
                     - (shift.break_minutes || 0);
             }
             const netHours = Math.max(0, netMins / 60);
-            data[eid].byDate[shiftDate] = (data[eid].byDate[shiftDate] || 0) + netHours;
+            
+            if (!data[eid].byDate[shiftDate]) {
+                data[eid].byDate[shiftDate] = [];
+            }
+            const isDraft = shift.lifecycle_status === 'Draft' || shift.is_draft;
+            data[eid].byDate[shiftDate].push({
+                id: shift.id,
+                netHours,
+                orgName: shift.organizations?.name,
+                deptName: shift.departments?.name,
+                subDeptName: shift.sub_departments?.name,
+                roleName: shift.roles?.name,
+                isDraft,
+            });
+
             const wn = getISOWeek(new Date(shiftDate));
             data[eid].byWeek[wn] = (data[eid].byWeek[wn] || 0) + netHours;
 
-            if (shift.lifecycle_status === 'Draft' || shift.is_draft) {
+            if (isDraft) {
                 data[eid].draftDates.add(shiftDate);
             }
         });
@@ -345,15 +386,7 @@ const GridPage: React.FC = () => {
 
     return (
         <div className="flex flex-col h-full bg-background">
-            <ScopeFilterBanner
-                mode="managerial"
-                onScopeChange={setScope}
-                hidden={isGammaLocked}
-                multiSelect={false}
-                className="mb-4 shadow-sm border-border/50"
-            />
-
-            <div className="flex-1 min-h-0 flex flex-col px-6 pb-6">
+            <div className="flex-1 min-h-0 flex flex-col px-6 pb-6 pt-6">
                 {/* ── Header ── */}
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-4">
@@ -439,13 +472,15 @@ const GridPage: React.FC = () => {
                     )}
 
                     <div className="overflow-x-auto overflow-y-auto custom-scrollbar" ref={scrollContainerRef}>
-                        <table className="w-full border-collapse table-fixed min-w-max">
+                        <table className="w-full border-collapse min-w-max">
                             <thead>
                                 <tr className="bg-muted/50">
-                                    {/* Left sticky: staff label */}
+                                    {/* Left sticky: Employee label */}
                                     <th className="sticky left-0 z-40 bg-muted/95 backdrop-blur-md w-48 min-w-[12rem] p-4 text-left border-b border-r border-border/60">
-                                        <span className="text-[10px] uppercase tracking-widest font-extrabold text-muted-foreground">Staff Member</span>
+                                        <span className="text-[10px] uppercase tracking-widest font-extrabold text-muted-foreground">Employee</span>
                                     </th>
+
+                                    
 
                                     {weeks.map(week => (
                                         <React.Fragment key={week.weekNum}>
@@ -526,32 +561,80 @@ const GridPage: React.FC = () => {
                                                         {/* Daily cells */}
                                                         {week.days.map(day => {
                                                             const dateStr = format(day, 'yyyy-MM-dd');
-                                                            const hours   = aggregatedData[emp.id]?.byDate[dateStr] || 0;
+                                                            const shifts   = aggregatedData[emp.id]?.byDate[dateStr] || [];
                                                             const isDraft = aggregatedData[emp.id]?.draftDates.has(dateStr) ?? false;
                                                             const isViol  = empComp?.dailyViolations.has(dateStr) ?? false;
                                                             const isWarn  = empComp?.dailyWarnings.has(dateStr) ?? false;
+                                                            
+                                                            const hours = shifts.reduce((sum, s) => sum + s.netHours, 0);
                                                             const cellCls = getDailyCellClass(hours, isViol, isWarn, isDraft);
 
                                                             return (
-                                                                <td key={`${emp.id}-${dateStr}`} className="p-1 relative group/cell">
-                                                                    <div className={`w-full h-7 rounded flex items-center justify-center text-[10px] font-mono font-medium transition-all duration-200 ${cellCls}`}>
-                                                                        {hours > 0 ? (
+                                                                <td key={`${emp.id}-${dateStr}`} className="p-1 relative group/cell align-middle">
+                                                                    <div className={`w-full h-[2.1rem] rounded flex items-center justify-center p-[2px] transition-all duration-200 ${cellCls}`}>
+                                                                        {shifts.length > 0 ? (
                                                                             compMode ? (
                                                                                 <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
                                                                             ) : (
-                                                                                <span>
-                                                                                    {hours % 1 === 0 ? hours : hours.toFixed(1)}
-                                                                                    <span className="text-[8px] opacity-40 ml-0.5 font-sans">h</span>
-                                                                                </span>
+                                                                                <Popover>
+                                                                                    <PopoverTrigger asChild>
+                                                                                        <div role="button" className="w-full h-full flex flex-col items-center justify-center gap-[2px] cursor-pointer hover:bg-background/20 rounded-sm transition-colors overflow-hidden">
+                                                                                            <TooltipProvider delayDuration={200}>
+                                                                                                <Tooltip>
+                                                                                                    <TooltipTrigger asChild>
+                                                                                                        <div className="flex items-center justify-center px-1 py-[2px] w-full max-w-[95%] rounded-[3px] bg-background/60 hover:bg-background/95 shadow-sm transition-colors text-[9px] font-extrabold tracking-tight border border-foreground/10 text-current truncate leading-none">
+                                                                                                            {shifts[0].netHours % 1 === 0 ? shifts[0].netHours : shifts[0].netHours.toFixed(1)}{shifts[0].isDraft ? ' d' : ''}
+                                                                                                        </div>
+                                                                                                    </TooltipTrigger>
+                                                                                                    <TooltipContent side="top" className="flex flex-col gap-1 px-2.5 py-1.5 z-[200]">
+                                                                                                        <div className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
+                                                                                                            <span className="truncate max-w-[80px]">{shifts[0].deptName || 'N/A'}</span>
+                                                                                                            <span className="opacity-50 text-[8px]">▶</span>
+                                                                                                            <span className="truncate max-w-[80px]">{shifts[0].subDeptName || 'N/A'}</span>
+                                                                                                        </div>
+                                                                                                    </TooltipContent>
+                                                                                                </Tooltip>
+                                                                                            </TooltipProvider>
+
+                                                                                            {shifts.length > 1 && (
+                                                                                                <div className="text-[7.5px] font-bold text-current/80 leading-none">
+                                                                                                    +{shifts.length - 1} more
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </PopoverTrigger>
+                                                                                    <PopoverContent side="right" align="start" className="w-64 p-0 z-[200] shadow-xl border-border/40 overflow-hidden">
+                                                                                        <div className="p-3 bg-muted/30 border-b border-border/40">
+                                                                                            <h4 className="text-xs font-bold">{format(day, 'EEEE, MMM d, yyyy')}</h4>
+                                                                                            <p className="text-[10px] text-muted-foreground">{shifts.length} shift{shifts.length > 1 ? 's' : ''} • {hours}h total</p>
+                                                                                        </div>
+                                                                                        <div className="flex flex-col overflow-y-auto max-h-[300px] p-2 gap-1.5">
+                                                                                            {shifts.map((s, idx) => (
+                                                                                                <div key={s.id || idx} className="flex flex-col p-2.5 rounded-md border border-border/30 bg-card hover:bg-muted/50 transition-colors">
+                                                                                                    <div className="flex items-center justify-between mb-1.5">
+                                                                                                        <span className="text-xs font-bold">{s.roleName || 'Unassigned Role'}</span>
+                                                                                                        <Badge variant="secondary" className="text-[9px] px-1.5 shadow-none font-bold">
+                                                                                                            {s.netHours}h
+                                                                                                        </Badge>
+                                                                                                    </div>
+                                                                                                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground flex-wrap">
+                                                                                                        <span>{s.deptName || 'Unknown Dept'}</span>
+                                                                                                        <span className="opacity-40 text-[8px]">▶</span>
+                                                                                                        <span>{s.subDeptName || 'Unknown SubDept'}</span>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    </PopoverContent>
+                                                                                </Popover>
                                                                             )
                                                                         ) : (
-                                                                            <span className="w-0.5 h-0.5 rounded-full bg-muted-foreground/20 group-hover/cell:bg-muted-foreground/40 transition-colors" />
+                                                                            hours === 0 ? <span className="opacity-30 text-muted-foreground font-black text-[10px] select-none">—</span> : <span className="w-0.5 h-0.5 my-auto rounded-full bg-muted-foreground/20 group-hover/cell:bg-muted-foreground/40 transition-colors" />
                                                                         )}
                                                                     </div>
-                                                                    {hours > 0 && (
+                                                                    {hours > 0 && (isViol || isWarn) && (
                                                                         <div className="absolute inset-x-1 -top-7 bg-foreground text-background text-[9px] px-2 py-0.5 rounded shadow-xl opacity-0 group-hover/cell:opacity-100 transition-opacity pointer-events-none z-[100] whitespace-nowrap text-center font-bold">
                                                                             {hours.toFixed(1)}h
-                                                                            {isDraft ? ' [DRAFT]' : ''}
                                                                             {isViol ? ' ⚠ cap!' : isWarn ? ' ~ cap' : ''}
                                                                         </div>
                                                                     )}

@@ -31,6 +31,7 @@ import { shiftKeys, rosterKeys, type ShiftFilters } from '../api/queryKeys';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { isAppError } from '@/platform/supabase/rpc/errors';
 import { supabase } from '@/platform/realtime/client';
+import { auditApi } from '@/modules/audit/api/audit.api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -798,6 +799,30 @@ export function useDropShift() {
 
     onError: (_err, _vars, context) => {
       if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
+    },
+
+    onSuccess: async (_data, { shiftId, reason }) => {
+      try {
+        await auditApi.logManualEvent({
+          shiftId,
+          action: 'UNASSIGN',
+          reason: `Employee dropped shift: ${reason}`,
+          metadata: { context: 'Employee Drop' }
+        });
+
+        await auditApi.logManualEvent({
+          shiftId,
+          action: 'FIELD_EDIT',
+          reason: `Pushed to Bidding`,
+          metadata: { 
+            context: 'Employee Drop',
+            fieldChanged: 'bidding_status',
+            newValue: 'on_bidding'
+          }
+        });
+      } catch (err) {
+        console.error('Failed to log audit events for shift drop', err);
+      }
     },
 
     onSettled: () => {

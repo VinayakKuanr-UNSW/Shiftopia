@@ -227,6 +227,17 @@ body,
   .text-glow {
     text-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
   }
+
+  /* Stripe Overlay - Red Diagonal Stripes */
+  .bg-stripe-red {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 10px,
+      rgba(239, 68, 68, 0.4) 10px,
+      rgba(239, 68, 68, 0.4) 20px
+    );
+  }
 }
 
 /* ============================================================
