@@ -13,9 +13,12 @@ import {
     SaveTemplateResult,
     VersionCheckResult,
     NameValidationResult,
+    CaptureTemplateInput,
+    CaptureTemplateResult,
     dbTemplateToFrontend,
     frontendToDbGroups,
 } from '../../model/templates.types';
+import { captureRosterAsTemplate } from '../../api/templates.service';
 
 /* ============================================================
    QUERY KEYS
@@ -427,6 +430,20 @@ export function useUndoTemplateBatch() {
         },
         onError: (error: Error) => {
             toast.error(error.message || 'Failed to undo application');
+        },
+    });
+}
+
+export function useSnapRosterAsTemplate() {
+    const queryClient = useQueryClient();
+
+    return useMutation<CaptureTemplateResult, Error, CaptureTemplateInput>({
+        mutationFn: (input) => captureRosterAsTemplate(input),
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: templateKeys.lists() });
+        },
+        onError: (error: Error) => {
+            toast.error(error.message || 'Failed to capture roster as template');
         },
     });
 }

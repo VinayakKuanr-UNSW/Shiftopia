@@ -46,8 +46,6 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
   const netMins = durationMins - shift.unpaidBreak;
   const netHoursDisplay = (netMins / 60).toFixed(1);
 
-  const isUrgent = shift.isUrgent;
-
   return (
     <SharedShiftCard
         organization={shift.location}
@@ -62,8 +60,8 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
         unpaidBreak={shift.unpaidBreak}
         timerText={timeRemaining.isExpired ? 'Bidding Closed' : `Closes in ${formatTimeRemaining(timeRemaining)}`}
         isExpired={timeRemaining.isExpired}
-        isUrgent={isUrgent}
         lifecycleStatus={shift.lifecycleStatus || 'Published'}
+        shiftData={shift}
 
         topContent={
             isBulkMode && (
@@ -79,8 +77,7 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
         }
         className={cn(
             isSelected && !isBulkMode && 'bg-primary/5 border-l-4 border-l-primary shadow-inner',
-            isBulkSelected && 'bg-primary/10 border-l-4 border-l-primary shadow-inner',
-            isUrgent && !isSelected && !isBulkSelected && 'border-l-4 border-l-rose-500/50'
+            isBulkSelected && 'bg-primary/10 border-l-4 border-l-primary shadow-inner'
         )}
         onClick={onClick}
     />

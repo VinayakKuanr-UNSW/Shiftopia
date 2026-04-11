@@ -114,12 +114,12 @@ const DashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 p-1">
+    <div className="space-y-4 md:space-y-8 p-1">
       {/* Welcome Section */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary/80 to-indigo-600 dark:from-indigo-900 dark:via-purple-900 dark:to-indigo-950 p-8 md:p-10 shadow-2xl"
+        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary/80 to-indigo-600 dark:from-indigo-900 dark:via-purple-900 dark:to-indigo-950 p-4 sm:p-6 md:p-10 shadow-2xl"
       >
         <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/10 rounded-full blur-2xl translate-y-1/3 -translate-x-1/3 pointer-events-none" />
@@ -201,9 +201,9 @@ const DashboardPage: React.FC = () => {
       </motion.div>
 
       {/* Bento Grid Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
         {/* Left Column (2/3) */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="md:col-span-2 lg:col-span-2 space-y-8">
           {/* Upcoming Shifts */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -289,7 +289,7 @@ const DashboardPage: React.FC = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="relative border-l border-white/10 ml-3 space-y-8 py-2">
+                <div className="relative border-l border-white/10 ml-3 space-y-4 md:space-y-8 py-2">
                   <ActivityItem
                     icon={<CheckCircle className="h-4 w-4 text-emerald-400" />}
                     title="System Update"
@@ -378,7 +378,7 @@ const ShiftItem: React.FC<ShiftItemProps> = ({ shift }) => {
             {status}
           </Badge>
         </div>
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
           <span className="flex items-center gap-1 min-w-fit">
             <CalendarDays className="h-3.5 w-3.5" /> {dayName}
           </span>

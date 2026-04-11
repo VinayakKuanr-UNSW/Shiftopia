@@ -9,7 +9,7 @@ export type ShiftStatus =
     | 'completed'
     | 'cancelled';
 
-export type AttendanceStatus = 'unknown' | 'checked_in' | 'no_show' | 'late' | 'excused';
+export type AttendanceStatus = 'unknown' | 'checked_in' | 'no_show' | 'late' | 'excused' | 'auto_clock_out';
 
 export type TemplateGroupType = 'convention_centre' | 'exhibition_centre' | 'theatre';
 
@@ -92,7 +92,7 @@ export interface Shift {
 
     lifecycle_status: 'Draft' | 'Published' | 'InProgress' | 'Completed' | 'Cancelled';
     assignment_status?: AssignmentStatusText; // Made optional as sometimes missing from simple queries
-    assignment_outcome?: 'confirmed' | 'no_show' | 'offered' | 'pending' | 'emergency_assigned' | 'declined' | 'withdrawn' | null;
+    assignment_outcome?: 'confirmed' | 'no_show' | 'emergency_assigned' | 'pending' | null;
     emergency_source?: 'manual' | 'auto' | null;
     fulfillment_status: 'scheduled' | 'bidding' | 'offered' | 'none';
     is_draft: boolean;
@@ -108,7 +108,7 @@ export interface Shift {
 
     trade_requested_at: string | null;
     is_trade_requested?: boolean;
-    trading_status?: 'NoTrade' | 'TradeRequested' | 'TradeAccepted' | 'TradeApproved';
+    trading_status?: 'NoTrade' | 'TradeRequested' | 'TradeAccepted';
 
     // Attendance
     attendance_status?: AttendanceStatus;

@@ -286,7 +286,7 @@ export function BidComplianceModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto bg-background border-border shadow-2xl">
+            <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl max-h-[85vh] overflow-y-auto bg-background border-border shadow-2xl">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-foreground">
                         <Shield className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />

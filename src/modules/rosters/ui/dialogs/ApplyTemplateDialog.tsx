@@ -213,7 +213,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent
-                className="sm:max-w-[1040px] h-[720px] max-h-[85vh] bg-background border border-border p-0 overflow-hidden shadow-2xl flex flex-col rounded-[2.5rem] [&>button]:hidden z-[150]"
+                className="w-[calc(100vw-1rem)] sm:max-w-[1040px] h-[85vh] sm:h-[720px] max-h-[85vh] bg-background border border-border p-0 overflow-hidden shadow-2xl flex flex-col rounded-2xl sm:rounded-[2.5rem] [&>button]:hidden z-[150]"
             >
                 <VisuallyHidden>
                     <DialogTitle>Apply Template to Roster</DialogTitle>
@@ -222,10 +222,10 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                     </DialogDescription>
                 </VisuallyHidden>
 
-                <div className="flex flex-1 h-full min-h-0">
+                <div className="flex flex-col md:flex-row flex-1 h-full min-h-0 overflow-auto md:overflow-hidden">
 
                     {/* LEFT PANE: LIBRARY */}
-                    <div className="w-[280px] border-r border-border flex flex-col bg-muted/30">
+                    <div className="w-full md:w-[280px] border-r border-border flex flex-col bg-muted/30">
                         <div className="p-10 pb-8">
                             <div className="flex items-center gap-4 mb-10">
                                 <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 shadow-sm">
@@ -474,7 +474,7 @@ export const ApplyTemplateDialog: React.FC<ApplyTemplateDialogProps> = ({
                     </div>
 
                     {/* RIGHT PANE: HISTORY */}
-                    <div className="w-[300px] border-l border-border flex flex-col bg-muted/30">
+                    <div className="w-full md:w-[300px] border-l border-border flex flex-col bg-muted/30">
                         <div className="p-10 pb-8">
                             <div className="flex items-center justify-between mb-10">
                                 <div className="flex items-center gap-4">

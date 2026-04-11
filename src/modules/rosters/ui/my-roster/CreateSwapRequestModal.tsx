@@ -18,13 +18,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/modules/core/ui/primitives/select';
-import { Calendar, Clock, AlertTriangle, ArrowRightLeft, Send, Timer } from 'lucide-react';
+import { Calendar, Clock, AlertTriangle, ArrowRightLeft, Send, Timer, Flame, Zap } from 'lucide-react';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { format } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { motion } from 'framer-motion';
 import { Shift } from '@/modules/rosters';
 import { useSwaps } from '@/modules/planning';
+import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 
 interface CreateSwapRequestModalProps {
   isOpen: boolean;
@@ -96,6 +97,8 @@ const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
     shift.break_minutes || 0
   );
 
+  const urgency = computeShiftUrgency(shift.shift_date, shift.start_time, (shift as any).start_at);
+
   const handleSubmit = async () => {
     if (!reason.trim()) {
       toast({
@@ -134,7 +137,7 @@ const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg bg-card border-border text-foreground max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-lg bg-card border-border text-foreground max-h-[90vh] overflow-y-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -164,16 +167,30 @@ const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
 
               <div className="flex items-center justify-between mb-2">
                 <div className="text-lg font-bold">{shift.roles?.name || 'Shift'}</div>
-                <Badge className="bg-white/20 text-white border-white/20 text-[10px]">
-                  {shift.remuneration_levels?.level_name || 'Standard'}
-                </Badge>
+                <div className="flex items-center gap-1.5">
+                  {urgency === 'emergent' && (
+                    <Badge className="bg-rose-500/80 text-white border-rose-400/40 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 animate-pulse">
+                      <Flame className="h-2.5 w-2.5" />
+                      Emergent
+                    </Badge>
+                  )}
+                  {urgency === 'urgent' && (
+                    <Badge className="bg-amber-500/80 text-white border-amber-400/40 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                      <Zap className="h-2.5 w-2.5" />
+                      Urgent
+                    </Badge>
+                  )}
+                  <Badge className="bg-white/20 text-white border-white/20 text-[10px]">
+                    {shift.remuneration_levels?.level_name || 'Standard'}
+                  </Badge>
+                </div>
               </div>
 
               <div className="text-sm opacity-80 mb-3">
                 {groupName || shift.departments?.name} • {subGroupName || shift.sub_group_name}
               </div>
 
-              <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                 <div className="flex items-center gap-1.5 bg-black/20 rounded-lg p-2">
                   <Clock className="h-3.5 w-3.5" />
                   <span>{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>

@@ -255,6 +255,23 @@ export interface NameValidationResult {
 }
 
 /* ============================================================
+      CAPTURE TEMPLATE TYPES
+      ============================================================ */
+
+export interface CaptureTemplateInput {
+  startDate: string;        // YYYY-MM-DD
+  endDate: string;          // YYYY-MM-DD
+  subDepartmentId: string;
+  templateName: string;
+  userId: string;
+}
+
+export interface CaptureTemplateResult {
+  templateId: string;
+  shiftsCaptured: number;
+}
+
+/* ============================================================
       VALIDATION TYPES
       ============================================================ */
 

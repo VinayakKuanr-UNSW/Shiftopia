@@ -44,7 +44,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                     Add Contract
                 </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl bg-card border-border text-foreground shadow-xl shadow-black/5 dark:shadow-black/20">
+            <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl bg-card border-border text-foreground shadow-xl shadow-black/5 dark:shadow-black/20">
                 <DialogHeader>
                     <DialogTitle>Add Contract</DialogTitle>
                     <DialogDescription>

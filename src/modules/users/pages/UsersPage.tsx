@@ -84,7 +84,7 @@ const UsersPage: React.FC = () => {
                     </p>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
                     {selectedUserId && isZeta && selectedUser && (
                         <DeleteUserDialog 
                             userId={selectedUserId}
@@ -138,7 +138,7 @@ const UsersPage: React.FC = () => {
             </motion.div>
 
             {/* Content Area */}
-            <div className="min-h-[400px]">
+            <div className="min-h-[200px] sm:min-h-[400px]">
                 {!selectedUserId && !isLoading && (
                     <motion.div
                         initial={{ opacity: 0 }}

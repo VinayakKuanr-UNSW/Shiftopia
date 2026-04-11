@@ -41,10 +41,10 @@ const Navbar = () => {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="icon"
-                  className="md:mr-2"
+                  className="h-11 w-11 md:mr-2"
                   onClick={toggleSidebar}
                   aria-label="Toggle sidebar"
                 >
@@ -72,7 +72,7 @@ const Navbar = () => {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="hidden md:flex" onClick={() => navigate('/search')}>
+                  <Button variant="ghost" size="icon" className="h-11 w-11 flex" onClick={() => navigate('/search')}>
                     <span className="sr-only">Search</span>
                     <Search className="h-5 w-5" />
                   </Button>

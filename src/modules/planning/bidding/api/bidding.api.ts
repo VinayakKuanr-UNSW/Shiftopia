@@ -173,6 +173,24 @@ export const biddingApi = {
         if (shiftError) throw shiftError;
         const currentIteration = (shiftData as any).bidding_iteration || 1;
 
+        // Decliner exclusion: if this employee dropped or rejected the offer in the current
+        // iteration, they are ineligible to re-bid until the iteration advances.
+        const { data: shiftExclusion } = await supabase
+            .from('shifts')
+            .select('last_dropped_by, last_rejected_by')
+            .eq('id', shiftId)
+            .single();
+
+        if (shiftExclusion) {
+            const ex = shiftExclusion as any;
+            if (ex.last_dropped_by === userId || ex.last_rejected_by === userId) {
+                throw new Error(
+                    'You dropped or rejected this shift in the current round. ' +
+                    'Re-bidding is not permitted until the next iteration begins.'
+                );
+            }
+        }
+
         const { data, error } = await supabase
             .from('shift_bids')
             .upsert({

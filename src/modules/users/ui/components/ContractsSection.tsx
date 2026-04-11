@@ -124,42 +124,91 @@ export const PositionContractsSection: React.FC<SectionProps> = ({ employeeId, e
                         No active positions recorded.
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <Table className="px-4">
-                            <TableHeader className="bg-slate-50/50 dark:bg-slate-900/50">
-                                <TableRow className="border-b-slate-100 dark:border-b-slate-800/60">
-                                    <TableHead className="text-xs text-slate-500 font-semibold h-10">Organization</TableHead>
-                                    <TableHead className="text-xs text-slate-500 font-semibold h-10">Department</TableHead>
-                                    <TableHead className="text-xs text-slate-500 font-semibold h-10">Sub-Department</TableHead>
-                                    <TableHead className="text-xs text-slate-500 font-semibold h-10">Role</TableHead>
-                                    <TableHead className="text-xs text-slate-500 font-semibold h-10">Level</TableHead>
-                                    <TableHead className="text-xs text-slate-500 font-semibold h-10">Status</TableHead>
-                                    <TableHead className="text-xs text-slate-500 font-semibold h-10 text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {contracts.map(contract => (
-                                    <TableRow key={contract.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b-slate-100 dark:border-b-slate-800/60">
-                                        <TableCell className="font-semibold text-sm text-slate-800 dark:text-slate-200">{contract.organization_name}</TableCell>
-                                        <TableCell className="text-sm text-slate-600 dark:text-slate-400">{contract.department_name}</TableCell>
-                                        <TableCell className="text-sm text-slate-600 dark:text-slate-400">{contract.sub_department_name}</TableCell>
-                                        <TableCell className="text-sm text-slate-600 dark:text-slate-400">{contract.role_name}</TableCell>
-                                        <TableCell className="text-sm text-slate-600 dark:text-slate-400">{contract.level_name}</TableCell>
-                                        <TableCell>
-                                            <Badge variant="secondary" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-none font-medium text-xs">
-                                                {contract.employment_status || 'Full-Time'}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="ghost" size="sm" onClick={() => handleDeleteContract(contract.id)} className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 h-8 w-8 p-0 border border-transparent shadow-none">
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </Button>
-                                        </TableCell>
+                    <>
+                        {/* Mobile: card layout */}
+                        <div className="block md:hidden space-y-3 p-3">
+                            {contracts.map(contract => (
+                                <div key={contract.id} className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-2.5">
+                                    {/* Top row: role + status badge */}
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                            <p className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">
+                                                {contract.role_name || '—'}
+                                            </p>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                                                {contract.sub_department_name || contract.department_name || '—'}
+                                            </p>
+                                        </div>
+                                        <Badge variant="secondary" className="shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-none font-medium text-xs">
+                                            {contract.employment_status || 'Full-Time'}
+                                        </Badge>
+                                    </div>
+                                    {/* Detail pills: org + department + level */}
+                                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                                        {contract.organization_name && (
+                                            <span className="font-semibold text-slate-700 dark:text-slate-300">{contract.organization_name}</span>
+                                        )}
+                                        {contract.department_name && (
+                                            <span>{contract.department_name}</span>
+                                        )}
+                                        {contract.level_name && (
+                                            <span className="text-slate-600 dark:text-slate-300 font-medium">{contract.level_name}</span>
+                                        )}
+                                    </div>
+                                    {/* Action buttons */}
+                                    <div className="flex gap-2 pt-1">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleDeleteContract(contract.id)}
+                                            className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 h-8 px-3 gap-1.5 text-xs border border-transparent shadow-none"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                            Delete
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Desktop: table */}
+                        <div className="hidden md:block overflow-x-auto">
+                            <Table className="px-4">
+                                <TableHeader className="bg-slate-50/50 dark:bg-slate-900/50">
+                                    <TableRow className="border-b-slate-100 dark:border-b-slate-800/60">
+                                        <TableHead className="text-xs text-slate-500 font-semibold h-10">Organization</TableHead>
+                                        <TableHead className="text-xs text-slate-500 font-semibold h-10">Department</TableHead>
+                                        <TableHead className="text-xs text-slate-500 font-semibold h-10">Sub-Department</TableHead>
+                                        <TableHead className="text-xs text-slate-500 font-semibold h-10">Role</TableHead>
+                                        <TableHead className="text-xs text-slate-500 font-semibold h-10">Level</TableHead>
+                                        <TableHead className="text-xs text-slate-500 font-semibold h-10">Status</TableHead>
+                                        <TableHead className="text-xs text-slate-500 font-semibold h-10 text-right">Actions</TableHead>
                                     </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                </TableHeader>
+                                <TableBody>
+                                    {contracts.map(contract => (
+                                        <TableRow key={contract.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b-slate-100 dark:border-b-slate-800/60">
+                                            <TableCell className="font-semibold text-sm text-slate-800 dark:text-slate-200">{contract.organization_name}</TableCell>
+                                            <TableCell className="text-sm text-slate-600 dark:text-slate-400">{contract.department_name}</TableCell>
+                                            <TableCell className="text-sm text-slate-600 dark:text-slate-400">{contract.sub_department_name}</TableCell>
+                                            <TableCell className="text-sm text-slate-600 dark:text-slate-400">{contract.role_name}</TableCell>
+                                            <TableCell className="text-sm text-slate-600 dark:text-slate-400">{contract.level_name}</TableCell>
+                                            <TableCell>
+                                                <Badge variant="secondary" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-none font-medium text-xs">
+                                                    {contract.employment_status || 'Full-Time'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Button variant="ghost" size="sm" onClick={() => handleDeleteContract(contract.id)} className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 h-10 w-10 p-0 border border-transparent shadow-none">
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </>
                 )}
             </div>
         </div>
@@ -290,7 +339,7 @@ export const AccessCertificatesSection: React.FC<SectionProps> = ({ employeeId, 
                                                     existingCertificates={certificates || []}
                                                     certificateToEdit={cert}
                                                     trigger={
-                                                        <Button variant="ghost" size="sm" className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 h-8 w-8 p-0 border border-transparent shadow-none">
+                                                        <Button variant="ghost" size="sm" className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 h-10 w-10 p-0 border border-transparent shadow-none">
                                                             <Pencil className="w-3.5 h-3.5" />
                                                         </Button>
                                                     }
@@ -298,7 +347,7 @@ export const AccessCertificatesSection: React.FC<SectionProps> = ({ employeeId, 
                                                         queryClient.invalidateQueries({ queryKey: ['access_certificates', employeeId] });
                                                     }}
                                                 />
-                                                <Button variant="ghost" size="sm" onClick={() => handleDeleteCertificate(cert.id)} className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 h-8 w-8 p-0 border border-transparent shadow-none">
+                                                <Button variant="ghost" size="sm" onClick={() => handleDeleteCertificate(cert.id)} className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 h-10 w-10 p-0 border border-transparent shadow-none">
                                                     <Trash2 className="w-3.5 h-3.5" />
                                                 </Button>
                                             </div>

@@ -249,7 +249,7 @@ export const UnfilledShiftsPanel: React.FC<UnfilledShiftsPanelProps> = ({
   const count = showStaff ? filteredStaff.length : filteredShifts.length;
 
   return (
-    <div className="w-80 h-full flex flex-col bg-slate-50/80 dark:bg-slate-950/40 backdrop-blur-2xl border-l border-slate-200 dark:border-white/[0.08] shadow-[-8px_0_32px_rgba(0,0,0,0.1)]">
+    <div className="w-full md:w-80 h-full flex flex-col bg-slate-50/80 dark:bg-slate-950/40 backdrop-blur-2xl border-l border-slate-200 dark:border-white/[0.08] shadow-[-8px_0_32px_rgba(0,0,0,0.1)]">
 
       {/* Header */}
       <div className="px-4 pt-4 pb-3 border-b border-slate-200 dark:border-white/[0.06]">

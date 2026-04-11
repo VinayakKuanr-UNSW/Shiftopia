@@ -15,14 +15,16 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { format, isToday } from 'date-fns';
+import { useDrop } from 'react-dnd';
+import { DND_EMPLOYEE_TYPE, EmployeeDragItem } from './people-mode.types';
+import { format, isToday, differenceInHours } from 'date-fns';
+import { getSydneyNow, SYDNEY_TZ, parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
+import { useToast } from '@/modules/core/hooks/use-toast';
 import { TemplateGroupType } from '@/modules/rosters/api/shifts.api';
 import {
-  Edit2, Trash2, Send, Undo2, History, User, MoreHorizontal, AlertCircle,
-  Plus, Copy, ChevronsLeft, ChevronsRight, Lock, Repeat2, Clock, Layers,
-  UserCheck, UserPlus, ShieldCheck, ShieldAlert, Shield, Gavel, Flame,
-  Ban, Minus, Circle, BadgeCheck, MailOpen, Zap, Megaphone, Hourglass, XCircle, CheckCircle, GripVertical
+  Edit2, Trash2, Send, Undo2, History, MoreHorizontal,
+  Plus, Copy, ChevronsLeft, ChevronsRight, Lock, Clock,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -42,6 +44,20 @@ import {
   useBulkUpdateShiftTimes,
 } from '@/modules/rosters/state/useRosterShifts';
 import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
+import type { RingColor } from '@/modules/rosters/domain/shift-ui';
+
+function ringClasses(color: RingColor): string {
+  switch (color) {
+    case 'purple':  return 'ring-2 ring-purple-500  shadow-[0_0_15px_rgba(168,85,247,0.45)]';
+    case 'emerald': return 'ring-2 ring-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.45)]';
+    case 'yellow':  return 'ring-2 ring-yellow-500  shadow-[0_0_12px_rgba(234,179,8,0.40)]';
+    case 'red':     return 'ring-2 ring-red-500     shadow-[0_0_15px_rgba(239,68,68,0.45)]';
+    case 'orange':  return 'ring-2 ring-orange-500  shadow-[0_0_12px_rgba(249,115,22,0.35)]';
+    case 'blue':
+    default:        return 'ring-1 ring-blue-500/30 shadow-[0_0_8px_rgba(59,130,246,0.20)]';
+  }
+}
+import { getShiftUIContext } from '@/modules/rosters/domain/shift-ui';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Button } from '@/modules/core/ui/primitives/button';
 import {
@@ -204,6 +220,7 @@ export interface DayTimelineViewProps {
   canEdit: boolean;
   isShiftsLoading?: boolean;
   isBulkMode?: boolean;
+  isDnDModeActive?: boolean;
   selectedShiftIds?: Set<string>;
   onBulkToggle?: (id: string) => void;
   complianceMap?: Record<string, any>;
@@ -218,17 +235,54 @@ export interface DayTimelineViewProps {
   onShiftAudit:      (shiftId: string) => void;
   onAddSubGroup?:    (group: DTGroup) => void;
   onSubGroupAction?: (action: 'rename' | 'clone' | 'delete', subGroup: DTSubGroup, group: DTGroup) => void;
+  onEmployeeDrop?:   (shiftId: string, dragItem: EmployeeDragItem) => void;
 }
+
+// ─── DroppableShiftAssign ─────────────────────────────────────────────────
+interface DroppableShiftAssignProps {
+  shiftId: string;
+  shiftRole: string;
+  canAccept: boolean;
+  onAssign: (shiftId: string, dragItem: EmployeeDragItem) => void;
+  children: React.ReactNode;
+}
+
+const DroppableShiftAssign: React.FC<DroppableShiftAssignProps> = ({
+  shiftId, shiftRole, canAccept, onAssign, children,
+}) => {
+  const [{ isOver, canDrop }, drop] = useDrop<EmployeeDragItem, void, { isOver: boolean; canDrop: boolean }>(
+    () => ({
+      accept: DND_EMPLOYEE_TYPE,
+      canDrop: (item: EmployeeDragItem) =>
+        canAccept && (!item.roleName || item.roleName === shiftRole),
+      drop: (item: EmployeeDragItem) => { onAssign(shiftId, item); },
+      collect: (monitor) => ({ isOver: monitor.isOver(), canDrop: monitor.canDrop() }),
+    }),
+    [shiftId, shiftRole, canAccept, onAssign],
+  );
+  return (
+    <div
+      ref={drop}
+      className={cn(
+        isOver && canDrop  && 'ring-2 ring-emerald-400 ring-inset rounded-lg bg-emerald-500/5',
+        isOver && !canDrop && 'ring-2 ring-red-400 ring-inset rounded-lg opacity-60',
+      )}
+    >
+      {children}
+    </div>
+  );
+};
 
 // ─── DayTimelineView ─────────────────────────────────────────────────────
 const DayTimelineView: React.FC<DayTimelineViewProps> = ({
   visualGroups, selectedDate, canEdit, isShiftsLoading,
-  isBulkMode, selectedShiftIds, onBulkToggle,
+  isBulkMode, isDnDModeActive, selectedShiftIds, onBulkToggle,
   isBucketView,
   zoom,
   onSlotClick, onShiftEdit, onShiftDelete, onShiftPublish, onShiftUnpublish, onShiftAudit,
-  onAddSubGroup, onSubGroupAction,
+  onAddSubGroup, onSubGroupAction, onEmployeeDrop,
 }) => {
+  const { toast } = useToast();
   const updateShift = useUpdateShift();
   const bulkUpdateTimes = useBulkUpdateShiftTimes();
   const bulkPublish = useBulkPublishShifts();
@@ -373,9 +427,24 @@ const DayTimelineView: React.FC<DayTimelineViewProps> = ({
 
   const onPointerUp = useCallback(async () => {
     if (!drag) return;
-    const ns = fromMins(drag.previewS);
-    const ne = fromMins(drag.previewE);
     const prev = drag; setDrag(null);
+    const ns = fromMins(snapTo(prev.previewS));
+    const ne = fromMins(snapTo(prev.previewE));
+
+    // [New Validation] Prevent moving/resizing into the past
+    const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+    const now = getSydneyNow();
+    const newStartAt = parseZonedDateTime(selectedDateStr, ns, SYDNEY_TZ);
+
+    if (newStartAt < now) {
+      toast({
+        title: 'Action Blocked',
+        description: 'Shifts cannot start in the past. This action has been reverted.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (ns !== fromMins(prev.origS) || ne !== fromMins(prev.origE)) {
       try {
         if (prev.shiftId) {
@@ -724,7 +793,8 @@ const DayTimelineView: React.FC<DayTimelineViewProps> = ({
                           const left  = pad + lane.lane * laneW;
                           const cc    = cardColors(sh.groupColor);
 
-                          return (
+                          const canAcceptDrop = !!onEmployeeDrop && sh.isDraft && !sh.isLocked && !sh.isCancelled;
+                          const card = (
                             <ShiftCard
                               key={sh.id}
                               shift={sh}
@@ -738,6 +808,7 @@ const DayTimelineView: React.FC<DayTimelineViewProps> = ({
                               selectedDate={selectedDate}
                               canEdit={canEdit}
                               isBulkMode={!!isBulkMode}
+                              isDnDModeActive={!!isDnDModeActive}
                               isSelected={!!selectedShiftIds?.has(sh.id)}
                               isDragging={isDragging}
                               onBulkToggle={onBulkToggle}
@@ -763,6 +834,17 @@ const DayTimelineView: React.FC<DayTimelineViewProps> = ({
                               }}
                             />
                           );
+                          return canAcceptDrop ? (
+                            <DroppableShiftAssign
+                              key={sh.id}
+                              shiftId={sh.id}
+                              shiftRole={sh.role}
+                              canAccept={true}
+                              onAssign={onEmployeeDrop!}
+                            >
+                              {card}
+                            </DroppableShiftAssign>
+                          ) : card;
                         })}
                       </div>
                     );
@@ -857,7 +939,7 @@ interface ShiftCardProps {
   top: number; left: number; width: number; height: number;
   cardColor: ReturnType<typeof cardColors>;
   group: DTGroup; subGroup: DTSubGroup; selectedDate: Date;
-  canEdit: boolean; isBulkMode: boolean; isSelected: boolean; isDragging: boolean;
+  canEdit: boolean; isBulkMode: boolean; isDnDModeActive: boolean; isSelected: boolean; isDragging: boolean;
   onBulkToggle?: (id: string) => void;
   onEdit:           (shift: DTShift, group: DTGroup, subGroup: DTSubGroup, date: Date, launchSource?: any) => void;
   onDelete:         (shift: DTShift) => void;
@@ -867,52 +949,56 @@ interface ShiftCardProps {
   onDragStart:      (id: string, y: number) => void;
   onResizeStart:    (id: string, y: number) => void;
   onResizeTopStart: (id: string, y: number) => void;
-  compliance?: any;
 }
 
 const ShiftCard: React.FC<ShiftCardProps> = ({
   shift, top, left, width, height,
   cardColor: cc, group, subGroup, selectedDate,
-  canEdit, isBulkMode, isSelected, isDragging,
+  canEdit, isBulkMode, isDnDModeActive, isSelected, isDragging,
   onBulkToggle, onEdit, onDelete, onPublish, onUnpublish, onAudit,
-  onDragStart, onResizeStart, onResizeTopStart, compliance
+  onDragStart, onResizeStart, onResizeTopStart,
 }) => {
   const compact = height < 80;
   const micro   = height < 30;
 
   const stateId = useMemo(() => determineShiftState(shift.rawShift), [shift.rawShift]);
 
-  // Lifecycle Icon Helper
-  const getLifecycleIcon = (status: string) => {
-    const s = (status || 'draft').toLowerCase();
-    if (s === 'draft') return <Edit2 className="h-3.5 w-3.5 text-slate-400" />;
-    if (s === 'published') return <Megaphone className="h-3.5 w-3.5 text-blue-500" />;
-    if (s === 'inprogress' || s === 'on_going') return <Hourglass className="h-3.5 w-3.5 text-orange-500" />;
-    if (s === 'completed') return <CheckCircle className="h-3.5 w-3.5 text-green-500" />;
-    if (s === 'cancelled') return <XCircle className="h-3.5 w-3.5 text-red-500" />;
-    return <Edit2 className="h-3.5 w-3.5 text-slate-400" />;
-  };
+  const ctx = useMemo(() => getShiftUIContext({
+    lifecycle_status:   shift.rawShift.lifecycle_status  ?? 'Draft',
+    assignment_status:  shift.rawShift.assignment_status ?? 'unassigned',
+    assignment_outcome: shift.rawShift.assignment_outcome ?? null,
+    trading_status:     shift.rawShift.trading_status    ?? null,
+    is_cancelled:       shift.rawShift.is_cancelled      ?? false,
+    scheduled_start:    shift.rawShift.scheduled_start   ?? null,
+    actual_start:       shift.rawShift.actual_start      ?? null,
+    emergency_source:   (shift.rawShift as any).emergency_source ?? null,
+  }), [shift.rawShift]);
 
   return (
     <div
       data-shift-card="true"
       className={cn(
         'absolute rounded-lg border overflow-hidden select-none group/card flex flex-col',
-        'transition-[box-shadow,opacity] duration-100 bg-card',
+        'transition-all duration-200 bg-card/95 backdrop-blur-[2px]',
         cc.border,
+        // RING COLOR (priority: Completed > InProgress > Late > Emergent > Urgent > Normal)
+        ringClasses(ctx.ringColor),
+
         isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background z-30',
         isDragging && 'opacity-50 scale-95 z-50 shadow-2xl bg-slate-100 dark:bg-slate-800',
         shift.isCancelled && 'opacity-40 grayscale',
-        !isDragging && 'hover:shadow-md hover:z-20',
+        !isDragging && 'hover:shadow-lg hover:z-20',
       )}
       style={{
         top, left, width, height,
         position: 'absolute',
-        cursor: isDragging ? 'grabbing' : (canEdit && !shift.isLocked && !shift.isPublished) ? 'grab' : 'pointer',
+        cursor: isDragging ? 'grabbing' : (canEdit && !shift.isLocked && !shift.isPublished && isDnDModeActive) ? 'grab' : 'pointer',
+        touchAction: 'none',
       }}
       onPointerDown={(e) => {
         // Prevent drag if: not editable, bulk mode, published/started, or explicitly locked
-        if (!canEdit || isBulkMode || shift.isPublished || shift.isLocked) return;
+        // Added isDnDModeActive check for consistency with other views
+        if (!canEdit || isBulkMode || shift.isPublished || shift.isLocked || !isDnDModeActive) return;
         if ((e.target as HTMLElement).closest('[data-resize]')) return;
         if ((e.target as HTMLElement).closest('[data-menu-trigger]')) return;
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -929,12 +1015,12 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
       }}
     >
       {/* S12: Top resize handle */}
-      {canEdit && !isBulkMode && !shift.isLocked && !shift.isPublished && height > 20 && (
+      {canEdit && !isBulkMode && !shift.isLocked && !shift.isPublished && isDnDModeActive && height > 20 && (
         <div
           data-resize="true"
           className="absolute top-0 left-0 right-0 h-1.5 cursor-ns-resize hover:bg-black/10 dark:hover:bg-white/20 transition-colors z-20"
           onPointerDown={(e) => {
-            if (shift.isPublished || shift.isLocked) return;
+            if (shift.isPublished || shift.isLocked || !isDnDModeActive) return;
             e.stopPropagation();
             e.currentTarget.setPointerCapture(e.pointerId);
             onResizeTopStart(shift.id, e.clientY);
@@ -1004,11 +1090,27 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
                         <Edit2 className="mr-2 h-4 w-4" /> Edit Shift
                       </DropdownMenuItem>
                     )}
-                    {shift.isDraft && !shift.isPublished && (
-                      <DropdownMenuItem onSelect={() => onPublish(shift)} className="text-emerald-600 dark:text-emerald-400 cursor-pointer">
-                        <Send className="mr-2 h-4 w-4" /> Publish Shift
-                      </DropdownMenuItem>
-                    )}
+                    {shift.isDraft && !shift.isPublished && (() => {
+                      const shiftStart = new Date(shift.rawShift.start_at || `${shift.rawShift.shift_date}T${shift.rawShift.start_time}`);
+                      const now = getSydneyNow();
+                      const hoursToStart = differenceInHours(shiftStart, now);
+                      const isEmergencyPub = hoursToStart < 4;
+                      const isUnassigned = !shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned';
+                      
+                      return (
+                        <DropdownMenuItem 
+                          disabled={isEmergencyPub && isUnassigned}
+                          onSelect={() => onPublish(shift)} 
+                          className={cn(
+                            "text-emerald-600 dark:text-emerald-400 cursor-pointer",
+                            isEmergencyPub && isUnassigned && "opacity-50 cursor-not-allowed"
+                          )}
+                        >
+                          <Send className="mr-2 h-4 w-4" /> 
+                          {isEmergencyPub && isUnassigned ? 'Publish (Assign Required)' : 'Publish Shift'}
+                        </DropdownMenuItem>
+                      );
+                    })()}
                     {shift.isPublished && (
                       <DropdownMenuItem onSelect={() => onUnpublish(shift)} className="text-amber-600 dark:text-amber-400 cursor-pointer">
                         <Undo2 className="mr-2 h-4 w-4" /> Unpublish Shift
@@ -1045,75 +1147,16 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
              )}
           </div>
 
-          {/* Status Footer */}
-          {!compact && (
-            <div className="px-2 py-1.5 grid grid-cols-6 gap-0.5 mt-auto border-t border-border/40 bg-muted/20">
-               {/* 1. Lifecycle */}
-               <div className="flex justify-center" title={`Lifecycle: ${shift.lifecycleStatus || (shift.isDraft ? 'draft' : 'published')}`}>
-                 {getLifecycleIcon(shift.lifecycleStatus || (shift.isDraft ? 'draft' : 'published'))}
-               </div>
-
-               {/* 2. Assignment */}
-               <div className="flex justify-center" title={`Assignment: ${shift.assignedEmployeeId ? 'Assigned' : 'Unassigned'}`}>
-                 {shift.assignedEmployeeId ? (
-                   <UserCheck className="h-3.5 w-3.5 text-emerald-500" />
-                 ) : (
-                   <UserPlus className="h-3.5 w-3.5 text-amber-500" />
-                 )}
-               </div>
-
-               {/* 3. Offer */}
-               <div className="flex justify-center" title={`Offer: ${shift.assignmentOutcome || 'None'}`}>
-                 {(() => {
-                   const o = shift.assignmentOutcome;
-                   if (!o) return <Circle className="h-3.5 w-3.5 text-slate-300 dark:text-slate-700" />;
-                   if (o === 'pending') return <Clock className="h-3.5 w-3.5 text-amber-500" />;
-                   if (o === 'offered') return <MailOpen className="h-3.5 w-3.5 text-blue-500" />;
-                   if (o === 'confirmed') return <BadgeCheck className="h-3.5 w-3.5 text-emerald-500" />;
-                   if (o === 'emergency_assigned') return <Zap className="h-3.5 w-3.5 text-red-500" />;
-                   return <Circle className="h-3.5 w-3.5 text-slate-300 dark:text-slate-700" />;
-                 })()}
-               </div>
-
-               {/* 4. Bidding */}
-               <div className="flex justify-center" title="Bidding">
-                 {shift.isOnBidding ? (
-                   <Gavel className={cn("h-3.5 w-3.5", shift.isUrgent ? "text-red-500" : "text-blue-500")} />
-                 ) : (
-                   <Ban className="h-3.5 w-3.5 text-slate-300 dark:text-slate-700" />
-                 )}
-               </div>
-
-               {/* 5. Trade */}
-               <div className="flex justify-center" title="Trade">
-                 {shift.isTrading ? (
-                   <Repeat2 className="h-3.5 w-3.5 text-purple-500" />
-                 ) : (
-                   <Minus className="h-3.5 w-3.5 text-slate-300 dark:text-slate-700" />
-                 )}
-               </div>
-
-               {/* 6. Compliance */}
-               <div className="flex justify-center" title={`Compliance: ${compliance?.status || 'Compliant'}`}>
-                 {(() => {
-                   const s = compliance?.status;
-                   if (s === 'violation') return <ShieldAlert className="h-3.5 w-3.5 text-red-500" />;
-                   if (s === 'warning') return <Shield className="h-3.5 w-3.5 text-amber-500" />;
-                   return <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />;
-                 })()}
-               </div>
-            </div>
-          )}
         </>
       )}
 
       {/* Resize Bottom Handle */}
-      {canEdit && !isBulkMode && !shift.isLocked && !shift.isPublished && height > 20 && (
+      {canEdit && !isBulkMode && !shift.isLocked && !shift.isPublished && isDnDModeActive && height > 20 && (
         <div
           data-resize="true"
           className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize hover:bg-black/10 dark:hover:bg-white/20 transition-colors z-20"
           onPointerDown={(e) => {
-            if (shift.isPublished || shift.isLocked) return;
+            if (shift.isPublished || shift.isLocked || !isDnDModeActive) return;
             e.stopPropagation();
             e.currentTarget.setPointerCapture(e.pointerId);
             onResizeStart(shift.id, e.clientY);

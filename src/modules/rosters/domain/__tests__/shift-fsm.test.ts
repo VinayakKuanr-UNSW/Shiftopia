@@ -66,14 +66,6 @@ describe('getShiftFSMState — 10 canonical states', () => {
         }, 'S3');
     });
 
-    it('S3 (Legacy) — Published + assigned + outcome=offered', () => {
-        assertState({
-            lifecycle_status:   'Published',
-            assignment_status:  'assigned',
-            assignment_outcome: 'offered' as any,
-        }, 'S3');
-    });
-
     it('S4  — Published + assigned + outcome=confirmed', () => {
         assertState({
             lifecycle_status:   'Published',

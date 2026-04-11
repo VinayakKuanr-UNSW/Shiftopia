@@ -220,7 +220,7 @@ export const shiftsQueries = {
                   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name, external_id))
                 `)
                 .eq('assigned_employee_id', employeeId)
-                .eq('lifecycle_status', 'Published')
+                .in('lifecycle_status', ['Published', 'InProgress', 'Completed'])
                 .gte('shift_date', startDate)
                 .lte('shift_date', endDate)
                 .is('deleted_at', null)
@@ -697,7 +697,7 @@ export const shiftsQueries = {
                 .select('id', { count: 'exact', head: true })
                 .eq('assigned_employee_id', employeeId)
                 .eq('lifecycle_status', 'Published')
-                .eq('assignment_outcome', 'offered')
+                .is('assignment_outcome', null)
                 .is('deleted_at', null);
 
             if (error) {
@@ -743,7 +743,7 @@ export const shiftsQueries = {
             `)
                 .eq('assigned_employee_id', employeeId)
                 .eq('lifecycle_status', 'Published')
-                .eq('assignment_outcome', 'offered')
+                .is('assignment_outcome', null)
                 .is('deleted_at', null);
 
             if (filters?.organizationId && isValidUuid(filters.organizationId)) {
@@ -799,12 +799,12 @@ export const shiftsQueries = {
         try {
             if (!isValidUuid(employeeId)) return [];
 
-            // Temporary Fix: The DB enum shift_assignment_outcome does NOT contain 'rejected'.
-            // If status is 'Declined', we return an empty array for now to prevent 400 errors
-            // until the correct outcome/tracking mechanism is established.
+            // Declined offers are not tracked by assignment_outcome (no 'rejected' value in enum).
+            // Return empty array to prevent invalid DB queries.
             if (status === 'Declined') return [];
 
-            const outcome = status === 'Accepted' ? 'confirmed' : 'pending';
+            // Only 'confirmed' is a valid accepted outcome per DB constraint.
+            const outcome = 'confirmed' as const;
 
             let query = supabase
                 .from('shifts')

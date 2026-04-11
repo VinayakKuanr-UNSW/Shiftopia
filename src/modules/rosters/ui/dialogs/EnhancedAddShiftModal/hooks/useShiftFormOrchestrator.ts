@@ -247,8 +247,10 @@ export function useShiftFormOrchestrator({
     const isPast = useMemo(() => isDateInPast(watchShiftDate, watchTimezone), [watchShiftDate, watchTimezone]);
     const isStarted = useMemo(() => isShiftStarted(watchShiftDate, watchStart, watchTimezone), [watchShiftDate, watchStart, watchTimezone]);
     const isPublished = useMemo(() => !isTemplateMode && existingShift?.lifecycle_status === 'Published', [isTemplateMode, existingShift]);
-    // Published shifts are now read-only per user request
-    const isReadOnly = isPast || isStarted || isPublished;
+
+    // Hard read-only ONLY for existing shifts or published shifts.
+    // For NEW shifts, we allow the fields to be editable even if "past" so the user can fix their inputs.
+    const isReadOnly = (editMode && (isPast || isStarted)) || isPublished;
 
     // ── Emergency assignment detection ───────────────────────────────────────
     // True when TTS ≤ 4h OR bidding closed without winner — assigning in this
@@ -259,7 +261,7 @@ export function useShiftFormOrchestrator({
         if (watchShiftDate && watchStart) {
             const shiftDateStr = format(watchShiftDate, 'yyyy-MM-dd');
             const urgency = computeShiftUrgency(shiftDateStr, watchStart, existingShift.start_at ?? undefined);
-            if (urgency === 'locked') return true;
+            if (urgency === 'emergent') return true;
         }
         return false;
     }, [editMode, existingShift, watchShiftDate, watchStart]);

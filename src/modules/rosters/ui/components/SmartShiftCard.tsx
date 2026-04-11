@@ -7,21 +7,11 @@
  */
 
 import React, { useMemo } from 'react';
+import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import {
     Clock,
     User,
-    UserCheck,
-    UserPlus,
-    UserX,
     AlertTriangle,
-    Shield,
-    ShieldAlert,
-    ShieldCheck,
-    Gavel,
-    ArrowLeftRight,
-    Zap,
-    MailOpen,
-    BadgeCheck,
     Megaphone,
     Edit,
     XCircle,
@@ -30,135 +20,20 @@ import {
     GripVertical,
     MoreHorizontal,
     Flame,
-    Ban,
-    Minus,
-    Circle,
-    HelpCircle,
     Lock,
     CopyPlus,
-    Loader2,
 } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
 import {
     Tooltip,
     TooltipContent,
-    TooltipProvider,
     TooltipTrigger,
 } from '@/modules/core/ui/primitives/tooltip';
 import { cn } from '@/modules/core/lib/utils';
 import type { Shift } from '../../domain/shift.entity';
-import { getShiftUIContext, getLockState } from '../../domain/shift-ui';
-import { isOnBidding } from '../../domain/bidding-urgency';
-import { AttendanceBadge } from './AttendanceBadge';
+import { getShiftUIContext, getLockState, getStatusDotInfo } from '../../domain/shift-ui';
 
-// ============================================================================
-// STATUS ICONS HELPER
-// ============================================================================
-
-/**
- * FSM Status Icon Bar
- *
- * One icon per FSM-relevant shift column:
- *  1. lifecycle_status   — Draft / Published / InProgress / Completed
- *  2. assignment_status  — unassigned / offered (S3) / confirmed (S4) / no_show (S13)
- *  3. assignment_outcome — null dim / confirmed check / no_show alert
- *  4. bidding_status     — off / normal / urgent
- *  5. trading_status     — off / requested / accepted
- *  6. emergency_source   — off / manual (rose) / auto (orange)
- *  7. is_cancelled       — off / cancelled (red)
- */
-const ShiftStatusIcons: React.FC<{ shift: Shift; isLocked?: boolean }> = ({ shift }) => {
-    const _isOnBidding = isOnBidding(shift.bidding_status);
-
-    const ctx = getShiftUIContext({
-        lifecycle_status:   shift.lifecycle_status  ?? 'Draft',
-        assignment_status:  shift.assignment_status ?? 'unassigned',
-        assignment_outcome: shift.assignment_outcome ?? null,
-        trading_status:     shift.trading_status    ?? null,
-        is_cancelled:       shift.is_cancelled      ?? false,
-        scheduled_start:    shift.scheduled_start   ?? null,
-        emergency_source:   (shift as any).emergency_source ?? null,
-    });
-
-    // ── 1. Lifecycle ──────────────────────────────────────────────────────────
-    const lc = (shift.lifecycle_status ?? 'Draft').toLowerCase();
-    const lifecycleIcon = lc === 'published'   ? <Megaphone  className="h-3.5 w-3.5 text-blue-500" />
-                        : lc === 'inprogress'  ? <Hourglass  className="h-3.5 w-3.5 text-orange-400" />
-                        : lc === 'completed'   ? <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
-                        :                        <Edit        className="h-3.5 w-3.5 text-muted-foreground/40" />;
-    const lifecycleTip = lc === 'published' ? 'Published' : lc === 'inprogress' ? 'In Progress' : lc === 'completed' ? 'Completed' : 'Draft';
-
-    // ── 2. Assignment + Outcome (combined — S3 vs S4 distinction) ─────────────
-    const isAssigned = shift.assignment_status === 'assigned';
-    const outcome    = shift.assignment_outcome ?? null;
-    const assignIcon = !isAssigned                 ? <UserX      className="h-3.5 w-3.5 text-muted-foreground/30" />
-                     : outcome === 'no_show'        ? <UserX      className="h-3.5 w-3.5 text-red-500" />
-                     : outcome === 'confirmed'      ? <UserCheck  className="h-3.5 w-3.5 text-emerald-500" />
-                     :                               <MailOpen   className="h-3.5 w-3.5 text-sky-400" />;  // S3 — offered, awaiting confirm
-    const assignTip  = !isAssigned          ? 'Unassigned'
-                     : outcome === 'no_show'  ? 'No Show'
-                     : outcome === 'confirmed'? 'Confirmed'
-                     :                         'Offered — Awaiting Acceptance';
-
-    // ── 3. Assignment outcome (standalone — shows the outcome value explicitly) ─
-    const outcomeIcon = outcome === 'confirmed' ? <BadgeCheck    className="h-3.5 w-3.5 text-emerald-500" />
-                      : outcome === 'no_show'   ? <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
-                      :                           <Circle        className="h-3.5 w-3.5 text-muted-foreground/20" />;
-    const outcomeTip  = outcome === 'confirmed' ? 'Outcome: Confirmed'
-                      : outcome === 'no_show'   ? 'Outcome: No Show'
-                      :                          'Outcome: Pending';
-
-    // ── 4. Bidding ────────────────────────────────────────────────────────────
-    const isBiddingUrgent = _isOnBidding && ctx.isUrgent;
-    const isBiddingNormal = _isOnBidding && !ctx.isUrgent;
-    const biddingIcon = isBiddingUrgent ? <Flame  className="h-3.5 w-3.5 text-orange-500 animate-pulse" />
-                      : isBiddingNormal  ? <Gavel  className="h-3.5 w-3.5 text-amber-500" />
-                      :                    <Gavel  className="h-3.5 w-3.5 text-muted-foreground/20" />;
-    const biddingTip  = isBiddingUrgent ? 'Urgent Bidding' : isBiddingNormal ? 'On Bidding' : 'Not on Bidding';
-
-    // ── 5. Trading ────────────────────────────────────────────────────────────
-    const isTradeRequested = shift.trading_status === 'TradeRequested';
-    const isTradeAccepted  = shift.trading_status === 'TradeAccepted';
-    const tradeIcon = isTradeAccepted  ? <Zap           className="h-3.5 w-3.5 text-purple-500" />
-                    : isTradeRequested  ? <ArrowLeftRight className="h-3.5 w-3.5 text-amber-500" />
-                    :                     <ArrowLeftRight className="h-3.5 w-3.5 text-muted-foreground/20" />;
-    const tradeTip  = isTradeAccepted ? 'Trade Accepted' : isTradeRequested ? 'Trade Requested' : 'No Trade';
-
-    // ── 6. Emergency source ───────────────────────────────────────────────────
-    const emergencySrc = (shift as any).emergency_source ?? null;
-    const emergencyIcon = emergencySrc === 'manual' ? <Flame className="h-3.5 w-3.5 text-rose-500" />
-                        : emergencySrc === 'auto'   ? <Flame className="h-3.5 w-3.5 text-orange-400" />
-                        :                             <Flame className="h-3.5 w-3.5 text-muted-foreground/20" />;
-    const emergencyTip  = emergencySrc === 'manual' ? 'Emergency: Manual'
-                        : emergencySrc === 'auto'   ? 'Emergency: Auto-assigned'
-                        :                            'No Emergency';
-
-    // ── 7. Cancelled ──────────────────────────────────────────────────────────
-    const isCancelled = shift.is_cancelled ?? false;
-    const cancelIcon = isCancelled ? <Ban className="h-3.5 w-3.5 text-red-500" />
-                                   : <Ban className="h-3.5 w-3.5 text-muted-foreground/20" />;
-    const cancelTip  = isCancelled ? 'Cancelled' : 'Not Cancelled';
-
-    return (
-        <div className="flex items-center justify-around gap-0.5 mt-auto pt-1.5 border-t border-border/30 px-1">
-            {[
-                { icon: lifecycleIcon,  tip: lifecycleTip  },
-                { icon: assignIcon,     tip: assignTip     },
-                { icon: outcomeIcon,    tip: outcomeTip    },
-                { icon: biddingIcon,    tip: biddingTip    },
-                { icon: tradeIcon,      tip: tradeTip      },
-                { icon: emergencyIcon,  tip: emergencyTip  },
-                { icon: cancelIcon,     tip: cancelTip     },
-            ].map(({ icon, tip }, i) => (
-                <Tooltip key={i}>
-                    <TooltipTrigger asChild><div>{icon}</div></TooltipTrigger>
-                    <TooltipContent className="text-[10px] py-1 px-2">{tip}</TooltipContent>
-                </Tooltip>
-            ))}
-        </div>
-    );
-};
 
 // ============================================================================
 // TYPES & HELPERS
@@ -232,6 +107,30 @@ function getNormalizedStatus(shift: any): string {
     return (shift.lifecycle_status || shift.lifecycleStatus || 'draft').toLowerCase();
 }
 
+/**
+ * Hook for 3D tilt effect that follows the mouse cursor.
+ */
+function useTilt() {
+    const x = useMotionValue(0);
+    const y = useMotionValue(0);
+    const mouseXSpring = useSpring(x, { stiffness: 300, damping: 30 });
+    const mouseYSpring = useSpring(y, { stiffness: 300, damping: 30 });
+    const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["7.5deg", "-7.5deg"]);
+    const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-7.5deg", "7.5deg"]);
+
+    const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        x.set((e.clientX - rect.left) / rect.width - 0.5);
+        y.set((e.clientY - rect.top) / rect.height - 0.5);
+    };
+    const onMouseLeave = () => {
+        x.set(0);
+        y.set(0);
+    };
+
+    return { rotateX, rotateY, onMouseMove, onMouseLeave };
+}
+
 // ============================================================================
 // COMPACT VARIANT
 // ============================================================================
@@ -260,8 +159,9 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
         trading_status:     shift.trading_status    ?? null,
         is_cancelled:       shift.is_cancelled      ?? false,
         scheduled_start:    shift.scheduled_start   ?? null,
+        actual_start:       shift.actual_start      ?? null,
         emergency_source:   (shift as any).emergency_source ?? null,
-    }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, (shift as any).emergency_source]);
+    }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, shift.actual_start, (shift as any).emergency_source]);
 
     const stateId = ctx.state;
     const fsmLock = getLockState(ctx.state);
@@ -278,109 +178,138 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
         return 'Protected';
     }, [stateId, isLocked]);
 
+    const dot = getStatusDotInfo({
+        lifecycle_status:   shift.lifecycle_status,
+        is_cancelled:       shift.is_cancelled,
+        assignment_outcome: shift.assignment_outcome,
+        attendance_status:  shift.attendance_status,
+        actual_start:       shift.actual_start,
+        actual_end:         shift.actual_end,
+        start_at:           shift.start_at,
+        end_at:             shift.end_at,
+        shift_date:         shift.shift_date,
+        start_time:         shift.start_time,
+        end_time:           shift.end_time,
+    });
+
     const statusStr = getNormalizedStatus(shift);
     const isDraft = statusStr === 'draft';
     const isPublished = statusStr === 'published';
 
+    const { rotateX, rotateY, onMouseMove, onMouseLeave } = useTilt();
+
     return (
-        <div
+        <motion.div
+            style={{ rotateX, rotateY, transformStyle: "preserve-3d", perspective: "1000px" }}
+            onMouseMove={onMouseMove}
+            onMouseLeave={onMouseLeave}
             className={cn(
                 'relative flex flex-col rounded-lg overflow-hidden border bg-card shadow-sm transition-all h-full group select-none',
-                onClick && (!isFullyLocked || isSelected) && 'cursor-pointer hover:shadow-md hover:ring-1 hover:ring-primary/30',
+                onClick && (!isFullyLocked || isSelected) && 'cursor-pointer hover:shadow-md',
                 isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background border-primary/50 bg-primary/5 dark:bg-primary/20',
                 isDragging && 'opacity-50 scale-95',
                 isDragOver && 'ring-2 ring-blue-400 ring-offset-1',
-                // EXCLUSION: Disable grayscale/opacity reductions during DnD mode to preserve colorful headers
-                !isDnDActive && isPast && 'grayscale opacity-60 cursor-not-allowed',
-                !isDnDActive && isFullyLocked && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
-                // Standard states
+                // No dot + past = fully expired draft → greyscale whole card
+                !isDnDActive && dot === null && isPast && 'grayscale opacity-60 cursor-not-allowed',
+                !isDnDActive && dot === null && isFullyLocked && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
                 isDraft && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'border-dashed opacity-[0.98]',
                 !isDraft && !isFullyLocked && !isPast && 'border-solid',
                 className
             )}
             onClick={isFullyLocked || isPast ? undefined : onClick}
         >
-            {/* Header */}
-            <div className={cn('px-3 py-1.5 flex justify-between items-center transition-all duration-300 relative z-[20]',
-                shift.bidding_status === 'bidding_closed_no_winner' ? 'bg-orange-500/20 text-orange-900 dark:text-orange-100' : colors.header,
-                isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-40 backdrop-blur-[2px]',
-                !isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-100',
-                shift.bidding_status !== 'bidding_closed_no_winner' && colors.text,
-                isFullyLocked && !isDnDActive && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-muted dark:bg-slate-700 text-muted-foreground')}>
-                <div className="flex items-center gap-1.5 min-w-0">
-                    <span className={cn("text-[9px] font-mono font-bold px-1.5 py-0.5 rounded", isFullyLocked ? "bg-black/20 dark:bg-black/50 opacity-70" : colors.badge)}>
-                        {stateId}
-                    </span>
-                    <span className="text-[11px] font-bold uppercase tracking-widest truncate opacity-80">
-                        {shift.roster_subgroup?.name || shift.sub_group_name || roleName}
-                    </span>
+            {/* Content container — body greyscales on past, header (dot) stays crisp */}
+            <div className="flex-1 flex flex-col min-h-0">
+                {/* Header */}
+                <div className={cn('px-3 py-1.5 flex justify-between items-center transition-all duration-300 relative z-[20]',
+                    shift.bidding_status === 'bidding_closed_no_winner' ? 'bg-orange-500/20 text-orange-900 dark:text-orange-100' : colors.header,
+                    isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-40 backdrop-blur-[2px]',
+                    !isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-100',
+                    shift.bidding_status !== 'bidding_closed_no_winner' && colors.text,
+                    isFullyLocked && !isDnDActive && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-muted dark:bg-slate-700 text-muted-foreground')}>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="flex items-center gap-1.5 cursor-help">
+                                    {dot && (
+                                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 ring-1 ring-black/10" style={{ backgroundColor: dot.color }} />
+                                    )}
+                                    <span className={cn("text-[9px] font-mono font-bold px-1.5 py-0.5 rounded", isFullyLocked ? "bg-black/20 dark:bg-black/50 opacity-70" : colors.badge)}>
+                                        {ctx.state === 'S3' && ctx.urgency === 'emergent' ? 'S3*'
+                                        : ctx.state === 'S5' && ctx.urgency === 'emergent' ? 'S5*'
+                                        : stateId}
+                                    </span>
+                                </div>
+                            </TooltipTrigger>
+                            {dot && (
+                                <TooltipContent className="bg-slate-900 text-white border-none py-1 px-2 text-[10px] font-bold" style={{ backgroundColor: dot.color }}>
+                                    {dot.label}
+                                </TooltipContent>
+                            )}
+                        </Tooltip>
+                        <span className="text-[11px] font-bold uppercase tracking-widest truncate opacity-80">
+                            {shift.roster_subgroup?.name || shift.sub_group_name || roleName}
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                        {shift.is_from_template && <div className="mr-1" title="From Template"><CopyPlus className="h-3 w-3 opacity-60" /></div>}
+                        {ctx.emergencyLabel && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <div className="flex items-center justify-center bg-rose-500/20 rounded p-0.5">
+                                        <Flame className="h-3 w-3 text-rose-500" />
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-rose-600 text-white border-none py-1 px-2 text-[10px] font-medium">{ctx.emergencyLabel}</TooltipContent>
+                            </Tooltip>
+                        )}
+                        {(isFullyLocked || isProtected) && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <div className={cn(
+                                        "flex items-center justify-center rounded p-0.5",
+                                        isFullyLocked ? "bg-muted dark:bg-slate-800" : "bg-amber-500/10"
+                                    )}>
+                                        <Lock className={cn(
+                                            "h-3 w-3",
+                                            isFullyLocked ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"
+                                        )} />
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-amber-600 text-white border-none py-1 px-2 text-[10px] font-medium">{lockTooltip}</TooltipContent>
+                            </Tooltip>
+                        )}
+                        {headerAction || (!isFullyLocked && (
+                          <button className="min-h-[44px] min-w-[44px] flex items-center justify-center -mr-1">
+                            <MoreHorizontal className="h-3.5 w-3.5 opacity-40" />
+                          </button>
+                        ))}
+                    </div>
                 </div>
-                <div className="flex items-center gap-1">
-                    {shift.is_from_template && <div className="mr-1" title="From Template"><CopyPlus className="h-3 w-3 opacity-60" /></div>}
-                    {ctx.emergencyLabel && (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className="flex items-center justify-center bg-rose-500/20 rounded p-0.5">
-                                    <Flame className="h-3 w-3 text-rose-500" />
-                                </div>
-                            </TooltipTrigger>
-                            <TooltipContent className="bg-rose-600 text-white border-none py-1 px-2 text-[10px] font-medium">{ctx.emergencyLabel}</TooltipContent>
-                        </Tooltip>
-                    )}
-                    {(isFullyLocked || isProtected) && (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className={cn(
-                                    "flex items-center justify-center rounded p-0.5",
-                                    isFullyLocked ? "bg-muted dark:bg-slate-800" : "bg-amber-500/10"
-                                )}>
-                                    <Lock className={cn(
-                                        "h-3 w-3",
-                                        isFullyLocked ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"
-                                    )} />
-                                </div>
-                            </TooltipTrigger>
-                            <TooltipContent className="bg-amber-600 text-white border-none py-1 px-2 text-[10px] font-medium">{lockTooltip}</TooltipContent>
-                        </Tooltip>
-                    )}
-                    {headerAction || (!isFullyLocked && <MoreHorizontal className="h-3.5 w-3.5 opacity-40" />)}
+
+                {/* Body — greyscaled for past shifts while header/dot stays crisp */}
+                <div className={cn("px-3 py-1.5 flex flex-col gap-1 flex-1 relative z-[20]",
+                    !isDnDActive && isPast && dot !== null && "grayscale opacity-60")}>
+                    <div className="flex flex-col items-center justify-center min-h-[20px] gap-0.5">
+                        <div className="text-sm font-semibold text-foreground truncate text-center">{employeeName || 'Unassigned'}</div>
+                    </div>
+                    <div className="flex justify-center mb-1">
+                        <div className="bg-muted/50 rounded-md px-2 py-0.5 flex items-center gap-1.5 text-[10px]">
+                            <Clock className="h-3 w-3 text-muted-foreground" />
+                            <span className="font-mono font-medium text-foreground">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {/* Body */}
-            <div className="px-3 py-1.5 flex flex-col gap-1 flex-1 relative z-[20]">
-                <div className="flex flex-col items-center justify-center min-h-[20px] gap-0.5">
-                    <div className="text-sm font-semibold text-foreground truncate text-center">{employeeName || 'Unassigned'}</div>
-                </div>
-                <div className="flex justify-center mb-1">
-                    <div className="bg-muted/50 rounded-md px-2 py-0.5 flex items-center gap-1.5 text-[10px]">
-                        <Clock className="h-3 w-3 text-muted-foreground" />
-                        <span className="font-mono font-medium text-foreground">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
-                    </div>
-                </div>
-                {(shift.lifecycle_status === 'InProgress' || shift.lifecycle_status === 'Completed') && (
-                    <div className="flex justify-center">
-                        <AttendanceBadge
-                            attendanceStatus={shift.attendance_status ?? 'unknown'}
-                            actualStart={shift.actual_start}
-                            scheduledStart={`${shift.shift_date}T${shift.start_time}`}
-                            actualEnd={shift.actual_end}
-                            scheduledEnd={`${shift.shift_date}T${shift.end_time}`}
-                            lifecycleStatus={shift.lifecycle_status as 'InProgress' | 'Completed'}
-                        />
-                    </div>
-                )}
-                <ShiftStatusIcons shift={shift} isLocked={isFullyLocked || isProtected} />
-            </div>
-
-            {/* DnD Blocking Overlay (highest layer) - MOVED TO END of children for certain stacking precedence */}
+            {/* DnD Blocking Overlay (highest layer) */}
             {isDnDActive && isLocked && isPublished && (
                 <div 
                     className="absolute inset-0 bg-stripe-red pointer-events-none rounded-inherit z-[100] border-2 border-red-500/50 shadow-[inset_0_0_20px_rgba(239,68,68,0.3)]" 
                     aria-hidden="true" 
                 />
             )}
-        </div>
+        </motion.div>
     );
 };
 
@@ -416,107 +345,156 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
         trading_status:     shift.trading_status    ?? null,
         is_cancelled:       shift.is_cancelled      ?? false,
         scheduled_start:    shift.scheduled_start   ?? null,
+        actual_start:       shift.actual_start      ?? null,
         emergency_source:   (shift as any).emergency_source ?? null,
-    }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, (shift as any).emergency_source]);
+    }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, shift.actual_start, (shift as any).emergency_source]);
+    
     const fsmLock = getLockState(ctx.state);
     const isFullyLocked = isLocked || fsmLock.fullyLocked;
     const isProtected = fsmLock.partialLock;
     const isDraft = statusStr === 'draft';
     const isPublished = statusStr === 'published';
 
+    const dot = getStatusDotInfo({
+        lifecycle_status:   shift.lifecycle_status,
+        is_cancelled:       shift.is_cancelled,
+        assignment_outcome: shift.assignment_outcome,
+        attendance_status:  shift.attendance_status,
+        actual_start:       shift.actual_start,
+        actual_end:         shift.actual_end,
+        start_at:           shift.start_at,
+        end_at:             shift.end_at,
+        shift_date:         shift.shift_date,
+        start_time:         shift.start_time,
+        end_time:           shift.end_time,
+    });
+
+    const stateLabel =
+        ctx.state === 'S3' && ctx.urgency === 'emergent' ? 'S3*'
+        : ctx.state === 'S5' && ctx.urgency === 'emergent' ? 'S5*'
+        : ctx.state;
+
+    const { rotateX, rotateY, onMouseMove, onMouseLeave } = useTilt();
+
     return (
-        <div
+        <motion.div
+            style={{ rotateX, rotateY, transformStyle: "preserve-3d", perspective: "1000px" }}
+            onMouseMove={onMouseMove}
+            onMouseLeave={onMouseLeave}
             className={cn(
                 'relative flex flex-col rounded-xl overflow-hidden border bg-card shadow-sm transition-all group select-none',
-                onClick && !isFullyLocked && 'cursor-pointer hover:shadow-lg hover:ring-1 hover:ring-primary/30',
+                onClick && !isFullyLocked && 'cursor-pointer hover:shadow-lg',
                 isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background border-primary/50 bg-primary/5 dark:bg-primary/20',
                 isDragging && 'opacity-50 scale-95',
                 isDragOver && 'ring-2 ring-blue-400 ring-offset-2',
-                // EXCLUSION: Disable grayscale/opacity reductions during DnD mode to preserve colorful headers
-                !isDnDActive && isPast && 'grayscale opacity-60 cursor-not-allowed',
-                !isDnDActive && isFullyLocked && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
-                // Standard states
+                !isDnDActive && dot === null && isPast && 'grayscale opacity-60 cursor-not-allowed',
+                !isDnDActive && dot === null && isFullyLocked && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
                 isDraft && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'border-dashed opacity-[0.98]',
                 !isDraft && !isFullyLocked && !isPast && 'border-solid',
                 className
             )}
             onClick={isFullyLocked || isPast ? undefined : onClick}
         >
-            {/* Header */}
-            <div className={cn('px-4 py-2.5 flex justify-between items-center transition-all duration-300 relative z-[20]',
-                shift.bidding_status === 'bidding_closed_no_winner' ? 'bg-orange-500/20 text-orange-900 dark:text-orange-100' : colors.header,
-                isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-40 backdrop-blur-[2px]',
-                !isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-100',
-                shift.bidding_status !== 'bidding_closed_no_winner' && colors.text,
-                isFullyLocked && !isDnDActive && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-muted dark:bg-slate-700 text-muted-foreground')}>
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <GripVertical className={cn("h-4 w-4 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity", isFullyLocked ? "cursor-not-allowed" : "cursor-grab")} />
-                    <span className="text-xs font-bold uppercase tracking-widest truncate opacity-90">
-                        {shift.roster_subgroup?.name || shift.sub_group_name || 'Shift'}
-                    </span>
+            {/* Content container — body greyscales on past, header (dot) stays crisp */}
+            <div className="flex-1 flex flex-col min-h-0">
+                {/* Header */}
+                <div className={cn('px-4 py-2.5 flex justify-between items-center transition-all duration-300 relative z-[20]',
+                    shift.bidding_status === 'bidding_closed_no_winner' ? 'bg-orange-500/20 text-orange-900 dark:text-orange-100' : colors.header,
+                    isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-40 backdrop-blur-[2px]',
+                    !isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-100',
+                    shift.bidding_status !== 'bidding_closed_no_winner' && colors.text,
+                    isFullyLocked && !isDnDActive && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-muted dark:bg-slate-700 text-muted-foreground')}>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <GripVertical className={cn("h-4 w-4 shrink-0 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-40 transition-opacity", isFullyLocked ? "cursor-not-allowed" : "cursor-grab")} />
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="flex items-center gap-2 flex-shrink-0 cursor-help">
+                                    {dot && (
+                                        <span className="w-2.5 h-2.5 rounded-full ring-1 ring-black/10" style={{ backgroundColor: dot.color }} />
+                                    )}
+                                    <span className={cn("text-[9px] font-mono font-bold px-1 py-0.5 rounded",
+                                        isFullyLocked ? "bg-black/20 dark:bg-black/50 opacity-70" : colors.badge)}>
+                                        {stateLabel}
+                                    </span>
+                                </div>
+                            </TooltipTrigger>
+                            {dot && (
+                                <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[11px] font-bold" style={{ backgroundColor: dot.color }}>
+                                    {dot.label}
+                                </TooltipContent>
+                            )}
+                        </Tooltip>
+                        <span className="text-xs font-bold uppercase tracking-widest truncate opacity-90">
+                            {shift.roster_subgroup?.name || shift.sub_group_name || 'Shift'}
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        {shift.is_from_template && <Badge variant="outline" className="text-[9px] bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 h-4 px-1 gap-1"><CopyPlus className="h-2.5 w-2.5" />Template</Badge>}
+                        {(isFullyLocked || isProtected) && (
+                            <div className={cn(
+                                "flex items-center justify-center rounded p-1 mr-1",
+                                isFullyLocked ? "bg-muted dark:bg-slate-800" : "bg-amber-500/10"
+                            )}>
+                                <Lock className={cn(
+                                    "h-3.5 w-3.5",
+                                    isFullyLocked ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"
+                                )} />
+                            </div>
+                        )}
+                        {getLifecycleIcon(statusStr)}
+                        {headerAction || (!isFullyLocked && (
+                          <button className="min-h-[44px] min-w-[44px] flex items-center justify-center -mr-1">
+                            <MoreHorizontal className="h-4 w-4 opacity-50" />
+                          </button>
+                        ))}
+                    </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                    {shift.is_from_template && <Badge variant="outline" className="text-[9px] bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 h-4 px-1 gap-1"><CopyPlus className="h-2.5 w-2.5" />Template</Badge>}
-                    {(isFullyLocked || isProtected) && (
-                        <div className={cn(
-                            "flex items-center justify-center rounded p-1 mr-1",
-                            isFullyLocked ? "bg-muted dark:bg-slate-800" : "bg-amber-500/10"
-                        )}>
-                            <Lock className={cn(
-                                "h-3.5 w-3.5",
-                                isFullyLocked ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"
-                            )} />
+
+                {/* Body — greyscaled for past shifts while header (dot) stays crisp */}
+                <div className={cn("p-4 space-y-3 relative z-[20]",
+                    !isDnDActive && isPast && dot !== null && "grayscale opacity-60")}>
+                    <div className="flex items-center gap-3">
+                        <Avatar className="h-9 w-9 border border-border">
+                            <AvatarFallback className={cn('text-xs font-bold', employeeName ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground')}>
+                                {employeeName ? getInitials(employeeName) : <User className="h-4 w-4" />}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">{employeeName || 'Unassigned'}</p>
+                            <p className="text-xs text-muted-foreground truncate">{roleName}</p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                        <div className="bg-muted/50 rounded-lg px-3 py-1.5 flex items-center gap-2">
+                            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="text-sm font-mono font-medium text-foreground">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
+                        </div>
+                        {totalHours && <Badge variant="secondary" className="text-xs">{totalHours}h net</Badge>}
+                    </div>
+
+                    {hasComplianceIssue && (
+                        <div className={cn('rounded-lg p-2.5 text-xs border', compliance?.status === 'violation' ? 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-300' : 'bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300')}>
+                            <div className="flex items-center gap-1.5 font-semibold mb-1"><AlertTriangle className="h-3.5 w-3.5" />{compliance?.status === 'violation' ? 'Compliance Violation' : 'Compliance Warning'}</div>
+                            <ul className="space-y-0.5 pl-5 list-disc">
+                                {compliance?.violations.map((v, i) => <li key={`v-${i}`}>{v}</li>)}
+                                {compliance?.warnings.map((w, i) => <li key={`w-${i}`}>{w}</li>)}
+                            </ul>
                         </div>
                     )}
-                    {getLifecycleIcon(statusStr)}
-                    {headerAction || (!isFullyLocked && <MoreHorizontal className="h-4 w-4 opacity-50" />)}
+
+                    {shift.notes && <p className="text-xs text-muted-foreground italic truncate">{shift.notes}</p>}
                 </div>
             </div>
 
-            {/* Body */}
-            <div className="p-4 space-y-3 relative z-[20]">
-                <div className="flex items-center gap-3">
-                    <Avatar className="h-9 w-9 border border-border">
-                        <AvatarFallback className={cn('text-xs font-bold', employeeName ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground')}>
-                            {employeeName ? getInitials(employeeName) : <User className="h-4 w-4" />}
-                        </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-foreground truncate">{employeeName || 'Unassigned'}</p>
-                        <p className="text-xs text-muted-foreground truncate">{roleName}</p>
-                    </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                    <div className="bg-muted/50 rounded-lg px-3 py-1.5 flex items-center gap-2">
-                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-sm font-mono font-medium text-foreground">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
-                    </div>
-                    {totalHours && <Badge variant="secondary" className="text-xs">{totalHours}h net</Badge>}
-                </div>
-
-                {hasComplianceIssue && (
-                    <div className={cn('rounded-lg p-2.5 text-xs border', compliance?.status === 'violation' ? 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-300' : 'bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-300')}>
-                        <div className="flex items-center gap-1.5 font-semibold mb-1"><AlertTriangle className="h-3.5 w-3.5" />{compliance?.status === 'violation' ? 'Compliance Violation' : 'Compliance Warning'}</div>
-                        <ul className="space-y-0.5 pl-5 list-disc">
-                            {compliance?.violations.map((v, i) => <li key={`v-${i}`}>{v}</li>)}
-                            {compliance?.warnings.map((w, i) => <li key={`w-${i}`}>{w}</li>)}
-                        </ul>
-                    </div>
-                )}
-
-                {shift.notes && <p className="text-xs text-muted-foreground italic truncate">{shift.notes}</p>}
-                <ShiftStatusIcons shift={shift} isLocked={isFullyLocked || isProtected} />
-            </div>
-
-            {/* DnD Blocking Overlay (highest layer) - MOVED TO END of children for certain stacking precedence */}
+            {/* DnD Blocking Overlay (highest layer) */}
             {isDnDActive && isLocked && isPublished && (
                 <div 
                     className="absolute inset-0 bg-stripe-red pointer-events-none rounded-inherit z-[100] border-2 border-red-500/50 shadow-[inset_0_0_20px_rgba(239,68,68,0.3)]" 
                     aria-hidden="true" 
                 />
             )}
-        </div>
+        </motion.div>
     );
 };
 

@@ -217,10 +217,10 @@ export const PRIORITY_CONFIG: Record<SwapPriority, {
     icon: React.ElementType;
     chipActiveCls: string;
 }> = {
-    locked: {
-        label: 'Not Allowed',
+    emergent: {
+        label: 'Emergent',
         badgeCls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
-        icon: Lock,
+        icon: Flame,
         chipActiveCls: 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400',
     },
     urgent: {
@@ -802,7 +802,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                             <Filter className="h-3 w-3" />
                             Priority
                         </div>
-                        {(['all', 'normal', 'urgent', 'locked'] as const).map((p) => {
+                        {(['all', 'normal', 'urgent', 'emergent'] as const).map((p) => {
                             const isAll = p === 'all';
                             const conf = isAll ? null : PRIORITY_CONFIG[p];
                             const active = priorityFilter === p;

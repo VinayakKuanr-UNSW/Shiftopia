@@ -121,7 +121,7 @@ export const AddShiftDialog: React.FC<AddShiftDialogProps> = ({
           {trigger}
         </DialogTrigger>
       )}
-      <DialogContent className="sm:max-w-[425px] bg-gray-900/95 backdrop-blur-xl border-gray-800">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[425px] bg-gray-900/95 backdrop-blur-xl border-gray-800">
         <DialogHeader>
           <DialogTitle>Add New Shift</DialogTitle>
           <DialogDescription>

@@ -15,8 +15,6 @@ import { Label } from '@/modules/core/ui/primitives/label';
 import {
   X,
   ArrowLeftRight,
-  History,
-  ChevronDown,
   Loader2,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -56,7 +54,6 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
-  const [showHistory, setShowHistory] = useState(false);
 
   const dropShiftMutation = useDropShift();
   const isDropping = dropShiftMutation.isPending;
@@ -81,7 +78,8 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   const isActiveOrCommenced = shift.lifecycle_status === 'InProgress' || shift.lifecycle_status === 'Completed' || isCommenced;
   const hasCheckedIn = shift.attendance_status === 'checked_in' || shift.attendance_status === 'late';
 
-  const isLockedFromActions = shift.is_cancelled || !!existingSwapRequest || isPendingInOffer || isWithinLockoutPeriod || shift.assignment_outcome === 'offered' || isActiveOrCommenced || hasCheckedIn;
+  const isS3PendingOffer = shift.lifecycle_status === 'Published' && shift.assignment_status === 'assigned' && !shift.assignment_outcome;
+  const isLockedFromActions = shift.is_cancelled || !!existingSwapRequest || isPendingInOffer || isWithinLockoutPeriod || isS3PendingOffer || isActiveOrCommenced || hasCheckedIn;
 
   // ── SharedShiftCard props ──────────────────────────────────────────────────
   const paidBreak = (shift as any).paid_break_minutes ?? 0;
@@ -113,7 +111,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
     : isActiveOrCommenced ? 'In Progress'
     : hasCheckedIn ? 'Clocked In'
     : existingSwapRequest ? (isWithinLockoutPeriod ? 'Swap Expired' : 'Swap Active')
-    : shift.assignment_outcome === 'offered' ? 'Offer Pending'
+    : isS3PendingOffer ? 'Offer Pending'
     : 'Assigned';
 
   const statusBadgeCls = shift.is_cancelled
@@ -122,7 +120,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
       ? 'bg-blue-500/10 text-blue-500 border-blue-500/20'
       : existingSwapRequest
         ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
-        : shift.assignment_outcome === 'offered'
+        : isS3PendingOffer
           ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 animate-pulse'
           : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
 
@@ -130,19 +128,8 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   const scheduledEndISO = `${shift.shift_date}T${shift.end_time}`;
   const showAttendanceBadge = shift.lifecycle_status === 'InProgress' || shift.lifecycle_status === 'Completed';
 
-  // ── Button labels ──────────────────────────────────────────────────────────
-  const swapLabel = isActiveOrCommenced || hasCheckedIn ? 'Locked'
-    : isPendingInOffer ? 'Offer Pending'
-    : existingSwapRequest ? (isWithinLockoutPeriod ? 'Expired' : 'Requested')
-    : isWithinLockoutPeriod ? 'Locked'
-    : shift.assignment_outcome === 'offered' ? 'Open Bid'
-    : 'Swap';
-
-  const dropLabel = isActiveOrCommenced || hasCheckedIn ? 'Locked'
-    : isPendingInOffer ? 'Locked via Offer'
-    : existingSwapRequest ? (isWithinLockoutPeriod ? 'Expired' : 'Swap Active')
-    : isWithinLockoutPeriod ? 'Locked'
-    : 'Drop';
+  const swapLabel = 'Swap';
+  const dropLabel = 'Drop';
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handleDropShift = () => setIsCancelConfirmOpen(true);
@@ -200,11 +187,9 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
               unpaidBreak={unpaidBreak}
               urgency={urgency}
               groupVariant={groupVariant}
+              shiftData={shift}
               statusIcons={
                 <div className="col-span-3 flex flex-wrap gap-2 items-center">
-                  <Badge variant="outline" className={cn('text-[9px] font-black uppercase tracking-wider', statusBadgeCls)}>
-                    {statusText}
-                  </Badge>
                   {shift.remuneration_levels?.level_name && (
                     <Badge className="text-[9px] font-black bg-primary/10 text-primary border-primary/20 border uppercase tracking-wider">
                       {shift.remuneration_levels.level_name}
@@ -230,28 +215,11 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
             />
           </div>
 
-          {/* Shift History */}
-          <div className="px-4 pt-3">
-            <button
-              onClick={() => setShowHistory(v => !v)}
-              className="w-full flex items-center justify-between p-2.5 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors text-left"
-            >
-              <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                <History className="h-3.5 w-3.5" />
-                Shift History
-              </span>
-              <ChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground/50 transition-transform', showHistory && 'rotate-180')} />
-            </button>
-            {showHistory && (
-              <div className="mt-2 max-h-48 overflow-y-auto rounded-xl bg-muted/20 px-3 py-2">
-                <ShiftTimeline shiftId={shift.id} className="text-foreground/80" />
-              </div>
-            )}
-          </div>
+
 
           {/* Action Buttons */}
           <div className="p-4 pt-3">
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Button
                 onClick={onClose}
                 variant="outline"
@@ -282,16 +250,6 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
                 {dropLabel}
               </Button>
             </div>
-            {isWithinLockoutPeriod && (
-              <p className="text-xs text-center text-muted-foreground mt-2">
-                Actions locked 4 hours before shift start
-              </p>
-            )}
-            {isPendingInOffer && !isWithinLockoutPeriod && (
-              <p className="text-xs text-center text-amber-500/80 mt-2 font-medium">
-                You have an active pending offer for this shift.
-              </p>
-            )}
           </div>
         </DialogContent>
       </Dialog>

@@ -166,7 +166,7 @@ const PerformanceSection: React.FC<PerformanceSectionProps> = ({ employeeId, qua
                         {/* ─── OFFER BEHAVIOR ─── */}
                         <div>
                             <SectionHeader icon={Inbox} label="Offer Behavior" color="text-blue-500" />
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                 <MetricCard
                                     label="Acceptance"
                                     value={m.acceptance_rate}
@@ -191,7 +191,7 @@ const PerformanceSection: React.FC<PerformanceSectionProps> = ({ employeeId, qua
                         {/* ─── RELIABILITY ─── */}
                         <div>
                             <SectionHeader icon={Shield} label="Reliability" color="text-amber-500" />
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                 <MetricCard
                                     label="Standard Cancellation"
                                     value={m.cancellation_rate_standard}
@@ -216,7 +216,7 @@ const PerformanceSection: React.FC<PerformanceSectionProps> = ({ employeeId, qua
                         {/* ─── ATTENDANCE ─── */}
                         <div>
                             <SectionHeader icon={CalendarCheck} label="Attendance" color="text-emerald-500" />
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                 <MetricCard
                                     label="Late Clock-Ins"
                                     value={m.late_clock_in_rate}
@@ -244,7 +244,7 @@ const PerformanceSection: React.FC<PerformanceSectionProps> = ({ employeeId, qua
                                 <CheckCircle2 className="w-3 h-3 text-muted-foreground" />
                                 <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Summary Metrics</span>
                             </div>
-                            <div className="flex justify-start gap-8 px-2">
+                            <div className="flex flex-wrap justify-start gap-4 px-2">
                                 <CountPill label="No. of Shifts Offered" value={m.shifts_offered} />
                                 <CountPill label="No. of Shifts Currently Assigned" value={m.shifts_assigned} />
                                 <CountPill label="No. of Times Emergency Assigned" value={m.emergency_assignments} />

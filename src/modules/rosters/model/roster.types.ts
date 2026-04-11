@@ -135,7 +135,7 @@ export interface DbRosterShift {
     is_manual: boolean;
     created_at: string;
     updated_at: string;
-    assignment_outcome?: 'pending' | 'offered' | 'confirmed' | 'emergency_assigned' | null;
+    assignment_outcome?: 'confirmed' | 'no_show' | null;
 }
 
 export interface DbRosterAssignment {
@@ -202,7 +202,7 @@ export interface RosterShiftWithLiveState {
     bidding_status: string;
     trading_status: string;
     attendance_status: string;
-    assignment_outcome: 'pending' | 'offered' | 'confirmed' | 'emergency_assigned' | null;
+    assignment_outcome: 'confirmed' | 'no_show' | null;
     assigned_employee_id: string | null;
     assignment_status: string;
 
@@ -257,7 +257,7 @@ export interface RosterShift {
     isManual: boolean;
     isUrgent?: boolean;
     assignment: RosterAssignment | null;
-    assignmentOutcome?: 'pending' | 'offered' | 'confirmed' | 'emergency_assigned' | null;
+    assignmentOutcome?: 'confirmed' | 'no_show' | null;
 }
 
 export interface RosterSubgroup {
@@ -386,7 +386,7 @@ export interface GroupModeShift {
     rosterShiftId?: string;
     isManual?: boolean;
     isUrgent?: boolean;
-    assignmentOutcome?: 'pending' | 'offered' | 'confirmed' | 'emergency_assigned' | null;
+    assignmentOutcome?: 'confirmed' | 'no_show' | null;
 }
 
 /** SubGroup with shifts organized by date */

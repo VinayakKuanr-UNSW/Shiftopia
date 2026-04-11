@@ -40,7 +40,7 @@ export const FunctionBar: React.FC<FunctionBarProps> = ({
             className
         )}>
             {/* Left: Tabs */}
-            <div className="flex items-center gap-1 bg-white dark:bg-black/20 p-1 rounded-lg border border-slate-200 dark:border-white/5 shadow-sm dark:shadow-none">
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar bg-white dark:bg-black/20 p-1 rounded-lg border border-slate-200 dark:border-white/5 shadow-sm dark:shadow-none">
                 {tabs.map((tab) => {
                     const isActive = activeTab === tab.id;
                     return (

@@ -1363,3 +1363,5 @@ export function useTemplates(): UseTemplatesReturn {
 }
 
 export default useTemplates;
+
+export { useSnapRosterAsTemplate } from '../hooks/queries/useTemplateQueries';

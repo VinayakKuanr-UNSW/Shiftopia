@@ -80,8 +80,9 @@ export const useMyRoster = (view: CalendarView, selectedDate: Date, scope?: Scop
 
         // Filter from the cached array
         let daysShifts = shifts.filter(s => {
-            // Exclude offered shifts — employee must accept first; they appear in MyOffers modal only
-            if ((s as any).assignment_outcome === 'offered') return false;
+            // Exclude S3 (Published+Offered, awaiting acceptance) — they appear in MyOffers modal only.
+            // S3 encoding: lifecycle=Published, assignment_status=assigned, assignment_outcome=NULL
+            if (s.lifecycle_status === 'Published' && s.assignment_status === 'assigned' && !s.assignment_outcome) return false;
 
             // Include shifts starting today
             if (s.shift_date === dateStr) return true;

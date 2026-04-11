@@ -144,7 +144,7 @@ export const AddLicenseDialog: React.FC<AddLicenseDialogProps> = ({ employeeId, 
                     {isVisa ? 'Add Work Rights' : 'Add License'}
                 </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md bg-card border-border text-foreground shadow-xl shadow-black/5 dark:shadow-black/20">
+            <DialogContent className="w-[calc(100vw-2rem)] max-w-md bg-card border-border text-foreground shadow-xl shadow-black/5 dark:shadow-black/20">
                 <DialogHeader>
                     <DialogTitle>{isVisa ? 'Add Work Rights' : 'Add License'}</DialogTitle>
                     <DialogDescription>

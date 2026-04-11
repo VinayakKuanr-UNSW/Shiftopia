@@ -361,7 +361,7 @@ export function SwapComplianceModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto bg-slate-900 border-white/10">
+            <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl max-h-[85vh] overflow-y-auto bg-slate-900 border-white/10">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-white">
                         <Shield className="h-5 w-5 text-purple-400" />

@@ -3,6 +3,8 @@ import AppSidebar from './sidebar/AppSidebar';
 import { cn } from '@/modules/core/lib/utils';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
+import { Sheet, SheetContent } from '@/modules/core/ui/primitives/sheet';
+import { useSidebar } from '@/modules/core/ui/primitives/sidebar';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -11,11 +13,19 @@ interface AppLayoutProps {
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children, noPadding = false }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { openMobile, setOpenMobile } = useSidebar();
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
 
-      {/* Sidebar - Fixed position, slides in/out */}
+      {/* Mobile Sidebar Drawer */}
+      <Sheet open={openMobile} onOpenChange={setOpenMobile}>
+        <SheetContent side="left" className="p-0 w-[280px] border-r border-border">
+          <AppSidebar />
+        </SheetContent>
+      </Sheet>
+
+      {/* Sidebar - Fixed position, slides in/out (desktop only) */}
       <div
         className={cn(
           "hidden md:block fixed left-0 top-0 h-screen z-40 transition-transform duration-300 ease-in-out",
@@ -51,7 +61,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, noPadding = false }) =>
           noPadding
             ? "p-0 overflow-hidden bg-background"
             // Normal pages scroll normally
-            : "p-8 overflow-auto bg-background bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-background to-background"
+            : "p-4 sm:p-6 md:p-8 overflow-auto bg-background bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-background to-background"
         )}
       >
         {/* Critical Fix: use min-h-0 instead of h-full */}

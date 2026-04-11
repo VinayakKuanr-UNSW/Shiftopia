@@ -75,7 +75,7 @@ const DayView: React.FC<DayViewProps> = ({ date, shifts }) => {
                     'border border-white/20 shadow-lg',
                     'hover:scale-[1.01] active:scale-[0.99] transition-transform',
                     'focus:outline-none focus:ring-2 focus:ring-white/30',
-                    shift.assignment_outcome === 'offered' && 'opacity-60 border-dashed border-2',
+                    shift.lifecycle_status === 'Published' && shift.assignment_status === 'assigned' && !shift.assignment_outcome && 'opacity-60 border-dashed border-2',
                     getGradientClass(groupColor)
                   )}
                 >

@@ -12,6 +12,38 @@ const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 if (!supabaseUrl) throw new Error('[FATAL] Missing SUPABASE_URL');
 if (!supabaseServiceKey) throw new Error('[FATAL] Missing SUPABASE_SERVICE_ROLE_KEY');
 
+interface ShiftRow {
+  id: string;
+  lifecycle_status: string;
+  assignment_status: string;
+  assignment_outcome: string | null;
+  bidding_status: string;
+  start_at: string | null;
+  shift_date: string | null;
+  start_time: string | null;
+  final_call_sent_at: string | null;
+}
+
+/**
+ * Resolve a shift's real start time.
+ * Priority: start_at (ISO) → shift_date + start_time (local, assumed Sydney/UTC+11).
+ * Returns null if neither field is usable.
+ */
+function resolveStartTime(s: Pick<ShiftRow, 'start_at' | 'shift_date' | 'start_time'>): Date | null {
+  if (s.start_at) {
+    const d = new Date(s.start_at);
+    if (!isNaN(d.getTime())) return d;
+  }
+  if (s.shift_date && s.start_time) {
+    // Treat shift_date + start_time as Sydney local (UTC+11 AEDT / UTC+10 AEST).
+    // We use a fixed +11 offset as a safe default; sub-minute precision is fine here.
+    const timeStr = s.start_time.length === 5 ? s.start_time : s.start_time.substring(0, 5); // HH:mm
+    const d = new Date(`${s.shift_date}T${timeStr}:00+11:00`);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -22,87 +54,163 @@ Deno.serve(async (req: Request) => {
     const now = new Date();
     const logs: string[] = [];
 
-    // ── Pass 1: Urgency escalation S5 → S6 at TTS ≤ 24h ──────────────────────
-    // Legacy: shifts still stored as on_bidding_normal escalate to on_bidding_urgent.
-    // New shifts use unified on_bidding; urgency is derived client-side from TTS.
-    const { data: escalated, error: escalateError } = await supabase
+    // Fetch all columns needed to calculate TTS from either source.
+    const { data: shifts, error: fetchError } = await supabase
       .from('shifts')
-      .update({ bidding_status: 'on_bidding_urgent', updated_at: now.toISOString() })
+      .select('id, lifecycle_status, assignment_status, assignment_outcome, bidding_status, start_at, shift_date, start_time, final_call_sent_at')
       .eq('lifecycle_status', 'Published')
-      .eq('bidding_status', 'on_bidding_normal')
-      .lte(
-        'start_at',
-        new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
-      )
-      .select('id');
+      .neq('is_cancelled', true);
 
-    if (escalateError) {
-      logs.push(`[WARN] Urgency escalation error: ${escalateError.message}`);
-    } else {
-      const count = escalated?.length ?? 0;
-      if (count > 0) logs.push(`[INFO] Escalated ${count} shift(s) to on_bidding_urgent (legacy)`);
+    if (fetchError) throw fetchError;
+
+    const allShifts: ShiftRow[] = (shifts ?? []) as ShiftRow[];
+
+    // Pre-compute TTS (ms) for every shift once — reused across all passes.
+    const ttsMap = new Map<string, number>();
+    for (const s of allShifts) {
+      const start = resolveStartTime(s);
+      ttsMap.set(s.id, start ? start.getTime() - now.getTime() : Infinity);
     }
 
-    // ── Pass 2: Offer expiry S3 → S1 at TTS ≤ 4h ─────────────────────────────
-    // Offered shifts (assignment_outcome='offered') revert to Draft+Unassigned.
-    // DB trigger trg_offer_expired_notification fires per-row and notifies the employee.
-    const { data: offersExpired, error: offerExpireError } = await supabase
-      .from('shifts')
-      .update({
-        lifecycle_status:     'Draft',
-        is_draft:             true,
-        assignment_outcome:   null,
-        assignment_status:    'unassigned',
-        assigned_employee_id: null,
-        assigned_at:          null,
-        bidding_status:       'not_on_bidding',
-        updated_at:           now.toISOString(),
+    const FOUR_H_MS    = 4  * 60 * 60 * 1000;
+    const FIVE_H_MS    = 5  * 60 * 60 * 1000;
+    const TWENTY4_H_MS = 24 * 60 * 60 * 1000;
+
+    // ── Pass 0: Final Call (TTS in (4h, 5h]) ────────────────────────────────────
+    const finalCallIds = allShifts
+      .filter(s => {
+        const tts = ttsMap.get(s.id)!;
+        return s.final_call_sent_at === null && tts > FOUR_H_MS && tts <= FIVE_H_MS;
       })
-      .eq('lifecycle_status', 'Published')
-      .eq('assignment_outcome', 'offered')
-      .lte(
-        'start_at',
-        new Date(now.getTime() + 4 * 60 * 60 * 1000).toISOString(),
-      )
-      .select('id');
+      .map(s => s.id);
 
-    if (offerExpireError) {
-      logs.push(`[WARN] Offer expiry error: ${offerExpireError.message}`);
-    } else {
-      const count = offersExpired?.length ?? 0;
-      if (count > 0) logs.push(`[INFO] Expired ${count} offer(s) → Draft+Unassigned (S1)`);
+    if (finalCallIds.length > 0) {
+      const { error } = await supabase
+        .from('shifts')
+        .update({ final_call_sent_at: now.toISOString() })
+        .in('id', finalCallIds);
+      if (error) {
+        logs.push(`[WARN] Final call update error: ${error.message}`);
+      } else {
+        logs.push(`[INFO] Sent final call for ${finalCallIds.length} shift(s) (5h mark)`);
+      }
     }
 
-    // ── Pass 3: Bidding expiry S5/S6 → S1 at TTS ≤ 4h ───────────────────────
-    // Shifts on bidding (any status variant) with no winner revert to Draft+Unassigned.
-    // DB trigger trg_bidding_expired_notification fires per-row and notifies the manager.
-    const { data: biddingExpired, error: biddingExpireError } = await supabase
-      .from('shifts')
-      .update({
-        lifecycle_status:  'Draft',
-        is_draft:          true,
-        bidding_status:    'not_on_bidding',
-        assignment_status: 'unassigned',
-        updated_at:        now.toISOString(),
+    // ── Pass 1: Urgency escalation (TTS ≤ 24h, still > 4h) ─────────────────────
+    const urgentIds = allShifts
+      .filter(s => {
+        const tts = ttsMap.get(s.id)!;
+        return (
+          ['on_bidding_normal', 'on_bidding'].includes(s.bidding_status) &&
+          tts > FOUR_H_MS &&
+          tts <= TWENTY4_H_MS
+        );
       })
-      .eq('lifecycle_status', 'Published')
-      .in('bidding_status', ['on_bidding_normal', 'on_bidding_urgent', 'on_bidding'])
-      .lte(
-        'start_at',
-        new Date(now.getTime() + 4 * 60 * 60 * 1000).toISOString(),
-      )
-      .select('id');
+      .map(s => s.id);
 
-    if (biddingExpireError) {
-      logs.push(`[WARN] Bidding expiry error: ${biddingExpireError.message}`);
-    } else {
-      const count = biddingExpired?.length ?? 0;
-      if (count > 0) logs.push(`[INFO] Expired ${count} bidding shift(s) → Draft+Unassigned (S1)`);
+    if (urgentIds.length > 0) {
+      const { data: escalated, error } = await supabase
+        .from('shifts')
+        .update({ bidding_status: 'on_bidding_urgent', updated_at: now.toISOString() })
+        .in('id', urgentIds)
+        .select('id');
+      if (error) {
+        logs.push(`[WARN] Urgency escalation error: ${error.message}`);
+      } else {
+        const count = escalated?.length ?? 0;
+        if (count > 0) logs.push(`[INFO] Escalated ${count} shift(s) to on_bidding_urgent`);
+      }
     }
 
-    // ── Pass 4: Swap expiry at TTS ≤ 4h ──────────────────────────────────────
-    // OPEN / MANAGER_PENDING swaps whose linked shift starts within 4h are cancelled.
-    // DB trigger trg_swap_expired_notification fires per-row and notifies the requester.
+    // ── Pass 2: Offer expiry (S3 → S2) at TTS ≤ 4h ─────────────────────────────
+    // Reverts to Draft-Assigned (S2), preserving the employee so the manager can
+    // use direct assignment (publish → S4) without losing who was offered the shift.
+    const offerExpiredIds = allShifts
+      .filter(s => {
+        const tts = ttsMap.get(s.id)!;
+        return (
+          s.assignment_status === 'assigned' &&
+          s.assignment_outcome == null &&
+          tts <= FOUR_H_MS
+        );
+      })
+      .map(s => s.id);
+
+    if (offerExpiredIds.length > 0) {
+      const { data: offersExpired, error } = await supabase
+        .from('shifts')
+        .update({
+          lifecycle_status:   'Draft',
+          // is_draft / is_published / is_on_bidding are generated columns — omitted.
+          assignment_outcome: null,
+          // assignment_status stays 'assigned' — employee ID preserved (S2, not S1)
+          bidding_status:     'not_on_bidding',
+          updated_at:         now.toISOString(),
+        })
+        .in('id', offerExpiredIds)
+        .select('id');
+      if (error) {
+        logs.push(`[WARN] Offer expiry error: ${error.message}`);
+      } else {
+        const count = offersExpired?.length ?? 0;
+        if (count > 0) logs.push(`[INFO] Expired ${count} offer(s) → Draft+Assigned (S3 → S2)`);
+      }
+    }
+
+    // ── Pass 3: Bidding expiry (S5 → S1) at TTS ≤ 4h ───────────────────────────
+    // Targets: Published + unassigned + active bidding status.
+    // Invalidates all pending bids after resetting shift to Draft.
+    const ACTIVE_BIDDING = ['on_bidding', 'on_bidding_normal', 'on_bidding_urgent'];
+    const biddingExpiredIds = allShifts
+      .filter(s => {
+        const tts = ttsMap.get(s.id)!;
+        return (
+          s.assignment_status === 'unassigned' &&
+          ACTIVE_BIDDING.includes(s.bidding_status) &&
+          tts <= FOUR_H_MS
+        );
+      })
+      .map(s => s.id);
+
+    if (biddingExpiredIds.length > 0) {
+      const { data: biddingExpired, error } = await supabase
+        .from('shifts')
+        .update({
+          lifecycle_status:  'Draft',
+          is_draft:          true,
+          is_published:      false,
+          is_on_bidding:     false,
+          bidding_status:    'not_on_bidding',
+          assignment_status: 'unassigned',
+          updated_at:        now.toISOString(),
+        })
+        .in('id', biddingExpiredIds)
+        .select('id');
+
+      if (error) {
+        logs.push(`[WARN] Bidding expiry error: ${error.message}`);
+      } else {
+        const count = biddingExpired?.length ?? 0;
+        if (count > 0) {
+          logs.push(`[INFO] Expired ${count} bidding shift(s) → Draft (S5 → S1)`);
+
+          // Invalidate all pending bids for expired shifts
+          const { error: bidsError } = await supabase
+            .from('shift_bids')
+            .update({ status: 'rejected', updated_at: now.toISOString() })
+            .in('shift_id', biddingExpiredIds)
+            .eq('status', 'pending');
+
+          if (bidsError) {
+            logs.push(`[WARN] Bid invalidation error: ${bidsError.message}`);
+          } else {
+            logs.push(`[INFO] Invalidated pending bids for ${count} expired shift(s)`);
+          }
+        }
+      }
+    }
+
+    // ── Pass 4: Swap expiry at TTS ≤ 4h ────────────────────────────────────────
     const { data: expiredSwaps, error: swapExpireError } = await supabase
       .rpc('expire_locked_swaps') as any;
 
@@ -114,12 +222,13 @@ Deno.serve(async (req: Request) => {
     }
 
     const summary = {
-      success:          true,
-      timestamp:        now.toISOString(),
-      updatedUrgency:   escalated?.length ?? 0,
-      expiredOffers:    offersExpired?.length ?? 0,
-      expiredBidding:   biddingExpired?.length ?? 0,
-      expiredSwaps:     (expiredSwaps as any[])?.length ?? 0,
+      success: true,
+      timestamp: now.toISOString(),
+      finalCalls: finalCallIds.length,
+      updatedUrgency: urgentIds.length,
+      expiredOffers: offerExpiredIds.length,
+      expiredBidding: biddingExpiredIds.length,
+      expiredSwaps: (expiredSwaps as any[])?.length ?? 0,
       logs,
     };
 
@@ -130,8 +239,9 @@ Deno.serve(async (req: Request) => {
     });
   } catch (error) {
     console.error('shift-state-processor error:', error);
+    const msg = error instanceof Error ? error.message : String(error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: msg }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }

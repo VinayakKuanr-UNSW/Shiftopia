@@ -34,6 +34,9 @@ export const isDateInPast = (date: Date | undefined, timezone: string = SYDNEY_T
 export const isShiftStarted = (date: Date | string | undefined, startTime: string | undefined, timezone: string = SYDNEY_TZ): boolean => {
     if (!date || !startTime) return false;
 
+    // Guard: Only validate if we have a complete "HH:MM" format (4-5 chars with a colon)
+    if (!/^\d{1,2}:\d{2}$/.test(startTime)) return false;
+
     try {
         // 1. Get the date string (YYYY-MM-DD)
         let dateStr: string;

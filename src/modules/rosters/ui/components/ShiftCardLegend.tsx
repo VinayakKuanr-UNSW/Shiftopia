@@ -63,8 +63,8 @@ const LEGEND_SECTIONS: LegendSection[] = [
         items: [
             { icon: <Edit className="h-4 w-4 text-gray-400" />, label: 'Draft', description: 'Shift created but not yet published (S1-Unassigned, S2-Assigned)' },
             { icon: <Megaphone className="h-4 w-4 text-blue-500" />, label: 'Published', description: 'Shift is live and visible to employees' },
-            { icon: <Hourglass className="h-4 w-4 text-orange-500" />, label: 'In Progress', description: 'Shift is currently being worked (S11-Confirmed, S12-Emergency)' },
-            { icon: <CheckCircle className="h-4 w-4 text-green-500" />, label: 'Completed', description: 'Shift has been completed (S13-Confirmed, S14-Emergency)' },
+            { icon: <Hourglass className="h-4 w-4 text-orange-500" />, label: 'In Progress', description: 'Shift is currently being worked (S11)' },
+            { icon: <CheckCircle className="h-4 w-4 text-green-500" />, label: 'Completed', description: 'Shift has been completed (S13)' },
             { icon: <XCircle className="h-4 w-4 text-red-500" />, label: 'Cancelled', description: 'Shift has been cancelled (S15)' },
         ],
     },
@@ -81,7 +81,7 @@ const LEGEND_SECTIONS: LegendSection[] = [
             { icon: <Clock className="h-4 w-4 text-yellow-500" />, label: 'Pending', description: 'Assignment pending employee response (S2 Implicit)' },
             { icon: <MailOpen className="h-4 w-4 text-blue-500" />, label: 'Offered', description: 'Offer sent, awaiting acceptance (S3)' },
             { icon: <BadgeCheck className="h-4 w-4 text-green-600" />, label: 'Confirmed', description: 'Employee accepted the offer (S4)' },
-            { icon: <Zap className="h-4 w-4 text-red-500" />, label: 'Emergency Assigned', description: 'Emergency assignment (auto-confirmed) (S7)' },
+            { icon: <Zap className="h-4 w-4 text-red-500" />, label: 'Emergency Assigned', description: 'Emergency assignment — confirmed S4 with emergency badge' },
         ],
     },
     {

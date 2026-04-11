@@ -55,50 +55,54 @@ const WeekView: React.FC<WeekViewProps> = ({ date, getShiftsForDate }) => {
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      <TimeGrid
-        days={days}
-        renderShifts={(day) =>
-          getShiftsForDate(day).map((shiftData) => {
-            const { shift, groupColor } = shiftData;
-            const dateStr = format(day, 'yyyy-MM-dd');
-            const { top, height } = calculateShiftLayout(shift, dateStr, HOUR_HEIGHT, 32);
+      <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0 flex-1 min-h-0 flex flex-col">
+        <div className="min-w-[560px] flex-1 min-h-0 flex flex-col">
+          <TimeGrid
+            days={days}
+            renderShifts={(day) =>
+              getShiftsForDate(day).map((shiftData) => {
+                const { shift, groupColor } = shiftData;
+                const dateStr = format(day, 'yyyy-MM-dd');
+                const { top, height } = calculateShiftLayout(shift, dateStr, HOUR_HEIGHT, 32);
 
-            return (
-              <div
-                key={shift.id}
-                className="absolute left-0.5 right-0.5"
-                style={{ top, height }}
-              >
-                <div
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`${shift.roles?.name || 'Shift'}`}
-                  onClick={() => setSelectedShift({ data: shiftData, date: day })}
-                  onKeyDown={(e) =>
-                    e.key === 'Enter' &&
-                    setSelectedShift({ data: shiftData, date: day })
-                  }
-                  className={cn(
-                    'h-full rounded-md p-1.5 cursor-pointer overflow-hidden',
-                    'border border-white/20 shadow-md',
-                    'hover:scale-[1.02] active:scale-[0.98] transition-transform',
-                    'focus:outline-none focus:ring-2 focus:ring-white/30',
-                    shift.assignment_outcome === 'offered' && 'opacity-60 border-dashed border-2',
-                    getGradientClass(groupColor)
-                  )}
-                >
-                  <div className="text-white text-[10px] font-semibold truncate leading-tight">
-                    {shift.roles?.name || 'Shift'}
+                return (
+                  <div
+                    key={shift.id}
+                    className="absolute left-0.5 right-0.5"
+                    style={{ top, height }}
+                  >
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${shift.roles?.name || 'Shift'}`}
+                      onClick={() => setSelectedShift({ data: shiftData, date: day })}
+                      onKeyDown={(e) =>
+                        e.key === 'Enter' &&
+                        setSelectedShift({ data: shiftData, date: day })
+                      }
+                      className={cn(
+                        'h-full rounded-md p-1.5 cursor-pointer overflow-hidden',
+                        'border border-white/20 shadow-md',
+                        'hover:scale-[1.02] active:scale-[0.98] transition-transform',
+                        'focus:outline-none focus:ring-2 focus:ring-white/30',
+                        shift.lifecycle_status === 'Published' && shift.assignment_status === 'assigned' && !shift.assignment_outcome && 'opacity-60 border-dashed border-2',
+                        getGradientClass(groupColor)
+                      )}
+                    >
+                      <div className="text-white text-[10px] font-semibold truncate leading-tight">
+                        {shift.roles?.name || 'Shift'}
+                      </div>
+                      <div className="text-[9px] text-white/80 truncate">
+                        {formatTime(shift.start_time)}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-[9px] text-white/80 truncate">
-                    {formatTime(shift.start_time)}
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        }
-      />
+                );
+              })
+            }
+          />
+        </div>
+      </div>
 
       <ShiftDetailsDialog
         isOpen={!!selectedShift}

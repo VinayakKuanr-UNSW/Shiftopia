@@ -129,7 +129,7 @@ const STATES: Record<Exclude<ShiftStateID, 'UNKNOWN'>, ShiftStateDef> = {
 
 const TRANSITIONS: Partial<Record<ShiftStateID, Partial<Record<ShiftAction, ShiftStateID>>>> = {
   S1:  { ASSIGN: 'S2',        PUBLISH: 'S5',  DELETE: 'S15', CANCEL: 'S15' },
-  S2:  { ASSIGN: 'S2',        UNASSIGN: 'S1', PUBLISH: 'S3', DELETE: 'S15', CANCEL: 'S15' },
+  S2:  { ASSIGN: 'S2',        UNASSIGN: 'S1', PUBLISH: 'S4', DELETE: 'S15', CANCEL: 'S15' },
   S3:  { ACCEPT_OFFER: 'S4',  REJECT_OFFER: 'S5', EXPIRE_OFFER: 'S1', UNPUBLISH: 'S2', DELETE: 'S15', CANCEL: 'S15' },
   S4:  { REQUEST_TRADE: 'S9', CANCEL: 'S15',  DELETE: 'S15', EDIT: 'S4' },
   S5:  { SELECT_BID_WINNER: 'S4', CLOSE_BIDDING: 'S8', ESCALATE_URGENCY: 'S6', EXPIRE_BIDDING: 'S1', UNPUBLISH: 'S1', DELETE: 'S15', CANCEL: 'S15' },
@@ -229,15 +229,13 @@ export function determineShiftState(shift: {
   // S15: Cancelled wins over everything
   if (lc === 'Cancelled' || is_cancelled) return 'S15';
 
-  // S13 / S14: Completed
+  // S13: Completed
   if (lc === 'Completed') {
-    if (ao === 'emergency_assigned') return 'S14';
     return 'S13';
   }
 
-  // S11 / S12: InProgress
+  // S11: InProgress
   if (lc === 'InProgress') {
-    if (ao === 'emergency_assigned') return 'S12';
     return 'S11';
   }
 
@@ -248,8 +246,8 @@ export function determineShiftState(shift: {
       if (ts === 'TradeAccepted')  return 'S10';
       return 'S4';
     }
-    if (ao === 'offered')           return 'S3';
-    if (ao === 'emergency_assigned') return 'S7';
+    // S3: Published + Assigned + No Outcome
+    if (as_ === 'assigned' && ao == null) return 'S3';
     // Unassigned + bidding
     if (!ao || as_ === 'unassigned') {
       if (bs === 'on_bidding_normal')        return 'S5';

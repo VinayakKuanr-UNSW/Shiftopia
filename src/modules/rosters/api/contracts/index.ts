@@ -30,14 +30,20 @@ export const LifecycleStatusSchema = z.enum([
 
 export const AssignmentStatusSchema = z.enum(['assigned', 'unassigned']);
 
+// assignment_outcome only ever holds NULL, 'confirmed', or 'no_show'.
+// All other values ('pending', 'offered', 'emergency_assigned', 'declined',
+// 'withdrawn', 'cancelled') are banned by the DB check constraint.
 export const AssignmentOutcomeSchema = z.enum([
-  'pending', 'offered', 'confirmed', 'emergency_assigned', 'declined', 'withdrawn', 'no_show', 'cancelled',
+  'confirmed', 'no_show',
 ]).nullable();
 
 export const BiddingStatusSchema = z.enum([
   'not_on_bidding', 'on_bidding', 'on_bidding_normal', 'on_bidding_urgent', 'bidding_closed_no_winner',
 ]);
 
+// TradeApproved has no corresponding FSM state — the FSM uses TradeAccepted (S10)
+// as the manager-approval step. TradeApproved is retained here only for backward
+// compatibility with existing DB rows during migration; treat it as TradeAccepted.
 export const TradingStatusSchema = z.enum([
   'NoTrade', 'TradeRequested', 'TradeAccepted', 'TradeApproved',
 ]);

@@ -261,29 +261,49 @@ export async function executeAssignShift(
             advisories = check.advisories;
         }
 
-        // 3. Execute DB write — direct UPDATE on shifts table.
-        //    The legacy RPC `assign_employee_to_shift` references a defunct
-        //    `roster_shifts` table, so we use a direct update instead.
+        // 3. Execute DB write via FSM RPCs.
         const userId = (await supabase.auth.getUser()).data.user?.id;
 
-        // Build update payload — always set assignment_status explicitly so the
-        // FSM validator (validate_shift_state_invariants trigger) sees a consistent row.
-        // On unassign: clear assignment_outcome too (cross-field rule: unassigned → null).
-        const updatePayload: Record<string, unknown> = {
-            assigned_employee_id: employeeId,
-            assigned_at:          employeeId ? new Date().toISOString() : null,
-            assignment_status:    employeeId ? 'assigned' : 'unassigned',
-            assignment_source:    employeeId ? 'manual' : null,
-            last_modified_by:     userId,
-            updated_at:           new Date().toISOString(),
-        };
         if (!employeeId) {
-            updatePayload.assignment_outcome = null;
+            // Unassign — delegate entirely to sm_unassign_shift RPC (handles bidding_status reset,
+            // audit, and FOR UPDATE lock to prevent TOCTOU races).
+            const { data: rpcResult, error: rpcError } = await (supabase as any)
+                .rpc('sm_unassign_shift', { p_shift_id: shiftId, p_user_id: userId ?? null });
+            if (rpcError) return { success: false, error: rpcError.message };
+            if (rpcResult && rpcResult.success === false) return { success: false, error: rpcResult.error };
+            return { success: true, advisories };
         }
 
+        // Assign — path splits by lifecycle_status:
+        //   Published (S5) → sm_emergency_assign RPC (S5→S4, sets assignment_outcome='confirmed',
+        //                     fulfillment_status='scheduled', bidding_status='not_on_bidding', audit)
+        //   Draft (S1)     → direct UPDATE (S1→S2, no outcome field needed)
+        const lifecycleStatus = (shift as any).lifecycle_status;
+
+        if (lifecycleStatus === 'Published') {
+            const { data: rpcResult, error: rpcError } = await (supabase as any)
+                .rpc('sm_emergency_assign', {
+                    p_shift_id:    shiftId,
+                    p_employee_id: employeeId,
+                    p_user_id:     userId ?? null,
+                    p_source:      context === 'AUTO' ? 'auto' : 'manual',
+                });
+            if (rpcError) return { success: false, error: rpcError.message };
+            if (rpcResult && rpcResult.success === false) return { success: false, error: rpcResult.error };
+            return { success: true, advisories };
+        }
+
+        // Draft shift — direct UPDATE (S1→S2)
         const { error: updateError } = await supabase
             .from('shifts')
-            .update(updatePayload)
+            .update({
+                assigned_employee_id: employeeId,
+                assigned_at:          new Date().toISOString(),
+                assignment_status:    'assigned',
+                assignment_source:    'manual',
+                last_modified_by:     userId,
+                updated_at:           new Date().toISOString(),
+            })
             .eq('id', shiftId);
 
         if (updateError) {

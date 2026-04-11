@@ -17,6 +17,31 @@ if (!supabaseServiceKey) {
   throw new Error('[FATAL] Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
 }
 
+/** 12.5 hours in milliseconds — auto-completion threshold */
+const AUTO_COMPLETE_MS = 12.5 * 60 * 60 * 1000;
+
+/**
+ * Resolve a shift's scheduled start time to a Unix timestamp (ms).
+ * Priority: start_at (ISO) → shift_date + start_time (local, assumed Sydney UTC+11).
+ * Returns null if neither is usable.
+ */
+function resolveStartMs(shift: {
+  start_at: string | null;
+  shift_date: string | null;
+  start_time: string | null;
+}): number | null {
+  if (shift.start_at) {
+    const d = new Date(shift.start_at);
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  if (shift.shift_date && shift.start_time) {
+    const timeStr = shift.start_time.length >= 5 ? shift.start_time.substring(0, 5) : shift.start_time;
+    const d = new Date(`${shift.shift_date}T${timeStr}:00+11:00`);
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  return null;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -29,66 +54,47 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const now = new Date();
-    const currentDate = now.toISOString().split('T')[0];
-    const currentTime = now.toTimeString().split(' ')[0].substring(0, 8);
-
     let updatedCount = 0;
     const logs: string[] = [];
 
     const { data: shifts, error: fetchError } = await supabase
       .from('shifts')
-      .select('id, lifecycle_status, shift_date, start_time, end_time')
-      .in('lifecycle_status', ['scheduled', 'active'])
-      .neq('lifecycle_status', 'cancelled');
+      .select('id, lifecycle_status, shift_date, start_time, end_time, start_at')
+      // Only auto-complete shifts that are currently InProgress (S11)
+      .eq('lifecycle_status', 'InProgress')
+      .neq('is_cancelled', true);
 
     if (fetchError) {
       throw fetchError;
     }
 
     for (const shift of shifts || []) {
-      let newStatus: string | null = null;
+      const startMs = resolveStartMs(shift);
 
-      const shiftDate = shift.shift_date;
-      const startTime = shift.start_time;
-      const endTime = shift.end_time;
-
-      if (shiftDate < currentDate || (shiftDate === currentDate && endTime <= currentTime)) {
-        if (shift.lifecycle_status !== 'completed') {
-          newStatus = 'completed';
-        }
-      } else if (shiftDate === currentDate && startTime <= currentTime) {
-        if (shift.lifecycle_status !== 'active') {
-          newStatus = 'active';
-        }
+      // Skip shifts where we can't determine the start time
+      if (startMs === null) {
+        logs.push(`[SKIP] shift ${shift.id}: cannot resolve start time`);
+        continue;
       }
 
-      if (newStatus && newStatus !== shift.lifecycle_status) {
+      const autoCompleteAt = startMs + AUTO_COMPLETE_MS;
+
+      if (now.getTime() >= autoCompleteAt) {
         const { error: updateError } = await supabase
           .from('shifts')
           .update({
-            lifecycle_status: newStatus,
-            updated_at: new Date().toISOString()
+            lifecycle_status: 'Completed',
+            attendance_status: 'auto_clock_out',
+            attendance_note: 'Auto-completed by system (12.5hr limit)',
+            updated_at: now.toISOString(),
           })
           .eq('id', shift.id);
 
         if (updateError) {
-          logs.push(`Error updating shift ${shift.id}: ${updateError.message}`);
+          logs.push(`[ERROR] shift ${shift.id}: ${updateError.message}`);
         } else {
-          const { error: logError } = await supabase
-            .from('shift_lifecycle_log')
-            .insert({
-              shift_id: shift.id,
-              old_status: shift.lifecycle_status,
-              new_status: newStatus,
-              reason: 'Auto-progression based on time'
-            });
-
-          if (logError) {
-            logs.push(`Error logging lifecycle change for shift ${shift.id}: ${logError.message}`);
-          }
-
           updatedCount++;
-          logs.push(`Updated shift ${shift.id}: ${shift.lifecycle_status} -> ${newStatus}`);
+          logs.push(`[INFO] Auto-completed shift ${shift.id}: InProgress -> Completed (auto_clock_out, 12.5hr limit)`);
         }
       }
     }
@@ -99,7 +105,8 @@ Deno.serve(async (req: Request) => {
         updatedCount,
         totalChecked: shifts?.length || 0,
         logs,
-        timestamp: now.toISOString()
+        timestamp: now.toISOString(),
+        note: 'Auto-completion fires at scheduled_start + 12.5 hours. Auto-progression to InProgress (S11) is disabled (manual clock-in required).',
       }),
       {
         headers: {

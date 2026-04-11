@@ -353,6 +353,36 @@ export const shiftsCommands = {
             if (!validation.isValid) {
                 throw new ComplianceError(validation.violations, 'sm_publish_shift');
             }
+
+            // TTS-aware routing: if 0 < TTS < 4h and the shift is already assigned,
+            // bypass the offer flow (S3) entirely and publish straight to Confirmed (S4).
+            //
+            // sm_publish_shift never sets assignment_outcome, so an assigned draft always
+            // lands in S3 (Published+Offered). With TTS < 4h the shift-state-processor
+            // cron immediately expires S3 → S2 (Draft+Assigned), creating a stuck loop.
+            const ttsMs = shift.start_at
+                ? new Date(shift.start_at).getTime() - Date.now()
+                : new Date(`${shift.shift_date}T${shift.start_time}`).getTime() - Date.now();
+
+            if (ttsMs > 0 && ttsMs < 4 * 60 * 60 * 1000) {
+                const user = await requireUser();
+                // is_draft / is_published / is_on_bidding are DB-generated columns
+                // (GENERATED ALWAYS AS) — they cannot be set explicitly. The DB
+                // derives them from lifecycle_status and bidding_status automatically.
+                const { error } = await supabase
+                    .from('shifts')
+                    .update({
+                        lifecycle_status:   'Published',
+                        assignment_outcome: 'confirmed',
+                        fulfillment_status: 'scheduled',
+                        bidding_status:     'not_on_bidding',
+                        updated_at:         new Date().toISOString(),
+                        last_modified_by:   user.id,
+                    })
+                    .eq('id', shiftId);
+                if (error) throw new Error(error.message);
+                return { success: true };
+            }
         }
 
         const result = await callAuthenticatedRpc(
@@ -370,6 +400,11 @@ export const shiftsCommands = {
 
     async bulkPublishShifts(shiftIds: string[]): Promise<BulkPublishPartialResult> {
         // Per-shift compliance pre-check — does NOT block the whole batch on a single failure.
+        // Also identifies assigned shifts with TTS < 4h (emergency set) so they bypass the
+        // offer flow and land directly on S4 (Confirmed) rather than S3 (Offered).
+        const FOUR_H_MS = 4 * 60 * 60 * 1000;
+        const emergencySet = new Set<string>();
+
         const complianceChecks = await Promise.allSettled(
             shiftIds.map(async (id) => {
                 const shift = await shiftsQueries.getShiftById(id);
@@ -389,8 +424,15 @@ export const shiftsCommands = {
                     id,
                 );
                 if (!validation.isValid) {
-                    const rules = validation.violations.map(v => v.rule ?? 'violation').join(', ');
+                    const rules = validation.violations.join(', ');
                     return { id, pass: false as const, reason: rules };
+                }
+                // Flag assigned shifts within the 4h lock window for emergency publish
+                const ttsMs = shift.start_at
+                    ? new Date(shift.start_at).getTime() - Date.now()
+                    : new Date(`${shift.shift_date}T${shift.start_time}`).getTime() - Date.now();
+                if (ttsMs > 0 && ttsMs < FOUR_H_MS) {
+                    emergencySet.add(id);
                 }
                 return { id, pass: true as const, reason: '' };
             })
@@ -415,19 +457,52 @@ export const shiftsCommands = {
             return { publishedIds: [], complianceFailed, dbFailed: [] };
         }
 
-        // Call RPC only with compliant IDs
-        const dbResult = await callAuthenticatedRpc(
-            'sm_bulk_publish_shifts',
-            (userId) => ({ p_shift_ids: passIds, p_actor_id: userId }),
-            BulkPublishResponseSchema,
-        );
+        // Split: normal publish via RPC; emergency publish via direct update (S2 → S4, no offer).
+        const normalIds    = passIds.filter(id => !emergencySet.has(id));
+        const emergencyIds = passIds.filter(id =>  emergencySet.has(id));
 
-        const dbFailed: Array<{ id: string; reason: string }> = (dbResult.errors ?? []).map(e => ({
-            id: e.shift_id,
-            reason: e.reason,
-        }));
-        const dbFailedSet = new Set(dbFailed.map(f => f.id));
-        const publishedIds = passIds.filter(id => !dbFailedSet.has(id));
+        const publishedIds: string[] = [];
+        const dbFailed: Array<{ id: string; reason: string }> = [];
+
+        // Normal path — sm_bulk_publish_shifts RPC
+        if (normalIds.length > 0) {
+            const dbResult = await callAuthenticatedRpc(
+                'sm_bulk_publish_shifts',
+                (userId) => ({ p_shift_ids: normalIds, p_actor_id: userId }),
+                BulkPublishResponseSchema,
+            );
+            const failed = (dbResult.errors ?? []).map(e => ({ id: e.shift_id, reason: e.reason }));
+            dbFailed.push(...failed);
+            const failedSet = new Set(failed.map(f => f.id));
+            publishedIds.push(...normalIds.filter(id => !failedSet.has(id)));
+        }
+
+        // Emergency path — direct update: publish + confirm atomically (S2 → S4)
+        // is_draft / is_published / is_on_bidding are generated columns — omitted.
+        if (emergencyIds.length > 0) {
+            const user = await requireUser();
+            const { error, data } = await supabase
+                .from('shifts')
+                .update({
+                    lifecycle_status:   'Published',
+                    assignment_outcome: 'confirmed',
+                    fulfillment_status: 'scheduled',
+                    bidding_status:     'not_on_bidding',
+                    updated_at:         new Date().toISOString(),
+                    last_modified_by:   user.id,
+                })
+                .in('id', emergencyIds)
+                .select('id');
+            if (error) {
+                emergencyIds.forEach(id => dbFailed.push({ id, reason: error.message }));
+            } else {
+                const succeededIds = new Set((data ?? []).map((r: { id: string }) => r.id));
+                emergencyIds.forEach(id => {
+                    if (succeededIds.has(id)) publishedIds.push(id);
+                    else dbFailed.push({ id, reason: 'Row not updated' });
+                });
+            }
+        }
 
         return { publishedIds, complianceFailed, dbFailed };
     },
@@ -448,7 +523,7 @@ export const shiftsCommands = {
             if (r.ok) {
                 unpublishedIds.push(r.id);
             } else {
-                failed.push({ id: r.id, reason: r.error });
+                failed.push({ id: r.id, reason: (r as any).error });
             }
         }
 
@@ -568,7 +643,7 @@ export const shiftsCommands = {
 
         for (const r of results) {
             if (r.ok) deletedIds.push(r.id);
-            else failed.push({ id: r.id, reason: r.error });
+            else failed.push({ id: r.id, reason: (r as any).error });
         }
 
         return { deletedIds, failed };
@@ -617,7 +692,7 @@ export const shiftsCommands = {
                 );
 
                 if (!validation.isValid) {
-                    const rules = validation.violations.map(v => v.rule ?? 'violation').join(', ');
+                    const rules = validation.violations.join(', ');
                     return { id, category: 'compliance_failed' as const, reason: rules };
                 }
 
@@ -627,7 +702,7 @@ export const shiftsCommands = {
 
         for (const r of checks) {
             if (!r.ok) {
-                complianceFailed.push({ id: r.id, reason: r.error });
+                complianceFailed.push({ id: r.id, reason: (r as any).error });
             } else {
                 switch (r.value.category) {
                     case 'eligible':          eligible.push(r.id); break;
@@ -706,7 +781,7 @@ export const shiftsCommands = {
 
         return callAuthenticatedRpc(
             'sm_reject_offer',
-            (userId) => ({ p_shift_id: shiftId, p_employee_id: userId, p_reason: reason }),
+            (userId) => ({ p_shift_id: shiftId, p_user_id: userId, p_reason: reason }),
             OfferActionResponseSchema,
         );
     },

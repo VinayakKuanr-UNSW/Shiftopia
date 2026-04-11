@@ -166,9 +166,9 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
     const inspectedEmployee = employees.find(e => e.id === inspectedEmployeeId);
 
     return (
-        <div className="flex gap-4 h-[calc(100%-1rem)]" style={{ minHeight: '480px' }}>
+        <div className="flex flex-col lg:flex-row gap-4 h-[calc(100%-1rem)]" style={{ minHeight: '480px' }}>
             {/* ═══════ LEFT PANE: EMPLOYEE POOL ═══════ */}
-            <div className="w-[45%] flex flex-col rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden">
+            <div className="w-full lg:w-[45%] flex flex-col rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden">
                 {/* Header */}
                 <div className="p-4 border-b border-border bg-muted/50 flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
@@ -336,7 +336,7 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
             </div>
 
             {/* ═══════ RIGHT PANE: COMPLIANCE INSPECTOR ═══════ */}
-            <div className="w-[55%] flex flex-col rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden">
+            <div className="w-full lg:w-[55%] flex flex-col rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden">
                 {/* Header */}
                 <div className="p-4 border-b border-border bg-muted/50 flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]">

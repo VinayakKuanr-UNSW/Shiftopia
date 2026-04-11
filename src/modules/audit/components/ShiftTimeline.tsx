@@ -27,9 +27,9 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
 const STATE_LABEL: Record<string, string> = {
     S1: 'Draft', S2: 'Draft Assigned', S3: 'Offered',
     S4: 'Confirmed', S5: 'Bidding (Normal)', S6: 'Bidding (Urgent)',
-    S7: 'Emergency Assigned', S8: 'Bidding Closed', S9: 'Trade Requested',
-    S10: 'Trade Accepted', S11: 'In Progress', S12: 'In Progress (Emergency)',
-    S13: 'Completed', S14: 'Completed (Emergency)', S15: 'Cancelled',
+    S7: 'Confirmed (Emergency)', S8: 'Bidding Closed', S9: 'Trade Requested',
+    S10: 'Trade Accepted', S11: 'In Progress', S12: 'In Progress',
+    S13: 'Completed', S14: 'Completed', S15: 'Cancelled',
 };
 
 // ── Group Component ───────────────────────────────────────────────────────────

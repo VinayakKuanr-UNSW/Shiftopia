@@ -78,7 +78,7 @@ import {
 import {
   getAllowedActions
 } from '../../domain/bulk-validation';
-import { computeBiddingUrgency, isOnBidding } from '../../domain/bidding-urgency';
+import { computeShiftUrgency, computeBiddingUrgency, isOnBidding } from '../../domain/bidding-urgency';
 import DayTimelineView from './DayTimelineView';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { startOfMonth, endOfMonth } from 'date-fns';
@@ -225,7 +225,12 @@ const DroppableCell: React.FC<DroppableCellProps> = ({
           lifecycle_status: item.lifecycle_status,
           is_cancelled: item.is_cancelled,
         },
-        { isLocked: disabled, isPast: isSydneyPast(parse(date, 'yyyy-MM-dd', new Date())) }
+        {
+          isLocked: disabled,
+          isPast: isSydneyPast(parse(date, 'yyyy-MM-dd', new Date())),
+          targetDate: date,
+          startTime: item.startTime,
+        }
       );
     },
     collect: (monitor) => ({
@@ -1067,8 +1072,10 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         }
         if (!employeeName && shift.assigned_employee_id) employeeName = 'Assigned';
 
-        let assignmentOutcome = (shift as any).assignment_outcome;
-        if (shift.assigned_employee_id && !assignmentOutcome) assignmentOutcome = 'pending';
+        // S3: Published + assigned + assignment_outcome IS NULL (awaiting acceptance)
+        // S4: Published + assigned + assignment_outcome === 'confirmed'
+        // Do not synthesise stale values — keep null as-is.
+        const assignmentOutcome = (shift as any).assignment_outcome ?? null;
 
         const isPublished = ['Published', 'InProgress', 'Completed'].includes(shift.lifecycle_status || '');
         const isDraft = shift.lifecycle_status === 'Draft';
@@ -1193,7 +1200,8 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         if ((shift.assignment_status || 'unassigned') !== advancedFilters.assignmentStatus) return false;
       }
       if (advancedFilters.assignmentOutcome !== 'all') {
-        let outcome = shift.assignment_outcome || (shift.assigned_employee_id ? 'pending' : 'none');
+        // outcome is null (S3 — offered, awaiting acceptance), 'confirmed' (S4), 'no_show', or null for unassigned
+        const outcome = shift.assignment_outcome ?? 'none';
         if (advancedFilters.assignmentOutcome === 'none') {
           if (outcome !== 'none' && outcome !== null) return false;
         } else if (outcome !== advancedFilters.assignmentOutcome) return false;
@@ -1374,6 +1382,20 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       });
       return;
     }
+
+    // BUSINESS POLICY: prevent publishing unassigned shifts within 4h of start
+    const shiftStart = new Date(shift.rawShift.start_at || `${shift.rawShift.shift_date}T${shift.rawShift.start_time}`);
+    const now = getSydneyNow();
+    const hoursToStart = differenceInHours(shiftStart, now);
+    if (hoursToStart < 4 && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned')) {
+      toast({
+        title: 'Publication Restricted',
+        description: 'Unassigned shifts cannot be published less than 4 hours before start. Please assign an employee first.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setPendingAction({ type: 'publish', shift });
     setConfirmActionOpen(true);
   };
@@ -1422,8 +1444,8 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   const handleToggleShiftSelection = useCallback((id: string) => {
     const shift = externalShifts.find(s => s.id === id);
     // Safely extract date and time to avoid undefined which would cause isShiftLocked to artificially lock the shift
-    const shiftDate = shift?.shiftDate || shift?.rawShift?.shift_date || (shift as any)?.shift_date;
-    const startTime = shift?.startTime || shift?.rawShift?.start_time || (shift as any)?.start_time;
+    const shiftDate = shift?.shift_date;
+    const startTime = shift?.start_time;
     
     // Check if shift is locked before toggling
     if (shift && shiftDate && startTime && isShiftLocked(shiftDate, startTime, 'roster_management')) {
@@ -1632,11 +1654,17 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
                     {shift.isDraft && !shift.isPublished && (
                       <DropdownMenuItem
+                        disabled={isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned')}
                         onClick={() => handleRequestPublish(shift)}
-                        className="text-popover-foreground hover:bg-accent cursor-pointer"
+                        className={cn(
+                          "text-popover-foreground hover:bg-accent cursor-pointer",
+                          isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned') && "opacity-50 cursor-not-allowed"
+                        )}
                       >
                         <Send className="h-4 w-4 mr-2" />
-                        Publish Shift
+                        {isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned') 
+                          ? 'Publish (Assign Required)' 
+                          : 'Publish Shift'}
                       </DropdownMenuItem>
                     )}
 
@@ -1646,8 +1674,10 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                         className="text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
                       >
                         <Undo2 className="h-4 w-4 mr-2" />
-                        {shift.rawShift.assignment_outcome === 'offered' 
-                          ? 'Retract Offer & Move to Draft' 
+                        {shift.rawShift.lifecycle_status === 'Published' &&
+                         shift.rawShift.assignment_status === 'assigned' &&
+                         !shift.rawShift.assignment_outcome
+                          ? 'Retract Offer & Move to Draft'
                           : 'Unpublish Shift'}
                       </DropdownMenuItem>
                     )}
@@ -1716,9 +1746,10 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           compliance={complianceMap?.[shift.id]}
           headerAction={canEdit && !isBulkMode ? menu : undefined}
           className={cn(isPastDate && "opacity-60")}
-                            isSelected={isBulkMode && selectedShiftIds.includes(shift.id)}
+          isSelected={isBulkMode && selectedShiftIds.includes(shift.id)}
           onClick={() => isBulkMode && handleToggleShiftSelection(shift.id)}
           isLocked={isLocked || (isDnDModeActive && !shift.isDraft)}
+          isPast={isPastDate}
           isDnDActive={isDnDModeActive}
         />
       </div>
@@ -1759,6 +1790,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
             canEdit={canEdit}
             isShiftsLoading={isShiftsLoading}
             isBulkMode={isBulkMode}
+            isDnDModeActive={isDnDModeActive}
             selectedShiftIds={new Set(selectedShiftIds)}
             onBulkToggle={handleToggleShiftSelection}
             complianceMap={complianceMap}
@@ -1967,7 +1999,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                   </span>
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                      <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <Button variant="ghost" size="icon" className="h-9 w-9 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
                                         <MoreHorizontal className="h-4 w-4" />
                                       </Button>
                                     </DropdownMenuTrigger>
@@ -2114,7 +2146,47 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                                   if (sd) handleRequestUnpublish(sd);
                                                 }}
                                                 onBulkPublish={(shiftIds) => {
-                                                  bulkPublishMutation.mutate(shiftIds);
+                                                  // Build a flat id→ShiftDisplay map from visualGroups
+                                                  const shiftLookup = new Map<string, ShiftDisplay>();
+                                                  for (const vg of visualGroups) {
+                                                    for (const sg of vg.subGroups) {
+                                                      for (const dayShifts of Object.values(sg.shifts)) {
+                                                        for (const sd of dayShifts) shiftLookup.set(sd.id, sd);
+                                                      }
+                                                    }
+                                                  }
+
+                                                  // Filter out S1+emergent shifts (unassigned, TTS < 4h)
+                                                  const publishable: string[] = [];
+                                                  const skipped: string[] = [];
+                                                  for (const id of shiftIds) {
+                                                    const sd = shiftLookup.get(id);
+                                                    if (sd && !sd.rawShift.assigned_employee_id && sd.rawShift.assignment_status === 'unassigned') {
+                                                      const urg = computeShiftUrgency(sd.rawShift.shift_date ?? '', sd.rawShift.start_time ?? '', sd.rawShift.start_at ?? undefined);
+                                                      if (urg === 'emergent') { skipped.push(id); continue; }
+                                                    }
+                                                    publishable.push(id);
+                                                  }
+
+                                                  if (publishable.length > 0) {
+                                                    bulkPublishMutation.mutate(publishable, {
+                                                      onSuccess: () => {
+                                                        const skipMsg = skipped.length > 0
+                                                          ? ` ${skipped.length} skipped (Emergent Restriction).`
+                                                          : '';
+                                                        toast({
+                                                          title: 'Bulk Publish Complete',
+                                                          description: `${publishable.length} shift${publishable.length !== 1 ? 's' : ''} published.${skipMsg}`,
+                                                        });
+                                                      },
+                                                    });
+                                                  } else if (skipped.length > 0) {
+                                                    toast({
+                                                      title: 'All Shifts Skipped',
+                                                      description: `${skipped.length} shift${skipped.length !== 1 ? 's' : ''} skipped — all are within the 4h emergent window and must be assigned before publishing.`,
+                                                      variant: 'destructive',
+                                                    });
+                                                  }
                                                 }}
                                                 onBulkUnpublish={(shiftIds) => {
                                                   bulkUnpublishMutation.mutate(shiftIds);
@@ -2168,8 +2240,8 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                                 "bg-primary/30 text-primary border border-primary/40 backdrop-blur-md",
                                                 "hover:bg-primary/60 hover:scale-110 active:scale-95 shadow-[0_0_20px_rgba(var(--primary),0.3)]",
                                                 cellShifts.length > 0 
-                                                  ? "w-7 h-7 opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100" 
-                                                  : "w-9 h-9 opacity-40 scale-90 hover:opacity-100",
+                                                  ? "w-9 h-9 opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:scale-100"
+                                                  : "w-9 h-9 opacity-40 scale-90 hover:opacity-100 [@media(hover:none)]:opacity-100",
                                                 "group/add"
                                               )}
                                               title="Add Shift"

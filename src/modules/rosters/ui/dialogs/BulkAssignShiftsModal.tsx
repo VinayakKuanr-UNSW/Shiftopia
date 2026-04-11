@@ -381,7 +381,7 @@ export const BulkAssignShiftsModal: React.FC<BulkAssignShiftsModalProps> = ({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[900px] h-[80vh] flex flex-col bg-gray-950/95 backdrop-blur-xl border-gray-800 p-0 overflow-hidden">
+            <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-[900px] max-h-[90vh] h-[80vh] flex flex-col bg-gray-950/95 backdrop-blur-xl border-gray-800 p-0 overflow-hidden">
                 <DialogHeader className="p-6 border-b border-white/10">
                     <DialogTitle className="text-xl font-semibold flex items-center justify-between">
                         <span>Bulk Assign – Compliance Review</span>
@@ -394,9 +394,9 @@ export const BulkAssignShiftsModal: React.FC<BulkAssignShiftsModalProps> = ({
                     </p>
                 </DialogHeader>
 
-                <div className="flex-1 flex overflow-hidden">
+                <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
                     {/* LEFT PANEL: Employee Selection */}
-                    <div className="w-[300px] border-r border-white/10 flex flex-col bg-black/20">
+                    <div className="w-full md:w-[300px] border-r border-white/10 flex flex-col bg-black/20">
                         <div className="p-4 border-b border-white/10 bg-white/5">
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />

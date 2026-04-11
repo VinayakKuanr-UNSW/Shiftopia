@@ -4,12 +4,12 @@
  * Rules:
  *   TTS > 24h          → 'normal'
  *   4h < TTS ≤ 24h     → 'urgent'
- *   TTS ≤ 4h           → 'locked'  (all exchange operations blocked server-side too)
+ *   TTS ≤ 4h           → 'emergent'  (all exchange operations blocked server-side too)
  *
  * "On bidding" is any bidding_status other than 'not_on_bidding' and 'bidding_closed_no_winner'.
  */
 
-export type ShiftUrgency = 'normal' | 'urgent' | 'locked';
+export type ShiftUrgency = 'normal' | 'urgent' | 'emergent';
 /** @deprecated use ShiftUrgency */
 export type BiddingUrgency = ShiftUrgency;
 
@@ -40,7 +40,7 @@ export function computeShiftUrgency(
   const tts = startAtIso
     ? new Date(startAtIso).getTime() - Date.now()
     : computeTTS(shiftDate, startTime);
-  if (tts <= FOUR_HOURS_MS)    return 'locked';
+  if (tts <= FOUR_HOURS_MS)    return 'emergent';
   if (tts <= TWENTY_FOUR_H_MS) return 'urgent';
   return 'normal';
 }

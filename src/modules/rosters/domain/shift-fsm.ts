@@ -85,8 +85,9 @@ export function getShiftFSMState(shift: ShiftFSMInput): ShiftStateID {
         if (shift.trading_status === 'TradeAccepted')  return 'S10';
 
         if (shift.assignment_status === 'assigned') {
-            // Offered: assigned but no outcome yet (handle legacy 'offered' too)
-            if (shift.assignment_outcome == null || shift.assignment_outcome === 'offered') return 'S3';
+            // Offered: assigned but no outcome yet (S3).
+            // assignment_outcome is constrained to NULL | 'confirmed' | 'no_show' only.
+            if (shift.assignment_outcome == null) return 'S3';
             // Confirmed (or no_show while published — edge case but valid)
             if (shift.assignment_outcome === 'confirmed') return 'S4';
         }

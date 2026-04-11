@@ -56,6 +56,8 @@ const ThreeDayView: React.FC<ThreeDayViewProps> = ({
 
   return (
     <div className="h-full flex flex-col min-h-0">
+      <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0 flex-1 min-h-0 flex flex-col">
+        <div className="min-w-[420px] flex-1 min-h-0 flex flex-col">
       <TimeGrid
         days={days}
         renderShifts={(day) =>
@@ -84,7 +86,7 @@ const ThreeDayView: React.FC<ThreeDayViewProps> = ({
                     'border border-white/20 shadow-lg',
                     'hover:scale-[1.01] active:scale-[0.99] transition-transform',
                     'focus:outline-none focus:ring-2 focus:ring-white/30',
-                    shift.assignment_outcome === 'offered' && 'opacity-60 border-dashed border-2',
+                    shift.lifecycle_status === 'Published' && shift.assignment_status === 'assigned' && !shift.assignment_outcome && 'opacity-60 border-dashed border-2',
                     getGradientClass(groupColor)
                   )}
                 >
@@ -108,6 +110,8 @@ const ThreeDayView: React.FC<ThreeDayViewProps> = ({
           })
         }
       />
+        </div>
+      </div>
 
       <ShiftDetailsDialog
         isOpen={!!selectedShift}

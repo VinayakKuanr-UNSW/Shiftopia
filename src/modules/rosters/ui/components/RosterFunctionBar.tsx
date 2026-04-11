@@ -32,6 +32,7 @@ import {
   Wand2,
   Activity,
   Hand,
+  Camera,
 } from 'lucide-react';
 import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, isSameMonth } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
@@ -47,8 +48,10 @@ import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggl
 import { Separator } from '@/modules/core/ui/primitives/separator';
 import { ApplyTemplateDialog } from '@/modules/rosters/ui/dialogs/ApplyTemplateDialog';
 import { PlanRosterPeriodDialog } from '@/modules/rosters/ui/dialogs/PlanRosterPeriodDialog';
+import SnapFromRosterDialog from '@/modules/rosters/ui/dialogs/SnapFromRosterDialog';
 import { useRosterStructure } from '../../state/useRosterStructure';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
+import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 
 /* ============================================================
    TYPES
@@ -234,7 +237,21 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
 
   const [isPlanPeriodDialogOpen, setIsPlanPeriodDialogOpen] = useState(false);
   const [isApplyTemplateDialogOpen, setIsApplyTemplateDialogOpen] = useState(false);
+  const [isSnapDialogOpen, setIsSnapDialogOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+
+  const { scopeTree } = useScopeFilter('managerial');
+  const subDepartmentName = React.useMemo(() => {
+    if (!selectedSubDepartmentId || !scopeTree) return '';
+    for (const org of scopeTree.organizations) {
+      for (const dept of org.departments) {
+        for (const sd of dept.subdepartments) {
+          if (sd.id === selectedSubDepartmentId) return sd.name;
+        }
+      }
+    }
+    return '';
+  }, [selectedSubDepartmentId, scopeTree]);
 
   // Auto-select template
   React.useEffect(() => {
@@ -489,6 +506,13 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
               )}
             </div>
             <IconButton
+              icon={<Camera className="h-4 w-4" />}
+              tooltip={selectedSubDepartmentId ? "Snap — Save current roster as template" : "Snap — select a subdepartment first"}
+              onClick={() => setIsSnapDialogOpen(true)}
+              variant="success"
+              disabled={!selectedSubDepartmentId}
+            />
+            <IconButton
               icon={<Hand className="h-4 w-4" />}
               tooltip={
                 activeMode === 'events'
@@ -561,6 +585,18 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
           selectedDate={selectedDate}
           appliedTemplateIds={currentRosterStructure?.appliedTemplateIds || []}
           rosterId={currentRosterStructure?.rosterId || null}
+        />
+      )}
+
+      {/* Snap — Capture Template from Roster */}
+      {selectedSubDepartmentId && (
+        <SnapFromRosterDialog
+          open={isSnapDialogOpen}
+          onOpenChange={setIsSnapDialogOpen}
+          subDepartmentId={selectedSubDepartmentId}
+          subDepartmentName={subDepartmentName}
+          defaultStartDate={format(autoScheduleRange.start, 'yyyy-MM-dd')}
+          defaultEndDate={format(autoScheduleRange.end, 'yyyy-MM-dd')}
         />
       )}
 

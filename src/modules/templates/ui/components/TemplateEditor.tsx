@@ -316,7 +316,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
 
       {/* Groups Content */}
       <ScrollArea className="flex-1">
-        <div className="p-6 space-y-4">
+        <div className="p-3 sm:p-6 space-y-4">
           {template.groups.map((group) => (
             <TemplateGroupCard
               key={String(group.id)}

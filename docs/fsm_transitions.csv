@@ -1,0 +1,35 @@
+FromState,Action,ToState,Description
+S1,ASSIGN,S2,Draft-Unassigned shift is assigned to an employee (Draft).
+S1,PUBLISH,S5,Shift is published without an assignment and bidding opens (Normal).
+S1,DELETE,S15,Unpublished draft is removed/cancelled.
+S2,ASSIGN,S2,Draft-Assigned employee is changed to a different employee.
+S2,UNASSIGN,S1,Draft employee is removed; returns to Draft-Unassigned.
+S2,PUBLISH,S4,Direct assignment is published; enters the active roster (Confirmed).
+S2,DELETE,S15,Unpublished draft is removed/cancelled.
+S3,ACCEPT_OFFER,S4,Employee accepts the direct offer.
+S3,REJECT_OFFER,S5,Employee rejects the offer; shift enters bidding.
+S3,EXPIRE_OFFER,S1,Offer hits 4h threshold without response; reverts to Draft-Unassigned.
+S3,UNPUBLISH,S2,Manager pulls the offer; shift reverts to Draft-Assigned.
+S3,DELETE,S15,Pending offer is cancelled/removed.
+S4,REQUEST_TRADE,S9,Employee requests to swap this shift.
+S4,CANCEL,S15,Confirmed shift is cancelled.
+S4,DELETE,S15,Shift is removed from the roster.
+S5,SELECT_BID_WINNER,S4,Manager selects a winner from the bid pool.
+S5,CLOSE_BIDDING,S8,Manager closes bidding without selecting a winner.
+S5,ESCALATE_URGENCY,S6,Shift enters 24h window; bidding priority becomes Urgent.
+S5,EXPIRE_BIDDING,S1,Bidding not won by 4h threshold; reverts to Draft-Unassigned.
+S5,UNPUBLISH,S1,Manager removes from bidding; shift reverts to Draft-Unassigned.
+S6,SELECT_BID_WINNER,S4,Manager selects a winner from the urgent bid pool.
+S6,CLOSE_BIDDING,S8,Urgent bidding closed without winner.
+S6,EXPIRE_BIDDING,S1,Urgent bidding expired; reverts to Draft-Unassigned.
+S7,CANCEL,S15,Emergency assignment cancelled.
+S8,UNPUBLISH,S1,Closed bidding shift returned to draft.
+S9,ACCEPT_TRADE,S10,Another employee accepts the trade request.
+S10,APPROVE_TRADE,S4,Manager approves the trade; shift reassigned to new employee.
+S11,CHECK_IN,S11,Employee clocks in (already in progress).
+S11,CHECK_OUT,S13,Employee clocks out; shift completed.
+S11,MARK_NO_SHOW,S11,Shift marked as no-show while in progress (manual).
+S11,EMERGENCY_ASSIGN,S12,Emergency re-assignment of an in-progress shift.
+S12,CHECK_OUT,S14,Emergency shift completed and clocked out.
+S11,AUTO_CLOCK_OUT,S13,System auto-completes shift after 12.5 hours.
+S1,AUTO_EXPIRE,S15,Draft shift past start time is expired.

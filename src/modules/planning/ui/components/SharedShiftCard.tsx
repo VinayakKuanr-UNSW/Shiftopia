@@ -11,9 +11,17 @@ import {
     Signal,
     Zap,
     Lock,
+    Flame,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/modules/core/ui/primitives/tooltip';
 import type { ShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
+import { getStatusDotInfo } from '@/modules/rosters/domain/shift-ui';
 
 export interface SharedShiftCardProps {
     organization: string;
@@ -40,6 +48,8 @@ export interface SharedShiftCardProps {
     className?: string;
     onClick?: () => void;
     variant?: 'default' | 'nested';
+    /** Standardised shift for status dot derivation */
+    shiftData?: any;
 }
 
 export const SharedShiftCard: React.FC<SharedShiftCardProps> = ({
@@ -66,6 +76,7 @@ export const SharedShiftCard: React.FC<SharedShiftCardProps> = ({
     className,
     onClick,
     variant = 'default',
+    shiftData,
 }) => {
     // Premium Department Color Styling (Badges)
     const getVariant = () => {
@@ -125,19 +136,45 @@ export const SharedShiftCard: React.FC<SharedShiftCardProps> = ({
                     <h3 className="font-black text-sm text-foreground/90 tracking-tight leading-tight uppercase font-mono">
                         {role}
                     </h3>
-                    {urgency === 'locked' ? (
-                        <Badge variant="outline" className="flex items-center gap-1 text-[8px] px-1.5 py-0 font-black uppercase tracking-tighter bg-rose-500/10 text-rose-500 border-rose-500/20">
-                            <Lock className="h-2.5 w-2.5" /> Not Allowed
-                        </Badge>
-                    ) : urgency === 'urgent' || (!urgency && isUrgent) ? (
-                        <Badge variant="outline" className="flex items-center gap-1 text-[8px] px-1.5 py-0 font-black uppercase tracking-tighter bg-amber-500/10 text-amber-500 border-amber-500/20 animate-pulse">
-                            <Zap className="h-2.5 w-2.5" /> Urgent
-                        </Badge>
-                    ) : urgency === 'normal' ? (
-                        <Badge variant="outline" className="flex items-center gap-1 text-[8px] px-1.5 py-0 font-black uppercase tracking-tighter bg-slate-500/10 text-muted-foreground border-slate-500/20">
-                            <Signal className="h-2.5 w-2.5" /> Normal
-                        </Badge>
-                    ) : null}
+                    <div className="flex items-center gap-1.5">
+                        {(() => {
+                            const dot = shiftData ? getStatusDotInfo(shiftData) : null;
+                            if (!dot) return null;
+                            return (
+                                <TooltipProvider delayDuration={0}>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded-md border border-border/50 cursor-help transition-colors hover:bg-black/10 dark:hover:bg-white/10">
+                                                <div
+                                                    className="h-1.5 w-1.5 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.2)]"
+                                                    style={{ backgroundColor: dot.color }}
+                                                />
+                                                <span className="text-[9px] font-black font-mono text-muted-foreground/70">
+                                                    {dot.label.split(' ')[0].substring(0, 3).toUpperCase()}
+                                                </span>
+                                            </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" className="bg-popover/95 backdrop-blur-md border-border/50 px-2 py-1 shadow-xl">
+                                            <p className="text-[10px] font-bold uppercase tracking-widest">{dot.label}</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            );
+                        })()}
+                        {urgency === 'emergent' ? (
+                            <Badge variant="outline" className="flex items-center gap-1 text-[8px] px-1.5 py-0 font-black uppercase tracking-tighter bg-rose-500/10 text-rose-500 border-rose-500/20 animate-[pulse_0.8s_ease-in-out_infinite]">
+                                <Flame className="h-2.5 w-2.5" /> Emergent
+                            </Badge>
+                        ) : urgency === 'urgent' || (!urgency && isUrgent) ? (
+                            <Badge variant="outline" className="flex items-center gap-1 text-[8px] px-1.5 py-0 font-black uppercase tracking-tighter bg-amber-500/10 text-amber-500 border-amber-500/20 animate-pulse">
+                                <Zap className="h-2.5 w-2.5" /> Urgent
+                            </Badge>
+                        ) : urgency === 'normal' ? (
+                            <Badge variant="outline" className="flex items-center gap-1 text-[8px] px-1.5 py-0 font-black uppercase tracking-tighter bg-slate-500/10 text-muted-foreground border-slate-500/20">
+                                <Signal className="h-2.5 w-2.5" /> Normal
+                            </Badge>
+                        ) : null}
+                    </div>
                 </div>
 
                 {/* TIMING BOXES */}
@@ -209,7 +246,7 @@ export const SharedShiftCard: React.FC<SharedShiftCardProps> = ({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className={cn(
-                "group flex flex-col rounded-[1.2rem] overflow-hidden border transition-all duration-300 bg-card/40 backdrop-blur-xl shadow-lg h-full",
+                "group flex flex-col rounded-[1.2rem] overflow-hidden border transition-all duration-300 bg-card/40 backdrop-blur-xl shadow-lg h-full relative",
                 getVariant().cardBg,
                 onClick && "cursor-pointer hover:shadow-2xl hover:translate-y-[-2px] hover:border-primary/40",
                 isExpired && "opacity-60 grayscale-[0.8]",

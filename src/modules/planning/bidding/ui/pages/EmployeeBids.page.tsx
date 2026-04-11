@@ -69,6 +69,7 @@ interface ShiftData {
     subGroupColor?: string;
     droppedById?: string | null;
     last_dropped_by?: string | null;
+    last_rejected_by?: string | null;
     bidding_iteration?: number;
 }
 
@@ -179,8 +180,8 @@ function getParticipationStatus(
     allMyBids: BidData[],
     userId: string
 ): ParticipationStatus {
-    // Not eligible: user dropped this shift
-    if (shift.last_dropped_by === userId || shift.droppedById === userId) {
+    // Not eligible: user dropped or rejected the offer this iteration
+    if (shift.last_dropped_by === userId || shift.droppedById === userId || shift.last_rejected_by === userId) {
         return 'not_eligible';
     }
 
@@ -387,6 +388,7 @@ export const EmployeeBidsPage: React.FC = () => {
                 subGroupColor: getDeptColor(s.group_type, s.departments?.name || ''),
                 droppedById: (s as any).dropped_by_id,
                 last_dropped_by: (s as any).last_dropped_by,
+                last_rejected_by: (s as any).last_rejected_by ?? null,
                 bidding_iteration: (s as any).bidding_iteration || 1
             };
         });

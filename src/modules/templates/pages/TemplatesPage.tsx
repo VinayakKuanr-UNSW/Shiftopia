@@ -9,7 +9,8 @@ import TemplatesSidebar from '../ui/components/TemplatesSidebar';
 import TemplateEditor from '../ui/components/TemplateEditor';
 import CreateTemplateDialog from '../ui/dialogs/CreateTemplateDialog';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Loader2, AlertTriangle, FileText } from 'lucide-react';
+import { Sheet, SheetContent } from '@/modules/core/ui/primitives/sheet';
+import { Loader2, AlertTriangle, FileText, Menu } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,6 +60,7 @@ const TemplatesPage: React.FC = () => {
   } = useTemplates();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const [unsavedChangesDialog, setUnsavedChangesDialog] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
@@ -245,21 +247,49 @@ const TemplatesPage: React.FC = () => {
 
     return (
       <>
-        <TemplatesSidebar
-          templates={sidebarTemplates}
-          selectedTemplateId={
-            currentTemplate?.id ? String(currentTemplate.id) : null
-          }
-          isLoading={isLoading}
-          onSelectTemplate={handleSelectTemplate}
-          onCreateTemplate={() => setCreateDialogOpen(true)}
-          onDeleteTemplate={deleteTemplate}
-          onDuplicateTemplate={duplicateTemplate}
-          onRenameTemplate={renameTemplate}
-          onArchiveTemplate={handleArchiveTemplate}
-        />
+        {/* Mobile sidebar drawer */}
+        <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+          <SheetContent side="left" className="p-0 w-[320px]">
+            <TemplatesSidebar
+              templates={sidebarTemplates}
+              selectedTemplateId={
+                currentTemplate?.id ? String(currentTemplate.id) : null
+              }
+              isLoading={isLoading}
+              onSelectTemplate={(id) => { handleSelectTemplate(id); setMobileSidebarOpen(false); }}
+              onCreateTemplate={() => { setCreateDialogOpen(true); setMobileSidebarOpen(false); }}
+              onDeleteTemplate={deleteTemplate}
+              onDuplicateTemplate={duplicateTemplate}
+              onRenameTemplate={renameTemplate}
+              onArchiveTemplate={handleArchiveTemplate}
+            />
+          </SheetContent>
+        </Sheet>
+
+        {/* Desktop sidebar — always visible */}
+        <div className="hidden md:flex">
+          <TemplatesSidebar
+            templates={sidebarTemplates}
+            selectedTemplateId={
+              currentTemplate?.id ? String(currentTemplate.id) : null
+            }
+            isLoading={isLoading}
+            onSelectTemplate={handleSelectTemplate}
+            onCreateTemplate={() => setCreateDialogOpen(true)}
+            onDeleteTemplate={deleteTemplate}
+            onDuplicateTemplate={duplicateTemplate}
+            onRenameTemplate={renameTemplate}
+            onArchiveTemplate={handleArchiveTemplate}
+          />
+        </div>
 
         <div className="flex-1 overflow-hidden">
+          {/* Mobile hamburger to open sidebar */}
+          <div className="md:hidden flex items-center px-4 pt-3">
+            <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => setMobileSidebarOpen(true)}>
+              <Menu className="h-5 w-5" />
+            </Button>
+          </div>
           {localTemplate ? (
             <TemplateEditor
               template={localTemplate}
@@ -301,7 +331,7 @@ const TemplatesPage: React.FC = () => {
         multiSelect={false}
         className="m-4 mb-0"
       />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
         {renderContent()}
       </div>
 

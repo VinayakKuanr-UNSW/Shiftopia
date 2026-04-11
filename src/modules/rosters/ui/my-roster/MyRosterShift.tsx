@@ -3,6 +3,13 @@ import { Shift } from '@/modules/rosters';
 import { cn } from '@/modules/core/lib/utils';
 import { ArrowRightLeft, CheckCircle2, Inbox } from 'lucide-react';
 import { formatInTimezone } from '@/modules/core/lib/date.utils';
+import { getStatusDotInfo } from '@/modules/rosters/domain/shift-ui';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/modules/core/ui/primitives/tooltip';
 
 interface MyRosterShiftProps {
   shift: Shift;
@@ -62,8 +69,9 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
 
   const isTradeRequested = shift.trading_status === 'TradeRequested' || shift.trading_status === 'TradeAccepted';
   const isTradeAccepted = shift.trading_status === 'TradeAccepted';
-  const isPendingOffer = (shift as any).assignment_outcome === 'offered';
+  const isPendingOffer = shift.lifecycle_status === 'Published' && shift.assignment_status === 'assigned' && !shift.assignment_outcome;
 
+  const dot = getStatusDotInfo(shift);
   const cardClass = getGradientClass();
 
   // Compact view for week/month views
@@ -116,29 +124,41 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
       style={style}
     >
       {/* Status Indicators */}
-      {isPendingOffer && (
-        <div className="absolute top-0 right-0 bg-black/20 backdrop-blur-sm px-2 py-1 rounded-bl-xl border-l border-b border-white/10 flex items-center gap-1.5">
-          <Inbox className="w-3 h-3 text-white/80" />
-          <span className="text-[10px] font-medium text-white/80">Offer Pending</span>
-        </div>
-      )}
-      {isTradeRequested && !isPendingOffer && (
-        <div className="absolute top-0 right-0 bg-black/30 backdrop-blur-sm px-2 py-1 rounded-bl-xl border-l border-b border-white/10 flex items-center gap-1.5">
-          {isTradeAccepted ? (
-            <>
-              <CheckCircle2 className="w-3 h-3 text-green-400" />
-              <span className="text-[10px] font-medium text-green-100">Pending Approval</span>
-            </>
-          ) : (
-            <>
-              <ArrowRightLeft className="w-3 h-3 text-amber-300" />
-              <span className="text-[10px] font-medium text-amber-100">Swap Requested</span>
-            </>
-          )}
-        </div>
-      )}
+      <div className="absolute top-0 right-0 p-1.5 flex flex-col items-end gap-1.5">
+        {dot && (
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1 bg-black/30 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-white/20 cursor-help shadow-lg">
+                  <div
+                    className="h-1.5 w-1.5 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.3)]"
+                    style={{ backgroundColor: dot.color }}
+                  />
+                  <span className="text-[9px] font-black font-mono text-white/90">
+                    {dot.label.split(' ')[0].substring(0, 3).toUpperCase()}
+                  </span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="left" className="bg-popover/95 backdrop-blur-md border-border/50 px-2 py-1 shadow-xl">
+                <p className="text-[10px] font-bold uppercase tracking-widest">{dot.label}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
 
-      <div className={cn((isTradeRequested || isPendingOffer) && "mt-4")}>
+        {isPendingOffer && (
+          <div className="bg-blue-500/80 backdrop-blur-sm p-1 rounded-md border border-white/20 shadow-lg">
+            <Inbox className="w-3.5 h-3.5 text-white" />
+          </div>
+        )}
+        {isTradeRequested && !isPendingOffer && (
+          <div className="bg-amber-500/80 backdrop-blur-sm p-1 rounded-md border border-white/20 shadow-lg">
+            <ArrowRightLeft className="w-3.5 h-3.5 text-white" />
+          </div>
+        )}
+      </div>
+
+      <div className="mt-2">
         {/* Role - Large and prominent */}
         <div className="font-bold text-sm mb-0.5 leading-tight">{shift.roles?.name || 'Shift'}</div>
         {/* Sub-group */}

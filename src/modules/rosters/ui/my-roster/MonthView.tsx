@@ -13,6 +13,35 @@ import { getSydneyToday, isSydneyToday } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
 import ShiftDetailsDialog from './ShiftDetailsDialog';
 import { Shift } from '@/modules/rosters';
+import type { RingColor } from '@/modules/rosters/domain/shift-ui';
+
+function getShiftRingColor(shift: Shift): RingColor {
+  if (shift.lifecycle_status === 'Completed') return 'purple';
+  if (shift.lifecycle_status === 'InProgress') return 'emerald';
+  // Late: Published, past start time, no actual_start
+  if (shift.lifecycle_status === 'Published' && !shift.actual_start) {
+    const start = shift.scheduled_start
+      ? new Date(shift.scheduled_start).getTime()
+      : new Date(`${shift.shift_date}T${shift.start_time}`).getTime();
+    if (Date.now() > start) return 'yellow';
+  }
+  const start = shift.scheduled_start
+    ? new Date(shift.scheduled_start).getTime()
+    : new Date(`${shift.shift_date}T${shift.start_time}`).getTime();
+  const ttsSec = Math.max(0, (start - Date.now()) / 1000);
+  if (ttsSec < 4 * 3600)  return 'red';
+  if (ttsSec < 24 * 3600) return 'orange';
+  return 'blue';
+}
+
+const RING_CLASSES: Record<RingColor, string> = {
+  purple:  'ring-2 ring-purple-500',
+  emerald: 'ring-2 ring-emerald-500',
+  yellow:  'ring-2 ring-yellow-500',
+  red:     'ring-2 ring-red-500',
+  orange:  'ring-2 ring-orange-400',
+  blue:    'ring-1 ring-blue-400/50',
+};
 
 interface ShiftWithDetails {
   shift: Shift;
@@ -76,6 +105,10 @@ const MonthView: React.FC<MonthViewProps> = ({ date, getShiftsForDate }) => {
 
   return (
     <div className="h-full flex flex-col bg-card rounded-lg overflow-hidden border border-border">
+      {/* Scroll wrapper for mobile — keeps 7-col layout intact, adds horizontal scroll on narrow screens */}
+      <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0 flex-1 flex flex-col min-h-0">
+        <div className="min-w-[480px] flex-1 flex flex-col min-h-0">
+
       {/* Header */}
       <div className="flex-shrink-0 bg-muted border-b border-border">
         <div className="p-3 text-center">
@@ -108,7 +141,7 @@ const MonthView: React.FC<MonthViewProps> = ({ date, getShiftsForDate }) => {
                 <div
                   key={`${weekIndex}-${dayIndex}`}
                   className={cn(
-                    'min-h-[90px] p-1 border-r border-b border-border last:border-r-0',
+                    'min-h-[70px] sm:min-h-[90px] p-1 border-r border-b border-border last:border-r-0',
                     isCurrentDay && 'bg-primary/10',
                     !isCurrentMonth && 'opacity-40 bg-muted'
                   )}
@@ -129,25 +162,32 @@ const MonthView: React.FC<MonthViewProps> = ({ date, getShiftsForDate }) => {
                     </span>
                   </div>
 
-                  {/* Shifts */}
                   <div className="space-y-0.5">
-                    {shifts.slice(0, 3).map((shiftData) => (
-                      <div
-                        key={shiftData.shift.id}
-                        onClick={() =>
-                          setSelectedShift({ data: shiftData, date: day })
-                        }
-                        className={cn(
-                          'text-[9px] text-white px-1 py-0.5 rounded cursor-pointer',
-                          'hover:opacity-80 transition-opacity truncate',
-                          shiftData.shift.assignment_outcome === 'offered' && 'opacity-60 border-dashed border',
-                          getGradientClass(shiftData.groupColor)
-                        )}
-                      >
-                        {formatTime(shiftData.shift.start_time)}{' '}
-                        {shiftData.shift.roles?.name || 'Shift'}
-                      </div>
-                    ))}
+                    {shifts.slice(0, 3).map((shiftData) => {
+                      const isContinuation = shiftData.shift.shift_date !== format(day, 'yyyy-MM-dd');
+                      return (
+                        <div
+                          key={shiftData.shift.id}
+                          onClick={() =>
+                            setSelectedShift({ data: shiftData, date: day })
+                          }
+                          className={cn(
+                            'text-[9px] text-white px-1 py-0.5 rounded cursor-pointer',
+                            'hover:opacity-80 transition-opacity truncate',
+                            shiftData.shift.lifecycle_status === 'Published' && shiftData.shift.assignment_status === 'assigned' && !shiftData.shift.assignment_outcome && 'opacity-60 border-dashed border',
+                            getGradientClass(shiftData.groupColor),
+                            RING_CLASSES[getShiftRingColor(shiftData.shift)]
+                          )}
+                        >
+                          <span className="font-semibold block truncate">
+                            {isContinuation ? `Ends ${formatTime(shiftData.shift.end_time)}` : formatTime(shiftData.shift.start_time)}
+                          </span>
+                          <span className="block truncate opacity-90">
+                            {shiftData.shift.roles?.name || 'Shift'}
+                          </span>
+                        </div>
+                      );
+                    })}
 
                     {shifts.length > 3 && (
                       <div className="text-[9px] text-primary px-1 cursor-pointer hover:underline">
@@ -168,6 +208,9 @@ const MonthView: React.FC<MonthViewProps> = ({ date, getShiftsForDate }) => {
         shiftData={selectedShift?.data || null}
         shiftDate={selectedShift?.date || getSydneyToday()}
       />
+
+        </div>
+      </div>
     </div>
   );
 };

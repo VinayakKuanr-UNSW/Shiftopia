@@ -152,7 +152,7 @@ const WorkRightsSection: React.FC<WorkRightsSectionProps> = ({ employeeId, emplo
                                     </Badge>
                                     <button
                                         onClick={handleDelete}
-                                        className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"
+                                        className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-all p-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
                                         title="Remove Work Rights"
                                     >
                                         <Trash2 className="w-3.5 h-3.5" />

@@ -1,5 +1,6 @@
 import { supabase } from '@/platform/realtime/client';
 import { Group, SubGroup, Template, Shift } from '../models/types';
+import type { CaptureTemplateInput, CaptureTemplateResult } from '../model/templates.types';
 
 /* ============================================================
    TYPES
@@ -258,3 +259,30 @@ export const templatesService = {
     return this.updateTemplate(templateId, { groups: template.groups });
   },
 };
+
+export async function captureRosterAsTemplate(
+  input: CaptureTemplateInput
+): Promise<CaptureTemplateResult> {
+  const { data, error } = await supabase.rpc('capture_roster_as_template', {
+    p_start_date: input.startDate,
+    p_end_date: input.endDate,
+    p_sub_department_id: input.subDepartmentId,
+    p_template_name: input.templateName,
+    p_user_id: input.userId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    throw new Error('No response from capture_roster_as_template RPC');
+  }
+
+  const result = Array.isArray(data) ? data[0] : data;
+
+  return {
+    templateId: result.template_id,
+    shiftsCaptured: result.shifts_captured,
+  };
+}

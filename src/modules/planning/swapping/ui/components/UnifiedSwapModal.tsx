@@ -321,10 +321,10 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                     const s = shift as any;
                                     const isOfferedHere = alreadyOfferedForThisSwapIds.has(shift.id);
                                     const isOfferedElsewhere = offeredElsewhereIds.has(shift.id);
-                                    const isPendingOffer = s.assignment_outcome === 'offered';
+                                    const isPendingOffer = s.lifecycle_status === 'Published' && s.assignment_status === 'assigned' && !s.assignment_outcome;
 
                                     const urgency = computeShiftUrgency(s.shift_date, s.start_time, s.start_at);
-                                    const isLocked = urgency === 'locked';
+                                    const isLocked = urgency === 'emergent';
 
                                     const elig = eligibilityMap.get(shift.id);
                                     const isIneligible = elig?.eligible === false;

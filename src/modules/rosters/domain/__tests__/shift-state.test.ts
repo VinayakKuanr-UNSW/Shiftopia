@@ -1,25 +1,26 @@
 /**
  * determineShiftState — exhaustive test suite
  *
- * Covers all 15 canonical states (S1–S15), the Unknown fallback, and edge
- * cases including missing fields, conflicting signals, and the priority order
- * of the state machine.
+ * Covers all canonical states returned by the FSM, the Unknown fallback, and
+ * edge cases including missing fields, conflicting signals, and the priority
+ * order of the state machine.
+ *
+ * assignment_outcome only accepts: NULL | 'confirmed' | 'no_show'
+ * All other values ('offered', 'pending', 'emergency_assigned', 'declined',
+ * 'withdrawn') are banned by the DB constraint.
  *
  * State reference:
  *   S1  Draft + unassigned
- *   S2  Draft + assigned          (pending outcome)
- *   S3  Published + assigned + offered
- *   S4  Published + assigned + confirmed (no trade)
+ *   S2  Draft + assigned
+ *   S3  Published + assigned + outcome IS NULL   (awaiting acceptance)
+ *   S4  Published + assigned + outcome='confirmed' (no trade)
  *   S5  Published + unassigned    (normal / open bidding)
- *   S6  Published + unassigned + on_bidding_urgent
- *   S7  Published + assigned + emergency_assigned
+ *   S6  Published + unassigned + on_bidding_urgent  (legacy bidding_status)
  *   S8  Published + unassigned + bidding_closed_no_winner
  *   S9  Published + assigned + confirmed + trade_requested
- *   S10 (not directly detectable via shift fields alone)
+ *   S10 Published + assigned + confirmed + TradeAccepted
  *   S11 InProgress + assigned + confirmed
- *   S12 InProgress + assigned + emergency_assigned
  *   S13 Completed + assigned + confirmed
- *   S14 Completed + assigned + emergency_assigned
  *   S15 Cancelled
  */
 
@@ -82,9 +83,9 @@ describe('S2 — Draft assigned', () => {
         assertState(shift({ lifecycle_status: 'Draft', assignment_status: 'assigned' }), 'S2');
     });
 
-    it('matches regardless of assignment_outcome (pending outcome state)', () => {
-        assertState(shift({ lifecycle_status: 'Draft', assignment_status: 'assigned', assignment_outcome: 'pending' }), 'S2');
-        assertState(shift({ lifecycle_status: 'Draft', assignment_status: 'assigned', assignment_outcome: 'offered' }), 'S2');
+    it('matches regardless of assignment_outcome (outcome is null for a freshly assigned draft)', () => {
+        assertState(shift({ lifecycle_status: 'Draft', assignment_status: 'assigned', assignment_outcome: null }), 'S2');
+        assertState(shift({ lifecycle_status: 'Draft', assignment_status: 'assigned', assignment_outcome: 'confirmed' }), 'S2');
     });
 });
 
@@ -125,12 +126,19 @@ describe('S8 — Published unassigned bidding closed', () => {
     });
 });
 
-// ── S3: Published + assigned + offered ───────────────────────────────────────
+// ── S3: Published + assigned + outcome IS NULL (awaiting acceptance) ─────────
 
-describe('S3 — Published assigned offered', () => {
-    it('matches Published + assigned + offered', () => {
+describe('S3 — Published assigned awaiting acceptance', () => {
+    it('matches Published + assigned + outcome=null', () => {
         assertState(
-            shift({ lifecycle_status: 'Published', assignment_status: 'assigned', assignment_outcome: 'offered' }),
+            shift({ lifecycle_status: 'Published', assignment_status: 'assigned', assignment_outcome: null }),
+            'S3',
+        );
+    });
+
+    it('matches Published + assigned with no outcome field provided', () => {
+        assertState(
+            shift({ lifecycle_status: 'Published', assignment_status: 'assigned' }),
             'S3',
         );
     });
@@ -174,20 +182,10 @@ describe('S9 — Published assigned confirmed with trade request', () => {
     });
 });
 
-// ── S7: Published + assigned + emergency ─────────────────────────────────────
-
-describe('S7 — Published assigned emergency', () => {
-    it('matches Published + assigned + emergency_assigned', () => {
-        assertState(
-            shift({
-                lifecycle_status:   'Published',
-                assignment_status:  'assigned',
-                assignment_outcome: 'emergency_assigned',
-            }),
-            'S7',
-        );
-    });
-});
+// ── S7: legacy — emergency_assigned is a banned outcome value ─────────────────
+// 'emergency_assigned' was removed from the assignment_outcome enum.
+// Emergency assignments are now recorded via the emergency_source column.
+// Published + assigned + non-null unrecognised outcome → Unknown (FSM fallback).
 
 // ── S11: InProgress + assigned + confirmed ───────────────────────────────────
 
@@ -200,16 +198,7 @@ describe('S11 — InProgress assigned confirmed', () => {
     });
 });
 
-// ── S12: InProgress + assigned + emergency ───────────────────────────────────
-
-describe('S12 — InProgress assigned emergency', () => {
-    it('matches', () => {
-        assertState(
-            shift({ lifecycle_status: 'InProgress', assignment_status: 'assigned', assignment_outcome: 'emergency_assigned' }),
-            'S12',
-        );
-    });
-});
+// ── S12: legacy — removed; 'emergency_assigned' is a banned outcome value ─────
 
 // ── S13: Completed + assigned + confirmed ────────────────────────────────────
 
@@ -222,16 +211,7 @@ describe('S13 — Completed assigned confirmed', () => {
     });
 });
 
-// ── S14: Completed + assigned + emergency ────────────────────────────────────
-
-describe('S14 — Completed assigned emergency', () => {
-    it('matches', () => {
-        assertState(
-            shift({ lifecycle_status: 'Completed', assignment_status: 'assigned', assignment_outcome: 'emergency_assigned' }),
-            'S14',
-        );
-    });
-});
+// ── S14: legacy — removed; 'emergency_assigned' is a banned outcome value ─────
 
 // ── Unknown ───────────────────────────────────────────────────────────────────
 
@@ -254,10 +234,10 @@ describe('Unknown — unrecognised combinations', () => {
         );
     });
 
-    it('returns Unknown for Published + assigned with no outcome', () => {
+    it('returns S3 for Published + assigned with no outcome (awaiting acceptance)', () => {
         assertState(
             shift({ lifecycle_status: 'Published', assignment_status: 'assigned' }),
-            'Unknown',
+            'S3',
         );
     });
 });
@@ -365,21 +345,21 @@ describe('getShiftStateDebugString', () => {
 
 // ── All 14 detectable states covered ─────────────────────────────────────────
 
-describe('Full state coverage — one canonical fixture per state', () => {
+// S6, S7, S8, S12, S14 are legacy FSM states whose discriminating outcome values
+// ('emergency_assigned', bidding urgency) are no longer stored in assignment_outcome.
+// determineShiftState delegates to getShiftFSMState; those states are never returned.
+
+describe('Full state coverage — one canonical fixture per active FSM state', () => {
     const cases: [string, Parameters<typeof determineShiftState>[0], ShiftStateID][] = [
         ['S1',  { lifecycle_status: 'Draft',      assignment_status: 'unassigned' },                                                                                           'S1'],
         ['S2',  { lifecycle_status: 'Draft',      assignment_status: 'assigned' },                                                                                             'S2'],
-        ['S3',  { lifecycle_status: 'Published',  assignment_status: 'assigned',   assignment_outcome: 'offered' },                                                           'S3'],
+        ['S3',  { lifecycle_status: 'Published',  assignment_status: 'assigned',   assignment_outcome: null },                                                                 'S3'],
         ['S4',  { lifecycle_status: 'Published',  assignment_status: 'assigned',   assignment_outcome: 'confirmed' },                                                         'S4'],
         ['S5',  { lifecycle_status: 'Published',  assignment_status: 'unassigned' },                                                                                           'S5'],
-        ['S6',  { lifecycle_status: 'Published',  assignment_status: 'unassigned', bidding_status: 'on_bidding_urgent' },                                                      'S6'],
-        ['S7',  { lifecycle_status: 'Published',  assignment_status: 'assigned',   assignment_outcome: 'emergency_assigned' },                                                'S7'],
         ['S8',  { lifecycle_status: 'Published',  assignment_status: 'unassigned', bidding_status: 'bidding_closed_no_winner' },                                               'S8'],
         ['S9',  { lifecycle_status: 'Published',  assignment_status: 'assigned',   assignment_outcome: 'confirmed',        trade_requested_at: '2024-01-01T00:00:00Z' },      'S9'],
         ['S11', { lifecycle_status: 'InProgress', assignment_status: 'assigned',   assignment_outcome: 'confirmed' },                                                         'S11'],
-        ['S12', { lifecycle_status: 'InProgress', assignment_status: 'assigned',   assignment_outcome: 'emergency_assigned' },                                                'S12'],
         ['S13', { lifecycle_status: 'Completed',  assignment_status: 'assigned',   assignment_outcome: 'confirmed' },                                                         'S13'],
-        ['S14', { lifecycle_status: 'Completed',  assignment_status: 'assigned',   assignment_outcome: 'emergency_assigned' },                                                'S14'],
         ['S15', { lifecycle_status: 'Cancelled' },                                                                                                                             'S15'],
     ];
 

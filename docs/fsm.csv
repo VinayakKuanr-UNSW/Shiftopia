@@ -1,0 +1,16 @@
+StateID,Label,Lifecycle,IsTerminal,IsModalLocked,Description
+S1,Draft – Unassigned,Draft,FALSE,FALSE,Shift created but no employee assigned yet.
+S2,Draft – Assigned,Draft,FALSE,FALSE,Employee assigned in draft mode; not yet visible to them.
+S3,Published – Offered,Published,FALSE,TRUE,Shift sent to an employee as a direct offer; waiting for acceptance.
+S4,Published – Confirmed,Published,FALSE,FALSE,Shift assigned and confirmed; visible on the employee's roster.
+S5,Published – Bidding (Normal),Published,FALSE,FALSE,Open shift available for bidding (>24h from start).
+S6,Published – Bidding (Urgent),Published,FALSE,FALSE,Open shift available for bidding (<24h from start).
+S7,Published – Emergency Assigned,Published,FALSE,FALSE,Shift assigned within 4h of start (bypass bidding/offers).
+S8,Published – Bidding Closed,Published,FALSE,FALSE,Bidding window closed without a winner select.
+S9,Published – Trade Requested,Published,FALSE,FALSE,Employee has requested to trade this shift.
+S10,Published – Trade Accepted,Published,FALSE,FALSE,Another employee has accepted the trade; waiting for manager approval.
+S11,In Progress – Confirmed,InProgress,FALSE,TRUE,Employee has clocked in for a confirmed shift.
+S12,In Progress – Emergency,InProgress,FALSE,TRUE,Employee has clocked in for an emergency assigned shift.
+S13,Completed – Confirmed,Completed,TRUE,TRUE,Shift finished correctly and clocked out (Confirmed).
+S14,Completed – Emergency,Completed,TRUE,TRUE,Shift finished correctly and clocked out (Emergency).
+S15,Cancelled,Cancelled,TRUE,TRUE,Shift has been cancelled and is no longer active.

@@ -105,7 +105,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                 onClick={() => !isDisabled && setIsOpen(!isOpen)}
                 className={cn(
                     "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                    "border min-w-[180px] justify-between",
+                    "border min-w-[140px] sm:min-w-[180px] justify-between",
                     isDisabled
                         ? "bg-slate-100 dark:bg-white/[0.02] border-slate-200 dark:border-white/[0.06] text-slate-400 dark:text-white/40 cursor-not-allowed"
                         : "bg-white dark:bg-white/[0.04] border-slate-200 dark:border-white/[0.08] text-slate-700 dark:text-white/80 hover:bg-slate-50 dark:hover:bg-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.12] cursor-pointer"
@@ -115,7 +115,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
             >
                 <span className="flex items-center gap-2">
                     {icon}
-                    <span className="truncate max-w-[140px]">{displayText}</span>
+                    <span className="truncate max-w-[100px] sm:max-w-[140px]">{displayText}</span>
                 </span>
                 {locked ? (
                     <Lock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400/60 flex-shrink-0" />
@@ -321,7 +321,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
 
     return (
         <div className={cn(
-            "flex items-center gap-3 p-3 rounded-xl relative z-30",
+            "flex flex-wrap items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-xl relative z-30",
             "bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.06] backdrop-blur-sm",
             className
         )}>

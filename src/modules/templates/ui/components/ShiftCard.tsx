@@ -78,14 +78,14 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
     >
       {/* Actions */}
       {!isReadOnly && (
-        <div className="absolute top-2 right-2 flex items-center gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute top-2 right-2 flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   onClick={(e) => {
                     e.stopPropagation();
                     onEdit();
@@ -104,7 +104,7 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   onClick={(e) => {
                     e.stopPropagation();
                     onClone?.();
@@ -123,7 +123,7 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-7 w-7 text-destructive/70 hover:text-destructive hover:bg-destructive/10"
+                  className="h-9 w-9 text-destructive/70 hover:text-destructive hover:bg-destructive/10"
                   onClick={(e) => {
                     e.stopPropagation();
                     onDelete();
