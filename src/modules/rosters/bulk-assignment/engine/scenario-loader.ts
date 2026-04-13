@@ -125,7 +125,7 @@ export class ScenarioLoader {
         const [profileRes, ctx] = await Promise.all([
             (supabase as any)
                 .from('profiles')
-                .select('id, full_name, employment_end_date')
+                .select('id, full_name, termination_date')
                 .eq('id', employeeId)
                 .single(),
             fetchEmployeeContextV2(employeeId),
@@ -140,7 +140,7 @@ export class ScenarioLoader {
         return {
             id:                  employeeId,
             name:                profile?.full_name ?? employeeId,
-            employment_end_date: profile?.employment_end_date ?? null,
+            employment_end_date: profile?.termination_date ?? null,
             // contracts → source of truth for R10 role/hierarchy match
             contracts:           ctx.contracts,
             qualifications:      ctx.qualifications.map(q => ({

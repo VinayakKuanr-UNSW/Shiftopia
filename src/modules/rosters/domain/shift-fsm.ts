@@ -16,16 +16,17 @@
 // ─── State ID ────────────────────────────────────────────────────────────────
 
 export type ShiftStateID =
-    | 'S1'   // Draft – Unassigned
-    | 'S2'   // Draft – Assigned
-    | 'S3'   // Published – Offered   (assigned + outcome = null)
-    | 'S4'   // Published – Confirmed
-    | 'S5'   // Published – Bidding   (unassigned)
-    | 'S9'   // Published – Trade Requested
-    | 'S10'  // Published – Trade Accepted
-    | 'S11'  // In Progress
-    | 'S13'  // Completed
-    | 'S15'; // Cancelled
+    | 'S1'      // Draft – Unassigned
+    | 'S2'      // Draft – Assigned
+    | 'S3'      // Published – Offered   (assigned + outcome = null)
+    | 'S4'      // Published – Confirmed
+    | 'S5'      // Published – Bidding   (unassigned)
+    | 'S9'      // Published – Trade Requested
+    | 'S10'     // Published – Trade Accepted
+    | 'S11'     // In Progress
+    | 'S13'     // Completed
+    | 'S15'     // Cancelled
+    | 'UNKNOWN'; // Stale/unrecognized DB combination — renders as neutral fallback
 
 // ─── Input shape ─────────────────────────────────────────────────────────────
 
@@ -56,8 +57,9 @@ export const FSM_STATE_META: Record<ShiftStateID, ShiftFSMStateInfo> = {
     S9:  { id: 'S9',  label: 'Trade Requested',    description: 'Employee has requested a trade',            color: 'amber'   },
     S10: { id: 'S10', label: 'Trade Accepted',     description: 'Trade accepted — awaiting manager approval',color: 'orange'  },
     S11: { id: 'S11', label: 'In Progress',        description: 'Shift has started',                         color: 'blue'    },
-    S13: { id: 'S13', label: 'Completed',          description: 'Shift has ended',                           color: 'gray'    },
-    S15: { id: 'S15', label: 'Cancelled',          description: 'Shift has been cancelled',                  color: 'red'     },
+    S13:     { id: 'S13',     label: 'Completed',          description: 'Shift has ended',                           color: 'gray'    },
+    S15:     { id: 'S15',     label: 'Cancelled',          description: 'Shift has been cancelled',                  color: 'red'     },
+    UNKNOWN: { id: 'UNKNOWN', label: 'Unknown',            description: 'Unrecognized shift state — stale DB data',  color: 'gray'    },
 };
 
 // ─── Core derivation function ─────────────────────────────────────────────────
@@ -85,11 +87,12 @@ export function getShiftFSMState(shift: ShiftFSMInput): ShiftStateID {
         if (shift.trading_status === 'TradeAccepted')  return 'S10';
 
         if (shift.assignment_status === 'assigned') {
-            // Offered: assigned but no outcome yet (S3).
-            // assignment_outcome is constrained to NULL | 'confirmed' | 'no_show' only.
-            if (shift.assignment_outcome == null) return 'S3';
-            // Confirmed (or no_show while published — edge case but valid)
+            // Confirmed → S4
             if (shift.assignment_outcome === 'confirmed') return 'S4';
+            // NULL or any legacy value ('pending', 'offered', etc.) → S3 (Offered, awaiting decision).
+            // assignment_outcome is now constrained to NULL | 'confirmed' | 'no_show', but
+            // older rows may carry stale values — treat them all as "no outcome yet".
+            return 'S3';
         }
 
         // Unassigned while published = bidding (or waiting for assignment)
@@ -102,12 +105,15 @@ export function getShiftFSMState(shift: ShiftFSMInput): ShiftStateID {
         return 'S1';
     }
 
-    // 6. Unreachable on valid data — DB trigger prevents this
-    throw new Error(
-        `Invalid shift state combination: lifecycle=${shift.lifecycle_status} ` +
+    // 6. Unrecognized combination — stale DB data or schema drift.
+    // Log a warning but never crash the UI; render as UNKNOWN so the card
+    // shows a neutral fallback state instead of an ErrorBoundary.
+    console.warn(
+        `[FSM] Unrecognized shift state combination: lifecycle=${shift.lifecycle_status} ` +
         `assignment=${shift.assignment_status} outcome=${shift.assignment_outcome} ` +
         `trading=${shift.trading_status} cancelled=${shift.is_cancelled}`
     );
+    return 'UNKNOWN';
 }
 
 // ─── Emergency source ─────────────────────────────────────────────────────────

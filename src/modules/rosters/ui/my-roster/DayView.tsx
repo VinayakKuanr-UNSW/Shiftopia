@@ -21,10 +21,9 @@ interface DayViewProps {
 
 // Helper to format time for display
 const formatTime = (time: string): string => {
+  if (!time) return '';
   const [h, m] = time.split(':').map(Number);
-  const period = h >= 12 ? 'PM' : 'AM';
-  const display = h % 12 || 12;
-  return `${display}:${m.toString().padStart(2, '0')} ${period}`;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 };
 
 // Get gradient class based on color
@@ -90,8 +89,7 @@ const DayView: React.FC<DayViewProps> = ({ date, shifts }) => {
                     </div>
                     <div className="space-y-0.5">
                       <div className="text-xs opacity-90">
-                        {formatTime(shift.start_time)} –{' '}
-                        {formatTime(shift.end_time)}
+                        {formatTime(shift.start_time)}-{formatTime(shift.end_time)}
                       </div>
                       {shift.break_minutes > 0 && (
                         <div className="text-[10px] opacity-70">

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ScopeTree, ScopeOrg, ScopeDept, ScopeSelection } from '@/platform/auth/types';
-import { ChevronDown, Lock, Building2, Layers, Users2 } from 'lucide-react';
+import { ChevronDown, Lock, Building2, Layers, Users2, PanelLeft } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
+import { SidebarTrigger } from '@/modules/core/ui/primitives/sidebar';
 
 // =============================================
 // Types
@@ -105,7 +106,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                 onClick={() => !isDisabled && setIsOpen(!isOpen)}
                 className={cn(
                     "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                    "border min-w-[140px] sm:min-w-[180px] justify-between",
+                    "border min-w-[80px] sm:min-w-[150px] justify-between w-full",
                     isDisabled
                         ? "bg-slate-100 dark:bg-white/[0.02] border-slate-200 dark:border-white/[0.06] text-slate-400 dark:text-white/40 cursor-not-allowed"
                         : "bg-white dark:bg-white/[0.04] border-slate-200 dark:border-white/[0.08] text-slate-700 dark:text-white/80 hover:bg-slate-50 dark:hover:bg-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.12] cursor-pointer"
@@ -113,9 +114,9 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                 disabled={isDisabled}
                 type="button"
             >
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5 sm:gap-2">
                     {icon}
-                    <span className="truncate max-w-[100px] sm:max-w-[140px]">{displayText}</span>
+                    <span className="truncate max-w-[80px] sm:max-w-[140px] text-xs sm:text-sm">{displayText}</span>
                 </span>
                 {locked ? (
                     <Lock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400/60 flex-shrink-0" />
@@ -321,52 +322,52 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
 
     return (
         <div className={cn(
-            "flex flex-wrap items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-xl relative z-30",
-            "bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/[0.06] backdrop-blur-sm",
+            "flex flex-col gap-1 p-1.5 rounded-xl relative z-30",
+            "bg-slate-50 dark:bg-[#1a2744]/20 border border-slate-200 dark:border-white/[0.03] backdrop-blur-xl shadow-lg",
             className
         )}>
-            {mode && (
-                <span className={cn(
-                    "px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider",
-                    mode === 'personal'
-                        ? "bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-500/20"
-                        : "bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-300 dark:border-purple-500/20"
-                )}>
-                    {mode}
-                </span>
-            )}
+            <div className="flex items-center gap-1.5 w-full">
+                {/* Unified Sidebar Trigger */}
+                <SidebarTrigger className="h-8 w-8 hover:bg-white/10 text-slate-500 dark:text-white/60 shrink-0" />
+                
+                <div className="flex-1 min-w-0">
+                    <MultiSelect
+                        label="Venue"
+                        options={orgs.map(o => ({ id: o.id, name: o.name }))}
+                        selected={selectedOrgIds}
+                        onChange={setSelectedOrgIds}
+                        locked={lockConfig.orgLocked}
+                        multiSelect={multiSelect}
+                        compact={true}
+                    />
+                </div>
 
-            <MultiSelect
-                label="Organization"
-                icon={<Building2 className="w-4 h-4 text-blue-500 dark:text-blue-400/70" />}
-                options={orgs.map(o => ({ id: o.id, name: o.name }))}
-                selected={selectedOrgIds}
-                onChange={setSelectedOrgIds}
-                locked={lockConfig.orgLocked}
-                multiSelect={multiSelect}
-            />
+                <div className="flex-1 min-w-0">
+                    <MultiSelect
+                        label="Department"
+                        options={availableDepts}
+                        selected={selectedDeptIds}
+                        onChange={setSelectedDeptIds}
+                        locked={lockConfig.deptLocked}
+                        disabled={selectedOrgIds.length === 0}
+                        multiSelect={multiSelect}
+                        compact={true}
+                    />
+                </div>
 
-            <MultiSelect
-                label="Department"
-                icon={<Layers className="w-4 h-4 text-emerald-600 dark:text-emerald-400/70" />}
-                options={availableDepts}
-                selected={selectedDeptIds}
-                onChange={setSelectedDeptIds}
-                locked={lockConfig.deptLocked}
-                disabled={selectedOrgIds.length === 0}
-                multiSelect={multiSelect}
-            />
-
-            <MultiSelect
-                label="Sub-Department"
-                icon={<Users2 className="w-4 h-4 text-amber-600 dark:text-amber-400/70" />}
-                options={availableSubDepts}
-                selected={selectedSubDeptIds}
-                onChange={setSelectedSubDeptIds}
-                locked={lockConfig.subDeptLocked}
-                disabled={selectedDeptIds.length === 0}
-                multiSelect={multiSelect}
-            />
+                <div className="flex-1 min-w-0">
+                    <MultiSelect
+                        label="Sub-Department"
+                        options={availableSubDepts}
+                        selected={selectedSubDeptIds}
+                        onChange={setSelectedSubDeptIds}
+                        locked={lockConfig.subDeptLocked}
+                        disabled={selectedDeptIds.length === 0}
+                        multiSelect={multiSelect}
+                        compact={true}
+                    />
+                </div>
+            </div>
         </div>
     );
 };

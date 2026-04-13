@@ -595,8 +595,8 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
           onOpenChange={setIsSnapDialogOpen}
           subDepartmentId={selectedSubDepartmentId}
           subDepartmentName={subDepartmentName}
-          defaultStartDate={format(autoScheduleRange.start, 'yyyy-MM-dd')}
-          defaultEndDate={format(autoScheduleRange.end, 'yyyy-MM-dd')}
+          defaultStartDate={format(selectedDate, 'yyyy-MM-dd')}
+          defaultEndDate={format(addDays(selectedDate, 6), 'yyyy-MM-dd')}
         />
       )}
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   format,
   startOfMonth,
@@ -7,41 +7,14 @@ import {
   endOfWeek,
   eachDayOfInterval,
   isSameMonth,
-  isToday,
+  isSameDay,
 } from 'date-fns';
-import { getSydneyToday, isSydneyToday } from '@/modules/core/lib/date.utils';
+import { getTodayInTimezone, isTodayInTimezone } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
+import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import ShiftDetailsDialog from './ShiftDetailsDialog';
+import { MobileShiftCard } from './MobileShiftCard';
 import { Shift } from '@/modules/rosters';
-import type { RingColor } from '@/modules/rosters/domain/shift-ui';
-
-function getShiftRingColor(shift: Shift): RingColor {
-  if (shift.lifecycle_status === 'Completed') return 'purple';
-  if (shift.lifecycle_status === 'InProgress') return 'emerald';
-  // Late: Published, past start time, no actual_start
-  if (shift.lifecycle_status === 'Published' && !shift.actual_start) {
-    const start = shift.scheduled_start
-      ? new Date(shift.scheduled_start).getTime()
-      : new Date(`${shift.shift_date}T${shift.start_time}`).getTime();
-    if (Date.now() > start) return 'yellow';
-  }
-  const start = shift.scheduled_start
-    ? new Date(shift.scheduled_start).getTime()
-    : new Date(`${shift.shift_date}T${shift.start_time}`).getTime();
-  const ttsSec = Math.max(0, (start - Date.now()) / 1000);
-  if (ttsSec < 4 * 3600)  return 'red';
-  if (ttsSec < 24 * 3600) return 'orange';
-  return 'blue';
-}
-
-const RING_CLASSES: Record<RingColor, string> = {
-  purple:  'ring-2 ring-purple-500',
-  emerald: 'ring-2 ring-emerald-500',
-  yellow:  'ring-2 ring-yellow-500',
-  red:     'ring-2 ring-red-500',
-  orange:  'ring-2 ring-orange-400',
-  blue:    'ring-1 ring-blue-400/50',
-};
 
 interface ShiftWithDetails {
   shift: Shift;
@@ -52,18 +25,23 @@ interface ShiftWithDetails {
 
 interface MonthViewProps {
   date: Date;
-  getShiftsForDate: (date: Date) => ShiftWithDetails[];
+  getShiftsForDate: (date: Date, options?: { includeContinuations?: boolean }) => ShiftWithDetails[];
+  pendingOfferCount: number;
+  offerDates: Set<string>;
 }
 
-// Helper to format time for display
+const SYDNEY_TZ = 'Australia/Sydney';
+
 const formatTime = (time: string): string => {
+  if (!time) return '';
   const [h, m] = time.split(':').map(Number);
-  const period = h >= 12 ? 'PM' : 'AM';
-  const display = h % 12 || 12;
-  return `${display}:${m.toString().padStart(2, '0')} ${period}`;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 };
 
-// Get gradient class based on color
+const formatTimeRange = (start: string, end: string): string => {
+  return `${formatTime(start)}-${formatTime(end)}`;
+};
+
 const getGradientClass = (color: string): string => {
   const base = 'dept-card-glass-base';
   switch (color?.toLowerCase()) {
@@ -78,121 +56,238 @@ const getGradientClass = (color: string): string => {
   }
 };
 
-const MonthView: React.FC<MonthViewProps> = ({ date, getShiftsForDate }) => {
+const MonthView: React.FC<MonthViewProps> = ({ date, getShiftsForDate, offerDates }) => {
+  const isMobile = useIsMobile();
+  const [selectedDay, setSelectedDay] = useState<Date>(date);
   const [selectedShift, setSelectedShift] = useState<{
     data: ShiftWithDetails;
     date: Date;
   } | null>(null);
 
-  const monthStart = startOfMonth(date);
-  const monthEnd = endOfMonth(date);
-  const calendarStart = startOfWeek(monthStart);
-  const calendarEnd = endOfWeek(monthEnd);
+  useEffect(() => {
+    setSelectedDay(date);
+  }, [date]);
 
-  const allDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+  const allDays = eachDayOfInterval({
+    start: startOfWeek(startOfMonth(date)),
+    end:   endOfWeek(endOfMonth(date)),
+  });
 
-  // Group days into weeks
   const weeks: Date[][] = [];
   let currentWeek: Date[] = [];
   allDays.forEach((day) => {
-    if (currentWeek.length === 7) {
-      weeks.push(currentWeek);
-      currentWeek = [];
-    }
+    if (currentWeek.length === 7) { weeks.push(currentWeek); currentWeek = []; }
     currentWeek.push(day);
   });
   if (currentWeek.length > 0) weeks.push(currentWeek);
 
-  return (
-    <div className="h-full flex flex-col bg-card rounded-lg overflow-hidden border border-border">
-      {/* Scroll wrapper for mobile — keeps 7-col layout intact, adds horizontal scroll on narrow screens */}
-      <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0 flex-1 flex flex-col min-h-0">
-        <div className="min-w-[480px] flex-1 flex flex-col min-h-0">
+  // ── MOBILE — Outlook-style compact grid + scrollable agenda ───────────────
+  if (isMobile) {
+    const agendaShifts = getShiftsForDate(selectedDay, { includeContinuations: false });
+    const selectedDateStr = format(selectedDay, 'yyyy-MM-dd');
+    const hasOffer = offerDates.has(selectedDateStr);
 
-      {/* Header */}
-      <div className="flex-shrink-0 bg-muted border-b border-border">
-        <div className="p-3 text-center">
-          <h3 className="text-lg font-bold text-foreground">
-            {format(date, 'MMMM yyyy')}
-          </h3>
+    return (
+      <div className="h-full flex flex-col overflow-hidden bg-background">
+
+        {/* Compact month mini-grid */}
+        <div className="flex-shrink-0 bg-card/40 backdrop-blur-xl border-b border-border py-2 px-3">
+          <div className="grid grid-cols-7 mb-1.5">
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, idx) => (
+              <div key={idx} className="text-center text-[10px] font-black text-muted-foreground/40 uppercase tracking-widest">
+                {d}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-y-1">
+            {allDays.map((day) => {
+              const belongsToMonth = isSameMonth(day, date);
+              const isToday        = isTodayInTimezone(day, SYDNEY_TZ);
+              const isSelected     = isSameDay(day, selectedDay);
+              const dayShifts      = getShiftsForDate(day, { includeContinuations: false });
+
+              return (
+                <button
+                  key={day.toISOString()}
+                  onClick={() => setSelectedDay(day)}
+                  className={cn(
+                    'relative flex flex-col items-center justify-center py-1.5 rounded-xl transition-all',
+                    !belongsToMonth && 'opacity-10 pointer-events-none',
+                    isSelected
+                      ? 'bg-primary text-primary-foreground scale-105 shadow-lg shadow-primary/20'
+                      : 'hover:bg-muted/60'
+                  )}
+                >
+                  <span className={cn(
+                    'text-xs font-black tracking-tight',
+                    isToday && !isSelected && 'text-primary underline decoration-primary/50 underline-offset-2'
+                  )}>
+                    {format(day, 'd')}
+                  </span>
+
+                  {/* Shift density dots */}
+                  <div className="flex gap-0.5 mt-1 h-1 justify-center">
+                    {dayShifts.slice(0, 3).map((s) => (
+                      <div
+                        key={s.shift.id}
+                        className={cn(
+                          'w-1 h-1 rounded-full',
+                          isSelected ? 'bg-primary-foreground/70' : 'bg-primary/50'
+                        )}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Offer dot */}
+                  {offerDates.has(format(day, 'yyyy-MM-dd')) && belongsToMonth && (
+                    <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div className="grid grid-cols-7 border-t border-border">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-            <div
-              key={day}
-              className="p-2 text-center text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-r border-border last:border-r-0"
-            >
-              {day}
+
+        {/* Agenda header */}
+        <div className="flex-shrink-0 px-5 py-2 flex items-center justify-between border-b border-border bg-muted/20">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground/70">
+              {format(selectedDay, 'EEEE, d MMMM')}
+            </p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[10px] text-primary/70 font-bold">
+                {agendaShifts.length} {agendaShifts.length === 1 ? 'shift' : 'shifts'}
+              </span>
+              {hasOffer && (
+                <>
+                  <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+                  <span className="text-[10px] text-amber-500 font-bold">Offer pending</span>
+                </>
+              )}
             </div>
-          ))}
+          </div>
         </div>
+
+        {/* Scrollable shift list */}
+        <div className="flex-1 overflow-y-auto overscroll-contain pb-24">
+          {agendaShifts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-center py-16 px-8">
+              <p className="text-xs font-black tracking-[0.2em] text-muted-foreground/30 uppercase">
+                No shifts scheduled
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 p-4">
+              {agendaShifts.map((shiftData) => (
+                <MobileShiftCard
+                  key={shiftData.shift.id}
+                  shiftData={shiftData}
+                  selectedDay={selectedDay}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <ShiftDetailsDialog
+          isOpen={!!selectedShift}
+          onClose={() => setSelectedShift(null)}
+          shiftData={selectedShift?.data || null}
+          shiftDate={selectedDay}
+        />
+      </div>
+    );
+  }
+
+  // ── DESKTOP — traditional grid ─────────────────────────────────────────────
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+
+      {/* Day-of-week header */}
+      <div className="flex-shrink-0 grid grid-cols-7 border-b border-border bg-muted/30">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+          <div
+            key={d}
+            className="py-2.5 text-center text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground/50 border-r border-border last:border-r-0"
+          >
+            {d}
+          </div>
+        ))}
       </div>
 
-      {/* Calendar grid */}
+      {/* Calendar grid — scrolls internally */}
       <div className="flex-1 overflow-auto">
-        <div className="grid grid-cols-7 h-full">
-          {weeks.map((week, weekIndex) =>
-            week.map((day, dayIndex) => {
+        <div className="grid grid-cols-7 min-h-full" style={{ gridAutoRows: 'minmax(120px, 1fr)' }}>
+          {weeks.map((week, wi) =>
+            week.map((day, di) => {
               const isCurrentMonth = isSameMonth(day, date);
-              const isCurrentDay = isSydneyToday(day);
-              const shifts = getShiftsForDate(day);
+              const isToday        = isTodayInTimezone(day, SYDNEY_TZ);
+              const dayShifts      = getShiftsForDate(day, { includeContinuations: false });
 
               return (
                 <div
-                  key={`${weekIndex}-${dayIndex}`}
+                  key={`${wi}-${di}`}
+                  onClick={() => setSelectedDay(day)}
                   className={cn(
-                    'min-h-[70px] sm:min-h-[90px] p-1 border-r border-b border-border last:border-r-0',
-                    isCurrentDay && 'bg-primary/10',
-                    !isCurrentMonth && 'opacity-40 bg-muted'
+                    'p-2 border-r border-b border-border last:border-r-0 cursor-default',
+                    isToday && 'bg-primary/5',
+                    !isCurrentMonth && 'opacity-25'
                   )}
                 >
                   {/* Date number */}
-                  <div className="flex justify-end mb-1">
+                  <div className="flex items-center justify-between mb-2">
                     <span
                       className={cn(
-                        'text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full',
-                        isCurrentDay
-                          ? 'bg-primary text-primary-foreground'
-                          : isCurrentMonth
-                            ? 'text-foreground/70'
-                            : 'text-muted-foreground/50'
+                        'text-xs font-black h-6 w-6 flex items-center justify-center rounded-lg transition-all',
+                        isToday
+                          ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/30'
+                          : 'text-foreground/70'
                       )}
                     >
                       {format(day, 'd')}
                     </span>
+                    {dayShifts.length > 0 && isCurrentMonth && (
+                      <span className="text-[9px] font-black text-primary/40 uppercase tracking-tight">
+                        {dayShifts.length}×
+                      </span>
+                    )}
                   </div>
 
-                  <div className="space-y-0.5">
-                    {shifts.slice(0, 3).map((shiftData) => {
+                  {/* Shift chips */}
+                  <div className="space-y-1.5">
+                    {dayShifts.slice(0, 3).map((shiftData) => {
                       const isContinuation = shiftData.shift.shift_date !== format(day, 'yyyy-MM-dd');
                       return (
                         <div
                           key={shiftData.shift.id}
-                          onClick={() =>
-                            setSelectedShift({ data: shiftData, date: day })
-                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedShift({ data: shiftData, date: day });
+                          }}
                           className={cn(
-                            'text-[9px] text-white px-1 py-0.5 rounded cursor-pointer',
-                            'hover:opacity-80 transition-opacity truncate',
-                            shiftData.shift.lifecycle_status === 'Published' && shiftData.shift.assignment_status === 'assigned' && !shiftData.shift.assignment_outcome && 'opacity-60 border-dashed border',
-                            getGradientClass(shiftData.groupColor),
-                            RING_CLASSES[getShiftRingColor(shiftData.shift)]
+                            'text-[10px] text-white px-2 py-1.5 rounded-lg cursor-pointer',
+                            'hover:scale-[1.02] active:scale-[0.98] transition-transform',
+                            'border border-white/10 shadow-sm truncate',
+                            getGradientClass(shiftData.groupColor)
                           )}
                         >
-                          <span className="font-semibold block truncate">
-                            {isContinuation ? `Ends ${formatTime(shiftData.shift.end_time)}` : formatTime(shiftData.shift.start_time)}
-                          </span>
-                          <span className="block truncate opacity-90">
+                          <div className="font-black truncate leading-tight">
+                            {formatTimeRange(shiftData.shift.start_time, shiftData.shift.end_time)}
+                          </div>
+                          <div className="text-[9px] opacity-60 truncate font-bold uppercase tracking-wider mt-0.5">
                             {shiftData.shift.roles?.name || 'Shift'}
-                          </span>
+                          </div>
                         </div>
                       );
                     })}
 
-                    {shifts.length > 3 && (
-                      <div className="text-[9px] text-primary px-1 cursor-pointer hover:underline">
-                        +{shifts.length - 3} more
-                      </div>
+                    {dayShifts.length > 3 && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setSelectedShift({ data: dayShifts[3], date: day }); }}
+                        className="text-[9px] font-black text-primary/50 hover:text-primary transition-colors px-1 uppercase tracking-tight"
+                      >
+                        +{dayShifts.length - 3} more
+                      </button>
                     )}
                   </div>
                 </div>
@@ -206,11 +301,8 @@ const MonthView: React.FC<MonthViewProps> = ({ date, getShiftsForDate }) => {
         isOpen={!!selectedShift}
         onClose={() => setSelectedShift(null)}
         shiftData={selectedShift?.data || null}
-        shiftDate={selectedShift?.date || getSydneyToday()}
+        shiftDate={selectedShift?.date ?? getTodayInTimezone(SYDNEY_TZ)}
       />
-
-        </div>
-      </div>
     </div>
   );
 };

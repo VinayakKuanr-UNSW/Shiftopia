@@ -144,16 +144,16 @@ export type PublishShiftResponse = z.infer<typeof PublishShiftResponseSchema>;
 
 // sm_bulk_publish_shifts
 export const BulkPublishResponseSchema = z.object({
-  success: z.boolean(),
-  total_requested: z.number().int(),
-  success_count: z.number().int(),
-  failure_count: z.number().int(),
+  success: z.boolean().optional(),
+  total_requested: z.number().int().optional(),
+  success_count: z.number().int().optional(),
+  failure_count: z.number().int().optional(),
   message: z.string().optional(),
   errors: z.array(z.object({
     shift_id: z.string(),
     reason: z.string(),
   })).optional(),
-});
+}).passthrough();
 export type BulkPublishResponse = z.infer<typeof BulkPublishResponseSchema>;
 
 // sm_bulk_assign

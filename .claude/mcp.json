@@ -6,7 +6,7 @@
                 "-y",
                 "@supabase/mcp-server-supabase@latest",
                 "--access-token",
-                "sbp_796733add09b144d337fd824237f07a18be24af6"
+                "sbp_ef836a0a91c7edfab458a0d8c424bc3bd45b9a92"
             ]
         }
     }

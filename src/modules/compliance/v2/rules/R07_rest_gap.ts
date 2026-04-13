@@ -28,6 +28,10 @@ export const R07_rest_gap: RuleEvaluatorV2 = (ctx) => {
         const a = sorted[i];
         const b = sorted[i + 1];
 
+        // Same-day split shifts have no rest gap requirement — only cross-day
+        // pairs (different shift_date) must satisfy the minimum rest gap.
+        if (a.shift_date === b.shift_date) continue;
+
         const aStartAbs = toAbsoluteMinutes(a.shift_date, a.start_time);
         const aEndAbs   = aStartAbs + shiftGrossMinutes(a);
         const bStartAbs = toAbsoluteMinutes(b.shift_date, b.start_time);

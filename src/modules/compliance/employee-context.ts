@@ -75,7 +75,7 @@ export async function fetchEmployeeContextV2(
     const [profileRes, contractsRes, skillsRes, licensesRes] = await Promise.all([
         supabase
             .from('profiles')
-            .select('id, contract_type, contracted_weekly_hours')
+            .select('id, employment_type')
             .eq('id', employeeId)
             .single(),
         supabase
@@ -85,11 +85,11 @@ export async function fetchEmployeeContextV2(
             .eq('status', 'active'),
         supabase
             .from('employee_skills')
-            .select('skill_id, expires_at, issued_at')
+            .select('skill_id, expiration_date')
             .eq('employee_id', employeeId),
         supabase
             .from('employee_licenses')
-            .select('license_id, expires_at, issued_at, has_restricted_work_limit, license_type')
+            .select('license_id, expiration_date, issue_date, has_restricted_work_limit, license_type')
             .eq('employee_id', employeeId),
     ]);
 
@@ -98,10 +98,16 @@ export async function fetchEmployeeContextV2(
     const skills   = skillsRes.data ?? [];
     const licenses = licensesRes.data ?? [];
 
-    // Determine contract type — explicit field takes precedence,
+    // Determine contract type — map DB employment_type enum to ContractType,
     // then visa flag override, then default to CASUAL.
+    const employmentTypeMap: Record<string, ContractType> = {
+        full_time:   'FULL_TIME',
+        part_time:   'PART_TIME',
+        casual:      'CASUAL',
+        contractual: 'CASUAL',
+    };
     let contract_type: ContractType =
-        (profile?.contract_type as ContractType | undefined) ?? 'CASUAL';
+        (profile?.employment_type ? employmentTypeMap[profile.employment_type] : undefined) ?? 'CASUAL';
 
     const hasStudentVisa = licenses.some(
         l => l.license_type === 'WorkRights' && l.has_restricted_work_limit === true,
@@ -113,13 +119,13 @@ export async function fetchEmployeeContextV2(
     const qualifications: QualificationV2[] = [
         ...skills.map(s => ({
             qualification_id: s.skill_id as string,
-            issued_at:        (s.issued_at as string | null) ?? FALLBACK_ISSUED,
-            expires_at:       (s.expires_at as string | null) ?? null,
+            issued_at:        FALLBACK_ISSUED,
+            expires_at:       (s.expiration_date as string | null) ?? null,
         })),
         ...licenses.map(l => ({
             qualification_id: l.license_id as string,
-            issued_at:        (l.issued_at as string | null) ?? FALLBACK_ISSUED,
-            expires_at:       (l.expires_at as string | null) ?? null,
+            issued_at:        (l.issue_date as string | null) ?? FALLBACK_ISSUED,
+            expires_at:       (l.expiration_date as string | null) ?? null,
         })),
     ];
 
@@ -139,7 +145,7 @@ export async function fetchEmployeeContextV2(
     const ctx: EmployeeContextV2 = {
         employee_id:             employeeId,
         contract_type,
-        contracted_weekly_hours: (profile?.contracted_weekly_hours as number | null) ?? 0,
+        contracted_weekly_hours: 0,
         assigned_role_ids,
         contracts,
         qualifications,

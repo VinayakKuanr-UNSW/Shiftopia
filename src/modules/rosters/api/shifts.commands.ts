@@ -336,24 +336,10 @@ export const shiftsCommands = {
 
 
     async publishShift(shiftId: string) {
-        // Compliance pre-check before publishing
+        // TTS-aware routing for already-assigned shifts.
+        // Compliance is checked at assignment time; publish is a lifecycle transition only.
         const shift = await shiftsQueries.getShiftById(shiftId);
         if (shift?.assigned_employee_id && isValidUuid(shift.assigned_employee_id)) {
-            const netMinutes =
-                calculateMinutesBetweenTimes(shift.start_time, shift.end_time)
-                - (shift.unpaid_break_minutes || 0);
-            const validation = await complianceService.validateShiftCompliance(
-                shift.assigned_employee_id,
-                shift.shift_date,
-                shift.start_time,
-                shift.end_time,
-                netMinutes,
-                shiftId,
-            );
-            if (!validation.isValid) {
-                throw new ComplianceError(validation.violations, 'sm_publish_shift');
-            }
-
             // TTS-aware routing: if 0 < TTS < 4h and the shift is already assigned,
             // bypass the offer flow (S3) entirely and publish straight to Confirmed (S4).
             //
@@ -464,17 +450,26 @@ export const shiftsCommands = {
         const publishedIds: string[] = [];
         const dbFailed: Array<{ id: string; reason: string }> = [];
 
-        // Normal path — sm_bulk_publish_shifts RPC
+        // Normal path — per-shift sm_publish_shift (same proven path as single publish)
         if (normalIds.length > 0) {
-            const dbResult = await callAuthenticatedRpc(
-                'sm_bulk_publish_shifts',
-                (userId) => ({ p_shift_ids: normalIds, p_actor_id: userId }),
-                BulkPublishResponseSchema,
+            const perShiftResults = await processInChunks(
+                normalIds,
+                async (id) => {
+                    const result = await callAuthenticatedRpc(
+                        'sm_publish_shift',
+                        (userId) => ({ p_shift_id: id, p_user_id: userId }),
+                        PublishShiftResponseSchema,
+                    );
+                    if (!result.success) {
+                        throw new Error(result.error ?? 'Publish failed');
+                    }
+                    return id;
+                },
             );
-            const failed = (dbResult.errors ?? []).map(e => ({ id: e.shift_id, reason: e.reason }));
-            dbFailed.push(...failed);
-            const failedSet = new Set(failed.map(f => f.id));
-            publishedIds.push(...normalIds.filter(id => !failedSet.has(id)));
+            for (const r of perShiftResults) {
+                if (r.ok) publishedIds.push(r.id);
+                else dbFailed.push({ id: r.id, reason: (r as any).error });
+            }
         }
 
         // Emergency path — direct update: publish + confirm atomically (S2 → S4)

@@ -263,7 +263,6 @@ export interface CaptureTemplateInput {
   endDate: string;          // YYYY-MM-DD
   subDepartmentId: string;
   templateName: string;
-  userId: string;
 }
 
 export interface CaptureTemplateResult {

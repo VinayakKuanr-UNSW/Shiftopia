@@ -46,6 +46,9 @@ function shiftsOverlap(a: EvaluatedBid, b: EvaluatedBid): boolean {
 }
 
 function violatesRestGap(a: EvaluatedBid, b: EvaluatedBid, rest_gap_minutes: number): boolean {
+    // Same-day split shifts have no rest gap requirement — only cross-day pairs.
+    if (a.shift.shift_date === b.shift.shift_date) return false;
+
     const [aS, aE] = absoluteInterval(a);
     const [bS, bE] = absoluteInterval(b);
 

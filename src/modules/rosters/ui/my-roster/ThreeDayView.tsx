@@ -16,15 +16,14 @@ interface ShiftWithDetails {
 
 interface ThreeDayViewProps {
   startDate: Date;
-  getShiftsForDate: (date: Date) => ShiftWithDetails[];
+  getShiftsForDate: (date: Date, options?: { includeContinuations?: boolean }) => ShiftWithDetails[];
 }
 
 // Helper to format time for display
 const formatTime = (time: string): string => {
+  if (!time) return '';
   const [h, m] = time.split(':').map(Number);
-  const period = h >= 12 ? 'PM' : 'AM';
-  const display = h % 12 || 12;
-  return `${display}:${m.toString().padStart(2, '0')} ${period}`;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 };
 
 // Get gradient class based on color
@@ -56,7 +55,7 @@ const ThreeDayView: React.FC<ThreeDayViewProps> = ({
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      <div className="overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0 flex-1 min-h-0 flex flex-col">
+      <div className="overflow-x-auto flex-1 min-h-0 flex flex-col">
         <div className="min-w-[420px] flex-1 min-h-0 flex flex-col">
       <TimeGrid
         days={days}
@@ -100,8 +99,7 @@ const ThreeDayView: React.FC<ThreeDayViewProps> = ({
                       </div>
                     </div>
                     <div className="text-[10px] opacity-90">
-                      {formatTime(shift.start_time)} –{' '}
-                      {formatTime(shift.end_time)}
+                      {formatTime(shift.start_time)}-{formatTime(shift.end_time)}
                     </div>
                   </div>
                 </div>

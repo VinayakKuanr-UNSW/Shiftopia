@@ -74,7 +74,8 @@ export const useMyRoster = (view: CalendarView, selectedDate: Date, scope?: Scop
     const resolvedDateRange = eachDayOfInterval({ start, end });
 
     // Get shifts for a specific date
-    const getShiftsForDate = (date: Date): ShiftWithDetails[] => {
+    const getShiftsForDate = (date: Date, options?: { includeContinuations?: boolean }): ShiftWithDetails[] => {
+        const includeContinuations = options?.includeContinuations ?? true;
         const dateStr = format(date, 'yyyy-MM-dd');
         const prevDateStr = format(subDays(date, 1), 'yyyy-MM-dd');
 
@@ -88,8 +89,10 @@ export const useMyRoster = (view: CalendarView, selectedDate: Date, scope?: Scop
             if (s.shift_date === dateStr) return true;
 
             // Include shifts starting yesterday that span into today
-            const crossesMidnight = doesShiftTrulyCrossMidnight(s);
-            if (s.shift_date === prevDateStr && crossesMidnight) return true;
+            if (includeContinuations) {
+                const crossesMidnight = doesShiftTrulyCrossMidnight(s);
+                if (s.shift_date === prevDateStr && crossesMidnight) return true;
+            }
 
             return false;
         });

@@ -155,6 +155,10 @@ export const MinRestGapRule: ComplianceRule = {
         let shortestBeforeMs: number | null = null; // gap: candidate-end → existing-start
 
         for (const existing of existing_shifts) {
+            // Same-day split shifts have no rest gap requirement — only cross-day
+            // pairs (different shift_date) must satisfy the minimum rest gap.
+            if (existing.shift_date === candidate_shift.shift_date) continue;
+
             const ex = toAbsolute(
                 existing.shift_date,
                 existing.start_time,

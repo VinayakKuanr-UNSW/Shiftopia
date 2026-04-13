@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import AppLayout from '@/modules/core/ui/layout/AppLayout';
 import { useAuth } from '@/platform/auth/useAuth';
+import { MobileAccessGuard } from '@/modules/core/ui/components/MobileAccessGuard';
 
 /* =======================
    EAGER LOADED PAGES
@@ -141,67 +142,72 @@ const AppRouter: React.FC = () => {
             ================= */}
             <Route element={<AuthLayout />}>
 
-                {/* ── Dashboard ── */}
-                <Route path="/dashboard" element={<DashboardPage />} />
+                {/* MobileAccessGuard: blocks non-workspace paths on mobile viewports */}
+                <Route element={<MobileAccessGuard />}>
 
-                {/* ── My Workspace ── */}
-                <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/my-roster" element={<MyRosterPage />} />
-                <Route path="/attendance" element={<AttendancePage />} />
-                <Route path="/availabilities" element={<AvailabilityPage />} />
-                <Route path="/bids" element={<EmployeeBidsPage />} />
-                <Route path="/my-swaps" element={<EmployeeSwapsPage />} />
-                <Route path="/my-notifications" element={<MyNotificationsPage />} />
+                    {/* ── Dashboard ── */}
+                    <Route path="/dashboard" element={<DashboardPage />} />
 
-                <Route element={<FeatureGate feature="my-broadcasts" />}>
-                    <Route path="/my-broadcasts" element={<MyBroadcastsPage />} />
-                </Route>
+                    {/* ── My Workspace ── */}
+                    <Route path="/profile" element={<ProfilePage />} />
+                    <Route path="/my-roster" element={<MyRosterPage />} />
+                    <Route path="/attendance" element={<AttendancePage />} />
+                    <Route path="/availabilities" element={<AvailabilityPage />} />
+                    <Route path="/bids" element={<EmployeeBidsPage />} />
+                    <Route path="/my-swaps" element={<EmployeeSwapsPage />} />
+                    <Route path="/my-notifications" element={<MyNotificationsPage />} />
 
-                {/* ── Rostering ── */}
-                <Route element={<FeatureGate feature="templates" />}>
-                    <Route path="/templates" element={<TemplatesPage />} />
-                </Route>
+                    <Route element={<FeatureGate feature="my-broadcasts" />}>
+                        <Route path="/my-broadcasts" element={<MyBroadcastsPage />} />
+                    </Route>
 
-                <Route element={<FeatureGate feature="rosters" />}>
-                    <Route path="/rosters" element={<RostersPlannerPage />} />
-                    <Route path="/labor-demand" element={<LaborDemandForecastingPage />} />
-                </Route>
+                    {/* ── Rostering ── */}
+                    <Route element={<FeatureGate feature="templates" />}>
+                        <Route path="/templates" element={<TemplatesPage />} />
+                    </Route>
 
-                <Route element={<FeatureGate feature="timesheet-view" />}>
-                    <Route path="/timesheet" element={<TimesheetPage />} />
-                </Route>
+                    <Route element={<FeatureGate feature="rosters" />}>
+                        <Route path="/rosters" element={<RostersPlannerPage />} />
+                        <Route path="/labor-demand" element={<LaborDemandForecastingPage />} />
+                    </Route>
 
-                {/* ── Management ── */}
-                <Route element={<FeatureGate feature="management" />}>
-                    <Route path="/management/bids" element={<ManagerBidsPage />} />
-                    <Route path="/management/swaps" element={<ManagerSwapsPage />} />
-                    <Route path="/performance" element={<PerformancePage />} />
-                    <Route path="/audit" element={<AuditDashboardPage />} />
-                </Route>
+                    <Route element={<FeatureGate feature="timesheet-view" />}>
+                        <Route path="/timesheet" element={<TimesheetPage />} />
+                    </Route>
 
-                {/* ── Broadcast ── */}
-                <Route element={<FeatureGate feature="broadcast" />}>
-                    <Route path="/broadcast" element={<BroadcastManagerPage />} />
-                </Route>
+                    {/* ── Management ── */}
+                    <Route element={<FeatureGate feature="management" />}>
+                        <Route path="/management/bids" element={<ManagerBidsPage />} />
+                        <Route path="/management/swaps" element={<ManagerSwapsPage />} />
+                        <Route path="/performance" element={<PerformancePage />} />
+                        <Route path="/audit" element={<AuditDashboardPage />} />
+                    </Route>
 
-                {/* ── Insights ── */}
-                <Route element={<FeatureGate feature="insights" />}>
-                    <Route path="/insights" element={<InsightsPage />} />
-                    <Route path="/insights/:metricId" element={<AnalysisPage />} />
-                    <Route path="/grid" element={<GridPage />} />
-                </Route>
+                    {/* ── Broadcast ── */}
+                    <Route element={<FeatureGate feature="broadcast" />}>
+                        <Route path="/broadcast" element={<BroadcastManagerPage />} />
+                    </Route>
 
-                {/* ── Admin ── */}
-                <Route element={<FeatureGate feature="configurations" />}>
-                    <Route path="/contracts" element={<ContractsPage />} />
-                </Route>
+                    {/* ── Insights ── */}
+                    <Route element={<FeatureGate feature="insights" />}>
+                        <Route path="/insights" element={<InsightsPage />} />
+                        <Route path="/insights/:metricId" element={<AnalysisPage />} />
+                        <Route path="/grid" element={<GridPage />} />
+                    </Route>
 
-                <Route element={<FeatureGate feature="users" />}>
-                    <Route path="/users" element={<UsersPage />} />
-                </Route>
+                    {/* ── Admin ── */}
+                    <Route element={<FeatureGate feature="configurations" />}>
+                        <Route path="/contracts" element={<ContractsPage />} />
+                    </Route>
 
-                {/* ── Utility ── */}
-                <Route path="/search" element={<SearchPage />} />
+                    <Route element={<FeatureGate feature="users" />}>
+                        <Route path="/users" element={<UsersPage />} />
+                    </Route>
+
+                    {/* ── Utility ── */}
+                    <Route path="/search" element={<SearchPage />} />
+
+                </Route>{/* /MobileAccessGuard */}
 
             </Route>
 

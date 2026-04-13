@@ -813,7 +813,7 @@ export const EmployeeBidsPage: React.FC = () => {
                 mode="personal"
                 onScopeChange={setScope}
                 hidden={isGammaLocked}
-                className="mb-6"
+                className="mb-2 md:mb-6"
             />
 
             <FunctionBar
@@ -826,12 +826,12 @@ export const EmployeeBidsPage: React.FC = () => {
                     queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
                     queryClient.invalidateQueries({ queryKey: ['myBids'] });
                 }}
-                className="mb-6"
+                className="mb-3 md:mb-6"
                 endActions={
-                    <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 mr-1">
+                    <div className="flex items-center gap-2 flex-nowrap shrink-0">
+                        <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 mr-1 shrink-0">
                             <Filter className="h-3 w-3" />
-                            Priority
+                            <span className="hidden sm:inline">Priority</span>
                         </div>
                         {(['all', 'normal', 'urgent'] as const).map((p) => {
                             const isAll = p === 'all';
@@ -842,7 +842,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                     key={p}
                                     onClick={() => setPriorityFilter(p)}
                                     className={cn(
-                                        "flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wider transition-all",
+                                        "flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wider transition-all flex-shrink-0",
                                         active
                                             ? isAll
                                                 ? "bg-primary/10 border-primary/30 text-primary"

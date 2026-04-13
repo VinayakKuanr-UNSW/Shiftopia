@@ -28,10 +28,7 @@ import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCar
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { Label } from '@/modules/core/ui/primitives/label';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogDescription, DialogFooter,
-} from '@/modules/core/ui/primitives/dialog';
+import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from '@/modules/core/ui/primitives/popover';
@@ -781,32 +778,33 @@ const AttendancePage: React.FC = () => {
       )}
 
       {/* ── No-show dialog ── */}
-      <Dialog open={!!noShowShift} onOpenChange={open => { if (!open) { setNoShowShift(null); setNoShowReason(''); } }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Mark as No-Show</DialogTitle>
-            <DialogDescription>
-              This will mark the employee as a no-show. The action is logged and cannot be undone without a manager override.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 space-y-2">
-            <Label htmlFor="noshow-reason">Reason</Label>
-            <Textarea id="noshow-reason" placeholder="e.g. Did not report for duty, no contact made…"
-              value={noShowReason} onChange={e => setNoShowReason(e.target.value)} />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setNoShowShift(null); setNoShowReason(''); }} disabled={noShowMutation.isPending}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={confirmNoShow}
-              disabled={noShowMutation.isPending || !noShowReason.trim()}>
-              {noShowMutation.isPending
-                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Marking…</>
-                : 'Confirm No-Show'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ResponsiveDialog
+        open={!!noShowShift}
+        onOpenChange={open => { if (!open) { setNoShowShift(null); setNoShowReason(''); } }}
+      >
+        <ResponsiveDialog.Header>
+          <ResponsiveDialog.Title>Mark as No-Show</ResponsiveDialog.Title>
+          <ResponsiveDialog.Description>
+            This will mark the employee as a no-show. The action is logged and cannot be undone without a manager override.
+          </ResponsiveDialog.Description>
+        </ResponsiveDialog.Header>
+        <ResponsiveDialog.Body className="py-4 space-y-2">
+          <Label htmlFor="noshow-reason">Reason</Label>
+          <Textarea id="noshow-reason" placeholder="e.g. Did not report for duty, no contact made…"
+            value={noShowReason} onChange={e => setNoShowReason(e.target.value)} />
+        </ResponsiveDialog.Body>
+        <ResponsiveDialog.Footer>
+          <Button variant="outline" onClick={() => { setNoShowShift(null); setNoShowReason(''); }} disabled={noShowMutation.isPending}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={confirmNoShow}
+            disabled={noShowMutation.isPending || !noShowReason.trim()}>
+            {noShowMutation.isPending
+              ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Marking…</>
+              : 'Confirm No-Show'}
+          </Button>
+        </ResponsiveDialog.Footer>
+      </ResponsiveDialog>
     </div>
   );
 };

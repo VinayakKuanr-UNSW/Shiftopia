@@ -268,21 +268,42 @@ export async function captureRosterAsTemplate(
     p_end_date: input.endDate,
     p_sub_department_id: input.subDepartmentId,
     p_template_name: input.templateName,
-    p_user_id: input.userId,
   });
 
   if (error) {
-    throw new Error(error.message);
+    console.error('[captureRosterAsTemplate] Error:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    });
+    
+    const msg = error.message ?? '';
+    if (msg.includes('UNAUTHORIZED'))
+      throw new Error('You do not have permission to access this subdepartment.');
+    if (msg.includes('INVALID_DATE_RANGE'))
+      throw new Error('End date must be on or after start date.');
+    if (msg.includes('INVALID_NAME'))
+      throw new Error('Template name must be between 3 and 100 characters.');
+    if (msg.includes('DUPLICATE_TEMPLATE_NAME'))
+      throw new Error('A template with this name already exists in this subdepartment.');
+    if (msg.includes('NO_SHIFTS_IN_RANGE'))
+      throw new Error('No shifts found in the selected date range.');
+    if (msg.includes('DATE_RANGE_TOO_LARGE'))
+      throw new Error('Date range cannot exceed 35 days.');
+    if (msg.includes('ORG_DEPT_MISSING_IN_SHIFTS'))
+      throw new Error('The captured shifts are missing required organization or department information.');
+    
+    throw new Error('Failed to capture template. Please check the console for details.');
   }
 
   if (!data) {
     throw new Error('No response from capture_roster_as_template RPC');
   }
 
-  const result = Array.isArray(data) ? data[0] : data;
-
+  // Handle both snake_case and camelCase to be safe
   return {
-    templateId: result.template_id,
-    shiftsCaptured: result.shifts_captured,
+    templateId: data.templateId || data.template_id,
+    shiftsCaptured: data.shiftsCaptured ?? data.shifts_captured,
   };
 }

@@ -17,6 +17,7 @@ import {
     Loader2,
     Camera,
     CalendarRange,
+    CalendarCheck,
     Info,
     ArrowRight,
     FileText,
@@ -24,8 +25,9 @@ import {
     Building2,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
-import { useAuth } from '@/platform/auth/useAuth';
 import { useSnapRosterAsTemplate } from '@/modules/templates/state/useTemplates';
+import { supabase } from '@/platform/realtime/client';
+import { useNavigate } from 'react-router-dom';
 
 /* ============================================================
    LOCAL HELPERS
@@ -68,17 +70,8 @@ interface SnapFromRosterDialogProps {
 
 function resolveErrorMessage(err: unknown): string {
     if (!err) return '';
-    const msg =
-        err instanceof Error
-            ? err.message
-            : typeof err === 'string'
-            ? err
-            : 'UNKNOWN';
-
-    if (msg.includes('NO_SHIFTS_IN_RANGE'))
-        return 'No shifts found in this date range.';
-    if (msg.includes('DUPLICATE_TEMPLATE_NAME'))
-        return 'A template with this name already exists.';
+    if (err instanceof Error) return err.message;
+    if (typeof err === 'string') return err;
     return 'Failed to capture template. Please try again.';
 }
 
@@ -94,7 +87,7 @@ const SnapFromRosterDialog: React.FC<SnapFromRosterDialogProps> = ({
     defaultStartDate = '',
     defaultEndDate = '',
 }) => {
-    const { user } = useAuth();
+    const navigate = useNavigate();
 
     const [startDate, setStartDate] = useState<string>(defaultStartDate);
     const [endDate, setEndDate] = useState<string>(defaultEndDate);
@@ -148,6 +141,32 @@ const SnapFromRosterDialog: React.FC<SnapFromRosterDialogProps> = ({
         return new Date(startDate) <= new Date(endDate);
     }, [startDate, endDate]);
 
+    /* ----------------------------------------------------------
+       Live shift count preview
+       ---------------------------------------------------------- */
+    const [previewCount, setPreviewCount] = useState<number | null>(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
+
+    useEffect(() => {
+        if (!datesValid || !startDate || !endDate) {
+            setPreviewCount(null);
+            return;
+        }
+        setPreviewLoading(true);
+        supabase
+            .from('shifts')
+            .select('id', { count: 'exact', head: true })
+            .eq('sub_department_id', subDepartmentId)
+            .gte('shift_date', startDate)
+            .lte('shift_date', endDate)
+            .neq('lifecycle_status', 'Cancelled')
+            .is('deleted_at', null)
+            .then(({ count }) => {
+                setPreviewCount(count ?? 0);
+                setPreviewLoading(false);
+            });
+    }, [startDate, endDate, datesValid, subDepartmentId]);
+
     const nameValid = useMemo(
         () => templateName.trim().length >= 3 && templateName.trim().length <= 100,
         [templateName]
@@ -161,13 +180,18 @@ const SnapFromRosterDialog: React.FC<SnapFromRosterDialogProps> = ({
         return null;
     }, [templateName]);
 
-    const canSubmit = datesValid && nameValid && !snapMutation.isPending;
+    const canSubmit =
+        datesValid &&
+        nameValid &&
+        !snapMutation.isPending &&
+        (previewCount ?? 0) > 0 &&
+        !previewLoading;
 
     /* ----------------------------------------------------------
        Handler
        ---------------------------------------------------------- */
     const handleSnap = async () => {
-        if (!canSubmit || !user) return;
+        if (!canSubmit) return;
         setError(null);
         try {
             const result = await snapMutation.mutateAsync({
@@ -175,7 +199,6 @@ const SnapFromRosterDialog: React.FC<SnapFromRosterDialogProps> = ({
                 startDate,
                 endDate,
                 templateName: templateName.trim(),
-                userId: user.id,
             });
             setSuccessResult({
                 templateId: result.templateId,
@@ -382,6 +405,25 @@ const SnapFromRosterDialog: React.FC<SnapFromRosterDialogProps> = ({
 
                                             <Separator className="bg-border/50" />
 
+                                            {/* Shifts found row */}
+                                            <div className="flex items-center gap-3">
+                                                <CalendarCheck className="h-4 w-4 text-muted-foreground/60 flex-shrink-0" />
+                                                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
+                                                    Shifts found
+                                                </span>
+                                                <span className="ml-auto text-xs font-semibold text-foreground dark:text-white">
+                                                    {previewLoading ? (
+                                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                                    ) : previewCount === null ? (
+                                                        <span className="text-muted-foreground italic text-[11px]">—</span>
+                                                    ) : (
+                                                        <span className={previewCount === 0 ? 'text-red-500' : ''}>{previewCount}</span>
+                                                    )}
+                                                </span>
+                                            </div>
+
+                                            <Separator className="bg-border/50" />
+
                                             {/* Assignment strip note */}
                                             <div className="flex items-start gap-3 pt-1">
                                                 <Info className="h-3.5 w-3.5 text-muted-foreground/40 flex-shrink-0 mt-0.5" />
@@ -480,6 +522,13 @@ const SnapFromRosterDialog: React.FC<SnapFromRosterDialogProps> = ({
                                             </p>
                                         </div>
                                         <Button
+                                            onClick={() => { navigate('/templates'); onOpenChange(false); }}
+                                            variant="outline"
+                                            className="w-full h-12 rounded-2xl font-black text-xs uppercase tracking-widest border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 transition-all"
+                                        >
+                                            Go to Templates
+                                        </Button>
+                                        <Button
                                             onClick={handleClose}
                                             className="w-full h-12 rounded-2xl font-black text-xs uppercase tracking-widest bg-emerald-600 hover:bg-emerald-500 text-white border-b-4 border-emerald-700 transition-all active:scale-[0.97]"
                                         >
@@ -532,29 +581,36 @@ const SnapFromRosterDialog: React.FC<SnapFromRosterDialogProps> = ({
                                             )}
                                         </AnimatePresence>
 
-                                        {/* Primary action */}
-                                        <Button
-                                            onClick={handleSnap}
-                                            disabled={!canSubmit}
-                                            className={cn(
-                                                'w-full h-16 rounded-[1.5rem] font-black text-md uppercase tracking-[0.2em] transition-all relative overflow-hidden active:scale-[0.97]',
-                                                canSubmit
-                                                    ? 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 border-b-4 border-primary/20'
-                                                    : 'bg-muted text-muted-foreground cursor-not-allowed border-border'
+                                        <div className="space-y-3">
+                                            <Button
+                                                onClick={handleSnap}
+                                                disabled={!canSubmit}
+                                                className={cn(
+                                                    'w-full h-16 rounded-[1.5rem] font-black text-md uppercase tracking-[0.2em] transition-all relative overflow-hidden active:scale-[0.97]',
+                                                    canSubmit
+                                                        ? 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 border-b-4 border-primary/20'
+                                                        : 'bg-muted text-muted-foreground cursor-not-allowed border-border'
+                                                )}
+                                            >
+                                                {snapMutation.isPending ? (
+                                                    <div className="flex items-center gap-3">
+                                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                                        <span>Capturing...</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-3">
+                                                        <Camera className="h-5 w-5" />
+                                                        <span>Snap Template</span>
+                                                    </div>
+                                                )}
+                                            </Button>
+
+                                            {previewCount === 0 && !previewLoading && (
+                                                <p className="text-[10px] text-center text-red-500 font-black uppercase tracking-[0.1em] px-4 animate-in fade-in slide-in-from-top-1">
+                                                    No shifts found in selected range
+                                                </p>
                                             )}
-                                        >
-                                            {snapMutation.isPending ? (
-                                                <div className="flex items-center gap-3">
-                                                    <Loader2 className="h-5 w-5 animate-spin" />
-                                                    <span>Capturing...</span>
-                                                </div>
-                                            ) : (
-                                                <div className="flex items-center gap-3">
-                                                    <Camera className="h-5 w-5" />
-                                                    <span>Snap Template</span>
-                                                </div>
-                                            )}
-                                        </Button>
+                                        </div>
 
                                         {/* Cancel */}
                                         <Button

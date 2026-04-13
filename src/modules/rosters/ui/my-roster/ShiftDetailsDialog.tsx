@@ -1,13 +1,6 @@
 import React, { useState } from 'react';
 import { isShiftLocked, isShiftCommenced } from '@/modules/rosters/domain/shift-locking.utils';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/modules/core/ui/primitives/dialog';
+import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
@@ -162,97 +155,98 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-md p-0 overflow-hidden bg-background border-border rounded-2xl">
-          <DialogHeader className="sr-only">
-            <DialogTitle>{shift.roles?.name || 'Shift'} Details</DialogTitle>
-            <DialogDescription>
-              Shift details for {format(shiftDate, 'EEEE, MMMM d, yyyy')}
-            </DialogDescription>
-          </DialogHeader>
+      <ResponsiveDialog
+        open={isOpen}
+        onOpenChange={onClose}
+        dialogClassName="max-w-md p-0 overflow-hidden bg-background border-border rounded-2xl"
+        drawerClassName="bg-background border-border"
+      >
+        <ResponsiveDialog.Header className="sr-only">
+          <ResponsiveDialog.Title>{shift.roles?.name || 'Shift'} Details</ResponsiveDialog.Title>
+          <ResponsiveDialog.Description>
+            Shift details for {format(shiftDate, 'EEEE, MMMM d, yyyy')}
+          </ResponsiveDialog.Description>
+        </ResponsiveDialog.Header>
 
-          {/* Shift Card */}
-          <div className="p-4 pb-0">
-            <SharedShiftCard
-              variant="default"
-              organization={shift.organizations?.name || ''}
-              department={shift.departments?.name || ''}
-              subGroup={shift.sub_departments?.name || subGroupName}
-              role={shift.roles?.name || 'Shift'}
-              shiftDate={format(shiftDate, 'EEE, MMM d, yyyy')}
-              startTime={shift.start_time.slice(0, 5)}
-              endTime={shift.end_time.slice(0, 5)}
-              netLength={netLengthMinutes}
-              paidBreak={paidBreak}
-              unpaidBreak={unpaidBreak}
-              urgency={urgency}
-              groupVariant={groupVariant}
-              shiftData={shift}
-              statusIcons={
-                <div className="col-span-3 flex flex-wrap gap-2 items-center">
-                  {shift.remuneration_levels?.level_name && (
-                    <Badge className="text-[9px] font-black bg-primary/10 text-primary border-primary/20 border uppercase tracking-wider">
-                      {shift.remuneration_levels.level_name}
-                    </Badge>
-                  )}
-                  {shift.remuneration_levels?.hourly_rate_min && (
-                    <span className="text-[9px] font-mono font-black text-muted-foreground">
-                      ${shift.remuneration_levels.hourly_rate_min}/hr
-                    </span>
-                  )}
-                  {showAttendanceBadge && (
-                    <AttendanceBadge
-                      attendanceStatus={shift.attendance_status ?? 'unknown'}
-                      actualStart={shift.actual_start}
-                      scheduledStart={scheduledStartISO}
-                      actualEnd={shift.actual_end}
-                      scheduledEnd={scheduledEndISO}
-                      lifecycleStatus={shift.lifecycle_status as 'InProgress' | 'Completed'}
-                    />
-                  )}
-                </div>
-              }
-            />
-          </div>
-
-
-
-          {/* Action Buttons */}
-          <div className="p-4 pt-3">
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button
-                onClick={onClose}
-                variant="outline"
-                className="flex-1 border-border/50 bg-transparent hover:bg-muted rounded-full"
-              >
-                Close
-              </Button>
-              <Button
-                onClick={handleSwapShift}
-                disabled={isLockedFromActions}
-                className={cn(
-                  'flex-1 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed',
-                  isWithinLockoutPeriod ? 'bg-slate-600' : 'bg-purple-600 hover:bg-purple-700 shadow-purple-500/30'
+        {/* Shift Card */}
+        <div className="p-4 pb-0">
+          <SharedShiftCard
+            variant="default"
+            organization={shift.organizations?.name || ''}
+            department={shift.departments?.name || ''}
+            subGroup={shift.sub_departments?.name || subGroupName}
+            role={shift.roles?.name || 'Shift'}
+            shiftDate={format(shiftDate, 'EEE, MMM d, yyyy')}
+            startTime={shift.start_time.slice(0, 5)}
+            endTime={shift.end_time.slice(0, 5)}
+            netLength={netLengthMinutes}
+            paidBreak={paidBreak}
+            unpaidBreak={unpaidBreak}
+            urgency={urgency}
+            groupVariant={groupVariant}
+            shiftData={shift}
+            statusIcons={
+              <div className="col-span-3 flex flex-wrap gap-2 items-center">
+                {shift.remuneration_levels?.level_name && (
+                  <Badge className="text-[9px] font-black bg-primary/10 text-primary border-primary/20 border uppercase tracking-wider">
+                    {shift.remuneration_levels.level_name}
+                  </Badge>
                 )}
-              >
-                <ArrowLeftRight size={16} className="mr-2" />
-                {swapLabel}
-              </Button>
-              <Button
-                onClick={handleDropShift}
-                disabled={isLockedFromActions}
-                className={cn(
-                  'flex-1 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed',
-                  isActiveOrCommenced || hasCheckedIn || isWithinLockoutPeriod ? 'bg-slate-600' : 'bg-red-600 hover:bg-red-500 shadow-red-500/30'
+                {shift.remuneration_levels?.hourly_rate_min && (
+                  <span className="text-[9px] font-mono font-black text-muted-foreground">
+                    ${shift.remuneration_levels.hourly_rate_min}/hr
+                  </span>
                 )}
-              >
-                <X size={16} className="mr-2" />
-                {dropLabel}
-              </Button>
-            </div>
+                {showAttendanceBadge && (
+                  <AttendanceBadge
+                    attendanceStatus={shift.attendance_status ?? 'unknown'}
+                    actualStart={shift.actual_start}
+                    scheduledStart={scheduledStartISO}
+                    actualEnd={shift.actual_end}
+                    scheduledEnd={scheduledEndISO}
+                    lifecycleStatus={shift.lifecycle_status as 'InProgress' | 'Completed'}
+                  />
+                )}
+              </div>
+            }
+          />
+        </div>
+
+        {/* Action Buttons */}
+        <ResponsiveDialog.Footer className="p-4 pt-3">
+          <div className="flex flex-col sm:flex-row gap-2 w-full">
+            <Button
+              onClick={onClose}
+              variant="outline"
+              className="flex-1 border-border/50 bg-transparent hover:bg-muted rounded-full"
+            >
+              Close
+            </Button>
+            <Button
+              onClick={handleSwapShift}
+              disabled={isLockedFromActions}
+              className={cn(
+                'flex-1 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed',
+                isWithinLockoutPeriod ? 'bg-slate-600' : 'bg-purple-600 hover:bg-purple-700 shadow-purple-500/30'
+              )}
+            >
+              <ArrowLeftRight size={16} className="mr-2" />
+              {swapLabel}
+            </Button>
+            <Button
+              onClick={handleDropShift}
+              disabled={isLockedFromActions}
+              className={cn(
+                'flex-1 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed',
+                isActiveOrCommenced || hasCheckedIn || isWithinLockoutPeriod ? 'bg-slate-600' : 'bg-red-600 hover:bg-red-500 shadow-red-500/30'
+              )}
+            >
+              <X size={16} className="mr-2" />
+              {dropLabel}
+            </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </ResponsiveDialog.Footer>
+      </ResponsiveDialog>
 
       {/* Swap Request Modal */}
       <CreateSwapRequestModal
@@ -266,44 +260,45 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
       />
 
       {/* Drop Shift Confirmation Dialog */}
-      <Dialog open={isCancelConfirmOpen} onOpenChange={setIsCancelConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Cancel Shift Assignment</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to drop this shift? Depending on the timing, this may require manager approval or affect your reliability score.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="cancel-reason">Reason for cancellation</Label>
-              <Textarea
-                id="cancel-reason"
-                placeholder="Please explain why you cannot work this shift..."
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-              />
-            </div>
-            {isWithinLockoutPeriod && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-md text-red-400 text-sm">
-                Warning: You are dropping this shift within 4 hours of start time.
-              </div>
-            )}
+      <ResponsiveDialog
+        open={isCancelConfirmOpen}
+        onOpenChange={setIsCancelConfirmOpen}
+      >
+        <ResponsiveDialog.Header>
+          <ResponsiveDialog.Title>Cancel Shift Assignment</ResponsiveDialog.Title>
+          <ResponsiveDialog.Description>
+            Are you sure you want to drop this shift? Depending on the timing, this may require manager approval or affect your reliability score.
+          </ResponsiveDialog.Description>
+        </ResponsiveDialog.Header>
+        <ResponsiveDialog.Body className="py-4 space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="cancel-reason">Reason for cancellation</Label>
+            <Textarea
+              id="cancel-reason"
+              placeholder="Please explain why you cannot work this shift..."
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+            />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCancelConfirmOpen(false)} disabled={isDropping}>
-              Keep Shift
-            </Button>
-            <Button variant="destructive" onClick={confirmDrop} disabled={isDropping || !cancelReason.trim()}>
-              {isDropping ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Dropping...</>
-              ) : (
-                'Confirm Drop'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          {isWithinLockoutPeriod && (
+            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-md text-red-400 text-sm">
+              Warning: You are dropping this shift within 4 hours of start time.
+            </div>
+          )}
+        </ResponsiveDialog.Body>
+        <ResponsiveDialog.Footer>
+          <Button variant="outline" onClick={() => setIsCancelConfirmOpen(false)} disabled={isDropping}>
+            Keep Shift
+          </Button>
+          <Button variant="destructive" onClick={confirmDrop} disabled={isDropping || !cancelReason.trim()}>
+            {isDropping ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Dropping...</>
+            ) : (
+              'Confirm Drop'
+            )}
+          </Button>
+        </ResponsiveDialog.Footer>
+      </ResponsiveDialog>
     </>
   );
 };

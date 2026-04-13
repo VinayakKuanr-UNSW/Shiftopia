@@ -20,6 +20,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { addMonths, subMonths, format } from 'date-fns';
+import { motion } from 'framer-motion';
 import {
   ChevronLeft,
   ChevronRight,
@@ -27,6 +28,9 @@ import {
   Lock,
   Unlock,
   RefreshCw,
+  Calendar,
+  ClipboardList,
+  Settings,
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { useToast } from '@/modules/core/hooks/use-toast';
@@ -234,25 +238,27 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
   // ========================================
 
   const renderHeader = () => (
-    <div className="flex-shrink-0 border-b bg-background">
-      <div className="flex items-center justify-between p-4">
+    <div className="flex-shrink-0 border-b bg-background shadow-sm">
+      <div className="flex flex-col md:flex-row items-center justify-between p-4 gap-4 md:gap-0">
         {/* Month Navigation */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-start">
           <Button
             variant="outline"
             size="icon"
             onClick={handlePrevMonth}
+            className="h-9 w-9"
             title="Previous month"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <h1 className="text-lg font-semibold min-w-[160px] text-center">
+          <h1 className="text-lg font-bold min-w-[120px] md:min-w-[160px] text-center bg-primary/5 px-4 py-1.5 rounded-full border border-primary/10">
             {format(currentMonth, 'MMMM yyyy')}
           </h1>
           <Button
             variant="outline"
             size="icon"
             onClick={handleNextMonth}
+            className="h-9 w-9"
             title="Next month"
           >
             <ChevronRight className="h-4 w-4" />
@@ -260,11 +266,12 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full md:w-auto justify-center md:justify-end">
           <Button
             variant="outline"
             size="icon"
             onClick={handleRefresh}
+            className="h-10 w-10 md:h-9 md:w-9"
             title="Refresh data"
           >
             <RefreshCw className="h-4 w-4" />
@@ -273,6 +280,7 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
             variant={isLocked ? 'destructive' : 'outline'}
             size="icon"
             onClick={handleToggleLock}
+            className="h-10 w-10 md:h-9 md:w-9"
             title={isLocked ? 'Unlock editing' : 'Lock editing'}
           >
             {isLocked ? (
@@ -284,10 +292,10 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
           <Button
             onClick={handleAddAvailability}
             disabled={isLocked}
-            className="gap-2"
+            className="gap-2 h-10 md:h-9 shadow-sm"
           >
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add Availability</span>
+            <span>Add Availability</span>
           </Button>
         </div>
       </div>
@@ -423,7 +431,7 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
       {renderHeader()}
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden pb-40">
         {activeTab === 'calendar' && (
           <CalendarPane
             slots={slots}
@@ -452,46 +460,55 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
         )}
       </div>
 
-      {/* Bottom Tab Bar */}
-      <div className="flex-shrink-0 border-t bg-background">
-        <div className="flex">
+      {/* Floating Animated Sub-Bottom Drawer */}
+      <motion.div 
+        initial={{ y: 100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200, delay: 0.1 }}
+        className="fixed bottom-[104px] left-8 right-8 z-40 h-16 bg-background/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.3)]"
+      >
+        <div className="flex h-full items-center justify-around px-2">
           <button
             onClick={() => setActiveTab('calendar')}
             className={cn(
-              'flex-1 py-3 flex flex-col items-center gap-1 text-xs transition-colors',
+              'flex flex-col items-center justify-center gap-1 transition-all duration-300 flex-1',
               activeTab === 'calendar'
-                ? 'text-primary'
-                : 'text-muted-foreground'
+                ? 'text-primary scale-105'
+                : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <span className="text-lg">📅</span>
-            <span>Calendar</span>
+            <Calendar className="h-5 w-5" />
+            <span className="text-[10px] font-medium uppercase tracking-tighter">Calendar</span>
           </button>
           <button
             onClick={() => setActiveTab('logs')}
             className={cn(
-              'flex-1 py-3 flex flex-col items-center gap-1 text-xs transition-colors',
-              activeTab === 'logs' ? 'text-primary' : 'text-muted-foreground'
+              'flex flex-col items-center justify-center gap-1 transition-all duration-300 flex-1',
+              activeTab === 'logs' 
+                ? 'text-primary scale-105' 
+                : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <span className="text-lg">📋</span>
-            <span>Rules</span>
+            <ClipboardList className="h-5 w-5" />
+            <span className="text-[10px] font-medium uppercase tracking-tighter">Rules</span>
           </button>
           <button
             onClick={() => setActiveTab('configure')}
             className={cn(
-              'flex-1 py-3 flex flex-col items-center gap-1 text-xs transition-colors',
+              'flex flex-col items-center justify-center gap-1 transition-all duration-300 flex-1',
               activeTab === 'configure'
-                ? 'text-primary'
-                : 'text-muted-foreground',
+                ? 'text-primary scale-105'
+                : 'text-muted-foreground hover:text-foreground',
               editState.mode && 'animate-pulse'
             )}
           >
-            <span className="text-lg">⚙️</span>
-            <span>Configure{editState.mode && ' *'}</span>
+            <Settings className="h-5 w-5" />
+            <span className="text-[10px] font-medium uppercase tracking-tighter">
+              Configure{editState.mode && ' *'}
+            </span>
           </button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

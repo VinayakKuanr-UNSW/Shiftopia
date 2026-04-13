@@ -1,54 +1,43 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/platform/auth/useAuth';
-import { Button } from '@/modules/core/ui/primitives/button';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import MyRosterCalendar from '@/modules/rosters/ui/my-roster/MyRosterCalendar';
 import { MyOffersModal } from '@/modules/rosters/ui/my-roster/MyOffersModal';
-import { useRosterView, CalendarView, useMyRoster } from '@/modules/rosters';
-import { usePendingOfferCount } from '@/modules/rosters/state/useRosterShifts';
-import { CalendarDays, Info, Calendar, LayoutGrid, Columns, Grid3X3, Loader2, Mail, CheckCircle2 } from 'lucide-react';
+import { useRosterView, useMyRoster } from '@/modules/rosters';
+import { usePendingOfferCount, useMyOffers } from '@/modules/rosters/state/useRosterShifts';
+import { CalendarDays, Info, Loader2, Mail } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
 
 const MyRosterPage: React.FC = () => {
   const { user } = useAuth();
   const { view, setView, selectedDate, setSelectedDate } = useRosterView();
-  const { organizationId, departmentId } = useOrgSelection();
+  useOrgSelection(); // keeps context subscription without unused destructure
   const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
 
-  // Fetch real shifts for the logged-in employee, filtering by the multi-select scope
   const { shifts, isLoading, error, getShiftsForDate } = useMyRoster(view, selectedDate, scope);
 
-  // My Offers state
   const [showOffersModal, setShowOffersModal] = useState(false);
 
-  // React Query: offer count auto-refetches on interval and after invalidation
+  const { data: offersData = [] } = useMyOffers(user?.id || null);
+  const offerDates = React.useMemo(() => {
+    return new Set(offersData.map(o => o.shift.shift_date));
+  }, [offersData]);
+
   const { data: pendingOfferCount = 0 } = usePendingOfferCount(user?.id || null);
 
-  console.log('[MyRosterPage] Debug:', {
-    userId: user?.id,
-    pendingOfferCount,
-    organizationId,
-    departmentId
-  });
-
-  // No-op: React Query auto-invalidates via mutation hooks when offers are responded to
-  const handleOfferResponded = () => {
-    // Cache invalidation happens automatically in useAcceptOffer/useDeclineOffer hooks
-  };
+  const handleOfferResponded = () => {};
 
   if (!user) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen bg-background">
+      <div className="flex flex-col items-center justify-center h-full bg-background">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="text-center p-8 rounded-3xl bg-card border border-border shadow-sm backdrop-blur-xl"
+          className="text-center p-8 rounded-3xl bg-card border border-border shadow-sm"
         >
           <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
             <CalendarDays className="h-8 w-8 text-primary" />
@@ -60,155 +49,89 @@ const MyRosterPage: React.FC = () => {
     );
   }
 
-  const viewOptions: Array<{ value: CalendarView; label: string; icon: React.ReactNode }> = [
-    { value: 'day', label: 'Day', icon: <Calendar className="h-4 w-4" /> },
-    { value: '3day', label: '3-Day', icon: <Columns className="h-4 w-4" /> },
-    { value: 'week', label: 'Week', icon: <Grid3X3 className="h-4 w-4" /> },
-    { value: 'month', label: 'Month', icon: <LayoutGrid className="h-4 w-4" /> },
-  ];
-
   return (
-    <div className="flex flex-col h-[calc(100vh-2rem)] md:h-[calc(100vh-3rem)] overflow-hidden bg-background p-4 md:p-6 space-y-6">
+    // h-full fills the noPadding main area (overflow-hidden in AppLayout)
+    <div className="h-full flex flex-col overflow-hidden bg-background">
 
-      {/* Scope Filter */}
-      <ScopeFilterBanner
-        mode="personal"
-        onScopeChange={setScope}
-        hidden={isGammaLocked}
-        className="flex-shrink-0"
-      />
-
-      {/* Controls Row */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex-shrink-0"
-      >
-        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
-
-          <div className="flex flex-wrap items-center gap-4 w-full xl:w-auto">
-            {/* View Toggle - Segmented Control */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-              className="flex items-center bg-muted/50 backdrop-blur-md rounded-xl p-1 border border-border"
-            >
-              {viewOptions.map((option, index) => (
-                <motion.button
-                  key={option.value}
-                  onClick={() => setView(option.value)}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.1 * index }}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300',
-                    view === option.value
-                      ? 'bg-primary text-primary-foreground shadow-md'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  )}
-                >
-                  {React.cloneElement(option.icon as React.ReactElement, {
-                    className: cn("h-4 w-4 transition-colors", view === option.value ? "text-primary-foreground" : "text-current opacity-70")
-                  })}
-                  <span className="hidden sm:inline">{option.label}</span>
-                </motion.button>
-              ))}
-            </motion.div>
-
-            {/* My Offers Button - Always available on Personal Roster if logged in */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.25 }}
-            >
-              <Button
-                variant="outline"
-                className={cn(
-                  "relative gap-2 h-11 px-5 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 hover:text-amber-700 dark:hover:text-amber-300 bg-amber-50 dark:bg-amber-950/20 backdrop-blur-md transition-all shadow-[0_0_15px_rgba(245,158,11,0.1)]",
-                  pendingOfferCount > 0 && "animate-pulse border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
-                )}
-                onClick={() => setShowOffersModal(true)}
-              >
-                <Mail className="h-4 w-4" />
-                Shift Offers
-                {pendingOfferCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 bg-amber-500 text-black font-bold text-xs flex items-center justify-center rounded-full shadow-lg border border-amber-400">
-                    {pendingOfferCount}
-                  </span>
-                )}
-              </Button>
-            </motion.div>
-          </div>
+      {/* Scope filter — slim, collapses away when gamma-locked */}
+      {!isGammaLocked && (
+        <div className="flex-shrink-0">
+          <ScopeFilterBanner
+            mode="personal"
+            onScopeChange={setScope}
+            hidden={isGammaLocked}
+          />
         </div>
-      </motion.div>
+      )}
 
-      {/* Calendar Container - Full width */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="flex-grow overflow-hidden bg-card/80 backdrop-blur-2xl rounded-3xl border border-border shadow-sm relative"
-      >
-        {/* Background decorative glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
-
+      {/* Calendar area — fills all remaining vertical space */}
+      <div className="flex-1 min-h-0 overflow-hidden">
         {isLoading ? (
-          <div className="h-full flex flex-col items-center justify-center gap-4">
-            <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <span className="text-muted-foreground font-medium">Synchronizing roster...</span>
+          <div className="h-full flex flex-col items-center justify-center gap-3">
+            <Loader2 className="h-9 w-9 animate-spin text-primary/60" />
+            <span className="text-sm text-muted-foreground font-medium tracking-wide">
+              Loading your roster…
+            </span>
           </div>
         ) : error ? (
           <div className="h-full flex flex-col items-center justify-center gap-4 text-center p-8">
-            <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
-              <Info className="h-8 w-8 text-destructive" />
+            <div className="w-14 h-14 rounded-2xl bg-destructive/10 flex items-center justify-center">
+              <Info className="h-7 w-7 text-destructive" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-foreground">Synchronization Error</h3>
-              <p className="text-destructive/80 mt-1">Failed to load shifts. Please try refreshing.</p>
+              <h3 className="text-lg font-bold text-foreground">Could not load roster</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Failed to fetch shifts. Try refreshing the page.
+              </p>
             </div>
           </div>
         ) : (
-          <div className="h-full w-full relative z-10">
-            <MyRosterCalendar
-              view={view}
-              selectedDate={selectedDate}
-              onDateChange={setSelectedDate}
-              getShiftsForDate={getShiftsForDate}
-              shifts={shifts || []}
-            />
-          </div>
+          <MyRosterCalendar
+            view={view}
+            onViewChange={setView}
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            getShiftsForDate={getShiftsForDate}
+            shifts={shifts || []}
+            pendingOfferCount={pendingOfferCount}
+            offerDates={offerDates}
+            onOffersClick={() => setShowOffersModal(true)}
+          />
         )}
-      </motion.div>
+      </div>
 
-      {/* Info Banner */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="flex-shrink-0 bg-primary/5 border border-primary/10 rounded-2xl p-4 flex items-start backdrop-blur-md"
-      >
-        <div className="p-2 rounded-lg bg-primary/10 text-primary mr-3 mt-0.5 shrink-0">
-          <Info size={18} />
-        </div>
-        <div>
-          <h3 className="text-foreground font-medium mb-1 text-sm">Roster Status</h3>
-          <p className="text-muted-foreground text-sm leading-relaxed">
-            {shifts && shifts.length > 0
-              ? `You have ${shifts.length} shift(s) scheduled for this period. Select a shift to view details, swap, or offer it to others.`
-              : 'No shifts assigned to you in this viewing period. Contact your manager if you believe this is an error.'}
-          </p>
-        </div>
-      </motion.div>
+      {/* Mobile sticky FAB — offers access below the calendar */}
+      <AnimatePresence>
+        <motion.div
+          key="offers-fab"
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0, opacity: 0 }}
+          className="md:hidden fixed bottom-24 right-5 z-40"
+        >
+          <button
+            onClick={() => setShowOffersModal(true)}
+            className={cn(
+              "relative h-14 w-14 rounded-full flex items-center justify-center",
+              "bg-amber-500 hover:bg-amber-400 active:scale-95 transition-all",
+              "shadow-2xl shadow-amber-500/40",
+              pendingOfferCount > 0 && "animate-[pulse_2s_ease-in-out_infinite]"
+            )}
+          >
+            <Mail size={22} className="text-black" />
+            {pendingOfferCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 bg-black text-amber-400 font-black text-[10px] flex items-center justify-center rounded-full border-2 border-amber-500 px-1">
+                {pendingOfferCount}
+              </span>
+            )}
+          </button>
+        </motion.div>
+      </AnimatePresence>
 
-      {/* My Offers Modal */}
       <MyOffersModal
         isOpen={showOffersModal}
         onClose={() => setShowOffersModal(false)}
         onOfferResponded={handleOfferResponded}
-      // Offers are global for the user
       />
     </div>
   );
