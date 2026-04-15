@@ -200,7 +200,7 @@ const PerformancePage: React.FC = () => {
     };
 
     return (
-        <div className="w-full min-h-screen p-4 md:p-6 lg:p-8 space-y-6">
+        <div className="w-full min-h-screen p-4 md:p-6 lg:p-8 space-y-6 pb-24 md:pb-8">
             {/* ═══ SCOPE FILTER ═══ */}
             <ScopeFilterBanner
                 mode="managerial"

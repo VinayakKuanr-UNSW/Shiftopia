@@ -52,7 +52,7 @@ const SearchPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-8 w-full">
+    <div className="min-h-screen p-4 md:p-8 w-full pb-24 md:pb-8">
       <div className="flex items-center mb-6">
         <Button
           variant="ghost"

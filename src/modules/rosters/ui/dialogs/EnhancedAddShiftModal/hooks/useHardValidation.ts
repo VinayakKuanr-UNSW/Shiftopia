@@ -32,6 +32,7 @@ interface UseHardValidationReturn {
     hardValidation: HardValidationResult;
     employeeExistingShifts: ShiftTimeRange[];
     studentVisaEnforcement: boolean;
+    isLoadingShifts: boolean;
 }
 
 export function useHardValidation({
@@ -63,7 +64,7 @@ export function useHardValidation({
     // This prevents false-pass on rest-gap / avg-4-week checks when the
     // employee works across multiple departments.
     // p_exclude_id filters out the shift being edited server-side.
-    const { data: rawShifts = EMPTY_ARRAY } = useQuery({
+    const { data: rawShifts = EMPTY_ARRAY, isLoading: isLoadingShifts } = useQuery({
         queryKey: shiftKeys.byEmployee(watchEmployeeId ?? '', startDate, endDate),
         queryFn: async () => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -107,12 +108,13 @@ export function useHardValidation({
     // Shape RPC results into ShiftTimeRange[] — exclusion already handled server-side
     const employeeExistingShifts = useMemo<ShiftTimeRange[]>(() => {
         return rawShifts.map(s => ({
+            shift_id: s.id,
             start_time: s.start_time,
             end_time: s.end_time,
             shift_date: s.shift_date,
             unpaid_break_minutes: s.unpaid_break_minutes || 0,
         }));
-    }, [rawShifts]);
+    }, [rawShifts, watchEmployeeId]);
 
     // Run synchronous hard-validation whenever any input changes
     useEffect(() => {
@@ -147,5 +149,5 @@ export function useHardValidation({
         });
     }, [watchStart, watchEnd, watchShiftDate, watchEmployeeId, employeeExistingShifts, isTemplateMode, timezone]);
 
-    return { hardValidation, employeeExistingShifts, studentVisaEnforcement };
+    return { hardValidation, employeeExistingShifts, studentVisaEnforcement, isLoadingShifts };
 }

@@ -127,9 +127,13 @@ export function evaluateCompliance(
         ? applySimulation(input.existing_shifts, input.candidate_changes)
         : input.existing_shifts;
 
+
+
     // ── 4. Impact scoping ─────────────────────────────────────────────────────
     const impactWindow    = deriveImpactWindow(input.candidate_changes.add_shifts);
     const relevantShifts  = shiftsInWindow(simulated, impactWindow.from_date, impactWindow.to_date);
+
+
 
     // ── 5. Pre-compute shared indexes (O(n log n) sort once) ──────────────────
     const sortedShifts = sortShiftsByStart(simulated);

@@ -10,11 +10,13 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { AvailabilityDesktopLayout } from '../layout/AvailabilityDesktopLayout';
 import { AvailabilityTabletLayout } from '../layout/AvailabilityTabletLayout';
 import { AvailabilityMobileLayout } from '../layout/AvailabilityMobileLayout';
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { pageVariants } from '@/modules/core/ui/motion/presets';
 
 // ============================================================================
 // BREAKPOINT DETECTION
@@ -60,7 +62,12 @@ export const AvailabilityPage: React.FC = () => {
 
   // Scope filter banner + responsive layout
   return (
-    <div>
+    <motion.div
+      variants={pageVariants}
+      initial="hidden"
+      animate="show"
+      className="w-full min-h-screen bg-background"
+    >
       <ScopeFilterBanner
         mode="personal"
         onScopeChange={setScope}
@@ -74,7 +81,7 @@ export const AvailabilityPage: React.FC = () => {
       ) : (
         <AvailabilityMobileLayout />
       )}
-    </div>
+    </motion.div>
   );
 };
 

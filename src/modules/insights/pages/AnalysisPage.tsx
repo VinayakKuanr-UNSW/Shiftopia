@@ -489,7 +489,7 @@ const AnalysisPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-8 animate-fade-in pb-24 md:pb-0">
       <div>
         <Button asChild variant="ghost" className="text-white/80 hover:bg-white/10 hover:text-white pl-1">
           <Link to="/insights">

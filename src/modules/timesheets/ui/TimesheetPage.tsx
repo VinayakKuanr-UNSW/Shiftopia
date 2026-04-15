@@ -12,9 +12,11 @@ import {
     TimesheetShiftRow,
     TimesheetFilters,
 } from '../api/timesheets.supabase.api';
-import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useEffect } from 'react';
+import { getStatusDotInfo } from '@/modules/rosters/domain/shift-ui';
+import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
+
 
 const TimesheetPageInner: React.FC = () => {
     // Scope filter — single-select like rosters
@@ -109,8 +111,9 @@ const TimesheetPageInner: React.FC = () => {
             clockIn: formatClockDisplay(shift.clockIn),
             clockOut: formatClockDisplay(shift.clockOut),
 
-            adjustedStart: shift.adjustedStart || shift.scheduledStart,
-            adjustedEnd: shift.adjustedEnd || shift.scheduledEnd,
+            adjustedStart: shift.adjustedStart,
+            adjustedEnd: shift.adjustedEnd,
+            isAdjustedManual: shift.isAdjustedManual,
 
             length: formatMinutes(shift.scheduledLengthMinutes),
             paidBreak: String(shift.paidBreakMinutes),
@@ -124,6 +127,36 @@ const TimesheetPageInner: React.FC = () => {
             timesheetStatus: shift.timesheetStatus?.toUpperCase() || 'DRAFT',
             attendanceStatus: shift.attendanceStatus || null,
             varianceMinutes: shift.varianceMinutes ?? null,
+            // Adjusted-vs-Actual delta: how much did the manager's billable time differ
+            // from the raw GPS clock-in? (positive = adjusted later than actual)
+            adjustedVarianceMinutes: (() => {
+                if (!shift.adjustedStart || !shift.clockIn) return null;
+                // adjustedStart is HH:MM; clockIn may be ISO or HH:MM
+                const parseHHMM = (val: string): number | null => {
+                    const t = val.includes('T') ? val.split('T')[1] : val;
+                    const [h, m] = t.split(':').map(Number);
+                    if (isNaN(h) || isNaN(m)) return null;
+                    return h * 60 + m;
+                };
+                const adjMins = parseHHMM(shift.adjustedStart);
+                const actMins = parseHHMM(shift.clockIn);
+                if (adjMins === null || actMins === null) return null;
+                return adjMins - actMins;
+            })(),
+            statusDot: getStatusDotInfo({
+                lifecycle_status: shift.lifecycleStatus,
+                assignment_outcome: shift.attendanceStatus,
+                attendance_status: shift.attendanceStatus,
+                actual_start: shift.clockIn,
+                actual_end: shift.clockOut,
+                start_at: shift.rawStartAt,
+                end_at: shift.rawEndAt,
+                shift_date: shift.shiftDate,
+                start_time: shift.scheduledStart,
+                end_time: shift.scheduledEnd
+            }),
+            rawActualStart: shift.clockIn,
+            rawActualEnd: shift.clockOut,
             notes: shift.notes || null,
             rejectedReason: shift.rejectedReason || null,
         }));

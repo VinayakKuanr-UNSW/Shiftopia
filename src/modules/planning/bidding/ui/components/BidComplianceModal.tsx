@@ -6,14 +6,7 @@
  */
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter,
-} from '@/modules/core/ui/primitives/dialog';
+import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ComplianceTabContent } from '@/modules/rosters/ui/components/ComplianceTabContent';
 import {
@@ -285,18 +278,22 @@ export function BidComplianceModal({
     if (!shift) return null;
 
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl max-h-[85vh] overflow-y-auto bg-background border-border shadow-2xl">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-foreground">
-                        <Shield className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />
-                        Compliance Check
-                    </DialogTitle>
-                    <DialogDescription className="text-muted-foreground">
-                        Review compliance rules before expressing interest in this shift.
-                    </DialogDescription>
-                </DialogHeader>
+        <ResponsiveDialog
+            open={isOpen}
+            onOpenChange={(open) => !open && onClose()}
+            dialogClassName="w-[calc(100vw-2rem)] max-w-2xl bg-background border-border shadow-2xl"
+        >
+            <ResponsiveDialog.Header>
+                <ResponsiveDialog.Title className="flex items-center gap-2 text-foreground">
+                    <Shield className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />
+                    Compliance Check
+                </ResponsiveDialog.Title>
+                <ResponsiveDialog.Description className="text-muted-foreground">
+                    Review compliance rules before expressing interest in this shift.
+                </ResponsiveDialog.Description>
+            </ResponsiveDialog.Header>
 
+            <ResponsiveDialog.Body className="overflow-y-auto max-h-[70dvh]">
                 {/* Shift Summary */}
                 <div className="bg-muted/50 rounded-xl p-5 border border-border mb-6">
                     <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground/60 mb-2">Checking eligibility for:</div>
@@ -352,61 +349,61 @@ export function BidComplianceModal({
                         shiftId={shift?.id}
                     />
                 )}
+            </ResponsiveDialog.Body>
 
-                <DialogFooter className="mt-8 gap-3">
-                        <div className="flex gap-2">
-                             <Button 
-                                variant="outline" 
-                                onClick={onClose} 
-                                className="border-border hover:bg-muted font-bold px-6"
-                            >
-                                Cancel
-                            </Button>
-                            {checksComplete && (
-                                <Button
-                                    variant="secondary"
-                                    onClick={handleRunAllChecks}
-                                    disabled={isRunningChecks}
-                                    className="gap-2 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-bold"
-                                >
-                                    <Play className="h-4 w-4 fill-current" />
-                                    Re-Run Checks
-                                </Button>
-                            )}
-                        </div>
-
-                    {checksComplete && (
-                        <Button
-                            onClick={onConfirmBid}
-                            disabled={!canProceed || isPending}
-                            className={cn(
-                                "gap-2 h-10 px-8 font-black uppercase tracking-widest shadow-lg transition-all active:scale-95",
-                                canProceed
-                                    ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20"
-                                    : "bg-muted text-muted-foreground cursor-not-allowed border border-border"
-                            )}
+            <ResponsiveDialog.Footer className="mt-8 gap-3">
+                    <div className="flex gap-2">
+                         <Button
+                            variant="outline"
+                            onClick={onClose}
+                            className="border-border hover:bg-muted font-bold px-6 min-h-[44px]"
                         >
-                            {isPending ? (
-                                <>
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    Processing...
-                                </>
-                            ) : canProceed ? (
-                                <>
-                                    <ThumbsUp className="h-4 w-4" />
-                                    {hasWarnings ? 'Bid Anyway' : 'Confirm Bid'}
-                                </>
-                            ) : (
-                                <>
-                                    <XCircle className="h-4 w-4" />
-                                    Ineligible
-                                </>
-                            )}
+                            Cancel
                         </Button>
-                    )}
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                        {checksComplete && (
+                            <Button
+                                variant="secondary"
+                                onClick={handleRunAllChecks}
+                                disabled={isRunningChecks}
+                                className="gap-2 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-bold min-h-[44px]"
+                            >
+                                <Play className="h-4 w-4 fill-current" />
+                                Re-Run Checks
+                            </Button>
+                        )}
+                    </div>
+
+                {checksComplete && (
+                    <Button
+                        onClick={onConfirmBid}
+                        disabled={!canProceed || isPending}
+                        className={cn(
+                            "gap-2 min-h-[44px] px-8 font-black uppercase tracking-widest shadow-lg transition-all active:scale-95",
+                            canProceed
+                                ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20"
+                                : "bg-muted text-muted-foreground cursor-not-allowed border border-border"
+                        )}
+                    >
+                        {isPending ? (
+                            <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Processing...
+                            </>
+                        ) : canProceed ? (
+                            <>
+                                <ThumbsUp className="h-4 w-4" />
+                                {hasWarnings ? 'Bid Anyway' : 'Confirm Bid'}
+                            </>
+                        ) : (
+                            <>
+                                <XCircle className="h-4 w-4" />
+                                Ineligible
+                            </>
+                        )}
+                    </Button>
+                )}
+            </ResponsiveDialog.Footer>
+        </ResponsiveDialog>
     );
 }
 

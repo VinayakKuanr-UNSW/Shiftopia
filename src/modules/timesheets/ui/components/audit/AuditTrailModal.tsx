@@ -1,10 +1,9 @@
 import React from 'react';
-import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Loader2 } from "lucide-react";
 import { AuditTrail } from "./AuditTrail";
 import { useTimesheetAudit } from "../../../state/timesheet.hooks";
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/modules/core/ui/primitives/dialog';
+import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 
 interface AuditTrailModalProps {
     timesheetId: string | number;
@@ -25,18 +24,15 @@ export const AuditTrailModal: React.FC<AuditTrailModalProps> = ({
     } = useTimesheetAudit(timesheetId);
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-sm p-0 border-0 shadow-none bg-transparent rounded-none [&>button]:hidden">
-                <DialogTitle asChild>
-                    <VisuallyHidden>Audit Trail for Timesheet {timesheetId}</VisuallyHidden>
-                </DialogTitle>
+        <ResponsiveDialog open={open} onOpenChange={onOpenChange} dialogClassName="max-w-sm p-0 border-0 shadow-none bg-transparent rounded-none [&>button]:hidden">
+            <ResponsiveDialog.Header className="sr-only">
+                <ResponsiveDialog.Title>Audit Trail for Timesheet {timesheetId}</ResponsiveDialog.Title>
+                <ResponsiveDialog.Description>
+                    View the complete history of changes and actions for this timesheet entry.
+                </ResponsiveDialog.Description>
+            </ResponsiveDialog.Header>
 
-                <DialogDescription asChild>
-                    <VisuallyHidden>
-                        View the complete history of changes and actions for this timesheet entry.
-                    </VisuallyHidden>
-                </DialogDescription>
-
+            <ResponsiveDialog.Body>
                 {loading ? (
                     <div className="bg-[#131516] text-slate-100 rounded-2xl p-8 flex flex-col items-center gap-4 w-80">
                         <Loader2 className="animate-spin" />
@@ -45,7 +41,7 @@ export const AuditTrailModal: React.FC<AuditTrailModalProps> = ({
                 ) : error ? (
                     <div className="bg-[#131516] text-slate-100 rounded-2xl p-8 w-80">
                         <p className="mb-4">Couldn't load audit history.</p>
-                        <Button onClick={refresh} className="w-full">
+                        <Button onClick={refresh} className="w-full min-h-[44px]">
                             Retry
                         </Button>
                     </div>
@@ -54,7 +50,7 @@ export const AuditTrailModal: React.FC<AuditTrailModalProps> = ({
                         <p>No history for this entry.</p>
                     </div>
                 ) : data && <AuditTrail events={data} onClose={() => onOpenChange(false)} />}
-            </DialogContent>
-        </Dialog>
+            </ResponsiveDialog.Body>
+        </ResponsiveDialog>
     );
 };

@@ -7,6 +7,7 @@ import {
     GroupParticipantWithDetails,
     BroadcastParticipantRole,
 } from '../../model/broadcast.types';
+import { motion } from 'framer-motion';
 
 const ROLE_CONFIG: Record<
     BroadcastParticipantRole,
@@ -39,7 +40,13 @@ export const ParticipantItem: React.FC<ParticipantItemProps> = ({
     const roleConfig = ROLE_CONFIG[participant.role];
 
     return (
-        <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors group">
+        <motion.div
+            layout
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1, transition: { type: 'spring', stiffness: 280, damping: 26 } }}
+            exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors group"
+        >
             <Avatar className="h-9 w-9">
                 <AvatarFallback className="bg-primary/20 text-primary text-sm">
                     {participant.employee?.name
@@ -69,6 +76,6 @@ export const ParticipantItem: React.FC<ParticipantItemProps> = ({
                     <UserMinus className="h-3.5 w-3.5" />
                 </Button>
             )}
-        </div>
+        </motion.div>
     );
 };

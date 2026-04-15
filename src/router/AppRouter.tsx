@@ -47,10 +47,10 @@ const BroadcastManagerPage = lazy(() => import('@/modules/broadcasts/ui/pages/Br
 const InsightsPage = lazy(() => import('@/modules/insights/pages/InsightsPage'));
 const AnalysisPage = lazy(() => import('@/modules/insights/pages/AnalysisPage'));
 const GridPage = lazy(() => import('@/modules/insights/pages/GridPage'));
-const ContractsPage = lazy(() => import('@/modules/contracts/pages/ContractsPage'));
 const UsersPage = lazy(() => import('@/modules/users/pages/UsersPage'));
 const PerformancePage = lazy(() => import('@/modules/users/pages/PerformancePage'));
 const AuditDashboardPage = lazy(() => import('@/modules/audit/pages/AuditDashboardPage'));
+const SettingsPage = lazy(() => import('@/modules/settings/pages/SettingsPage'));
 
 // Utility
 const SearchPage = lazy(() => import('@/modules/search/pages/SearchPage'));
@@ -195,14 +195,13 @@ const AppRouter: React.FC = () => {
                         <Route path="/grid" element={<GridPage />} />
                     </Route>
 
-                    {/* ── Admin ── */}
-                    <Route element={<FeatureGate feature="configurations" />}>
-                        <Route path="/contracts" element={<ContractsPage />} />
-                    </Route>
 
                     <Route element={<FeatureGate feature="users" />}>
                         <Route path="/users" element={<UsersPage />} />
                     </Route>
+
+                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/settings/:section" element={<SettingsPage />} />
 
                     {/* ── Utility ── */}
                     <Route path="/search" element={<SearchPage />} />

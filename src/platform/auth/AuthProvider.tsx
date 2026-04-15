@@ -242,23 +242,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     return highest;
   }, [user, activeCertificateId]);
 
-  // Derive access scope from the certificate
+  // Derive access scope from the certificate or fallback to allowed_scope_tree
   const accessScope: AccessScope | null = React.useMemo(() => {
-    if (!activeCertificate) return null;
+    // 1. Primary source: Active Certificate
+    if (activeCertificate) {
+      return {
+        organizationId: activeCertificate.organizationId,
+        organizationName: activeCertificate.organizationName || 'Organization',
+        departmentId: activeCertificate.departmentId,
+        departmentName: activeCertificate.departmentName || null,
+        subDepartmentId: activeCertificate.subDepartmentId,
+        subDepartmentName: activeCertificate.subDepartmentName || null,
+        accessLevel: activeCertificate.accessLevel,
+        isOrgLocked: true,
+        isDeptLocked: activeCertificate.departmentId !== null,
+        isSubDeptLocked: activeCertificate.subDepartmentId !== null,
+      };
+    }
 
-    return {
-      organizationId: activeCertificate.organizationId,
-      organizationName: activeCertificate.organizationName || 'Organization',
-      departmentId: activeCertificate.departmentId,
-      departmentName: activeCertificate.departmentName || null,
-      subDepartmentId: activeCertificate.subDepartmentId,
-      subDepartmentName: activeCertificate.subDepartmentName || null,
-      accessLevel: activeCertificate.accessLevel,
-      isOrgLocked: true,
-      isDeptLocked: activeCertificate.departmentId !== null,
-      isSubDeptLocked: activeCertificate.subDepartmentId !== null,
-    };
-  }, [activeCertificate]);
+    // 2. Secondary source: Fallback to first organization in permission tree (for administrative global access)
+    // Only if the user has Zeta/Epsilon permissions (Type Y equivalents)
+    const firstOrg = permissionObject?.allowed_scope_tree?.organizations?.[0];
+    if (firstOrg && (permissionObject?.typeY || permissionObject?.typeX.length > 0)) {
+      return {
+        organizationId: firstOrg.id,
+        organizationName: firstOrg.name,
+        departmentId: null,
+        departmentName: null,
+        subDepartmentId: null,
+        subDepartmentName: null,
+        accessLevel: permissionObject.typeY?.level || 'alpha',
+        isOrgLocked: false,
+        isDeptLocked: false,
+        isSubDeptLocked: false,
+      };
+    }
+
+    return null;
+  }, [activeCertificate, permissionObject]);
 
   return (
     <AuthContext.Provider

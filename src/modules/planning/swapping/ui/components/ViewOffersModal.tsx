@@ -397,13 +397,8 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
         );
     }
 
-    return (
+    const modalContent = (
         <>
-            <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-                <DialogContent
-                    className="sm:max-w-[1040px] h-[720px] max-h-[85vh] bg-background border border-border p-0 overflow-hidden shadow-2xl flex flex-col rounded-[2.5rem] [&>button]:hidden"
-                >
-
                     <VisuallyHidden>
                         <DialogTitle>Received Offers</DialogTitle>
                         <DialogDescription>
@@ -411,9 +406,9 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                         </DialogDescription>
                     </VisuallyHidden>
 
-                    <div className="flex flex-1 h-full min-h-0">
+                    <div className={cn("flex flex-1 min-h-0", isMobile ? "flex-col overflow-y-auto" : "h-full")}>
                         {/* LEFT PANE: INBOX */}
-                        <div className="w-[320px] border-r border-border flex flex-col bg-muted/20">
+                        <div className={cn("border-border flex flex-col bg-muted/20", isMobile ? "border-b" : "w-[320px] border-r")}>
 
                             <div className="p-8 pb-6">
                                 <div className="flex items-center gap-3 mb-8">
@@ -674,8 +669,8 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                             </AnimatePresence>
                         </div>
 
-                        {/* RIGHT PANE: REQUEST STATUS / AUDIT */}
-                        <div className="w-[300px] border-l border-border flex flex-col bg-muted/20">
+                        {/* RIGHT PANE: REQUEST STATUS / AUDIT (hidden on mobile) */}
+                        <div className={cn("border-l border-border flex flex-col bg-muted/20", isMobile ? "hidden" : "w-[300px]")}>
 
                             <div className="p-10 pb-6">
                                 <div className="flex items-center gap-3 mb-8 text-amber-500">
@@ -746,8 +741,26 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
 
                         </div>
                     </div>
-                </DialogContent>
-            </Dialog>
+        </>
+    );
+
+    return (
+        <>
+            {isMobile ? (
+                <Drawer open={isOpen} onOpenChange={(open) => !open && onClose()}>
+                    <DrawerContent className="h-[92dvh] bg-background border-border p-0 overflow-hidden flex flex-col">
+                        {modalContent}
+                    </DrawerContent>
+                </Drawer>
+            ) : (
+                <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+                    <DialogContent
+                        className="sm:max-w-[1040px] h-[720px] max-h-[85vh] bg-background border border-border p-0 overflow-hidden shadow-2xl flex flex-col rounded-[2.5rem] [&>button]:hidden"
+                    >
+                        {modalContent}
+                    </DialogContent>
+                </Dialog>
+            )}
 
             <AlertDialog open={!!showRejectConfirm} onOpenChange={() => setShowRejectConfirm(null)}>
                 <AlertDialogContent className="bg-background border border-border rounded-[2rem] p-8 max-w-sm">

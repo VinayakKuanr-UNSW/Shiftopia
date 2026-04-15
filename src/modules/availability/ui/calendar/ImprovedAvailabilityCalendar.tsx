@@ -30,9 +30,11 @@ import {
   startOfWeek,
   endOfWeek,
 } from 'date-fns';
+import { motion } from 'framer-motion';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 import { AvailabilitySlot } from '../../model/availability.types';
+import { itemVariants } from '@/modules/core/ui/motion/presets';
 
 // ============================================================================
 // TYPES
@@ -156,14 +158,14 @@ const getStatusColor = (status: DayStatus): string => {
 const getStatusBadgeClass = (status: DayStatus): string => {
   switch (status) {
     case 'Available':
-      return 'bg-green-500 text-white dark:bg-green-600';
+      return 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-700';
     case 'Unavailable':
-      return 'bg-red-500 text-white dark:bg-red-600';
+      return 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-900/40 dark:text-rose-200 dark:border-rose-700';
     case 'Mixed':
-      return 'bg-yellow-500 text-white dark:bg-yellow-600';
+      return 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700';
     case 'Not set':
     default:
-      return 'bg-gray-400 text-white dark:bg-gray-600';
+      return 'bg-muted text-muted-foreground border-border';
   }
 };
 
@@ -214,7 +216,12 @@ export function ImprovedAvailabilityCalendar({
   };
 
   return (
-    <div className="p-6 flex flex-col h-full">
+    <motion.div
+      variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
+      initial="hidden"
+      animate="show"
+      className="p-6 flex flex-col h-full"
+    >
       {/* Weekday Headers */}
       <div className="grid grid-cols-7 gap-1 mb-4 flex-shrink-0">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
@@ -252,7 +259,7 @@ export function ImprovedAvailabilityCalendar({
                   'text-sm font-medium mb-1',
                   isTodayDate
                     ? 'text-blue-700 dark:text-blue-400'
-                    : 'text-gray-900 dark:text-gray-100'
+                    : 'text-foreground'
                 )}
               >
                 {format(date, 'd')}
@@ -260,17 +267,17 @@ export function ImprovedAvailabilityCalendar({
 
               {/* Time Pills (Slots Preview) */}
               {daySlots.length > 0 && (
-                <div className="mt-1 text-xs text-gray-600 dark:text-gray-400 truncate flex-grow overflow-y-auto pr-1">
+                <div className="mt-1 text-xs text-muted-foreground truncate flex-grow overflow-y-auto pr-1">
                   {daySlots.slice(0, 3).map((slot, i) => (
                     <div
                       key={slot.id || i}
-                      className="truncate mb-0.5 bg-white/50 dark:bg-black/20 rounded px-1 py-0.5"
+                      className="truncate mb-0.5 bg-background/60 rounded px-1 py-0.5"
                     >
                       {formatTime(slot.start_time)}-{formatTime(slot.end_time)}
                     </div>
                   ))}
                   {daySlots.length > 3 && (
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-muted-foreground">
                       +{daySlots.length - 3} more
                     </div>
                   )}
@@ -293,26 +300,26 @@ export function ImprovedAvailabilityCalendar({
       </div>
 
       {/* Legend */}
-      <div className="mt-6 flex items-center justify-center gap-4 text-sm flex-shrink-0 flex-wrap">
+      <motion.div variants={itemVariants} className="mt-6 flex items-center justify-center gap-4 text-sm flex-shrink-0 flex-wrap">
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-green-500 rounded" />
-          <span>Available</span>
+          <div className="w-4 h-4 bg-emerald-500 rounded border border-emerald-600" />
+          <span className="text-muted-foreground">Available</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-yellow-500 rounded" />
-          <span>Mixed</span>
+          <div className="w-4 h-4 bg-amber-500 rounded border border-amber-600" />
+          <span className="text-muted-foreground">Mixed</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-gray-400 rounded" />
-          <span>Not set</span>
+          <div className="w-4 h-4 bg-muted rounded border border-border" />
+          <span className="text-muted-foreground">Not set</span>
         </div>
-      </div>
+      </motion.div>
 
       {/* Read-only notice */}
-      <p className="text-xs text-center text-muted-foreground mt-2">
+      <motion.p variants={itemVariants} className="text-xs text-center text-muted-foreground mt-2">
         Calendar is read-only. Use the Configure panel to edit availability.
-      </p>
-    </div>
+      </motion.p>
+    </motion.div>
   );
 }
 

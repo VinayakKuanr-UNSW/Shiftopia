@@ -19,9 +19,11 @@
 import React, { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Pencil, Trash2, Calendar, Clock, Repeat, AlertCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Card, CardContent } from '@/modules/core/ui/primitives/card';
+import { listItemSpring } from '@/modules/core/ui/motion/presets';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import {
@@ -43,7 +45,6 @@ import { AvailabilityRule } from '../../model/availability.types';
 export interface LogsPaneProps {
   rules: AvailabilityRule[];
   isLoading: boolean;
-  isLocked: boolean;
   onEditRule: (rule: AvailabilityRule) => void;
   onDeleteRule: (ruleId: string) => void;
 }
@@ -106,18 +107,18 @@ const getRepeatBadgeVariant = (repeatType: string): 'default' | 'secondary' | 'o
 
 interface RuleItemProps {
   rule: AvailabilityRule;
-  isLocked: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-function RuleItem({ rule, isLocked, onEdit, onDelete }: RuleItemProps) {
+function RuleItem({ rule, onEdit, onDelete }: RuleItemProps) {
   const startDate = parseISO(rule.start_date);
   const hasRepeat = rule.repeat_type !== 'none';
   const repeatEndDate = rule.repeat_end_date ? parseISO(rule.repeat_end_date) : null;
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <motion.div {...listItemSpring}>
+    <Card className="bg-card border border-border rounded-2xl hover:shadow-md transition-shadow">
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-4">
           {/* Left: Rule Details */}
@@ -173,8 +174,7 @@ function RuleItem({ rule, isLocked, onEdit, onDelete }: RuleItemProps) {
               variant="ghost"
               size="icon"
               onClick={onEdit}
-              disabled={isLocked}
-              title={isLocked ? 'Editing disabled' : 'Edit rule'}
+              title="Edit rule"
               className="h-8 w-8"
             >
               <Pencil className="h-4 w-4" />
@@ -183,8 +183,7 @@ function RuleItem({ rule, isLocked, onEdit, onDelete }: RuleItemProps) {
               variant="ghost"
               size="icon"
               onClick={onDelete}
-              disabled={isLocked}
-              title={isLocked ? 'Deletion disabled' : 'Delete rule'}
+              title="Delete rule"
               className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
             >
               <Trash2 className="h-4 w-4" />
@@ -193,6 +192,7 @@ function RuleItem({ rule, isLocked, onEdit, onDelete }: RuleItemProps) {
         </div>
       </CardContent>
     </Card>
+    </motion.div>
   );
 }
 
@@ -203,7 +203,6 @@ function RuleItem({ rule, isLocked, onEdit, onDelete }: RuleItemProps) {
 export function LogsPane({
   rules,
   isLoading,
-  isLocked,
   onEditRule,
   onDeleteRule,
 }: LogsPaneProps) {
@@ -238,8 +237,8 @@ export function LogsPane({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="p-4 border-b flex-shrink-0">
-        <h2 className="text-lg font-semibold">Availability Rules</h2>
+      <div className="p-4 border-b border-border flex-shrink-0">
+        <h2 className="text-lg font-black tracking-tight text-foreground">Availability Rules</h2>
         <p className="text-sm text-muted-foreground">
           {rules.length} rule{rules.length !== 1 ? 's' : ''} configured
         </p>
@@ -251,9 +250,9 @@ export function LogsPane({
           {rules.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="text-muted-foreground mb-2">
-                <Calendar className="mx-auto h-12 w-12 text-gray-400" />
+                <Calendar className="mx-auto h-12 w-12 text-muted-foreground/40" />
               </div>
-              <h3 className="text-lg font-medium">No availability rules</h3>
+              <h3 className="text-lg font-bold text-foreground">No availability rules</h3>
               <p className="text-sm text-muted-foreground mt-1 max-w-xs">
                 Use the Configure panel to create your first availability rule.
               </p>
@@ -263,7 +262,6 @@ export function LogsPane({
               <RuleItem
                 key={rule.id}
                 rule={rule}
-                isLocked={isLocked}
                 onEdit={() => onEditRule(rule)}
                 onDelete={() => handleDeleteClick(rule.id)}
               />
@@ -272,13 +270,6 @@ export function LogsPane({
         </div>
       </ScrollArea>
 
-      {/* Lock Warning */}
-      {isLocked && rules.length > 0 && (
-        <div className="p-3 border-t bg-yellow-50 dark:bg-yellow-900/20 flex items-center gap-2 text-sm text-yellow-800 dark:text-yellow-200">
-          <AlertCircle className="h-4 w-4 flex-shrink-0" />
-          <span>Editing is currently disabled</span>
-        </div>
-      )}
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog

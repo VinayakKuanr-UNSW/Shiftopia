@@ -7,14 +7,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from '@/modules/core/ui/primitives/dialog';
+import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 import {
   Select,
   SelectContent,
@@ -349,8 +342,8 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
   const getSubDeptName = () => subDepartments.find(sd => sd.id === selectedSubDeptId)?.name || '...';
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="bg-card border-border p-0 overflow-hidden sm:max-w-[760px] shadow-2xl">
+    <ResponsiveDialog open={isOpen} onOpenChange={handleClose} dialogClassName="bg-card border-border p-0 overflow-hidden sm:max-w-[760px] shadow-2xl">
+      <ResponsiveDialog.Body className="overflow-y-auto max-h-[85dvh] p-0">
         <div className="grid grid-cols-1 md:grid-cols-[1fr_1.4fr]">
           {/* Left Column: Hierarchy (Locked) */}
           <div className="relative overflow-hidden bg-muted/30 p-8 flex flex-col justify-between border-r border-border">
@@ -515,8 +508,8 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
             </div>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialog.Body>
+    </ResponsiveDialog>
   );
 };
 

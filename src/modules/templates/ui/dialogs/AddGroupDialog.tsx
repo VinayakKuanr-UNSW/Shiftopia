@@ -10,14 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/modules/core/ui/primitives/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from '@/modules/core/ui/primitives/dialog';
+import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 import {
   Clipboard,
   UtensilsCrossed,
@@ -78,17 +71,17 @@ const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-card border-border sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle className="text-foreground text-xl">
-            Add New Group
-          </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            Create a new group to organize roles and shifts in your template.
-          </DialogDescription>
-        </DialogHeader>
+    <ResponsiveDialog open={isOpen} onOpenChange={onOpenChange} dialogClassName="bg-card border-border sm:max-w-[500px]" drawerClassName="h-[85dvh]">
+      <ResponsiveDialog.Header>
+        <ResponsiveDialog.Title className="text-foreground text-xl">
+          Add New Group
+        </ResponsiveDialog.Title>
+        <ResponsiveDialog.Description className="text-muted-foreground">
+          Create a new group to organize roles and shifts in your template.
+        </ResponsiveDialog.Description>
+      </ResponsiveDialog.Header>
 
+      <ResponsiveDialog.Body className="overflow-y-auto max-h-[70dvh]">
         <div className="space-y-5 py-4">
           {/* Group Name */}
           <div className="space-y-2">
@@ -212,25 +205,25 @@ const AddGroupDialog: React.FC<AddGroupDialogProps> = ({
             </div>
           </div>
         </div>
+      </ResponsiveDialog.Body>
 
-        <DialogFooter className="gap-2">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            className="bg-transparent border-border text-foreground hover:bg-muted/50"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={!newGroup.name.trim()}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
-          >
-            Add Group
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <ResponsiveDialog.Footer className="gap-2">
+        <Button
+          variant="outline"
+          onClick={() => onOpenChange(false)}
+          className="bg-transparent border-border text-foreground hover:bg-muted/50 min-h-[44px]"
+        >
+          Cancel
+        </Button>
+        <Button
+          onClick={handleSubmit}
+          disabled={!newGroup.name.trim()}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground min-h-[44px]"
+        >
+          Add Group
+        </Button>
+      </ResponsiveDialog.Footer>
+    </ResponsiveDialog>
   );
 };
 

@@ -8,10 +8,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/platform/realtime/client';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 import { cn } from '@/modules/core/lib/utils';
+import { useIsMobile } from '@/modules/core/hooks/use-mobile';
+import { Drawer, DrawerContent } from '@/modules/core/ui/primitives/drawer';
 import {
   Search, Flame, Clock, CheckCircle, Loader2, Inbox,
   Users, Zap, ShieldCheck, ShieldAlert, Shield,
-  CircleCheck, CircleX, TriangleAlert, ChevronDown, ChevronRight,
+  CircleCheck, CircleX, TriangleAlert, ChevronDown, ChevronRight, ChevronLeft,
   Sparkles, UserCheck as LucideUserCheck, History,
 } from 'lucide-react';
 import {
@@ -573,6 +575,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
 }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
 
   // Updates countdown timers every 10 seconds
   useTimeTicker(10000);
@@ -584,6 +587,10 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
   const [selectedBid, setSelectedBid] = useState<EmployeeBid | null>(null);
   const [isAssigning, setIsAssigning] = useState(false);
   const [isAutoAssigning, setIsAutoAssigning] = useState(false);
+
+  // ── Mobile State ───────────────────────────────────────────────────────────
+  const [mobileStep, setMobileStep] = useState<'roles' | 'bidders'>('roles');
+  const [drawerBidId, setDrawerBidId] = useState<string | null>(null);
 
   // ── Data ───────────────────────────────────────────────────────────────────
   const { shifts, isLoading } = useManagerBidShifts({
@@ -636,10 +643,15 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
       }
       return next;
     });
+    // On mobile, transition to the bidders step when a role is tapped
+    setMobileStep('bidders');
   }, []);
 
-  const handleSelectBid = useCallback((bid: EmployeeBid) => {
+  const handleSelectBid = useCallback((bid: EmployeeBid, openDrawer = false) => {
     setSelectedBid(prev => prev?.id === bid.id ? null : bid);
+    if (openDrawer) {
+      setDrawerBidId(bid.id);
+    }
   }, []);
 
   const handleAssign = useCallback(async () => {
@@ -851,48 +863,374 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
       <div className="flex flex-col h-[calc(100vh-64px)] bg-background select-none text-foreground overflow-hidden">
 
       {/* ─── FUNCTION BAR ─────────────────────────────────────────────── */}
-      <div className="shrink-0 h-14 border-b border-border/60 flex items-center px-6 gap-4 bg-card/40 backdrop-blur-xl">
-        <div className="relative group/search">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40 group-focus-within/search:text-primary transition-colors" />
-          <Input
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search roles…"
-            className="w-60 h-9 bg-muted/30 border-border/50 pl-9 text-[13px] placeholder:text-muted-foreground/30 focus-visible:ring-1 focus-visible:ring-primary/30 rounded-xl"
-          />
+      {isMobile ? (
+        /* Mobile function bar */
+        <div className="shrink-0 border-b border-border/60 flex flex-col gap-2 px-4 py-3 bg-card/40 backdrop-blur-xl">
+          <div className="relative group/search">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40 group-focus-within/search:text-primary transition-colors" />
+            <Input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search roles…"
+              className="w-full h-10 bg-muted/30 border-border/50 pl-9 text-[13px] placeholder:text-muted-foreground/30 focus-visible:ring-1 focus-visible:ring-primary/30 rounded-xl"
+            />
+          </div>
+          <div className="flex items-center gap-1 overflow-x-auto flex-nowrap pb-0.5 -mx-1 px-1">
+            <ToggleChip active={activeToggle === 'urgent'} onClick={() => setActiveToggle('urgent')} icon={<Flame className="h-3 w-3" />} label="Urgent" count={counts.urgent} activeClass="bg-rose-500/10 text-rose-400 border-rose-500/20" />
+            <ToggleChip active={activeToggle === 'normal'} onClick={() => setActiveToggle('normal')} icon={<Clock className="h-3 w-3" />} label="Normal" count={counts.normal} activeClass="bg-amber-500/10 text-amber-400 border-amber-500/20" />
+            <ToggleChip active={activeToggle === 'resolved'} onClick={() => setActiveToggle('resolved')} icon={<CheckCircle className="h-3 w-3" />} label="Resolved" count={counts.resolved} activeClass="bg-emerald-500/10 text-emerald-400 border-emerald-500/20" />
+          </div>
         </div>
+      ) : (
+        /* Desktop function bar */
+        <div className="shrink-0 h-14 border-b border-border/60 flex items-center px-6 gap-4 bg-card/40 backdrop-blur-xl">
+          <div className="relative group/search">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40 group-focus-within/search:text-primary transition-colors" />
+            <Input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search roles…"
+              className="w-60 h-9 bg-muted/30 border-border/50 pl-9 text-[13px] placeholder:text-muted-foreground/30 focus-visible:ring-1 focus-visible:ring-primary/30 rounded-xl"
+            />
+          </div>
 
-        <Separator orientation="vertical" className="h-5 bg-border/40" />
+          <Separator orientation="vertical" className="h-5 bg-border/40" />
 
-        <div className="flex items-center gap-1 p-0.5 bg-muted/20 rounded-xl border border-border/40">
-          <ToggleChip active={activeToggle === 'urgent'} onClick={() => setActiveToggle('urgent')} icon={<Flame className="h-3 w-3" />} label="Urgent" count={counts.urgent} activeClass="bg-rose-500/10 text-rose-400 border-rose-500/20" />
-          <ToggleChip active={activeToggle === 'normal'} onClick={() => setActiveToggle('normal')} icon={<Clock className="h-3 w-3" />} label="Normal" count={counts.normal} activeClass="bg-amber-500/10 text-amber-400 border-amber-500/20" />
-          <ToggleChip active={activeToggle === 'resolved'} onClick={() => setActiveToggle('resolved')} icon={<CheckCircle className="h-3 w-3" />} label="Resolved" count={counts.resolved} activeClass="bg-emerald-500/10 text-emerald-400 border-emerald-500/20" />
+          <div className="flex items-center gap-1 p-0.5 bg-muted/20 rounded-xl border border-border/40">
+            <ToggleChip active={activeToggle === 'urgent'} onClick={() => setActiveToggle('urgent')} icon={<Flame className="h-3 w-3" />} label="Urgent" count={counts.urgent} activeClass="bg-rose-500/10 text-rose-400 border-rose-500/20" />
+            <ToggleChip active={activeToggle === 'normal'} onClick={() => setActiveToggle('normal')} icon={<Clock className="h-3 w-3" />} label="Normal" count={counts.normal} activeClass="bg-amber-500/10 text-amber-400 border-amber-500/20" />
+            <ToggleChip active={activeToggle === 'resolved'} onClick={() => setActiveToggle('resolved')} icon={<CheckCircle className="h-3 w-3" />} label="Resolved" count={counts.resolved} activeClass="bg-emerald-500/10 text-emerald-400 border-emerald-500/20" />
+          </div>
+
+          <div className="flex-1" />
+
+          <Button
+            onClick={handleAutoAssign}
+            disabled={isAutoAssigning}
+            size="sm"
+            className="h-9 px-5 text-[11px] font-semibold uppercase tracking-wider rounded-xl shadow-lg shadow-primary/15"
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {isAutoAssigning ? (
+                <motion.span key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Assigning…
+                </motion.span>
+              ) : (
+                <motion.span key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
+                  <Zap className="h-3.5 w-3.5" /> Auto-Assign Safe Bids
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </Button>
         </div>
+      )}
 
-        <div className="flex-1" />
+      {/* ─── MOBILE LAYOUT ────────────────────────────────────────────── */}
+      {isMobile ? (
+        <div className="flex-1 flex flex-col overflow-hidden relative">
 
-        <Button
-          onClick={handleAutoAssign}
-          disabled={isAutoAssigning}
-          size="sm"
-          className="h-9 px-5 text-[11px] font-semibold uppercase tracking-wider rounded-xl shadow-lg shadow-primary/15"
-        >
           <AnimatePresence mode="wait" initial={false}>
-            {isAutoAssigning ? (
-              <motion.span key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Assigning…
-              </motion.span>
-            ) : (
-              <motion.span key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
-                <Zap className="h-3.5 w-3.5" /> Auto-Assign Safe Bids
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </Button>
-      </div>
 
-      {/* ─── 4-PANE SYSTEM ────────────────────────────────────────────── */}
+            {/* ── Mobile Step 1: Roles List ── */}
+            {mobileStep === 'roles' && (
+              <motion.div
+                key="mobile-roles"
+                initial={{ opacity: 0, x: -24 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -24 }}
+                transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+                className="flex-1 flex flex-col overflow-hidden"
+              >
+                <ScrollArea className="flex-1">
+                  <div className="p-4 space-y-2">
+                    <AnimatePresence mode="wait">
+                      {isLoading ? (
+                        <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center gap-3 text-muted-foreground/30">
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          <span className="text-[10px] uppercase tracking-widest font-semibold">Loading…</span>
+                        </motion.div>
+                      ) : filteredShifts.length === 0 ? (
+                        <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center gap-3 text-muted-foreground/20">
+                          <Inbox className="h-6 w-6" />
+                          <p className="text-[10px] uppercase tracking-widest font-semibold">No roles</p>
+                        </motion.div>
+                      ) : (
+                        <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-2">
+                          {filteredShifts.map((s) => (
+                            <RoleCard
+                              key={s.id}
+                              shift={s}
+                              isSelected={expandedShiftId === s.id}
+                              onSelect={() => handleExpand(s.id)}
+                            />
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </ScrollArea>
+              </motion.div>
+            )}
+
+            {/* ── Mobile Step 2: Bidders List ── */}
+            {mobileStep === 'bidders' && (
+              <motion.div
+                key="mobile-bidders"
+                initial={{ opacity: 0, x: 24 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 24 }}
+                transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+                className="flex-1 flex flex-col overflow-hidden"
+              >
+                {/* Back button */}
+                <button
+                  onClick={() => {
+                    setMobileStep('roles');
+                    setExpandedShiftId(null);
+                    setSelectedBid(null);
+                  }}
+                  className="shrink-0 flex items-center gap-2 px-4 py-3 text-sm font-black border-b border-border/40 bg-card/20 text-foreground/70 hover:text-foreground transition-colors min-h-[44px]"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  {expandedShift?.role ?? 'Roles'}
+                </button>
+
+                <ScrollArea className="flex-1">
+                  <div className="p-4 space-y-1">
+                    <AnimatePresence mode="wait">
+                      {isLoadingBids ? (
+                        <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex justify-center text-muted-foreground/20">
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        </motion.div>
+                      ) : bids.length === 0 ? (
+                        <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center gap-3 text-muted-foreground/20">
+                          <Users className="h-5 w-5" />
+                          <p className="text-[10px] uppercase tracking-widest font-semibold">No bids yet</p>
+                        </motion.div>
+                      ) : (
+                        <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-1">
+                          {bids.map((bid, i) => (
+                            <BidderRow
+                              key={bid.id}
+                              bid={bid}
+                              index={i}
+                              isSelected={selectedBid?.id === bid.id}
+                              isWinner={expandedShift ? (expandedShift.assignedEmployeeId === bid.employeeId || (!expandedShift.assignedEmployeeId && bid.isWinner)) : false}
+                              groupVariant={getGroupVariant(expandedShift?.groupType, expandedShift?.department)}
+                              onSelect={() => {
+                                handleSelectBid(bid, true);
+                              }}
+                            />
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Past Iterations */}
+                    {iterationHistory.length > 0 && (
+                      <div className="mt-4 border-t border-white/[0.05] pt-4">
+                        <div className="flex items-center gap-2 px-1 mb-3">
+                          <History className="h-3 w-3 text-white/20" />
+                          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/25">
+                            Past Iterations
+                          </span>
+                        </div>
+                        <div className="space-y-3">
+                          {iterationHistory.map(entry => (
+                            <div key={entry.iteration} className="rounded-xl border border-white/[0.05] bg-white/[0.02] p-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-[9px] font-black font-mono uppercase tracking-widest text-white/30 bg-white/5 px-2 py-0.5 rounded-md">
+                                  ITR {entry.iteration}
+                                </span>
+                                <span className="text-[9px] text-white/20 font-mono">
+                                  {entry.bids.length} {entry.bids.length === 1 ? 'bid' : 'bids'}
+                                </span>
+                              </div>
+                              {entry.bids.length === 0 ? (
+                                <p className="text-[9px] text-white/15 font-mono">No bids received</p>
+                              ) : (
+                                <div className="space-y-1">
+                                  {entry.bids.map((b, i) => (
+                                    <div key={i} className="flex items-center justify-between">
+                                      <span className="text-[10px] text-white/40 truncate">{b.employeeName}</span>
+                                      <span className={cn(
+                                        'text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded',
+                                        b.status === 'accepted' ? 'bg-emerald-500/15 text-emerald-400' :
+                                        b.status === 'rejected' ? 'bg-red-500/15 text-red-400' :
+                                        b.status === 'withdrawn' ? 'bg-slate-500/15 text-slate-400' :
+                                        'bg-white/5 text-white/25'
+                                      )}>
+                                        {b.status}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </motion.div>
+            )}
+
+          </AnimatePresence>
+
+          {/* ── Floating Auto-Assign Button (FAB) ── */}
+          <motion.button
+            onClick={handleAutoAssign}
+            disabled={isAutoAssigning}
+            whileTap={{ scale: 0.93 }}
+            className="fixed bottom-28 right-4 z-50 h-14 w-14 rounded-2xl bg-primary shadow-xl shadow-primary/30 flex items-center justify-center text-primary-foreground disabled:opacity-60"
+          >
+            {isAutoAssigning
+              ? <Loader2 className="h-5 w-5 animate-spin" />
+              : <Zap className="h-5 w-5" />
+            }
+          </motion.button>
+
+          {/* ── Bid Detail Drawer ── */}
+          <Drawer
+            open={!!drawerBidId}
+            onOpenChange={(open) => {
+              if (!open) {
+                setDrawerBidId(null);
+              }
+            }}
+          >
+            <DrawerContent className="h-[85dvh] flex flex-col">
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {/* Drawer header */}
+                <div className="shrink-0 px-5 pt-2 pb-4 border-b border-border/40">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground/50">Bid Review</p>
+                      <p className="text-sm font-semibold text-foreground mt-0.5 truncate">
+                        {selectedBid?.employeeName ?? '—'}
+                      </p>
+                    </div>
+                    {selectedBid && (
+                      <div className="text-right text-[9px] font-mono text-muted-foreground/40">
+                        <div>{expandedShift?.role}</div>
+                        <div>{expandedShift ? `${expandedShift.startTime} – ${expandedShift.endTime}` : ''}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Compliance panel */}
+                <ScrollArea className="flex-1">
+                  <div className="p-4">
+                    {selectedBid && (
+                      <>
+                        {/* Intelligence cards inline */}
+                        {(bidsPanel.status === 'results' || bidsPanel.status === 'stale') && (
+                          <div className="mb-4 space-y-2">
+                            <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/40">
+                              {(blockingIssues.length + warningIssues.length) > 0
+                                ? `${blockingIssues.length} blocker${blockingIssues.length !== 1 ? 's' : ''} · ${warningIssues.length} warning${warningIssues.length !== 1 ? 's' : ''}`
+                                : 'All checks passed'}
+                            </p>
+                            {blockingIssues.map((hit, i) => (
+                              <div key={`b-${i}`} className="rounded-2xl border overflow-hidden border-rose-500/20 bg-rose-500/[0.04]">
+                                <div className="px-3.5 py-2 border-b border-white/[0.04] flex items-center gap-2">
+                                  <CircleX className="h-3 w-3 text-rose-400 shrink-0" />
+                                  <span className="text-[10px] font-semibold text-rose-400">{hit.rule_id.replace(/_/g, ' ')}</span>
+                                </div>
+                                <div className="px-3.5 py-2.5">
+                                  <p className="text-[9px] text-muted-foreground/50 leading-relaxed">{hit.message}</p>
+                                  {hit.resolution_hint && <p className="text-[9px] text-foreground/50 leading-relaxed mt-1.5 border-t border-white/[0.04] pt-1.5">{hit.resolution_hint}</p>}
+                                </div>
+                              </div>
+                            ))}
+                            {warningIssues.map((hit, i) => (
+                              <div key={`w-${i}`} className="rounded-2xl border overflow-hidden border-amber-500/20 bg-amber-500/[0.04]">
+                                <div className="px-3.5 py-2 border-b border-white/[0.04] flex items-center gap-2">
+                                  <TriangleAlert className="h-3 w-3 text-amber-400 shrink-0" />
+                                  <span className="text-[10px] font-semibold text-amber-400">{hit.rule_id.replace(/_/g, ' ')}</span>
+                                </div>
+                                <div className="px-3.5 py-2.5">
+                                  <p className="text-[9px] text-muted-foreground/50 leading-relaxed">{hit.message}</p>
+                                  {hit.resolution_hint && <p className="text-[9px] text-foreground/50 leading-relaxed mt-1.5 border-t border-white/[0.04] pt-1.5">{hit.resolution_hint}</p>}
+                                </div>
+                              </div>
+                            ))}
+                            {blockingIssues.length === 0 && warningIssues.length === 0 && (
+                              <div className="py-8 flex flex-col items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04]">
+                                <ShieldCheck className="h-6 w-6 text-emerald-400/50" />
+                                <div className="text-center">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400/70">All Clear</p>
+                                  <p className="text-[9px] text-muted-foreground/30 mt-1 font-mono">{bidsPanel.result?.summary.passed ?? 0} checks passed</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <CompliancePanel hook={bidsPanel} className="flex-1" />
+                      </>
+                    )}
+                  </div>
+                </ScrollArea>
+
+                {/* Action footer */}
+                <div className="shrink-0 p-4 border-t border-border/40 space-y-2 bg-card/30 backdrop-blur-sm">
+                  {bidsPanel.status === 'idle' || bidsPanel.status === 'error' ? (
+                    <Button
+                      onClick={bidsPanel.run}
+                      disabled={!selectedBid}
+                      className="w-full min-h-[44px] text-[11px] font-semibold uppercase tracking-wider rounded-xl shadow-md shadow-primary/10"
+                    >
+                      <ShieldCheck className="h-4 w-4 mr-2" />
+                      Run Compliance
+                    </Button>
+                  ) : bidsPanel.status === 'running' ? (
+                    <Button disabled className="w-full min-h-[44px] rounded-xl text-[11px] font-semibold uppercase tracking-wider">
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" /> Analyzing…
+                    </Button>
+                  ) : !bidsPanel.canProceed ? (
+                    <>
+                      <Button disabled className="w-full min-h-[44px] rounded-xl text-[11px] font-semibold uppercase tracking-wider opacity-30 cursor-not-allowed border border-border/50 bg-transparent">
+                        <CircleX className="h-4 w-4 mr-2" /> Blocked
+                      </Button>
+                      <Button variant="ghost" onClick={bidsPanel.run} className="w-full min-h-[44px] text-[9px] text-muted-foreground/40 hover:text-muted-foreground uppercase tracking-wider font-semibold">
+                        Re-run Audit
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <motion.div whileTap={{ scale: 0.98 }}>
+                        <Button
+                          onClick={handleAssign}
+                          disabled={isAssigning}
+                          className={cn(
+                            'w-full min-h-[44px] rounded-xl text-[11px] font-semibold uppercase tracking-wider shadow-lg',
+                            (bidsPanel.result?.buckets.B.length ?? 0) > 0
+                              ? 'bg-amber-500 text-amber-950 hover:bg-amber-400 shadow-amber-500/20'
+                              : 'bg-emerald-500 text-white hover:bg-emerald-400 shadow-emerald-500/20',
+                          )}
+                        >
+                          {isAssigning
+                            ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            : <LucideUserCheck className="h-4 w-4 mr-2" />}
+                          {(bidsPanel.result?.buckets.B.length ?? 0) > 0 ? 'Override & Assign' : 'Assign Role'}
+                        </Button>
+                      </motion.div>
+                      <Button variant="ghost" onClick={bidsPanel.run} className="w-full min-h-[44px] text-[9px] text-muted-foreground/40 hover:text-muted-foreground uppercase tracking-wider font-semibold">
+                        Re-run Audit
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </DrawerContent>
+          </Drawer>
+
+        </div>
+      ) : (
+
+      /* ─── 4-PANE SYSTEM (desktop only) ───────────────────────────── */
       <div className="flex-1 flex overflow-hidden divide-x divide-border/40">
 
         {/* ── Pane 1: Open Roles ─────────────────────────────────────── */}
@@ -1232,6 +1570,9 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
         </div>
 
       </div>
+
+      )} {/* end isMobile ternary */}
+
     </div>
   </TooltipProvider>
 );

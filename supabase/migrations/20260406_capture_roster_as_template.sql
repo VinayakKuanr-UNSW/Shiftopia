@@ -71,7 +71,7 @@ BEGIN
     JOIN departments     d  ON d.id  = sd.department_id
     WHERE aac.user_id         = v_user_id
       AND aac.is_active       = true
-      AND aac.organization_id = d.organization_id
+      AND (aac.organization_id = d.organization_id OR aac.organization_id IS NULL)
       AND (
         aac.sub_department_id = p_sub_department_id          -- gamma: direct subdept
         OR (aac.sub_department_id IS NULL
@@ -137,7 +137,7 @@ BEGIN
     s.assigned_employee_id,
     s.lifecycle_status,
     s.roster_subgroup_id,
-    s.required_skills, s.notes,
+    s.required_skills, s.required_licenses, s.tags, s.event_tags, s.notes,
     s.group_type::text AS group_type
   FROM shifts s
   LEFT JOIN roles r ON r.id = s.role_id
@@ -237,7 +237,8 @@ BEGIN
         start_time, end_time,
         paid_break_minutes, unpaid_break_minutes,
         net_length_hours,
-        required_skills, notes, day_of_week,
+        required_skills, required_licenses, site_tags, event_tags,
+        notes, day_of_week,
         assigned_employee_id, assigned_employee_name, sort_order
       )
       SELECT
@@ -250,7 +251,10 @@ BEGIN
         COALESCE(cs.paid_break_minutes, 0),
         COALESCE(cs.unpaid_break_minutes, 0),
         ROUND(COALESCE(cs.net_length_minutes, 0)::numeric / 60.0, 2),
-        COALESCE(cs.required_skills, '{}'),
+        (SELECT ARRAY(SELECT jsonb_array_elements_text(COALESCE(cs.required_skills, '[]'::jsonb)))),
+        (SELECT ARRAY(SELECT jsonb_array_elements_text(COALESCE(cs.required_licenses, '[]'::jsonb)))),
+        (SELECT ARRAY(SELECT jsonb_array_elements_text(COALESCE(cs.tags, '[]'::jsonb)))),
+        (SELECT ARRAY(SELECT jsonb_array_elements_text(COALESCE(cs.event_tags, '[]'::jsonb)))),
         cs.notes,
         EXTRACT(DOW FROM cs.shift_date)::int,
         NULL,

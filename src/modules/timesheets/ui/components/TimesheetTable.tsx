@@ -308,13 +308,13 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                             Attendance (Actual)
                                         </th>
                                         <th colSpan={6} className={`p-3 text-[10px] font-black uppercase tracking-widest text-primary text-center border-b-2 border-primary/20 ${headerGroupStyles.adjusted}`}>
-                                            Adjusted (Inline Edit)
+                                            Adjusted (Billable)
                                         </th>
                                         <th colSpan={2} className={`p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 ${headerGroupStyles.payroll}`}>
                                             Payroll
                                         </th>
                                         <th colSpan={3} className={`p-3 text-[10px] font-black uppercase tracking-widest text-primary text-center border-b-2 border-primary/20 ${headerGroupStyles.statuses}`}>
-                                            Statuses
+                                            Status
                                         </th>
                                         <th className={`p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 ${headerGroupStyles.actions}`}>
                                             Actions
@@ -357,13 +357,13 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                         {/* Payroll */}
                                         <SortableHeader field="approximatePay" label="Approximate Pay" />
                                         <SortableHeader field="differential" label="Differential" />
-                                        {/* Statuses */}
+                                        {/* Statuses — dot badge + lifecycle + timesheet only */}
+                                        <th className="p-2.5 text-[10px] font-black uppercase tracking-widest text-foreground/70 border-b border-border/50 text-center w-8">●</th>
                                         <SortableHeader field="liveStatus" label="Lifecycle" />
-                                        <SortableHeader field="attendanceStatus" label="Attendance" />
-                                        <SortableHeader field="timesheetStatus" label="Timesheet Status" />
+                                        <SortableHeader field="timesheetStatus" label="Timesheet" />
                                         {/* Actions */}
                                         <th className="p-3 text-[10px] font-black uppercase tracking-widest text-foreground/70 text-center border-b border-border/50">
-                                            History / Actions
+                                            Actions
                                         </th>
                                     </tr>
                                 </thead>

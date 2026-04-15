@@ -82,23 +82,23 @@ const ThreeDayView: React.FC<ThreeDayViewProps> = ({
                   }
                   className={cn(
                     'h-full rounded-lg p-2 cursor-pointer',
-                    'border border-white/20 shadow-lg',
+                    'border shadow-lg',
                     'hover:scale-[1.01] active:scale-[0.99] transition-transform',
-                    'focus:outline-none focus:ring-2 focus:ring-white/30',
+                    'focus:outline-none focus:ring-2 focus:ring-primary/30',
                     shift.lifecycle_status === 'Published' && shift.assignment_status === 'assigned' && !shift.assignment_outcome && 'opacity-60 border-dashed border-2',
                     getGradientClass(groupColor)
                   )}
                 >
-                  <div className="flex flex-col h-full justify-between text-white">
+                  <div className="flex flex-col h-full justify-between text-foreground">
                     <div>
                       <div className="font-semibold text-xs truncate">
                         {shift.roles?.name || 'No Role'}
                       </div>
-                      <div className="text-[10px] opacity-80 truncate">
+                      <div className="text-[10px] opacity-70 truncate">
                         {shiftData.subGroupName}
                       </div>
                     </div>
-                    <div className="text-[10px] opacity-90">
+                    <div className="text-[10px] opacity-80">
                       {formatTime(shift.start_time)}-{formatTime(shift.end_time)}
                     </div>
                   </div>

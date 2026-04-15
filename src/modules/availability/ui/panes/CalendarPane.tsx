@@ -31,10 +31,12 @@ import {
   endOfWeek,
 } from 'date-fns';
 import { Lock } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { cn } from '@/modules/core/lib/utils';
 import { AvailabilitySlot } from '../../model/availability.types';
 import { AssignedShiftInterval } from '../../api/availability-view.api';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
+import { itemVariants } from '@/modules/core/ui/motion/presets';
 
 // ============================================================================
 // TYPES
@@ -124,14 +126,14 @@ const computeDayState = (
 const getStateClasses = (state: DayState): string => {
   switch (state) {
     case 'locked':
-      return 'bg-purple-100 border-purple-400 dark:bg-purple-900/40 dark:border-purple-600';
+      return 'bg-purple-50 border-purple-300 dark:bg-purple-900/40 dark:border-purple-600';
     case 'available':
-      return 'bg-green-100 border-green-300 dark:bg-green-900/30 dark:border-green-700';
+      return 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-700';
     case 'partial':
-      return 'bg-yellow-100 border-yellow-300 dark:bg-yellow-900/30 dark:border-yellow-700';
+      return 'bg-amber-50 border-amber-200 dark:bg-amber-900/30 dark:border-amber-700';
     case 'unset':
     default:
-      return 'bg-gray-50 border-gray-200 dark:bg-gray-800/50 dark:border-gray-700';
+      return 'bg-muted/30 border-border';
   }
 };
 
@@ -199,11 +201,12 @@ export function CalendarPane({
   }
 
   return (
-    <div className="flex flex-col h-full p-4">
-      {/* Month Header */}
-      <h2 className="text-lg font-semibold mb-4 text-center">
-        {format(currentMonth, 'MMMM yyyy')}
-      </h2>
+    <motion.div
+      variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
+      initial="hidden"
+      animate="show"
+      className="flex flex-col h-full p-4"
+    >
 
       {/* Weekday Headers */}
       <div className="grid grid-cols-7 gap-1 mb-2">
@@ -246,8 +249,8 @@ export function CalendarPane({
                   isTodayDate
                     ? 'text-blue-600 dark:text-blue-400'
                     : isLocked
-                    ? 'text-purple-800 dark:text-purple-200'
-                    : 'text-gray-700 dark:text-gray-300'
+                    ? 'text-purple-700 dark:text-purple-200'
+                    : 'text-foreground'
                 )}
               >
                 {format(date, 'd')}
@@ -285,7 +288,7 @@ export function CalendarPane({
                   {daySlots.slice(0, 3).map((slot, index) => (
                     <div
                       key={slot.id || index}
-                      className="text-[10px] px-1 py-0.5 rounded bg-white/60 dark:bg-black/20 truncate"
+                      className="text-[10px] px-1 py-0.5 rounded bg-background/70 dark:bg-muted/30 truncate text-foreground"
                       title={`${formatTimeForDisplay(slot.start_time)} – ${formatTimeForDisplay(slot.end_time)}`}
                     >
                       {formatTimeForDisplay(slot.start_time)}-{formatTimeForDisplay(slot.end_time)}
@@ -304,26 +307,26 @@ export function CalendarPane({
       </div>
 
       {/* Legend */}
-      <div className="mt-4 flex items-center justify-center gap-4 text-xs flex-wrap">
+      <motion.div variants={itemVariants} className="mt-4 flex items-center justify-center gap-4 text-xs flex-wrap text-foreground">
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded bg-green-400 border border-green-500" />
-          <span>Available</span>
+          <div className="w-3 h-3 rounded bg-emerald-400 border border-emerald-500" />
+          <span className="text-muted-foreground">Available</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded bg-yellow-400 border border-yellow-500" />
-          <span>Partial</span>
+          <div className="w-3 h-3 rounded bg-amber-400 border border-amber-500" />
+          <span className="text-muted-foreground">Partial</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded bg-purple-400 border border-purple-500" />
-          <Lock className="h-2.5 w-2.5 text-purple-700" />
-          <span>Locked (assigned)</span>
+          <Lock className="h-2.5 w-2.5 text-purple-600 dark:text-purple-400" />
+          <span className="text-muted-foreground">Locked (assigned)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded bg-gray-300 border border-gray-400" />
-          <span>Unset</span>
+          <div className="w-3 h-3 rounded bg-muted border border-border" />
+          <span className="text-muted-foreground">Unset</span>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 

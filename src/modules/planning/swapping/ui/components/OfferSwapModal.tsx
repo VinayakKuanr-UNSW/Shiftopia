@@ -7,6 +7,11 @@ import {
     DialogDescription,
 } from '@/modules/core/ui/primitives/dialog';
 import {
+    Drawer,
+    DrawerContent,
+} from '@/modules/core/ui/primitives/drawer';
+import { useIsMobile } from '@/modules/core/hooks/use-mobile';
+import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -100,6 +105,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
     isSubmitting,
     swapId,
 }) => {
+    const isMobile = useIsMobile();
     const { user } = useAuth();
     const now = useMinuteTick();
     const [selectedShiftId, setSelectedShiftId] = useState<string | null>(null);
@@ -203,12 +209,8 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
         onClose();
     };
 
-    return (
+    const modalContent = (
         <>
-            <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-                <DialogContent
-                    className="sm:max-w-[1040px] h-[720px] max-h-[85vh] bg-[#0A0C0E] border border-white/10 p-0 overflow-hidden shadow-[0_0_80px_-15px_rgba(0,0,0,0.8)] flex flex-col rounded-[2.5rem] [&>button]:hidden"
-                >
                     <VisuallyHidden>
                         <DialogTitle>Make an Offer</DialogTitle>
                         <DialogDescription>
@@ -216,9 +218,9 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                         </DialogDescription>
                     </VisuallyHidden>
 
-                    <div className="flex flex-1 h-full min-h-0">
+                    <div className={cn("flex flex-1 min-h-0", isMobile ? "flex-col overflow-y-auto" : "h-full")}>
                         {/* LEFT PANE: ELIGIBLE SHIFTS */}
-                        <div className="w-[320px] border-r border-white/5 flex flex-col bg-[#0D0F12]">
+                        <div className={cn("border-white/5 flex flex-col bg-[#0D0F12]", isMobile ? "border-b" : "w-[320px] border-r")}>
                             <div className="p-8 pb-6">
                                 <div className="flex items-center gap-3 mb-8">
                                     <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-600/20 to-indigo-400/10 flex items-center justify-center border border-indigo-500/20 shadow-lg shadow-indigo-500/5">
@@ -315,7 +317,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                         </div>
 
                         {/* MIDDLE PANE: TRADE CONSTRUCTION */}
-                        <div className="flex-1 flex flex-col bg-[#0A0C0E] relative overflow-hidden h-full">
+                        <div className={cn("flex-1 flex flex-col bg-[#0A0C0E] relative overflow-hidden", isMobile ? "" : "h-full")}>
                             <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-600/5 blur-[120px] rounded-full pointer-events-none" />
                             <div className="absolute bottom-[-5%] right-[-5%] w-[30%] h-[30%] bg-blue-600/5 blur-[100px] rounded-full pointer-events-none" />
 
@@ -445,8 +447,8 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                             </div>
                         </div>
 
-                        {/* RIGHT PANE: TRADE PROTOCOL */}
-                        <div className="w-[300px] border-l border-white/5 flex flex-col bg-[#0D0F12]">
+                        {/* RIGHT PANE: TRADE PROTOCOL (hidden on mobile) */}
+                        <div className={cn("border-l border-white/5 flex flex-col bg-[#0D0F12]", isMobile ? "hidden" : "w-[300px]")}>
                             <div className="p-10 pb-6">
                                 <div className="flex items-center gap-3 mb-8 text-amber-500/80">
                                     <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
@@ -526,8 +528,26 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                             </div>
                         </div>
                     </div>
-                </DialogContent>
-            </Dialog>
+        </>
+    );
+
+    return (
+        <>
+            {isMobile ? (
+                <Drawer open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+                    <DrawerContent className="h-[92dvh] bg-[#0A0C0E] border-white/10 p-0 overflow-hidden flex flex-col">
+                        {modalContent}
+                    </DrawerContent>
+                </Drawer>
+            ) : (
+                <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+                    <DialogContent
+                        className="sm:max-w-[1040px] h-[720px] max-h-[85vh] bg-[#0A0C0E] border border-white/10 p-0 overflow-hidden shadow-[0_0_80px_-15px_rgba(0,0,0,0.8)] flex flex-col rounded-[2.5rem] [&>button]:hidden"
+                    >
+                        {modalContent}
+                    </DialogContent>
+                </Dialog>
+            )}
 
             {selectedShift && theirShift && (
                 <SwapComplianceReviewModal

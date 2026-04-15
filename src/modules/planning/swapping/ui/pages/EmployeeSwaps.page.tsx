@@ -42,7 +42,8 @@ import {
     Ban,
     ThumbsUp,
     CheckCircle,
-    Minus
+    Minus,
+    ChevronRight
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { useToast } from '@/modules/core/hooks/use-toast';
@@ -52,6 +53,7 @@ import { format, differenceInMinutes, parse } from 'date-fns';
 import { SYDNEY_TZ, parseZonedDateTime, formatInTimezone } from '@/modules/core/lib/date.utils';
 import { ViewOffersModal } from '../components/ViewOffersModal';
 import { UnifiedSwapModal } from '../components/UnifiedSwapModal';
+import { Drawer, DrawerContent, DrawerTitle, DrawerClose } from '@/modules/core/ui/primitives/drawer';
 import { useQuery } from '@tanstack/react-query';
 
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
@@ -237,6 +239,24 @@ export const PRIORITY_CONFIG: Record<SwapPriority, {
     },
 };
 
+// ============================================================================
+// MOTION VARIANTS
+// ============================================================================
+const pageVariants = {
+    hidden: {},
+    show: { transition: { staggerChildren: 0.04, delayChildren: 0.02 } }
+};
+const itemVariants = {
+    hidden: { opacity: 0, y: 8 },
+    show: { opacity: 1, y: 0, transition: { ease: [0.16, 1, 0.3, 1], duration: 0.4 } }
+};
+const listItemSpring = {
+    layout: true as const,
+    initial: { opacity: 0, scale: 0.96 },
+    animate: { opacity: 1, scale: 1, transition: { type: 'spring' as const, stiffness: 280, damping: 26 } },
+    exit: { opacity: 0, scale: 0.96, transition: { duration: 0.15 } }
+};
+
 // =============================================================================
 // Calculate countdown to shift close (4h before start) in Sydney timezone
 
@@ -339,6 +359,7 @@ export const EmployeeSwapsPage: React.FC = () => {
 
     // Selection State
     const [selectedSwapIds, setSelectedSwapIds] = useState<string[]>([]);
+    const [drawerSwap, setDrawerSwap] = useState<{ swap: ShiftSwap; tab: TabType } | null>(null);
 
     // Handle refresh
     const handleRefresh = useCallback(async () => {
@@ -545,47 +566,48 @@ export const EmployeeSwapsPage: React.FC = () => {
             : 'Pending';
 
         return (
-            <SharedShiftCard
-                key={swap.id}
-                organization={shift?.organizations?.name || ''}
-                department={shift?.departments?.name || ''}
-                subGroup={shift?.sub_departments?.name}
-                role={shift?.roles?.name || 'Unknown Role'}
-                shiftDate={shift?.shift_date || ''}
-                startTime={shift?.start_time || ''}
-                endTime={shift?.end_time || ''}
-                netLength={shift?.net_length_minutes || 0}
-                paidBreak={shift?.paid_break_minutes ?? 0}
-                unpaidBreak={shift?.unpaid_break_minutes ?? 0}
-                timerText={timerDisplay}
-                isExpired={isExpired}
-                groupVariant={offerGroupVariant}
+            <motion.div key={swap.id} {...listItemSpring} whileHover={{ y: -2, transition: { duration: 0.15 } }} whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}>
+                <SharedShiftCard
+                    organization={shift?.organizations?.name || ''}
+                    department={shift?.departments?.name || ''}
+                    subGroup={shift?.sub_departments?.name}
+                    role={shift?.roles?.name || 'Unknown Role'}
+                    shiftDate={shift?.shift_date || ''}
+                    startTime={shift?.start_time || ''}
+                    endTime={shift?.end_time || ''}
+                    netLength={shift?.net_length_minutes || 0}
+                    paidBreak={shift?.paid_break_minutes ?? 0}
+                    unpaidBreak={shift?.unpaid_break_minutes ?? 0}
+                    timerText={timerDisplay}
+                    isExpired={isExpired}
+                    groupVariant={offerGroupVariant}
 
-                footerActions={
-                    <div className={`w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md border text-sm font-medium ${status.color}`}>
-                        {status.label === 'Accepted' ? <CheckCircle className="h-4 w-4" /> :
-                         status.label === 'Expired' || status.label === 'Withdrawn' ? <Ban className="h-4 w-4" /> :
-                         status.label.includes('Rejected') ? <XCircle className="h-4 w-4" /> :
-                         <Clock className="h-4 w-4" />}
-                        {status.label}
-                    </div>
-                }
-                topContent={
-                    <div className="flex items-center gap-2">
-                        <input
-                            type="checkbox"
-                            checked={selectedSwapIds.includes(swap.id)}
-                            onChange={() => handleSelectSwap(swap.id, `Offer: ${shift?.roles?.name || 'Shift'}`)}
-                            className="h-4 w-4 rounded border-slate-300 dark:border-white/20 text-indigo-600 focus:ring-indigo-500 accent-indigo-500 cursor-pointer"
-                        />
-                        {selectedSwapIds.includes(swap.id) && (
-                            <span className="text-[10px] text-indigo-500 font-bold uppercase tracking-wider animate-in fade-in slide-in-from-left-1">
-                                Selected
-                            </span>
-                        )}
-                    </div>
-                }
-            />
+                    footerActions={
+                        <div className={`w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md border text-sm font-medium ${status.color}`}>
+                            {status.label === 'Accepted' ? <CheckCircle className="h-4 w-4" /> :
+                             status.label === 'Expired' || status.label === 'Withdrawn' ? <Ban className="h-4 w-4" /> :
+                             status.label.includes('Rejected') ? <XCircle className="h-4 w-4" /> :
+                             <Clock className="h-4 w-4" />}
+                            {status.label}
+                        </div>
+                    }
+                    topContent={
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="checkbox"
+                                checked={selectedSwapIds.includes(swap.id)}
+                                onChange={() => handleSelectSwap(swap.id, `Offer: ${shift?.roles?.name || 'Shift'}`)}
+                                className="h-4 w-4 rounded border-border/50 text-indigo-600 focus:ring-indigo-500 accent-indigo-500 cursor-pointer"
+                            />
+                            {selectedSwapIds.includes(swap.id) && (
+                                <span className="text-[10px] text-indigo-500 font-bold uppercase tracking-wider animate-in fade-in slide-in-from-left-1">
+                                    Selected
+                                </span>
+                            )}
+                        </div>
+                    }
+                />
+            </motion.div>
         );
     };
 
@@ -611,29 +633,29 @@ export const EmployeeSwapsPage: React.FC = () => {
             (shift?.group_type === 'theatre' || (shift?.departments?.name || '').toLowerCase().includes('theatre')) ? 'theatre' : 'default';
 
         return (
-            <SharedShiftCard
-                key={swap.id}
-                organization={shift?.organizations?.name || 'ICC Sydney'}
-                department={shift?.departments?.name || 'Department'}
-                subGroup={shift?.sub_departments?.name}
-                role={shift?.roles?.name || 'Shift'}
-                shiftDate={shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'EEEE, MMM d, yyyy') : (shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEEE, MMM d, yyyy') : 'Unknown')}
-                startTime={shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : (shift?.start_time ? formatTime(shift.start_time) : '00:00')}
-                endTime={shift?.end_at ? formatInTimezone(new Date(shift.end_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : (shift?.end_time ? formatTime(shift.end_time) : '00:00')}
-                netLength={shift?.net_length_minutes || 0}
-                paidBreak={shift?.paid_break_minutes || 0}
-                unpaidBreak={shift?.unpaid_break_minutes || 0}
-                timerText={timerDisplay}
-                isExpired={isExpired}
-                urgency={priority}
-                lifecycleStatus={shift?.lifecycle_status}
-                groupVariant={groupVariant}
+            <motion.div key={swap.id} {...listItemSpring} whileHover={{ y: -2, transition: { duration: 0.15 } }} whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}>
+                <SharedShiftCard
+                    organization={shift?.organizations?.name || 'ICC Sydney'}
+                    department={shift?.departments?.name || 'Department'}
+                    subGroup={shift?.sub_departments?.name}
+                    role={shift?.roles?.name || 'Shift'}
+                    shiftDate={shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'EEEE, MMM d, yyyy') : (shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEEE, MMM d, yyyy') : 'Unknown')}
+                    startTime={shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : (shift?.start_time ? formatTime(shift.start_time) : '00:00')}
+                    endTime={shift?.end_at ? formatInTimezone(new Date(shift.end_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : (shift?.end_time ? formatTime(shift.end_time) : '00:00')}
+                    netLength={shift?.net_length_minutes || 0}
+                    paidBreak={shift?.paid_break_minutes || 0}
+                    unpaidBreak={shift?.unpaid_break_minutes || 0}
+                    timerText={timerDisplay}
+                    isExpired={isExpired}
+                    urgency={priority}
+                    lifecycleStatus={shift?.lifecycle_status}
+                    groupVariant={groupVariant}
 
-                footerActions={
-                    <div className="flex flex-col gap-1.5">
-                        {/* ── EXPIRY GLOBAL OVERRIDE ── */}
-                        {isExpired ? (
-                            <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40 text-sm font-medium">
+                    footerActions={
+                        <div className="flex flex-col gap-1.5">
+                            {/* ── EXPIRY GLOBAL OVERRIDE ── */}
+                            {isExpired ? (
+                                <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40 text-sm font-medium">
                                 <Ban className="h-4 w-4" /> Expired
                             </div>
                         ) : swap.status === 'APPROVED' ? (
@@ -680,22 +702,23 @@ export const EmployeeSwapsPage: React.FC = () => {
                         )}
                     </div>
                 }
-                topContent={
-                    <div className="flex items-center gap-2">
-                        <input
-                            type="checkbox"
-                            checked={selectedSwapIds.includes(swap.id)}
-                            onChange={() => handleSelectSwap(swap.id, `Swap: ${shift?.roles?.name || 'Shift'}`)}
-                            className="h-4 w-4 rounded border-slate-300 dark:border-white/20 text-indigo-600 focus:ring-indigo-500 accent-indigo-500 cursor-pointer"
-                        />
-                        {selectedSwapIds.includes(swap.id) && (
-                            <span className="text-[10px] text-indigo-500 font-bold uppercase tracking-wider animate-in fade-in slide-in-from-left-1">
-                                Selected
-                            </span>
-                        )}
-                    </div>
-                }
-            />
+                    topContent={
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="checkbox"
+                                checked={selectedSwapIds.includes(swap.id)}
+                                onChange={() => handleSelectSwap(swap.id, `Swap: ${shift?.roles?.name || 'Shift'}`)}
+                                className="h-4 w-4 rounded border-border/50 text-indigo-600 focus:ring-indigo-500 accent-indigo-500 cursor-pointer"
+                            />
+                            {selectedSwapIds.includes(swap.id) && (
+                                <span className="text-[10px] text-indigo-500 font-bold uppercase tracking-wider animate-in fade-in slide-in-from-left-1">
+                                    Selected
+                                </span>
+                            )}
+                        </div>
+                    }
+                />
+            </motion.div>
         );
     };
 
@@ -717,8 +740,8 @@ export const EmployeeSwapsPage: React.FC = () => {
             (shift?.group_type === 'theatre' || (shift?.departments?.name || '').toLowerCase().includes('theatre')) ? 'theatre' : 'default';
 
         return (
-            <SharedShiftCard
-                key={swap.id}
+            <motion.div key={swap.id} {...listItemSpring} whileHover={{ y: -2, transition: { duration: 0.15 } }} whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}>
+                <SharedShiftCard
                 organization={shift?.organizations?.name || 'ICC Sydney'}
                 department={shift?.departments?.name || 'Department'}
                 subGroup={shift?.sub_departments?.name}
@@ -757,7 +780,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                             type="checkbox"
                             checked={selectedSwapIds.includes(swap.id)}
                             onChange={() => handleSelectSwap(swap.id, `Market: ${shift?.roles?.name || 'Shift'}`)}
-                            className="h-4 w-4 rounded border-slate-300 dark:border-white/20 text-indigo-600 focus:ring-indigo-500 accent-indigo-500 cursor-pointer"
+                            className="h-4 w-4 rounded border-border/50 text-indigo-600 focus:ring-indigo-500 accent-indigo-500 cursor-pointer"
                             disabled={hasOffered}
                         />
                         {selectedSwapIds.includes(swap.id) && (
@@ -768,11 +791,82 @@ export const EmployeeSwapsPage: React.FC = () => {
                     </div>
                 }
             />
+            </motion.div>
+        );
+    };
+
+    // ========================================================================
+    // RENDER: Compact mobile list row (table view on mobile)
+    // ========================================================================
+    const renderSwapListItem = (swap: ShiftSwap, tab: TabType) => {
+        const shift = (swap as any).requester_shift;
+        const shiftDate = shift?.start_at
+            ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'EEE d MMM')
+            : shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE d MMM') : '—';
+        const startT = shift?.start_at
+            ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm')
+            : shift?.start_time ? shift.start_time.slice(0, 5) : '—';
+        const endT = shift?.end_at
+            ? formatInTimezone(new Date(shift.end_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm')
+            : shift?.end_time ? shift.end_time.slice(0, 5) : '—';
+        const net = shift?.net_length_minutes || shift?.net_length || 0;
+        const netH = Math.floor(net / 60);
+        const netM = Math.round(net % 60);
+        const netStr = netH > 0 ? `${netH}h${netM > 0 ? ` ${netM}m` : ''}` : `${netM}m`;
+
+        const priority = getSwapPriority(now, shift?.shift_date, shift?.start_time, shift?.start_at, shift?.tz_identifier);
+        const pConf = PRIORITY_CONFIG[priority];
+
+        const statusCfg = STATUS_CONFIG[swap.status] ?? STATUS_CONFIG.EXPIRED;
+
+        return (
+            <motion.div
+                key={swap.id}
+                layout
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="flex items-center gap-3 px-4 py-3.5 border-b border-border/40 last:border-0 active:bg-muted/40 transition-colors cursor-pointer"
+                onClick={() => setDrawerSwap({ swap, tab })}
+            >
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                    {/* Line 1: role + priority */}
+                    <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[13px] font-semibold text-foreground truncate flex-1 leading-snug">
+                            {shift?.roles?.name || 'Unknown Role'}
+                        </span>
+                        {priority !== 'normal' && (
+                            <span className={cn('shrink-0 inline-flex items-center gap-0.5 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full border leading-none', pConf.badgeCls)}>
+                                <pConf.icon className="h-2 w-2" />{pConf.label}
+                            </span>
+                        )}
+                    </div>
+                    {/* Line 2: dept */}
+                    <p className="text-[11px] text-muted-foreground/70 truncate mt-0.5 leading-none">
+                        {shift?.departments?.name || '—'}{shift?.sub_departments?.name ? ` · ${shift.sub_departments.name}` : ''}
+                    </p>
+                    {/* Line 3: date · time · net · status */}
+                    <div className="flex items-center gap-1 mt-1 flex-wrap">
+                        <span className="text-[11px] text-muted-foreground/60 font-medium">{shiftDate}</span>
+                        <span className="text-muted-foreground/25">·</span>
+                        <span className="text-[11px] text-muted-foreground/60 font-mono">{startT}–{endT}</span>
+                        <span className="text-muted-foreground/25">·</span>
+                        <span className="text-[11px] text-muted-foreground/50">{netStr}</span>
+                        <span className="text-muted-foreground/25">·</span>
+                        <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded border leading-none', statusCfg.badgeCls)}>
+                            {statusCfg.label}
+                        </span>
+                    </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground/25 shrink-0" />
+            </motion.div>
         );
     };
 
     return (
-        <div className="w-full text-foreground">
+        <motion.div className="w-full text-foreground pb-24 md:pb-0" variants={pageVariants} initial="hidden" animate="show">
 
 
             {/* Scope Filter */}
@@ -783,71 +877,103 @@ export const EmployeeSwapsPage: React.FC = () => {
                 className="mb-2 md:mb-6"
             />
 
-            {/* Function Bar */}
-            <FunctionBar
-                tabs={[
-                    { id: 'available-swaps', label: 'Available Swaps', count: filteredAvailableSwaps.length },
-                    { id: 'my-offers', label: 'My Swap Offers', count: filteredMyOffers.length },
-                    { id: 'my-swaps', label: 'My Swaps', count: filteredMySwaps.length }
-                ]}
-                activeTab={activeTab}
-                onTabChange={(id) => setActiveTab(id as any)}
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-                onRefresh={handleRefresh}
-                className="mb-3 md:mb-6"
-                endActions={
-                    <div className="flex items-center gap-2 flex-nowrap shrink-0">
-                        <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 mr-1 shrink-0">
-                            <Filter className="h-3 w-3" />
-                            <span className="hidden sm:inline">Priority</span>
-                        </div>
-                        {(['all', 'normal', 'urgent', 'emergent'] as const).map((p) => {
-                            const isAll = p === 'all';
-                            const conf = isAll ? null : PRIORITY_CONFIG[p];
+            {/* ═══════════════════════════════════════════════════════════════
+                STICKY HEADER — 2 rows: title+actions | tab navigation
+            ═══════════════════════════════════════════════════════════════ */}
+            <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/40 -mx-4 px-4 md:-mx-8 md:px-8 mb-5">
+
+                {/* ── Row 1: Title + active count + priority toggles + view/refresh ── */}
+                <div className="flex items-center gap-2 pt-2.5 pb-2">
+
+                    {/* Left: icon + title + active count */}
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <ArrowLeftRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+                        <span className="text-sm font-black text-foreground tracking-tight leading-none">Swaps</span>
+                        <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-primary/10 text-primary text-[10px] font-black leading-none tabular-nums">
+                            {activeTab === 'available-swaps' ? filteredAvailableSwaps.length
+                             : activeTab === 'my-offers' ? filteredMyOffers.length
+                             : filteredMySwaps.length}
+                        </span>
+                        {(isLoading || isRefreshing) && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/40 shrink-0" />}
+                    </div>
+
+                    {/* Priority toggles — icon always, label on sm+ */}
+                    <div className="flex items-center gap-1">
+                        {(['normal', 'urgent', 'emergent'] as const).map(p => {
+                            const conf = PRIORITY_CONFIG[p];
                             const active = priorityFilter === p;
                             return (
-                                <button
+                                <motion.button
                                     key={p}
-                                    onClick={() => setPriorityFilter(p as ShiftUrgency | 'all')}
+                                    onClick={() => setPriorityFilter(active ? 'all' : p)}
+                                    whileTap={{ scale: 0.88 }}
                                     className={cn(
-                                        "flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wider transition-all flex-shrink-0",
-                                        active
-                                            ? isAll
-                                                ? "bg-primary/10 border-primary/30 text-primary"
-                                                : conf!.chipActiveCls
-                                            : "bg-muted/20 border-border/30 text-muted-foreground hover:bg-muted/40"
+                                        'flex items-center gap-1 px-2.5 h-8 rounded-full border text-[10px] font-black uppercase tracking-wider transition-all',
+                                        active ? conf.chipActiveCls : 'border-border/30 text-muted-foreground/50 hover:bg-muted/30 hover:text-foreground'
                                     )}
                                 >
-                                    {isAll ? 'All' : (
-                                        <>
-                                            {conf?.icon && <conf.icon className="h-3 w-3" />}
-                                            {conf?.label}
-                                        </>
-                                    )}
-                                </button>
+                                    <conf.icon className="h-3 w-3" />
+                                    <span className="hidden sm:inline">{conf.label}</span>
+                                </motion.button>
                             );
                         })}
                     </div>
-                }
-            />
 
-            {/* Info Banner */}
-            {activeTab === 'available-swaps' && (
-                <div className="relative mb-6 overflow-hidden rounded-xl border-l-[3px] border-l-purple-500 bg-gradient-to-r from-purple-50 dark:from-purple-500/10 via-purple-50/50 dark:via-purple-900/5 to-transparent p-4 backdrop-blur-sm">
-                    <div className="flex items-start gap-3">
-                        <div className="rounded-full bg-purple-100 dark:bg-purple-500/20 p-1.5 ring-1 ring-purple-200 dark:ring-purple-500/30">
-                            <ArrowLeftRight className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                        </div>
-                        <div className="space-y-1">
-                            <h4 className="text-sm font-medium text-purple-700 dark:text-purple-200">Shift Swaps</h4>
-                            <p className="text-sm text-purple-600/80 dark:text-purple-200/70 leading-relaxed max-w-2xl">
-                                Browse available swaps from colleagues or manage your own swap requests.
-                            </p>
-                        </div>
+                    {/* View toggle + Refresh */}
+                    <div className="flex items-center gap-1 pl-2 border-l border-border/30">
+                        <button
+                            onClick={() => setViewMode(v => v === 'card' ? 'table' : 'card')}
+                            className="h-8 w-8 flex items-center justify-center rounded-lg border border-border/30 text-muted-foreground/50 hover:bg-muted/30 hover:text-foreground transition-colors"
+                            title={viewMode === 'card' ? 'Table view' : 'Card view'}
+                        >
+                            {viewMode === 'card'
+                                ? <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none"><rect x="0.5" y="0.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2"/><rect x="8" y="0.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2"/><rect x="0.5" y="8" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2"/><rect x="8" y="8" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2"/></svg>
+                                : <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none"><rect x="0.5" y="1.5" width="13" height="1.5" rx="0.75" fill="currentColor"/><rect x="0.5" y="6" width="13" height="1.5" rx="0.75" fill="currentColor"/><rect x="0.5" y="10.5" width="13" height="1.5" rx="0.75" fill="currentColor"/></svg>
+                            }
+                        </button>
+                        <button
+                            onClick={handleRefresh}
+                            className="h-8 w-8 flex items-center justify-center rounded-lg border border-border/30 text-muted-foreground/50 hover:bg-muted/30 hover:text-foreground transition-colors"
+                            title="Refresh"
+                        >
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none"><path d="M13 2.5C11.6 1 9.9 0 8 0 4.1 0 1 3.1 1 7s3.1 7 7 7c3.3 0 6-2.1 6.9-5H13c-.9 2.3-3.1 4-5.5 4-3.3 0-6-2.7-6-6s2.7-6 6-6c1.7 0 3.1.7 4.2 1.8L9 5h5V0l-1 2.5z" fill="currentColor"/></svg>
+                        </button>
                     </div>
                 </div>
-            )}
+
+                {/* ── Row 2: Tab navigation — full-width underline style ── */}
+                <div className="flex -mb-px">
+                    {([
+                        { id: 'available-swaps' as TabType, label: 'Available',  mobileLabel: 'Available', count: filteredAvailableSwaps.length },
+                        { id: 'my-offers'       as TabType, label: 'My Offers',  mobileLabel: 'Offers',    count: filteredMyOffers.length },
+                        { id: 'my-swaps'        as TabType, label: 'My Swaps',   mobileLabel: 'Mine',      count: filteredMySwaps.length },
+                    ] as const).map(tab => {
+                        const isActive = activeTab === tab.id;
+                        return (
+                            <motion.button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                whileTap={{ scale: 0.97 }}
+                                className={cn(
+                                    'flex-1 flex items-center justify-center gap-1.5 py-2.5 min-h-[44px] text-[11px] font-bold uppercase tracking-wide border-b-2 transition-all',
+                                    isActive
+                                        ? 'border-primary text-foreground'
+                                        : 'border-transparent text-muted-foreground/60 hover:text-foreground hover:border-border'
+                                )}
+                            >
+                                <span className="hidden sm:inline">{tab.label}</span>
+                                <span className="sm:hidden">{tab.mobileLabel}</span>
+                                <span className={cn(
+                                    'inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[9px] font-black leading-none tabular-nums transition-all',
+                                    isActive ? 'bg-primary/10 text-primary' : 'bg-muted/50 text-muted-foreground/50'
+                                )}>
+                                    {tab.count}
+                                </span>
+                            </motion.button>
+                        );
+                    })}
+                </div>
+            </div>
 
             {/* Content */}
             {isLoading ? (
@@ -857,265 +983,371 @@ export const EmployeeSwapsPage: React.FC = () => {
                 </div>
             ) : activeTab === 'available-swaps' ? (
                 viewMode === 'card' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {filteredAvailableSwaps.length === 0 ? (
-                            <div className="col-span-full py-12 text-center">
-                                <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center mb-4">
-                                    <ArrowLeftRight className="h-6 w-6 text-slate-300 dark:text-white/20" />
-                                </div>
-                                <h3 className="text-lg font-medium text-slate-400 dark:text-white/50">No available swaps</h3>
-                                <p className="text-sm text-slate-400/70 dark:text-white/30 mt-1">Check back later for opportunities.</p>
-                            </div>
-                        ) : (
-                            filteredAvailableSwaps.map(renderAvailableSwapCard)
-                        )}
-                    </div>
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={`available-${priorityFilter}`}
+                            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+                            variants={pageVariants}
+                            initial="hidden"
+                            animate="show"
+                            exit={{ opacity: 0, transition: { duration: 0.15 } }}
+                        >
+                            {filteredAvailableSwaps.length === 0 ? (
+                                <motion.div variants={itemVariants} className="col-span-full">
+                                    <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                                        <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
+                                            <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-semibold text-foreground/60">No available swaps</p>
+                                            <p className="text-xs text-muted-foreground/40 mt-1">
+                                                {priorityFilter !== 'all' ? 'Try clearing the priority filter.' : 'Check back later for opportunities.'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            ) : (
+                                filteredAvailableSwaps.map(renderAvailableSwapCard)
+                            )}
+                        </motion.div>
+                    </AnimatePresence>
                 ) : (
-                    <div className="overflow-x-auto border border-slate-200 dark:border-white/10 rounded-lg">
-                        <table className="w-full text-sm text-slate-800 dark:text-white">
-                            <thead className="bg-slate-100 dark:bg-black/40 text-xs text-muted-foreground uppercase tracking-wider">
-                                <tr>
-                                    <th className="p-3 text-left w-[40px]">
-                                        <input
-                                            type="checkbox"
-                                            checked={filteredAvailableSwaps.length > 0 && filteredAvailableSwaps.every(s => selectedSwapIds.includes(s.id))}
-                                            onChange={(e) => handleSelectAll(e.target.checked ? filteredAvailableSwaps.map(s => s.id) : [])}
-                                            className="accent-indigo-500"
-                                        />
-                                    </th>
-                                    <SortableTableHeader sortKey="requester_shift.departments.name" currentSort={availableSort.sortConfig} onSort={availableSort.handleSort}>Dept</SortableTableHeader>
-                                    <SortableTableHeader sortKey="requester_shift.subGroups.name" currentSort={availableSort.sortConfig} onSort={availableSort.handleSort}>Sub</SortableTableHeader>
-                                    <SortableTableHeader sortKey="requester_shift.roles.name" currentSort={availableSort.sortConfig} onSort={availableSort.handleSort}>Role</SortableTableHeader>
-                                    <SortableTableHeader sortKey="requester_shift.shift_date" currentSort={availableSort.sortConfig} onSort={availableSort.handleSort}>Date</SortableTableHeader>
-                                    <th className="p-3 text-left">Time</th>
-                                    <th className="p-3 text-left">Net</th>
-                                    <th className="p-3 text-left w-[180px]">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                                {filteredAvailableSwaps.map(swap => {
-                                    const shift = (swap as any).requester_shift;
-                                    const hasOffered = myActiveOfferSwapIds.has(swap.id);
-                                    return (
-                                        <tr key={swap.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-                                            <td className="p-3">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedSwapIds.includes(swap.id)}
-                                                    onChange={() => handleSelectSwap(swap.id, shift?.roles?.name || 'Shift')}
-                                                    disabled={hasOffered}
-                                                    className="accent-indigo-500"
-                                                />
-                                            </td>
-                                            <td className="p-3 font-medium">{shift?.departments?.name || '---'}</td>
-                                            <td className="p-3">{shift?.subGroups?.name || '---'}</td>
-                                            <td className="p-3 font-semibold text-indigo-600 dark:text-indigo-400">{shift?.roles?.name || '---'}</td>
-                                            <td className="p-3">{shift?.shift_date || '---'}</td>
-                                            <td className="p-3 text-[11px] font-medium opacity-80">
-                                                {shift ? `${shift.start_time.slice(0, 5)} - ${shift.end_time.slice(0, 5)}` : '---'}
-                                            </td>
-                                            <td className="p-3 opacity-60 font-mono text-xs">{shift?.net_length ? `${Math.round(shift.net_length)}m` : '---'}</td>
-                                            <td className="p-3">
-                                                {hasOffered ? (
-                                                    <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
-                                                        <CheckCircle2 className="h-4 w-4" /> Offered
-                                                    </div>
-                                                ) : (
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={() => setOfferSwapTarget(swap)}
-                                                        className="h-8 w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow-sm text-xs font-bold"
-                                                    >
-                                                        <ThumbsUp className="mr-1.5 h-3.5 w-3.5" /> Offer Swap
-                                                    </Button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
+                    <>
+                        {/* Mobile: list */}
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={`avail-list-${priorityFilter}`}
+                                className="md:hidden border border-border/40 rounded-xl overflow-hidden"
+                                variants={pageVariants} initial="hidden" animate="show"
+                                exit={{ opacity: 0, transition: { duration: 0.12 } }}
+                            >
+                                {filteredAvailableSwaps.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                                        <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
+                                            <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
+                                        </div>
+                                        <p className="text-sm font-semibold text-foreground/60">No available swaps</p>
+                                    </div>
+                                ) : filteredAvailableSwaps.map(s => renderSwapListItem(s, 'available-swaps'))}
+                            </motion.div>
+                        </AnimatePresence>
+                        {/* Desktop: table */}
+                        <div className="hidden md:block overflow-x-auto border border-border rounded-lg">
+                            <table className="w-full text-sm text-foreground">
+                                <thead className="bg-muted/60 text-xs text-muted-foreground uppercase tracking-wider">
+                                    <tr>
+                                        <th className="p-3 text-left w-[40px]">
+                                            <input
+                                                type="checkbox"
+                                                checked={filteredAvailableSwaps.length > 0 && filteredAvailableSwaps.every(s => selectedSwapIds.includes(s.id))}
+                                                onChange={(e) => handleSelectAll(e.target.checked ? filteredAvailableSwaps.map(s => s.id) : [])}
+                                                className="accent-indigo-500"
+                                            />
+                                        </th>
+                                        <SortableTableHeader sortKey="requester_shift.departments.name" currentSort={availableSort.sortConfig} onSort={availableSort.handleSort}>Dept</SortableTableHeader>
+                                        <SortableTableHeader sortKey="requester_shift.subGroups.name" currentSort={availableSort.sortConfig} onSort={availableSort.handleSort}>Sub</SortableTableHeader>
+                                        <SortableTableHeader sortKey="requester_shift.roles.name" currentSort={availableSort.sortConfig} onSort={availableSort.handleSort}>Role</SortableTableHeader>
+                                        <SortableTableHeader sortKey="requester_shift.shift_date" currentSort={availableSort.sortConfig} onSort={availableSort.handleSort}>Date</SortableTableHeader>
+                                        <th className="p-3 text-left">Time</th>
+                                        <th className="p-3 text-left">Net</th>
+                                        <th className="p-3 text-left w-[180px]">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border/50">
+                                    {filteredAvailableSwaps.map(swap => {
+                                        const shift = (swap as any).requester_shift;
+                                        const hasOffered = myActiveOfferSwapIds.has(swap.id);
+                                        return (
+                                            <tr key={swap.id} className="hover:bg-muted/30 transition-colors">
+                                                <td className="p-3">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedSwapIds.includes(swap.id)}
+                                                        onChange={() => handleSelectSwap(swap.id, shift?.roles?.name || 'Shift')}
+                                                        disabled={hasOffered}
+                                                        className="accent-indigo-500"
+                                                    />
+                                                </td>
+                                                <td className="p-3 font-medium">{shift?.departments?.name || '---'}</td>
+                                                <td className="p-3">{shift?.subGroups?.name || '---'}</td>
+                                                <td className="p-3 font-semibold text-indigo-600 dark:text-indigo-400">{shift?.roles?.name || '---'}</td>
+                                                <td className="p-3">{shift?.shift_date || '---'}</td>
+                                                <td className="p-3 text-[11px] font-medium opacity-80">
+                                                    {shift ? `${shift.start_time.slice(0, 5)} - ${shift.end_time.slice(0, 5)}` : '---'}
+                                                </td>
+                                                <td className="p-3 opacity-60 font-mono text-xs">{shift?.net_length ? `${Math.round(shift.net_length)}m` : '---'}</td>
+                                                <td className="p-3">
+                                                    {hasOffered ? (
+                                                        <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
+                                                            <CheckCircle2 className="h-4 w-4" /> Offered
+                                                        </div>
+                                                    ) : (
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={() => setOfferSwapTarget(swap)}
+                                                            className="h-8 w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow-sm text-xs font-bold"
+                                                        >
+                                                            <ThumbsUp className="mr-1.5 h-3.5 w-3.5" /> Offer Swap
+                                                        </Button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
                 )
             ) : activeTab === 'my-offers' ? (
                 /* ── MY SWAP OFFERS (Offers I made on others' swaps) ── */
                 viewMode === 'card' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={`my-offers-${priorityFilter}`}
+                            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+                            variants={pageVariants}
+                            initial="hidden"
+                            animate="show"
+                            exit={{ opacity: 0, transition: { duration: 0.15 } }}
+                        >
                         {filteredMyOffers.length === 0 ? (
-                            <div className="col-span-full py-12 text-center">
-                                <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center mb-4">
-                                    <ArrowLeftRight className="h-6 w-6 text-slate-300 dark:text-white/20" />
+                            <motion.div variants={itemVariants} className="col-span-full">
+                                <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                                    <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
+                                        <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-semibold text-foreground/60">No swap offers yet</p>
+                                        <p className="text-xs text-muted-foreground/40 mt-1">Go to Available Swaps and offer on a colleague's request.</p>
+                                    </div>
                                 </div>
-                                <h3 className="text-lg font-medium text-slate-400 dark:text-white/50">No swap offers yet</h3>
-                                <p className="text-sm text-slate-400/70 dark:text-white/30 mt-1">Offer on available swaps to see them here.</p>
-                            </div>
+                            </motion.div>
                         ) : (
                             filteredMyOffers.map(renderMyOfferCard)
                         )}
-                    </div>
+                        </motion.div>
+                    </AnimatePresence>
                 ) : (
-                    <div className="overflow-x-auto border border-slate-200 dark:border-white/10 rounded-lg">
-                        <table className="w-full text-sm text-slate-800 dark:text-white">
-                            <thead className="bg-slate-100 dark:bg-black/40 text-xs text-muted-foreground uppercase tracking-wider">
-                                <tr>
-                                    <th className="p-3 text-left w-[40px]">
-                                        <input
-                                            type="checkbox"
-                                            checked={filteredMyOffers.length > 0 && filteredMyOffers.every(s => selectedSwapIds.includes(s.id))}
-                                            onChange={(e) => handleSelectAll(e.target.checked ? filteredMyOffers.map(s => s.id) : [])}
-                                            className="accent-indigo-500"
-                                        />
-                                    </th>
-                                    <SortableTableHeader sortKey="requester_shift.departments.name" currentSort={myOffersSort.sortConfig} onSort={myOffersSort.handleSort}>Dept</SortableTableHeader>
-                                    <SortableTableHeader sortKey="requester_shift.roles.name" currentSort={myOffersSort.sortConfig} onSort={myOffersSort.handleSort}>Role</SortableTableHeader>
-                                    <SortableTableHeader sortKey="requester_shift.shift_date" currentSort={myOffersSort.sortConfig} onSort={myOffersSort.handleSort}>Date</SortableTableHeader>
-                                    <th className="p-3 text-left">Time</th>
-                                    <th className="p-3 text-left">Status</th>
-                                    <th className="p-3 text-left w-[150px]">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                                {filteredMyOffers.map(swap => {
-                                    const shift = (swap as any).requester_shift;
-                                    const myOffer = ((swap as any).swap_offers || []).find((o: any) => o.offerer_id === userId || o.offerer?.id === userId);
-                                    if (!myOffer) return null;
-                                    const statusConf = STATUS_CONFIG[myOffer.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.OPEN;
-                                    const StatusIcon = statusConf.icon;
+                    <>
+                        {/* Mobile: list */}
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={`offers-list-${priorityFilter}`}
+                                className="md:hidden border border-border/40 rounded-xl overflow-hidden"
+                                variants={pageVariants} initial="hidden" animate="show"
+                                exit={{ opacity: 0, transition: { duration: 0.12 } }}
+                            >
+                                {filteredMyOffers.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                                        <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
+                                            <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
+                                        </div>
+                                        <p className="text-sm font-semibold text-foreground/60">No swap offers yet</p>
+                                    </div>
+                                ) : filteredMyOffers.map(s => renderSwapListItem(s, 'my-offers'))}
+                            </motion.div>
+                        </AnimatePresence>
+                        {/* Desktop: table */}
+                        <div className="hidden md:block overflow-x-auto border border-border rounded-lg">
+                            <table className="w-full text-sm text-foreground">
+                                <thead className="bg-muted/60 text-xs text-muted-foreground uppercase tracking-wider">
+                                    <tr>
+                                        <th className="p-3 text-left w-[40px]">
+                                            <input
+                                                type="checkbox"
+                                                checked={filteredMyOffers.length > 0 && filteredMyOffers.every(s => selectedSwapIds.includes(s.id))}
+                                                onChange={(e) => handleSelectAll(e.target.checked ? filteredMyOffers.map(s => s.id) : [])}
+                                                className="accent-indigo-500"
+                                            />
+                                        </th>
+                                        <SortableTableHeader sortKey="requester_shift.departments.name" currentSort={myOffersSort.sortConfig} onSort={myOffersSort.handleSort}>Dept</SortableTableHeader>
+                                        <SortableTableHeader sortKey="requester_shift.roles.name" currentSort={myOffersSort.sortConfig} onSort={myOffersSort.handleSort}>Role</SortableTableHeader>
+                                        <SortableTableHeader sortKey="requester_shift.shift_date" currentSort={myOffersSort.sortConfig} onSort={myOffersSort.handleSort}>Date</SortableTableHeader>
+                                        <th className="p-3 text-left">Time</th>
+                                        <th className="p-3 text-left">Status</th>
+                                        <th className="p-3 text-left w-[150px]">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border/50">
+                                    {filteredMyOffers.map(swap => {
+                                        const shift = (swap as any).requester_shift;
+                                        const myOffer = ((swap as any).swap_offers || []).find((o: any) => o.offerer_id === userId || o.offerer?.id === userId);
+                                        if (!myOffer) return null;
+                                        const statusConf = STATUS_CONFIG[myOffer.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.OPEN;
+                                        const StatusIcon = statusConf.icon;
 
-                                    return (
-                                        <tr key={swap.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-                                            <td className="p-3">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedSwapIds.includes(swap.id)}
-                                                    onChange={() => handleSelectSwap(swap.id, shift?.roles?.name || 'Offer')}
-                                                    className="accent-indigo-500"
-                                                />
-                                            </td>
-                                            <td className="p-3">{shift?.departments?.name || '---'}</td>
-                                            <td className="p-3 font-semibold text-indigo-600 dark:text-indigo-400">{shift?.roles?.name || '---'}</td>
-                                            <td className="p-3">{shift?.shift_date || '---'}</td>
-                                            <td className="p-3 text-[11px] font-medium opacity-80">
-                                                {shift ? `${shift.start_time.slice(0, 5)} - ${shift.end_time.slice(0, 5)}` : '---'}
-                                            </td>
-                                            <td className="p-3">
-                                                <div className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider", statusConf.badgeCls)}>
-                                                    <StatusIcon className="h-3 w-3" />
-                                                    {statusConf.label}
-                                                </div>
-                                            </td>
-                                            <td className="p-3 text-right">
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    onClick={() => declineOffer(myOffer.id)}
-                                                    className="h-8 w-full text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-500/10 text-xs font-bold border border-red-200 dark:border-red-500/30"
-                                                >
-                                                    <XCircle className="mr-1.5 h-3.5 w-3.5" /> Withdraw
-                                                </Button>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
+                                        return (
+                                            <tr key={swap.id} className="hover:bg-muted/30 transition-colors">
+                                                <td className="p-3">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedSwapIds.includes(swap.id)}
+                                                        onChange={() => handleSelectSwap(swap.id, shift?.roles?.name || 'Offer')}
+                                                        className="accent-indigo-500"
+                                                    />
+                                                </td>
+                                                <td className="p-3">{shift?.departments?.name || '---'}</td>
+                                                <td className="p-3 font-semibold text-indigo-600 dark:text-indigo-400">{shift?.roles?.name || '---'}</td>
+                                                <td className="p-3">{shift?.shift_date || '---'}</td>
+                                                <td className="p-3 text-[11px] font-medium opacity-80">
+                                                    {shift ? `${shift.start_time.slice(0, 5)} - ${shift.end_time.slice(0, 5)}` : '---'}
+                                                </td>
+                                                <td className="p-3">
+                                                    <div className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider", statusConf.badgeCls)}>
+                                                        <StatusIcon className="h-3 w-3" />
+                                                        {statusConf.label}
+                                                    </div>
+                                                </td>
+                                                <td className="p-3 text-right">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => declineOffer(myOffer.id)}
+                                                        className="h-8 w-full text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-500/10 text-xs font-bold border border-red-200 dark:border-red-500/30"
+                                                    >
+                                                        <XCircle className="mr-1.5 h-3.5 w-3.5" /> Withdraw
+                                                    </Button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
                 )
             ) : (
                 /* ── MY SWAPS (Shifts I posted for swap) ── */
                 viewMode === 'card' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={`my-swaps-${priorityFilter}`}
+                            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+                            variants={pageVariants}
+                            initial="hidden"
+                            animate="show"
+                            exit={{ opacity: 0, transition: { duration: 0.15 } }}
+                        >
                         {filteredMySwaps.length === 0 ? (
-                            <div className="col-span-full py-12 text-center">
-                                <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center mb-4">
-                                    <ArrowLeftRight className="h-6 w-6 text-slate-300 dark:text-white/20" />
+                            <motion.div variants={itemVariants} className="col-span-full">
+                                <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                                    <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
+                                        <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-semibold text-foreground/60">No swap requests</p>
+                                        <p className="text-xs text-muted-foreground/40 mt-1">
+                                            {priorityFilter !== 'all' ? 'Try clearing the priority filter.' : 'Create a swap request from your roster to get started.'}
+                                        </p>
+                                    </div>
                                 </div>
-                                <h3 className="text-lg font-medium text-slate-400 dark:text-white/50">No swap requests found</h3>
-                                <p className="text-sm text-slate-400/70 dark:text-white/30 mt-1">Create a swap request from your roster to get started.</p>
-                            </div>
+                            </motion.div>
                         ) : (
                             filteredMySwaps.map(renderMySwapCard)
                         )}
-                    </div>
+                        </motion.div>
+                    </AnimatePresence>
                 ) : (
-                    <div className="overflow-x-auto border border-slate-200 dark:border-white/10 rounded-lg">
-                        <table className="w-full text-sm text-slate-800 dark:text-white">
-                            <thead className="bg-slate-100 dark:bg-black/40 text-xs text-muted-foreground uppercase tracking-wider">
-                                <tr>
-                                    <th className="p-3 text-left w-[40px]">
-                                        <input
-                                            type="checkbox"
-                                            checked={filteredMySwaps.length > 0 && filteredMySwaps.every(s => selectedSwapIds.includes(s.id))}
-                                            onChange={(e) => handleSelectAll(e.target.checked ? filteredMySwaps.map(s => s.id) : [])}
-                                            className="accent-indigo-500"
-                                        />
-                                    </th>
-                                    <SortableTableHeader sortKey="requester_shift.departments.name" currentSort={mySwapsSort.sortConfig} onSort={mySwapsSort.handleSort}>Dept</SortableTableHeader>
-                                    <SortableTableHeader sortKey="requester_shift.roles.name" currentSort={mySwapsSort.sortConfig} onSort={mySwapsSort.handleSort}>Role</SortableTableHeader>
-                                    <SortableTableHeader sortKey="requester_shift.shift_date" currentSort={mySwapsSort.sortConfig} onSort={mySwapsSort.handleSort}>Date</SortableTableHeader>
-                                    <th className="p-3 text-left">Time</th>
-                                    <th className="p-3 text-left">Status</th>
-                                    <th className="p-3 text-left w-[220px]">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                                {filteredMySwaps.map(swap => {
-                                    const shift = (swap as any).requester_shift;
-                                    const statusConf = STATUS_CONFIG[swap.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.OPEN;
-                                    const StatusIcon = statusConf.icon;
-                                    const offersCount = ((swap as any).swap_offers || []).length;
+                    <>
+                        {/* Mobile: list */}
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={`swaps-list-${priorityFilter}`}
+                                className="md:hidden border border-border/40 rounded-xl overflow-hidden"
+                                variants={pageVariants} initial="hidden" animate="show"
+                                exit={{ opacity: 0, transition: { duration: 0.12 } }}
+                            >
+                                {filteredMySwaps.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                                        <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
+                                            <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
+                                        </div>
+                                        <p className="text-sm font-semibold text-foreground/60">No swap requests</p>
+                                    </div>
+                                ) : filteredMySwaps.map(s => renderSwapListItem(s, 'my-swaps'))}
+                            </motion.div>
+                        </AnimatePresence>
+                        {/* Desktop: table */}
+                        <div className="hidden md:block overflow-x-auto border border-border rounded-lg">
+                            <table className="w-full text-sm text-foreground">
+                                <thead className="bg-muted/60 text-xs text-muted-foreground uppercase tracking-wider">
+                                    <tr>
+                                        <th className="p-3 text-left w-[40px]">
+                                            <input
+                                                type="checkbox"
+                                                checked={filteredMySwaps.length > 0 && filteredMySwaps.every(s => selectedSwapIds.includes(s.id))}
+                                                onChange={(e) => handleSelectAll(e.target.checked ? filteredMySwaps.map(s => s.id) : [])}
+                                                className="accent-indigo-500"
+                                            />
+                                        </th>
+                                        <SortableTableHeader sortKey="requester_shift.departments.name" currentSort={mySwapsSort.sortConfig} onSort={mySwapsSort.handleSort}>Dept</SortableTableHeader>
+                                        <SortableTableHeader sortKey="requester_shift.roles.name" currentSort={mySwapsSort.sortConfig} onSort={mySwapsSort.handleSort}>Role</SortableTableHeader>
+                                        <SortableTableHeader sortKey="requester_shift.shift_date" currentSort={mySwapsSort.sortConfig} onSort={mySwapsSort.handleSort}>Date</SortableTableHeader>
+                                        <th className="p-3 text-left">Time</th>
+                                        <th className="p-3 text-left">Status</th>
+                                        <th className="p-3 text-left w-[220px]">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border/50">
+                                    {filteredMySwaps.map(swap => {
+                                        const shift = (swap as any).requester_shift;
+                                        const statusConf = STATUS_CONFIG[swap.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.OPEN;
+                                        const StatusIcon = statusConf.icon;
+                                        const offersCount = ((swap as any).swap_offers || []).length;
 
-                                    return (
-                                        <tr key={swap.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-                                            <td className="p-3">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedSwapIds.includes(swap.id)}
-                                                    onChange={() => handleSelectSwap(swap.id, shift?.roles?.name || 'Swap')}
-                                                    className="accent-indigo-500"
-                                                />
-                                            </td>
-                                            <td className="p-3 font-medium">{shift?.departments?.name || '---'}</td>
-                                            <td className="p-3 font-semibold text-indigo-600 dark:text-indigo-400">{shift?.roles?.name || '---'}</td>
-                                            <td className="p-3">{shift?.shift_date || '---'}</td>
-                                            <td className="p-3 text-[11px] font-medium opacity-80">
-                                                {shift ? `${shift.start_time.slice(0, 5)} - ${shift.end_time.slice(0, 5)}` : '---'}
-                                            </td>
-                                            <td className="p-3">
-                                                <div className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider", statusConf.badgeCls)}>
-                                                    <StatusIcon className="h-3 w-3" />
-                                                    {statusConf.label}
-                                                </div>
-                                            </td>
-                                            <td className="p-3">
-                                                <div className="flex gap-2">
-                                                    {swap.status === 'OPEN' && (
+                                        return (
+                                            <tr key={swap.id} className="hover:bg-muted/30 transition-colors">
+                                                <td className="p-3">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedSwapIds.includes(swap.id)}
+                                                        onChange={() => handleSelectSwap(swap.id, shift?.roles?.name || 'Swap')}
+                                                        className="accent-indigo-500"
+                                                    />
+                                                </td>
+                                                <td className="p-3 font-medium">{shift?.departments?.name || '---'}</td>
+                                                <td className="p-3 font-semibold text-indigo-600 dark:text-indigo-400">{shift?.roles?.name || '---'}</td>
+                                                <td className="p-3">{shift?.shift_date || '---'}</td>
+                                                <td className="p-3 text-[11px] font-medium opacity-80">
+                                                    {shift ? `${shift.start_time.slice(0, 5)} - ${shift.end_time.slice(0, 5)}` : '---'}
+                                                </td>
+                                                <td className="p-3">
+                                                    <div className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider", statusConf.badgeCls)}>
+                                                        <StatusIcon className="h-3 w-3" />
+                                                        {statusConf.label}
+                                                    </div>
+                                                </td>
+                                                <td className="p-3">
+                                                    <div className="flex gap-2">
+                                                        {swap.status === 'OPEN' && (
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={(e) => { e.stopPropagation(); setViewOffersSwapId(swap.id); }}
+                                                                className="h-8 flex-1 bg-background text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 text-xs font-bold"
+                                                            >
+                                                                <Eye className="mr-1.5 h-3.5 w-3.5" />
+                                                                Offers ({offersCount})
+                                                            </Button>
+                                                        )}
                                                         <Button
                                                             size="sm"
-                                                            onClick={(e) => { e.stopPropagation(); setViewOffersSwapId(swap.id); }}
-                                                            className="h-8 flex-1 bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 text-xs font-bold"
+                                                            variant="ghost"
+                                                            onClick={() => setConfirmDialog({ isOpen: true, swap })}
+                                                            disabled={isCancelling}
+                                                            className="h-8 flex-1 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-500/10 text-xs font-bold border border-red-200 dark:border-red-500/30"
                                                         >
-                                                            <Eye className="mr-1.5 h-3.5 w-3.5" /> 
-                                                            Offers ({offersCount})
+                                                            <Ban className="mr-1.5 h-3.5 w-3.5" /> Cancel
                                                         </Button>
-                                                    )}
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={() => setConfirmDialog({ isOpen: true, swap })}
-                                                        disabled={isCancelling}
-                                                        className="h-8 flex-1 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-500/10 text-xs font-bold border border-red-200 dark:border-red-500/30"
-                                                    >
-                                                        <Ban className="mr-1.5 h-3.5 w-3.5" /> Cancel
-                                                    </Button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
                 )
             )}
 
@@ -1246,7 +1478,152 @@ export const EmployeeSwapsPage: React.FC = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </div>
+
+            {/* ── SWAP DETAIL DRAWER (mobile list tap) ── */}
+            <Drawer open={drawerSwap !== null} onOpenChange={open => { if (!open) setDrawerSwap(null); }}>
+                <DrawerContent className="max-h-[88dvh] flex flex-col">
+                    <div className="overflow-y-auto flex-1 px-4 pb-8">
+                        {drawerSwap && (() => {
+                            const { swap, tab } = drawerSwap;
+                            const shift = (swap as any).requester_shift;
+                            const myOffer = ((swap as any).swap_offers || []).find((o: any) => o.offerer_id === userId || o.offerer?.id === userId);
+                            const hasOffered = myActiveOfferSwapIds.has(swap.id);
+                            const statusCfg = STATUS_CONFIG[swap.status] ?? STATUS_CONFIG.EXPIRED;
+                            const StatusIcon = statusCfg.icon;
+
+                            const shiftDate = shift?.start_at
+                                ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'EEE, d MMM yyyy')
+                                : shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE, d MMM yyyy') : '—';
+                            const startT = shift?.start_at
+                                ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm')
+                                : shift?.start_time ? shift.start_time.slice(0, 5) : '—';
+                            const endT = shift?.end_at
+                                ? formatInTimezone(new Date(shift.end_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm')
+                                : shift?.end_time ? shift.end_time.slice(0, 5) : '—';
+                            const net = shift?.net_length_minutes || shift?.net_length || 0;
+                            const netH = Math.floor(net / 60);
+                            const netM = Math.round(net % 60);
+                            const netStr = netH > 0 ? `${netH}h${netM > 0 ? ` ${netM}m` : ''}` : `${netM}m`;
+
+                            const deadline = shift?.start_at || (shift?.shift_date && shift?.start_time ? `${shift.shift_date}T${shift.start_time}` : '');
+                            const tr = calculateTimeRemaining(deadline);
+                            const timerStr = formatTimeRemaining(tr);
+                            const isExpired = tr.isExpired;
+
+                            return (
+                                <>
+                                    {/* Header */}
+                                    <div className="flex items-start justify-between pt-2 pb-4 border-b border-border/40">
+                                        <div className="min-w-0 pr-3">
+                                            <DrawerTitle className="text-base font-bold leading-tight">
+                                                {shift?.roles?.name || 'Unknown Role'}
+                                            </DrawerTitle>
+                                            <p className="text-sm text-muted-foreground mt-0.5 truncate">
+                                                {shift?.departments?.name || '—'}{shift?.sub_departments?.name ? ` · ${shift.sub_departments.name}` : ''}
+                                            </p>
+                                            <span className={cn('inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full border mt-1.5', statusCfg.badgeCls)}>
+                                                <StatusIcon className="h-2.5 w-2.5" />{statusCfg.label}
+                                            </span>
+                                        </div>
+                                        <DrawerClose asChild>
+                                            <button className="shrink-0 h-8 w-8 flex items-center justify-center rounded-full bg-muted/50 text-muted-foreground hover:bg-muted transition-colors">
+                                                <X className="h-4 w-4" />
+                                            </button>
+                                        </DrawerClose>
+                                    </div>
+
+                                    {/* Detail grid */}
+                                    <div className="grid grid-cols-2 gap-2.5 mt-4">
+                                        {[
+                                            { label: 'Date',     value: shiftDate },
+                                            { label: 'Time',     value: `${startT} – ${endT}`, mono: true },
+                                            { label: 'Duration', value: netStr },
+                                            { label: 'Org',      value: shift?.organizations?.name || '—' },
+                                        ].map(({ label, value, mono }) => (
+                                            <div key={label} className="flex flex-col gap-0.5 p-3 rounded-xl bg-muted/30 border border-border/30">
+                                                <span className="text-[9px] uppercase tracking-widest text-muted-foreground/50 font-bold">{label}</span>
+                                                <span className={cn('text-sm font-semibold mt-0.5 truncate', mono && 'font-mono')}>{value}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Timer */}
+                                    {!isExpired && timerStr && (
+                                        <div className="flex items-center gap-2 mt-4 px-3 py-2.5 rounded-xl bg-amber-500/8 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-sm">
+                                            <Clock className="h-4 w-4 shrink-0" />
+                                            <span>Closes in <strong>{timerStr}</strong></span>
+                                        </div>
+                                    )}
+
+                                    {/* Actions */}
+                                    <div className="flex flex-col gap-2 mt-5">
+                                        {tab === 'available-swaps' && (
+                                            hasOffered ? (
+                                                <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-sm font-medium">
+                                                    <CheckCircle2 className="h-4 w-4 shrink-0" /> Offer Already Submitted
+                                                </div>
+                                            ) : isExpired ? (
+                                                <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-muted/30 border border-border/30 text-muted-foreground text-sm">
+                                                    <Ban className="h-4 w-4 shrink-0" /> Expired
+                                                </div>
+                                            ) : (
+                                                <Button
+                                                    className="w-full h-12 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-900/20"
+                                                    onClick={() => { setOfferSwapTarget(swap); setDrawerSwap(null); }}
+                                                >
+                                                    <ThumbsUp className="mr-2 h-4 w-4" /> Offer Swap
+                                                </Button>
+                                            )
+                                        )}
+                                        {tab === 'my-offers' && myOffer && (
+                                            myOffer.status === 'SUBMITTED' && !isExpired ? (
+                                                <Button
+                                                    variant="outline"
+                                                    className="w-full h-11 border-border/50 hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 text-sm"
+                                                    onClick={() => { declineOffer(myOffer.id); setDrawerSwap(null); }}
+                                                    disabled={isDeclining}
+                                                >
+                                                    {isDeclining ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <X className="mr-2 h-4 w-4" />}
+                                                    Withdraw Offer
+                                                </Button>
+                                            ) : (
+                                                <div className={cn('w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border text-sm font-medium', STATUS_CONFIG[swap.status]?.badgeCls ?? 'bg-muted/30 border-border/30 text-muted-foreground')}>
+                                                    <StatusIcon className="h-4 w-4 shrink-0" />{statusCfg.label}
+                                                </div>
+                                            )
+                                        )}
+                                        {tab === 'my-swaps' && (
+                                            swap.status === 'OPEN' && !isExpired ? (
+                                                <>
+                                                    <Button
+                                                        className="w-full h-12 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm"
+                                                        onClick={() => { setViewOffersSwapId(swap.id); setDrawerSwap(null); }}
+                                                    >
+                                                        <Eye className="mr-2 h-4 w-4" /> View Offers
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        className="w-full h-11 border-border/50 hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 text-sm"
+                                                        onClick={() => { setConfirmDialog({ isOpen: true, swap }); setDrawerSwap(null); }}
+                                                        disabled={isCancelling}
+                                                    >
+                                                        <X className="mr-2 h-4 w-4" /> Cancel Request
+                                                    </Button>
+                                                </>
+                                            ) : (
+                                                <div className={cn('w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border text-sm font-medium', STATUS_CONFIG[swap.status]?.badgeCls ?? 'bg-muted/30 border-border/30 text-muted-foreground')}>
+                                                    <StatusIcon className="h-4 w-4 shrink-0" />{statusCfg.label}
+                                                </div>
+                                            )
+                                        )}
+                                    </div>
+                                </>
+                            );
+                        })()}
+                    </div>
+                </DrawerContent>
+            </Drawer>
+        </motion.div>
     );
 };
 

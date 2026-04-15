@@ -86,6 +86,7 @@ export const useAuth = () => {
 
       // Delta and above (Managers)
       audit: ['delta', 'epsilon', 'zeta'],
+      configurations: ['delta', 'epsilon', 'zeta'],
 
       // Epsilon and above
       users: ['epsilon', 'zeta'],

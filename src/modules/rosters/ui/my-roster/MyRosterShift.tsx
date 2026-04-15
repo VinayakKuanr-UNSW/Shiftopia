@@ -83,20 +83,20 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
           'hover:scale-[1.02] hover:shadow-lg active:scale-[0.98]',
           'flex flex-col justify-center px-2 py-1 h-full relative overflow-hidden',
           'shadow-md',
-          'text-white',
+          'text-foreground',
           cardClass
         )}
         onClick={(e) => onClick?.(e)}
         style={style}
       >
         {isPendingOffer && (
-          <div className="absolute top-0 right-0 p-0.5 bg-slate-700/40 rounded-bl-lg">
-            <Inbox className="w-3 h-3 text-slate-400" />
+          <div className="absolute top-0 right-0 p-0.5 bg-muted/60 dark:bg-slate-700/40 rounded-bl-lg">
+            <Inbox className="w-3 h-3 text-muted-foreground" />
           </div>
         )}
         {isTradeRequested && !isPendingOffer && (
-          <div className="absolute top-0 right-0 p-0.5 bg-black/20 rounded-bl-lg">
-            <ArrowRightLeft className="w-3 h-3 text-amber-300" />
+          <div className="absolute top-0 right-0 p-0.5 bg-amber-500/10 dark:bg-black/20 rounded-bl-lg">
+            <ArrowRightLeft className="w-3 h-3 text-amber-600" />
           </div>
         )}
         <div className="font-semibold truncate text-center text-xs leading-tight">
@@ -117,7 +117,7 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
         'hover:scale-[1.01] hover:shadow-xl active:scale-[0.99]',
         'p-3 h-full flex flex-col justify-between relative overflow-hidden',
         'shadow-lg',
-        'text-white',
+        'text-foreground',
         cardClass
       )}
       onClick={() => onClick?.()}
@@ -129,12 +129,12 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
           <TooltipProvider delayDuration={0}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="flex items-center gap-1 bg-black/30 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-white/20 cursor-help shadow-lg">
+                <div className="flex items-center gap-1 bg-muted/60 dark:bg-black/30 backdrop-blur-md px-1.5 py-0.5 rounded-md border border-border/50 cursor-help shadow-lg">
                   <div
-                    className="h-1.5 w-1.5 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.3)]"
+                    className="h-1.5 w-1.5 rounded-full"
                     style={{ backgroundColor: dot.color }}
                   />
-                  <span className="text-[9px] font-black font-mono text-white/90">
+                  <span className="text-[9px] font-black font-mono text-foreground/80">
                     {dot.label.split(' ')[0].substring(0, 3).toUpperCase()}
                   </span>
                 </div>
@@ -147,13 +147,13 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
         )}
 
         {isPendingOffer && (
-          <div className="bg-blue-500/80 backdrop-blur-sm p-1 rounded-md border border-white/20 shadow-lg">
-            <Inbox className="w-3.5 h-3.5 text-white" />
+          <div className="bg-blue-500/15 dark:bg-blue-500/80 backdrop-blur-sm p-1 rounded-md border border-blue-500/30 shadow-lg">
+            <Inbox className="w-3.5 h-3.5 text-blue-600 dark:text-blue-100" />
           </div>
         )}
         {isTradeRequested && !isPendingOffer && (
-          <div className="bg-amber-500/80 backdrop-blur-sm p-1 rounded-md border border-white/20 shadow-lg">
-            <ArrowRightLeft className="w-3.5 h-3.5 text-white" />
+          <div className="bg-amber-500/15 dark:bg-amber-500/80 backdrop-blur-sm p-1 rounded-md border border-amber-500/30 shadow-lg">
+            <ArrowRightLeft className="w-3.5 h-3.5 text-amber-600 dark:text-amber-100" />
           </div>
         )}
       </div>
@@ -162,17 +162,17 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
         {/* Role - Large and prominent */}
         <div className="font-bold text-sm mb-0.5 leading-tight">{shift.roles?.name || 'Shift'}</div>
         {/* Sub-group */}
-        <div className="text-xs opacity-80 leading-tight">{subGroupName}</div>
+        <div className="text-xs opacity-70 leading-tight">{subGroupName}</div>
       </div>
 
       {/* Time */}
-      <div className="text-xs opacity-90 leading-tight mt-2">
+      <div className="text-xs opacity-80 leading-tight mt-2">
         {formatTime(shift.start_at, shift.start_time, shift.tz_identifier)} - {formatTime(shift.end_at, shift.end_time, shift.tz_identifier)}
       </div>
 
       {/* Optional: Break indicator */}
       {shift.break_minutes > 0 && (
-        <div className="text-[10px] opacity-70 mt-1">☕ {shift.break_minutes}m break</div>
+        <div className="text-[10px] opacity-60 mt-1">☕ {shift.break_minutes}m break</div>
       )}
     </div>
   );

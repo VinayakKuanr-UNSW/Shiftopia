@@ -1,7 +1,9 @@
 
 import React from 'react';
+import { motion } from 'framer-motion';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { CalendarIcon, List, RefreshCw, Zap } from 'lucide-react';
+import { itemVariants } from '@/modules/core/ui/motion/presets';
 
 interface AvailabilityPageHeaderProps {
   viewMode: 'calendar' | 'list';
@@ -19,8 +21,8 @@ export function AvailabilityPageHeader({
   isCalendarLocked
 }: AvailabilityPageHeaderProps) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <h1 className="text-2xl font-bold tracking-tight">
+    <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <h1 className="text-2xl font-black tracking-tight text-foreground">
         Availability Management
       </h1>
 
@@ -32,17 +34,17 @@ export function AvailabilityPageHeader({
 
         {/* View Mode Toggle */}
         <div className="hidden sm:flex gap-2">
-          <Button 
-            variant={viewMode === 'calendar' ? 'default' : 'outline'} 
-            onClick={() => setViewMode('calendar')} 
+          <Button
+            variant={viewMode === 'calendar' ? 'default' : 'outline'}
+            onClick={() => setViewMode('calendar')}
             size="sm"
           >
             <CalendarIcon className="h-4 w-4 mr-2" />
             Calendar
           </Button>
-          <Button 
-            variant={viewMode === 'list' ? 'default' : 'outline'} 
-            onClick={() => setViewMode('list')} 
+          <Button
+            variant={viewMode === 'list' ? 'default' : 'outline'}
+            onClick={() => setViewMode('list')}
             size="sm"
           >
             <List className="h-4 w-4 mr-2" />
@@ -51,17 +53,17 @@ export function AvailabilityPageHeader({
         </div>
 
         {/* Batch Apply Button */}
-        <Button 
-          variant="default" 
-          onClick={onBatchApply} 
-          disabled={isCalendarLocked} 
-          size="sm" 
-          className="bg-blue-600 hover:bg-blue-700"
+        <Button
+          variant="outline"
+          onClick={onBatchApply}
+          disabled={isCalendarLocked}
+          size="sm"
+          className="bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20"
         >
           <Zap className="h-4 w-4 mr-2" />
           Batch Apply
         </Button>
       </div>
-    </div>
+    </motion.div>
   );
 }

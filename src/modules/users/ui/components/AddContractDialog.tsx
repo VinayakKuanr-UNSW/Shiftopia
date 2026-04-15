@@ -48,7 +48,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                 <DialogHeader>
                     <DialogTitle>Add Contract</DialogTitle>
                     <DialogDescription>
-                        Create a new role/position for {employeeName}
+                        Create a new user contract for {employeeName}
                     </DialogDescription>
                 </DialogHeader>
 

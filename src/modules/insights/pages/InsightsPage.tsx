@@ -40,7 +40,7 @@ const InsightsPage: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-background">
-            <div className="p-4 md:p-8 space-y-6">
+            <div className="p-4 md:p-8 space-y-6 pb-24 md:pb-8">
                 {/* ── Page header ──────────────────────────────────── */}
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                     <div>

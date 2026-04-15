@@ -199,6 +199,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
     rosterStructure,
     activeSubGroups,
     isLoadingData,
+    isLoadingShifts,
     resolvedContext,
     selectedRosterId,
     setSelectedRosterId,
@@ -1095,11 +1096,22 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                         ══════════════════════════════════════════════════ */}
                     <section>
                         <Section num="05" title="Compliance" icon={Shield} />
-                        <div className="rounded-xl border border-border bg-card dark:bg-white/[0.012] p-4">
+                        <div className="relative rounded-xl border border-border bg-card dark:bg-white/[0.012] p-4 overflow-hidden">
+                            {isLoadingShifts && (
+                                <div className="absolute inset-0 z-10 flex items-center justify-center bg-card/60 backdrop-blur-[2px] transition-all duration-300">
+                                    <div className="flex flex-col items-center gap-2 text-center animate-in fade-in zoom-in-95 duration-300">
+                                        <div className="relative">
+                                            <Shield className="h-6 w-6 text-indigo-500/20" />
+                                            <Loader2 className="absolute inset-0 h-6 w-6 animate-spin text-indigo-500" />
+                                        </div>
+                                        <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Fetching Shift History...</span>
+                                    </div>
+                                </div>
+                            )}
                             <CompliancePanel
                                 hook={compliancePanel}
                                 className="compliance-panel-integrated"
-                                disabled={isReadOnly}
+                                disabled={isReadOnly || isLoadingShifts}
                             />
                         </div>
                     </section>

@@ -169,6 +169,7 @@ export interface ShiftFormDrawerContentProps {
     rosterStructure: any;
     activeSubGroups: any[];
     isLoadingData: boolean;
+    isLoadingShifts: boolean;
     isGroupLocked: boolean;
     isSubGroupLocked: boolean;
 

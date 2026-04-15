@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/modules/core/ui/primitives/dialog';
+import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 import { EmployeeSelector } from '@/modules/core/ui/components/EmployeeSelector';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { BroadcastParticipantRole } from '../../model/broadcast.types';
@@ -48,14 +48,14 @@ export const AddMemberDialog: React.FC<AddMemberDialogProps> = ({
     };
 
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Add Member to {groupName || 'Group'}</DialogTitle>
-                    <DialogDescription>
-                        Search for an employee to add them to this broadcast group.
-                    </DialogDescription>
-                </DialogHeader>
+        <ResponsiveDialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+            <ResponsiveDialog.Header>
+                <ResponsiveDialog.Title>Add Member to {groupName || 'Group'}</ResponsiveDialog.Title>
+                <ResponsiveDialog.Description>
+                    Search for an employee to add them to this broadcast group.
+                </ResponsiveDialog.Description>
+            </ResponsiveDialog.Header>
+            <ResponsiveDialog.Body className="overflow-y-auto max-h-[70dvh]">
                 <div className="space-y-4 py-4">
                     <EmployeeSelector
                         onSelect={(userId, isAdmin) => handleAddMember(userId, isAdmin || false)}
@@ -63,7 +63,7 @@ export const AddMemberDialog: React.FC<AddMemberDialogProps> = ({
                         subDepartmentId={subDepartmentId}
                     />
                 </div>
-            </DialogContent>
-        </Dialog>
+            </ResponsiveDialog.Body>
+        </ResponsiveDialog>
     );
 };

@@ -57,6 +57,8 @@ export interface TimesheetShiftRow {
     shiftStatus: string;
     lifecycleStatus: string;
     timesheetStatus: string | null;
+    rawStartAt: string | null;
+    rawEndAt: string | null;
 
     // Attendance (from shifts table)
     attendanceStatus: string | null;
@@ -87,6 +89,41 @@ export interface TimesheetFilters {
 /**
  * Fetch shifts for timesheet display
  */
+
+/**
+ * Snap an HH:MM or ISO datetime string to the nearest 15-minute boundary.
+ * e.g. "09:07" → "09:00", "09:08" → "09:15", "09:52" → "09:45"
+ * When given an ISO timestamp, the LOCAL wall-clock time is used (browser TZ).
+ * Returns null if value is falsy or unparseable.
+ */
+function snapToQuarterHour(value: string | null | undefined): string | null {
+    if (!value) return null;
+
+    let h: number;
+    let m: number;
+
+    if (value.includes('T') || (value.length > 8 && value.includes('-'))) {
+        // ISO datetime → use Date for correct local-timezone extraction
+        const d = new Date(value);
+        if (isNaN(d.getTime())) return null;
+        h = d.getHours();   // local hour
+        m = d.getMinutes(); // local minute
+    } else {
+        // Plain HH:MM or HH:MM:SS string
+        const parts = value.split(':').map(Number);
+        if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
+        h = parts[0];
+        m = parts[1];
+    }
+
+    const snapped = Math.round(m / 15) * 15;
+    if (snapped === 60) {
+        const nextH = (h + 1) % 24;
+        return `${nextH.toString().padStart(2, '0')}:00`;
+    }
+    return `${h.toString().padStart(2, '0')}:${snapped.toString().padStart(2, '0')}`;
+}
+
 export async function getShiftsForTimesheet(
     date: string,
     filters: TimesheetFilters = {}
@@ -240,13 +277,29 @@ export async function getShiftsForTimesheet(
                 scheduledStart: shift.start_time,
                 scheduledEnd: shift.end_time,
 
-                // Attendance data is source of truth; timesheet edits layer on top
-                // Fallback chain: manual edit → actual (GPS) → scheduled UTC
-                clockIn: timesheet?.clock_in ?? shift.actual_start ?? shift.start_at ?? null,
-                clockOut: timesheet?.clock_out ?? shift.actual_end ?? shift.end_at ?? null,
+                // Actual/Clock times
+                // Source of truth: timesheet.clock_in (manual) → shift.actual_start (GPS) → null
+                // We deliberately do NOT fall back to start_at (scheduled UTC) so the
+                // "Actual" column is blank when nobody has clocked in.
+                clockIn: timesheet?.clock_in ?? shift.actual_start ?? null,
+                clockOut: timesheet?.clock_out ?? shift.actual_end ?? null,
 
-                adjustedStart: timesheet?.start_time || null,
-                adjustedEnd: timesheet?.end_time || null,
+                // Adjusted times (billable) — three-tier logic:
+                //   1. Explicit manager edit  → timesheet.start_time / end_time  (isAdjustedManual = true)
+                //   2. Snapped actual clock   → snap actual_start to nearest 15m (isAdjustedManual = false)
+                //   3. Scheduled fallback     → shift.start_time / end_time       (isAdjustedManual = false)
+                adjustedStart: (() => {
+                    if (timesheet?.start_time) return timesheet.start_time;
+                    const snapped = snapToQuarterHour(shift.actual_start);
+                    return snapped ?? shift.start_time;
+                })(),
+                adjustedEnd: (() => {
+                    if (timesheet?.end_time) return timesheet.end_time;
+                    const snapped = snapToQuarterHour(shift.actual_end);
+                    return snapped ?? shift.end_time;
+                })(),
+                // Whether the manager has explicitly saved a custom adjusted time
+                isAdjustedManual: !!(timesheet?.start_time || timesheet?.end_time),
 
                 paidBreakMinutes: shift.paid_break_minutes || 0,
                 unpaidBreakMinutes: shift.unpaid_break_minutes || 0,
@@ -257,6 +310,8 @@ export async function getShiftsForTimesheet(
                 shiftStatus: shift.assignment_status || 'open',
                 lifecycleStatus: shift.lifecycle_status || 'scheduled',
                 timesheetStatus: timesheet?.status || null,
+                rawStartAt: shift.start_at || null,
+                rawEndAt: shift.end_at || null,
 
                 attendanceStatus: shift.attendance_status || null,
                 varianceMinutes: (() => {

@@ -9,14 +9,7 @@ import { Label } from '@/modules/core/ui/primitives/label';
 import { Calendar } from '@/modules/core/ui/primitives/calendar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/modules/core/ui/primitives/tabs';
 import { CalendarDays, Clock, Zap, AlertTriangle } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/modules/core/ui/primitives/dialog';
+import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 import { AvailabilityStatus } from '../../model/availability.types';
 
 interface TimeSlot {
@@ -39,15 +32,10 @@ interface BatchApplyModalProps {
     name: string;
     timeSlots: Array<{ startTime: string; endTime: string }>;
   }>;
-  isLocked?: boolean;
 }
 
-export function BatchApplyModal({
-  open,
-  onClose,
   onApply,
   availabilityPresets,
-  isLocked = false
 }: BatchApplyModalProps) {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
@@ -118,26 +106,19 @@ export function BatchApplyModal({
   const hasPastDates = dateRange?.from && isBefore(startOfDay(dateRange.from), today);
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5" />
-            Batch Apply Availability
-          </DialogTitle>
-          <DialogDescription>
-            Apply availability to multiple days at once
-          </DialogDescription>
-        </DialogHeader>
+    <ResponsiveDialog open={open} onOpenChange={onClose} dialogClassName="sm:max-w-2xl" drawerClassName="h-[85dvh]">
+      <ResponsiveDialog.Header>
+        <ResponsiveDialog.Title className="flex items-center gap-2">
+          <Zap className="h-5 w-5" />
+          Batch Apply Availability
+        </ResponsiveDialog.Title>
+        <ResponsiveDialog.Description>
+          Apply availability to multiple days at once
+        </ResponsiveDialog.Description>
+      </ResponsiveDialog.Header>
 
+      <ResponsiveDialog.Body className="overflow-y-auto max-h-[70dvh]">
         <div className="space-y-4">
-          {isLocked && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-              <p className="text-sm text-yellow-800">
-                🔒 Some dates may be locked and cannot be modified.
-              </p>
-            </div>
-          )}
 
           {/* Date Selection */}
           <div className="space-y-3">
@@ -259,19 +240,19 @@ export function BatchApplyModal({
             />
           </div>
         </div>
+      </ResponsiveDialog.Body>
 
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleApply} disabled={!isValid}>
-            {isValid && dateRange?.from && dateRange.to
-              ? `Apply to ${format(dateRange.from, 'MMM d')} - ${format(dateRange.to, 'MMM d')}`
-              : 'Apply to Range'
-            }
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <ResponsiveDialog.Footer>
+        <Button type="button" variant="outline" onClick={onClose} className="min-h-[44px]">
+          Cancel
+        </Button>
+        <Button onClick={handleApply} disabled={!isValid} className="min-h-[44px]">
+          {isValid && dateRange?.from && dateRange.to
+            ? `Apply to ${format(dateRange.from, 'MMM d')} - ${format(dateRange.to, 'MMM d')}`
+            : 'Apply to Range'
+          }
+        </Button>
+      </ResponsiveDialog.Footer>
+    </ResponsiveDialog>
   );
 }

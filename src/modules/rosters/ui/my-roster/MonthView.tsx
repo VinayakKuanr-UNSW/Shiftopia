@@ -12,6 +12,8 @@ import {
 import { getTodayInTimezone, isTodayInTimezone } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
+import { motion, AnimatePresence } from 'framer-motion';
+import { listItemSpring } from '@/modules/core/ui/motion/presets';
 import ShiftDetailsDialog from './ShiftDetailsDialog';
 import { MobileShiftCard } from './MobileShiftCard';
 import { Shift } from '@/modules/rosters';
@@ -171,21 +173,32 @@ const MonthView: React.FC<MonthViewProps> = ({ date, getShiftsForDate, offerDate
         {/* Scrollable shift list */}
         <div className="flex-1 overflow-y-auto overscroll-contain pb-24">
           {agendaShifts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center text-center py-16 px-8">
+            <motion.div
+              key="empty"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex flex-col items-center justify-center text-center py-16 px-8"
+            >
               <p className="text-xs font-black tracking-[0.2em] text-muted-foreground/30 uppercase">
                 No shifts scheduled
               </p>
-            </div>
+            </motion.div>
           ) : (
-            <div className="flex flex-col gap-3 p-4">
-              {agendaShifts.map((shiftData) => (
-                <MobileShiftCard
-                  key={shiftData.shift.id}
-                  shiftData={shiftData}
-                  selectedDay={selectedDay}
-                />
-              ))}
-            </div>
+            <AnimatePresence mode="popLayout">
+              <div className="flex flex-col gap-3 p-4">
+                {agendaShifts.map((shiftData) => (
+                  <motion.div
+                    key={shiftData.shift.id}
+                    {...listItemSpring}
+                  >
+                    <MobileShiftCard
+                      shiftData={shiftData}
+                      selectedDay={selectedDay}
+                    />
+                  </motion.div>
+                ))}
+              </div>
+            </AnimatePresence>
           )}
         </div>
 
@@ -265,9 +278,9 @@ const MonthView: React.FC<MonthViewProps> = ({ date, getShiftsForDate, offerDate
                             setSelectedShift({ data: shiftData, date: day });
                           }}
                           className={cn(
-                            'text-[10px] text-white px-2 py-1.5 rounded-lg cursor-pointer',
+                            'text-[10px] text-foreground px-2 py-1.5 rounded-lg cursor-pointer',
                             'hover:scale-[1.02] active:scale-[0.98] transition-transform',
-                            'border border-white/10 shadow-sm truncate',
+                            'border border-border/30 shadow-sm truncate',
                             getGradientClass(shiftData.groupColor)
                           )}
                         >

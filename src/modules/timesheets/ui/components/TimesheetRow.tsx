@@ -13,7 +13,8 @@ import {
 } from "lucide-react";
 import { ShiftStatusBadge } from "./ShiftStatusBadge";
 import { TimesheetStatusBadge } from "./TimesheetStatusBadge";
-import { AttendanceBadge } from "@/modules/rosters/ui/components/AttendanceBadge";
+
+
 import { cn } from "@/modules/core/lib/utils";
 import { useToast } from "@/modules/core/hooks/use-toast";
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -282,6 +283,10 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                     </span>
                 </td>
 
+                {/* Scheduled — always first to match header order */}
+                <td className={cellClass}>{entry.scheduledStart}</td>
+                <td className={`${cellClass} border-r border-border/30`}>{entry.scheduledEnd}</td>
+
                 {/* Clock (Actual) */}
                 <td className={cellClass}>
                     <div className="flex flex-col">
@@ -294,10 +299,9 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                 {entry.varianceMinutes > 0 ? `+${entry.varianceMinutes}m` : `${entry.varianceMinutes}m`}
                             </span>
                         )}
-                        {/* Missing check-in error indicator */}
-                        {entry.attendanceStatus === 'unknown' &&
-                            (entry.liveStatus === 'InProgress' || entry.liveStatus === 'Completed') &&
-                            (!entry.clockIn || entry.clockIn === '-') && (
+                        {/* Missing check-in badge */}
+                        {(!entry.clockIn || entry.clockIn === '-') &&
+                            (entry.liveStatus === 'InProgress' || entry.liveStatus === 'Completed') && (
                             <span className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 w-fit border border-red-500/20">
                                 <AlertTriangle className="h-2.5 w-2.5" />Missing
                             </span>
@@ -307,17 +311,30 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                 <td className={`${cellClass} border-r border-border/30`}>
                     <div className="flex flex-col gap-0.5">
                         <span>{entry.clockOut || '-'}</span>
-                        {entry.attendanceStatus === 'no_show' && (
-                            <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 w-fit">
-                                <AlertTriangle className="h-2.5 w-2.5" />No Show
+                        {/* Missing check-out badge — shown when a completed/in-progress shift has no clock-out */}
+                        {(!entry.clockOut || entry.clockOut === '-') &&
+                            (entry.liveStatus === 'Completed') && (
+                            <span className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 w-fit border border-red-500/20">
+                                <AlertTriangle className="h-2.5 w-2.5" />Missing
+                            </span>
+                        )}
+                        {/* Adjusted-vs-Actual financial variance badge */}
+                        {entry.adjustedVarianceMinutes !== null &&
+                            entry.adjustedVarianceMinutes !== undefined &&
+                            Math.abs(entry.adjustedVarianceMinutes) >= 1 && (
+                            <span className={cn(
+                                "inline-flex items-center gap-0.5 text-[8px] font-black uppercase px-1.5 py-0.5 rounded w-fit border",
+                                Math.abs(entry.adjustedVarianceMinutes) > 30
+                                    ? "bg-orange-500/10 text-orange-500 border-orange-500/20"
+                                    : "bg-sky-500/10 text-sky-500 border-sky-500/20"
+                            )}>
+                                Adj {entry.adjustedVarianceMinutes > 0
+                                    ? `+${entry.adjustedVarianceMinutes}m`
+                                    : `${entry.adjustedVarianceMinutes}m`}
                             </span>
                         )}
                     </div>
                 </td>
-
-                {/* Scheduled */}
-                <td className={cellClass}>{entry.scheduledStart}</td>
-                <td className={`${cellClass} border-r border-border/30`}>{entry.scheduledEnd}</td>
 
                 {/* Adjusted (Inline Editable) */}
                 {isEditingAdjusted ? (
@@ -374,11 +391,41 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                     </>
                 ) : (
                     <>
+                        {/* Adjusted Start — dimmed if auto-snapped, bold if manually set */}
                         <td className={editableCellClass} onClick={handleAdjustedCellClick}>
-                            {entry.adjustedStart || '-'}
+                            <div className="flex flex-col">
+                                <span className={cn(
+                                    "font-bold",
+                                    entry.isAdjustedManual
+                                        ? "text-primary"
+                                        : "text-muted-foreground/50 italic"
+                                )}>
+                                    {entry.adjustedStart || '-'}
+                                </span>
+                                {!entry.isAdjustedManual && entry.adjustedStart && (
+                                    <span className="text-[8px] font-black uppercase text-muted-foreground/40 tracking-widest">
+                                        snapped
+                                    </span>
+                                )}
+                            </div>
                         </td>
+                        {/* Adjusted End — dimmed if auto-snapped */}
                         <td className={editableCellClass} onClick={handleAdjustedCellClick}>
-                            {entry.adjustedEnd || '-'}
+                            <div className="flex flex-col">
+                                <span className={cn(
+                                    "font-bold",
+                                    entry.isAdjustedManual
+                                        ? "text-primary"
+                                        : "text-muted-foreground/50 italic"
+                                )}>
+                                    {entry.adjustedEnd || '-'}
+                                </span>
+                                {!entry.isAdjustedManual && entry.adjustedEnd && (
+                                    <span className="text-[8px] font-black uppercase text-muted-foreground/40 tracking-widest">
+                                        snapped
+                                    </span>
+                                )}
+                            </div>
                         </td>
                         <td className={`${cellClass} font-black text-foreground border-r border-border/30`}>
                             {displayValues.length}
@@ -407,22 +454,32 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                     </div>
                 </td>
 
-                {/* Statuses */}
+                {/* Statuses — dot badge + lifecycle + timesheet only */}
+                {/* Dot badge */}
+                <td className={`${cellClass} text-center`}>
+                    {entry.statusDot ? (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <span
+                                        className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-background cursor-default"
+                                        style={{ backgroundColor: entry.statusDot.color }}
+                                    />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p className="text-xs font-black">{entry.statusDot.label}</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    ) : (
+                        <span className="inline-block h-2.5 w-2.5 rounded-full bg-muted-foreground/20" />
+                    )}
+                </td>
+                {/* Lifecycle */}
                 <td className={cellClass}>
                     <ShiftStatusBadge status={entry.liveStatus as any} />
                 </td>
-                <td className={cellClass}>
-                    {entry.attendanceStatus && entry.attendanceStatus !== 'unknown' && (
-                        <AttendanceBadge
-                            attendanceStatus={entry.attendanceStatus as any}
-                            actualStart={entry.clockIn}
-                            scheduledStart={`${entry.date}T${entry.scheduledStart}`}
-                            actualEnd={entry.clockOut}
-                            scheduledEnd={`${entry.date}T${entry.scheduledEnd}`}
-                            lifecycleStatus={entry.liveStatus === 'InProgress' ? 'InProgress' : entry.liveStatus === 'Completed' ? 'Completed' : undefined}
-                        />
-                    )}
-                </td>
+                {/* Timesheet status */}
                 <td className={`${cellClass} border-r border-border/30`}>
                     <div className="flex flex-col gap-1">
                         <TimesheetStatusBadge status={entry.timesheetStatus} />

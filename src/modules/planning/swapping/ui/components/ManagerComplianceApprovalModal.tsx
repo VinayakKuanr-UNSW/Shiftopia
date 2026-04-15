@@ -34,6 +34,8 @@ import { getScenarioWindow } from '@/modules/compliance';
 import { fetchEmployeeContextV2 } from '@/modules/compliance/employee-context';
 import type { ComplianceInputV2, ShiftV2 } from '@/modules/compliance/v2/types';
 import { motion } from 'framer-motion';
+import { Drawer, DrawerContent } from '@/modules/core/ui/primitives/drawer';
+import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { useCompliancePanel } from '@/modules/compliance/ui/useCompliancePanel';
 import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
 
@@ -256,11 +258,146 @@ export function ManagerComplianceApprovalModal({
         }
     };
 
+    const isMobile = useIsMobile();
+
     if (!isOpen) return null;
+
+    // -------------------------------------------------------------------------
+    // Inner content shared between mobile Drawer and desktop overlay
+    // -------------------------------------------------------------------------
+    const innerContent = (
+        <>
+            {/* Top accent stripe */}
+            <div className={cn(
+                'h-1.5 flex-shrink-0',
+                panel.status === 'idle'    ? 'bg-primary/20' :
+                panel.status === 'running' ? 'bg-primary/30' :
+                panel.status === 'error'   ? 'bg-rose-500' :
+                canApprove ? 'bg-emerald-500' : 'bg-rose-500'
+            )} />
+
+            {/* ── HEADER ── */}
+            <div className="flex items-center justify-between px-6 pt-5 pb-4 flex-shrink-0 border-b border-border/50">
+                <div className="flex items-center gap-3">
+                    <div className="h-11 w-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                        <Shield className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-black text-foreground tracking-tight">Compliance Review</h2>
+                        <p className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-[0.2em] font-black">Manager Approval Gate</p>
+                    </div>
+                </div>
+                <button
+                    onClick={onClose}
+                    className="h-11 w-11 min-h-[44px] rounded-xl flex items-center justify-center text-muted-foreground/40 hover:text-foreground hover:bg-muted transition-all"
+                >
+                    <X className="h-4 w-4" />
+                </button>
+            </div>
+
+            {/* ── PARTIES SUMMARY ── */}
+            <div className="flex items-center gap-4 px-6 py-4 flex-shrink-0 border-b border-border/30 bg-muted/20">
+                <div className="flex items-center gap-2.5">
+                    <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-indigo-600 text-white text-[10px] font-black">
+                            {getInitials(requesterName)}
+                        </AvatarFallback>
+                    </Avatar>
+                    <div>
+                        <div className="text-[11px] font-black text-foreground">{requesterName}</div>
+                        <div className="text-[9px] text-muted-foreground/50 uppercase tracking-wider font-black">Requester</div>
+                    </div>
+                </div>
+                <div className="flex-1 flex items-center justify-center">
+                    <ArrowLeftRight className="h-4 w-4 text-primary/40" />
+                </div>
+                <div className="flex items-center gap-2.5">
+                    <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-emerald-600 text-white text-[10px] font-black">
+                            {getInitials(offererName)}
+                        </AvatarFallback>
+                    </Avatar>
+                    <div>
+                        <div className="text-[11px] font-black text-foreground">{offererName}</div>
+                        <div className="text-[9px] text-muted-foreground/50 uppercase tracking-wider font-black">Offerer</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* ── BODY ── */}
+            <div className="flex-1 overflow-y-auto p-6">
+                <CompliancePanel
+                    hook={panel}
+                    partyAName={requesterName}
+                    partyBName={offererName}
+                />
+            </div>
+
+            {/* ── FOOTER ── */}
+            <div className="flex items-center justify-between gap-3 px-6 py-5 flex-shrink-0 border-t border-border/50 bg-card/80">
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="ghost"
+                        onClick={onClose}
+                        className="rounded-xl text-muted-foreground hover:bg-muted font-black uppercase tracking-widest text-[10px] min-h-[44px] px-4"
+                    >
+                        Cancel
+                    </Button>
+                    {panel.status !== 'idle' && panel.status !== 'running' && (
+                        <Button
+                            variant="ghost"
+                            onClick={() => panel.run()}
+                            className="rounded-xl text-muted-foreground/60 hover:bg-muted font-black uppercase tracking-widest text-[10px] min-h-[44px] px-4 gap-1.5"
+                        >
+                            <RefreshCw className="h-3 w-3" />
+                            Re-run
+                        </Button>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <Button
+                        onClick={onReject}
+                        disabled={isApproving}
+                        className="rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[10px] font-black uppercase tracking-wider min-h-[44px] px-4 gap-1.5"
+                    >
+                        <X className="h-3.5 w-3.5" />
+                        Reject Instead
+                    </Button>
+                    <Button
+                        onClick={handleApprove}
+                        disabled={!canApprove || isApproving}
+                        className={cn(
+                            'rounded-xl text-[10px] font-black uppercase tracking-wider min-h-[44px] px-5 gap-1.5 border-none',
+                            canApprove
+                                ? 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20'
+                                : 'bg-muted text-muted-foreground/40 cursor-not-allowed',
+                        )}
+                    >
+                        {isApproving ? (
+                            <><Loader2 className="h-3.5 w-3.5 animate-spin" />Approving...</>
+                        ) : (
+                            <><Check className="h-3.5 w-3.5" /><Gavel className="h-3.5 w-3.5" />Confirm Approval</>
+                        )}
+                    </Button>
+                </div>
+            </div>
+        </>
+    );
 
     // -------------------------------------------------------------------------
     // Render
     // -------------------------------------------------------------------------
+    if (isMobile) {
+        return (
+            <Drawer open={isOpen} onOpenChange={(open) => !open && onClose()}>
+                <DrawerContent className="h-[90dvh] bg-card border-border p-0 overflow-hidden flex flex-col">
+                    {innerContent}
+                </DrawerContent>
+            </Drawer>
+        );
+    }
+
     return (
         <motion.div
             initial={{ opacity: 0 }}
@@ -276,121 +413,7 @@ export function ManagerComplianceApprovalModal({
                 transition={{ type: 'spring', stiffness: 300, damping: 25 }}
                 className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-[2.5rem] border border-border shadow-2xl overflow-hidden bg-card"
             >
-                {/* Top accent stripe */}
-                <div className={cn(
-                    'h-1.5 flex-shrink-0',
-                    panel.status === 'idle'    ? 'bg-primary/20' :
-                    panel.status === 'running' ? 'bg-primary/30' :
-                    panel.status === 'error'   ? 'bg-rose-500' :
-                    canApprove ? 'bg-emerald-500' : 'bg-rose-500'
-                )} />
-
-                {/* ── HEADER ── */}
-                <div className="flex items-center justify-between px-8 pt-6 pb-4 flex-shrink-0 border-b border-border/50">
-                    <div className="flex items-center gap-3">
-                        <div className="h-11 w-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                            <Shield className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                            <h2 className="text-lg font-black text-foreground tracking-tight">Compliance Review</h2>
-                            <p className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-[0.2em] font-black">Manager Approval Gate</p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="h-8 w-8 rounded-xl flex items-center justify-center text-muted-foreground/40 hover:text-foreground hover:bg-muted transition-all"
-                    >
-                        <X className="h-4 w-4" />
-                    </button>
-                </div>
-
-                {/* ── PARTIES SUMMARY ── */}
-                <div className="flex items-center gap-4 px-8 py-4 flex-shrink-0 border-b border-border/30 bg-muted/20">
-                    <div className="flex items-center gap-2.5">
-                        <Avatar className="h-8 w-8">
-                            <AvatarFallback className="bg-indigo-600 text-white text-[10px] font-black">
-                                {getInitials(requesterName)}
-                            </AvatarFallback>
-                        </Avatar>
-                        <div>
-                            <div className="text-[11px] font-black text-foreground">{requesterName}</div>
-                            <div className="text-[9px] text-muted-foreground/50 uppercase tracking-wider font-black">Requester</div>
-                        </div>
-                    </div>
-                    <div className="flex-1 flex items-center justify-center">
-                        <ArrowLeftRight className="h-4 w-4 text-primary/40" />
-                    </div>
-                    <div className="flex items-center gap-2.5">
-                        <Avatar className="h-8 w-8">
-                            <AvatarFallback className="bg-emerald-600 text-white text-[10px] font-black">
-                                {getInitials(offererName)}
-                            </AvatarFallback>
-                        </Avatar>
-                        <div>
-                            <div className="text-[11px] font-black text-foreground">{offererName}</div>
-                            <div className="text-[9px] text-muted-foreground/50 uppercase tracking-wider font-black">Offerer</div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* ── BODY ── */}
-                <div className="flex-1 overflow-y-auto p-6">
-                    <CompliancePanel 
-                        hook={panel} 
-                        partyAName={requesterName}
-                        partyBName={offererName}
-                    />
-                </div>
-
-                {/* ── FOOTER ── */}
-                <div className="flex items-center justify-between gap-3 px-8 py-5 flex-shrink-0 border-t border-border/50 bg-card/80">
-                    <div className="flex items-center gap-2">
-                        <Button
-                            variant="ghost"
-                            onClick={onClose}
-                            className="rounded-xl text-muted-foreground hover:bg-muted font-black uppercase tracking-widest text-[10px] h-9 px-4"
-                        >
-                            Cancel
-                        </Button>
-                        {panel.status !== 'idle' && panel.status !== 'running' && (
-                            <Button
-                                variant="ghost"
-                                onClick={() => panel.run()}
-                                className="rounded-xl text-muted-foreground/60 hover:bg-muted font-black uppercase tracking-widest text-[10px] h-9 px-4 gap-1.5"
-                            >
-                                <RefreshCw className="h-3 w-3" />
-                                Re-run
-                            </Button>
-                        )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <Button
-                            onClick={onReject}
-                            disabled={isApproving}
-                            className="rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[10px] font-black uppercase tracking-wider h-9 px-4 gap-1.5"
-                        >
-                            <X className="h-3.5 w-3.5" />
-                            Reject Instead
-                        </Button>
-                        <Button
-                            onClick={handleApprove}
-                            disabled={!canApprove || isApproving}
-                            className={cn(
-                                'rounded-xl text-[10px] font-black uppercase tracking-wider h-9 px-5 gap-1.5 border-none',
-                                canApprove
-                                    ? 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20'
-                                    : 'bg-muted text-muted-foreground/40 cursor-not-allowed',
-                            )}
-                        >
-                            {isApproving ? (
-                                <><Loader2 className="h-3.5 w-3.5 animate-spin" />Approving...</>
-                            ) : (
-                                <><Check className="h-3.5 w-3.5" /><Gavel className="h-3.5 w-3.5" />Confirm Approval</>
-                            )}
-                        </Button>
-                    </div>
-                </div>
+                {innerContent}
             </motion.div>
         </motion.div>
     );

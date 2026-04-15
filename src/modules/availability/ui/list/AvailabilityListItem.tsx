@@ -14,32 +14,33 @@
 import React from 'react';
 import { format, parseISO } from 'date-fns';
 import { Pencil, Trash2, Calendar, Clock, Repeat } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Card, CardContent } from '@/modules/core/ui/primitives/card';
 import { AvailabilityRule } from '../../model/availability.types';
 import { parseRecurrenceRule } from '../../utils/validation.utils';
+import { listItemSpring } from '@/modules/core/ui/motion/presets';
 
 interface AvailabilityListItemProps {
   rule: AvailabilityRule;
   onEdit: () => void;
   onDelete: () => void;
-  isLocked?: boolean;
 }
 
-// Get status color
+// Get status color — light/dark safe
 const getStatusColor = (type: string): string => {
   switch (type) {
     case 'available':
-      return 'bg-green-500 text-white';
+      return 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20';
     case 'unavailable':
-      return 'bg-red-500 text-white';
+      return 'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20';
     case 'preferred':
-      return 'bg-blue-500 text-white';
+      return 'bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20';
     case 'limited':
-      return 'bg-yellow-500 text-white';
+      return 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20';
     default:
-      return 'bg-gray-500 text-white';
+      return 'bg-muted text-muted-foreground border border-border';
   }
 };
 
@@ -64,14 +65,14 @@ export const AvailabilityListItem: React.FC<AvailabilityListItemProps> = ({
   rule,
   onEdit,
   onDelete,
-  isLocked = false,
 }) => {
   const startDate = parseISO(rule.start_date);
   const endDate = parseISO(rule.end_date);
   const sameDay = rule.start_date === rule.end_date;
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <motion.div {...listItemSpring}>
+    <Card className="bg-card border border-border rounded-2xl hover:shadow-md transition-shadow">
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-4">
           {/* Left: Rule Details */}
@@ -126,7 +127,6 @@ export const AvailabilityListItem: React.FC<AvailabilityListItemProps> = ({
           </div>
 
           {/* Right: Action Buttons */}
-          {!isLocked && (
             <div className="flex gap-2">
               <Button
                 variant="ghost"
@@ -146,9 +146,9 @@ export const AvailabilityListItem: React.FC<AvailabilityListItemProps> = ({
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
-          )}
         </div>
       </CardContent>
     </Card>
+    </motion.div>
   );
 };

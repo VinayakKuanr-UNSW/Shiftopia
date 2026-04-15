@@ -27,7 +27,7 @@ export const ManagerBidsPage: React.FC = () => {
     }
 
     return (
-        <div className="w-full h-full flex flex-col">
+        <div className="w-full h-full flex flex-col pb-24 md:pb-0">
             <ScopeFilterBanner
                 mode="managerial"
                 onScopeChange={setScope}

@@ -61,10 +61,10 @@ interface ProviderWrapperProps {
 const ProviderWrapper: React.FC<ProviderWrapperProps> = ({ children }) => {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <TooltipProvider>
-          <AuthProvider>
-            <OrgSelectionProvider>
+      <TooltipProvider>
+        <AuthProvider>
+          <OrgSelectionProvider>
+            <ThemeProvider>
               <SearchProvider>
                 <SidebarProvider defaultOpen={true}>
                   <div className="h-full w-full overflow-hidden">
@@ -78,10 +78,10 @@ const ProviderWrapper: React.FC<ProviderWrapperProps> = ({ children }) => {
                   </div>
                 </SidebarProvider>
               </SearchProvider>
-            </OrgSelectionProvider>
-          </AuthProvider>
-        </TooltipProvider>
-      </ThemeProvider>
+            </ThemeProvider>
+          </OrgSelectionProvider>
+        </AuthProvider>
+      </TooltipProvider>
     </QueryClientProvider>
   );
 };

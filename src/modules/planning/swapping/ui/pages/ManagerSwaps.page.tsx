@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { Check, X, ChevronRight, ArrowLeftRight, Clock, CheckCircle, XCircle, Calendar, AlertTriangle, Shield, Gavel, RefreshCw, ShieldCheck, ShieldAlert, ShieldX, ScanSearch, Megaphone, UserCheck as LucideUserCheck, Circle, Minus } from 'lucide-react';
 import { ManagerComplianceApprovalModal } from '../components/ManagerComplianceApprovalModal';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -119,7 +120,7 @@ const accentMap: Record<string, { bg: string; text: string; ring: string; glow: 
 const ShiftPane: React.FC<{ data: any; label: string }> = ({ data, label }) => {
     if (!data) {
         return (
-            <div className="flex-1 min-w-[200px] rounded-2xl border border-dashed border-border/60 p-5 flex flex-col items-center justify-center gap-2 bg-muted/5 backdrop-blur-sm">
+            <div className="flex-1 min-w-0 md:min-w-[200px] rounded-2xl border border-dashed border-border/60 p-5 flex flex-col items-center justify-center gap-2 bg-muted/5 backdrop-blur-sm">
                 <div className="h-10 w-10 rounded-full bg-muted/20 flex items-center justify-center">
                     <ArrowLeftRight className="h-4 w-4 text-muted-foreground/30" />
                 </div>
@@ -142,7 +143,7 @@ const ShiftPane: React.FC<{ data: any; label: string }> = ({ data, label }) => {
 
     return (
         <div className={cn(
-            "flex-1 min-w-[240px] p-6 rounded-[2rem] border transition-all duration-500 relative overflow-hidden group/pane dept-card-glass-base",
+            "flex-1 min-w-0 md:min-w-[240px] w-full p-4 md:p-6 rounded-xl md:rounded-[2rem] border transition-all duration-500 relative overflow-hidden group/pane dept-card-glass-base",
             deptClass
         )}>
             {/* Glass Background Highlight */}
@@ -497,6 +498,7 @@ const deriveStateIds = (status: string): { shiftStateId: string; combinedStateId
 export const ManagerSwapsPage: React.FC = () => {
     const { toast } = useToast();
     const { activeContract } = useAuth();
+    const isMobile = useIsMobile();
     const orgSelection = useOrgSelection();
     const { scope, setScope, scopeKey, isGammaLocked } = useScopeFilter('managerial');
 
@@ -629,13 +631,13 @@ export const ManagerSwapsPage: React.FC = () => {
 
     // ==================== RENDER ====================
     return (
-        <div className="flex flex-col h-full min-h-screen bg-background">
+        <div className="flex flex-col h-full min-h-screen bg-background pb-24 md:pb-0">
             {/* Ambient glow */}
             <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/[0.05] blur-[150px] rounded-full pointer-events-none" />
 
             {/* ── HEADER ── */}
             <div className="sticky top-0 z-50 backdrop-blur-xl border-b border-border bg-card/80">
-                <div className="max-w-[1400px] mx-auto px-6 py-5">
+                <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-5">
                     {/* Scope Filter */}
                     <ScopeFilterBanner
                         mode="managerial"
@@ -657,7 +659,8 @@ export const ManagerSwapsPage: React.FC = () => {
                         </div>
 
                         {/* Status Tabs */}
-                        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/30 border border-border">
+                        <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
+                        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/30 border border-border flex-nowrap min-w-max md:min-w-0">
                             {STATUS_TABS.map(tab => {
                                 const isActive = statusFilter === tab.id;
                                 const colors = accentMap[tab.accent];
@@ -701,13 +704,14 @@ export const ManagerSwapsPage: React.FC = () => {
                                 <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
                             </button>
                         </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
             {/* ── CONTENT ── */}
             <div className="flex-1 overflow-y-auto">
-                <div className="max-w-[1400px] mx-auto px-6 py-6">
+                <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-6">
                     {isLoading ? (
                         <div className="flex flex-col items-center justify-center py-32 gap-4">
                             <div className="h-10 w-10 rounded-full border-2 border-border border-t-indigo-500 animate-spin" />
@@ -753,7 +757,7 @@ export const ManagerSwapsPage: React.FC = () => {
                                         exit={{ opacity: 0, scale: 0.96 }}
                                         transition={{ delay: idx * 0.05, duration: 0.3, ease: "easeOut" }}
                                         className={cn(
-                                            "group rounded-[2.5rem] border transition-all duration-300 hover:shadow-2xl overflow-hidden bg-card/40 backdrop-blur-md",
+                                            "group rounded-2xl md:rounded-[2.5rem] border transition-all duration-300 hover:shadow-2xl overflow-hidden bg-card/40 backdrop-blur-md",
                                             "hover:translate-y-[-2px] border-border shadow-sm",
                                             selectedIds.has(request.id) && "ring-2 ring-primary border-primary/40 shadow-primary/20"
                                         )}
@@ -830,13 +834,13 @@ export const ManagerSwapsPage: React.FC = () => {
 
                                                 {/* Actions */}
                                                 {request.status === 'MANAGER_PENDING' ? (
-                                                    <div className="flex lg:flex-col gap-2 w-full">
+                                                    <div className="flex flex-col gap-2 w-full">
                                                         {/* Re-check compliance */}
                                                         <Button
                                                             onClick={() => setComplianceApprovalTarget(request)}
                                                             size="sm"
                                                             variant="outline"
-                                                            className="flex-1 h-9 rounded-xl border-border/60 text-muted-foreground hover:bg-muted/50 hover:text-foreground text-[10px] font-black uppercase tracking-wider transition-all"
+                                                            className="flex-1 min-h-[44px] h-9 rounded-xl border-border/60 text-muted-foreground hover:bg-muted/50 hover:text-foreground text-[10px] font-black uppercase tracking-wider transition-all"
                                                         >
                                                             <ScanSearch className="h-3 w-3 mr-1.5" />
                                                             Check Compliance
@@ -844,7 +848,7 @@ export const ManagerSwapsPage: React.FC = () => {
                                                         <Button
                                                             onClick={() => handleAction([request.id], 'rejected')}
                                                             size="sm"
-                                                            className="flex-1 h-9 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[10px] font-black uppercase tracking-wider transition-all"
+                                                            className="flex-1 min-h-[44px] h-9 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[10px] font-black uppercase tracking-wider transition-all"
                                                         >
                                                             <X className="h-3 w-3 mr-1.5" />
                                                             Reject
@@ -882,10 +886,10 @@ export const ManagerSwapsPage: React.FC = () => {
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: 80, opacity: 0 }}
                         transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                        className="sticky bottom-4 z-20 backdrop-blur-xl border border-primary/20 shadow-2xl shadow-primary/10 rounded-[2rem] mx-6"
+                        className="sticky bottom-24 md:bottom-4 z-20 backdrop-blur-xl border border-primary/20 shadow-2xl shadow-primary/10 rounded-[2rem] mx-4 md:mx-6"
                         style={{ background: 'hsl(var(--card) / 0.9)' }}
                     >
-                        <div className="max-w-[1400px] mx-auto px-6 py-4 flex items-center justify-between">
+                        <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-4 flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="h-8 w-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
                                     <span className="text-[11px] font-black text-primary">{selectedIds.size}</span>

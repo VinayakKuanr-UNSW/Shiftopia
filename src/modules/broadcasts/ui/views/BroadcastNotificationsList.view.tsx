@@ -82,7 +82,7 @@ export const BroadcastNotificationsList: React.FC = () => {
                         {notifications.map((notification) => (
                             <div
                                 key={notification.id}
-                                className={`border rounded-lg p-4 transition-colors ${!notification.isRead ? 'bg-blue-50 border-blue-200' : 'bg-background'
+                                className={`border rounded-lg p-4 transition-colors ${!notification.isRead ? 'bg-blue-50 border-blue-200 dark:bg-primary/5 dark:border-primary/10' : 'bg-background'
                                     }`}
                             >
                                 <div className="flex justify-between items-start mb-2">

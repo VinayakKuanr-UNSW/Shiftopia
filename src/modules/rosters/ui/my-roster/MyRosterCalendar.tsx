@@ -20,6 +20,8 @@ import {
 import { Calendar } from '@/modules/core/ui/primitives/calendar';
 import { CalendarView } from '@/modules/rosters/hooks/useRosterView';
 import { cn } from '@/modules/core/lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
+import { tabTransition } from '@/modules/core/ui/motion/presets';
 import DayView from './DayView';
 import ThreeDayView from './ThreeDayView';
 import WeekView from './WeekView';
@@ -216,29 +218,39 @@ const MyRosterCalendar: React.FC<MyRosterCalendarProps> = ({
 
       {/* ── Calendar view ───────────────────────────────────────────────── */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {view === 'day' && (
-          <DayView
-            date={selectedDate}
-            shifts={getShiftsForDate(selectedDate)}
-          />
-        )}
-        {view === '3day' && (
-          <ThreeDayView
-            startDate={selectedDate}
-            getShiftsForDate={getShiftsForDate}
-          />
-        )}
-        {view === 'week' && (
-          <WeekView date={selectedDate} getShiftsForDate={getShiftsForDate} />
-        )}
-        {view === 'month' && (
-          <MonthView
-            date={selectedDate}
-            getShiftsForDate={getShiftsForDate}
-            pendingOfferCount={pendingOfferCount}
-            offerDates={offerDates}
-          />
-        )}
+        <AnimatePresence mode="wait">
+          {view === 'day' && (
+            <motion.div key="day" {...tabTransition} className="h-full">
+              <DayView
+                date={selectedDate}
+                shifts={getShiftsForDate(selectedDate)}
+              />
+            </motion.div>
+          )}
+          {view === '3day' && (
+            <motion.div key="3day" {...tabTransition} className="h-full">
+              <ThreeDayView
+                startDate={selectedDate}
+                getShiftsForDate={getShiftsForDate}
+              />
+            </motion.div>
+          )}
+          {view === 'week' && (
+            <motion.div key="week" {...tabTransition} className="h-full">
+              <WeekView date={selectedDate} getShiftsForDate={getShiftsForDate} />
+            </motion.div>
+          )}
+          {view === 'month' && (
+            <motion.div key="month" {...tabTransition} className="h-full">
+              <MonthView
+                date={selectedDate}
+                getShiftsForDate={getShiftsForDate}
+                pendingOfferCount={pendingOfferCount}
+                offerDates={offerDates}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -160,7 +160,7 @@ const AuditDashboardPage: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
-            <main className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
+            <main className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto pb-24 md:pb-8">
 
                 {/* Scope Filter */}
                 <ScopeFilterBanner

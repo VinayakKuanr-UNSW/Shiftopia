@@ -17,14 +17,7 @@
  */
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter,
-} from '@/modules/core/ui/primitives/dialog';
+import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ComplianceTabContent } from '@/modules/rosters/ui/components/ComplianceTabContent';
 import {
@@ -360,17 +353,17 @@ export function SwapComplianceModal({
     // -------------------------------------------------------------------------
 
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl max-h-[85vh] overflow-y-auto bg-slate-900 border-white/10">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-white">
+        <ResponsiveDialog open={isOpen} onOpenChange={(open) => !open && onClose()} dialogClassName="w-[calc(100vw-2rem)] max-w-2xl max-h-[85vh] overflow-y-auto bg-slate-900 border-white/10" drawerClassName="h-[85dvh]">
+                <ResponsiveDialog.Header>
+                    <ResponsiveDialog.Title className="flex items-center gap-2 text-white">
                         <Shield className="h-5 w-5 text-purple-400" />
                         Swap Compliance Check (2-Way)
-                    </DialogTitle>
-                    <DialogDescription className="text-white/50">
+                    </ResponsiveDialog.Title>
+                    <ResponsiveDialog.Description className="text-white/50">
                         Verifying compliance for both {requesterName} and {offererName}.
-                    </DialogDescription>
-                </DialogHeader>
+                    </ResponsiveDialog.Description>
+                </ResponsiveDialog.Header>
+                <ResponsiveDialog.Body className="overflow-y-auto max-h-[70dvh]">
 
                 {/* Swap Summary */}
                 <div className="bg-white/5 rounded-lg p-4 border border-white/10 mb-4">
@@ -463,9 +456,10 @@ export function SwapComplianceModal({
                     </div>
                 )}
 
-                <DialogFooter className="mt-6 gap-2">
+                </ResponsiveDialog.Body>
+                <ResponsiveDialog.Footer className="mt-6 gap-2">
                     <div className="flex gap-2">
-                        <Button variant="outline" onClick={onClose} className="border-white/10">
+                        <Button variant="outline" onClick={onClose} className="border-white/10 min-h-[44px]">
                             Cancel
                         </Button>
                         {checksComplete && (
@@ -473,7 +467,7 @@ export function SwapComplianceModal({
                                 variant="secondary"
                                 onClick={handleRunAllChecks}
                                 disabled={isRunningChecks}
-                                className="gap-2 bg-slate-800 hover:bg-slate-700 text-purple-400 border border-purple-500/20"
+                                className="gap-2 bg-slate-800 hover:bg-slate-700 text-purple-400 border border-purple-500/20 min-h-[44px]"
                             >
                                 <Play className="h-4 w-4 fill-current" />
                                 Re-Run Checks
@@ -486,7 +480,7 @@ export function SwapComplianceModal({
                             onClick={onConfirmOffer}
                             disabled={!canProceed || isSubmitting}
                             className={cn(
-                                'gap-2',
+                                'gap-2 min-h-[44px]',
                                 canProceed
                                     ? 'bg-green-600 hover:bg-green-700 text-white'
                                     : 'bg-white/10 text-white/50 cursor-not-allowed',
@@ -501,9 +495,8 @@ export function SwapComplianceModal({
                             )}
                         </Button>
                     )}
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                </ResponsiveDialog.Footer>
+        </ResponsiveDialog>
     );
 }
 

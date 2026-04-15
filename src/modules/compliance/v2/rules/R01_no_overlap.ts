@@ -28,6 +28,8 @@ export const R01_no_overlap: RuleEvaluatorV2 = (ctx) => {
         const aEnd   = aStart + shiftGrossMinutes(a);
         const bStart = toAbsoluteMinutes(b.shift_date, b.start_time);
 
+
+
         if (bStart < aEnd) {
             hits.push({
                 rule_id:  'R01_NO_OVERLAP',

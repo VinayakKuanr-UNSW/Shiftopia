@@ -1,12 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogTitle,
-} from '@/modules/core/ui/primitives/dialog';
-import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -36,9 +30,9 @@ import {
     Loader2,
     X,
 } from 'lucide-react';
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
+import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 
 /* ═══════════════════════════════════════════════════════════════════════
    TYPES
@@ -351,97 +345,100 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
 
     return (
         <>
-            <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-                <DialogContent className="sm:max-w-[480px] max-h-[82vh] p-0 overflow-hidden flex flex-col rounded-2xl [&>button]:hidden z-[150]">
-                    <VisuallyHidden>
-                        <DialogTitle>My Shift Offers</DialogTitle>
-                        <DialogDescription>
-                            Review and respond to shift offers assigned to you.
-                        </DialogDescription>
-                    </VisuallyHidden>
+            <ResponsiveDialog
+                open={isOpen}
+                onOpenChange={(open) => !open && onClose()}
+                dialogClassName="sm:max-w-[480px] max-h-[82vh] p-0 overflow-hidden flex flex-col rounded-2xl [&>button]:hidden z-[150]"
+                drawerClassName="bg-background border-border"
+            >
+                <ResponsiveDialog.Header className="sr-only">
+                    <ResponsiveDialog.Title>My Shift Offers</ResponsiveDialog.Title>
+                    <ResponsiveDialog.Description>
+                        Review and respond to shift offers assigned to you.
+                    </ResponsiveDialog.Description>
+                </ResponsiveDialog.Header>
 
-                    {/* Header */}
-                    <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
-                        <div className="h-8 w-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                            <Inbox className="h-4 w-4 text-blue-500" />
-                        </div>
-                        <div className="flex-1">
-                            <h2 className="font-black text-foreground tracking-tight leading-none">
-                                Shift Offers
-                            </h2>
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mt-0.5">
-                                My Inbox
+                {/* Header */}
+                <div className="flex items-center gap-3 px-5 py-4 border-b border-border shrink-0">
+                    <div className="h-8 w-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                        <Inbox className="h-4 w-4 text-blue-500" />
+                    </div>
+                    <div className="flex-1">
+                        <h2 className="font-black text-foreground tracking-tight leading-none">
+                            Shift Offers
+                        </h2>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mt-0.5">
+                            My Inbox
+                        </p>
+                    </div>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 rounded-lg"
+                        onClick={onClose}
+                    >
+                        <X className="h-4 w-4" />
+                    </Button>
+                </div>
+
+                {/* Tab Selector */}
+                <div className="flex gap-1.5 px-5 pt-4 pb-2 shrink-0">
+                    {tabs.map(({ label, count }) => (
+                        <button
+                            key={label}
+                            onClick={() => setActiveTab(label)}
+                            className={cn(
+                                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all min-h-[44px]',
+                                activeTab === label
+                                    ? 'bg-foreground text-background'
+                                    : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                            )}
+                        >
+                            {label}
+                            {count > 0 && (
+                                <span
+                                    className={cn(
+                                        'h-4 min-w-[1rem] rounded-full text-[9px] flex items-center justify-center px-1 font-black',
+                                        activeTab === label
+                                            ? 'bg-background/20 text-background'
+                                            : 'bg-muted-foreground/20 text-muted-foreground',
+                                    )}
+                                >
+                                    {count}
+                                </span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Offer List */}
+                <ResponsiveDialog.Body className="flex-1 overflow-y-auto px-5 pb-5 space-y-3 min-h-0">
+                    {isLoading ? (
+                        [1, 2, 3].map((i) => (
+                            <Skeleton key={i} className="h-52 w-full rounded-xl" />
+                        ))
+                    ) : currentOffers.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 text-center opacity-30">
+                            <Inbox className="h-8 w-8 mb-3 stroke-[1]" />
+                            <p className="text-xs font-black uppercase tracking-widest">
+                                Nothing Here
                             </p>
                         </div>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 rounded-lg"
-                            onClick={onClose}
-                        >
-                            <X className="h-4 w-4" />
-                        </Button>
-                    </div>
-
-                    {/* Tab Selector */}
-                    <div className="flex gap-1.5 px-5 pt-4 pb-2 shrink-0">
-                        {tabs.map(({ label, count }) => (
-                            <button
-                                key={label}
-                                onClick={() => setActiveTab(label)}
-                                className={cn(
-                                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all',
-                                    activeTab === label
-                                        ? 'bg-foreground text-background'
-                                        : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-                                )}
-                            >
-                                {label}
-                                {count > 0 && (
-                                    <span
-                                        className={cn(
-                                            'h-4 min-w-[1rem] rounded-full text-[9px] flex items-center justify-center px-1 font-black',
-                                            activeTab === label
-                                                ? 'bg-background/20 text-background'
-                                                : 'bg-muted-foreground/20 text-muted-foreground',
-                                        )}
-                                    >
-                                        {count}
-                                    </span>
-                                )}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Offer List */}
-                    <div className="flex-1 overflow-y-auto px-5 pb-5 space-y-3 min-h-0">
-                        {isLoading ? (
-                            [1, 2, 3].map((i) => (
-                                <Skeleton key={i} className="h-52 w-full rounded-xl" />
-                            ))
-                        ) : currentOffers.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-16 text-center opacity-30">
-                                <Inbox className="h-8 w-8 mb-3 stroke-[1]" />
-                                <p className="text-xs font-black uppercase tracking-widest">
-                                    Nothing Here
-                                </p>
-                            </div>
-                        ) : (
-                            currentOffers.map((offer) => (
-                                <OfferItem
-                                    key={offer.id}
-                                    offer={offer}
-                                    showActions={activeTab === 'Pending'}
-                                    processingId={processingId}
-                                    onAccept={handleAccept}
-                                    onDeclineRequest={(id) => setShowDeclineConfirm(id)}
-                                    onExpire={handleExpire}
-                                />
-                            ))
-                        )}
-                    </div>
-                </DialogContent>
-            </Dialog>
+                    ) : (
+                        currentOffers.map((offer) => (
+                            <OfferItem
+                                key={offer.id}
+                                offer={offer}
+                                showActions={activeTab === 'Pending'}
+                                processingId={processingId}
+                                onAccept={handleAccept}
+                                onDeclineRequest={(id) => setShowDeclineConfirm(id)}
+                                onExpire={handleExpire}
+                            />
+                        ))
+                    )}
+                </ResponsiveDialog.Body>
+            </ResponsiveDialog>
 
             {/* Decline Confirmation */}
             <AlertDialog

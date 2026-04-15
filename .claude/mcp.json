@@ -1,13 +1,17 @@
 {
-    "mcpServers": {
-        "supabase": {
-            "command": "npx",
-            "args": [
-                "-y",
-                "@supabase/mcp-server-supabase@latest",
-                "--access-token",
-                "sbp_ef836a0a91c7edfab458a0d8c424bc3bd45b9a92"
-            ]
-        }
+  "mcpServers": {
+    "supabase": {
+      "command": "/opt/homebrew/bin/node",
+      "args": [
+        "/opt/homebrew/lib/node_modules/npm/bin/npx-cli.js",
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--access-token",
+        "sbp_761bb1cd2cf2d5db23aaa3392b5d09c4bbf6de21"
+      ],
+      "env": {
+        "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+      }
     }
+  }
 }

@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { X, CheckCircle, XCircle, AlertTriangle, Info, Play, Circle, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, Info, Play, Circle, Loader2 } from 'lucide-react';
 import {
     ComplianceCheckResult,
     ComplianceResult,
@@ -17,6 +17,7 @@ import {
 } from '../types';
 import { getRegisteredRules, runRule } from '../engine';
 import { cn } from '@/modules/core/lib/utils';
+import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 
 // =============================================================================
 // TYPES

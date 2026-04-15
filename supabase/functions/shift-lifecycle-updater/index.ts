@@ -21,22 +21,17 @@ if (!supabaseServiceKey) {
 const AUTO_COMPLETE_MS = 12.5 * 60 * 60 * 1000;
 
 /**
- * Resolve a shift's scheduled start time to a Unix timestamp (ms).
- * Priority: start_at (ISO) → shift_date + start_time (local, assumed Sydney UTC+11).
- * Returns null if neither is usable.
+ * Resolve a shift's scheduled time to a Unix timestamp (ms).
+ * Priority: timestamp (ISO) → shift_date + local time (assumed Sydney UTC+11).
  */
-function resolveStartMs(shift: {
-  start_at: string | null;
-  shift_date: string | null;
-  start_time: string | null;
-}): number | null {
-  if (shift.start_at) {
-    const d = new Date(shift.start_at);
+function resolveTimeMs(iso: string | null, date: string | null, time: string | null): number | null {
+  if (iso) {
+    const d = new Date(iso);
     if (!isNaN(d.getTime())) return d.getTime();
   }
-  if (shift.shift_date && shift.start_time) {
-    const timeStr = shift.start_time.length >= 5 ? shift.start_time.substring(0, 5) : shift.start_time;
-    const d = new Date(`${shift.shift_date}T${timeStr}:00+11:00`);
+  if (date && time) {
+    const timeStr = time.length >= 5 ? time.substring(0, 5) : time;
+    const d = new Date(`${date}T${timeStr}:00+11:00`);
     if (!isNaN(d.getTime())) return d.getTime();
   }
   return null;
@@ -57,11 +52,12 @@ Deno.serve(async (req: Request) => {
     let updatedCount = 0;
     const logs: string[] = [];
 
+    // Fetch shifts that are either InProgress (for auto-out) 
+    // or Published/Confirmed (for no-show detection)
     const { data: shifts, error: fetchError } = await supabase
       .from('shifts')
-      .select('id, lifecycle_status, shift_date, start_time, end_time, start_at')
-      // Only auto-complete shifts that are currently InProgress (S11)
-      .eq('lifecycle_status', 'InProgress')
+      .select('id, lifecycle_status, assignment_status, assigned_employee_id, shift_date, start_time, end_time, start_at, end_at')
+      .in('lifecycle_status', ['InProgress', 'Published', 'Confirmed'])
       .neq('is_cancelled', true);
 
     if (fetchError) {
@@ -69,32 +65,61 @@ Deno.serve(async (req: Request) => {
     }
 
     for (const shift of shifts || []) {
-      const startMs = resolveStartMs(shift);
+      const startMs = resolveTimeMs(shift.start_at, shift.shift_date, shift.start_time);
+      const endMs   = resolveTimeMs(shift.end_at,   shift.shift_date, shift.end_time);
 
-      // Skip shifts where we can't determine the start time
-      if (startMs === null) {
-        logs.push(`[SKIP] shift ${shift.id}: cannot resolve start time`);
+      if (startMs === null || endMs === null) {
+        logs.push(`[SKIP] shift ${shift.id}: cannot resolve timing`);
         continue;
       }
 
-      const autoCompleteAt = startMs + AUTO_COMPLETE_MS;
+      // ── LOGIC 1: Auto-Clock-Out for hanging InProgress shifts ───────
+      if (shift.lifecycle_status === 'InProgress') {
+        const autoCompleteAt = startMs + AUTO_COMPLETE_MS;
+        if (now.getTime() >= autoCompleteAt) {
+          const { error: updateError } = await supabase
+            .from('shifts')
+            .update({
+              lifecycle_status: 'Completed',
+              attendance_status: 'auto_clock_out',
+              attendance_note: 'Auto-completed by system (12.5hr limit)',
+              updated_at: now.toISOString(),
+            })
+            .eq('id', shift.id);
 
-      if (now.getTime() >= autoCompleteAt) {
-        const { error: updateError } = await supabase
-          .from('shifts')
-          .update({
-            lifecycle_status: 'Completed',
-            attendance_status: 'auto_clock_out',
-            attendance_note: 'Auto-completed by system (12.5hr limit)',
-            updated_at: now.toISOString(),
-          })
-          .eq('id', shift.id);
+          if (updateError) {
+            logs.push(`[ERROR] shift ${shift.id} (auto-out): ${updateError.message}`);
+          } else {
+            updatedCount++;
+            logs.push(`[INFO] Auto-completed shift ${shift.id}: InProgress -> Completed (auto_clock_out)`);
+          }
+        }
+      }
 
-        if (updateError) {
-          logs.push(`[ERROR] shift ${shift.id}: ${updateError.message}`);
-        } else {
-          updatedCount++;
-          logs.push(`[INFO] Auto-completed shift ${shift.id}: InProgress -> Completed (auto_clock_out, 12.5hr limit)`);
+      // ── LOGIC 2: Auto-No-Show for missed assigned shifts ────────────
+      // If the shift ended and nobody checked in, mark as no-show
+      else if (
+        (shift.lifecycle_status === 'Published' || shift.lifecycle_status === 'Confirmed') &&
+        shift.assigned_employee_id !== null
+      ) {
+        if (now.getTime() >= endMs) {
+          const { error: updateError } = await supabase
+            .from('shifts')
+            .update({
+              lifecycle_status: 'Completed',
+              attendance_status: 'no_show',
+              assignment_outcome: 'no_show',
+              attendance_note: 'Auto-no-show: No clock-in recorded by shift end',
+              updated_at: now.toISOString(),
+            })
+            .eq('id', shift.id);
+
+          if (updateError) {
+            logs.push(`[ERROR] shift ${shift.id} (no-show): ${updateError.message}`);
+          } else {
+            updatedCount++;
+            logs.push(`[INFO] Auto-no-show shift ${shift.id}: Published -> Completed (no_show)`);
+          }
         }
       }
     }
@@ -106,7 +131,6 @@ Deno.serve(async (req: Request) => {
         totalChecked: shifts?.length || 0,
         logs,
         timestamp: now.toISOString(),
-        note: 'Auto-completion fires at scheduled_start + 12.5 hours. Auto-progression to InProgress (S11) is disabled (manual clock-in required).',
       }),
       {
         headers: {

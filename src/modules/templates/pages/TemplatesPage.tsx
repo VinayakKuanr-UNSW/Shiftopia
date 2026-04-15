@@ -323,7 +323,7 @@ const TemplatesPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full pb-24 md:pb-0">
       <ScopeFilterBanner
         mode="managerial"
         onScopeChange={setScope}

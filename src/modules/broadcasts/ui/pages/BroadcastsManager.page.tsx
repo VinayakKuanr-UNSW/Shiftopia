@@ -10,7 +10,7 @@ export const BroadcastsManagerPage: React.FC = () => {
   const [controlRoomOpen, setControlRoomOpen] = useState(false);
 
   return (
-    <div>
+    <div className="pb-24 md:pb-0">
       {!controlRoomOpen && (
         <ScopeFilterBanner
           mode="managerial"

@@ -27,6 +27,20 @@ export const ALLOWED_MOBILE_ROUTES = new Set([
   '/my-swaps',
   '/my-broadcasts',
   '/my-notifications',
+  '/management/bids',
+  '/management/swaps',
+  '/templates',
+  '/broadcast',
+  '/labor-demand',
+  '/performance',
+  '/audit',
+  '/insights',
+  '/grid',
+  '/contracts',
+  '/users',
+  '/search',
+  '/settings',
+  '/timesheet',
 ]);
 
 // ── Desktop-Only Screen ────────────────────────────────────────────────────────
@@ -97,7 +111,10 @@ const MobileAccessGuard: React.FC = () => {
   const isMobile = useIsMobile();
   const { pathname } = useLocation();
 
-  if (isMobile && !ALLOWED_MOBILE_ROUTES.has(pathname)) {
+  const isAllowed = ALLOWED_MOBILE_ROUTES.has(pathname)
+    || pathname.startsWith('/insights/');
+
+  if (isMobile && !isAllowed) {
     return <DesktopOnlyScreen />;
   }
 

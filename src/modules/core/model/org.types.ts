@@ -23,6 +23,7 @@ export interface Role {
     name: string;
     departmentId?: string;
     subDepartmentId?: string;
+    level: number;
     remunerationLevelId?: string;
     createdAt: string;
     updatedAt: string;
@@ -42,4 +43,10 @@ export interface Organization {
     name: string;
     createdAt: string;
     updatedAt: string;
+    branding?: {
+        brand_color?: string;
+        chart_style?: string;
+        language?: string;
+        cookie_banner?: string;
+    };
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/modules/core/ui/primitives/dialog';
+import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 import { BroadcastGroupFormFields } from './BroadcastGroupFormFields';
 import type { BroadcastGroup, UpdateBroadcastGroupRequest } from '@/modules/broadcasts/model/broadcast.types';
 
@@ -42,11 +42,11 @@ export const EditGroupDialog: React.FC<EditGroupDialogProps> = ({
     };
 
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Edit Broadcast Group</DialogTitle>
-                </DialogHeader>
+        <ResponsiveDialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+            <ResponsiveDialog.Header>
+                <ResponsiveDialog.Title>Edit Broadcast Group</ResponsiveDialog.Title>
+            </ResponsiveDialog.Header>
+            <ResponsiveDialog.Body className="overflow-y-auto max-h-[70dvh]">
                 <div className="space-y-4 py-4">
                     <BroadcastGroupFormFields
                         name={name}
@@ -56,15 +56,15 @@ export const EditGroupDialog: React.FC<EditGroupDialogProps> = ({
                         disabled={isUpdating}
                     />
                 </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={onClose} disabled={isUpdating}>
-                        Cancel
-                    </Button>
-                    <Button onClick={handleSave} disabled={isUpdating || !name.trim()}>
-                        {isUpdating ? "Saving..." : "Save Changes"}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+            </ResponsiveDialog.Body>
+            <ResponsiveDialog.Footer>
+                <Button variant="outline" onClick={onClose} disabled={isUpdating}>
+                    Cancel
+                </Button>
+                <Button onClick={handleSave} disabled={isUpdating || !name.trim()}>
+                    {isUpdating ? "Saving..." : "Save Changes"}
+                </Button>
+            </ResponsiveDialog.Footer>
+        </ResponsiveDialog>
     );
 };

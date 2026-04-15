@@ -14,7 +14,7 @@ import { motion } from 'framer-motion';
 import SkillsSection from '@/modules/users/ui/components/SkillsSection';
 import LicensesSection from '@/modules/users/ui/components/LicensesSection';
 import WorkRightsSection from '@/modules/users/ui/components/WorkRightsSection';
-import { PositionContractsSection, AccessCertificatesSection } from '@/modules/users/ui/components/ContractsSection';
+import { UserContractsSection, AccessCertificatesSection } from '@/modules/users/ui/components/ContractsSection';
 import { DeleteUserDialog } from '@/modules/users/ui/components/DeleteUserDialog';
 import { useAuth } from '@/platform/auth/useAuth';
 
@@ -67,7 +67,7 @@ const UsersPage: React.FC = () => {
     const selectedUser = profiles?.find(p => p.id === selectedUserId);
 
     return (
-        <div className="w-full min-h-screen p-6 md:p-10 space-y-6 bg-[#f8f9fa] dark:bg-slate-950 font-sans selection:bg-indigo-100 selection:text-indigo-900">
+        <div className="w-full min-h-screen p-6 md:p-10 space-y-6 pb-24 md:pb-10 bg-[#f8f9fa] dark:bg-slate-950 font-sans selection:bg-indigo-100 selection:text-indigo-900">
             {/* Header Section (Not in a card) */}
             <motion.div
                 initial={{ opacity: 0, y: -10 }}
@@ -191,13 +191,13 @@ const UsersPage: React.FC = () => {
                             </motion.div>
                         </div>
 
-                        {/* Row 2: Position Contracts */}
+                        {/* Row 2: User Contracts */}
                         <motion.div
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.25, duration: 0.4 }}
                         >
-                            <PositionContractsSection
+                            <UserContractsSection
                                 employeeId={selectedUserId}
                                 employeeName={selectedUser?.full_name || `${selectedUser?.first_name} ${selectedUser?.last_name}`}
                             />

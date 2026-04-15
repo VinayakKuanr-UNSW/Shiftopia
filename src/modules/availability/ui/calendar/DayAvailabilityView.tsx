@@ -2,11 +2,13 @@
 import React from 'react';
 import { format } from 'date-fns';
 import { Clock, Info } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/modules/core/ui/primitives/card';
 import { useAvailability } from '../../state/useAvailability';
 import { AvailabilityStatus, TimeSlot } from '../../model/availability.types';
 import { cn } from '@/modules/core/lib/utils';
+import { itemVariants } from '@/modules/core/ui/motion/presets';
 
 interface DayAvailabilityViewProps {
   date: Date;
@@ -88,10 +90,11 @@ export function DayAvailabilityView({ date, onEdit }: DayAvailabilityViewProps) 
   );
 
   return (
-    <Card className="border border-border">
+    <motion.div variants={itemVariants} initial="hidden" animate="show">
+    <Card className="border border-border bg-card rounded-2xl">
       <CardHeader className="pb-3">
         <div className="flex justify-between items-center">
-          <CardTitle className="text-xl">
+          <CardTitle className="text-xl font-black tracking-tight text-foreground">
             {format(date, 'EEEE, MMMM d, yyyy')}
           </CardTitle>
           <Button 
@@ -132,5 +135,6 @@ export function DayAvailabilityView({ date, onEdit }: DayAvailabilityViewProps) 
         )}
       </CardContent>
     </Card>
+    </motion.div>
   );
 }

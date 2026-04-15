@@ -81,17 +81,17 @@ const WeekView: React.FC<WeekViewProps> = ({ date, getShiftsForDate }) => {
                       }
                       className={cn(
                         'h-full rounded-md p-1.5 cursor-pointer overflow-hidden',
-                        'border border-white/20 shadow-md',
+                        'border shadow-md',
                         'hover:scale-[1.02] active:scale-[0.98] transition-transform',
-                        'focus:outline-none focus:ring-2 focus:ring-white/30',
+                        'focus:outline-none focus:ring-2 focus:ring-primary/30',
                         shift.lifecycle_status === 'Published' && shift.assignment_status === 'assigned' && !shift.assignment_outcome && 'opacity-60 border-dashed border-2',
                         getGradientClass(groupColor)
                       )}
                     >
-                      <div className="text-white text-[10px] font-semibold truncate leading-tight">
+                      <div className="text-foreground text-[10px] font-semibold truncate leading-tight">
                         {shift.roles?.name || 'Shift'}
                       </div>
-                      <div className="text-[9px] text-white/80 truncate">
+                      <div className="text-[9px] text-foreground/70 truncate">
                         {formatTime(shift.start_time)}-{formatTime(shift.end_time)}
                       </div>
                     </div>

@@ -1,7 +1,8 @@
 // src/pages/DashboardPage.tsx
 import React, { useMemo } from 'react';
 import { useAuth } from '@/platform/auth/useAuth';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { pageVariants, itemVariants, cardInteractive, listItemSpring } from '@/modules/core/ui/motion/presets';
 import { useNavigate } from 'react-router-dom';
 import {
   Calendar,
@@ -34,22 +35,8 @@ import {
 import { Shift } from '@/modules/rosters/domain/shift.entity';
 
 /* ============================================================
-   ANIMATION VARIANTS
+   ANIMATION VARIANTS — imported from presets
    ============================================================ */
-const container = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1
-    }
-  }
-};
-
-const item = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0 }
-};
 
 /* ============================================================
    DASHBOARD PAGE COMPONENT
@@ -114,39 +101,43 @@ const DashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4 md:space-y-8 p-1">
+    <motion.div
+      variants={pageVariants}
+      initial="hidden"
+      animate="show"
+      className="space-y-4 md:space-y-8 p-1 pb-24 md:pb-0"
+    >
       {/* Welcome Section */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        variants={itemVariants}
         className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary/80 to-indigo-600 dark:from-indigo-900 dark:via-purple-900 dark:to-indigo-950 p-4 sm:p-6 md:p-10 shadow-2xl"
       >
-        <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 dark:bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/10 rounded-full blur-2xl translate-y-1/3 -translate-x-1/3 pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div>
-            <Badge variant="glass" className="mb-3 backdrop-blur-md bg-white/10 border-white/20 text-white">
+            <Badge variant="glass" className="mb-3 backdrop-blur-md bg-white/10 dark:bg-white/10 border-white/20 dark:border-white/20 text-white dark:text-white">
               {user?.systemRole?.toUpperCase() || 'MEMBER'}
             </Badge>
-            <h1 className="text-3xl md:text-5xl font-heading font-bold text-white mb-2 tracking-tight">
+            <h1 className="text-3xl md:text-5xl font-heading font-bold text-white dark:text-white mb-2 tracking-tight">
               Welcome back, {firstName}
             </h1>
             <p className="text-blue-100/80 text-lg max-w-xl">
-              You have <span className="text-white font-semibold">{upcomingCount} upcoming shifts</span> this week.
+              You have <span className="text-white dark:text-white font-semibold">{upcomingCount} upcoming shifts</span> this week.
             </p>
           </div>
           <div className="flex gap-3">
             <Button
               variant="glass"
-              className="bg-white/10 hover:bg-white/20 border-white/20"
+              className="bg-white/10 dark:bg-white/10 hover:bg-white/20 dark:hover:bg-white/20 border-white/20 dark:border-white/20"
               onClick={handleViewSchedule}
             >
               View Schedule
             </Button>
             <Button
               variant="default"
-              className="bg-white text-primary hover:bg-white/90 shadow-xl shadow-black/20"
+              className="bg-white dark:bg-white text-primary dark:text-primary hover:bg-white/90 dark:hover:bg-white/90 shadow-xl shadow-black/20"
               onClick={handleNewRequest}
               disabled
             >
@@ -158,10 +149,8 @@ const DashboardPage: React.FC = () => {
 
       {/* Main Grid */}
       <motion.div
-        variants={container}
-        initial="hidden"
-        animate="show"
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+        variants={pageVariants}
+        className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6"
       >
         <StatCard
           icon={<Calendar className="h-6 w-6 text-blue-400" />}
@@ -205,12 +194,8 @@ const DashboardPage: React.FC = () => {
         {/* Left Column (2/3) */}
         <div className="md:col-span-2 lg:col-span-2 space-y-8">
           {/* Upcoming Shifts */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-          >
-            <Card className="h-full border-white/5 bg-card/50 backdrop-blur-xl">
+          <motion.div variants={itemVariants}>
+            <Card className="h-full border-border bg-card/50 backdrop-blur-xl">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-xl">Upcoming Shifts</CardTitle>
@@ -231,12 +216,14 @@ const DashboardPage: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  displayShifts.map((shift) => (
-                    <ShiftItem
-                      key={shift.id}
-                      shift={shift}
-                    />
-                  ))
+                  <AnimatePresence mode="popLayout">
+                    {displayShifts.map((shift) => (
+                      <ShiftItem
+                        key={shift.id}
+                        shift={shift}
+                      />
+                    ))}
+                  </AnimatePresence>
                 )}
               </CardContent>
             </Card>
@@ -244,12 +231,8 @@ const DashboardPage: React.FC = () => {
 
           {/* Manager Quick View (Conditional) */}
           {(user?.systemRole === 'admin' || user?.systemRole === 'manager') && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-            >
-              <Card className="border-white/5 bg-gradient-to-br from-card/80 to-card/40 backdrop-blur-xl">
+            <motion.div variants={itemVariants}>
+              <Card className="border-border bg-gradient-to-br from-card/80 to-card/40 backdrop-blur-xl">
                 <CardHeader>
                   <CardTitle className="text-xl">Manager Overview</CardTitle>
                   <CardDescription>Quick actions and status updates</CardDescription>
@@ -276,12 +259,8 @@ const DashboardPage: React.FC = () => {
         {/* Right Column (1/3) */}
         <div className="space-y-8">
           {/* Recent Activity */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.6 }}
-          >
-            <Card className="h-full border-white/5 bg-card/30 backdrop-blur-md">
+          <motion.div variants={itemVariants}>
+            <Card className="h-full border-border bg-card/30 backdrop-blur-md">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Bell className="h-5 w-5 text-primary" />
@@ -289,7 +268,7 @@ const DashboardPage: React.FC = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="relative border-l border-white/10 ml-3 space-y-4 md:space-y-8 py-2">
+                <div className="relative border-l border-border ml-3 space-y-4 md:space-y-8 py-2">
                   <ActivityItem
                     icon={<CheckCircle className="h-4 w-4 text-emerald-400" />}
                     title="System Update"
@@ -303,7 +282,7 @@ const DashboardPage: React.FC = () => {
           </motion.div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
@@ -322,11 +301,11 @@ interface StatCardProps {
 }
 
 const StatCard: React.FC<StatCardProps> = ({ icon, title, value, trend, trendUp, delay = 0, loading }) => (
-  <motion.div variants={item} className="h-full">
-    <Card className="h-full border-white/5 bg-card/40 backdrop-blur-lg hover:bg-card/60 transition-colors group">
+  <motion.div variants={itemVariants} {...cardInteractive} className="h-full">
+    <Card className="h-full border-border bg-card/40 backdrop-blur-lg hover:bg-card/60 transition-colors group">
       <CardContent className="p-6">
         <div className="flex justify-between items-start mb-4">
-          <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-primary group-hover:scale-110 transition-transform duration-300">
+          <div className="p-3 rounded-xl bg-muted/40 border border-border text-primary group-hover:scale-110 transition-transform duration-300">
             {icon}
           </div>
           {trendUp !== undefined && (
@@ -365,8 +344,12 @@ const ShiftItem: React.FC<ShiftItemProps> = ({ shift }) => {
   const location = shift.departments?.name || shift.sub_departments?.name || 'Main Venue';
 
   return (
-    <div className="group flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all duration-300">
-      <div className="flex-shrink-0 flex flex-col items-center justify-center w-14 h-14 rounded-lg bg-black/20 border border-white/5 text-center">
+    <motion.div
+      {...listItemSpring}
+      {...cardInteractive}
+      className="group flex items-center gap-4 p-4 rounded-xl bg-muted/20 border border-border hover:bg-muted/40 hover:border-border/80 transition-colors duration-300"
+    >
+      <div className="flex-shrink-0 flex flex-col items-center justify-center w-14 h-14 rounded-lg bg-muted/40 border border-border text-center">
         <span className="text-[10px] text-muted-foreground uppercase font-bold">{dayDate.split(' ')[0]}</span>
         <span className="text-lg font-bold text-foreground">{dayDate.split(' ')[1]}</span>
       </div>
@@ -385,11 +368,11 @@ const ShiftItem: React.FC<ShiftItemProps> = ({ shift }) => {
           <span className="flex items-center gap-1 min-w-fit">
             <Clock className="h-3.5 w-3.5" /> {shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)}
           </span>
-          <span className="hidden sm:inline w-1 h-1 rounded-full bg-white/20" />
+          <span className="hidden sm:inline w-1 h-1 rounded-full bg-muted-foreground/30" />
           <span className="flex items-center gap-1 truncate"><MapPin className="h-3.5 w-3.5" /> {location}</span>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
@@ -402,7 +385,7 @@ interface ActivityItemProps {
 
 const ActivityItem: React.FC<ActivityItemProps> = ({ icon, title, time, description }) => (
   <div className="relative pl-8">
-    <div className="absolute left-[-5px] top-1 p-1 rounded-full bg-card border border-white/10 z-10 shadow-sm">
+    <div className="absolute left-[-5px] top-1 p-1 rounded-full bg-card border border-border z-10 shadow-sm">
       {icon}
     </div>
     <div>

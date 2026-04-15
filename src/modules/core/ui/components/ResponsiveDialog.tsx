@@ -136,7 +136,7 @@ function ResponsiveDialogFooter({
 }: React.HTMLAttributes<HTMLDivElement>) {
   const { isMobile } = useResponsiveDialog();
   return isMobile ? (
-    <DrawerFooter className={className}>{children}</DrawerFooter>
+    <DrawerFooter className={cn('pb-6', className)}>{children}</DrawerFooter>
   ) : (
     <DialogFooter className={className}>{children}</DialogFooter>
   );

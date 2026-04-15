@@ -226,8 +226,10 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
               onClick={handleSwapShift}
               disabled={isLockedFromActions}
               className={cn(
-                'flex-1 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed',
-                isWithinLockoutPeriod ? 'bg-slate-600' : 'bg-purple-600 hover:bg-purple-700 shadow-purple-500/30'
+                'flex-1 rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed',
+                isWithinLockoutPeriod
+                  ? 'bg-muted text-muted-foreground border border-border'
+                  : 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20 dark:hover:bg-indigo-500/20'
               )}
             >
               <ArrowLeftRight size={16} className="mr-2" />
@@ -237,8 +239,10 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
               onClick={handleDropShift}
               disabled={isLockedFromActions}
               className={cn(
-                'flex-1 text-white rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed',
-                isActiveOrCommenced || hasCheckedIn || isWithinLockoutPeriod ? 'bg-slate-600' : 'bg-red-600 hover:bg-red-500 shadow-red-500/30'
+                'flex-1 rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed',
+                isActiveOrCommenced || hasCheckedIn || isWithinLockoutPeriod
+                  ? 'bg-muted text-muted-foreground border border-border'
+                  : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20 dark:hover:bg-rose-500/20'
               )}
             >
               <X size={16} className="mr-2" />

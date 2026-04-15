@@ -210,7 +210,7 @@ export function useShiftFormOrchestrator({
     }, [scopeTree, rosters, selectedRosterId, safeContext, watchGroup, watchSubGroupName]);
 
     // ── Hard validation ──────────────────────────────────────────────────────
-    const { hardValidation, employeeExistingShifts, studentVisaEnforcement } = useHardValidation({
+    const { hardValidation, employeeExistingShifts, studentVisaEnforcement, isLoadingShifts } = useHardValidation({
         watchStart,
         watchEnd,
         watchShiftDate,
@@ -444,7 +444,9 @@ export function useShiftFormOrchestrator({
     // Build the v2 ComplianceInputV2 from current form state.
     // Returns null if required fields are missing.
     const buildV2ComplianceInput = useCallback((): ComplianceInputV2 | null => {
-        if (!watchEmployeeId || !watchStart || !watchEnd || !watchShiftDate || !watchRoleId) return null;
+        if (!watchEmployeeId || !watchStart || !watchEnd || !watchShiftDate || !watchRoleId) {
+            return null;
+        }
 
         const shiftDateStr = format(watchShiftDate, 'yyyy-MM-dd');
 
@@ -461,12 +463,16 @@ export function useShiftFormOrchestrator({
                 qualifications:          [],
             },
             existing_shifts: (employeeExistingShifts || [])
-                .filter((s: any) => s.shift_id !== existingShift?.id && s.id !== existingShift?.id)
+                .filter((s: any) => {
+                    // Only filter if we are in EDIT mode (existingShift has an ID)
+                    if (!existingShift?.id) return true;
+                    return s.shift_id !== existingShift.id && s.id !== existingShift.id;
+                })
                 .map((s: any) => ({
                     shift_id: s.shift_id || s.id || String(Math.random()),
                     shift_date: s.shift_date,
-                    start_time: (s.start_time || '').replace(/:\d{2}$/, ''),
-                    end_time: (s.end_time || '').replace(/:\d{2}$/, ''),
+                    start_time: (s.start_time || '').slice(0, 5),
+                    end_time: (s.end_time || '').slice(0, 5),
                     role_id: s.role_id || watchRoleId || '',
                     required_qualifications: [],
                     is_ordinary_hours: s.is_ordinary_hours ?? true,
@@ -477,8 +483,8 @@ export function useShiftFormOrchestrator({
                 add_shifts: [{
                     shift_id:          existingShift?.id ?? `candidate-${Date.now()}`,
                     shift_date:        shiftDateStr,
-                    start_time:        watchStart.replace(/:\d{2}$/, ''),
-                    end_time:          watchEnd.replace(/:\d{2}$/, ''),
+                    start_time:        (watchStart || '').slice(0, 5),
+                    end_time:          (watchEnd || '').slice(0, 5),
                     role_id:           watchRoleId,
                     // Org/dept hierarchy for R10 contract matching
                     organization_id:   resolvedContext.organizationId ?? undefined,
@@ -502,6 +508,7 @@ export function useShiftFormOrchestrator({
     // v2 CompliancePanel hook — single source of truth for compliance state
     const compliancePanel = useCompliancePanel({
         buildInputs: useCallback(async () => {
+            if (isLoadingShifts) throw new Error('Fetching employee information...');
             const input = buildV2ComplianceInput();
             if (!input) {
                 // Return a "Skeleton" input for shift-only checks if we have times
@@ -569,7 +576,7 @@ export function useShiftFormOrchestrator({
             }
 
             return [{ ...input, employee_context: employeeCtx, availability_data: availabilityData }] as [ComplianceInputV2];
-        }, [buildV2ComplianceInput, watchStart, watchEnd, watchShiftDate, watchRoleId, watchUnpaidBreak, existingShift?.id, minShiftHours]),
+        }, [buildV2ComplianceInput, watchStart, watchEnd, watchShiftDate, watchRoleId, watchUnpaidBreak, existingShift?.id, minShiftHours, isLoadingShifts]),
         stage: 'DRAFT',
     });
 

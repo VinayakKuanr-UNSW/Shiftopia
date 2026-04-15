@@ -30,19 +30,11 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import { useAvailability } from '../../state/useAvailability';
 import { AvailabilityStatus } from '../../model/availability.types';
 
-interface AvailabilityCalendarProps {
-  onSelectDate: (date: Date) => void;
-  selectedMonth: Date;
-  /**
-   * If true, the entire calendar is read-only with a lock icon on every cell.
-   */
-  isLocked?: boolean;
 }
 
 export const AvailabilityCalendar: FC<AvailabilityCalendarProps> = ({
   onSelectDate,
   selectedMonth,
-  isLocked = false,
 }) => {
   const {
     startOfMonth,
@@ -86,17 +78,8 @@ export const AvailabilityCalendar: FC<AvailabilityCalendarProps> = ({
 
   const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  /** Delete availability if not locked */
   const handleDeleteAvailability = async (date: Date, event: MouseEvent) => {
     event.stopPropagation();
-    if (isLocked) {
-      toast({
-        title: 'Calendar Locked',
-        description: 'No changes allowed while locked.',
-        variant: 'destructive',
-      });
-      return;
-    }
 
     const success = await deleteAvailability(date);
     if (success) {
@@ -110,17 +93,8 @@ export const AvailabilityCalendar: FC<AvailabilityCalendarProps> = ({
     }
   };
 
-  /** Show all time slots in a dialog (if not locked) */
   const showAllTimeSlots = (date: Date, event: MouseEvent) => {
     event.stopPropagation();
-    if (isLocked) {
-      toast({
-        title: 'Calendar Locked',
-        description: 'No changes allowed while locked.',
-        variant: 'destructive',
-      });
-      return;
-    }
     setSelectedTimeSlotsDate(date);
     setShowTimeSlotsDialog(true);
   };
@@ -167,21 +141,10 @@ export const AvailabilityCalendar: FC<AvailabilityCalendarProps> = ({
                   <div
                     key={day.toISOString()}
                     onClick={() => {
-                      if (!isLocked) {
-                        onSelectDate(day);
-                      } else {
-                        toast({
-                          title: 'Calendar Locked',
-                          description: 'No changes allowed while locked.',
-                          variant: 'destructive',
-                        });
-                      }
+                      onSelectDate(day);
                     }}
                     className={cn(
-                      'h-32 md:h-40 p-1 transition-colors relative group',
-                      isLocked
-                        ? 'cursor-not-allowed bg-gray-800/20 opacity-60'
-                        : 'cursor-pointer hover:bg-muted/50',
+                      'h-32 md:h-40 p-1 transition-colors relative group cursor-pointer hover:bg-muted/50',
                       !isCurrentMonth && 'opacity-40'
                     )}
                   >
@@ -194,28 +157,14 @@ export const AvailabilityCalendar: FC<AvailabilityCalendarProps> = ({
                             isTodayDate
                               ? 'bg-blue-500 text-white'
                               : isCurrentMonth
-                              ? 'text-white/80'
-                              : 'text-white/40'
+                              ? 'text-foreground dark:text-white/80'
+                              : 'text-foreground/40 dark:text-white/40'
                           )}
                         >
                           {format(day, 'd')}
                         </span>
 
-                        {/* Lock icon if locked */}
-                        {isLocked && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="text-amber-500">
-                                  <Lock size={14} />
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Calendar locked</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
+                        </span>
                       </div>
 
                       {/* Show availability if any */}
@@ -231,18 +180,16 @@ export const AvailabilityCalendar: FC<AvailabilityCalendarProps> = ({
                           >
                             <span>{availability.status}</span>
 
-                            {!isLocked && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={(e) =>
-                                  handleDeleteAvailability(day, e)
-                                }
-                              >
-                                <Trash2 size={12} />
-                              </Button>
-                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e) =>
+                                handleDeleteAvailability(day, e)
+                              }
+                            >
+                              <Trash2 size={12} />
+                            </Button>
                           </div>
 
                           {/* If multiple time slots */}

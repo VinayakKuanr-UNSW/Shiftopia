@@ -7,6 +7,7 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
+import { motion, type Variants } from 'framer-motion';
 import {
   format, addDays, subDays, startOfWeek, endOfWeek,
   startOfMonth, endOfMonth, parseISO, differenceInMinutes, isToday,
@@ -23,7 +24,7 @@ import { cn } from '@/modules/core/lib/utils';
 import { useAuth } from '@/platform/auth/useAuth';
 import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
-import { useClockIn, useClockOut, useMarkNoShow } from '@/modules/rosters/state/useClockInOut';
+import { useClockIn, useClockOut } from '@/modules/rosters/state/useClockInOut';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
@@ -45,6 +46,17 @@ import {
   type GPSCapture,
   type GPSAnalysis,
 } from '@/modules/rosters/utils/gps';
+
+// ── Motion variants ────────────────────────────────────────────────────────────
+
+const pageVariants: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.04, delayChildren: 0.02 } },
+};
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0, transition: { ease: [0.16, 1, 0.3, 1], duration: 0.4 } },
+};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -238,10 +250,9 @@ interface TodayCardProps {
   shift: Shift;
   now: Date;
   isManager: boolean;
-  onNoShow: (shift: Shift) => void;
 }
 
-const TodayCard: React.FC<TodayCardProps> = ({ shift, now, isManager, onNoShow }) => {
+const TodayCard: React.FC<TodayCardProps> = ({ shift, now, isManager }) => {
   const clockIn  = useClockIn();
   const clockOut = useClockOut();
 
@@ -254,7 +265,6 @@ const TodayCard: React.FC<TodayCardProps> = ({ shift, now, isManager, onNoShow }
   const status   = (shift.attendance_status ?? 'unknown') as AttendanceStatus;
   const canClockIn  = status === 'unknown' && timing === 'in_window' && !shift.actual_end;
   const canClockOut = (status === 'checked_in' || status === 'late') && !shift.actual_end && timing !== 'before_window';
-  const canNoShow   = isManager && status === 'unknown' && shift.lifecycle_status === 'InProgress';
 
   const minsUntilWindow = timing === 'before_window'
     ? Math.max(0, Math.floor((windowOpen - nowMs) / 60000)) : 0;
@@ -359,7 +369,7 @@ const TodayCard: React.FC<TodayCardProps> = ({ shift, now, isManager, onNoShow }
     </div>
   ) : null;
 
-  const footerActions = (canClockIn || canClockOut || canNoShow) ? (
+  const footerActions = (canClockIn || canClockOut) ? (
     <div className="px-4 pb-4 pt-1 flex flex-col gap-1.5">
       <div className="flex gap-2">
         {canClockIn && (
@@ -367,7 +377,7 @@ const TodayCard: React.FC<TodayCardProps> = ({ shift, now, isManager, onNoShow }
             onClick={() => clockIn.mutate({ shiftId: shift.id, preCapture: gpsCapture })}
             disabled={clockIn.isPending || gpsCapturing || !gpsCapture}
             title={!gpsCapture && !gpsCapturing ? 'Waiting for GPS fix…' : undefined}
-            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-lg shadow-emerald-500/20 disabled:opacity-50">
+            className="flex-1 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 rounded-xl font-bold text-xs disabled:opacity-50">
             {clockIn.isPending
               ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Clocking in…</>
               : gpsCapturing
@@ -379,16 +389,10 @@ const TodayCard: React.FC<TodayCardProps> = ({ shift, now, isManager, onNoShow }
           <Button size="sm"
             onClick={() => clockOut.mutate({ shiftId: shift.id })}
             disabled={clockOut.isPending}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-lg shadow-blue-500/20">
+            className="flex-1 bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20 rounded-xl font-bold text-xs">
             {clockOut.isPending
               ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Clocking out…</>
               : <><LogOut className="h-3.5 w-3.5 mr-1.5" />Clock Out</>}
-          </Button>
-        )}
-        {canNoShow && (
-          <Button size="sm" variant="outline" onClick={() => onNoShow(shift)}
-            className="border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-xl font-bold text-xs">
-            <UserX className="h-3.5 w-3.5 mr-1.5" />No-Show
           </Button>
         )}
       </div>
@@ -497,24 +501,49 @@ const TotalsBar: React.FC<{ shifts: Shift[] }> = ({ shifts }) => {
   }, [shifts]);
 
   return (
-    <div className="grid grid-cols-4 gap-3 p-4 rounded-2xl bg-muted/40 border border-border">
-      <div className="text-center">
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ ease: [0.16, 1, 0.3, 1], duration: 0.4 }}
+      className="grid grid-cols-4 gap-3 p-4 rounded-2xl bg-muted/40 border border-border"
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.05, duration: 0.35 }}
+        className="text-center"
+      >
         <p className="text-xl font-black font-mono text-foreground tabular-nums">{totals.hoursWorked}h</p>
         <p className="text-[11px] text-muted-foreground mt-0.5 uppercase tracking-widest font-bold">Worked</p>
-      </div>
-      <div className="text-center">
+      </motion.div>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.1, duration: 0.35 }}
+        className="text-center"
+      >
         <p className="text-xl font-black font-mono text-amber-500 tabular-nums">{totals.lateInCount}</p>
         <p className="text-[11px] text-muted-foreground mt-0.5 uppercase tracking-widest font-bold">Late In</p>
-      </div>
-      <div className="text-center">
+      </motion.div>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.15, duration: 0.35 }}
+        className="text-center"
+      >
         <p className="text-xl font-black font-mono text-orange-500 tabular-nums">{totals.earlyOutCount}</p>
         <p className="text-[11px] text-muted-foreground mt-0.5 uppercase tracking-widest font-bold">Early Out</p>
-      </div>
-      <div className="text-center">
+      </motion.div>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: 0.2, duration: 0.35 }}
+        className="text-center"
+      >
         <p className="text-xl font-black font-mono text-red-500 tabular-nums">{totals.noShowCount}</p>
         <p className="text-[11px] text-muted-foreground mt-0.5 uppercase tracking-widest font-bold">No Show</p>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
 
@@ -578,39 +607,31 @@ const AttendancePage: React.FC = () => {
   const sortedToday = useMemo(() => {
     return todayRaw
       .filter(shift => {
-        // Always show today's shifts
+        // Always show shifts that started today
         if (shift.shift_date === todayStr) return true;
-        // Show yesterday's overnight shifts only while employee is still clocked in
-        // (shift_date = yesterday, is_overnight = true, clocked in but no clock-out yet)
-        const status = (shift.attendance_status ?? 'unknown') as string;
+        
+        // Show yesterday's overnight shifts (they end today)
+        // We keep them visible even after clock-out for consistency with today's shifts
         return (
           shift.shift_date === yesterdayStr &&
-          shift.is_overnight === true &&
-          (status === 'checked_in' || status === 'late') &&
-          !shift.actual_end
+          shift.is_overnight === true
         );
       })
       .sort((a, b) => toMs(a, 'start') - toMs(b, 'start'));
   }, [todayRaw, todayStr, yesterdayStr],
   );
 
-  const [noShowShift, setNoShowShift]   = useState<Shift | null>(null);
-  const [noShowReason, setNoShowReason] = useState('');
-  const noShowMutation = useMarkNoShow();
-
-  const confirmNoShow = () => {
-    if (!noShowShift || !noShowReason.trim()) return;
-    noShowMutation.mutate(
-      { shiftId: noShowShift.id, reason: noShowReason.trim() },
-      { onSuccess: () => { setNoShowShift(null); setNoShowReason(''); } },
-    );
-  };
 
   return (
-    <div className="h-full flex flex-col px-6 py-6 gap-5 overflow-y-auto">
+    <motion.div
+      variants={pageVariants}
+      initial="hidden"
+      animate="show"
+      className="h-full flex flex-col px-4 md:px-6 py-6 gap-5 overflow-y-auto pb-24 md:pb-6"
+    >
 
       {/* ── Header ── */}
-      <div className="flex items-start justify-between shrink-0">
+      <motion.div variants={itemVariants} className="flex items-start justify-between shrink-0">
         <div>
           <div className="flex items-center gap-2 mb-0.5">
             <Fingerprint className="h-5 w-5 text-emerald-500" />
@@ -622,10 +643,10 @@ const AttendancePage: React.FC = () => {
           <p className="text-3xl font-mono font-black text-foreground tabular-nums leading-none">{format(now, 'HH:mm')}</p>
           <p className="text-xs font-mono text-muted-foreground tabular-nums">:{format(now, 'ss')}</p>
         </div>
-      </div>
+      </motion.div>
 
       {/* ── Tab switcher ── */}
-      <div className="flex rounded-xl bg-muted/50 p-1 gap-1 shrink-0">
+      <motion.div variants={itemVariants} className="flex rounded-xl bg-muted/50 p-1 gap-1 shrink-0">
         {(['today', 'logs'] as Tab[]).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={cn(
@@ -635,7 +656,7 @@ const AttendancePage: React.FC = () => {
             {t === 'today' ? "Today's Shifts" : 'Logs'}
           </button>
         ))}
-      </div>
+      </motion.div>
 
       {/* ══════════════ TODAY TAB ══════════════ */}
       {tab === 'today' && (
@@ -654,7 +675,7 @@ const AttendancePage: React.FC = () => {
             <div className="space-y-4">
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                 {sortedToday.map(shift => (
-                  <TodayCard key={shift.id} shift={shift} now={now} isManager={isManager} onNoShow={setNoShowShift} />
+                  <TodayCard key={shift.id} shift={shift} now={now} isManager={isManager} />
                 ))}
               </div>
               <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground border-t border-border pt-3">
@@ -777,35 +798,7 @@ const AttendancePage: React.FC = () => {
         </div>
       )}
 
-      {/* ── No-show dialog ── */}
-      <ResponsiveDialog
-        open={!!noShowShift}
-        onOpenChange={open => { if (!open) { setNoShowShift(null); setNoShowReason(''); } }}
-      >
-        <ResponsiveDialog.Header>
-          <ResponsiveDialog.Title>Mark as No-Show</ResponsiveDialog.Title>
-          <ResponsiveDialog.Description>
-            This will mark the employee as a no-show. The action is logged and cannot be undone without a manager override.
-          </ResponsiveDialog.Description>
-        </ResponsiveDialog.Header>
-        <ResponsiveDialog.Body className="py-4 space-y-2">
-          <Label htmlFor="noshow-reason">Reason</Label>
-          <Textarea id="noshow-reason" placeholder="e.g. Did not report for duty, no contact made…"
-            value={noShowReason} onChange={e => setNoShowReason(e.target.value)} />
-        </ResponsiveDialog.Body>
-        <ResponsiveDialog.Footer>
-          <Button variant="outline" onClick={() => { setNoShowShift(null); setNoShowReason(''); }} disabled={noShowMutation.isPending}>
-            Cancel
-          </Button>
-          <Button variant="destructive" onClick={confirmNoShow}
-            disabled={noShowMutation.isPending || !noShowReason.trim()}>
-            {noShowMutation.isPending
-              ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Marking…</>
-              : 'Confirm No-Show'}
-          </Button>
-        </ResponsiveDialog.Footer>
-      </ResponsiveDialog>
-    </div>
+    </motion.div>
   );
 };
 

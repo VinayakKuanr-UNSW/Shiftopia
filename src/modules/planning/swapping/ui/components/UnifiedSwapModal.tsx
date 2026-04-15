@@ -18,6 +18,11 @@ import {
     DialogTitle,
     DialogDescription,
 } from '@/modules/core/ui/primitives/dialog';
+import {
+    Drawer,
+    DrawerContent,
+} from '@/modules/core/ui/primitives/drawer';
+import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Separator } from '@/modules/core/ui/primitives/separator';
@@ -109,6 +114,7 @@ const resolveGroupVariant = (groupType?: string | null, deptName = ''): 'convent
 export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
     isOpen, onClose, onConfirmOffer, isSubmitting, swapId,
 }) => {
+    const isMobile = useIsMobile();
     const { user } = useAuth();
     const now = useMinuteTick();
 
@@ -281,9 +287,8 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
     // RENDER
     // ==========================================================================
 
-    return (
-        <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-            <DialogContent className="sm:max-w-[1040px] h-[720px] max-h-[90vh] bg-[#0A0C0E] border border-white/10 p-0 overflow-hidden shadow-[0_0_80px_-15px_rgba(0,0,0,0.8)] flex flex-col rounded-[2.5rem] [&>button]:hidden">
+    const modalContent = (
+        <>
                 <VisuallyHidden>
                     <DialogTitle>Offer a Shift Swap</DialogTitle>
                     <DialogDescription>Select a shift and send your offer. Manager will run full compliance.</DialogDescription>
@@ -291,10 +296,10 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
 
                 <motion.div
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                    className="flex flex-1 h-full min-h-0 overflow-hidden"
+                    className={cn("flex flex-1 min-h-0 overflow-hidden", isMobile ? "flex-col overflow-y-auto" : "h-full")}
                 >
                     {/* LEFT PANE: YOUR SHIFTS */}
-                    <div className="w-[320px] border-r border-white/5 flex flex-col bg-[#0D0F12] shrink-0">
+                    <div className={cn("border-white/5 flex flex-col bg-[#0D0F12] shrink-0", isMobile ? "border-b" : "w-[320px] border-r")}>
                         <div className="p-8 pb-6">
                             <div className="flex items-center gap-3 mb-8">
                                 <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-600/20 to-indigo-400/10 flex items-center justify-center border border-indigo-500/20">
@@ -535,8 +540,8 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                         </div>
                     </div>
 
-                    {/* RIGHT PANE: TRADE PROTOCOL */}
-                    <div className="w-[300px] border-l border-white/5 flex flex-col bg-[#0D0F12] shrink-0">
+                    {/* RIGHT PANE: TRADE PROTOCOL (hidden on mobile) */}
+                    <div className={cn("border-l border-white/5 flex flex-col bg-[#0D0F12] shrink-0", isMobile ? "hidden" : "w-[300px]")}>
                         <div className="p-10 pb-6">
                             <div className="flex items-center gap-3 mb-8">
                                 <div className="h-9 w-9 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
@@ -598,6 +603,19 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                         </div>
                     </div>
                 </motion.div>
+        </>
+    );
+
+    return isMobile ? (
+        <Drawer open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+            <DrawerContent className="h-[92dvh] bg-[#0A0C0E] border-white/10 p-0 overflow-hidden flex flex-col">
+                {modalContent}
+            </DrawerContent>
+        </Drawer>
+    ) : (
+        <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+            <DialogContent className="sm:max-w-[1040px] h-[720px] max-h-[90vh] bg-[#0A0C0E] border border-white/10 p-0 overflow-hidden shadow-[0_0_80px_-15px_rgba(0,0,0,0.8)] flex flex-col rounded-[2.5rem] [&>button]:hidden">
+                {modalContent}
             </DialogContent>
         </Dialog>
     );

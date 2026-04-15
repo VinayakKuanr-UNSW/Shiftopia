@@ -4,7 +4,7 @@ import { useAuth } from '@/platform/auth/useAuth';
 import { useTableSorting } from '@/modules/core/hooks/useTableSorting';
 import { SortableTableHeader } from '@/modules/core/ui/primitives/sortable-table-header';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, addDays, startOfWeek, endOfWeek } from 'date-fns';
 import { SYDNEY_TZ, parseZonedDateTime, formatInTimezone } from '@/modules/core/lib/date.utils';
 import { biddingApi } from '../../api/bidding.api';
 import { validateCompliance, type ComplianceResult, type QualificationViolation } from '@/modules/rosters/services/compliance.service';
@@ -13,7 +13,7 @@ import {
     Info, User,
     Calendar, Clock, ThumbsUp, ShieldAlert, Ban, Flame,
     Megaphone, UserPlus, UserCheck as LucideUserCheck, Circle, Minus, Gavel, Coffee, Shield, Loader2, AlertTriangle, CheckCircle, XCircle,
-    Filter, Zap, Signal, History, ChevronDown, ChevronRight
+    X, Filter, Zap, Signal, History, ChevronDown, ChevronRight
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { BidStatusBadge } from '../components/BidStatusBadge';
@@ -30,6 +30,7 @@ import {
     AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from '@/modules/core/ui/primitives/alert-dialog';
 import { BidComplianceModal } from '../components/BidComplianceModal';
+import { Drawer, DrawerContent, DrawerTitle, DrawerClose } from '@/modules/core/ui/primitives/drawer';
 
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
@@ -211,6 +212,38 @@ function getParticipationStatus(
 }
 
 // ============================================================================
+// DATE PRESETS
+// ============================================================================
+const DATE_PRESETS = [
+    { id: 'today'     as const, label: 'Today'     },
+    { id: 'tomorrow'  as const, label: 'Tomorrow'  },
+    { id: 'this_week' as const, label: 'This Week' },
+    { id: 'weekend'   as const, label: 'Weekend'   },
+    { id: 'next_week' as const, label: 'Next Week' },
+    { id: 'all'       as const, label: 'All Dates' },
+] as const;
+
+type DatePreset = typeof DATE_PRESETS[number]['id'];
+
+// ============================================================================
+// MOTION VARIANTS
+// ============================================================================
+const pageVariants = {
+    hidden: {},
+    show: { transition: { staggerChildren: 0.04, delayChildren: 0.02 } }
+};
+const itemVariants = {
+    hidden: { opacity: 0, y: 8 },
+    show: { opacity: 1, y: 0, transition: { ease: [0.16, 1, 0.3, 1], duration: 0.4 } }
+};
+const listItemSpring = {
+    layout: true as const,
+    initial: { opacity: 0, scale: 0.96 },
+    animate: { opacity: 1, scale: 1, transition: { type: 'spring' as const, stiffness: 280, damping: 26 } },
+    exit: { opacity: 0, scale: 0.96, transition: { duration: 0.15 } }
+};
+
+// ============================================================================
 // COMPONENT
 // ============================================================================
 export const EmployeeBidsPage: React.FC = () => {
@@ -220,7 +253,20 @@ export const EmployeeBidsPage: React.FC = () => {
     const queryClient = useQueryClient();
     const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
     const [priorityFilter, setPriorityFilter] = useState<BidPriority | 'all'>('all');
+    const [datePreset, setDatePreset] = useState<DatePreset>('today');
+    const [stripDate, setStripDate] = useState<string | null>(null);
     const [expandedHistoryIds, setExpandedHistoryIds] = useState<Set<string>>(new Set());
+    const [drawerOpp, setDrawerOpp] = useState<ShiftOpportunity | null>(null);
+
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const todayDate = React.useMemo(() => {
+        const d = new Date(); d.setHours(0, 0, 0, 0); return d;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [todayStr]);
+    const stripDays = React.useMemo(
+        () => Array.from({ length: 14 }, (_, i) => addDays(todayDate, i)),
+        [todayDate]
+    );
 
     // Selection (for bulk bid on not_participated eligible shifts)
     const [selectedShiftIds, setSelectedShiftIds] = useState<any[]>([]);
@@ -476,6 +522,64 @@ export const EmployeeBidsPage: React.FC = () => {
                 return { ...shift, participationStatus, currentBid, bidHistory };
             });
     }, [shiftsTableSort.sortedData, myBids, priorityFilter, user?.id]);
+
+    // ========================================================================
+    // SHIFT COUNTS BY DATE (dot indicators — pre-date-filter)
+    // ========================================================================
+    const shiftsByDate = React.useMemo(() => {
+        const map = new Map<string, { count: number; hasUrgent: boolean }>();
+        shiftsTableSort.sortedData.forEach(shift => {
+            const existing = map.get(shift.date) || { count: 0, hasUrgent: false };
+            map.set(shift.date, {
+                count: existing.count + 1,
+                hasUrgent: existing.hasUrgent || getBidPriority(shift) === 'urgent',
+            });
+        });
+        return map;
+    }, [shiftsTableSort.sortedData]);
+
+    // ========================================================================
+    // DATE-FILTERED BID OPPORTUNITIES
+    // ========================================================================
+    const filteredBidOpportunities = React.useMemo(() => {
+        if (stripDate) return bidOpportunities.filter(opp => opp.date === stripDate);
+        return bidOpportunities.filter(opp => {
+            const oppDate = new Date(opp.date + 'T00:00:00');
+            switch (datePreset) {
+                case 'today':     return opp.date === todayStr;
+                case 'tomorrow':  return opp.date === format(addDays(todayDate, 1), 'yyyy-MM-dd');
+                case 'this_week': {
+                    const ws = startOfWeek(todayDate, { weekStartsOn: 1 });
+                    const we = endOfWeek(todayDate, { weekStartsOn: 1 });
+                    return oppDate >= ws && oppDate <= we;
+                }
+                case 'weekend': {
+                    const ws = startOfWeek(todayDate, { weekStartsOn: 1 });
+                    const sat = format(addDays(ws, 5), 'yyyy-MM-dd');
+                    const sun = format(addDays(ws, 6), 'yyyy-MM-dd');
+                    return opp.date === sat || opp.date === sun;
+                }
+                case 'next_week': {
+                    const nm = addDays(startOfWeek(todayDate, { weekStartsOn: 1 }), 7);
+                    const ns = addDays(nm, 6);
+                    return oppDate >= nm && oppDate <= ns;
+                }
+                default: return true;
+            }
+        });
+    }, [bidOpportunities, datePreset, stripDate, todayStr, todayDate]);
+
+    const nextAvailableDate = React.useMemo(() => {
+        if (datePreset !== 'today' || filteredBidOpportunities.length > 0 || stripDate) return null;
+        for (let i = 1; i <= 30; i++) {
+            const d = format(addDays(todayDate, i), 'yyyy-MM-dd');
+            const dayData = shiftsByDate.get(d);
+            if (dayData && dayData.count > 0) {
+                return { date: d, count: dayData.count, label: format(parseISO(d), 'EEE, d MMM') };
+            }
+        }
+        return null;
+    }, [datePreset, filteredBidOpportunities.length, stripDate, shiftsByDate, todayDate]);
 
     // ========================================================================
     // SELECTION HANDLERS (only applicable to not_participated eligible shifts)
@@ -765,7 +869,7 @@ export const EmployeeBidsPage: React.FC = () => {
                     checked={selectedShiftIds.includes(opp.id)}
                     onChange={() => handleSelectShift(opp.id)}
                     disabled={!canSelect}
-                    className="h-4 w-4 rounded border-white/20 bg-white/5 text-primary focus:ring-primary/30"
+                    className="h-4 w-4 rounded border-border/50 text-primary focus:ring-primary/30 accent-primary"
                 />
                 <span className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-wider">Select</span>
                 {currentIteration > 1 && (
@@ -777,30 +881,122 @@ export const EmployeeBidsPage: React.FC = () => {
         );
 
         return (
-            <SharedShiftCard
+            <motion.div key={opp.id} {...listItemSpring} whileHover={{ y: -2, transition: { duration: 0.15 } }} whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}>
+                <SharedShiftCard
+                    organization={opp.organization}
+                    department={opp.department}
+                    subGroup={opp.subGroup}
+                    role={opp.role}
+                    shiftDate={opp.date}
+                    startTime={opp.startTime}
+                    endTime={opp.endTime}
+                    netLength={opp.netLength}
+                    paidBreak={opp.paidBreak}
+                    unpaidBreak={opp.unpaidBreak}
+                    timerText={timerDisplay}
+                    isExpired={isTerminal ? false : tr.isExpired}
+                    isUrgent={opp.isUrgent}
+                    lifecycleStatus={opp.lifecycleStatus || 'Published'}
+                    groupVariant={
+                        opp.groupType === 'convention_centre' ? 'convention' :
+                        opp.groupType === 'exhibition_centre' ? 'exhibition' :
+                        opp.groupType === 'theatre' ? 'theatre' : 'default'
+                    }
+                    footerActions={footerActions}
+                    topContent={topContent}
+                />
+            </motion.div>
+        );
+    };
+
+    // ========================================================================
+    // RENDER: Compact mobile list row (table view on mobile)
+    // ========================================================================
+    const renderBidListItem = (opp: ShiftOpportunity) => {
+        const { participationStatus } = opp;
+        const priority = getBidPriority(opp);
+        const pConf = PRIORITY_CONFIG[priority];
+        const PIcon = pConf.icon;
+        const shiftStart = opp.startAt
+            ? new Date(opp.startAt)
+            : parseZonedDateTime(opp.date, opp.startTime, SYDNEY_TZ);
+        const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
+        const tr = calculateTimeRemaining(biddingCloses.toISOString());
+        const isExpired = tr.isExpired;
+        const canSelect = participationStatus === 'not_participated' && opp.isEligible;
+
+        const netH = Math.floor(opp.netLength / 60);
+        const netM = Math.round(opp.netLength % 60);
+        const netStr = netH > 0 ? `${netH}h${netM > 0 ? ` ${netM}m` : ''}` : `${netM}m`;
+
+        const statusPill = (() => {
+            if (participationStatus === 'selected')     return { label: 'Selected',     cls: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' };
+            if (participationStatus === 'pending')      return { label: 'Pending',       cls: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' };
+            if (participationStatus === 'rejected')     return { label: 'Not Selected',  cls: 'bg-slate-500/10 text-muted-foreground border-slate-500/20' };
+            if (participationStatus === 'not_eligible') return { label: 'Dropped',       cls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' };
+            if (participationStatus === 'expired' || (participationStatus === 'not_participated' && isExpired))
+                return { label: 'Closed', cls: 'bg-slate-500/10 text-muted-foreground border-slate-500/20' };
+            if (!opp.isEligible) return { label: 'Ineligible', cls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' };
+            return null;
+        })();
+
+        return (
+            <motion.div
                 key={opp.id}
-                organization={opp.organization}
-                department={opp.department}
-                subGroup={opp.subGroup}
-                role={opp.role}
-                shiftDate={opp.date}
-                startTime={opp.startTime}
-                endTime={opp.endTime}
-                netLength={opp.netLength}
-                paidBreak={opp.paidBreak}
-                unpaidBreak={opp.unpaidBreak}
-                timerText={timerDisplay}
-                isExpired={isTerminal ? false : tr.isExpired}
-                isUrgent={opp.isUrgent}
-                lifecycleStatus={opp.lifecycleStatus || 'Published'}
-                groupVariant={
-                    opp.groupType === 'convention_centre' ? 'convention' :
-                    opp.groupType === 'exhibition_centre' ? 'exhibition' :
-                    opp.groupType === 'theatre' ? 'theatre' : 'default'
-                }
-                footerActions={footerActions}
-                topContent={topContent}
-            />
+                layout
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="flex items-center gap-3 px-4 py-3.5 border-b border-border/40 last:border-0 active:bg-muted/40 transition-colors cursor-pointer"
+                onClick={() => setDrawerOpp(opp)}
+            >
+                {/* Checkbox — stopPropagation so tap on checkbox doesn't open drawer */}
+                <div onClick={e => { e.stopPropagation(); if (canSelect) handleSelectShift(opp.id); }} className="shrink-0">
+                    <input
+                        type="checkbox"
+                        readOnly
+                        checked={selectedShiftIds.includes(opp.id)}
+                        disabled={!canSelect}
+                        className="h-4 w-4 rounded border-border/50 accent-primary"
+                    />
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                    {/* Line 1: role + urgency badge */}
+                    <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[13px] font-semibold text-foreground truncate flex-1 leading-snug">{opp.role}</span>
+                        {priority !== 'normal' && (
+                            <span className={cn('shrink-0 inline-flex items-center gap-0.5 text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full border leading-none', pConf.badgeCls)}>
+                                <PIcon className="h-2 w-2" />{pConf.label}
+                            </span>
+                        )}
+                    </div>
+                    {/* Line 2: dept */}
+                    <p className="text-[11px] text-muted-foreground/70 truncate mt-0.5 leading-none">
+                        {opp.department}{opp.subGroup && opp.subGroup !== opp.department ? ` · ${opp.subGroup}` : ''}
+                    </p>
+                    {/* Line 3: date · time · net · status */}
+                    <div className="flex items-center gap-1 mt-1 flex-wrap">
+                        <span className="text-[11px] text-muted-foreground/60 font-medium">{format(parseISO(opp.date), 'EEE d MMM')}</span>
+                        <span className="text-muted-foreground/25">·</span>
+                        <span className="text-[11px] text-muted-foreground/60 font-mono">{opp.startTime}–{opp.endTime}</span>
+                        <span className="text-muted-foreground/25">·</span>
+                        <span className="text-[11px] text-muted-foreground/50">{netStr}</span>
+                        {statusPill && (
+                            <>
+                                <span className="text-muted-foreground/25">·</span>
+                                <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded border leading-none', statusPill.cls)}>
+                                    {statusPill.label}
+                                </span>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                <ChevronRight className="h-4 w-4 text-muted-foreground/25 shrink-0" />
+            </motion.div>
         );
     };
 
@@ -808,7 +1004,7 @@ export const EmployeeBidsPage: React.FC = () => {
     // RENDER
     // ========================================================================
     return (
-        <div className="w-full text-foreground">
+        <motion.div className="w-full text-foreground pb-24 md:pb-0" variants={pageVariants} initial="hidden" animate="show">
             <ScopeFilterBanner
                 mode="personal"
                 onScopeChange={setScope}
@@ -816,184 +1012,340 @@ export const EmployeeBidsPage: React.FC = () => {
                 className="mb-2 md:mb-6"
             />
 
-            <FunctionBar
-                tabs={[{ id: 'all', label: 'Open Shifts', count: bidOpportunities.length }]}
-                activeTab="all"
-                onTabChange={() => {}}
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-                onRefresh={() => {
-                    queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
-                    queryClient.invalidateQueries({ queryKey: ['myBids'] });
-                }}
-                className="mb-3 md:mb-6"
-                endActions={
-                    <div className="flex items-center gap-2 flex-nowrap shrink-0">
-                        <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 mr-1 shrink-0">
-                            <Filter className="h-3 w-3" />
-                            <span className="hidden sm:inline">Priority</span>
-                        </div>
-                        {(['all', 'normal', 'urgent'] as const).map((p) => {
-                            const isAll = p === 'all';
-                            const conf = isAll ? null : PRIORITY_CONFIG[p];
+            {/* ═══════════════════════════════════════════════════════════════
+                STICKY HEADER — 2 rows: title+actions | unified date strip
+            ═══════════════════════════════════════════════════════════════ */}
+            <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/40 -mx-4 px-4 md:-mx-8 md:px-8 mb-5">
+
+                {/* ── Row 1: Title + Priority toggles + view/refresh ── */}
+                <div className="flex items-center gap-2 pt-2.5 pb-2">
+
+                    {/* Left: title + count */}
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <span className="text-sm font-black text-foreground tracking-tight leading-none">Open Shifts</span>
+                        <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-primary/10 text-primary text-[10px] font-black leading-none tabular-nums">
+                            {filteredBidOpportunities.length}
+                        </span>
+                        {eligibilityLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/40 shrink-0" />}
+                    </div>
+
+                    {/* Priority toggles — tap to activate, tap again to clear */}
+                    <div className="flex items-center gap-1">
+                        {(['normal', 'urgent'] as const).map(p => {
+                            const conf = PRIORITY_CONFIG[p];
                             const active = priorityFilter === p;
                             return (
-                                <button
+                                <motion.button
                                     key={p}
-                                    onClick={() => setPriorityFilter(p)}
+                                    onClick={() => setPriorityFilter(active ? 'all' : p)}
+                                    whileTap={{ scale: 0.88 }}
                                     className={cn(
-                                        "flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-wider transition-all flex-shrink-0",
-                                        active
-                                            ? isAll
-                                                ? "bg-primary/10 border-primary/30 text-primary"
-                                                : conf!.chipActiveCls
-                                            : "bg-muted/20 border-border/30 text-muted-foreground hover:bg-muted/40"
+                                        'flex items-center gap-1 px-2.5 h-8 rounded-full border text-[10px] font-black uppercase tracking-wider transition-all',
+                                        active ? conf.chipActiveCls : 'border-border/30 text-muted-foreground/50 hover:bg-muted/30 hover:text-foreground'
                                     )}
                                 >
-                                    {isAll ? 'All' : (
-                                        <>
-                                            {conf?.icon && <conf.icon className="h-3 w-3" />}
-                                            {conf?.label}
-                                        </>
-                                    )}
-                                </button>
+                                    <conf.icon className="h-3 w-3" />
+                                    <span className="hidden sm:inline">{conf.label}</span>
+                                </motion.button>
                             );
                         })}
                     </div>
-                }
-            />
 
-            {/* Eligibility scan indicator */}
-            {eligibilityLoading && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60 mb-4">
-                    <Loader2 className="h-3 w-3 animate-spin" /> Checking eligibility…
+                    {/* View toggle + Refresh */}
+                    <div className="flex items-center gap-1 pl-2 border-l border-border/30">
+                        <button
+                            onClick={() => setViewMode(v => v === 'card' ? 'table' : 'card')}
+                            className="h-8 w-8 flex items-center justify-center rounded-lg border border-border/30 text-muted-foreground/50 hover:bg-muted/30 hover:text-foreground transition-colors"
+                            title={viewMode === 'card' ? 'Table view' : 'Card view'}
+                        >
+                            {viewMode === 'card'
+                                ? <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none"><rect x="0.5" y="0.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2"/><rect x="8" y="0.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2"/><rect x="0.5" y="8" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2"/><rect x="8" y="8" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2"/></svg>
+                                : <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none"><rect x="0.5" y="1.5" width="13" height="1.5" rx="0.75" fill="currentColor"/><rect x="0.5" y="6" width="13" height="1.5" rx="0.75" fill="currentColor"/><rect x="0.5" y="10.5" width="13" height="1.5" rx="0.75" fill="currentColor"/></svg>
+                            }
+                        </button>
+                        <button
+                            onClick={() => {
+                                queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
+                                queryClient.invalidateQueries({ queryKey: ['myBids'] });
+                            }}
+                            className="h-8 w-8 flex items-center justify-center rounded-lg border border-border/30 text-muted-foreground/50 hover:bg-muted/30 hover:text-foreground transition-colors"
+                            title="Refresh"
+                        >
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none"><path d="M13 2.5C11.6 1 9.9 0 8 0 4.1 0 1 3.1 1 7s3.1 7 7 7c3.3 0 6-2.1 6.9-5H13c-.9 2.3-3.1 4-5.5 4-3.3 0-6-2.7-6-6s2.7-6 6-6c1.7 0 3.1.7 4.2 1.8L9 5h5V0l-1 2.5z" fill="currentColor"/></svg>
+                        </button>
+                    </div>
                 </div>
-            )}
 
-            {/* ── UNIFIED SHIFT OPPORTUNITIES GRID ── */}
+                {/* ── Row 2: Unified date selector — presets + individual days in one strip ── */}
+                {/* Preset pills first, then a hairline separator, then scrollable day cells */}
+                <div className="flex gap-1.5 pb-3 overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+
+                    {/* Preset pills: All | Today | Tmrw | Week | Wknd | Next */}
+                    {([
+                        { id: 'all'       as DatePreset, label: 'All'  },
+                        { id: 'today'     as DatePreset, label: 'Today' },
+                        { id: 'tomorrow'  as DatePreset, label: 'Tmrw' },
+                        { id: 'this_week' as DatePreset, label: 'Week' },
+                        { id: 'weekend'   as DatePreset, label: 'Wknd' },
+                        { id: 'next_week' as DatePreset, label: 'Next Wk' },
+                    ] as const).map(preset => {
+                        const isActive = !stripDate && datePreset === preset.id;
+                        const dotDate = preset.id === 'today' ? todayStr
+                                      : preset.id === 'tomorrow' ? format(addDays(todayDate, 1), 'yyyy-MM-dd')
+                                      : null;
+                        const dotData = dotDate ? shiftsByDate.get(dotDate) : null;
+                        return (
+                            <motion.button
+                                key={preset.id}
+                                onClick={() => { setDatePreset(preset.id); setStripDate(null); }}
+                                whileTap={{ scale: 0.92 }}
+                                className={cn(
+                                    'shrink-0 flex flex-col items-center justify-center px-3 min-h-[52px] rounded-xl border text-[11px] font-bold whitespace-nowrap transition-all',
+                                    isActive
+                                        ? 'bg-foreground text-background border-foreground'
+                                        : 'border-border/40 text-muted-foreground hover:border-border hover:text-foreground'
+                                )}
+                            >
+                                {preset.label}
+                                {dotData && dotData.count > 0 && (
+                                    <span className={cn('h-1 w-1 rounded-full mt-1', isActive ? 'bg-background/50' : dotData.hasUrgent ? 'bg-amber-500' : 'bg-primary')} />
+                                )}
+                            </motion.button>
+                        );
+                    })}
+
+                    {/* Hairline separator */}
+                    <div className="shrink-0 w-px bg-border/50 self-stretch mx-0.5 my-2" />
+
+                    {/* Individual day pills */}
+                    {stripDays.map(day => {
+                        const dayStr = format(day, 'yyyy-MM-dd');
+                        const dayData = shiftsByDate.get(dayStr);
+                        const isSelected = stripDate === dayStr;
+                        const isCurrentDay = dayStr === todayStr;
+                        return (
+                            <motion.button
+                                key={dayStr}
+                                onClick={() => setStripDate(isSelected ? null : dayStr)}
+                                whileTap={{ scale: 0.88 }}
+                                className={cn(
+                                    'shrink-0 flex flex-col items-center w-12 min-h-[52px] py-2 rounded-xl border transition-all',
+                                    isSelected
+                                        ? 'bg-foreground border-foreground text-background'
+                                        : isCurrentDay && !stripDate
+                                        ? 'bg-primary/10 border-primary/40 text-primary'
+                                        : 'border-border/30 text-muted-foreground hover:bg-muted/30 hover:border-border'
+                                )}
+                            >
+                                <span className="text-[10px] font-semibold uppercase tracking-wide leading-none opacity-60 mt-1">
+                                    {format(day, 'EEE')}
+                                </span>
+                                <span className="text-base font-black leading-none tabular-nums mt-1">
+                                    {format(day, 'd')}
+                                </span>
+                                <div className="h-2 flex items-center justify-center mt-0.5">
+                                    {dayData && dayData.count > 0
+                                        ? <span className={cn('h-1 w-1 rounded-full', isSelected ? 'bg-background/60' : dayData.hasUrgent ? 'bg-amber-500' : 'bg-primary')} />
+                                        : <span className="h-1 w-1" />
+                                    }
+                                </div>
+                            </motion.button>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* ── CARD / TABLE VIEW ── */}
             {viewMode === 'card' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {bidOpportunities.map(opp => renderOpportunityCard(opp))}
-                    {bidOpportunities.length === 0 && (
-                        <div className="col-span-full text-center py-16 text-muted-foreground/50">
-                            No open shifts match your filters.
-                        </div>
-                    )}
-                </div>
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key={`${priorityFilter}-${datePreset}-${stripDate ?? ''}`}
+                        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
+                        variants={pageVariants}
+                        initial="hidden"
+                        animate="show"
+                        exit={{ opacity: 0, transition: { duration: 0.15 } }}
+                    >
+                        {filteredBidOpportunities.map(opp => renderOpportunityCard(opp))}
+                        {filteredBidOpportunities.length === 0 && (
+                            <motion.div variants={itemVariants} className="col-span-full">
+                                <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                                    <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
+                                        <Calendar className="h-6 w-6 text-muted-foreground/40" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-semibold text-foreground/60">
+                                            {stripDate
+                                                ? `No shifts on ${format(parseISO(stripDate), 'EEE, d MMM')}`
+                                                : datePreset === 'today'
+                                                ? 'No open shifts today'
+                                                : 'No shifts match your filters'}
+                                        </p>
+                                        {nextAvailableDate && (
+                                            <p className="text-xs text-muted-foreground/50 mt-1.5">
+                                                Next available:{' '}
+                                                <button
+                                                    onClick={() => setStripDate(nextAvailableDate.date)}
+                                                    className="text-primary font-semibold hover:underline"
+                                                >
+                                                    {nextAvailableDate.label} ({nextAvailableDate.count} shift{nextAvailableDate.count !== 1 ? 's' : ''})
+                                                </button>
+                                            </p>
+                                        )}
+                                        {!nextAvailableDate && datePreset !== 'all' && (
+                                            <button
+                                                onClick={() => { setDatePreset('all'); setStripDate(null); }}
+                                                className="text-xs text-primary hover:underline mt-1.5 block mx-auto"
+                                            >
+                                                Show all dates
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </motion.div>
+                </AnimatePresence>
             ) : (
-                /* ── TABLE VIEW ── */
-                <div className="overflow-x-auto border border-slate-200 dark:border-white/10 rounded-lg">
-                    <table className="w-full text-sm text-slate-800 dark:text-white">
-                        <thead className="bg-slate-100 dark:bg-black/40 text-xs">
-                            <tr>
-                                <th className="p-3 text-left w-[40px]">
-                                    <input
-                                        type="checkbox"
-                                        checked={
-                                            bidOpportunities.some(o => o.participationStatus === 'not_participated' && o.isEligible) &&
-                                            bidOpportunities
-                                                .filter(o => o.participationStatus === 'not_participated' && o.isEligible)
-                                                .every(o => selectedShiftIds.includes(o.id))
-                                        }
-                                        onChange={(e) => handleSelectAll(e.target.checked)}
-                                    />
-                                </th>
-                                <SortableTableHeader sortKey="department" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Dept</SortableTableHeader>
-                                <SortableTableHeader sortKey="subGroup" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Sub</SortableTableHeader>
-                                <SortableTableHeader sortKey="role" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Role</SortableTableHeader>
-                                <SortableTableHeader sortKey="date" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Date</SortableTableHeader>
-                                <th className="p-3 text-left">Time</th>
-                                <th className="p-3 text-left">Net</th>
-                                <th className="p-3 text-left">ITR</th>
-                                <th className="p-3 text-left w-[200px]">Status / Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {bidOpportunities.map(opp => {
-                                const { participationStatus, currentBid } = opp;
-                                const shiftStart = opp.startAt
-                                    ? new Date(opp.startAt)
-                                    : parseZonedDateTime(opp.date, opp.startTime, SYDNEY_TZ);
-                                const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
-                                const isExpired = new Date() >= biddingCloses;
-                                const canSelect = participationStatus === 'not_participated' && opp.isEligible;
+                /* ── LIST / TABLE VIEW ── */
+                <>
+                    {/* Mobile: vertical list rows, tap → bottom drawer */}
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={`list-${priorityFilter}-${datePreset}-${stripDate ?? ''}`}
+                            className="md:hidden border border-border/40 rounded-xl overflow-hidden"
+                            variants={pageVariants}
+                            initial="hidden"
+                            animate="show"
+                            exit={{ opacity: 0, transition: { duration: 0.12 } }}
+                        >
+                            {filteredBidOpportunities.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                                    <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
+                                        <Calendar className="h-6 w-6 text-muted-foreground/40" />
+                                    </div>
+                                    <p className="text-sm font-semibold text-foreground/60">No shifts match your filters</p>
+                                </div>
+                            ) : (
+                                filteredBidOpportunities.map(renderBidListItem)
+                            )}
+                        </motion.div>
+                    </AnimatePresence>
 
-                                return (
-                                    <tr key={opp.id} className="border-t border-slate-100 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5">
-                                        <td className="p-3">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedShiftIds.includes(opp.id)}
-                                                onChange={() => handleSelectShift(opp.id)}
-                                                disabled={!canSelect}
-                                            />
-                                        </td>
-                                        <td className="p-3">{opp.department}</td>
-                                        <td className="p-3">{opp.subGroup}</td>
-                                        <td className="p-3">{opp.role}</td>
-                                        <td className="p-3">{opp.date}</td>
-                                        <td className="p-3">{opp.startTime}–{opp.endTime}</td>
-                                        <td className="p-3">{Math.round(opp.netLength)}m</td>
-                                        <td className="p-3 text-xs font-mono text-muted-foreground">
-                                            {(opp.bidding_iteration || 1) > 1 ? `ITR ${opp.bidding_iteration}` : '—'}
-                                        </td>
-                                        <td className="p-3">
-                                            {participationStatus === 'not_eligible' && (
-                                                <span className="text-xs text-rose-500 flex items-center gap-1"><XCircle size={12} /> Dropped</span>
-                                            )}
-                                            {participationStatus === 'not_participated' && !isExpired && (
-                                                opp.isEligible ? (
-                                                    <Button
-                                                        size="sm"
-                                                        className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
-                                                        disabled={placeBidMutation.isPending}
-                                                        onClick={() => handleQuickBid(opp)}
-                                                    >
-                                                        {placeBidMutation.isPending && placeBidMutation.variables === opp.id
-                                                            ? <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                                                            : <ThumbsUp className="mr-1 h-3 w-3" />
-                                                        }
-                                                        Bid
-                                                    </Button>
-                                                ) : (
-                                                    <span className="text-xs text-rose-500 flex items-center gap-1"><Ban size={12} /> Ineligible</span>
-                                                )
-                                            )}
-                                            {participationStatus === 'not_participated' && isExpired && (
-                                                <span className="text-xs text-slate-400 flex items-center gap-1"><Ban size={12} /> Closed</span>
-                                            )}
-                                            {participationStatus === 'pending' && (
-                                                <div className="flex gap-2 items-center">
-                                                    <span className="text-xs text-amber-500 flex items-center gap-1"><Clock size={12} /> Pending</span>
-                                                    {!isExpired && currentBid && (
+                    {/* Desktop: traditional sortable table */}
+                    <div className="hidden md:block overflow-x-auto border border-border rounded-lg">
+                        <table className="w-full text-sm text-foreground">
+                            <thead className="bg-muted/60 text-xs">
+                                <tr>
+                                    <th className="p-3 text-left w-[40px]">
+                                        <input
+                                            type="checkbox"
+                                            checked={
+                                                filteredBidOpportunities.some(o => o.participationStatus === 'not_participated' && o.isEligible) &&
+                                                filteredBidOpportunities
+                                                    .filter(o => o.participationStatus === 'not_participated' && o.isEligible)
+                                                    .every(o => selectedShiftIds.includes(o.id))
+                                            }
+                                            onChange={(e) => handleSelectAll(e.target.checked)}
+                                        />
+                                    </th>
+                                    <SortableTableHeader sortKey="department" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Dept</SortableTableHeader>
+                                    <SortableTableHeader sortKey="subGroup" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Sub</SortableTableHeader>
+                                    <SortableTableHeader sortKey="role" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Role</SortableTableHeader>
+                                    <SortableTableHeader sortKey="date" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Date</SortableTableHeader>
+                                    <th className="p-3 text-left">Time</th>
+                                    <th className="p-3 text-left">Net</th>
+                                    <th className="p-3 text-left">ITR</th>
+                                    <th className="p-3 text-left w-[200px]">Status / Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredBidOpportunities.map(opp => {
+                                    const { participationStatus, currentBid } = opp;
+                                    const shiftStart = opp.startAt
+                                        ? new Date(opp.startAt)
+                                        : parseZonedDateTime(opp.date, opp.startTime, SYDNEY_TZ);
+                                    const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
+                                    const isExpired = new Date() >= biddingCloses;
+                                    const canSelect = participationStatus === 'not_participated' && opp.isEligible;
+
+                                    return (
+                                        <tr key={opp.id} className="border-t border-border/50 hover:bg-muted/30 transition-colors">
+                                            <td className="p-3">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedShiftIds.includes(opp.id)}
+                                                    onChange={() => handleSelectShift(opp.id)}
+                                                    disabled={!canSelect}
+                                                />
+                                            </td>
+                                            <td className="p-3">{opp.department}</td>
+                                            <td className="p-3">{opp.subGroup}</td>
+                                            <td className="p-3">{opp.role}</td>
+                                            <td className="p-3">{opp.date}</td>
+                                            <td className="p-3">{opp.startTime}–{opp.endTime}</td>
+                                            <td className="p-3">{Math.round(opp.netLength)}m</td>
+                                            <td className="p-3 text-xs font-mono text-muted-foreground">
+                                                {(opp.bidding_iteration || 1) > 1 ? `ITR ${opp.bidding_iteration}` : '—'}
+                                            </td>
+                                            <td className="p-3">
+                                                {participationStatus === 'not_eligible' && (
+                                                    <span className="text-xs text-rose-500 flex items-center gap-1"><XCircle size={12} /> Dropped</span>
+                                                )}
+                                                {participationStatus === 'not_participated' && !isExpired && (
+                                                    opp.isEligible ? (
                                                         <Button
                                                             size="sm"
-                                                            variant="outline"
-                                                            className="h-7 text-xs border-white/10 hover:bg-red-500/10 hover:text-red-400"
-                                                            onClick={() => handleWithdrawBid(currentBid.id)}
-                                                            disabled={withdrawBidMutation.isPending}
+                                                            className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
+                                                            disabled={placeBidMutation.isPending}
+                                                            onClick={() => handleQuickBid(opp)}
                                                         >
-                                                            <XCircle className="mr-1 h-3 w-3" /> Withdraw
+                                                            {placeBidMutation.isPending && placeBidMutation.variables === opp.id
+                                                                ? <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                                                : <ThumbsUp className="mr-1 h-3 w-3" />
+                                                            }
+                                                            Bid
                                                         </Button>
-                                                    )}
-                                                </div>
-                                            )}
-                                            {participationStatus === 'selected' && (
-                                                <span className="text-xs text-emerald-400 flex items-center gap-1"><CheckCircle size={12} /> Selected</span>
-                                            )}
-                                            {participationStatus === 'rejected' && (
-                                                <span className="text-xs text-slate-400 flex items-center gap-1"><Ban size={12} /> Not Selected</span>
-                                            )}
-                                            {participationStatus === 'expired' && (
-                                                <span className="text-xs text-slate-400 flex items-center gap-1"><Ban size={12} /> Expired</span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+                                                    ) : (
+                                                        <span className="text-xs text-rose-500 flex items-center gap-1"><Ban size={12} /> Ineligible</span>
+                                                    )
+                                                )}
+                                                {participationStatus === 'not_participated' && isExpired && (
+                                                    <span className="text-xs text-slate-400 flex items-center gap-1"><Ban size={12} /> Closed</span>
+                                                )}
+                                                {participationStatus === 'pending' && (
+                                                    <div className="flex gap-2 items-center">
+                                                        <span className="text-xs text-amber-500 flex items-center gap-1"><Clock size={12} /> Pending</span>
+                                                        {!isExpired && currentBid && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="h-7 text-xs border-border/40 hover:bg-red-500/10 hover:text-red-400"
+                                                                onClick={() => handleWithdrawBid(currentBid.id)}
+                                                                disabled={withdrawBidMutation.isPending}
+                                                            >
+                                                                <XCircle className="mr-1 h-3 w-3" /> Withdraw
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                {participationStatus === 'selected' && (
+                                                    <span className="text-xs text-emerald-400 flex items-center gap-1"><CheckCircle size={12} /> Selected</span>
+                                                )}
+                                                {participationStatus === 'rejected' && (
+                                                    <span className="text-xs text-slate-400 flex items-center gap-1"><Ban size={12} /> Not Selected</span>
+                                                )}
+                                                {participationStatus === 'expired' && (
+                                                    <span className="text-xs text-slate-400 flex items-center gap-1"><Ban size={12} /> Expired</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
             )}
 
             {/* ── FLOATING BULK ACTION BAR ── */}
@@ -1003,7 +1355,7 @@ export const EmployeeBidsPage: React.FC = () => {
                         initial={{ opacity: 0, y: 50, x: '-50%' }}
                         animate={{ opacity: 1, y: 0, x: '-50%' }}
                         exit={{ opacity: 0, y: 50, x: '-50%' }}
-                        className="fixed bottom-6 left-1/2 z-50 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-3 rounded-full shadow-2xl flex items-center gap-4 border border-slate-700 dark:border-slate-200"
+                        className="fixed bottom-24 md:bottom-6 left-1/2 z-50 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-3 rounded-full shadow-2xl flex items-center gap-4 border border-slate-700 dark:border-slate-200"
                     >
                         <div className="flex items-center gap-2">
                             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500 text-[12px] font-bold text-white shadow-sm">
@@ -1088,7 +1440,151 @@ export const EmployeeBidsPage: React.FC = () => {
                     isPending={placeBidMutation.isPending}
                 />
             )}
-        </div>
+
+            {/* ── BID DETAIL DRAWER (mobile list tap) ── */}
+            <Drawer open={drawerOpp !== null} onOpenChange={open => { if (!open) setDrawerOpp(null); }}>
+                <DrawerContent className="max-h-[88dvh] flex flex-col">
+                    <div className="overflow-y-auto flex-1 px-4 pb-8">
+                        {drawerOpp && (() => {
+                            const opp = drawerOpp;
+                            const { participationStatus, currentBid } = opp;
+                            const shiftStart = opp.startAt
+                                ? new Date(opp.startAt)
+                                : parseZonedDateTime(opp.date, opp.startTime, SYDNEY_TZ);
+                            const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
+                            const tr = calculateTimeRemaining(biddingCloses.toISOString());
+                            const isExpired = tr.isExpired;
+                            const timerStr = formatTimeRemaining(tr);
+                            const priority = getBidPriority(opp);
+                            const pConf = PRIORITY_CONFIG[priority];
+                            const netH = Math.floor(opp.netLength / 60);
+                            const netM = Math.round(opp.netLength % 60);
+                            const netStr = netH > 0 ? `${netH}h${netM > 0 ? ` ${netM}m` : ''}` : `${netM}m`;
+
+                            return (
+                                <>
+                                    {/* Header */}
+                                    <div className="flex items-start justify-between pt-2 pb-4 border-b border-border/40">
+                                        <div className="min-w-0 pr-3">
+                                            <DrawerTitle className="text-base font-bold leading-tight">{opp.role}</DrawerTitle>
+                                            <p className="text-sm text-muted-foreground mt-0.5 truncate">
+                                                {opp.department}{opp.subGroup && opp.subGroup !== opp.department ? ` · ${opp.subGroup}` : ''}
+                                            </p>
+                                            {priority !== 'normal' && (
+                                                <span className={cn('inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full border mt-1.5', pConf.badgeCls)}>
+                                                    <pConf.icon className="h-2.5 w-2.5" />{pConf.label}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <DrawerClose asChild>
+                                            <button className="shrink-0 h-8 w-8 flex items-center justify-center rounded-full bg-muted/50 text-muted-foreground hover:bg-muted transition-colors">
+                                                <X className="h-4 w-4" />
+                                            </button>
+                                        </DrawerClose>
+                                    </div>
+
+                                    {/* Detail grid */}
+                                    <div className="grid grid-cols-2 gap-2.5 mt-4">
+                                        {[
+                                            { label: 'Date',     value: format(parseISO(opp.date), 'EEE, d MMM yyyy') },
+                                            { label: 'Time',     value: `${opp.startTime} – ${opp.endTime}`, mono: true },
+                                            { label: 'Duration', value: netStr },
+                                            { label: 'Level',    value: opp.remunerationLevel },
+                                        ].map(({ label, value, mono }) => (
+                                            <div key={label} className="flex flex-col gap-0.5 p-3 rounded-xl bg-muted/30 border border-border/30">
+                                                <span className="text-[9px] uppercase tracking-widest text-muted-foreground/50 font-bold">{label}</span>
+                                                <span className={cn('text-sm font-semibold mt-0.5', mono && 'font-mono')}>{value}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Bidding timer */}
+                                    {!isExpired && timerStr && (
+                                        <div className="flex items-center gap-2 mt-4 px-3 py-2.5 rounded-xl bg-amber-500/8 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-sm">
+                                            <Clock className="h-4 w-4 shrink-0" />
+                                            <span>Closes in <strong>{timerStr}</strong></span>
+                                        </div>
+                                    )}
+
+                                    {/* Iteration badge */}
+                                    {(opp.bidding_iteration || 1) > 1 && (
+                                        <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-xl bg-muted/30 border border-border/30 text-xs text-muted-foreground font-mono">
+                                            <History className="h-3.5 w-3.5" />
+                                            Iteration {opp.bidding_iteration}
+                                        </div>
+                                    )}
+
+                                    {/* Actions */}
+                                    <div className="flex flex-col gap-2 mt-5">
+                                        {participationStatus === 'not_eligible' && (
+                                            <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-medium">
+                                                <XCircle className="h-4 w-4 shrink-0" /> You dropped this shift
+                                            </div>
+                                        )}
+                                        {participationStatus === 'not_participated' && opp.isEligible && !isExpired && (
+                                            <Button
+                                                className="w-full h-12 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-900/20"
+                                                onClick={() => { handleQuickBid(opp); setDrawerOpp(null); }}
+                                                disabled={placeBidMutation.isPending}
+                                            >
+                                                {placeBidMutation.isPending && placeBidMutation.variables === opp.id
+                                                    ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    : <ThumbsUp className="mr-2 h-4 w-4" />
+                                                }
+                                                {placeBidMutation.isPending && placeBidMutation.variables === opp.id ? 'Placing…' : 'Bid Now'}
+                                            </Button>
+                                        )}
+                                        {participationStatus === 'not_participated' && !opp.isEligible && (
+                                            <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-medium">
+                                                <Ban className="h-4 w-4 shrink-0" />
+                                                <span>{opp.ineligibilityReason ?? 'Ineligible for this shift'}</span>
+                                            </div>
+                                        )}
+                                        {participationStatus === 'not_participated' && isExpired && (
+                                            <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-muted/30 border border-border/30 text-muted-foreground text-sm">
+                                                <Ban className="h-4 w-4 shrink-0" /> Bidding Closed
+                                            </div>
+                                        )}
+                                        {participationStatus === 'pending' && (
+                                            <>
+                                                <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm font-medium">
+                                                    <Clock className="h-4 w-4 shrink-0" /> Awaiting Manager Review
+                                                </div>
+                                                {!isExpired && currentBid && (
+                                                    <Button
+                                                        variant="outline"
+                                                        className="w-full h-11 border-border/50 hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 text-sm"
+                                                        onClick={() => { handleWithdrawBid(currentBid.id); setDrawerOpp(null); }}
+                                                        disabled={withdrawBidMutation.isPending}
+                                                    >
+                                                        <XCircle className="mr-2 h-4 w-4" /> Withdraw Bid
+                                                    </Button>
+                                                )}
+                                            </>
+                                        )}
+                                        {participationStatus === 'selected' && (
+                                            <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-sm font-medium">
+                                                <CheckCircle className="h-4 w-4 shrink-0" /> Bid Selected — Assigned to You
+                                            </div>
+                                        )}
+                                        {participationStatus === 'rejected' && (
+                                            <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-muted/30 border border-border/30 text-muted-foreground text-sm">
+                                                <Ban className="h-4 w-4 shrink-0" /> Not Selected This Round
+                                            </div>
+                                        )}
+                                        {participationStatus === 'expired' && (
+                                            <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-muted/30 border border-border/30 text-muted-foreground text-sm">
+                                                <Ban className="h-4 w-4 shrink-0" /> Bidding Closed
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            );
+                        })()}
+                    </div>
+                </DrawerContent>
+            </Drawer>
+        </motion.div>
     );
 };
 

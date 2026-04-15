@@ -4,6 +4,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/modules/core/ui/primitives/card';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
 import { BroadcastGroup } from '../../model/broadcast.types';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface GroupsListProps {
     groups: BroadcastGroup[];
@@ -50,45 +51,52 @@ export const GroupsList: React.FC<GroupsListProps> = ({
                         <p className="text-sm text-muted-foreground">Create one to get started.</p>
                     </div>
                 ) : (
-                    <div className="space-y-2">
-                        {groups.map((group) => (
-                            <div
-                                key={group.id}
-                                className={`flex items-center justify-between p-3 border rounded-md cursor-pointer hover:bg-muted transition-colors ${selectedGroup?.id === group.id ? 'bg-muted border-primary' : ''
-                                    }`}
-                                onClick={() => onSelectGroup(group)}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <Users className="h-4 w-4 text-primary" />
-                                    <span className="font-medium">{group.name}</span>
-                                </div>
-                                <div className="flex space-x-1">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onEditGroup(group);
-                                        }}
-                                    >
-                                        <Edit className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onDeleteGroup(group.id);
-                                        }}
-                                    >
-                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                    <AnimatePresence>
+                        <div className="space-y-2">
+                            {groups.map((group, index) => (
+                                <motion.div
+                                    key={group.id}
+                                    layout
+                                    initial={{ opacity: 0, y: 6 }}
+                                    animate={{ opacity: 1, y: 0, transition: { delay: index * 0.04, ease: [0.16, 1, 0.3, 1], duration: 0.3 } }}
+                                    exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.15 } }}
+                                    whileHover={{ y: -1, transition: { duration: 0.12 } }}
+                                    className={`flex items-center justify-between p-3 border rounded-md cursor-pointer hover:bg-muted transition-colors ${selectedGroup?.id === group.id ? 'bg-muted border-primary' : ''
+                                        }`}
+                                    onClick={() => onSelectGroup(group)}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <Users className="h-4 w-4 text-primary" />
+                                        <span className="font-medium">{group.name}</span>
+                                    </div>
+                                    <div className="flex space-x-1">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onEditGroup(group);
+                                            }}
+                                        >
+                                            <Edit className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onDeleteGroup(group.id);
+                                            }}
+                                        >
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                    </div>
+                                </motion.div>
+                            ))}
+                        </div>
+                    </AnimatePresence>
                 )}
             </CardContent>
         </Card>

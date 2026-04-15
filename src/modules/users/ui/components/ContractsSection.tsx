@@ -54,7 +54,7 @@ const AccessIcon = ({ level }: { level: string }) => {
     }
 }
 
-export const PositionContractsSection: React.FC<SectionProps> = ({ employeeId, employeeName = 'User' }) => {
+export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, employeeName = 'User' }) => {
     const { toast } = useToast();
     const queryClient = useQueryClient();
 
@@ -108,10 +108,10 @@ export const PositionContractsSection: React.FC<SectionProps> = ({ employeeId, e
                 <div className="space-y-0.5">
                     <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                         <Briefcase className="w-4 h-4 text-slate-500" />
-                        Position Contracts
+                        User Contracts
                     </h3>
                     <p className="text-[10px] text-slate-400 font-medium pl-6 uppercase tracking-wider">
-                        HR & Employment Position Details
+                        HR & Employment Contract Details
                     </p>
                 </div>
                 <AddContractDialog employeeId={employeeId} employeeName={employeeName} />
@@ -121,7 +121,7 @@ export const PositionContractsSection: React.FC<SectionProps> = ({ employeeId, e
                     <div className="p-8 text-center text-sm text-slate-400 animate-pulse">Loading contracts...</div>
                 ) : !contracts || contracts.length === 0 ? (
                     <div className="p-8 text-center text-sm font-medium text-slate-400">
-                        No active positions recorded.
+                        No active contracts recorded.
                     </div>
                 ) : (
                     <>
@@ -366,7 +366,7 @@ export const AccessCertificatesSection: React.FC<SectionProps> = ({ employeeId, 
 const ContractsSection: React.FC<SectionProps> = (props) => {
     return (
         <div className="space-y-6">
-            <PositionContractsSection {...props} />
+            <UserContractsSection {...props} />
             <AccessCertificatesSection {...props} />
         </div>
     );

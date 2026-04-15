@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { format, eachDayOfInterval, startOfYear, endOfYear, getISOWeek } from 'date-fns';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useEmployees, useShiftsByDateRange } from '@/modules/rosters/state/useRosterShifts';
@@ -220,6 +221,7 @@ const avatarCls = (s: CompSeverity) =>
 const GridPage: React.FC = () => {
     const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
     const queryClient = useQueryClient();
+    const isMobile = useIsMobile();
 
     const today = new Date();
     const [year, setYear] = useState(today.getFullYear());
@@ -337,9 +339,9 @@ const GridPage: React.FC = () => {
             if (finalEmployeeIds.length === 0) return [];
             const { data, error } = await supabase
                 .from('employee_licenses')
-                .select('user_id, has_restricted_work_limit, license:license_id ( name )')
+                .select('employee_id, has_restricted_work_limit, license:license_id ( name )')
                 .eq('status', 'Active')
-                .in('user_id', finalEmployeeIds);
+                .in('employee_id', finalEmployeeIds);
             if (error) throw error;
             return data;
         },
@@ -351,7 +353,7 @@ const GridPage: React.FC = () => {
         const map: Record<string, boolean> = {};
         studentVisaStatusData.forEach((wr: any) => {
             if (wr.license?.name?.includes('Subclass 500'))
-                map[wr.user_id] = !!wr.has_restricted_work_limit;
+                map[wr.employee_id] = !!wr.has_restricted_work_limit;
         });
         return map;
     }, [studentVisaStatusData]);
@@ -385,10 +387,10 @@ const GridPage: React.FC = () => {
     const compMode = viewMode === 'compliance';
 
     return (
-        <div className="flex flex-col h-full bg-background">
-            <div className="flex-1 min-h-0 flex flex-col px-6 pb-6 pt-6">
+        <div className="flex flex-col h-full bg-background pb-24 md:pb-0">
+            <div className="flex-1 min-h-0 flex flex-col px-4 md:px-6 pb-6 pt-6">
                 {/* ── Header ── */}
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
                     <div className="flex items-center gap-4">
                         <div className="p-2.5 bg-primary/10 rounded-xl">
                             <Activity className="w-6 h-6 text-primary" />
@@ -399,7 +401,7 @@ const GridPage: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
                         {/* Stats */}
                         <div className="flex items-center gap-6 px-4 py-2 bg-muted/30 rounded-xl border border-border/40 mr-2">
                             <div className="flex items-center gap-2">

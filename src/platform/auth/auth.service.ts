@@ -125,6 +125,7 @@ export const authService = {
                 contracts: contracts,
                 certificates: certificates,
                 highestAccessLevel: highest,
+                preferences: profile.preferences,
             };
         } catch (e: any) {
             console.error('[AuthService] getUserProfile EXCEPTION:', e.message);

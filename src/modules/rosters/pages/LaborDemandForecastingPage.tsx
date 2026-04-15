@@ -824,7 +824,7 @@ const LaborDemandForecastingPage: React.FC = () => {
      ============================================================= */
   return (
     <div className="min-h-full bg-background">
-      <div className="max-w-[1280px] mx-auto px-6 py-6 space-y-5">
+      <div className="max-w-[1280px] mx-auto px-4 md:px-6 py-6 space-y-5 pb-24 md:pb-6">
 
         {/* ===================== SCOPE HEADER ===================== */}
         <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>

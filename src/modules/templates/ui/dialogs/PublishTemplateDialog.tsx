@@ -1,13 +1,6 @@
 // src/components/templates/PublishTemplateDialog.tsx
 import React from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/modules/core/ui/primitives/dialog';
+import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Alert, AlertDescription } from '@/modules/core/ui/primitives/alert';
@@ -57,24 +50,24 @@ export const PublishTemplateDialog: React.FC<PublishTemplateDialogProps> = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-card border-border sm:max-w-[500px]">
-        <DialogHeader>
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400">
-              <CalendarIcon className="h-5 w-5" />
-            </div>
-            <div>
-              <DialogTitle className="text-xl text-foreground">
-                Apply Template to Roster
-              </DialogTitle>
-              <DialogDescription className="text-muted-foreground text-sm">
-                Apply current template to the generated roster.
-              </DialogDescription>
-            </div>
+    <ResponsiveDialog open={isOpen} onOpenChange={onClose} dialogClassName="bg-card border-border sm:max-w-[500px]">
+      <ResponsiveDialog.Header>
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400">
+            <CalendarIcon className="h-5 w-5" />
           </div>
-        </DialogHeader>
+          <div>
+            <ResponsiveDialog.Title className="text-xl text-foreground">
+              Apply Template to Roster
+            </ResponsiveDialog.Title>
+            <ResponsiveDialog.Description className="text-muted-foreground text-sm">
+              Apply current template to the generated roster.
+            </ResponsiveDialog.Description>
+          </div>
+        </div>
+      </ResponsiveDialog.Header>
 
+      <ResponsiveDialog.Body className="overflow-y-auto max-h-[70dvh]">
         <div className="py-4 space-y-6">
           {/* Template Info */}
           <div className="bg-muted/50 rounded-xl p-4 border border-border/50 space-y-3">
@@ -121,36 +114,36 @@ export const PublishTemplateDialog: React.FC<PublishTemplateDialogProps> = ({
             </AlertDescription>
           </Alert>
         </div>
+      </ResponsiveDialog.Body>
 
-        <DialogFooter className="gap-3">
-          <Button
-            variant="outline"
-            onClick={onClose}
-            disabled={isPublishing}
-            className="bg-transparent border-border text-foreground hover:bg-muted/50"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleApply}
-            disabled={isPublishing}
-            className="bg-blue-600 hover:bg-blue-700 text-white min-w-[140px]"
-          >
-            {isPublishing ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Applying...
-              </>
-            ) : (
-              <>
-                <CalendarIcon className="h-4 w-4 mr-2" />
-                Apply to Roster
-              </>
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <ResponsiveDialog.Footer className="gap-3">
+        <Button
+          variant="outline"
+          onClick={onClose}
+          disabled={isPublishing}
+          className="bg-transparent border-border text-foreground hover:bg-muted/50"
+        >
+          Cancel
+        </Button>
+        <Button
+          onClick={handleApply}
+          disabled={isPublishing}
+          className="bg-blue-600 hover:bg-blue-700 text-white min-w-[140px]"
+        >
+          {isPublishing ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Applying...
+            </>
+          ) : (
+            <>
+              <CalendarIcon className="h-4 w-4 mr-2" />
+              Apply to Roster
+            </>
+          )}
+        </Button>
+      </ResponsiveDialog.Footer>
+    </ResponsiveDialog>
   );
 };
 

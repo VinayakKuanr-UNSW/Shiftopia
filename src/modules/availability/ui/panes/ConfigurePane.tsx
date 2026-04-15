@@ -47,7 +47,6 @@ import { validateAvailabilityForm } from '../../utils/validation.utils';
 export interface ConfigurePaneProps {
   mode: 'create' | 'edit' | null;
   ruleBeingEdited: AvailabilityRule | null;
-  isLocked: boolean;
   isSubmitting: boolean;
   onSubmit: (payload: AvailabilityFormPayload) => Promise<void>;
   onCancel: () => void;
@@ -132,7 +131,6 @@ const formStateToPayload = (state: FormState): AvailabilityFormPayload => {
 export function ConfigurePane({
   mode,
   ruleBeingEdited,
-  isLocked,
   isSubmitting,
   onSubmit,
   onCancel,
@@ -202,7 +200,7 @@ export function ConfigurePane({
 
   // Determine if form is active (in create or edit mode)
   const isFormActive = mode !== null;
-  const isDisabled = isLocked || !isFormActive;
+  const isDisabled = !isFormActive;
 
   return (
     <div className="flex flex-col h-full">
@@ -239,7 +237,7 @@ export function ConfigurePane({
           )}
 
           {/* Inactive State */}
-          {!isFormActive && !isLocked && (
+          {!isFormActive && (
             <div className="py-12 text-center text-muted-foreground">
               <Calendar className="mx-auto h-12 w-12 mb-4 opacity-50" />
               <p>No rule selected for editing.</p>
@@ -249,19 +247,8 @@ export function ConfigurePane({
             </div>
           )}
 
-          {/* Locked State */}
-          {isLocked && (
-            <div className="py-12 text-center text-muted-foreground">
-              <AlertCircle className="mx-auto h-12 w-12 mb-4 text-yellow-500" />
-              <p>Editing is currently disabled.</p>
-              <p className="text-sm mt-1">
-                Unlock the calendar to make changes.
-              </p>
-            </div>
-          )}
 
-          {/* Form Fields (visible only when active) */}
-          {isFormActive && !isLocked && (
+          {isFormActive && (
             <>
               {/* Start Date */}
               <div className="space-y-2">
@@ -432,8 +419,7 @@ export function ConfigurePane({
         </form>
       </ScrollArea>
 
-      {/* Action Buttons */}
-      {isFormActive && !isLocked && (
+      {isFormActive && (
         <div className="p-4 border-t flex-shrink-0 flex gap-2">
           <Button
             type="button"

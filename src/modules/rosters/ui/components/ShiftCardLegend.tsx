@@ -1,13 +1,3 @@
-/**
- * ShiftCardLegend - Phase 4 Enterprise Component
- *
- * Visual legend explaining all icons used in SmartShiftCard / ShiftCardCompact.
- * Covers: Lifecycle, Assignment, Bidding, Offer Outcome, Trade, Compliance states.
- *
- * Render this in a popover, sidebar, or collapsible panel so users
- * can reference it without leaving the roster grid.
- */
-
 import React, { useState } from 'react';
 import {
     Edit,
@@ -15,26 +5,18 @@ import {
     Hourglass,
     CheckCircle,
     XCircle,
-    UserCheck,
-    UserPlus,
-    Clock,
-    MailOpen,
-    BadgeCheck,
     Zap,
-    Gavel,
     Flame,
-    Ban,
     Lock,
     ArrowLeftRight,
-    Minus,
-    ShieldCheck,
-    Shield,
     ShieldAlert,
     ChevronDown,
     ChevronUp,
     HelpCircle,
     CopyPlus,
-    Circle,
+    Clock,
+    UserPlus,
+    Gavel,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 
@@ -42,79 +24,44 @@ import { cn } from '@/modules/core/lib/utils';
 // TYPES
 // ============================================================================
 
-interface LegendItem {
+interface BadgeCodeItem {
+    type: 'Planning' | 'Live' | 'Terminal' | 'System';
+    dot?: string; // Hex color
+    code?: string;
     icon: React.ReactNode;
     label: string;
     description: string;
 }
 
-interface LegendSection {
-    title: string;
-    items: LegendItem[];
-}
-
 // ============================================================================
-// LEGEND DATA
+// LEGEND DATA (Unified Source of Truth)
 // ============================================================================
 
-const LEGEND_SECTIONS: LegendSection[] = [
-    {
-        title: 'Lifecycle',
-        items: [
-            { icon: <Edit className="h-4 w-4 text-gray-400" />, label: 'Draft', description: 'Shift created but not yet published (S1-Unassigned, S2-Assigned)' },
-            { icon: <Megaphone className="h-4 w-4 text-blue-500" />, label: 'Published', description: 'Shift is live and visible to employees' },
-            { icon: <Hourglass className="h-4 w-4 text-orange-500" />, label: 'In Progress', description: 'Shift is currently being worked (S11)' },
-            { icon: <CheckCircle className="h-4 w-4 text-green-500" />, label: 'Completed', description: 'Shift has been completed (S13)' },
-            { icon: <XCircle className="h-4 w-4 text-red-500" />, label: 'Cancelled', description: 'Shift has been cancelled (S15)' },
-        ],
-    },
-    {
-        title: 'Assignment',
-        items: [
-            { icon: <UserCheck className="h-4 w-4 text-emerald-500" />, label: 'Assigned', description: 'An employee is assigned to this shift' },
-            { icon: <UserPlus className="h-4 w-4 text-amber-500" />, label: 'Unassigned', description: 'No employee assigned yet' },
-        ],
-    },
-    {
-        title: 'Offer Outcome',
-        items: [
-            { icon: <Clock className="h-4 w-4 text-yellow-500" />, label: 'Pending', description: 'Assignment pending employee response (S2 Implicit)' },
-            { icon: <MailOpen className="h-4 w-4 text-blue-500" />, label: 'Offered', description: 'Offer sent, awaiting acceptance (S3)' },
-            { icon: <BadgeCheck className="h-4 w-4 text-green-600" />, label: 'Confirmed', description: 'Employee accepted the offer (S4)' },
-            { icon: <Zap className="h-4 w-4 text-red-500" />, label: 'Emergency Assigned', description: 'Emergency assignment — confirmed S4 with emergency badge' },
-        ],
-    },
-    {
-        title: 'Bidding',
-        items: [
-            { icon: <Gavel className="h-4 w-4 text-blue-500" />, label: 'On Bidding (Normal)', description: 'Open for employee bids (S5)' },
-            { icon: <Flame className="h-4 w-4 text-red-500" />, label: 'On Bidding (Urgent)', description: 'Urgent bidding - shift starts soon (S6)' },
-            { icon: <Lock className="h-4 w-4 text-gray-600" />, label: 'Bidding Closed', description: 'Bidding window expired with no winner (S8)' },
-            { icon: <Ban className="h-4 w-4 text-gray-400" />, label: 'Not On Bidding', description: 'Shift is not open for bidding' },
-        ],
-    },
-    {
-        title: 'Trade',
-        items: [
-            { icon: <ArrowLeftRight className="h-4 w-4 text-purple-500" />, label: 'Trade Requested', description: 'Employee requested a shift swap (S9)' },
-            { icon: <Minus className="h-4 w-4 text-gray-400" />, label: 'No Trade', description: 'No trade request active' },
-        ],
-    },
-    {
-        title: 'Origin',
-        items: [
-            { icon: <CopyPlus className="h-4 w-4 text-indigo-400" />, label: 'Template', description: 'Generated from a Roster Template' },
-            { icon: <Circle className="h-4 w-4 text-gray-500" />, label: 'Manual', description: 'Manually created by a manager' },
-        ],
-    },
-    {
-        title: 'Compliance',
-        items: [
-            { icon: <ShieldCheck className="h-4 w-4 text-emerald-500" />, label: 'Compliant', description: 'All compliance rules satisfied' },
-            { icon: <Shield className="h-4 w-4 text-amber-500" />, label: 'Warning', description: 'Approaching compliance limits' },
-            { icon: <ShieldAlert className="h-4 w-4 text-red-500" />, label: 'Violation', description: 'Compliance rule violated' },
-        ],
-    },
+const BADGE_CODES: BadgeCodeItem[] = [
+    // PLANNING
+    { type: 'Planning', dot: '#3B82F6', code: 'S1-S5', icon: <Edit className="h-3 w-3" />, label: 'Normal', description: '> 24h until shift start' },
+    { type: 'Planning', dot: '#F59E0B', code: 'S3-S5', icon: <Zap className="h-3 w-3" />, label: 'Urgent', description: '< 24h until shift start' },
+    { type: 'Planning', dot: '#EF4444', code: 'S3-S6', icon: <Flame className="h-3 w-3" />, label: 'Emergency', description: '< 4h until start (Locks S1 Publication)' },
+    
+    // LIVE ATTENDANCE
+    { type: 'Live', dot: '#6366F1', code: 'S11', icon: <Hourglass className="h-3 w-3" />, label: 'Early Start', description: 'Clocked in > 5m before start' },
+    { type: 'Live', dot: '#10B981', code: 'S11', icon: <Hourglass className="h-3 w-3" />, label: 'On Time', description: 'Clocked in within 5m window' },
+    { type: 'Live', dot: '#FBBF24', code: 'S11', icon: <Hourglass className="h-3 w-3" />, label: 'Late Start', description: 'Clocked in > 5m after start' },
+    { type: 'Live', dot: '#EAB308', code: 'S11', icon: <Clock className="h-3 w-3" />, label: 'Missing', description: 'Start time passed; no clock-in recorded' },
+    
+    // TERMINAL
+    { type: 'Terminal', dot: '#14B8A6', code: 'S13', icon: <CheckCircle className="h-3 w-3" />, label: 'Early Exit', description: 'Clocked out > 5m before scheduled end' },
+    { type: 'Terminal', dot: '#8B5CF6', code: 'S13', icon: <CheckCircle className="h-3 w-3" />, label: 'On Time', description: 'Clocked out within 5m window' },
+    { type: 'Terminal', dot: '#6D28D9', code: 'S13', icon: <CheckCircle className="h-3 w-3" />, label: 'Overtime', description: 'Clocked out > 5m after scheduled end' },
+    { type: 'Terminal', dot: '#A855F7', code: 'S13', icon: <CheckCircle className="h-3 w-3" />, label: 'Auto Out', description: 'System-enforced auto clock-out' },
+    { type: 'Terminal', dot: '#7F1D1D', code: 'S13', icon: <XCircle className="h-3 w-3" />, label: 'No Show', description: 'Employee failed to report for the shift' },
+    
+    // SYSTEM SIGNALS
+    { type: 'System', code: 'S9/S10', icon: <ArrowLeftRight className="h-3 w-3" />, label: 'Trading', description: 'Shift swap or trade request active' },
+    { type: 'System', code: 'S5', icon: <Gavel className="h-3 w-3" />, label: 'Bidding', description: 'Open for employee expressions of interest' },
+    { type: 'System', code: '-', icon: <ShieldAlert className="h-3 w-3" />, label: 'Violation', description: 'Compliance breech (Rest/Length/Skills)' },
+    { type: 'System', code: '-', icon: <CopyPlus className="h-3 w-3" />, label: 'Template', description: 'Generated from an institutional roster' },
+    { type: 'System', code: '-', icon: <Lock className="h-3 w-3" />, label: 'Locked', description: 'Locked by manager or institutional rule' },
 ];
 
 // ============================================================================
@@ -123,10 +70,7 @@ const LEGEND_SECTIONS: LegendSection[] = [
 
 export interface ShiftCardLegendProps {
     className?: string;
-    /** Start collapsed */
     defaultCollapsed?: boolean;
-    /** Inline mode renders a compact single-row summary */
-    inline?: boolean;
 }
 
 // ============================================================================
@@ -136,71 +80,89 @@ export interface ShiftCardLegendProps {
 export const ShiftCardLegend: React.FC<ShiftCardLegendProps> = ({
     className,
     defaultCollapsed = true,
-    inline = false,
 }) => {
     const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
 
-    // Inline mode: flat row of all icons with tooltips
-    if (inline) {
-        return (
-            <div className={cn('flex flex-wrap items-center gap-3 text-xs', className)}>
-                <HelpCircle className="h-3.5 w-3.5 text-slate-400 dark:text-white/40 shrink-0" />
-                {LEGEND_SECTIONS.map((section) =>
-                    section.items.map((item) => (
-                        <div
-                            key={item.label}
-                            className="flex items-center gap-1 text-slate-500 dark:text-white/60"
-                            title={`${item.label}: ${item.description}`}
-                        >
-                            {item.icon}
-                            <span className="text-[10px]">{item.label}</span>
-                        </div>
-                    ))
-                )}
-            </div>
-        );
-    }
-
     return (
-        <div className={cn('rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-black/20 backdrop-blur-sm overflow-hidden', className)}>
+        <div className={cn(
+            'rounded-xl border border-slate-200 dark:border-white/10 bg-white/40 dark:bg-black/20 backdrop-blur-xl overflow-hidden transition-all duration-300',
+            className
+        )}>
             {/* Toggle Header */}
             <button
                 onClick={() => setIsCollapsed(!isCollapsed)}
-                className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
             >
-                <div className="flex items-center gap-2">
-                    <HelpCircle className="h-3.5 w-3.5 text-slate-400 dark:text-white/50" />
-                    <span className="text-xs font-medium text-slate-700 dark:text-white/80">Shift Card Legend</span>
+                <div className="flex items-center gap-3">
+                    <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                        <HelpCircle className="h-4 w-4" />
+                    </div>
+                    <div className="flex flex-col items-start leading-tight">
+                        <span className="text-[11px] font-black uppercase tracking-widest text-foreground">Badge Legend</span>
+                        <span className="text-[9px] font-medium text-muted-foreground/60 uppercase">Indicator & Status Reference</span>
+                    </div>
                 </div>
                 {isCollapsed ? (
-                    <ChevronDown className="h-3.5 w-3.5 text-slate-400 dark:text-white/40" />
+                    <ChevronDown className="h-4 w-4 text-muted-foreground/40" />
                 ) : (
-                    <ChevronUp className="h-3.5 w-3.5 text-slate-400 dark:text-white/40" />
+                    <ChevronUp className="h-4 w-4 text-muted-foreground/40" />
                 )}
             </button>
 
-            {/* Legend Body - Compact Grid */}
+            {/* Legend Body - Detailed Table */}
             {!isCollapsed && (
-                <div className="px-3 pb-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-                    {LEGEND_SECTIONS.map((section) => (
-                        <div key={section.title} className="space-y-1.5">
-                            <h4 className="text-[9px] font-bold uppercase tracking-widest text-slate-400 dark:text-white/30 border-b border-slate-200 dark:border-white/5 pb-0.5">
-                                {section.title}
-                            </h4>
-                            <div className="space-y-1">
-                                {section.items.map((item) => (
-                                    <div key={item.label} className="flex items-center gap-1.5 group select-none" title={item.description}>
-                                        <div className="shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
-                                            {React.cloneElement(item.icon as React.ReactElement, { className: cn((item.icon as React.ReactElement).props.className, 'h-3 w-3') })}
-                                        </div>
-                                        <span className="text-[10px] text-slate-500 dark:text-white/60 group-hover:text-slate-800 dark:group-hover:text-white/90 truncate cursor-help transition-colors">
-                                            {item.label}
-                                        </span>
-                                    </div>
+                <div className="px-1 pb-1">
+                    <div className="overflow-x-auto rounded-lg border border-border/40 bg-card/30">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-muted/30">
+                                    <th className="px-3 py-2 text-[9px] font-black uppercase tracking-tighter text-muted-foreground/50 border-b border-border/40">Status</th>
+                                    <th className="px-2 py-2 text-[9px] font-black uppercase tracking-tighter text-muted-foreground/50 border-b border-border/40 text-center">Dot</th>
+                                    <th className="px-2 py-2 text-[9px] font-black uppercase tracking-tighter text-muted-foreground/50 border-b border-border/40 text-center">Code</th>
+                                    <th className="px-3 py-2 text-[9px] font-black uppercase tracking-tighter text-muted-foreground/50 border-b border-border/40">Trigger / Context</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border/20">
+                                {BADGE_CODES.map((item, idx) => (
+                                    <tr key={idx} className="hover:bg-primary/5 transition-colors group">
+                                        <td className="px-3 py-2.5">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-1 rounded bg-black/5 dark:bg-white/5 text-muted-foreground group-hover:text-foreground transition-colors">
+                                                    {item.icon}
+                                                </div>
+                                                <span className="text-[10px] font-black uppercase tracking-tight text-foreground/80 break-keep">
+                                                    {item.label}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-2 py-2.5 text-center">
+                                            {item.dot ? (
+                                                <div 
+                                                    className="inline-block h-2 w-2 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.2)] ring-1 ring-black/10" 
+                                                    style={{ backgroundColor: item.dot }} 
+                                                />
+                                            ) : (
+                                                <span className="text-[8px] text-muted-foreground/30">—</span>
+                                            )}
+                                        </td>
+                                        <td className="px-2 py-2.5 text-center font-mono">
+                                            <span className={cn(
+                                                "text-[9px] font-black px-1 py-0.5 rounded leading-none transition-all",
+                                                item.code !== '-' ? "bg-black/10 dark:bg-white/10 text-foreground/60 group-hover:bg-primary/20 group-hover:text-primary" : "text-muted-foreground/20"
+                                            )}>
+                                                {item.code}
+                                            </span>
+                                        </td>
+                                        <td className="px-3 py-2.5">
+                                            <p className="text-[9px] font-medium text-muted-foreground/70 leading-[1.3] group-hover:text-muted-foreground transition-colors">
+                                                {item.description}
+                                            </p>
+                                        </td>
+                                    </tr>
                                 ))}
-                            </div>
-                        </div>
-                    ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
         </div>

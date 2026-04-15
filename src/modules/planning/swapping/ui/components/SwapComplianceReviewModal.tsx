@@ -31,6 +31,8 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
 import { Dialog, DialogPortal, DialogOverlay } from '@/modules/core/ui/primitives/dialog';
 import * as RadixDialog from '@radix-ui/react-dialog';
+import { Drawer, DrawerContent } from '@/modules/core/ui/primitives/drawer';
+import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { cn } from '@/modules/core/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/platform/realtime/client';
@@ -730,6 +732,7 @@ export function SwapComplianceReviewModal({
     onConfirmOffer,
     isSubmitting = false,
 }: SwapComplianceReviewModalProps) {
+    const isMobile = useIsMobile();
     const [step, setStep] = useState<Step>('exchange');
     const [isRunning, setIsRunning] = useState(false);
     const [solverResult, setSolverResult] = useState<SolverResult | null>(null);
@@ -942,11 +945,8 @@ export function SwapComplianceReviewModal({
     // Render
     // ------------------------------------------------------------------
 
-    return (
-        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogPortal>
-                <DialogOverlay className="backdrop-blur-md" />
-                <RadixDialog.Content className="fixed left-[50%] top-[50%] z-50 w-full max-w-2xl max-h-[92vh] -translate-x-1/2 -translate-y-1/2 flex flex-col rounded-[2rem] border border-border shadow-2xl overflow-hidden bg-card focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+    const innerContent = (
+        <>
                 {/* Top stripe */}
                 <div className={cn('h-1.5 shrink-0',
                     step === 'exchange' ? 'bg-primary/40' :
@@ -1211,6 +1211,25 @@ export function SwapComplianceReviewModal({
                         </div>
                     )}
                 </div>
+        </>
+    );
+
+    if (isMobile) {
+        return (
+            <Drawer open={isOpen} onOpenChange={(open) => !open && onClose()}>
+                <DrawerContent className="h-[90dvh] bg-card border-border p-0 overflow-hidden flex flex-col">
+                    {innerContent}
+                </DrawerContent>
+            </Drawer>
+        );
+    }
+
+    return (
+        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+            <DialogPortal>
+                <DialogOverlay className="backdrop-blur-md" />
+                <RadixDialog.Content className="fixed left-[50%] top-[50%] z-50 w-full max-w-2xl max-h-[92vh] -translate-x-1/2 -translate-y-1/2 flex flex-col rounded-[2rem] border border-border shadow-2xl overflow-hidden bg-card focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+                    {innerContent}
                 </RadixDialog.Content>
             </DialogPortal>
         </Dialog>

@@ -56,6 +56,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
         rosterStructure,
         activeSubGroups,
         isLoadingData,
+        isLoadingShifts,
 
         // Context
         resolvedContext,
@@ -169,6 +170,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                                 rosterStructure={rosterStructure}
                                 activeSubGroups={Object.values(activeSubGroups).flat()}
                                 isLoadingData={isLoadingData}
+                                isLoadingShifts={isLoadingShifts}
                                 resolvedContext={resolvedContext}
                                 selectedRosterId={selectedRosterId}
                                 setSelectedRosterId={setSelectedRosterId}

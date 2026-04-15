@@ -588,3 +588,39 @@ body {
 .light .broadcast-group-card .broadcast-card-hover-overlay {
   background: rgba(0, 0, 0, 0.02);
 }
+
+/* ============================================================
+   ACTION BUTTON SEMANTIC COLORS
+   Light mode uses solid tinted backgrounds; dark keeps alpha tints.
+   Usage: className="action-btn-rose rounded-lg px-3 py-1.5 text-sm"
+   ============================================================ */
+@layer components {
+  .action-btn-rose {
+    @apply bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20;
+  }
+
+  .action-btn-emerald {
+    @apply bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20;
+  }
+
+  .action-btn-amber {
+    @apply bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20;
+  }
+
+  .action-btn-indigo {
+    @apply bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20;
+  }
+
+  .action-btn-teal {
+    @apply bg-teal-50 text-teal-700 border border-teal-200 dark:bg-teal-500/10 dark:text-teal-400 dark:border-teal-500/20;
+  }
+
+  /* Generic surface helpers */
+  .surface-card {
+    @apply bg-card border border-border rounded-2xl shadow-sm;
+  }
+
+  .surface-muted {
+    @apply bg-muted/40 dark:bg-muted/20 rounded-xl;
+  }
+}

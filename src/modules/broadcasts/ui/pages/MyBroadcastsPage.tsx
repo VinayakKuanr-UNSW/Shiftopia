@@ -9,7 +9,7 @@ export const MyBroadcastsPage: React.FC = () => {
   const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
 
   return (
-    <div>
+    <div className="pb-24 md:pb-0">
       <ScopeFilterBanner
         mode="personal"
         onScopeChange={setScope}

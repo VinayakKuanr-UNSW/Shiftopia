@@ -19,14 +19,12 @@ interface AvailabilityListProps {
   rules: AvailabilityRule[];
   onEditRule: (ruleId: string) => void;
   onDeleteRule: (ruleId: string) => void;
-  isLocked?: boolean;
 }
 
 export const AvailabilityList: React.FC<AvailabilityListProps> = ({
   rules,
   onEditRule,
   onDeleteRule,
-  isLocked = false,
 }) => {
   if (rules.length === 0) {
     return (
@@ -64,7 +62,7 @@ export const AvailabilityList: React.FC<AvailabilityListProps> = ({
           rule={rule}
           onEdit={() => onEditRule(rule.id)}
           onDelete={() => onDeleteRule(rule.id)}
-          isLocked={isLocked}
+          onDelete={() => onDeleteRule(rule.id)}
         />
       ))}
     </div>

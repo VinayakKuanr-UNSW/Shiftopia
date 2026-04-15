@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/modules/core/ui/primitives/dialog';
+import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 import { BroadcastGroupFormFields } from './BroadcastGroupFormFields';
 
 export interface CreateGroupDialogProps {
@@ -54,14 +54,14 @@ export const CreateGroupDialog: React.FC<CreateGroupDialogProps> = ({
     };
 
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                    <DialogTitle>Create New Broadcast Group</DialogTitle>
-                    <DialogDescription>
-                        This group will be created under your current scope. Change the global scope filter to create groups in a different area.
-                    </DialogDescription>
-                </DialogHeader>
+        <ResponsiveDialog open={isOpen} onOpenChange={(open) => !open && onClose()} dialogClassName="sm:max-w-[500px]">
+            <ResponsiveDialog.Header>
+                <ResponsiveDialog.Title>Create New Broadcast Group</ResponsiveDialog.Title>
+                <ResponsiveDialog.Description>
+                    This group will be created under your current scope. Change the global scope filter to create groups in a different area.
+                </ResponsiveDialog.Description>
+            </ResponsiveDialog.Header>
+            <ResponsiveDialog.Body className="overflow-y-auto max-h-[70dvh]">
                 <div className="space-y-4 py-4">
                     <BroadcastGroupFormFields
                         name={name}
@@ -71,15 +71,15 @@ export const CreateGroupDialog: React.FC<CreateGroupDialogProps> = ({
                         disabled={isCreating}
                     />
                 </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={onClose} disabled={isCreating}>
-                        Cancel
-                    </Button>
-                    <Button onClick={handleCreate} disabled={isCreating || !name.trim()}>
-                        {isCreating ? "Creating..." : "Create Group"}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+            </ResponsiveDialog.Body>
+            <ResponsiveDialog.Footer>
+                <Button variant="outline" onClick={onClose} disabled={isCreating}>
+                    Cancel
+                </Button>
+                <Button onClick={handleCreate} disabled={isCreating || !name.trim()}>
+                    {isCreating ? "Creating..." : "Create Group"}
+                </Button>
+            </ResponsiveDialog.Footer>
+        </ResponsiveDialog>
     );
 };

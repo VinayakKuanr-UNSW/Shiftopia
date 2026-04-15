@@ -1,13 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { format, isBefore, startOfDay } from 'date-fns';
 import { Plus, Minus, Clock, Trash2, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/modules/core/ui/primitives/dialog';
+import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
@@ -40,7 +34,6 @@ interface DayInteractionModalProps {
     notes?: string;
   }) => Promise<boolean>;
   onDelete: (date: Date) => Promise<boolean>;
-  isLocked?: boolean;
 }
 
 interface TimeSlotForm {
@@ -66,14 +59,7 @@ const timeToMinutes = (time: string): number => {
 };
 
 
-export function DayInteractionModal({
-  isOpen,
-  onClose,
-  selectedDate,
-  existingAvailability,
-  onSave,
   onDelete,
-  isLocked = false
 }: DayInteractionModalProps) {
   const [timeSlots, setTimeSlots] = useState<TimeSlotForm[]>([]);
   const [notes, setNotes] = useState('');
@@ -316,43 +302,43 @@ export function DayInteractionModal({
   // Show warning for past dates
   if (isPastDate) {
     return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-yellow-600">
-              <AlertTriangle className="h-5 w-5" />
-              Cannot Edit Past Date
-            </DialogTitle>
-            <DialogDescription>
-              You cannot set or modify availability for past dates.
-            </DialogDescription>
-          </DialogHeader>
+      <ResponsiveDialog open={isOpen} onOpenChange={onClose} dialogClassName="max-w-md">
+        <ResponsiveDialog.Header>
+          <ResponsiveDialog.Title className="flex items-center gap-2 text-yellow-600">
+            <AlertTriangle className="h-5 w-5" />
+            Cannot Edit Past Date
+          </ResponsiveDialog.Title>
+          <ResponsiveDialog.Description>
+            You cannot set or modify availability for past dates.
+          </ResponsiveDialog.Description>
+        </ResponsiveDialog.Header>
+        <ResponsiveDialog.Body>
           <div className="text-center py-4">
             <p className="text-muted-foreground">
               {format(selectedDate, 'EEEE, MMMM d, yyyy')} is in the past.
             </p>
           </div>
-          <div className="flex justify-end">
-            <Button onClick={onClose} variant="outline">Close</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        </ResponsiveDialog.Body>
+        <ResponsiveDialog.Footer>
+          <Button onClick={onClose} variant="outline">Close</Button>
+        </ResponsiveDialog.Footer>
+      </ResponsiveDialog>
     );
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Availability for {format(selectedDate, 'EEEE, MMMM d, yyyy')}
-          </DialogTitle>
-          <DialogDescription>
-            Set your availability time slots for this day
-          </DialogDescription>
-        </DialogHeader>
+    <ResponsiveDialog open={isOpen} onOpenChange={onClose} dialogClassName="max-w-2xl">
+      <ResponsiveDialog.Header>
+        <ResponsiveDialog.Title className="flex items-center gap-2">
+          <Clock className="h-5 w-5" />
+          Availability for {format(selectedDate, 'EEEE, MMMM d, yyyy')}
+        </ResponsiveDialog.Title>
+        <ResponsiveDialog.Description>
+          Set your availability time slots for this day
+        </ResponsiveDialog.Description>
+      </ResponsiveDialog.Header>
 
+      <ResponsiveDialog.Body className="overflow-y-auto max-h-[70dvh]">
         <div className="space-y-6">
           {/* Quick Action Buttons */}
           <div className="flex flex-wrap gap-2 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -361,7 +347,6 @@ export function DayInteractionModal({
               variant="outline"
               size="sm"
               className="text-green-600 hover:text-green-700 hover:bg-green-50"
-              disabled={isLocked}
             >
               <CheckCircle className="h-4 w-4 mr-1" />
               Mark Fully Available
@@ -371,7 +356,6 @@ export function DayInteractionModal({
               variant="outline"
               size="sm"
               className="text-red-600 hover:text-red-700 hover:bg-red-50"
-              disabled={isLocked}
             >
               <XCircle className="h-4 w-4 mr-1" />
               Mark Fully Unavailable
@@ -381,7 +365,6 @@ export function DayInteractionModal({
               variant="outline"
               size="sm"
               className="text-gray-600 hover:text-gray-700"
-              disabled={isLocked}
             >
               <Trash2 className="h-4 w-4 mr-1" />
               Clear All
@@ -403,7 +386,6 @@ export function DayInteractionModal({
                   onClick={addTimeSlot}
                   variant="outline"
                   className="mt-2"
-                  disabled={isLocked}
                 >
                   <Plus className="h-4 w-4 mr-1" />
                   Add Time Slot
@@ -428,7 +410,6 @@ export function DayInteractionModal({
                         value={slot.startTime}
                         onChange={(e) => updateTimeSlot(slot.id, 'startTime', e.target.value)}
                         className="mt-1"
-                        disabled={isLocked}
                         step="60"
                       />
                     </div>
@@ -441,7 +422,6 @@ export function DayInteractionModal({
                         value={slot.endTime}
                         onChange={(e) => updateTimeSlot(slot.id, 'endTime', e.target.value)}
                         className="mt-1"
-                        disabled={isLocked}
                         step="60"
                       />
                     </div>
@@ -454,7 +434,6 @@ export function DayInteractionModal({
                         onValueChange={(value: 'Available' | 'Unavailable') =>
                           updateTimeSlot(slot.id, 'status', value)
                         }
-                        disabled={isLocked}
                       >
                         <SelectTrigger className="mt-1">
                           <SelectValue />
@@ -472,7 +451,6 @@ export function DayInteractionModal({
                       variant="outline"
                       size="icon"
                       className="text-red-600 hover:text-red-700 mt-5"
-                      disabled={isLocked}
                     >
                       <Minus className="h-4 w-4" />
                     </Button>
@@ -484,7 +462,6 @@ export function DayInteractionModal({
                   onClick={addTimeSlot}
                   variant="outline"
                   className="w-full"
-                  disabled={isLocked}
                 >
                   <Plus className="h-4 w-4 mr-1" />
                   Add Another Time Slot
@@ -503,38 +480,40 @@ export function DayInteractionModal({
               placeholder="Add any additional notes about your availability..."
               className="w-full px-3 py-2 border border-input rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
               rows={3}
-              disabled={isLocked}
             />
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-between pt-4">
-            <div className="flex gap-2">
-              {hasExistingData && (
-                <Button
-                  onClick={handleDelete}
-                  variant="destructive"
-                  disabled={isDeleting || isLocked}
-                >
-                  {isDeleting ? 'Deleting...' : 'Delete Availability'}
-                </Button>
-              )}
-            </div>
+        </div>
+      </ResponsiveDialog.Body>
 
-            <div className="flex gap-2">
-              <Button onClick={onClose} variant="outline">
-                Cancel
-              </Button>
+      <ResponsiveDialog.Footer>
+        <div className="flex justify-between w-full">
+          <div className="flex gap-2">
+            {hasExistingData && (
               <Button
-                onClick={handleSave}
-                disabled={isSaving || isLocked || isDeleting}
+                onClick={handleDelete}
+                variant="destructive"
+                disabled={isDeleting}
               >
-                {isSaving || isDeleting ? 'Saving...' : 'Save Availability'}
+                {isDeleting ? 'Deleting...' : 'Delete Availability'}
               </Button>
-            </div>
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            <Button onClick={onClose} variant="outline">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={isSaving || isDeleting}
+            >
+              {isSaving || isDeleting ? 'Saving...' : 'Save Availability'}
+            </Button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialog.Footer>
+    </ResponsiveDialog>
   );
 }

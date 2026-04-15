@@ -42,7 +42,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, noPadding = false }) =>
         size="icon"
         onClick={() => toggleSidebar()}
         className={cn(
-          "hidden md:flex fixed top-4 z-50 h-8 w-8 rounded-full bg-card border border-border/50 shadow-md hover:bg-muted transition-all duration-300",
+          "hidden md:flex fixed top-4 z-[100] h-8 w-8 rounded-full bg-card border border-border/50 shadow-md hover:bg-muted transition-all duration-300",
           isCollapsed ? "left-4" : "left-[268px]"
         )}
       >
@@ -60,9 +60,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, noPadding = false }) =>
           isCollapsed ? "md:ml-0" : "md:ml-[280px]",
           // Roster pages must not scroll at top level
           noPadding
-            ? "p-0 pb-20 md:pb-0 overflow-hidden bg-background"
+            ? "p-0 overflow-hidden bg-background"
             // Normal pages scroll normally
-            : "p-4 sm:p-6 md:p-8 pb-20 md:pb-8 overflow-auto bg-background bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-background to-background"
+            : "p-4 sm:p-6 md:p-8 pb-32 md:pb-8 overflow-auto bg-background bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-background to-background"
         )}
       >
         {/* Critical Fix: use min-h-0 instead of h-full */}

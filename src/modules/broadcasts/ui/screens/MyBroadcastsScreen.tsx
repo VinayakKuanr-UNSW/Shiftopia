@@ -144,11 +144,11 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen w-full">
-        <div className="flex flex-col items-center gap-4 md:gap-6 p-6 md:p-8 rounded-2xl md:rounded-3xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 backdrop-blur-3xl shadow-sm dark:shadow-none">
+        <div className="flex flex-col items-center gap-4 md:gap-6 p-6 md:p-8 rounded-2xl md:rounded-3xl bg-card border border-border backdrop-blur-3xl shadow-sm">
           <Loader2 className="h-12 w-12 md:h-16 md:w-16 text-primary animate-spin" />
           <div className="text-center">
-            <h3 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white mb-1">Loading System</h3>
-            <p className="text-slate-500 dark:text-blue-200/60 text-sm md:text-base">Retrieving broadcast frequencies...</p>
+            <h3 className="text-lg md:text-xl font-bold text-foreground mb-1">Loading System</h3>
+            <p className="text-muted-foreground text-sm md:text-base">Retrieving broadcast frequencies...</p>
           </div>
         </div>
       </div>
@@ -164,8 +164,8 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
             <AlertTriangle className="h-8 w-8 md:h-10 md:w-10 text-red-500" />
           </div>
           <div>
-            <h3 className="text-lg md:text-xl font-bold text-slate-900 dark:text-white mb-2">Connection Error</h3>
-            <p className="text-red-700 dark:text-red-200/80 mb-4 md:mb-6 text-sm md:text-base">{error.message}</p>
+            <h3 className="text-lg md:text-xl font-bold text-foreground mb-2">Connection Error</h3>
+            <p className="text-red-700 dark:text-red-300 mb-4 md:mb-6 text-sm md:text-base">{error.message}</p>
             <Button onClick={() => refetch()} className="gap-2 bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20">
               <RefreshCw className="h-4 w-4" />
               Retry Connection
@@ -184,7 +184,7 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
     <motion.div
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white/80 dark:bg-[#1a2744]/40 backdrop-blur-2xl border border-slate-200 dark:border-white/10 rounded-2xl md:rounded-3xl px-4 md:px-8 py-6 md:py-8 mb-6 md:mb-8 relative overflow-hidden shadow-sm dark:shadow-none"
+      className="bg-card/80 backdrop-blur-2xl border border-border rounded-2xl md:rounded-3xl px-4 md:px-8 py-6 md:py-8 mb-6 md:mb-8 relative overflow-hidden shadow-sm"
     >
       <div className="absolute top-0 right-0 w-64 md:w-96 h-64 md:h-96 bg-primary/10 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
 
@@ -195,8 +195,8 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
               <Radio className="h-6 w-6 md:h-8 md:w-8 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Broadcasts</h1>
-              <p className="text-slate-500 dark:text-blue-200/60 mt-1 font-medium text-sm md:text-base">
+              <h1 className="text-2xl md:text-3xl font-bold text-foreground tracking-tight">Broadcasts</h1>
+              <p className="text-muted-foreground mt-1 font-medium text-sm md:text-base">
                 Company announcements and updates
               </p>
             </div>
@@ -205,12 +205,12 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
           {/* Status indicators */}
           <div className="flex flex-wrap items-center gap-2 md:gap-3">
             {isOnline ? (
-              <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] md:text-xs font-bold uppercase tracking-wider">
+              <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[10px] md:text-xs font-bold uppercase tracking-wider">
                 <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
                 Online
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] md:text-xs font-bold uppercase tracking-wider">
+              <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 rounded-full bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 text-[10px] md:text-xs font-bold uppercase tracking-wider">
                 <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-red-500" />
                 Offline
               </div>
@@ -226,11 +226,11 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
   // ========================================
 
   const renderChannelSidebar = (compact?: boolean) => (
-    <div className={cn('flex flex-col h-full', !compact && 'bg-slate-50 dark:bg-[#0d1424]/90 backdrop-blur-xl border-r border-slate-200 dark:border-white/5')}>
-      <div className={cn('p-4 md:p-6 border-b border-slate-200 dark:border-white/5', compact && 'p-4')}>
+    <div className={cn('flex flex-col h-full', !compact && 'bg-muted/30 backdrop-blur-xl border-r border-border')}>
+      <div className={cn('p-4 md:p-6 border-b border-border', compact && 'p-4')}>
         <Button
           variant="ghost"
-          className="w-full justify-start text-slate-500 dark:text-blue-200/60 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 mb-4 -ml-2"
+          className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted/50 mb-4 -ml-2"
           onClick={handleBack}
         >
           <ChevronLeft className="h-4 w-4 mr-2" />
@@ -244,19 +244,19 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
               GROUP_ICON_BG[selectedGroup?.color || 'blue']
             )}
           >
-            <div className="text-slate-700 dark:text-white">{GROUP_ICONS_SM[selectedGroup?.icon || 'megaphone']}</div>
+            <div className="text-foreground">{GROUP_ICONS_SM[selectedGroup?.icon || 'megaphone']}</div>
           </div>
-          <h2 className="font-bold text-lg text-slate-900 dark:text-white truncate">{selectedGroup?.name}</h2>
+          <h2 className="font-bold text-lg text-foreground truncate">{selectedGroup?.name}</h2>
         </div>
       </div>
 
       <ScrollArea className="flex-1 px-3 md:px-4 py-4">
         <div className="space-y-1">
-          <p className="px-3 md:px-4 text-[10px] md:text-xs font-bold text-slate-400 dark:text-blue-200/40 uppercase tracking-widest mb-2 md:mb-3">
+          <p className="px-3 md:px-4 text-[10px] md:text-xs font-bold text-muted-foreground/60 uppercase tracking-widest mb-2 md:mb-3">
             Channels
           </p>
           {selectedGroup?.channels?.length === 0 ? (
-            <div className="px-4 py-6 md:py-8 text-center text-xs md:text-sm text-slate-400 dark:text-white/30 italic">
+            <div className="px-4 py-6 md:py-8 text-center text-xs md:text-sm text-muted-foreground/50 italic">
               No channels
             </div>
           ) : (
@@ -279,16 +279,16 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
 
       {/* User Profile Mini */}
       {user && (
-        <div className="p-3 md:p-4 border-t border-slate-200 dark:border-white/5 bg-slate-100/60 dark:bg-black/20">
+        <div className="p-3 md:p-4 border-t border-border bg-muted/40">
           <div className="flex items-center gap-2 md:gap-3">
-            <Avatar className="h-8 w-8 md:h-9 md:w-9 border border-slate-200 dark:border-white/10">
-              <AvatarFallback className="bg-primary text-white text-[10px] md:text-xs">
+            <Avatar className="h-8 w-8 md:h-9 md:w-9 border border-border">
+              <AvatarFallback className="bg-primary text-primary-foreground text-[10px] md:text-xs">
                 {user?.name?.substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0">
-              <p className="text-xs md:text-sm font-bold text-slate-900 dark:text-white truncate">{user?.name}</p>
-              <p className="text-[10px] md:text-xs text-slate-400 dark:text-blue-200/40 truncate">{user?.role}</p>
+              <p className="text-xs md:text-sm font-bold text-foreground truncate">{user?.name}</p>
+              <p className="text-[10px] md:text-xs text-muted-foreground truncate">{user?.role}</p>
             </div>
           </div>
         </div>
@@ -303,13 +303,13 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
   if (!selectedGroup) {
     const gridCols =
       layout === 'mobile'
-        ? 'grid-cols-1'
+        ? 'grid-cols-1 sm:grid-cols-2'
         : layout === 'tablet'
           ? 'grid-cols-1 sm:grid-cols-2'
           : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
 
     return (
-      <div className="w-full min-h-screen p-4 md:p-8 bg-transparent">
+      <div className="w-full min-h-screen p-4 md:p-8 pb-24 md:pb-8 bg-transparent">
         {renderGroupsHeader()}
 
         {filteredGroups.length === 0 ? (
@@ -347,7 +347,7 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
         <div className="w-[280px] lg:w-[300px] shrink-0 z-20">{renderChannelSidebar()}</div>
 
         {/* Main Content - Messages */}
-        <div className="flex-1 flex flex-col min-w-0 relative bg-white dark:bg-[#0d1424]/50">
+        <div className="flex-1 flex flex-col min-w-0 relative bg-background/50">
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
 
           {selectedChannel ? (
@@ -377,7 +377,7 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
         <div className="w-[220px] shrink-0 z-20">{renderChannelSidebar(true)}</div>
 
         {/* Main Content - Messages */}
-        <div className="flex-1 flex flex-col min-w-0 relative bg-white dark:bg-[#0d1424]/50">
+        <div className="flex-1 flex flex-col min-w-0 relative bg-background/50">
           {selectedChannel ? (
             <ChannelView
               channelId={selectedChannel.id}
@@ -402,10 +402,10 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
   return (
     <div className="flex flex-col h-screen w-full bg-transparent overflow-hidden">
       {/* Mobile Header */}
-      <div className="flex-shrink-0 bg-white/90 dark:bg-[#1a2744]/60 backdrop-blur-xl border-b border-slate-200 dark:border-white/5 px-4 py-3">
+      <div className="flex-shrink-0 bg-card/90 backdrop-blur-xl border-b border-border px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={handleBack} className="text-slate-500 dark:text-white/60 hover:text-slate-900 dark:hover:text-white">
+            <Button variant="ghost" size="icon" onClick={handleBack} className="text-muted-foreground hover:text-foreground">
               <ChevronLeft className="h-5 w-5" />
             </Button>
             <div className="flex items-center gap-2">
@@ -415,27 +415,27 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
                   GROUP_ICON_BG[selectedGroup?.color || 'blue']
                 )}
               >
-                <div className="text-slate-700 dark:text-white">
+                <div className="text-foreground">
                   {React.cloneElement(GROUP_ICONS_SM[selectedGroup?.icon || 'megaphone'] as React.ReactElement, {
                     className: 'h-4 w-4',
                   })}
                 </div>
               </div>
-              <h2 className="font-bold text-base text-slate-900 dark:text-white truncate max-w-[150px]">{selectedGroup?.name}</h2>
+              <h2 className="font-bold text-base text-foreground truncate max-w-[150px]">{selectedGroup?.name}</h2>
             </div>
           </div>
 
           {/* Channel Selector Sheet */}
           <Sheet open={channelSheetOpen} onOpenChange={setChannelSheetOpen}>
             <SheetTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2 border-slate-200 dark:border-white/10 text-slate-700 dark:text-white">
+              <Button variant="outline" size="sm" className="gap-2 border-border text-foreground">
                 <Hash className="h-4 w-4" />
                 <span className="truncate max-w-[80px]">{selectedChannel?.name || 'Select'}</span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="bottom" className="bg-white dark:bg-[#0d1424] border-slate-200 dark:border-white/10 h-[60vh]">
+            <SheetContent side="bottom" className="bg-card border-border h-[60vh]">
               <SheetHeader>
-                <SheetTitle className="text-slate-900 dark:text-white">Select Channel</SheetTitle>
+                <SheetTitle className="text-foreground">Select Channel</SheetTitle>
               </SheetHeader>
               <ScrollArea className="h-full py-4">
                 <div className="space-y-1">
@@ -459,7 +459,7 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
       </div>
 
       {/* Main Content - Messages */}
-      <div className="flex-1 flex flex-col min-w-0 relative bg-white dark:bg-[#0d1424]/50 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 relative bg-background/50 overflow-hidden">
         {selectedChannel ? (
           <ChannelView
             channelId={selectedChannel.id}

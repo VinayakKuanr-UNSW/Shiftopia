@@ -56,10 +56,6 @@ const ClockOutResponseSchema = z.discriminatedUnion('success', [
   }),
 ]);
 
-const NoShowResponseSchema = z.discriminatedUnion('success', [
-  z.object({ success: z.literal(true) }),
-  z.object({ success: z.literal(false), error: z.string() }),
-]);
 
 // ── useClockIn ──────────────────────────────────────────────────────────────
 
@@ -229,50 +225,3 @@ export function useClockOut() {
   });
 }
 
-// ── useMarkNoShow ───────────────────────────────────────────────────────────
-
-export function useMarkNoShow() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: async ({ shiftId, reason }: { shiftId: string; reason: string }) => {
-      const user = await requireUser();
-
-      const raw = await callRpc('sm_mark_no_show', {
-        p_shift_id:   shiftId,
-        p_manager_id: user.id,
-        p_reason:     reason,
-      }, NoShowResponseSchema);
-
-      if (raw.success === false) {
-        throw new Error(raw.error);
-      }
-
-      auditApi.logManualEvent({
-        shiftId,
-        action:  'MARK_NO_SHOW',
-        reason,
-        metadata: {},
-      }).catch(() => {});
-
-      return raw;
-    },
-
-    onSuccess: () => {
-      toast({
-        title:       'Marked No-Show',
-        description: 'The employee has been marked as a no-show for this shift.',
-      });
-      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
-    },
-
-    onError: (error: Error) => {
-      toast({
-        title:       'Failed',
-        description: error.message,
-        variant:     'destructive',
-      });
-    },
-  });
-}

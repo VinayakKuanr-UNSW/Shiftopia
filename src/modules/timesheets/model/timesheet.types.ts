@@ -64,6 +64,11 @@ export interface TimesheetRow {
     // Adjusted (editable)
     adjustedStart: string;
     adjustedEnd: string;
+    /**
+     * true  → manager has explicitly saved a custom time (stored in timesheets.start_time)
+     * false → auto-snapped from Actual (or fell back to Scheduled). Display dimmed.
+     */
+    isAdjustedManual: boolean;
     length: string; // Auto-calculated
     paidBreak: string;
     unpaidBreak: string;
@@ -71,7 +76,7 @@ export interface TimesheetRow {
     // Payroll
     approximatePay: string;
     // Differential
-    differential: string; // Scheduled vs Actual difference
+    differential: string; // Scheduled vs Adjusted (financial) difference
     // Statuses
     liveStatus: 'Completed' | 'Cancelled' | 'Active' | 'No-Show' | 'Swapped' | string;
     timesheetStatus: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | string;
@@ -79,6 +84,15 @@ export interface TimesheetRow {
     attendanceStatus?: string | null;
     // Minutes delta: actual_start vs scheduled_start (positive = late, negative = early)
     varianceMinutes?: number | null;
+    // Minutes delta: adjusted_start vs actual_start (positive = adjusted later than actual)
+    adjustedVarianceMinutes?: number | null;
+    // Status Dot (Badge)
+    statusDot?: { color: string; label: string } | null;
+    // Raw fields for internal UI logic (indicators)
+    rawActualStart?: string | null;
+    rawActualEnd?: string | null;
+    rawStartAt?: string | null;
+    rawEndAt?: string | null;
 }
 
 /**

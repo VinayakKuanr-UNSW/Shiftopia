@@ -164,9 +164,9 @@ export function runHardValidation(input: HardValidationInput): HardValidationRes
     const rangeError = validateTimeRange(input);
     if (rangeError) errors.push(rangeError);
 
-    // Overlap handled by compliance engine (NoOverlapRule)
-    // const overlapError = validateNoOverlap(input);
-    // if (overlapError) errors.push(overlapError);
+    // Overlap handled by compliance engine (NoOverlapRule) but also here for immediate Level 1 blocking
+    const overlapError = validateNoOverlap(input);
+    if (overlapError) errors.push(overlapError);
 
     return {
         passed: errors.length === 0,

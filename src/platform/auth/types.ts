@@ -121,4 +121,17 @@ export interface User {
     contracts: UserContract[];
     certificates: AccessCertificate[];
     highestAccessLevel: AccessLevel;
+    preferences?: {
+        appearance?: {
+            brand_color?: string;
+            chart_style?: string;
+            language?: string;
+            cookie_banner?: string;
+        };
+        notifications?: {
+            email?: boolean;
+            push?: boolean;
+            browser?: boolean;
+        };
+    };
 }

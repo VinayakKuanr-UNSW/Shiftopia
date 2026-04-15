@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ScopeTree, ScopeOrg, ScopeDept, ScopeSelection } from '@/platform/auth/types';
-import { ChevronDown, Lock, Building2, Layers, Users2, PanelLeft } from 'lucide-react';
+import { ChevronDown, Lock, Building2, Layers, Users2 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
-import { SidebarTrigger } from '@/modules/core/ui/primitives/sidebar';
+// SidebarTrigger removed as it conflicts with AppLayout persistent toggle
 
 // =============================================
 // Types
@@ -327,8 +327,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
             className
         )}>
             <div className="flex items-center gap-1.5 w-full">
-                {/* Unified Sidebar Trigger */}
-                <SidebarTrigger className="h-8 w-8 hover:bg-white/10 text-slate-500 dark:text-white/60 shrink-0" />
+                {/* Unified Sidebar Trigger removed as it conflicts with AppLayout persistent toggle */}
                 
                 <div className="flex-1 min-w-0">
                     <MultiSelect

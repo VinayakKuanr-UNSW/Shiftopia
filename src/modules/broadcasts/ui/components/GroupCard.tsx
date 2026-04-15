@@ -4,6 +4,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 import { BroadcastGroupWithStats } from '../../model/broadcast.types';
+import { motion } from 'framer-motion';
 
 const GROUP_ICONS: Record<string, React.ReactNode> = {
     megaphone: <Megaphone className="h-6 w-6" />,
@@ -30,12 +31,14 @@ export const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onDelete }
     const icon = GROUP_ICONS[group.icon || 'megaphone'];
 
     return (
-        <div
+        <motion.div
+            whileHover={{ y: -2, transition: { duration: 0.15 } }}
+            whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}
             className={cn(
-                'relative rounded-2xl overflow-hidden transition-all duration-300',
+                'relative rounded-2xl overflow-hidden transition-shadow duration-300',
                 'bg-gradient-to-br border-2 backdrop-blur-sm',
                 colorClass,
-                'hover:shadow-xl hover:shadow-black/20 hover:scale-[1.02]',
+                'hover:shadow-xl hover:shadow-black/20',
                 'min-h-[240px] flex flex-col'
             )}
         >
@@ -113,6 +116,6 @@ export const GroupCard: React.FC<GroupCardProps> = ({ group, onClick, onDelete }
             </div>
 
             <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-        </div>
+        </motion.div>
     );
 };

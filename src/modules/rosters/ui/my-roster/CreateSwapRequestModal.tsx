@@ -31,11 +31,17 @@ const formatTime = (time: string): string => {
 
 const getGradientClass = (color: string): string => {
   switch (color) {
-    case 'blue': return 'bg-gradient-to-br from-blue-600 to-blue-800';
-    case 'green': return 'bg-gradient-to-br from-green-600 to-green-800';
-    case 'red': return 'bg-gradient-to-br from-red-600 to-red-800';
-    case 'purple': return 'bg-gradient-to-br from-purple-600 to-purple-800';
-    default: return 'bg-gradient-to-br from-slate-600 to-slate-800';
+    case 'blue':
+    case 'convention':
+      return 'dept-card-glass-base dept-card-glass-convention';
+    case 'green':
+    case 'exhibition':
+      return 'dept-card-glass-base dept-card-glass-exhibition';
+    case 'red':
+    case 'theatre':
+      return 'dept-card-glass-base dept-card-glass-theatre';
+    default:
+      return 'dept-card-glass-base dept-card-glass-default';
   }
 };
 
@@ -122,39 +128,39 @@ const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
 
   // ── Shared content ────────────────────────────────────────────────────────────
   const shiftCard = (
-    <div className={cn('rounded-2xl p-4 text-white shadow-xl', getGradientClass(groupColor))}>
-      <div className="flex items-center gap-2 mb-2 text-[10px] font-black uppercase tracking-widest opacity-60">
+    <div className={cn('rounded-2xl p-4 shadow-xl text-foreground', getGradientClass(groupColor))}>
+      <div className="flex items-center gap-2 mb-2 text-[10px] font-black uppercase tracking-widest text-foreground/50">
         <Calendar className="h-3.5 w-3.5" />
         Shift to Swap
       </div>
       <div className="flex items-center justify-between mb-2">
-        <div className="text-xl font-black tracking-tight">{shift.roles?.name || 'Shift'}</div>
+        <div className="text-xl font-black tracking-tight text-foreground">{shift.roles?.name || 'Shift'}</div>
         <div className="flex items-center gap-1.5">
           {urgency === 'emergent' && (
-            <Badge className="bg-rose-500/80 text-white border-rose-400/40 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 animate-pulse">
+            <Badge className="bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-400/40 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 animate-pulse">
               <Flame className="h-2.5 w-2.5" />
               Emergent
             </Badge>
           )}
           {urgency === 'urgent' && (
-            <Badge className="bg-amber-500/80 text-white border-amber-400/40 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+            <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-400/40 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
               <Zap className="h-2.5 w-2.5" />
               Urgent
             </Badge>
           )}
         </div>
       </div>
-      <div className="text-xs font-bold opacity-80 mb-4 uppercase tracking-tight">
+      <div className="text-xs font-bold text-foreground/70 mb-4 uppercase tracking-tight">
         {groupName || shift.departments?.name} | {subGroupName || shift.sub_group_name}
       </div>
       <div className="grid grid-cols-2 gap-3 text-xs">
-        <div className="flex items-center gap-2 bg-black/20 rounded-xl p-2.5">
+        <div className="flex items-center gap-2 bg-muted/40 dark:bg-black/20 rounded-xl p-2.5">
           <Clock className="h-4 w-4 opacity-60" />
-          <span className="font-bold">{formatTime(shift.start_time)}-{formatTime(shift.end_time)}</span>
+          <span className="font-bold text-foreground">{formatTime(shift.start_time)}-{formatTime(shift.end_time)}</span>
         </div>
-        <div className="flex items-center gap-2 bg-black/20 rounded-xl p-2.5 text-center justify-center">
+        <div className="flex items-center gap-2 bg-muted/40 dark:bg-black/20 rounded-xl p-2.5 text-center justify-center">
           <Timer className="h-4 w-4 opacity-60" />
-          <span className="font-bold">{netLength}</span>
+          <span className="font-bold text-foreground">{netLength}</span>
         </div>
       </div>
     </div>

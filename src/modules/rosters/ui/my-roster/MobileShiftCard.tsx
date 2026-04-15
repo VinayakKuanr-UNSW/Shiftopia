@@ -3,6 +3,8 @@ import { format } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Clock, MapPin, ArrowLeftRight, X, Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { cardInteractive } from '@/modules/core/ui/motion/presets';
 import { Shift } from '@/modules/rosters';
 import { useDropShift } from '@/modules/rosters/state/useRosterShifts';
 import { useSwaps } from '@/modules/planning';
@@ -112,26 +114,27 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, sel
   };
 
   return (
-    <div
+    <motion.div
+      {...cardInteractive}
       className={cn(
-        "relative overflow-hidden rounded-2xl p-6 min-h-[180px] transition-all active:scale-[0.99] border border-white/10 shadow-2xl flex flex-col justify-between",
+        "relative overflow-hidden rounded-2xl p-6 min-h-[180px] border border-border/40 shadow-xl flex flex-col justify-between",
         getGradientClass(groupColor)
       )}
     >
       {/* Header: GROUP | SUBGROUP */}
       <div className="flex justify-between items-start mb-3">
         <div className="space-y-1">
-          <div className="text-white/60 font-black text-[10px] uppercase tracking-widest">
+          <div className="text-foreground/50 font-black text-[10px] uppercase tracking-widest">
             {groupName} | {subGroupName}
           </div>
-          <div className="text-white font-black text-xl leading-tight tracking-tight">
+          <div className="text-foreground font-black text-xl leading-tight tracking-tight">
             {shift.roles?.name || 'Shift'}
           </div>
         </div>
       </div>
 
       {/* Details Row */}
-      <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-white/90">
+      <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 text-foreground/80">
         <div className="flex items-center gap-2">
           <Clock className="h-4 w-4 opacity-70" />
           <span className="text-[12px] font-black tracking-tight">
@@ -155,7 +158,9 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, sel
           disabled={isLockedFromActions}
           className={cn(
             "flex-1 h-12 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg transition-all",
-            "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20 border-none"
+            "bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100",
+            "dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20 dark:hover:bg-indigo-500/20",
+            "disabled:opacity-50"
           )}
         >
           <ArrowLeftRight size={16} className="mr-2" />
@@ -166,7 +171,9 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, sel
           disabled={isLockedFromActions}
           className={cn(
             "flex-1 h-12 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg transition-all",
-            "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-500/20 border-none"
+            "bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100",
+            "dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20 dark:hover:bg-rose-500/20",
+            "disabled:opacity-50"
           )}
         >
           <X size={16} className="mr-2" />
@@ -186,32 +193,32 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, sel
       />
 
       <Drawer open={isCancelConfirmOpen} onOpenChange={setIsCancelConfirmOpen}>
-        <DrawerContent className="border-white/10 bg-slate-900/95 backdrop-blur-2xl px-4">
+        <DrawerContent className="border-border bg-background backdrop-blur-2xl px-4">
           <DrawerHeader>
-            <DrawerTitle className="text-xl font-black uppercase tracking-tight text-white">Drop Shift</DrawerTitle>
+            <DrawerTitle className="text-xl font-black uppercase tracking-tight text-foreground">Drop Shift</DrawerTitle>
             <DrawerDescription className="text-muted-foreground/80">
                Why are you dropping this shift?
             </DrawerDescription>
           </DrawerHeader>
           <div className="py-2 space-y-4">
             <div className="space-y-2">
-              <Label className="text-xs font-black uppercase tracking-widest opacity-60 text-white/60">Reason Required</Label>
+              <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Reason Required</Label>
               <Textarea
                 placeholder="Manager needs to know why..."
-                className="rounded-2xl bg-white/5 border-white/10 min-h-[120px] text-white"
+                className="rounded-2xl bg-muted/30 border-border min-h-[120px] text-foreground"
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
               />
             </div>
           </div>
           <DrawerFooter className="gap-3 pb-8">
-            <Button variant="ghost" onClick={() => setIsCancelConfirmOpen(false)} className="rounded-2xl h-14 uppercase text-xs font-black text-white hover:bg-white/5">Keep Shift</Button>
-            <Button onClick={confirmDrop} disabled={isDropping || !cancelReason.trim()} className="rounded-2xl h-14 uppercase text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-xl shadow-rose-900/20">
+            <Button variant="ghost" onClick={() => setIsCancelConfirmOpen(false)} className="rounded-2xl h-14 uppercase text-xs font-black text-foreground hover:bg-muted">Keep Shift</Button>
+            <Button onClick={confirmDrop} disabled={isDropping || !cancelReason.trim()} className="rounded-2xl h-14 uppercase text-xs font-black bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20 shadow-xl">
               {isDropping ? <Loader2 className="animate-spin h-5 w-5" /> : 'Confirm Drop'}
             </Button>
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
-    </div>
+    </motion.div>
   );
 };
