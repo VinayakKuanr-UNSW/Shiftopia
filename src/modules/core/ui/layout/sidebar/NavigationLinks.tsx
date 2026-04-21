@@ -191,15 +191,7 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
         />
       )}
 
-      {hasPermission('management') && (
-        <NavItem
-          icon={<ClipboardList className="h-5 w-5" />}
-          label="Audit Trail"
-          path="/audit"
-          active={isRouteActive('/audit')}
-          sectionColor="green"
-        />
-      )}
+
 
     </div>
   );

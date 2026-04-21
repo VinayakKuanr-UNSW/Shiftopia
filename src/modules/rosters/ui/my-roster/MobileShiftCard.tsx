@@ -10,6 +10,7 @@ import { useDropShift } from '@/modules/rosters/state/useRosterShifts';
 import { useSwaps } from '@/modules/planning';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { isShiftLocked, isShiftCommenced } from '@/modules/rosters/domain/shift-locking.utils';
+import { getProtectionContext } from '@/modules/rosters/domain/shift-ui';
 import CreateSwapRequestModal from './CreateSwapRequestModal';
 import {
   Dialog,
@@ -90,7 +91,23 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, sel
   const hasCheckedIn = shift.attendance_status === 'checked_in' || shift.attendance_status === 'late';
 
   const isS3PendingOffer = shift.lifecycle_status === 'Published' && shift.assignment_status === 'assigned' && !shift.assignment_outcome;
-  const isLockedFromActions = shift.is_cancelled || !!existingSwapRequest || isPendingInOffer || isWithinLockoutPeriod || isS3PendingOffer || isActiveOrCommenced || hasCheckedIn;
+  
+  const isPast = React.useMemo(() => {
+    if (!shift.shift_date || !shift.end_time) return false;
+    try {
+      const endStr = `${shift.shift_date}T${shift.end_time}`;
+      return new Date(endStr).getTime() < Date.now();
+    } catch {
+      return false;
+    }
+  }, [shift.shift_date, shift.end_time]);
+
+  const protection = React.useMemo(() => getProtectionContext(
+    { lifecycle_status: shift.lifecycle_status },
+    isPast
+  ), [shift.lifecycle_status, isPast]);
+
+  const isLockedFromActions = shift.is_cancelled || !!existingSwapRequest || isPendingInOffer || isWithinLockoutPeriod || isS3PendingOffer || isActiveOrCommenced || hasCheckedIn || isPast;
 
   const confirmDrop = async () => {
     if (!cancelReason.trim()) {
@@ -117,8 +134,9 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, sel
     <motion.div
       {...cardInteractive}
       className={cn(
-        "relative overflow-hidden rounded-2xl p-6 min-h-[180px] border border-border/40 shadow-xl flex flex-col justify-between",
-        getGradientClass(groupColor)
+        "relative overflow-hidden rounded-2xl p-6 min-h-[180px] border border-border/40 shadow-xl flex flex-col justify-between transition-all",
+        getGradientClass(groupColor),
+        isPast && "grayscale opacity-70"
       )}
     >
       {/* Header: GROUP | SUBGROUP */}
@@ -127,10 +145,19 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, sel
           <div className="text-foreground/50 font-black text-[10px] uppercase tracking-widest">
             {groupName} | {subGroupName}
           </div>
-          <div className="text-foreground font-black text-xl leading-tight tracking-tight">
+          <div className={cn("text-foreground font-black text-xl leading-tight tracking-tight", protection.colorClass)}>
             {shift.roles?.name || 'Shift'}
           </div>
         </div>
+        {protection.status !== 'DRAFT' && (
+            <div className={cn(
+                "px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 backdrop-blur-md border",
+                protection.status === 'LOCKED' ? "bg-slate-500/10 border-slate-500/20 text-slate-500" : "bg-blue-500/10 border-blue-500/20 text-blue-500"
+            )}>
+                <protection.icon className="w-3 h-3" />
+                {protection.label}
+            </div>
+        )}
       </div>
 
       {/* Details Row */}
@@ -157,7 +184,7 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, sel
           onClick={(e) => { e.stopPropagation(); setIsSwapModalOpen(true); }}
           disabled={isLockedFromActions}
           className={cn(
-            "flex-1 h-12 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg transition-all",
+            "flex-1 h-12 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
             "bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100",
             "dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20 dark:hover:bg-indigo-500/20",
             "disabled:opacity-50"
@@ -170,7 +197,7 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, sel
           onClick={(e) => { e.stopPropagation(); setIsCancelConfirmOpen(true); }}
           disabled={isLockedFromActions}
           className={cn(
-            "flex-1 h-12 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg transition-all",
+            "flex-1 h-12 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
             "bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100",
             "dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20 dark:hover:bg-rose-500/20",
             "disabled:opacity-50"

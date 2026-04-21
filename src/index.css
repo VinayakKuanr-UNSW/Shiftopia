@@ -206,10 +206,7 @@ body,
    ============================================================ */
 @layer utilities {
 
-  /* Audit trail icon */
-  .audit-trail-icon {
-    @apply shrink-0 mt-0.5;
-  }
+
 
   /* Gradients */
   .gradient-primary {

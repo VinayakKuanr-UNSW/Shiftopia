@@ -4,6 +4,8 @@
  */
 
 import { supabase } from '@/platform/realtime/client';
+import { isShiftFinished } from '../ui/components/TimesheetTable.utils';
+
 
 export interface TimesheetShiftRow {
     id: string;
@@ -44,6 +46,9 @@ export interface TimesheetShiftRow {
     // Adjusted times (manager edits)
     adjustedStart: string | null;
     adjustedEnd: string | null;
+    adjustedStartSource: 'manual' | 'snapped' | null;
+    adjustedEndSource: 'manual' | 'snapped' | null;
+    isAdjustedManual: boolean;
 
     // Breaks
     paidBreakMinutes: number;
@@ -56,14 +61,18 @@ export interface TimesheetShiftRow {
     // Status
     shiftStatus: string;
     lifecycleStatus: string;
+    liveStatus: string;
     timesheetStatus: string | null;
+    statusDot: { color: string; label: string } | null;
     rawStartAt: string | null;
     rawEndAt: string | null;
 
     // Attendance (from shifts table)
     attendanceStatus: string | null;
-    // Minutes between actual_start and scheduled start (positive = late, negative = early)
-    varianceMinutes: number | null;
+    // Minutes between actual times and scheduled times
+    clockInVarianceMinutes: number | null;
+    clockOutVarianceMinutes: number | null;
+    varianceMinutes: number | null; // Legacy for clock-in
 
     // Pay
     hourlyRate: number | null;
@@ -96,7 +105,7 @@ export interface TimesheetFilters {
  * When given an ISO timestamp, the LOCAL wall-clock time is used (browser TZ).
  * Returns null if value is falsy or unparseable.
  */
-function snapToQuarterHour(value: string | null | undefined): string | null {
+export function snapToQuarterHour(value: string | null | undefined): string | null {
     if (!value) return null;
 
     let h: number;
@@ -147,6 +156,7 @@ export async function getShiftsForTimesheet(
                 actual_end,
                 group_type,
                 sub_group_name,
+                roster_subgroup_id,
                 paid_break_minutes,
                 unpaid_break_minutes,
                 net_length_minutes,
@@ -162,9 +172,11 @@ export async function getShiftsForTimesheet(
                 departments(id, name),
                 sub_departments(id, name),
                 roles(id, name),
-                remuneration_levels(id, level_name, hourly_rate_min)
+                remuneration_levels(id, level_name, hourly_rate_min),
+                roster_subgroups!roster_subgroup_id(name, roster_groups(name))
             `)
             .eq('shift_date', date)
+            .in('lifecycle_status', ['Published', 'InProgress', 'Completed'])
             .is('deleted_at', null)
             .order('start_time');
 
@@ -248,7 +260,29 @@ export async function getShiftsForTimesheet(
                 (scheduledMins - (shift.unpaid_break_minutes || 0));
 
             const hourlyRate = remLevel?.hourly_rate_min || shift.remuneration_rate || 0;
-            const estimatedPay = (netMins / 60) * hourlyRate;
+            const calculatedNetMins = (() => {
+                const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time);
+                const startRaw = timesheet?.start_time || (finished ? snapToQuarterHour(shift.actual_start) : null);
+                const endRaw = timesheet?.end_time || (finished ? snapToQuarterHour(shift.actual_end) : null);
+                if (!startRaw || !endRaw || startRaw === 'NIL' || endRaw === 'NIL') return 0;
+                
+                try {
+                    const [startH, startM] = startRaw.split(':').map(Number);
+                    const [endH, endM] = endRaw.split(':').map(Number);
+                    
+                    if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM)) return 0;
+                    
+                    let diffMins = (endH * 60 + endM) - (startH * 60 + startM);
+                    if (diffMins < 0) diffMins += 24 * 60; // Overnight
+                    
+                    const unpaidBreak = timesheet?.unpaid_break_minutes !== undefined ? timesheet.unpaid_break_minutes : (shift.unpaid_break_minutes || 0);
+                    return Math.max(0, diffMins - unpaidBreak);
+                } catch {
+                    return 0;
+                }
+            })();
+
+            const currentEstimatedPay = (calculatedNetMins / 60) * hourlyRate;
 
             return {
                 id: shift.id,
@@ -265,8 +299,9 @@ export async function getShiftsForTimesheet(
                 subDepartmentId: shift.sub_department_id,
                 subDepartmentName: subDept?.name || '',
 
-                groupType: shift.group_type,
-                subGroupName: shift.sub_group_name,
+                // Prefer normalized roster_subgroups join; fall back to legacy columns
+                groupType: shift.roster_subgroups?.roster_groups?.name ?? shift.group_type ?? null,
+                subGroupName: shift.roster_subgroups?.name ?? shift.sub_group_name ?? null,
 
                 roleId: shift.role_id,
                 roleName: role?.name || '',
@@ -278,42 +313,87 @@ export async function getShiftsForTimesheet(
                 scheduledEnd: shift.end_time,
 
                 // Actual/Clock times
-                // Source of truth: timesheet.clock_in (manual) → shift.actual_start (GPS) → null
-                // We deliberately do NOT fall back to start_at (scheduled UTC) so the
-                // "Actual" column is blank when nobody has clocked in.
-                clockIn: timesheet?.clock_in ?? shift.actual_start ?? null,
-                clockOut: timesheet?.clock_out ?? shift.actual_end ?? null,
+                // Source of truth: ALWAYS shift.actual_start / actual_end (raw data)
+                // We deliberately do NOT fall back to timesheet adjustments here, as 
+                // the "Actual" column must preserve the true history record.
+                clockIn: shift.actual_start ?? null,
+                clockOut: shift.actual_end ?? null,
 
-                // Adjusted times (billable) — three-tier logic:
+                // Adjusted times (billable) — two-tier logic:
                 //   1. Explicit manager edit  → timesheet.start_time / end_time  (isAdjustedManual = true)
-                //   2. Snapped actual clock   → snap actual_start to nearest 15m (isAdjustedManual = false)
-                //   3. Scheduled fallback     → shift.start_time / end_time       (isAdjustedManual = false)
+                //   2. Snapped actual clock   → snap actual_start AFTER scheduled end (isAdjustedManual = false)
                 adjustedStart: (() => {
                     if (timesheet?.start_time) return timesheet.start_time;
-                    const snapped = snapToQuarterHour(shift.actual_start);
-                    return snapped ?? shift.start_time;
+                    const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time, shift.actual_end);
+                    return finished ? snapToQuarterHour(shift.actual_start) : null;
                 })(),
                 adjustedEnd: (() => {
                     if (timesheet?.end_time) return timesheet.end_time;
-                    const snapped = snapToQuarterHour(shift.actual_end);
-                    return snapped ?? shift.end_time;
+                    const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time, shift.actual_end);
+                    return finished ? snapToQuarterHour(shift.actual_end) : null;
                 })(),
                 // Whether the manager has explicitly saved a custom adjusted time
+                adjustedStartSource: (() => {
+                    if (timesheet?.start_time) return 'manual';
+                    const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time, shift.actual_end);
+                    if (finished && shift.actual_start) return 'snapped';
+                    return null;
+                })(),
+                adjustedEndSource: (() => {
+                    if (timesheet?.end_time) return 'manual';
+                    const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time);
+                    if (finished && shift.actual_end) return 'snapped';
+                    return null;
+                })(),
                 isAdjustedManual: !!(timesheet?.start_time || timesheet?.end_time),
 
-                paidBreakMinutes: shift.paid_break_minutes || 0,
-                unpaidBreakMinutes: shift.unpaid_break_minutes || 0,
-
+                paidBreakMinutes: timesheet?.paid_break_minutes !== undefined ? timesheet.paid_break_minutes : (shift.paid_break_minutes || 0),
+                unpaidBreakMinutes: timesheet?.unpaid_break_minutes !== undefined ? timesheet.unpaid_break_minutes : (shift.unpaid_break_minutes || 0),
                 scheduledLengthMinutes: scheduledMins,
-                netLengthMinutes: netMins,
+                netLengthMinutes: calculatedNetMins,
 
                 shiftStatus: shift.assignment_status || 'open',
                 lifecycleStatus: shift.lifecycle_status || 'scheduled',
+                liveStatus: shift.lifecycle_status || 'Scheduled',
                 timesheetStatus: timesheet?.status || null,
+                statusDot: (() => {
+                    const tsStatus = (timesheet?.status || '').toLowerCase();
+                    if (tsStatus === 'approved') return { color: 'emerald', label: 'Approved' };
+                    if (tsStatus === 'rejected') return { color: 'rose', label: 'Rejected' };
+                    if (tsStatus === 'submitted') return { color: 'sky', label: 'Submitted' };
+                    if (tsStatus === 'no_show') return { color: 'rose', label: 'No Show' };
+                    
+                    if (shift.attendance_status === 'no_show') return { color: 'rose', label: 'No Show' };
+                    
+                    const varMins = (() => {
+                        if (!shift.actual_start) return null;
+                        const scheduledMs = new Date(shift.start_at || `${shift.shift_date}T${shift.start_time}`).getTime();
+                        return Math.round((new Date(shift.actual_start).getTime() - scheduledMs) / 60000);
+                    })();
+                    
+                    if (varMins && varMins > 15) return { color: 'amber', label: 'Late' };
+                    if (shift.lifecycle_status === 'InProgress') return { color: 'sky', label: 'In Progress' };
+                    
+                    return { color: 'muted', label: shift.lifecycle_status || 'Scheduled' };
+                })(),
                 rawStartAt: shift.start_at || null,
                 rawEndAt: shift.end_at || null,
 
                 attendanceStatus: shift.attendance_status || null,
+                clockInVarianceMinutes: (() => {
+                    if (!shift.actual_start) return null;
+                    const scheduledMs = new Date(
+                        shift.start_at || `${shift.shift_date}T${shift.start_time}`
+                    ).getTime();
+                    return Math.round((new Date(shift.actual_start).getTime() - scheduledMs) / 60000);
+                })(),
+                clockOutVarianceMinutes: (() => {
+                    if (!shift.actual_end) return null;
+                    const scheduledMs = new Date(
+                        shift.end_at || `${shift.shift_date}T${shift.end_time}`
+                    ).getTime();
+                    return Math.round((new Date(shift.actual_end).getTime() - scheduledMs) / 60000);
+                })(),
                 varianceMinutes: (() => {
                     if (!shift.actual_start) return null;
                     const scheduledMs = new Date(
@@ -323,21 +403,22 @@ export async function getShiftsForTimesheet(
                 })(),
 
                 hourlyRate,
-                estimatedPay: Math.round(estimatedPay * 100) / 100,
+                estimatedPay: Math.round(currentEstimatedPay * 100) / 100,
 
                 notes: timesheet?.notes || null,
                 rejectedReason: timesheet?.rejected_reason || null,
             };
         });
 
-        // Apply search filter client-side
+        // Apply search filter client-side (searches name, role, department, sub-group)
         if (filters.searchQuery) {
             const q = filters.searchQuery.toLowerCase();
             return rows.filter(row =>
                 row.employeeName.toLowerCase().includes(q) ||
                 row.roleName.toLowerCase().includes(q) ||
                 row.departmentName.toLowerCase().includes(q) ||
-                row.subGroupName?.toLowerCase().includes(q)
+                (row.subGroupName ?? '').toLowerCase().includes(q) ||
+                (row.groupType ?? '').toLowerCase().includes(q)
             );
         }
 
@@ -374,7 +455,7 @@ function isIsoTimestamp(value: string): boolean {
 }
 
 /**
- * Update timesheet for a shift
+ * Update timesheet entry
  */
 export async function updateTimesheetEntry(
     shiftId: string,
@@ -386,18 +467,47 @@ export async function updateTimesheetEntry(
         status?: string;
         notes?: string;
         rejectedReason?: string;
+        length?: string;
+        netLength?: string;
+        approximatePay?: string;
     }
 ): Promise<boolean> {
     try {
-        // Check if timesheet exists
+        // 1. Check if timesheet exists
         const { data: existing } = await supabase
             .from('timesheets')
-            .select('id')
+            .select('id, status')
             .eq('shift_id', shiftId)
             .maybeSingle();
 
+        // 2. Safety Guard: If it's already Approved, Rejected, or No-Show
+        // Block ALL updates to finalized records (data integrity)
+        let currentStatus = (existing?.status || '').toLowerCase();
+        
+        // If no timesheet record yet, check the shift record for attendance_status
+        if (!currentStatus) {
+            const { data: shift } = await supabase
+                .from('shifts')
+                .select('attendance_status')
+                .eq('id', shiftId)
+                .single();
+            if (shift?.attendance_status === 'no_show') {
+                currentStatus = 'no_show';
+            }
+        }
+
+        if (['approved', 'rejected', 'no_show'].includes(currentStatus)) {
+            // Allow idempotency if the only change is setting the SAME status
+            const isStatusOnly = Object.keys(updates).length === 1 && updates.status;
+            if (isStatusOnly && updates.status?.toLowerCase() === currentStatus) return true;
+            
+            console.warn(`[updateTimesheetEntry] Blocking update for finalized shift ${shiftId} (Current: ${currentStatus})`);
+            return true; 
+        }
+
+        // 3. Build payload
         const payload: any = {
-            updated_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
         };
 
         // clock_in/clock_out are timestamptz — only set if value is a proper ISO timestamp
@@ -407,11 +517,32 @@ export async function updateTimesheetEntry(
         if (updates.clockOut !== undefined && updates.clockOut && isIsoTimestamp(updates.clockOut)) {
             payload.clock_out = updates.clockOut;
         }
-        if (updates.adjustedStart !== undefined) payload.start_time = updates.adjustedStart;
-        if (updates.adjustedEnd !== undefined) payload.end_time = updates.adjustedEnd;
-        if (updates.status !== undefined) payload.status = updates.status;
+
+        const validTime = (val: string | undefined): string | null | undefined => {
+            if (val === undefined) return undefined;
+            if (!val || val === '-' || val === 'NIL' || val.trim() === '') return null;
+            if (/^\d{1,2}:\d{2}$/.test(val)) return `${val.padStart(5, '0')}:00`;
+            return val;
+        };
+
+        const adjStart = validTime(updates.adjustedStart);
+        if (adjStart !== undefined) payload.start_time = adjStart;
+        
+        const adjEnd = validTime(updates.adjustedEnd);
+        if (adjEnd !== undefined) payload.end_time = adjEnd;
+
+        if (updates.status !== undefined) payload.status = updates.status.toLowerCase();
         if (updates.notes !== undefined) payload.notes = updates.notes;
         if (updates.rejectedReason !== undefined) payload.rejected_reason = updates.rejectedReason;
+        
+        // Breaks (minutes)
+        if (updates.paidBreak !== undefined) payload.paid_break_minutes = parseInt(updates.paidBreak, 10) || 0;
+        if (updates.unpaidBreak !== undefined) payload.unpaid_break_minutes = parseInt(updates.unpaidBreak, 10) || 0;
+        
+        // NEW: Support for direct metric overrides (e.g. from No-Show marking)
+        if (updates.length !== undefined) payload.length = updates.length;
+        if (updates.netLength !== undefined) payload.net_length = updates.netLength;
+        if (updates.approximatePay !== undefined) payload.approximate_pay = updates.approximatePay;
 
         if (existing) {
             // Update existing
@@ -430,56 +561,44 @@ export async function updateTimesheetEntry(
                 .single();
 
             if (!shift) throw new Error('Shift not found');
+            if (!shift.assigned_employee_id) throw new Error('Cannot create timesheet for unassigned shift');
 
-            // clock_in is timestamptz NOT NULL — build a proper ISO timestamp
-            // Priority: explicit update → actual_start (GPS) → start_at (UTC) → construct from shift_date+start_time
             const clockInTs: string = updates.clockIn
-                ? (isIsoTimestamp(updates.clockIn)
-                    ? updates.clockIn
-                    : `${shift.shift_date}T${shift.start_time}`)
+                ? (isIsoTimestamp(updates.clockIn) ? updates.clockIn : `${shift.shift_date}T${shift.start_time}`)
                 : (shift.actual_start ?? shift.start_at ?? `${shift.shift_date}T${shift.start_time}`);
 
-            // clock_out is nullable timestamptz — populate from actual_end if available
             const clockOutTs: string | null = updates.clockOut
                 ? (isIsoTimestamp(updates.clockOut) ? updates.clockOut : null)
                 : (shift.actual_end ?? shift.end_at ?? null);
 
-            // Create new timesheet
-            const { error } = await supabase
+            const { error: insertError } = await supabase
                 .from('timesheets')
                 .insert({
                     shift_id: shiftId,
                     employee_id: shift.assigned_employee_id,
-                    profile_id: shift.assigned_employee_id || '', // Required field
+                    profile_id: shift.assigned_employee_id,
                     work_date: shift.shift_date,
-                    start_time: updates.adjustedStart || shift.start_time,
-                    end_time: updates.adjustedEnd || shift.end_time,
                     clock_in: clockInTs,
                     ...(clockOutTs ? { clock_out: clockOutTs } : {}),
-                    status: updates.status || 'draft',
+                    status: (updates.status || 'draft').toLowerCase(),
                     ...payload,
                 });
-
-            if (error) throw error;
+            if (insertError) throw insertError;
         }
 
-        // When a timesheet is approved, mark the shift as Completed (if it has ended)
+        // Cleanup: If approved, mark shift as Completed
         if (updates.status === 'approved') {
             const { data: shiftData } = await supabase
                 .from('shifts')
-                .select('lifecycle_status, end_at, shift_date, end_time')
+                .select('lifecycle_status')
                 .eq('id', shiftId)
                 .single();
 
             if (shiftData && !['Completed', 'Cancelled', 'Draft'].includes(shiftData.lifecycle_status)) {
-                const effectiveEnd = shiftData.end_at ||
-                    `${shiftData.shift_date}T${shiftData.end_time}`;
-                if (new Date(effectiveEnd) <= new Date()) {
-                    await supabase
-                        .from('shifts')
-                        .update({ lifecycle_status: 'Completed', updated_at: new Date().toISOString() })
-                        .eq('id', shiftId);
-                }
+                await supabase
+                    .from('shifts')
+                    .update({ lifecycle_status: 'Completed', updated_at: new Date().toISOString() })
+                    .eq('id', shiftId);
             }
         }
 
@@ -491,19 +610,20 @@ export async function updateTimesheetEntry(
 }
 
 /**
- * Bulk update timesheet status
+ * Bulk approve timesheets
  */
 export async function bulkUpdateTimesheetStatus(
-    shiftIds: string[],
-    status: 'approved' | 'rejected',
-    userId: string
+    ids: string[],
+    userId: string,
+    status: 'approved' | 'rejected'
 ): Promise<{ success: number; failed: number }> {
     let success = 0;
     let failed = 0;
 
-    for (const shiftId of shiftIds) {
-        const result = await updateTimesheetEntry(shiftId, {
+    for (const shiftId of ids) {
+        const result = await updateTimesheetEntry(shiftId, { 
             status,
+            notes: `Bulk ${status} by manager`
         });
 
         if (result) {
@@ -514,4 +634,45 @@ export async function bulkUpdateTimesheetStatus(
     }
 
     return { success, failed };
+}
+
+/**
+ * Mark a shift as No-Show
+ */
+export async function markShiftAsNoShow(
+    shiftId: string,
+    userId: string
+): Promise<boolean> {
+    try {
+        // Update shift status
+        const { error: shiftError } = await supabase
+            .from('shifts')
+            .update({
+                attendance_status: 'no_show',
+                assignment_outcome: 'no_show',
+                lifecycle_status: 'Completed',
+                updated_at: new Date().toISOString(),
+                last_modified_by: userId
+            })
+            .eq('id', shiftId);
+
+        if (shiftError) {
+            console.error('[markShiftAsNoShow] Shift error:', shiftError);
+            return false;
+        }
+
+        // NEW: Ensure a timesheet entry exists with status 'no_show' AND zero hours/pay
+        await updateTimesheetEntry(shiftId, { 
+            status: 'no_show',
+            length: '0.00',
+            netLength: '0.00',
+            approximatePay: '$0.00',
+            notes: 'Marked as No-Show by manager'
+        });
+
+        return true;
+    } catch (error) {
+        console.error('[markShiftAsNoShow] Error:', error);
+        return false;
+    }
 }

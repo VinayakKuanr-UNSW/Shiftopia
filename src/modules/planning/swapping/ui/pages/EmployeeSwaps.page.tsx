@@ -56,7 +56,7 @@ import { UnifiedSwapModal } from '../components/UnifiedSwapModal';
 import { Drawer, DrawerContent, DrawerTitle, DrawerClose } from '@/modules/core/ui/primitives/drawer';
 import { useQuery } from '@tanstack/react-query';
 
-import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
+import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { FunctionBar } from '@/modules/core/ui/components/FunctionBar';
 import { useMinuteTick } from '@/modules/core/hooks/useMinuteTick';
@@ -361,6 +361,11 @@ export const EmployeeSwapsPage: React.FC = () => {
     const [selectedSwapIds, setSelectedSwapIds] = useState<string[]>([]);
     const [drawerSwap, setDrawerSwap] = useState<{ swap: ShiftSwap; tab: TabType } | null>(null);
 
+    // Clear selection when switching tabs
+    React.useEffect(() => {
+        setSelectedSwapIds([]);
+    }, [activeTab]);
+
     // Handle refresh
     const handleRefresh = useCallback(async () => {
         setIsRefreshing(true);
@@ -467,10 +472,12 @@ export const EmployeeSwapsPage: React.FC = () => {
 
     const handleSelectAll = (ids: string[]) => {
         setSelectedSwapIds(ids);
-        toast({
-            description: `Selected all ${ids.length} items`,
-            duration: 2000,
-        });
+        if (ids.length > 0) {
+            toast({
+                description: `Selected all ${ids.length} items`,
+                duration: 2000,
+            });
+        }
     };
 
     const handleDeselectAll = () => {
@@ -870,12 +877,15 @@ export const EmployeeSwapsPage: React.FC = () => {
 
 
             {/* Scope Filter */}
-            <ScopeFilterBanner
-                mode="personal"
-                onScopeChange={setScope}
-                hidden={isGammaLocked}
-                className="mb-2 md:mb-6"
-            />
+            <div className="px-4 pt-6">
+                <PersonalPageHeader
+                    title="My Swaps"
+                    Icon={ArrowLeftRight}
+                    scope={scope}
+                    setScope={setScope}
+                    isGammaLocked={isGammaLocked}
+                />
+            </div>
 
             {/* ═══════════════════════════════════════════════════════════════
                 STICKY HEADER — 2 rows: title+actions | tab navigation

@@ -1,7 +1,8 @@
 import React from 'react';
 import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
 import { MyBroadcastsScreen } from '../screens/MyBroadcastsScreen';
-import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
+import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { Radio } from 'lucide-react';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 
 export const MyBroadcastsPage: React.FC = () => {
@@ -10,12 +11,15 @@ export const MyBroadcastsPage: React.FC = () => {
 
   return (
     <div className="pb-24 md:pb-0">
-      <ScopeFilterBanner
-        mode="personal"
-        onScopeChange={setScope}
-        hidden={isGammaLocked}
-        className="m-4 md:m-6"
-      />
+      <div className="px-4 pt-6">
+        <PersonalPageHeader
+          title="Broadcasts"
+          Icon={Radio}
+          scope={scope}
+          setScope={setScope}
+          isGammaLocked={isGammaLocked}
+        />
+      </div>
       <MyBroadcastsScreen layout={breakpoint} scope={scope} />
     </div>
   );

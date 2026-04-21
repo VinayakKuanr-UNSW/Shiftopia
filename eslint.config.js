@@ -181,32 +181,7 @@ export default tseslint.config(
       ],
     },
   },
-  {
-    files: ["src/modules/audit/**/*.{ts,tsx}"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: [
-                "@/components/*",
-                "!@/components/ui",
-                "@/hooks/*",
-                "@/api/*",
-                "@/pages/*",
-                "@/modules/*",
-                "!@/modules/audit",
-                "!@/modules/timesheets",
-                "!@/modules/rosters",
-              ],
-              message: "Audit module violation: Do not import from legacy layers or unauthorized modules.",
-            },
-          ],
-        },
-      ],
-    },
-  },
+
   {
     files: ["src/design-system/**/*.{ts,tsx}"],
     rules: {

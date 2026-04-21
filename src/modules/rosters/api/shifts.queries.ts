@@ -264,7 +264,8 @@ export const shiftsQueries = {
                   roles(id, name),
                   remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max),
                   assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
-                  roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name, external_id))
+                  roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name, external_id)),
+                  timesheets(status, notes, rejected_reason, start_time, end_time)
                 `)
                 .eq('assigned_employee_id', employeeId)
                 .in('lifecycle_status', ['Published', 'InProgress', 'Completed'])
@@ -279,7 +280,18 @@ export const shiftsQueries = {
                 return [];
             }
 
-            return (data || []).map(row => normalizeShiftRow(row as Record<string, unknown>));
+            return (data || []).map((row: any) => {
+                const shift = normalizeShiftRow(row as Record<string, unknown>);
+                const ts = Array.isArray(row.timesheets) ? row.timesheets[0] : row.timesheets;
+                if (ts) {
+                    shift.timesheet_status = ts.status;
+                    shift.timesheet_notes = ts.notes;
+                    shift.timesheet_rejected_reason = ts.rejected_reason;
+                    shift.timesheet_start_time = ts.start_time;
+                    shift.timesheet_end_time = ts.end_time;
+                }
+                return shift;
+            });
         } catch (error) {
             console.error('Exception in getEmployeeShiftsForAttendance:', error);
             return [];

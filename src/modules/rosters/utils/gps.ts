@@ -3,7 +3,7 @@
  *
  * Design constraints:
  *  - GPS is OPTIONAL: captureGPS() never throws — callers must never block on null.
- *  - No schema changes: analysis result flows into audit metadata only.
+ *  - No schema changes: analysis result flows into metadata only.
  *  - Pure analysis: analyzeGPS() is deterministic, no side effects, no network calls.
  *  - Speed check: clock-in capture is persisted to sessionStorage so the
  *    clock-out path can compute implied speed without an extra DB query.

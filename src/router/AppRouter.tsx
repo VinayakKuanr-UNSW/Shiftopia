@@ -49,7 +49,7 @@ const AnalysisPage = lazy(() => import('@/modules/insights/pages/AnalysisPage'))
 const GridPage = lazy(() => import('@/modules/insights/pages/GridPage'));
 const UsersPage = lazy(() => import('@/modules/users/pages/UsersPage'));
 const PerformancePage = lazy(() => import('@/modules/users/pages/PerformancePage'));
-const AuditDashboardPage = lazy(() => import('@/modules/audit/pages/AuditDashboardPage'));
+
 const SettingsPage = lazy(() => import('@/modules/settings/pages/SettingsPage'));
 
 // Utility
@@ -180,7 +180,7 @@ const AppRouter: React.FC = () => {
                         <Route path="/management/bids" element={<ManagerBidsPage />} />
                         <Route path="/management/swaps" element={<ManagerSwapsPage />} />
                         <Route path="/performance" element={<PerformancePage />} />
-                        <Route path="/audit" element={<AuditDashboardPage />} />
+
                     </Route>
 
                     {/* ── Broadcast ── */}

@@ -144,3 +144,17 @@ export const isPublicHoliday = (date: Date): boolean => {
 
     return holidays.some(h => h.m === month && h.d === d);
 };
+
+/**
+ * Checks if a specific wall-clock time on a specific date has already passed in Sydney.
+ * Useful for locking "today's" shifts once they have started.
+ * 
+ * @param dateStr ISO date string (YYYY-MM-DD)
+ * @param timeStr 24h time string (HH:mm)
+ */
+export const isSydneyStarted = (dateStr: string, timeStr: string): boolean => {
+    if (!dateStr || !timeStr) return false;
+    const shiftStart = parseZonedDateTime(dateStr, timeStr, SYDNEY_TZ);
+    const now = getSydneyNow();
+    return now >= shiftStart;
+};

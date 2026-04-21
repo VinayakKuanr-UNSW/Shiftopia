@@ -2,7 +2,7 @@
  * DnD Utilities — Single Source of Truth for Roster DnD Logic
  */
 import { ShiftDisplay } from '../domain/queries/getGroupsModeGrid.query';
-import { getSydneyNow } from '@/modules/core/lib/date.utils';
+import { getSydneyNow, isSydneyStarted } from '@/modules/core/lib/date.utils';
 import { format } from 'date-fns';
 
 /**
@@ -21,6 +21,11 @@ export const canDragShift = (
   // Handle both raw shift object and ShiftDisplay wrapper
   const status = 'lifecycle_status' in shift ? shift.lifecycle_status : (shift as ShiftDisplay).status;
   const isCancelled = 'is_cancelled' in shift ? shift.is_cancelled : (shift as ShiftDisplay).isCancelled;
+  const shiftDate = 'shift_date' in shift ? shift.shift_date : (shift as any).rawShift?.shift_date;
+  const startTime = 'start_time' in shift ? shift.start_time : (shift as ShiftDisplay).startTime;
+
+  // Granular check: has the shift already started?
+  if (shiftDate && startTime && isSydneyStarted(shiftDate, startTime)) return false;
 
   return status === 'Draft' && !isCancelled;
 };
@@ -59,14 +64,7 @@ export const canDropOnTarget = (
 
   // Granular: today + start time already passed (Sydney clock)
   if (targetContext?.targetDate && targetContext?.startTime) {
-    const now = getSydneyNow();
-    const todayStr = format(now, 'yyyy-MM-dd');
-    if (targetContext.targetDate === todayStr) {
-      const [h, m] = targetContext.startTime.split(':').map(Number);
-      const shiftMinutes = h * 60 + m;
-      const nowMinutes = now.getHours() * 60 + now.getMinutes();
-      if (shiftMinutes < nowMinutes) return false;
-    }
+    if (isSydneyStarted(targetContext.targetDate, targetContext.startTime)) return false;
   }
 
   return true;

@@ -29,6 +29,7 @@ import {
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { cn } from '@/modules/core/lib/utils';
+import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
 import { pageVariants, itemVariants, listItemSpring } from '@/modules/core/ui/motion/presets';
 
 /* ── Badge color helper ─────────────────────────────────────── */
@@ -138,28 +139,23 @@ const MyNotificationsPage: React.FC = () => {
       animate="show"
       className="flex flex-col h-full bg-background p-4 sm:p-6 md:p-8 pb-24 md:pb-8"
     >
-      {/* Header */}
-      <motion.div variants={itemVariants} className="flex flex-row items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-            My Notifications
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Stay updated with your workspace activity
-          </p>
-        </div>
-
-        {unreadCount > 0 && (
-          <Button
-            onClick={markAllRead}
-            variant="link"
-            size="sm"
-            className="text-primary font-semibold hover:no-underline px-0"
-          >
-            Mark all as read
-          </Button>
-        )}
-      </motion.div>
+      {/* Unified Header */}
+      <PersonalPageHeader
+        title="My Notifications"
+        Icon={Bell}
+        rightActions={
+          unreadCount > 0 && (
+            <Button
+              onClick={markAllRead}
+              variant="link"
+              size="sm"
+              className="text-primary font-semibold hover:no-underline px-0"
+            >
+              Mark all as read
+            </Button>
+          )
+        }
+      />
 
       <div className="flex flex-col gap-6">
         {/* Tabs — segmented control */}

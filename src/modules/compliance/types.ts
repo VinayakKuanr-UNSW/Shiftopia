@@ -2,7 +2,7 @@
  * Compliance Engine - Core Types
  * 
  * These types form the contract between the compliance engine,
- * UI components, and audit logging.
+ * UI components, and telemetry.
  */
 
 // =============================================================================

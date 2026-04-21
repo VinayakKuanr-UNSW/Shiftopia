@@ -282,7 +282,7 @@ export const biddingApi = {
             //   - bid status updates (accept winner, reject others)
             //   - shift FSM transition (S5 → S4) with correct field values
             //   - emergency_source write-once logic
-            //   - audit log entry
+            //   - operational log entry
             const { data: rpcResult, error: rpcError } = await (supabase as any)
                 .rpc('sm_select_bid_winner', {
                     p_shift_id:  shiftId,

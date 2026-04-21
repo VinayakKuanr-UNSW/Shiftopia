@@ -8,7 +8,7 @@ module.exports = {
       severity: 'error',
       from: {
         path: '^src/modules/([^/]+)',
-        pathNot: '^src/modules/(rosters|planning|templates|timesheets|audit)/.*$',
+        pathNot: '^src/modules/(rosters|planning|templates|timesheets)/.*$',
       },
       to: {
         path: '^src/modules/([^/]+)',
@@ -93,21 +93,6 @@ module.exports = {
       },
     },
     {
-      name: 'audit-allowed-dependencies',
-      comment: 'Audit module can import from timesheets and rosters',
-      severity: 'error',
-      from: {
-        path: '^src/modules/audit',
-      },
-      to: {
-        path: '^src/modules/([^/]+)',
-        pathNot: [
-          '^src/modules/audit',
-          '^src/modules/timesheets',
-          '^src/modules/rosters',
-        ],
-      },
-    },
     {
       name: 'design-system-no-business-logic',
       comment: 'Design system must not import from business logic layers',

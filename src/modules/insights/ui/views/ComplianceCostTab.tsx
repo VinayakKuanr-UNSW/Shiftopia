@@ -147,7 +147,7 @@ export default function ComplianceCostTab({ filters }: ComplianceCostTabProps) {
                                 </Badge>
                                 <p className="text-xs text-muted-foreground">
                                     Managers approved exceptions to compliance rules.
-                                    Each override requires a recorded reason for audit purposes.
+                                    Each override requires a recorded reason for internal records.
                                 </p>
                             </div>
                         )}

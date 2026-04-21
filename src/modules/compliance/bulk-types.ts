@@ -99,7 +99,7 @@ export interface BulkComplianceSummary {
  * Response from bulk compliance check API.
  */
 export interface BulkComplianceCheckResponse {
-    bulkCheckId: string;  // For audit and apply reference
+    bulkCheckId: string;  // For history and apply reference
     summary: BulkComplianceSummary;
     results: BulkShiftComplianceResult[];
     // Grouped by employee for UI convenience

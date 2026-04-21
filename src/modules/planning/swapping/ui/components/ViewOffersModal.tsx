@@ -669,7 +669,7 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                             </AnimatePresence>
                         </div>
 
-                        {/* RIGHT PANE: REQUEST STATUS / AUDIT (hidden on mobile) */}
+                        {/* RIGHT PANE: REQUEST STATUS / HISTORY (hidden on mobile) */}
                         <div className={cn("border-l border-border flex flex-col bg-muted/20", isMobile ? "hidden" : "w-[300px]")}>
 
                             <div className="p-10 pb-6">

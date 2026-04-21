@@ -184,18 +184,4 @@ export interface BulkAssignmentOptions {
     skipQualificationChecks?: boolean;
 }
 
-// =============================================================================
-// AUDIT LOG
-// =============================================================================
 
-export interface BulkAssignmentAuditLog {
-    runId: string;
-    employeeId: string;
-    requestedBy: string;
-    timestamp: string;
-    mode: string;
-    total: number;
-    committed: number;
-    violations: number;
-    validationMs: number;
-}

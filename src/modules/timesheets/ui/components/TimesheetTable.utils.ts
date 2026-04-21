@@ -38,3 +38,39 @@ export const calculateHoursBetween = (startStr?: string, endStr?: string): numbe
         return 0;
     }
 };
+
+/**
+ * Robust check to determine if a shift is physically over.
+ * Accounts for date, time, and overnight status.
+ */
+export const isShiftFinished = (
+    date: string | Date, 
+    scheduledStart: string, 
+    scheduledEnd: string,
+    actualEnd?: string | null
+): boolean => {
+    // If they have physically clocked out, the shift is "finished" for processing
+    // whichever is earlier rule.
+    if (actualEnd && actualEnd !== '-' && actualEnd !== '—') return true;
+
+    if (!scheduledEnd || scheduledEnd === '-') return false;
+    
+    try {
+        const baseDate = new Date(date);
+        const [hours, minutes] = scheduledEnd.split(':').map(Number);
+        const [startH] = scheduledStart.split(':').map(Number);
+        
+        const endTime = new Date(baseDate);
+        endTime.setHours(hours, minutes, 0, 0);
+
+        // Handle overnight shifts
+        if (hours < startH) {
+            endTime.setDate(endTime.getDate() + 1);
+        }
+
+        return new Date() >= endTime;
+    } catch (e) {
+        console.error("Error parsing shift end time for finished check", e);
+        return true; 
+    }
+};

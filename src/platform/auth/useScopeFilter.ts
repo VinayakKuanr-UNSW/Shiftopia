@@ -3,6 +3,7 @@
 
 import { useState, useMemo, useCallback, useContext, useEffect } from 'react';
 import { AuthContext } from './AuthProvider';
+import { useGlobalScopeContext } from './ScopeFilterContext';
 import type { ScopeSelection, ScopeTree } from './types';
 
 export type ScopeMode = 'personal' | 'managerial';
@@ -115,8 +116,14 @@ export function useScopeFilter(
     options: UseScopeFilterOptions = {}
 ): UseScopeFilterReturn {
     const context = useContext(AuthContext);
+    const { personalScope, setPersonalScope, managerialScope, setManagerialScope } = useGlobalScopeContext();
+    
     const permissionObject = context?.permissionObject ?? null;
     const isPermissionsLoading = context?.isPermissionsLoading ?? true;
+
+    // Current global scope for this mode
+    const currentGlobalScope = mode === 'personal' ? personalScope : managerialScope;
+    const setGlobalScope = mode === 'personal' ? setPersonalScope : setManagerialScope;
 
     // Derive the scope tree based on mode
     const scopeTree = useMemo<ScopeTree | null>(() => {
@@ -133,14 +140,13 @@ export function useScopeFilter(
     // Compute default selection
     const defaultScope = useMemo(() => defaultSelectionFromTree(scopeTree), [scopeTree]);
 
-    const [scope, setScopeInternal] = useState<ScopeSelection>(defaultScope);
-
     // Sync scope when defaults change (e.g. permissions loaded)
+    // ONLY initialize if no global scope is already set (or if specific re-init is needed)
     useEffect(() => {
-        if (defaultScope.org_ids.length > 0) {
-            setScopeInternal(defaultScope);
+        if (!currentGlobalScope && defaultScope.org_ids.length > 0) {
+            setGlobalScope(defaultScope);
         }
-    }, [defaultScope]);
+    }, [defaultScope, currentGlobalScope, setGlobalScope]);
 
     // Is gamma locked? Only relevant for managerial mode
     const isGammaLocked = useMemo(() => {
@@ -148,11 +154,14 @@ export function useScopeFilter(
         return permissionObject?.typeY?.level === 'gamma';
     }, [mode, permissionObject]);
 
-    // Setter with optional onScopeChange callback
+    // Final scope to return (fallback to default if global not yet set)
+    const scope = currentGlobalScope || defaultScope;
+
+    // Setter with global update and optional callback
     const setScope = useCallback((newScope: ScopeSelection) => {
-        setScopeInternal(newScope);
+        setGlobalScope(newScope);
         options.onScopeChange?.();
-    }, [options.onScopeChange]);
+    }, [options.onScopeChange, setGlobalScope]);
 
     // Serialised key for React Query
     const scopeKey = useMemo(() => {

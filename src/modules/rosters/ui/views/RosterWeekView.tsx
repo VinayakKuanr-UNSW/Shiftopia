@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import { Roster } from '@/modules/core/types';
+import { RosterDay } from '@/modules/rosters/model/roster.types';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from 'date-fns';
-import { isSydneyToday, isSydneyPast } from '@/modules/core/lib/date.utils';
+import { isSydneyToday, isSydneyPast, isSydneyStarted } from '@/modules/core/lib/date.utils';
 import { Clock, ChevronDown, ChevronUp, Lock } from 'lucide-react';
-import { ShiftChip } from '../ShiftChip';
+import { ShiftChip } from '../components/ShiftChip';
 import { cn } from '@/modules/core/lib/utils';
 
 interface RosterWeekViewProps {
-  roster: Roster | null;
+  roster: RosterDay | null;
   selectedDate: Date;
   readOnly?: boolean;
-  onShiftClick?: (shiftId: string, groupId: number, subGroupId: number, date: Date) => void;
+  onShiftClick?: (shiftId: string, groupId: string, subGroupId: string, date: Date) => void;
 }
 
 export const RosterWeekView: React.FC<RosterWeekViewProps> = ({
@@ -25,16 +25,16 @@ export const RosterWeekView: React.FC<RosterWeekViewProps> = ({
   const endDay = endOfWeek(selectedDate);
   const weekDays = eachDayOfInterval({ start: startDay, end: endDay });
 
-  const countShiftsForDay = (roster: Roster | null, date: Date) => {
+  const countShiftsForDay = (roster: RosterDay | null, date: Date) => {
     if (!roster) return 0;
 
     // In a real app, we would check the date from the roster
     // For demonstration, we'll count all shifts in the roster for the selected date
     // and none for other dates
-    if (isSameDay(date, selectedDate)) {
+    if (isSameDay(date, new Date(roster.startDate))) {
       let count = 0;
       roster.groups.forEach(group => {
-        group.subGroups.forEach(subGroup => {
+        group.subgroups.forEach(subGroup => {
           count += subGroup.shifts.length;
         });
       });
@@ -44,8 +44,8 @@ export const RosterWeekView: React.FC<RosterWeekViewProps> = ({
     return 0;
   };
 
-  const getGroupsCountForDay = (roster: Roster | null, date: Date) => {
-    if (!roster || !isSameDay(date, selectedDate)) return 0;
+  const getGroupsCountForDay = (roster: RosterDay | null, date: Date) => {
+    if (!roster || !isSameDay(date, new Date(roster.startDate))) return 0;
     return roster.groups.length;
   };
 
@@ -61,19 +61,19 @@ export const RosterWeekView: React.FC<RosterWeekViewProps> = ({
     });
   };
 
-  const getAllShiftsForDay = (roster: Roster | null, day: Date) => {
+  const getAllShiftsForDay = (roster: RosterDay | null, day: Date) => {
     if (!roster) return [];
     const shifts: Array<{
       shift: any;
-      groupId: number;
-      subGroupId: number;
+      groupId: string;
+      subGroupId: string;
       groupName: string;
       groupColor: string;
       subGroupName: string;
     }> = [];
 
     roster.groups.forEach(group => {
-      group.subGroups.forEach(subGroup => {
+      group.subgroups.forEach(subGroup => {
         subGroup.shifts.forEach(shift => {
           shifts.push({
             shift,
@@ -170,6 +170,7 @@ export const RosterWeekView: React.FC<RosterWeekViewProps> = ({
                       shift={item.shift}
                       groupColor={item.groupColor}
                       size="sm"
+                      isPast={isSydneyStarted(format(day, 'yyyy-MM-dd'), item.shift.startTime)}
                       onClick={() => onShiftClick?.(item.shift.id, item.groupId, item.subGroupId, day)}
                     />
                   ))}

@@ -4,7 +4,7 @@
  * Attendance mutations for the clock-in/out feature.
  * Each mutation:
  *  1. Attempts GPS capture (never blocks on failure — GPS is optional)
- *  2. Runs fraud analysis and attaches it to the audit log
+ *  2. Runs fraud analysis and attaches results to the action payload
  *  3. Calls the appropriate Supabase RPC
  *  4. Invalidates shift list cache so the badge re-renders
  *  5. Shows a toast on error
@@ -13,7 +13,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { callRpc, requireUser } from '@/platform/supabase/rpc/client';
-import { auditApi } from '@/modules/audit/api/audit.api';
+
 import { shiftKeys } from '../api/queryKeys';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import {
@@ -100,19 +100,7 @@ export function useClockIn() {
         storeClockInCapture(shiftId, capture);
       }
 
-      // 5. Audit — attach GPS capture + fraud analysis
-      auditApi.logManualEvent({
-        shiftId,
-        action:   'CHECK_IN',
-        metadata: {
-          lat:              capture?.lat         ?? null,
-          lon:              capture?.lon         ?? null,
-          accuracy_m:       capture?.accuracy    ?? null,
-          distance_m:       raw.distance_m       ?? null,
-          gps_confidence:   analysis.confidence,
-          gps_flags:        analysis.flags,
-        },
-      }).catch(() => {});
+
 
       return { raw, analysis };
     },
@@ -183,20 +171,7 @@ export function useClockOut() {
       // 5. Clear clock-in capture after successful clock-out
       clearClockInCapture(shiftId);
 
-      // 6. Audit
-      auditApi.logManualEvent({
-        shiftId,
-        action:   'CHECK_OUT',
-        metadata: {
-          lat:               capture?.lat          ?? null,
-          lon:               capture?.lon          ?? null,
-          accuracy_m:        capture?.accuracy     ?? null,
-          early_out:         raw.early_out         ?? false,
-          actual_net_minutes: raw.actual_net_minutes ?? null,
-          gps_confidence:    analysis.confidence,
-          gps_flags:         analysis.flags,
-        },
-      }).catch(() => {});
+
 
       return { raw, analysis };
     },

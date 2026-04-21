@@ -1,12 +1,23 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ScopeTree, ScopeOrg, ScopeDept, ScopeSelection } from '@/platform/auth/types';
-import { ChevronDown, Lock, Building2, Layers, Users2 } from 'lucide-react';
+import { ChevronDown, Lock, Building2, Layers, Users2, Filter, MoreHorizontal, Check, Settings2 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
-// SidebarTrigger removed as it conflicts with AppLayout persistent toggle
+import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+    SheetDescription,
+} from '@/modules/core/ui/primitives/sheet';
+import { Button } from '@/modules/core/ui/primitives/button';
 
 // =============================================
 // Types
 // =============================================
+// ... (LockConfig and GlobalScopeFilterProps interfaces remain same, eliding for brevity if possible, but tool rules say exact match or replace block)
+// I'll replace the whole file for safety if needed, or just the main component and imports.
 
 export interface LockConfig {
     orgLocked: boolean;
@@ -46,6 +57,8 @@ interface MultiSelectProps {
     disabled?: boolean;
     /** If false, behaves as single-select (click = select one) */
     multiSelect?: boolean;
+    /** Mobile optimization flag */
+    isMobile?: boolean;
 }
 
 const MultiSelect: React.FC<MultiSelectProps> = ({
@@ -57,6 +70,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
     locked,
     disabled = false,
     multiSelect = true,
+    isMobile = false,
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const isDisabled = locked || disabled;
@@ -99,6 +113,55 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
             onChange(options.map(o => o.id));
         }
     };
+
+    if (isMobile) {
+        return (
+            <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between px-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2">
+                        {icon}
+                        {label}
+                    </label>
+                    {locked && <Lock className="w-3 h-3 text-amber-500/50" />}
+                </div>
+                
+                <div className="flex flex-wrap gap-2.5 min-h-[52px] p-3 rounded-2xl bg-muted/40 border border-border/40 shadow-inner">
+                    {options.map(opt => {
+                        const isSelected = selected.includes(opt.id);
+                        return (
+                            <button
+                                key={opt.id}
+                                onClick={() => !isDisabled && toggleOption(opt.id)}
+                                disabled={isDisabled}
+                                className={cn(
+                                    "flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[12px] font-black uppercase tracking-tight transition-all active:scale-90",
+                                    isSelected 
+                                        ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" 
+                                        : "bg-background/80 border border-border/80 text-muted-foreground hover:border-primary/40",
+                                    isDisabled && "opacity-40 grayscale cursor-not-allowed"
+                                )}
+                            >
+                                {isSelected && <Check className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={3} />}
+                                {opt.name}
+                            </button>
+                        );
+                    })}
+                    {options.length === 0 && (
+                        <span className="text-[11px] font-semibold text-muted-foreground/40 italic px-2 py-2">No options available</span>
+                    )}
+                </div>
+                
+                {multiSelect && options.length > 1 && !isDisabled && (
+                    <button 
+                        onClick={toggleAll}
+                        className="text-[11px] font-black uppercase tracking-widest text-primary/60 hover:text-primary active:scale-90 w-fit px-1 mt-1 transition-all"
+                    >
+                        {allSelected ? "Clear Selection" : "Select All"}
+                    </button>
+                )}
+            </div>
+        );
+    }
 
     return (
         <div className="relative">
@@ -202,6 +265,8 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
     className,
 }) => {
     const orgs = allowedScopeTree?.organizations || [];
+    const breakpoint = useBreakpoint();
+    const isMobile = breakpoint === 'mobile';
 
     // Initialize selected IDs
     const [selectedOrgIds, setSelectedOrgIds] = useState<string[]>(() => {
@@ -282,8 +347,7 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
         }
     }, [availableSubDepts, lockConfig.subDeptLocked, multiSelect]);
 
-    // Emit scope changes — debounced so rapid auto-select cascades
-    // (org → dept → subdept) collapse into a single parent update.
+    // Emit scope changes
     const emitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const onScopeChangeRef = useRef(onScopeChange);
     useEffect(() => { onScopeChangeRef.current = onScopeChange; }, [onScopeChange]);
@@ -318,7 +382,103 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
         };
     }, [selectedOrgIds, selectedDeptIds, selectedSubDeptIds, orgs]);
 
+    // Summary text for mobile button (must be at top level)
+    const summaryText = useMemo(() => {
+        if (selectedOrgIds.length === 0) return "Scope Hidden";
+        if (selectedOrgIds.length === orgs.length && orgs.length > 1) return "All Venues";
+        if (selectedOrgIds.length === 1) {
+            const org = orgs.find(o => o.id === selectedOrgIds[0]);
+            return org?.name || "Single Venue";
+        }
+        return `${selectedOrgIds.length} Venues`;
+    }, [selectedOrgIds, orgs]);
+
     if (hidden) return null;
+
+    if (isMobile) {
+        return (
+            <div className={cn("w-full mb-2 px-0.5", className)}>
+                <Sheet>
+                    <SheetTrigger asChild>
+                        <button className="flex items-center justify-between w-full px-4 py-3 bg-card/60 backdrop-blur-md border border-border/40 rounded-2xl shadow-sm active:scale-[0.98] transition-all group">
+                            <div className="flex items-center gap-3">
+                                <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary transition-colors group-hover:bg-primary/20">
+                                    <Building2 className="w-5 h-5" />
+                                </div>
+                                <div className="flex flex-col items-start">
+                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 leading-none mb-1">Organizational Scope</span>
+                                    <span className="text-sm font-bold text-foreground truncate max-w-[180px]">{summaryText}</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="flex items-center -space-x-1.5 mr-1">
+                                    {selectedDeptIds.length > 0 && <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 ring-2 ring-background" />}
+                                    {selectedSubDeptIds.length > 0 && <div className="h-1.5 w-1.5 rounded-full bg-blue-500 ring-2 ring-background" />}
+                                </div>
+                                <div className="h-8 w-8 rounded-full bg-muted/40 flex items-center justify-center text-muted-foreground">
+                                    <Settings2 className="w-4 h-4" />
+                                </div>
+                            </div>
+                        </button>
+                    </SheetTrigger>
+                    <SheetContent side="bottom" className="rounded-t-[2.5rem] border-t-0 p-0 bg-background/95 backdrop-blur-2xl max-h-[90vh] flex flex-col">
+                        <div className="mx-auto w-12 h-1.5 bg-muted/60 rounded-full my-4 flex-shrink-0" />
+                        
+                        <div className="flex-1 overflow-y-auto px-6 pb-24">
+                            <SheetHeader className="mb-8 text-left">
+                                <SheetTitle className="text-2xl font-black flex items-center gap-3">
+                                    <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                                        <Filter className="w-5 h-5" />
+                                    </div>
+                                    Filter Scope
+                                </SheetTitle>
+                                <SheetDescription className="text-sm font-medium text-muted-foreground/80 mt-1">
+                                    Select the organizations and departments to refine your view.
+                                </SheetDescription>
+                            </SheetHeader>
+
+                            <div className="space-y-10">
+                                <MultiSelect
+                                    label="Venue / Office"
+                                    icon={<Building2 className="w-3.5 h-3.5" />}
+                                    options={orgs.map(o => ({ id: o.id, name: o.name }))}
+                                    selected={selectedOrgIds}
+                                    onChange={setSelectedOrgIds}
+                                    locked={lockConfig.orgLocked}
+                                    multiSelect={multiSelect}
+                                    isMobile={true}
+                                />
+
+                                <MultiSelect
+                                    label="Department"
+                                    icon={<Layers className="w-3.5 h-3.5" />}
+                                    options={availableDepts}
+                                    selected={selectedDeptIds}
+                                    onChange={setSelectedDeptIds}
+                                    locked={lockConfig.deptLocked}
+                                    disabled={selectedOrgIds.length === 0}
+                                    multiSelect={multiSelect}
+                                    isMobile={true}
+                                />
+
+                                <MultiSelect
+                                    label="Sub-Department / Group"
+                                    icon={<Users2 className="w-3.5 h-3.5" />}
+                                    options={availableSubDepts}
+                                    selected={selectedSubDeptIds}
+                                    onChange={setSelectedSubDeptIds}
+                                    locked={lockConfig.subDeptLocked}
+                                    disabled={selectedDeptIds.length === 0}
+                                    multiSelect={multiSelect}
+                                    isMobile={true}
+                                />
+                            </div>
+                        </div>
+                    </SheetContent>
+                </Sheet>
+            </div>
+        );
+    }
 
     return (
         <div className={cn(
@@ -327,43 +487,41 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
             className
         )}>
             <div className="flex items-center gap-1.5 w-full">
-                {/* Unified Sidebar Trigger removed as it conflicts with AppLayout persistent toggle */}
-                
                 <div className="flex-1 min-w-0">
                     <MultiSelect
                         label="Venue"
+                        icon={<Building2 className="w-3.5 h-3.5 text-slate-400 dark:text-white/30" />}
                         options={orgs.map(o => ({ id: o.id, name: o.name }))}
                         selected={selectedOrgIds}
                         onChange={setSelectedOrgIds}
                         locked={lockConfig.orgLocked}
                         multiSelect={multiSelect}
-                        compact={true}
                     />
                 </div>
 
                 <div className="flex-1 min-w-0">
                     <MultiSelect
                         label="Department"
+                        icon={<Layers className="w-3.5 h-3.5 text-slate-400 dark:text-white/30" />}
                         options={availableDepts}
                         selected={selectedDeptIds}
                         onChange={setSelectedDeptIds}
                         locked={lockConfig.deptLocked}
                         disabled={selectedOrgIds.length === 0}
                         multiSelect={multiSelect}
-                        compact={true}
                     />
                 </div>
 
                 <div className="flex-1 min-w-0">
                     <MultiSelect
                         label="Sub-Department"
+                        icon={<Users2 className="w-3.5 h-3.5 text-slate-400 dark:text-white/30" />}
                         options={availableSubDepts}
                         selected={selectedSubDeptIds}
                         onChange={setSelectedSubDeptIds}
                         locked={lockConfig.subDeptLocked}
                         disabled={selectedDeptIds.length === 0}
                         multiSelect={multiSelect}
-                        compact={true}
                     />
                 </div>
             </div>

@@ -21,7 +21,7 @@ import {
     TooltipTrigger,
 } from '@/modules/core/ui/primitives/tooltip';
 import type { ShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
-import { getStatusDotInfo } from '@/modules/rosters/domain/shift-ui';
+import { getStatusDotInfo, getProtectionContext } from '@/modules/rosters/domain/shift-ui';
 
 export interface SharedShiftCardProps {
     organization: string;
@@ -42,6 +42,7 @@ export interface SharedShiftCardProps {
     urgency?: ShiftUrgency;
     groupVariant?: 'convention' | 'exhibition' | 'theatre' | 'default';
     complianceLabel?: string;
+    isPast?: boolean;
     statusIcons?: React.ReactNode;
     footerActions?: React.ReactNode;
     topContent?: React.ReactNode;
@@ -70,6 +71,7 @@ export const SharedShiftCard: React.FC<SharedShiftCardProps> = ({
     urgency,
     groupVariant = 'default',
     complianceLabel = 'Compliant',
+    isPast = false,
     statusIcons,
     footerActions,
     topContent,
@@ -78,6 +80,11 @@ export const SharedShiftCard: React.FC<SharedShiftCardProps> = ({
     variant = 'default',
     shiftData,
 }) => {
+    const protection = React.useMemo(() => getProtectionContext(
+        { lifecycle_status: lifecycleStatus },
+        isPast
+    ), [lifecycleStatus, isPast]);
+
     // Premium Department Color Styling (Badges)
     const getVariant = () => {
         const base = 'dept-card-glass-base';
@@ -161,20 +168,27 @@ export const SharedShiftCard: React.FC<SharedShiftCardProps> = ({
                                 </TooltipProvider>
                             );
                         })()}
-                        {urgency === 'emergent' ? (
-                            <Badge variant="outline" className="flex items-center gap-1 text-[8px] px-1.5 py-0 font-black uppercase tracking-tighter bg-rose-500/10 text-rose-500 border-rose-500/20 animate-[pulse_0.8s_ease-in-out_infinite]">
-                                <Flame className="h-2.5 w-2.5" /> Emergent
-                            </Badge>
-                        ) : urgency === 'urgent' || (!urgency && isUrgent) ? (
-                            <Badge variant="outline" className="flex items-center gap-1 text-[8px] px-1.5 py-0 font-black uppercase tracking-tighter bg-amber-500/10 text-amber-500 border-amber-500/20 animate-pulse">
-                                <Zap className="h-2.5 w-2.5" /> Urgent
-                            </Badge>
-                        ) : urgency === 'normal' ? (
-                            <Badge variant="outline" className="flex items-center gap-1 text-[8px] px-1.5 py-0 font-black uppercase tracking-tighter bg-slate-500/10 text-muted-foreground border-slate-500/20">
-                                <Signal className="h-2.5 w-2.5" /> Normal
-                            </Badge>
-                        ) : null}
                     </div>
+                    {protection.status !== 'DRAFT' && (
+                        <TooltipProvider delayDuration={0}>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <div className={cn(
+                                        "flex items-center gap-1.5 px-2 py-0.5 rounded-md border backdrop-blur-md transition-all h-6",
+                                        protection.status === 'LOCKED' ? "bg-slate-500/10 border-slate-500/20 text-slate-500" : "bg-blue-500/10 border-blue-500/20 text-blue-500"
+                                    )}>
+                                        <protection.icon className="h-3 w-3" />
+                                        <span className="text-[9px] font-black font-mono uppercase tracking-widest">
+                                            {protection.label}
+                                        </span>
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="bg-popover/95 backdrop-blur-md border-border/50 px-2 py-1 shadow-xl">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest">{protection.label}</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
                 </div>
 
                 {/* TIMING BOXES */}
@@ -249,7 +263,7 @@ export const SharedShiftCard: React.FC<SharedShiftCardProps> = ({
                 "group flex flex-col rounded-[1.2rem] overflow-hidden border transition-all duration-300 bg-card/40 backdrop-blur-xl shadow-lg h-full relative",
                 getVariant().cardBg,
                 onClick && "cursor-pointer hover:shadow-2xl hover:translate-y-[-2px] hover:border-primary/40",
-                isExpired && "opacity-60 grayscale-[0.8]",
+                (isExpired || (isPast && protection.status === 'LOCKED')) && "opacity-60 grayscale-[0.8]",
                 className
             )}
             onClick={onClick}

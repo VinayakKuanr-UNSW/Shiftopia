@@ -17,6 +17,7 @@ export const useAuth = () => {
     activeContract,
     activeContractId,
     setActiveContractId,
+    activeCertificate,
     activeCertificateId,
     setActiveCertificateId,
     isLoading
@@ -33,34 +34,40 @@ export const useAuth = () => {
     return roles.includes(user.systemRole);
   };
 
+  // Helper to get the current resolved access level
+  const getEffectiveLevel = (): AccessLevel => {
+    // 1. Priority: Active Certificate (Type X/Y)
+    if (activeCertificate?.accessLevel) {
+      return activeCertificate.accessLevel;
+    }
+
+    // 2. Superuser Fallback (delta+)
+    if (['delta', 'epsilon', 'zeta'].includes(user?.highestAccessLevel || '')) {
+      return user!.highestAccessLevel;
+    }
+
+    // 3. Baseline: Position Contract
+    return activeContract?.accessLevel || 'alpha';
+  };
+
   // Check if active contract OR certificate is delta, epsilon or zeta
   const isAdmin = (): boolean =>
-    ['delta', 'epsilon', 'zeta'].includes(activeContract?.accessLevel || '') ||
-    ['delta', 'epsilon', 'zeta'].includes(user?.highestAccessLevel || '');
+    ['delta', 'epsilon', 'zeta'].includes(getEffectiveLevel());
 
   // Check if active contract OR certificate is gamma or above
   const isManagerOrAbove = (): boolean =>
-    (!!activeContract && ['gamma', 'delta', 'epsilon', 'zeta'].includes(activeContract.accessLevel)) ||
-    (!!user && ['gamma', 'delta', 'epsilon', 'zeta'].includes(user.highestAccessLevel));
+    ['gamma', 'delta', 'epsilon', 'zeta'].includes(getEffectiveLevel());
 
   // Check if active contract OR certificate is beta or above
   const isTeamLeadOrAbove = (): boolean =>
-    (!!activeContract && ['beta', 'gamma', 'delta', 'epsilon', 'zeta'].includes(activeContract.accessLevel)) ||
-    (!!user && ['beta', 'gamma', 'delta', 'epsilon', 'zeta'].includes(user.highestAccessLevel));
+    ['beta', 'gamma', 'delta', 'epsilon', 'zeta'].includes(getEffectiveLevel());
 
   /* ============================================================
      Feature Permission Checking
      ============================================================ */
 
   const hasPermission = (feature: string): boolean => {
-    // Use contract level by default
-    let level = activeContract?.accessLevel || 'alpha';
-
-    // Superuser Fallback: If user is epsilon, zeta or delta, they use their certificate rank
-    // to bypass site-contract restrictions.
-    if (['delta', 'epsilon', 'zeta'].includes(user?.highestAccessLevel || '')) {
-      level = user!.highestAccessLevel;
-    }
+    const level = getEffectiveLevel();
 
     // Define feature permissions based on AccessLevel
     const permissions: Record<string, AccessLevel[]> = {

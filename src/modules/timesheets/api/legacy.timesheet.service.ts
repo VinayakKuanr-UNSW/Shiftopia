@@ -1,5 +1,5 @@
 
-import { Timesheet, AuditEvent, timesheetReadApi, timesheetWriteApi, auditsApi } from '../index';
+import { Timesheet, timesheetReadApi, timesheetWriteApi } from '../index';
 
 export const timesheetService = {
     /* ----------------------------- READERS ------------------------- */
@@ -34,7 +34,7 @@ export const timesheetService = {
         }
 
         // Otherwise, direct update for non-status fields (with warning)
-        console.warn('Direct timesheet update via bridge. Audit safety compromised.');
+        console.warn('Direct timesheet update via bridge. Integrity safety compromised.');
         const store = timesheetReadApi._getInternalStore();
         const idx = store.findIndex(t => t.id === ts.id);
         const updated = { ...store[idx], ...updates, updatedAt: new Date().toISOString() };
@@ -164,11 +164,4 @@ export const timesheetService = {
         timesheetReadApi._setInternalStore(store);
         return copy;
     },
-
-    /* ----------------------------- AUDIT --------------------------- */
-
-    getTimesheetAuditEvents: async (
-        timesheetId: number,
-    ): Promise<AuditEvent[]> =>
-        auditsApi.getLegacyAuditEvents(timesheetId),
 };

@@ -1,6 +1,6 @@
 import { Timesheet, TimesheetStatus } from '../model/timesheet.types';
 import { timesheetReadApi } from './timesheets.read.api';
-import { auditsApi } from './audits.api';
+
 
 /**
  * Valid Status Transitions
@@ -15,7 +15,7 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
 
 /**
  * Write-only Timesheet API
- * Enforces state machine and audit trails.
+ * Enforces state machine and record integrity.
  */
 export const timesheetWriteApi = {
     updateTimesheetStatus: async (
@@ -46,16 +46,7 @@ export const timesheetWriteApi = {
         timesheets[idx] = updated;
         timesheetReadApi._setInternalStore(timesheets);
 
-        // Append to audit trail
-        await auditsApi.logAction({
-            timesheetId: String(id),
-            action: newStatus as any,
-            performedBy,
-            performedAt: updated.updatedAt,
-            reason,
-            diff: { status: { from: currentStatus, to: newStatus } },
-            metadata: { version: updated.version }
-        });
+
 
         return updated;
     },

@@ -1,25 +1,12 @@
 import React from 'react';
-import {
-  format,
-  startOfWeek,
-  endOfWeek,
-  addDays,
-} from 'date-fns';
-import {
-  ChevronLeft,
-  ChevronRight,
-  Calendar as CalendarIcon,
-  Mail,
-} from 'lucide-react';
-import { Button } from '@/modules/core/ui/primitives/button';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/modules/core/ui/primitives/popover';
-import { Calendar } from '@/modules/core/ui/primitives/calendar';
+import { Mail } from 'lucide-react';
 import { CalendarView } from '@/modules/rosters/hooks/useRosterView';
+import {
+  UnifiedRosterNavigator,
+  navigateDate,
+} from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
 import { cn } from '@/modules/core/lib/utils';
+import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { motion, AnimatePresence } from 'framer-motion';
 import { tabTransition } from '@/modules/core/ui/motion/presets';
 import DayView from './DayView';
@@ -47,12 +34,6 @@ interface MyRosterCalendarProps {
   onOffersClick: () => void;
 }
 
-const VIEW_OPTIONS: Array<{ value: CalendarView; label: string; short: string }> = [
-  { value: 'day',   label: 'Day',   short: 'D'  },
-  { value: '3day',  label: '3-Day', short: '3D' },
-  { value: 'week',  label: 'Week',  short: 'W'  },
-  { value: 'month', label: 'Month', short: 'M'  },
-];
 
 const MyRosterCalendar: React.FC<MyRosterCalendarProps> = ({
   view,
@@ -65,47 +46,7 @@ const MyRosterCalendar: React.FC<MyRosterCalendarProps> = ({
   offerDates,
   onOffersClick,
 }) => {
-  const handlePrevious = () => {
-    const d = new Date(selectedDate);
-    if (view === 'day')   d.setDate(d.getDate() - 1);
-    if (view === '3day')  d.setDate(d.getDate() - 3);
-    if (view === 'week')  d.setDate(d.getDate() - 7);
-    if (view === 'month') d.setMonth(d.getMonth() - 1);
-    onDateChange(d);
-  };
-
-  const handleNext = () => {
-    const d = new Date(selectedDate);
-    if (view === 'day')   d.setDate(d.getDate() + 1);
-    if (view === '3day')  d.setDate(d.getDate() + 3);
-    if (view === 'week')  d.setDate(d.getDate() + 7);
-    if (view === 'month') d.setMonth(d.getMonth() + 1);
-    onDateChange(d);
-  };
-
-  const getDateRangeText = () => {
-    switch (view) {
-      case 'day':
-        return format(selectedDate, 'EEE, MMM d, yyyy');
-      case '3day': {
-        const end = addDays(selectedDate, 2);
-        return selectedDate.getMonth() === end.getMonth()
-          ? `${format(selectedDate, 'MMM d')} – ${format(end, 'd, yyyy')}`
-          : `${format(selectedDate, 'MMM d')} – ${format(end, 'MMM d, yyyy')}`;
-      }
-      case 'week': {
-        const s = startOfWeek(selectedDate);
-        const e = endOfWeek(selectedDate);
-        return s.getMonth() === e.getMonth()
-          ? `${format(s, 'MMM d')} – ${format(e, 'd, yyyy')}`
-          : `${format(s, 'MMM d')} – ${format(e, 'MMM d, yyyy')}`;
-      }
-      case 'month':
-        return format(selectedDate, 'MMMM yyyy');
-      default:
-        return '';
-    }
-  };
+  const isMobile = useIsMobile();
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -113,89 +54,21 @@ const MyRosterCalendar: React.FC<MyRosterCalendarProps> = ({
       {/* ── Unified toolbar ─────────────────────────────────────────────── */}
       <div className="flex-shrink-0 flex items-center gap-2 px-3 md:px-4 py-2 border-b border-border bg-card/70 backdrop-blur-xl">
 
-        {/* Date navigation — left */}
-        <div className="flex items-center gap-1 min-w-0 flex-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handlePrevious}
-            className="h-8 w-8 rounded-lg flex-shrink-0"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
+        {/* Navigation (hidden on mobile month — MonthView owns its own header) */}
+        {!(isMobile && view === 'month') && (
+          <UnifiedRosterNavigator
+            date={selectedDate}
+            viewType={view}
+            onChange={(d) => onDateChange(d)}
+            onViewTypeChange={onViewChange}
+            showToday
+            showPicker
+            className="flex-1 min-w-0"
+          />
+        )}
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm font-semibold text-foreground hover:bg-muted/60 transition-colors min-w-0 max-w-[220px] md:max-w-none truncate">
-                <CalendarIcon className="h-3.5 w-3.5 text-primary flex-shrink-0" />
-                <span className="truncate">{getDateRangeText()}</span>
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <div className="px-3 py-2 border-b border-border">
-                <p className="text-xs text-muted-foreground">
-                  {view === 'day'   && 'Select a day'}
-                  {view === '3day'  && 'Select starting day'}
-                  {view === 'week'  && 'Select any day in the week'}
-                  {view === 'month' && 'Select any day in the month'}
-                </p>
-              </div>
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={(d) => d && onDateChange(d)}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleNext}
-            className="h-8 w-8 rounded-lg flex-shrink-0"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onDateChange(new Date())}
-            className="h-8 px-3 text-xs font-bold rounded-lg flex-shrink-0 hidden sm:flex"
-          >
-            Today
-          </Button>
-        </div>
-
-        {/* View tabs — center (desktop: text labels, mobile: letter labels) */}
-        <div className="flex items-center bg-muted/50 rounded-lg p-0.5 gap-0.5 flex-shrink-0">
-          {VIEW_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => onViewChange(opt.value)}
-              className={cn(
-                'px-2.5 py-1.5 rounded-md text-[11px] font-black uppercase tracking-widest transition-all',
-                view === opt.value
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <span className="sm:hidden">{opt.short}</span>
-              <span className="hidden sm:inline">{opt.label}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Today (mobile only — doesn't fit beside the date text) */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onDateChange(new Date())}
-          className="h-8 px-3 text-xs font-bold rounded-lg flex-shrink-0 sm:hidden"
-        >
-          Today
-        </Button>
+        {/* Spacer for mobile month view */}
+        {isMobile && view === 'month' && <div className="flex-1" />}
 
         {/* Offers button — desktop only (mobile uses FAB) */}
         <button
@@ -203,7 +76,7 @@ const MyRosterCalendar: React.FC<MyRosterCalendarProps> = ({
           className={cn(
             'hidden md:flex items-center gap-2 h-8 pl-3 pr-3.5 rounded-lg text-xs font-bold flex-shrink-0',
             'border border-border bg-card hover:bg-muted/60 transition-colors relative',
-            pendingOfferCount > 0 && 'border-amber-500/50 text-amber-600 dark:text-amber-400'
+            pendingOfferCount > 0 && 'border-amber-500/50 text-amber-600 dark:text-amber-400',
           )}
         >
           <Mail className="h-3.5 w-3.5" />
@@ -247,6 +120,10 @@ const MyRosterCalendar: React.FC<MyRosterCalendarProps> = ({
                 getShiftsForDate={getShiftsForDate}
                 pendingOfferCount={pendingOfferCount}
                 offerDates={offerDates}
+                onPrevious={() => onDateChange(navigateDate(selectedDate, 'month', -1))}
+                onNext={() => onDateChange(navigateDate(selectedDate, 'month', 1))}
+                view={view}
+                onViewChange={onViewChange}
               />
             </motion.div>
           )}

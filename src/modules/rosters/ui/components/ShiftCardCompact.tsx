@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
-import { Clock, MoreHorizontal, Gavel, ArrowLeftRight, Ban, X, Check, Flame, Edit, Megaphone, Hourglass, CheckCircle, XCircle, UserPlus, UserCheck, Users, MailOpen, BadgeCheck, Zap, Circle, Lock, Minus, Handshake } from 'lucide-react';
+import { Clock, MoreHorizontal, Gavel, ArrowLeftRight, Ban, X, Check, Flame, Edit, Megaphone, Hourglass, CheckCircle, XCircle, UserPlus, UserCheck, Users, MailOpen, BadgeCheck, Zap, Circle, Lock, Minus, Handshake, ShieldCheck } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
 import {
   Tooltip,
@@ -12,7 +12,7 @@ import {
 import { determineShiftState, getShiftStateDebugString } from '../../domain/shift-state.utils';
 import { Shift } from '../../api/shifts.api';
 import { computeShiftUrgency } from '../../domain/bidding-urgency';
-import { getStatusDotInfo } from '../../domain/shift-ui';
+import { getStatusDotInfo, getProtectionContext } from '../../domain/shift-ui';
 
 /* ============================================================
    TYPES
@@ -59,6 +59,7 @@ interface ShiftCardCompactProps {
   showCheckbox?: boolean;
   onCheckboxChange?: () => void;
   isDragging?: boolean;
+  isPast?: boolean;
   className?: string; // Allow custom classes
   // Interactive Handlers
   onBid?: (shiftId: string) => void;
@@ -105,6 +106,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
   headerAction,
   isSelected = false,
   isDragging = false,
+  isPast = false,
   className,
   onBid,
   onSwap,
@@ -166,6 +168,11 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
     y.set(0);
   };
 
+  const protection = useMemo(() => getProtectionContext(
+    { lifecycle_status: rawShift.lifecycle_status || shift.lifecycleStatus }, 
+    !!isPast
+  ), [rawShift.lifecycle_status, shift.lifecycleStatus, isPast]);
+
   return (
     <motion.div
       style={{ rotateX, rotateY, transformStyle: "preserve-3d", perspective: "1000px" }}
@@ -176,12 +183,14 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
         // Removed urgency rings to make room for left strip
 
         // Hover effect for interactivity
+        // Hover effect for interactivity
         onClick && 'cursor-pointer hover:shadow-lg',
         isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
         isDragging && 'opacity-50',
+        dot === null && isPast && 'grayscale opacity-60 cursor-not-allowed',
         className
       )}
-      onClick={onClick}
+      onClick={isPast ? undefined : onClick}
     >
       {/* HEADER */}
       <div className={cn('px-4 py-2 flex justify-between items-center min-h-[40px]', headerColor)}>
@@ -198,7 +207,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
       </div>
 
       {/* BODY */}
-      <div className="p-3 flex flex-col gap-2 flex-1">
+      <div className={cn("p-3 flex flex-col gap-2 flex-1", isPast && dot !== null && "grayscale opacity-60")}>
 
         {/* IDENTITY */}
         <div className="text-center space-y-1">
@@ -259,22 +268,9 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
 
             {/* 2. LIFECYCLE */}
             <div className="flex flex-col items-center gap-1">
-              {(() => {
-                const s = (rawShift.lifecycle_status || shift.lifecycleStatus || 'draft').toLowerCase();
-                // Draft
-                if (s === 'draft') return <Edit className="w-4 h-4 text-gray-500" />;
-                // Published
-                if (s === 'published') return <Megaphone className="w-4 h-4 text-blue-600" />;
-                // InProgress
-                if (s === 'inprogress' || s === 'on_going') return <Hourglass className="w-4 h-4 text-orange-500" />;
-                // Completed
-                if (s === 'completed') return <CheckCircle className="w-4 h-4 text-green-600" />;
-                // Cancelled
-                if (s === 'cancelled' || shift.isCancelled) return <XCircle className="w-4 h-4 text-red-600" />;
-                return <Edit className="w-4 h-4 text-gray-500" />;
-              })()}
-              <span className="text-[9px] font-bold text-muted-foreground capitalize truncate w-full text-center">
-                {rawShift.lifecycle_status || shift.lifecycleStatus || 'Draft'}
+              <protection.icon className={cn("w-4 h-4", protection.colorClass)} />
+              <span className={cn("text-[9px] font-bold truncate w-full text-center", protection.colorClass)}>
+                {protection.label}
               </span>
             </div>
 

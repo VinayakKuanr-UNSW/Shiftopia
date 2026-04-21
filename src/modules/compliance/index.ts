@@ -126,6 +126,4 @@ export type {
 
 export { checkBulkCompliance } from './bulk-engine';
 
-// Audit logging
-export { logComplianceEvent, buildResultSnapshot } from './audit/compliance-audit';
-export type { ComplianceAuditEntry, ComplianceContext, ComplianceAction } from './audit/compliance-audit';
+

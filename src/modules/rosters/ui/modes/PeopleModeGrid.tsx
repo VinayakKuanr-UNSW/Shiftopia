@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
-import { Plus, MoreHorizontal, Undo2, Edit2, History, Zap } from 'lucide-react';
+import { Plus, MoreHorizontal, Undo2, Edit2, Zap } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 import { format } from 'date-fns';
@@ -66,7 +66,7 @@ interface PeopleModeGridProps {
   onSwapShift?: (shiftId: string) => void;
   onCancelShift?: (shiftId: string) => void;
   onUnpublishShift?: (shiftId: string) => void;
-  onViewAudit?: (shiftId: string) => void;
+
   /** Called when an unfilled shift is drag-dropped onto an employee date cell */
   onAssignShift?: (shift: UnfilledShift, employeeId: string, dateKey: string) => void;
   /** Called when an existing shift is moved */
@@ -148,7 +148,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   onSwapShift,
   onCancelShift,
   onUnpublishShift,
-  onViewAudit,
+
   onAssignShift,
   onMoveShift,
 }) => {
@@ -194,15 +194,6 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
             </DropdownMenuItem>
           </>
         )}
-
-        <DropdownMenuSeparator className="bg-border" />
-        <DropdownMenuItem
-          onClick={(e) => { e.stopPropagation(); onViewAudit?.(shift.id); }}
-          className="text-muted-foreground hover:bg-accent cursor-pointer"
-        >
-          <History className="h-4 w-4 mr-2" />
-          Audit Trail
-        </DropdownMenuItem>
 
       </DropdownMenuContent>
     </DropdownMenu>

@@ -19,7 +19,7 @@ Phase 1 of the Domain-Driven Design (DDD) migration has been successfully comple
 Defined 5 distinct module types with standardized structures:
 
 - **Simple Module** - Page-focused modules (auth, core, dashboard, search, settings, users, configurations, contracts)
-- **Feature Module** - Standard feature modules with API/Model/State/UI (availability, insights, broadcasts, templates, timesheets, audit)
+- **Feature Module** - Standard feature modules with API/Model/State/UI (availability, insights, broadcasts, templates, timesheets, history)
 - **Domain Module** - DDD/CQRS pattern (rosters)
 - **Container Module** - Multi-feature modules (planning)
 - **Specialized Module** - Rules engines and services (compliance)
@@ -56,7 +56,7 @@ Updated and verified public APIs for 6 feature modules:
 
 | Module | Status | Key Changes |
 |--------|--------|-------------|
-| **audit** | ✅ New index.ts | Added exports for types, hooks, components, pages |
+| **history** | ✅ New index.ts | Added exports for types, hooks, components, pages |
 | **availability** | ✅ Enhanced | Expanded from minimal to comprehensive (API, types, state, utils, pages) |
 | **broadcasts** | ✅ Verified | Already comprehensive - no changes needed |
 | **templates** | ✅ Verified | Already well-structured - no changes needed |
@@ -64,7 +64,7 @@ Updated and verified public APIs for 6 feature modules:
 | **insights** | ✅ Verified | Already well-structured - no changes needed |
 
 **Changes Made:**
-- Created 1 new `index.ts` (audit)
+- Created 1 new `index.ts` (history)
 - Enhanced 1 existing `index.ts` (availability)
 - Verified 4 existing `index.ts` files
 
@@ -141,7 +141,7 @@ The compliance module already has:
 | 6 | **availability** | Feature | ✅ Enhanced | Good | Expanded exports |
 | 7 | **insights** | Feature | ✅ Verified | Excellent | Analytics module |
 | 8 | **planning** | Container | ✅ New | Good | Parent + 2 sub-modules |
-| 9 | **audit** | Feature | ✅ New | Good | Audit trail module |
+| 9 | **history** | Feature | ✅ New | Good | History trail module |
 | 10 | **auth** | Simple | ✅ New | Good | Authentication pages |
 | 11 | **core** | Simple | ✅ New | Good | Core pages |
 | 12 | **dashboard** | Simple | ✅ New | Good | Dashboard page |
@@ -203,7 +203,7 @@ Established the groundwork for enforcing module boundaries and architectural rul
 8. `src/modules/users/index.ts`
 9. `src/modules/configurations/index.ts`
 10. `src/modules/contracts/index.ts`
-11. `src/modules/audit/index.ts`
+11. `src/modules/history/index.ts`
 12. `src/modules/planning/index.ts`
 13. `src/modules/planning/bidding/index.ts`
 14. `src/modules/planning/swapping/index.ts`
@@ -302,7 +302,7 @@ Established the groundwork for enforcing module boundaries and architectural rul
 - [ ] Generate visual dependency graphs
 
 #### 4. Migration of Existing Imports
-- [ ] Audit codebase for direct module imports (bypassing `index.ts`)
+- [ ] History codebase for direct module imports (bypassing `index.ts`)
 - [ ] Create automated refactoring script
 - [ ] Update imports to use public APIs only
 - [ ] Remove internal imports

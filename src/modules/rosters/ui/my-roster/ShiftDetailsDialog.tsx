@@ -15,7 +15,7 @@ import { cn } from '@/modules/core/lib/utils';
 import { Shift } from '@/modules/rosters';
 import { useDropShift } from '@/modules/rosters/state/useRosterShifts';
 import { AttendanceBadge } from '@/modules/rosters/ui/components/AttendanceBadge';
-import { ShiftTimeline } from '@/modules/audit/components/ShiftTimeline';
+
 import { useSwaps } from '@/modules/planning';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import CreateSwapRequestModal from './CreateSwapRequestModal';
@@ -72,7 +72,17 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   const hasCheckedIn = shift.attendance_status === 'checked_in' || shift.attendance_status === 'late';
 
   const isS3PendingOffer = shift.lifecycle_status === 'Published' && shift.assignment_status === 'assigned' && !shift.assignment_outcome;
-  const isLockedFromActions = shift.is_cancelled || !!existingSwapRequest || isPendingInOffer || isWithinLockoutPeriod || isS3PendingOffer || isActiveOrCommenced || hasCheckedIn;
+  const isPast = React.useMemo(() => {
+    if (!shift.shift_date || !shift.end_time) return false;
+    try {
+      const endStr = `${shift.shift_date}T${shift.end_time}`;
+      return new Date(endStr).getTime() < Date.now();
+    } catch {
+      return false;
+    }
+  }, [shift.shift_date, shift.end_time]);
+
+  const isLockedFromActions = shift.is_cancelled || !!existingSwapRequest || isPendingInOffer || isWithinLockoutPeriod || isS3PendingOffer || isActiveOrCommenced || hasCheckedIn || isPast;
 
   // ── SharedShiftCard props ──────────────────────────────────────────────────
   const paidBreak = (shift as any).paid_break_minutes ?? 0;
@@ -184,7 +194,9 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
             unpaidBreak={unpaidBreak}
             urgency={urgency}
             groupVariant={groupVariant}
+            isPast={isPast}
             shiftData={shift}
+            lifecycleStatus={shift.lifecycle_status}
             statusIcons={
               <div className="col-span-3 flex flex-wrap gap-2 items-center">
                 {shift.remuneration_levels?.level_name && (
@@ -197,16 +209,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
                     ${shift.remuneration_levels.hourly_rate_min}/hr
                   </span>
                 )}
-                {showAttendanceBadge && (
-                  <AttendanceBadge
-                    attendanceStatus={shift.attendance_status ?? 'unknown'}
-                    actualStart={shift.actual_start}
-                    scheduledStart={scheduledStartISO}
-                    actualEnd={shift.actual_end}
-                    scheduledEnd={scheduledEndISO}
-                    lifecycleStatus={shift.lifecycle_status as 'InProgress' | 'Completed'}
-                  />
-                )}
+
               </div>
             }
           />

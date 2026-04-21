@@ -36,7 +36,7 @@ export { default as UnauthorizedPage } from './pages/UnauthorizedPage';
 
 ### 2. Feature Module (Standard)
 
-**Used for:** availability, insights, broadcasts, templates, timesheets, audit
+**Used for:** availability, insights, broadcasts, templates, timesheets
 
 **Structure:**
 ```

@@ -14,7 +14,8 @@ import { motion } from 'framer-motion';
 import { AvailabilityDesktopLayout } from '../layout/AvailabilityDesktopLayout';
 import { AvailabilityTabletLayout } from '../layout/AvailabilityTabletLayout';
 import { AvailabilityMobileLayout } from '../layout/AvailabilityMobileLayout';
-import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
+import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { CalendarDays } from 'lucide-react';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { pageVariants } from '@/modules/core/ui/motion/presets';
 
@@ -68,12 +69,15 @@ export const AvailabilityPage: React.FC = () => {
       animate="show"
       className="w-full min-h-screen bg-background"
     >
-      <ScopeFilterBanner
-        mode="personal"
-        onScopeChange={setScope}
-        hidden={isGammaLocked}
-        className="m-4 md:m-6"
-      />
+      <div className="px-4 pt-6 pb-2">
+        <PersonalPageHeader
+          title="Availabilities"
+          Icon={CalendarDays}
+          scope={scope}
+          setScope={setScope}
+          isGammaLocked={isGammaLocked}
+        />
+      </div>
       {breakpoint === 'desktop' ? (
         <AvailabilityDesktopLayout />
       ) : breakpoint === 'tablet' ? (

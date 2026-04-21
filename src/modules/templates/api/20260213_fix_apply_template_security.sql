@@ -238,7 +238,7 @@ BEGIN
     v_start_date := (p_month || '-01')::date;
     v_end_date := (v_start_date + interval '1 month' - interval '1 day')::date;
     
-    -- Get current user (for audit/created_by)
+    -- Get current user (for history/created_by)
     v_user_id := auth.uid();
     
     -- Call the V2 function

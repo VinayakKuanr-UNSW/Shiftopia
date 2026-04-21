@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS planning_requests (
   manager_notes           text,
   decided_at              timestamptz,
 
-  -- Audit
+  -- Operational Log Entries
   created_at              timestamptz NOT NULL DEFAULT now(),
   updated_at              timestamptz NOT NULL DEFAULT now(),
 
@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS planning_offers (
       'WITHDRAWN'
     )),
 
-  -- Audit
+  -- History Storage
   created_at       timestamptz NOT NULL DEFAULT now(),
   updated_at       timestamptz NOT NULL DEFAULT now()
 );

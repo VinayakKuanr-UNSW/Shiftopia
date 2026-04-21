@@ -1,5 +1,5 @@
 import { Shift, TemplateGroupType } from '../domain/shift.entity';
-import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime, SYDNEY_TZ, getSydneyNow } from '@/modules/core/lib/date.utils';
 import { isShiftLocked as isShiftLockedUtil, LockContext } from '../domain/shift-locking.utils';
 
 /**
@@ -62,7 +62,7 @@ export function resolveShiftStatus(
     if (!shift_date || !start_time) return { isPast: false, isLocked: false };
 
     // Standard Sydney-based computation
-    const now = new Date();
+    const now = getSydneyNow();
     const shiftStartAt = parseZonedDateTime(shift_date, start_time, SYDNEY_TZ);
     
     const isPast = now >= shiftStartAt;

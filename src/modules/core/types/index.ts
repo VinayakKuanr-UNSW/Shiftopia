@@ -60,7 +60,4 @@ export {
     type TimesheetRow,
 } from '@/modules/timesheets/model/timesheet.types';
 
-export {
-    type LegacyAuditStatus as AuditStatus,
-    type LegacyAuditEvent as AuditEvent,
-} from '@/modules/timesheets/model/audit.types';
+

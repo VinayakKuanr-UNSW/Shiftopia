@@ -22,6 +22,7 @@ import {
     Flame,
     Lock,
     CopyPlus,
+    ShieldCheck,
 } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
@@ -32,7 +33,12 @@ import {
 } from '@/modules/core/ui/primitives/tooltip';
 import { cn } from '@/modules/core/lib/utils';
 import type { Shift } from '../../domain/shift.entity';
-import { getShiftUIContext, getLockState, getStatusDotInfo } from '../../domain/shift-ui';
+import { 
+    getShiftUIContext, 
+    getLockState, 
+    getStatusDotInfo,
+    getProtectionContext 
+} from '../../domain/shift-ui';
 
 
 // ============================================================================
@@ -93,7 +99,7 @@ function getInitials(name: string): string {
 function getLifecycleIcon(status: string) {
     const s = (status || 'draft').toLowerCase();
     if (s === 'draft') return <Edit className="h-3.5 w-3.5 text-gray-400" />;
-    if (s === 'published') return <Megaphone className="h-3.5 w-3.5 text-blue-500" />;
+    if (s === 'published') return <ShieldCheck className="h-3.5 w-3.5 text-blue-500" />;
     if (s === 'inprogress' || s === 'on_going') return <Hourglass className="h-3.5 w-3.5 text-orange-500" />;
     if (s === 'completed') return <CheckCircle className="h-3.5 w-3.5 text-green-500" />;
     if (s === 'cancelled') return <XCircle className="h-3.5 w-3.5 text-red-500" />;
@@ -159,24 +165,30 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
         trading_status:     shift.trading_status    ?? null,
         is_cancelled:       shift.is_cancelled      ?? false,
         scheduled_start:    shift.scheduled_start   ?? null,
+        scheduled_end:      shift.scheduled_end     ?? null,
         actual_start:       shift.actual_start      ?? null,
         emergency_source:   (shift as any).emergency_source ?? null,
-    }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, shift.actual_start, (shift as any).emergency_source]);
+    }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, shift.scheduled_end, shift.actual_start, (shift as any).emergency_source]);
 
     const stateId = ctx.state;
     const fsmLock = getLockState(ctx.state);
     // FSM-based lock overrides — differentiation between interactive protection vs absolute lock
     const isFullyLocked = isLocked || fsmLock.fullyLocked;
-    const isProtected = fsmLock.partialLock;
+    
+    // Centralized protection logic
+    const protection = useMemo(() => getProtectionContext({ lifecycle_status: shift.lifecycle_status }, !!isPast), [shift.lifecycle_status, isPast]);
+    const isProtected = protection.isProtected || fsmLock.partialLock;
 
     const lockTooltip = useMemo(() => {
+        if (protection.status === 'LOCKED') return 'LOCKED — Past Date';
+        if (protection.status === 'PROTECTED') return 'PROTECTED — Published Shift';
         if (stateId === 'S3') return 'Offer Sent — Schedule Protected';
         if (stateId === 'S11') return 'Shift In Progress — Locked';
         if (stateId === 'S13') return 'Shift Completed — Locked';
         if (stateId === 'S15') return 'Shift Cancelled — Locked';
         if (isLocked) return 'Roster/Group Locked';
-        return 'Protected';
-    }, [stateId, isLocked]);
+        return protection.label;
+    }, [stateId, isLocked, protection]);
 
     const dot = getStatusDotInfo({
         lifecycle_status:   shift.lifecycle_status,
@@ -210,8 +222,8 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                 isDragging && 'opacity-50 scale-95',
                 isDragOver && 'ring-2 ring-blue-400 ring-offset-1',
                 // No dot + past = fully expired draft → greyscale whole card
-                !isDnDActive && dot === null && isPast && 'grayscale opacity-60 cursor-not-allowed',
-                !isDnDActive && dot === null && isFullyLocked && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
+                dot === null && isPast && 'grayscale opacity-60 cursor-not-allowed',
+                dot === null && isFullyLocked && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
                 isDraft && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'border-dashed opacity-[0.98]',
                 !isDraft && !isFullyLocked && !isPast && 'border-solid',
                 className
@@ -226,7 +238,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                     isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-40 backdrop-blur-[2px]',
                     !isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-100',
                     shift.bidding_status !== 'bidding_closed_no_winner' && colors.text,
-                    isFullyLocked && !isDnDActive && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-muted dark:bg-slate-700 text-muted-foreground')}>
+                    isFullyLocked && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-muted dark:bg-slate-700 text-muted-foreground')}>
                     <div className="flex items-center gap-1.5 min-w-0">
                         <Tooltip>
                             <TooltipTrigger asChild>
@@ -263,20 +275,26 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                                 <TooltipContent className="bg-rose-600 text-white border-none py-1 px-2 text-[10px] font-medium">{ctx.emergencyLabel}</TooltipContent>
                             </Tooltip>
                         )}
-                        {(isFullyLocked || isProtected) && (
+                        {(isFullyLocked || isProtected || protection.status !== 'DRAFT') && (
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <div className={cn(
-                                        "flex items-center justify-center rounded p-0.5",
+                                        "flex items-center justify-center rounded p-0.5 transition-colors",
+                                        protection.status === 'LOCKED' ? "bg-slate-500/10" : 
+                                        protection.status === 'PROTECTED' ? "bg-blue-500/10" :
                                         isFullyLocked ? "bg-muted dark:bg-slate-800" : "bg-amber-500/10"
                                     )}>
-                                        <Lock className={cn(
+                                        <protection.icon className={cn(
                                             "h-3 w-3",
+                                            protection.status === 'LOCKED' ? "text-slate-500" :
+                                            protection.status === 'PROTECTED' ? "text-blue-500" :
                                             isFullyLocked ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"
                                         )} />
                                     </div>
                                 </TooltipTrigger>
-                                <TooltipContent className="bg-amber-600 text-white border-none py-1 px-2 text-[10px] font-medium">{lockTooltip}</TooltipContent>
+                                <TooltipContent className="bg-slate-900 text-white border-none py-1 px-2 text-[10px] font-bold">
+                                    {lockTooltip.toUpperCase()}
+                                </TooltipContent>
                             </Tooltip>
                         )}
                         {headerAction || (!isFullyLocked && (
@@ -289,7 +307,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
 
                 {/* Body — greyscaled for past shifts while header/dot stays crisp */}
                 <div className={cn("px-3 py-1.5 flex flex-col gap-1 flex-1 relative z-[20]",
-                    !isDnDActive && isPast && dot !== null && "grayscale opacity-60")}>
+                    isPast && dot !== null && "grayscale opacity-60")}>
                     <div className="flex flex-col items-center justify-center min-h-[20px] gap-0.5">
                         <div className="text-sm font-semibold text-foreground truncate text-center">{employeeName || 'Unassigned'}</div>
                     </div>
@@ -345,13 +363,17 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
         trading_status:     shift.trading_status    ?? null,
         is_cancelled:       shift.is_cancelled      ?? false,
         scheduled_start:    shift.scheduled_start   ?? null,
+        scheduled_end:      shift.scheduled_end     ?? null,
         actual_start:       shift.actual_start      ?? null,
         emergency_source:   (shift as any).emergency_source ?? null,
-    }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, shift.actual_start, (shift as any).emergency_source]);
+    }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, shift.scheduled_end, shift.actual_start, (shift as any).emergency_source]);
     
     const fsmLock = getLockState(ctx.state);
     const isFullyLocked = isLocked || fsmLock.fullyLocked;
-    const isProtected = fsmLock.partialLock;
+    
+    // Centralized protection logic
+    const protection = useMemo(() => getProtectionContext({ lifecycle_status: shift.lifecycle_status }, !!isPast), [shift.lifecycle_status, isPast]);
+    const isProtected = protection.isProtected || fsmLock.partialLock;
     const isDraft = statusStr === 'draft';
     const isPublished = statusStr === 'published';
 
@@ -387,8 +409,8 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                 isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background border-primary/50 bg-primary/5 dark:bg-primary/20',
                 isDragging && 'opacity-50 scale-95',
                 isDragOver && 'ring-2 ring-blue-400 ring-offset-2',
-                !isDnDActive && dot === null && isPast && 'grayscale opacity-60 cursor-not-allowed',
-                !isDnDActive && dot === null && isFullyLocked && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
+                dot === null && isPast && 'grayscale opacity-60 cursor-not-allowed',
+                dot === null && isFullyLocked && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
                 isDraft && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'border-dashed opacity-[0.98]',
                 !isDraft && !isFullyLocked && !isPast && 'border-solid',
                 className
@@ -403,7 +425,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-40 backdrop-blur-[2px]',
                     !isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-100',
                     shift.bidding_status !== 'bidding_closed_no_winner' && colors.text,
-                    isFullyLocked && !isDnDActive && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-muted dark:bg-slate-700 text-muted-foreground')}>
+                    isFullyLocked && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-muted dark:bg-slate-700 text-muted-foreground')}>
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                         <GripVertical className={cn("h-4 w-4 shrink-0 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-40 transition-opacity", isFullyLocked ? "cursor-not-allowed" : "cursor-grab")} />
                         <Tooltip>
@@ -430,13 +452,17 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     </div>
                     <div className="flex items-center gap-1.5">
                         {shift.is_from_template && <Badge variant="outline" className="text-[9px] bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 h-4 px-1 gap-1"><CopyPlus className="h-2.5 w-2.5" />Template</Badge>}
-                        {(isFullyLocked || isProtected) && (
+                        {(isFullyLocked || isProtected || protection.status !== 'DRAFT') && (
                             <div className={cn(
-                                "flex items-center justify-center rounded p-1 mr-1",
+                                "flex items-center justify-center rounded p-1 mr-1 transition-colors",
+                                protection.status === 'LOCKED' ? "bg-slate-500/10" : 
+                                protection.status === 'PROTECTED' ? "bg-blue-500/10" :
                                 isFullyLocked ? "bg-muted dark:bg-slate-800" : "bg-amber-500/10"
                             )}>
-                                <Lock className={cn(
+                                <protection.icon className={cn(
                                     "h-3.5 w-3.5",
+                                    protection.status === 'LOCKED' ? "text-slate-500" :
+                                    protection.status === 'PROTECTED' ? "text-blue-500" :
                                     isFullyLocked ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"
                                 )} />
                             </div>
@@ -452,7 +478,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
 
                 {/* Body — greyscaled for past shifts while header (dot) stays crisp */}
                 <div className={cn("p-4 space-y-3 relative z-[20]",
-                    !isDnDActive && isPast && dot !== null && "grayscale opacity-60")}>
+                    isPast && dot !== null && "grayscale opacity-60")}>
                     <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9 border border-border">
                             <AvatarFallback className={cn('text-xs font-bold', employeeName ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground')}>

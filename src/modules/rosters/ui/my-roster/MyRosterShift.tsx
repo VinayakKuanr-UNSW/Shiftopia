@@ -1,9 +1,9 @@
 import React from 'react';
 import { Shift } from '@/modules/rosters';
 import { cn } from '@/modules/core/lib/utils';
-import { ArrowRightLeft, CheckCircle2, Inbox } from 'lucide-react';
+import { ArrowRightLeft, CheckCircle2, Inbox, Lock, ShieldCheck } from 'lucide-react';
 import { formatInTimezone } from '@/modules/core/lib/date.utils';
-import { getStatusDotInfo } from '@/modules/rosters/domain/shift-ui';
+import { getStatusDotInfo, getProtectionContext } from '@/modules/rosters/domain/shift-ui';
 import {
   Tooltip,
   TooltipContent,
@@ -30,6 +30,22 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
   onClick,
   style,
 }) => {
+  // Calculate if shift is in the past
+  const isPast = React.useMemo(() => {
+    if (!shift.shift_date || !shift.end_time) return false;
+    try {
+      const endStr = `${shift.shift_date}T${shift.end_time}`;
+      return new Date(endStr).getTime() < Date.now();
+    } catch {
+      return false;
+    }
+  }, [shift.shift_date, shift.end_time]);
+
+  const protection = React.useMemo(() => getProtectionContext(
+    { lifecycle_status: shift.lifecycle_status },
+    isPast
+  ), [shift.lifecycle_status, isPast]);
+
   // Format time helper using UTC-at-Rest where possible
   const formatTime = (utcTime?: string | null, localTimeString?: string, tzIdentifier?: string) => {
     // Favor local time string as it is the direct user intention and updated first.
@@ -99,12 +115,17 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
             <ArrowRightLeft className="w-3 h-3 text-amber-600" />
           </div>
         )}
-        <div className="font-semibold truncate text-center text-xs leading-tight">
+        <div className={cn("font-semibold truncate text-center text-xs leading-tight transition-colors", protection.colorClass)}>
           {shift.roles?.name || 'Shift'}
         </div>
-        <div className="opacity-80 text-[10px] truncate text-center leading-tight mt-0.5">
+        <div className={cn("opacity-80 text-[10px] truncate text-center leading-tight mt-0.5 transition-colors", protection.colorClass)}>
           {formatTime(shift.start_at, shift.start_time, shift.tz_identifier)}
         </div>
+        {protection.status !== 'DRAFT' && (
+          <div className="absolute bottom-0 right-0 p-0.5 opacity-30">
+            <protection.icon className="w-2.5 h-2.5" />
+          </div>
+        )}
       </div>
     );
   }
@@ -160,9 +181,25 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
 
       <div className="mt-2">
         {/* Role - Large and prominent */}
-        <div className="font-bold text-sm mb-0.5 leading-tight">{shift.roles?.name || 'Shift'}</div>
+        <div className={cn("font-bold text-sm mb-0.5 leading-tight transition-colors", protection.colorClass)}>
+            {shift.roles?.name || 'Shift'}
+        </div>
         {/* Sub-group */}
-        <div className="text-xs opacity-70 leading-tight">{subGroupName}</div>
+        <div className="text-xs opacity-70 leading-tight flex items-center gap-1.5">
+            {protection.status !== 'DRAFT' && (
+                <TooltipProvider delayDuration={0}>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <protection.icon className={cn("w-3 h-3", protection.colorClass)} />
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="bg-slate-900 text-white border-none py-1 px-2 text-[10px] font-bold">
+                            {protection.label}
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            )}
+            {subGroupName}
+        </div>
       </div>
 
       {/* Time */}
@@ -173,6 +210,11 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
       {/* Optional: Break indicator */}
       {shift.break_minutes > 0 && (
         <div className="text-[10px] opacity-60 mt-1">☕ {shift.break_minutes}m break</div>
+      )}
+
+      {/* Logic for greyed out past shifts */}
+      {isPast && (
+          <div className="absolute inset-0 bg-slate-500/5 pointer-events-none z-[5]" />
       )}
     </div>
   );

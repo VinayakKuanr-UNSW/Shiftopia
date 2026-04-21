@@ -33,7 +33,7 @@ export const ALLOWED_MOBILE_ROUTES = new Set([
   '/broadcast',
   '/labor-demand',
   '/performance',
-  '/audit',
+
   '/insights',
   '/grid',
   '/contracts',

@@ -10,6 +10,9 @@ import {
     X,
     AlertTriangle,
     MessageSquare,
+    UserX,
+    Lock,
+    ShieldCheck,
 } from "lucide-react";
 import { ShiftStatusBadge } from "./ShiftStatusBadge";
 import { TimesheetStatusBadge } from "./TimesheetStatusBadge";
@@ -31,7 +34,8 @@ import {
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { Label } from '@/modules/core/ui/primitives/label';
 import type { TimesheetRow as TimesheetRowType } from "../../model/timesheet.types";
-import { calculateHoursBetween, formatHours, formatDifferential } from "./TimesheetTable.utils";
+import { calculateHoursBetween, formatHours, formatDifferential, isShiftFinished } from "./TimesheetTable.utils";
+import { getProtectionContext } from "@/modules/rosters/domain/shift-ui";
 
 interface TimesheetRowProps {
     entry: TimesheetRowType;
@@ -39,6 +43,7 @@ interface TimesheetRowProps {
     isSelected?: boolean;
     onToggleSelect?: () => void;
     onSave?: (id: string, updates: Partial<TimesheetRowType>) => void;
+    onMarkNoShow?: (id: string) => void;
 }
 
 export const TimesheetRow: React.FC<TimesheetRowProps> = ({
@@ -47,6 +52,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     isSelected = false,
     onToggleSelect,
     onSave,
+    onMarkNoShow,
 }) => {
     /* -- state -------------------------------------------------- */
     const [isEditingAdjusted, setIsEditingAdjusted] = useState(false);
@@ -62,6 +68,13 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
 
     const { toast } = useToast();
 
+    // Decision is finalized — no more edits allowed
+    const isFinalized = useMemo(() => {
+        const tsStatus = (entry.timesheetStatus || '').toLowerCase();
+        const attStatus = (entry.attendanceStatus || '').toLowerCase();
+        return ['approved', 'rejected', 'no_show'].includes(tsStatus) || attStatus === 'no_show';
+    }, [entry.timesheetStatus, entry.attendanceStatus]);
+
     const [editedAdjusted, setEditedAdjusted] = useState({
         adjustedStart: entry.adjustedStart || "",
         adjustedEnd: entry.adjustedEnd || "",
@@ -70,7 +83,26 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     });
 
     // Shift is currently running — block both approve and reject until it ends
-    const isInProgress = entry.liveStatus === 'InProgress';
+    const isShiftOver = useMemo(() => 
+        isShiftFinished(entry.date, entry.scheduledStart, entry.scheduledEnd, entry.clockOut),
+    [entry.date, entry.scheduledStart, entry.scheduledEnd, entry.clockOut]);
+    
+    const isInProgress = entry.liveStatus === 'InProgress' || !isShiftOver;
+
+    const isPast = useMemo(() => {
+        if (!entry.date || !entry.scheduledEnd) return false;
+        try {
+            const endStr = `${entry.date}T${entry.scheduledEnd}`;
+            return new Date(endStr).getTime() < Date.now();
+        } catch {
+            return false;
+        }
+    }, [entry.date, entry.scheduledEnd]);
+
+    const protection = useMemo(() => getProtectionContext(
+        { lifecycle_status: entry.liveStatus },
+        isPast
+    ), [entry.liveStatus, isPast]);
 
     // Attendance warnings — drives the approval modal
     const warnings = useMemo(() => {
@@ -117,11 +149,19 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
 
     // Calculate display values for non-edit mode
     const displayValues = useMemo(() => {
+        if (entry.attendanceStatus === 'no_show') {
+            return {
+                length: '0.00',
+                netLength: '0.00',
+                approximatePay: '$0.00',
+                differential: formatDifferential(0 - calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd)),
+            };
+        }
         if (!entry.adjustedStart || !entry.adjustedEnd) {
             return {
-                length: entry.length || '-',
-                netLength: entry.netLength || '-',
-                differential: entry.differential || '-',
+                length: '0.00',
+                netLength: '0.00',
+                differential: formatDifferential(0 - calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd)),
             };
         }
         const length = calculateHoursBetween(entry.adjustedStart, entry.adjustedEnd);
@@ -141,7 +181,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     // Approve
     const doApprove = () => {
         onSave?.(String(entry.id), {
-            timesheetStatus: 'APPROVED',
+            timesheetStatus: 'approved',
             ...(overrideReason.trim() ? { notes: overrideReason.trim() } : {}),
         } as any);
         toast({ title: 'Timesheet Approved', description: `Timesheet for ${entry.employee} approved.` });
@@ -150,7 +190,16 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     };
 
     const handleApprove = () => {
-        if (entry.timesheetStatus !== 'SUBMITTED' && entry.timesheetStatus !== 'DRAFT') return;
+        const status = entry.timesheetStatus?.toLowerCase();
+        if (status !== 'submitted' && status !== 'draft') return;
+        if (entry.attendanceStatus === 'no_show') {
+            toast({
+                title: 'Cannot Approve',
+                description: 'Shift is marked as No-Show. Marks as approved is only for worked shifts.',
+                variant: 'destructive',
+            });
+            return;
+        }
         if (warnings.length > 0) { setWarningsOpen(true); return; }
         doApprove();
     };
@@ -159,7 +208,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     const doReject = () => {
         if (!rejectReason.trim()) return;
         onSave?.(String(entry.id), {
-            timesheetStatus: 'REJECTED',
+            timesheetStatus: 'rejected',
             ...({ rejectedReason: rejectReason.trim() } as any),
         } as any);
         toast({ title: 'Timesheet Rejected', description: `Timesheet for ${entry.employee} rejected.` });
@@ -168,7 +217,8 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     };
 
     const handleReject = () => {
-        if (entry.timesheetStatus !== 'SUBMITTED' && entry.timesheetStatus !== 'DRAFT') return;
+        const status = entry.timesheetStatus?.toLowerCase();
+        if (status !== 'submitted' && status !== 'draft') return;
         if (isInProgress) {
             toast({
                 title: 'Cannot Reject Yet',
@@ -230,7 +280,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     };
 
     const handleAdjustedCellClick = () => {
-        if (!readOnly && !isEditingAdjusted && entry.liveStatus !== 'Cancelled' && entry.liveStatus !== 'No-Show') {
+        if (!readOnly && !isEditingAdjusted && !isFinalized && !isInProgress && entry.liveStatus !== 'Cancelled') {
             setIsEditingAdjusted(true);
         }
     };
@@ -247,7 +297,12 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
 
     /* -- render ------------------------------------------------ */
     const cellClass = "p-3 text-sm whitespace-nowrap border-b border-border/50 transition-all duration-200";
-    const editableCellClass = `${cellClass} cursor-pointer hover:bg-primary/5 hover:text-primary font-medium text-foreground/80`;
+    const editableCellClass = cn(
+        cellClass,
+        (!isFinalized && !readOnly && !isInProgress)
+            ? "cursor-pointer hover:bg-primary/5 hover:text-primary font-medium text-foreground/80"
+            : "font-medium text-foreground/60"
+    );
 
     return (
         <>{/* TimesheetRow.tsx */}
@@ -310,27 +365,20 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                 </td>
                 <td className={`${cellClass} border-r border-border/30`}>
                     <div className="flex flex-col gap-0.5">
-                        <span>{entry.clockOut || '-'}</span>
+                        <span className="font-bold">{entry.clockOut || '-'}</span>
+                        {entry.clockOutVarianceMinutes !== null && entry.clockOutVarianceMinutes !== undefined && (
+                            <span className={cn(
+                                "text-[9px] font-black uppercase tracking-tighter",
+                                entry.clockOutVarianceMinutes > 5 ? "text-amber-500" : entry.clockOutVarianceMinutes < -5 ? "text-emerald-500" : "text-muted-foreground/40"
+                            )}>
+                                {entry.clockOutVarianceMinutes > 0 ? `+${entry.clockOutVarianceMinutes}m` : `${entry.clockOutVarianceMinutes}m`}
+                            </span>
+                        )}
                         {/* Missing check-out badge — shown when a completed/in-progress shift has no clock-out */}
                         {(!entry.clockOut || entry.clockOut === '-') &&
                             (entry.liveStatus === 'Completed') && (
                             <span className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 w-fit border border-red-500/20">
                                 <AlertTriangle className="h-2.5 w-2.5" />Missing
-                            </span>
-                        )}
-                        {/* Adjusted-vs-Actual financial variance badge */}
-                        {entry.adjustedVarianceMinutes !== null &&
-                            entry.adjustedVarianceMinutes !== undefined &&
-                            Math.abs(entry.adjustedVarianceMinutes) >= 1 && (
-                            <span className={cn(
-                                "inline-flex items-center gap-0.5 text-[8px] font-black uppercase px-1.5 py-0.5 rounded w-fit border",
-                                Math.abs(entry.adjustedVarianceMinutes) > 30
-                                    ? "bg-orange-500/10 text-orange-500 border-orange-500/20"
-                                    : "bg-sky-500/10 text-sky-500 border-sky-500/20"
-                            )}>
-                                Adj {entry.adjustedVarianceMinutes > 0
-                                    ? `+${entry.adjustedVarianceMinutes}m`
-                                    : `${entry.adjustedVarianceMinutes}m`}
                             </span>
                         )}
                     </div>
@@ -384,57 +432,92 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                         </td>
                         <td className={`${cellClass} bg-primary/10 border-r border-border/30`}>
                             <div className="flex flex-col">
-                                <span className="font-black text-primary">{calculatedValues.netLength}</span>
-                                <span className="text-[8px] font-black uppercase text-muted-foreground tracking-widest leading-none">Auto</span>
+                                <span className={cn(
+                                    "font-black",
+                                    calculatedValues.netLength === '0.00' ? "text-muted-foreground/40" : "text-primary"
+                                )}>
+                                    {calculatedValues.netLength}
+                                </span>
+                                <span className="text-[8px] font-black uppercase text-muted-foreground/30 tracking-widest leading-none">Preview</span>
                             </div>
                         </td>
                     </>
                 ) : (
                     <>
-                        {/* Adjusted Start — dimmed if auto-snapped, bold if manually set */}
-                        <td className={editableCellClass} onClick={handleAdjustedCellClick}>
-                            <div className="flex flex-col">
-                                <span className={cn(
-                                    "font-bold",
-                                    entry.isAdjustedManual
-                                        ? "text-primary"
-                                        : "text-muted-foreground/50 italic"
-                                )}>
-                                    {entry.adjustedStart || '-'}
-                                </span>
-                                {!entry.isAdjustedManual && entry.adjustedStart && (
-                                    <span className="text-[8px] font-black uppercase text-muted-foreground/40 tracking-widest">
-                                        snapped
-                                    </span>
-                                )}
-                            </div>
+                        {/* Adjusted Start — color coded by source; locked while shift is ongoing */}
+                        <td className={cn(
+                            editableCellClass,
+                            (!entry.adjustedStart || entry.adjustedStart === '-') && "bg-muted/5"
+                        )} onClick={handleAdjustedCellClick}>
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <div className="flex flex-col">
+                                            <div className="flex items-center gap-1">
+                                                {isInProgress && <Lock className="h-2.5 w-2.5 text-muted-foreground/30 shrink-0" />}
+                                                <span className={cn(
+                                                    "font-bold",
+                                                    entry.adjustedStartSource === 'manual' ? "text-indigo-600 dark:text-indigo-400" :
+                                                    entry.adjustedStartSource === 'snapped' ? "text-sky-600 dark:text-sky-400 font-bold" :
+                                                    "text-muted-foreground/30 italic font-medium"
+                                                )}>
+                                                    {entry.adjustedStart || '-'}
+                                                </span>
+                                            </div>
+                                            {entry.adjustedStartSource === 'snapped' && entry.adjustedStart && (
+                                                <span className="text-[8px] font-black uppercase text-muted-foreground/30 tracking-widest leading-none">
+                                                    snapped
+                                                </span>
+                                            )}
+                                        </div>
+                                    </TooltipTrigger>
+                                    {isInProgress && (
+                                        <TooltipContent>Shift ongoing — editable after scheduled end</TooltipContent>
+                                    )}
+                                </Tooltip>
+                            </TooltipProvider>
                         </td>
-                        {/* Adjusted End — dimmed if auto-snapped */}
-                        <td className={editableCellClass} onClick={handleAdjustedCellClick}>
-                            <div className="flex flex-col">
-                                <span className={cn(
-                                    "font-bold",
-                                    entry.isAdjustedManual
-                                        ? "text-primary"
-                                        : "text-muted-foreground/50 italic"
-                                )}>
-                                    {entry.adjustedEnd || '-'}
-                                </span>
-                                {!entry.isAdjustedManual && entry.adjustedEnd && (
-                                    <span className="text-[8px] font-black uppercase text-muted-foreground/40 tracking-widest">
-                                        snapped
-                                    </span>
-                                )}
-                            </div>
+                        {/* Adjusted End — color coded by source; locked while shift is ongoing */}
+                        <td className={cn(
+                            editableCellClass,
+                            (!entry.adjustedEnd || entry.adjustedEnd === '-') && "bg-muted/5"
+                        )} onClick={handleAdjustedCellClick}>
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <div className="flex flex-col">
+                                            <div className="flex items-center gap-1">
+                                                {isInProgress && <Lock className="h-2.5 w-2.5 text-muted-foreground/30 shrink-0" />}
+                                                <span className={cn(
+                                                    "font-bold",
+                                                    entry.adjustedEndSource === 'manual' ? "text-indigo-600 dark:text-indigo-400" :
+                                                    entry.adjustedEndSource === 'snapped' ? "text-sky-600 dark:text-sky-400 font-bold" :
+                                                    "text-muted-foreground/30 italic font-medium"
+                                                )}>
+                                                    {entry.adjustedEnd || '-'}
+                                                </span>
+                                            </div>
+                                            {entry.adjustedEndSource === 'snapped' && entry.adjustedEnd && (
+                                                <span className="text-[8px] font-black uppercase text-muted-foreground/30 tracking-widest leading-none">
+                                                    snapped
+                                                </span>
+                                            )}
+                                        </div>
+                                    </TooltipTrigger>
+                                    {isInProgress && (
+                                        <TooltipContent>Shift ongoing — editable after scheduled end</TooltipContent>
+                                    )}
+                                </Tooltip>
+                            </TooltipProvider>
                         </td>
                         <td className={`${cellClass} font-black text-foreground border-r border-border/30`}>
                             {displayValues.length}
                         </td>
                         <td className={editableCellClass} onClick={handleAdjustedCellClick}>
-                            {entry.paidBreak || '-'}
+                            {entry.paidBreak || '0'}
                         </td>
                         <td className={editableCellClass} onClick={handleAdjustedCellClick}>
-                            {entry.unpaidBreak || '-'}
+                            {entry.unpaidBreak || '0'}
                         </td>
                         <td className={`${cellClass} font-black text-foreground border-r border-border/30`}>
                             {displayValues.netLength}
@@ -477,12 +560,26 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                 </td>
                 {/* Lifecycle */}
                 <td className={cellClass}>
-                    <ShiftStatusBadge status={entry.liveStatus as any} />
+                    <div className="flex items-center gap-2">
+                        <ShiftStatusBadge status={entry.liveStatus as any} />
+                        {protection.status !== 'DRAFT' && !isFinalized && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <protection.icon className={cn("h-3.5 w-3.5", protection.colorClass)} />
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p className="text-[10px] font-black uppercase tracking-widest">{protection.label}</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
+                    </div>
                 </td>
                 {/* Timesheet status */}
                 <td className={`${cellClass} border-r border-border/30`}>
                     <div className="flex flex-col gap-1">
-                        <TimesheetStatusBadge status={entry.timesheetStatus} />
+                        <TimesheetStatusBadge status={entry.attendanceStatus === 'no_show' ? 'no_show' : entry.timesheetStatus} />
                         {/* Show action note (override/rejection reason) */}
                         {actionNote && (
                             <TooltipProvider>
@@ -539,8 +636,8 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                             </>
                         ) : (
                             <>
-                                {/* Approve — blocked while InProgress */}
-                                {(entry.timesheetStatus === 'SUBMITTED' || entry.timesheetStatus === 'DRAFT') && !readOnly && (
+                                {/* Approve — blocked while InProgress or if No-Show */}
+                                {(entry.timesheetStatus?.toLowerCase() === 'submitted' || entry.timesheetStatus?.toLowerCase() === 'draft') && entry.attendanceStatus !== 'no_show' && !readOnly && (
                                     <TooltipProvider>
                                         <Tooltip>
                                             <TooltipTrigger asChild>
@@ -560,14 +657,14 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                                 </Button>
                                             </TooltipTrigger>
                                             <TooltipContent>
-                                                {isInProgress ? 'Shift in progress — approve after shift ends' : 'Approve'}
+                                                {isInProgress ? 'Shift Ongoing — action available after scheduled end' : 'Approve'}
                                             </TooltipContent>
                                         </Tooltip>
                                     </TooltipProvider>
                                 )}
 
-                                {/* Reject — also blocked while InProgress; always requires reason */}
-                                {(entry.timesheetStatus === 'SUBMITTED' || entry.timesheetStatus === 'DRAFT') && !readOnly && (
+                                {/* Reject — also blocked while InProgress; always requires reason; hidden if No-Show */}
+                                {(entry.timesheetStatus?.toLowerCase() === 'submitted' || entry.timesheetStatus?.toLowerCase() === 'draft') && entry.attendanceStatus !== 'no_show' && !readOnly && (
                                     <TooltipProvider>
                                         <Tooltip>
                                             <TooltipTrigger asChild>
@@ -587,8 +684,27 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                                 </Button>
                                             </TooltipTrigger>
                                             <TooltipContent>
-                                                {isInProgress ? 'Shift in progress — reject after shift ends' : 'Reject'}
+                                                {isInProgress ? 'Shift Ongoing — action available after scheduled end' : 'Reject'}
                                             </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                )}
+
+                                {/* Mark as No-Show — only available when shift is over + no clocks recorded */}
+                                {(!entry.clockIn || entry.clockIn === '-') && (!entry.clockOut || entry.clockOut === '-') && entry.statusDot?.label === 'No Show' && isShiftOver && entry.attendanceStatus !== 'no_show' && !readOnly && onMarkNoShow && (
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => onMarkNoShow(String(entry.id))}
+                                                    className="h-8 w-8 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-500/20"
+                                                >
+                                                    <UserX size={16} />
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>Mark as No-Show</TooltipContent>
                                         </Tooltip>
                                     </TooltipProvider>
                                 )}

@@ -334,7 +334,7 @@ compliance (utility module)
    │      ├── planning (bidding + swapping)
    │      ├── templates (shift templates)
    │      ├── timesheets (time tracking)
-   │      └── audit (audit trails)
+   │      └── history (history trails)
    └── (all other modules)
 ```
 
@@ -663,10 +663,10 @@ When you need to expose something from a module:
 // Any module → compliance (utility module)
 import { runComplianceChecks } from '@/modules/compliance';
 
-// planning, templates, timesheets, audit → rosters
+// planning, templates, timesheets, history → rosters
 import { Shift } from '@/modules/rosters';
 
-// audit → timesheets
+// history → timesheets
 import { Timesheet } from '@/modules/timesheets';
 ```
 

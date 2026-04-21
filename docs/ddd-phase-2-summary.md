@@ -30,7 +30,7 @@ All project documentation now organized in `docs/` with proper categorization:
 docs/
 ├── adr/                    # Architecture Decision Records
 │   └── ADR-001-modular-frontend.md
-├── reports/                # Analysis and audit reports
+├── reports/                # Analysis and internal reports
 │   └── rpc_usage_report.md
 ├── architecture-overview.md
 ├── ddd-module-standards.md
@@ -127,7 +127,6 @@ import { Button } from '@design-system/components/button';
 | **planning** | rosters, compliance | All other modules |
 | **templates** | rosters, compliance | All other modules |
 | **timesheets** | rosters, compliance | All other modules |
-| **audit** | timesheets, rosters | All other modules |
 | **compliance** | (none) | All modules (utility module) |
 | **design-system** | (none) | modules, api, hooks, pages |
 
@@ -158,7 +157,7 @@ import { BroadcastsPage } from '@modules/broadcasts'; // ❌ ERROR
    External code must use module public APIs (index.ts), not internal paths
 
 3. **Module-specific allowed dependencies**
-   Fine-grained control per module (rosters, planning, templates, timesheets, audit)
+   Fine-grained control per module (rosters, planning, templates, timesheets)
 
 4. **design-system-no-business-logic**
    Design system cannot import from business layers
@@ -301,9 +300,9 @@ npm run arch:graph
         │
         ├──────────┬──────────┬──────────┬──────────┐
         │          │          │          │          │
-┌───────────┐ ┌──────────┐ ┌───────────┐ ┌──────────┐ ┌──────────┐
-│  rosters  │ │ planning │ │ templates │ │timesheets│ │  audit   │
-└───────────┘ └──────────┘ └───────────┘ └──────────┘ └──────────┘
+┌───────────┐ ┌──────────┐ ┌───────────┐ ┌──────────┐
+│  rosters  │ │ planning │ │ templates │ │timesheets│
+└───────────┘ └──────────┘ └───────────┘ └──────────┘
                     │            │            │            │
                     │            │            │            │
                     └────────────┴────────────┴────────────┘
@@ -311,15 +310,8 @@ npm run arch:graph
                           ┌───────▼────────┐
                           │    rosters     │  (Core domain module)
                           └────────────────┘
-                                  ▲
-                                  │
                           ┌───────┴────────┐
                           │   timesheets   │
-                          └────────────────┘
-                                  ▲
-                                  │
-                          ┌───────┴────────┐
-                          │     audit      │
                           └────────────────┘
 ```
 
@@ -330,7 +322,6 @@ npm run arch:graph
 3. **Planning** - Depends on rosters + compliance
 4. **Templates** - Depends on rosters + compliance
 5. **Timesheets** - Depends on rosters + compliance
-6. **Audit** - Depends on timesheets + rosters
 
 ---
 
@@ -407,9 +398,6 @@ Some modules have **architectural dependencies** that are allowed:
 
 4. **timesheets → rosters**
    Timesheets track actual vs. scheduled (rosters) hours
-
-5. **audit → timesheets + rosters**
-   Audit trails for timesheets and roster changes
 
 **Trade-off:** Some coupling is acceptable for pragmatic reasons, but it's now **explicit and documented**.
 

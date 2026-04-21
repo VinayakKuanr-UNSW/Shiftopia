@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Timesheet, TimesheetStatus, TimesheetRow } from '../model/timesheet.types';
-import { TimesheetAuditEntry } from '../model/audit.types';
+
 import { timesheetReadApi } from '../api/timesheets.read.api';
 import { timesheetWriteApi } from '../api/timesheets.write.api';
-import { auditsApi } from '../api/audits.api';
+
 import { useToast } from '@/modules/core/hooks/use-toast';
 
 export const useTimesheets = (startDate?: string, endDate?: string) => {
@@ -126,43 +126,4 @@ export const useTimesheetByDate = (date: string) => {
     };
 };
 
-export const useTimesheetAudit = (timesheetId?: string | number) => {
-    const [data, setData] = useState<TimesheetAuditEntry[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<Error | null>(null);
-    const { toast } = useToast();
 
-    const loadHistory = useCallback(async () => {
-        if (!timesheetId) {
-            setData([]);
-            return;
-        }
-
-        setLoading(true);
-        try {
-            const history = await auditsApi.getAuditTrail(String(timesheetId));
-            setData(history);
-            setError(null);
-        } catch (err) {
-            setError(err as Error);
-            toast({
-                title: 'Error loading audit history',
-                description: (err as Error).message,
-                variant: 'destructive',
-            });
-        } finally {
-            setLoading(false);
-        }
-    }, [timesheetId, toast]);
-
-    useEffect(() => {
-        loadHistory();
-    }, [loadHistory]);
-
-    return {
-        data,
-        loading,
-        error,
-        refresh: loadHistory,
-    };
-};

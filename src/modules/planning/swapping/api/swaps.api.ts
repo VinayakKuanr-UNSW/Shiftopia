@@ -823,7 +823,7 @@ export const swapsApi = {
 
         if (swapError) throw swapError;
 
-        // 4b. Update shift trail info so the audit log captures the partner
+        // 4b. Update shift telemetry/tracking info to capture the partner
         const { data: offererProfile } = await db.from('profiles').select('first_name, last_name').eq('id', offererId).single();
         const offererName = offererProfile ? `${offererProfile.first_name} ${offererProfile.last_name}` : 'Unknown';
         

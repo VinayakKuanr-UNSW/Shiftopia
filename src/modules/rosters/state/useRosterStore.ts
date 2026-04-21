@@ -150,11 +150,15 @@ export const useRosterStore = create<RosterState>()(
       // ── Actions ────────────────────────────────────────────────────────────
       setViewType: (view) => set({ viewType: view }),
       setActiveMode: (mode) => set({ activeMode: mode, selectedShiftIds: new Set(), bulkModeActive: false }),
-      setIsBucketView: (v) => set({ isBucketView: v }),
+      setIsBucketView: (v) => set({ 
+        isBucketView: v,
+        ...(v ? { bulkModeActive: false, isDnDModeActive: false, selectedShiftIds: new Set() } : {})
+      }),
 
       setBulkModeActive: (active) => set((s) => ({
         bulkModeActive: active,
         selectedShiftIds: active ? s.selectedShiftIds : new Set(),
+        ...(active ? { isBucketView: false, isDnDModeActive: false } : {})
       })),
 
       setSelectedShiftIds: (ids) => set({ selectedShiftIds: ids }),
@@ -177,6 +181,7 @@ export const useRosterStore = create<RosterState>()(
       setIsDnDModeActive: (active) => set((s) => ({
         isDnDModeActive: active,
         showUnfilledPanel: active ? true : s.showUnfilledPanel,
+        ...(active ? { isBucketView: false, bulkModeActive: false, selectedShiftIds: new Set() } : {})
       })),
       setShowUnfilledPanel: (show) => set((s) => ({
         showUnfilledPanel: show,

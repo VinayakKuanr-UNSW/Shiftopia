@@ -5,7 +5,7 @@
  *   createPlanningRequest → submitOffer → selectOffer → approveRequest
  *
  * Critical invariant: the shift must be assigned to the OFFERER (EMP_A),
- * not the request initiator (MGR). This was Bug #1 (CRITICAL) in the audit.
+ * not the request initiator (MGR). This was Bug #1 (CRITICAL) in the system assessment.
  *
  * Mock strategy:
  *   - Supabase client is mocked via createSupabaseMock()

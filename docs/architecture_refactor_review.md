@@ -6,7 +6,7 @@ The manual refactor to a Domain-Driven Design (DDD) architecture has been succes
 ## Verification Findings
 
 ### 1. Structural Integrity (PASSED)
-- **Modules**: The `src/modules` directory is well-organized with clear domain boundaries (e.g., `audit`, `auth`, `dashboard`, `planning`, `rosters`).
+- **Modules**: The `src/modules` directory is well-organized with clear domain boundaries (e.g., `auth`, `dashboard`, `planning`, `rosters`).
 - **Page Migration**: All pages have been successfully moved from `src/pages` to their respective modules. `src/pages` has been removed.
 - **Imports**: No lingering broken imports referencing `@/pages` were found.
 

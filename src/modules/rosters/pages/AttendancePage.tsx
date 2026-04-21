@@ -9,23 +9,28 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { motion, type Variants } from 'framer-motion';
 import {
-  format, addDays, subDays, startOfWeek, endOfWeek,
-  startOfMonth, endOfMonth, parseISO, differenceInMinutes, isToday,
+  format, parseISO, differenceInMinutes, isToday,
 } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
-import { DayPicker } from 'react-day-picker';
-import 'react-day-picker/dist/style.css';
 import {
   Fingerprint, MapPin, Loader2, UserX, LogIn, LogOut,
-  CheckCircle, Timer, ChevronLeft, ChevronRight,
-  BarChart3, Filter, CalendarIcon,
+  CheckCircle, Timer,
+  BarChart3, Filter,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
+import {
+  UnifiedRosterNavigator,
+  ViewType,
+  computeRange,
+} from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
 import { useAuth } from '@/platform/auth/useAuth';
+import { supabase } from '@/platform/realtime/client';
 import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 import { useClockIn, useClockOut } from '@/modules/rosters/state/useClockInOut';
-import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
+import { TimesheetMobileCard } from '@/modules/timesheets/ui/components/TimesheetMobileCard';
+import type { TimesheetRow } from '@/modules/timesheets/model/timesheet.types';
+import { snapToQuarterHour } from '@/modules/timesheets/api/timesheets.supabase.api';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { Label } from '@/modules/core/ui/primitives/label';
@@ -47,6 +52,9 @@ import {
   type GPSAnalysis,
 } from '@/modules/rosters/utils/gps';
 
+import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+
 // ── Motion variants ────────────────────────────────────────────────────────────
 
 const pageVariants: Variants = {
@@ -60,20 +68,7 @@ const itemVariants: Variants = {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Mode = 'D' | '3D' | 'W' | 'M';
-type Tab  = 'today' | 'logs';
 type StatusFilter = 'all' | 'checked_in' | 'late' | 'no_show' | 'unknown';
-
-// ── Live clock ────────────────────────────────────────────────────────────────
-
-function useLiveClock() {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  return now;
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -101,51 +96,6 @@ function formatHM(totalMinutes: number): string {
   return `${h}h ${m}m`;
 }
 
-function formatTime12(timeStr: string): string {
-  const [h, m] = timeStr.split(':').map(Number);
-  const p = h >= 12 ? 'PM' : 'AM';
-  return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${p}`;
-}
-
-function getGroupVariant(shift: Shift): 'convention' | 'exhibition' | 'theatre' | 'default' {
-  const gt = shift.group_type?.toLowerCase() ?? '';
-  if (gt.includes('convention'))  return 'convention';
-  if (gt.includes('exhibition'))  return 'exhibition';
-  if (gt.includes('theatre'))     return 'theatre';
-  return 'default';
-}
-
-function getDateRange(anchor: Date, mode: Mode): { start: string; end: string; label: string } {
-  const fmt = (d: Date) => format(d, 'yyyy-MM-dd');
-  switch (mode) {
-    case 'D':
-      return { start: fmt(anchor), end: fmt(anchor), label: format(anchor, 'EEE, d MMM') };
-    case '3D': {
-      const end = addDays(anchor, 2);
-      return { start: fmt(anchor), end: fmt(end), label: `${format(anchor, 'd MMM')} – ${format(end, 'd MMM')}` };
-    }
-    case 'W': {
-      const s = startOfWeek(anchor, { weekStartsOn: 1 });
-      const e = endOfWeek(anchor, { weekStartsOn: 1 });
-      return { start: fmt(s), end: fmt(e), label: `${format(s, 'd MMM')} – ${format(e, 'd MMM')}` };
-    }
-    case 'M': {
-      const s = startOfMonth(anchor);
-      const e = endOfMonth(anchor);
-      return { start: fmt(s), end: fmt(e), label: format(anchor, 'MMMM yyyy') };
-    }
-  }
-}
-
-function navigateAnchor(anchor: Date, mode: Mode, dir: -1 | 1): Date {
-  switch (mode) {
-    case 'D':  return dir === 1 ? addDays(anchor, 1)  : subDays(anchor, 1);
-    case '3D': return dir === 1 ? addDays(anchor, 3)  : subDays(anchor, 3);
-    case 'W':  return dir === 1 ? addDays(anchor, 7)  : subDays(anchor, 7);
-    case 'M':  return dir === 1 ? addDays(anchor, 31) : subDays(anchor, 31);
-  }
-}
-
 // ── Shift timing ──────────────────────────────────────────────────────────────
 
 type ShiftTiming = 'before_window' | 'in_window' | 'window_closed' | 'completed';
@@ -164,95 +114,14 @@ function getShiftTiming(shift: Shift, now: Date): ShiftTiming {
   return 'before_window';
 }
 
-// ── Standardized Metrics Component ────────────────────────────────────────────
+// ── Unified Attendance Card (combines history + live clocking) ───────────────
 
-const MetricRow = ({ label, time, color = 'emerald' }: { label: string; time?: string | null; color?: 'emerald' | 'amber' | 'red' | 'blue' | 'slate' }) => {
-  if (!time) return null;
-  const colors = {
-    emerald: 'text-emerald-500',
-    amber: 'text-amber-500',
-    red: 'text-red-500',
-    blue: 'text-blue-500',
-    slate: 'text-slate-500',
-  };
-  return (
-    <div className="flex flex-col items-center gap-0.5">
-      <span className={cn('text-[9px] font-mono font-black text-foreground/70 uppercase tracking-widest')}>
-        {label}
-      </span>
-      <span className={cn('text-[10px] font-mono font-black tabular-nums', colors[color])}>
-        {time}
-      </span>
-    </div>
-  );
-};
-
-const AttendanceMetrics = ({ shift }: { shift: Shift }) => {
-  const status = (shift.attendance_status ?? 'unknown') as AttendanceStatus;
-  const isNoShow = status === 'no_show';
-  const isLateIn = status === 'late';
-  
-  const actualStartMs = shift.actual_start ? new Date(shift.actual_start).getTime() : null;
-  const scheduledStartMs = new Date(`${shift.shift_date}T${shift.start_time}`).getTime();
-  const actualEndMs = shift.actual_end ? new Date(shift.actual_end).getTime() : null;
-  // Use end_at (UTC ISO) when available so overnight shifts are handled correctly.
-  // Fall back to local string + overnight offset when end_at is absent.
-  const scheduledEndMs = shift.end_at
-    ? new Date(shift.end_at).getTime()
-    : (() => {
-        const end = new Date(`${shift.shift_date}T${shift.end_time}`);
-        if (shift.is_overnight) end.setDate(end.getDate() + 1);
-        return end.getTime();
-      })();
-  const FIVE_MINS = 5 * 60 * 1000;
-
-  const isEarlyIn = actualStartMs && actualStartMs < scheduledStartMs;
-  const isEarlyOut = actualEndMs && actualEndMs < scheduledEndMs - FIVE_MINS;
-  const isLateOut = actualEndMs && actualEndMs > scheduledEndMs + FIVE_MINS;
-  
-  const workedMins = shift.actual_start && shift.actual_end
-    ? Math.max(0, differenceInMinutes(new Date(shift.actual_end), new Date(shift.actual_start)))
-    : null;
-
-  const inLabel = isLateIn ? 'Late In' : isEarlyIn ? 'Early In' : 'Check In';
-  const inColor = isLateIn ? 'amber' : 'emerald';
-  const inTime = shift.actual_start ? format(new Date(shift.actual_start), 'h:mm a') : '—';
-
-  const outLabel = isLateOut ? 'Late Out' : isEarlyOut ? 'Early Out' : 'Check Out';
-  const outColor = isLateOut ? 'slate' : isEarlyOut ? 'amber' : 'blue';
-  const outTime = shift.actual_end ? format(new Date(shift.actual_end), 'h:mm a') : '—';
-
-  return (
-    <>
-      {isNoShow ? (
-        <div className="col-span-2 flex flex-col items-center gap-0.5">
-          <span className="text-[9px] font-mono font-black text-red-500 uppercase tracking-widest">No-Show</span>
-          <span className="text-[10px] font-mono font-black text-red-500/70">REPORTED</span>
-        </div>
-      ) : (
-        <>
-          <MetricRow label={inLabel} time={inTime} color={inColor as any} />
-          <MetricRow label={outLabel} time={outTime} color={outColor as any} />
-        </>
-      )}
-      <MetricRow 
-        label="Worked" 
-        time={workedMins !== null ? formatHM(workedMins) : '0m'} 
-        color="blue" 
-      />
-    </>
-  );
-};
-
-// ── Today card using SharedShiftCard ─────────────────────────────────────────
-
-interface TodayCardProps {
+interface AttendanceCardProps {
   shift: Shift;
   now: Date;
-  isManager: boolean;
 }
 
-const TodayCard: React.FC<TodayCardProps> = ({ shift, now, isManager }) => {
+const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now }) => {
   const clockIn  = useClockIn();
   const clockOut = useClockOut();
 
@@ -263,6 +132,8 @@ const TodayCard: React.FC<TodayCardProps> = ({ shift, now, isManager }) => {
 
   const timing   = getShiftTiming(shift, now);
   const status   = (shift.attendance_status ?? 'unknown') as AttendanceStatus;
+  const isAutoClockOut = shift.attendance_note === 'auto_clocked_out';
+
   const canClockIn  = status === 'unknown' && timing === 'in_window' && !shift.actual_end;
   const canClockOut = (status === 'checked_in' || status === 'late') && !shift.actual_end && timing !== 'before_window';
 
@@ -273,21 +144,18 @@ const TodayCard: React.FC<TodayCardProps> = ({ shift, now, isManager }) => {
   const minsElapsed = Math.max(0, Math.floor((nowMs - startMs) / 60000));
 
   // ── GPS pre-capture ────────────────────────────────────────────────────────
-  // Capture once when the clock-in/out window opens, so the indicator is ready
-  // before the user taps the button.  Re-used by clockIn.mutate if < 30 s old.
   const [gpsCapture, setGpsCapture]   = useState<GPSCapture | null>(null);
   const [gpsAnalysis, setGpsAnalysis] = useState<GPSAnalysis | null>(null);
   const [gpsCapturing, setGpsCapturing] = useState(false);
 
   useEffect(() => {
     if (!canClockIn && !canClockOut) return;
-    if (gpsCapture) return; // already have a capture
+    if (gpsCapture) return;
     let cancelled = false;
     setGpsCapturing(true);
     captureGPS().then((capture) => {
       if (cancelled) return;
       setGpsCapture(capture);
-      // venueLat/venueLon: populate organizations.venue_lat/lon in DB to enable distance check
       setGpsAnalysis(analyzeGPS(capture, null, null));
       setGpsCapturing(false);
     });
@@ -348,30 +216,41 @@ const TodayCard: React.FC<TodayCardProps> = ({ shift, now, isManager }) => {
     </Popover>
   ) : null;
 
-  const topContent = (timing === 'before_window' || shift.lifecycle_status === 'InProgress') ? (
-    <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3">
-      {timing === 'before_window' && (
-        <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-500/20 text-slate-500 dark:text-slate-400 border border-slate-500/30">
-          <Timer className="h-3 w-3" />Opens in {formatHM(minsUntilWindow)}
+  let topContent = null;
+  if (isAutoClockOut) {
+    topContent = (
+      <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3">
+        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30">
+          <LogOut className="h-3 w-3" />DID NOT CLOCK OUT
         </span>
-      )}
-      {shift.lifecycle_status === 'InProgress' && shift.actual_start && !shift.actual_end && (
-        <div className="w-full mt-1">
-          <div className="flex items-center justify-between text-[9px] text-muted-foreground/60 mb-0.5 font-mono">
-            <span>{formatHM(minsElapsed)} in</span>
-            <span>{formatHM(minsRemaining)} left</span>
+      </div>
+    );
+  } else if (timing === 'before_window' || shift.lifecycle_status === 'InProgress') {
+    topContent = (
+      <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3">
+        {timing === 'before_window' && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-slate-500/20 text-slate-500 dark:text-slate-400 border border-slate-500/30">
+            <Timer className="h-3 w-3" />Opens in {formatHM(minsUntilWindow)}
+          </span>
+        )}
+        {shift.lifecycle_status === 'InProgress' && shift.actual_start && !shift.actual_end && (
+          <div className="w-full mt-1">
+            <div className="flex items-center justify-between text-[9px] text-muted-foreground/60 mb-0.5 font-mono">
+              <span>{formatHM(minsElapsed)} in</span>
+              <span>{formatHM(minsRemaining)} left</span>
+            </div>
+            <div className="h-1 rounded-full bg-muted/50 overflow-hidden">
+              <div className="h-full rounded-full bg-emerald-500 transition-all duration-1000" style={{ width: `${Math.max(2, progress)}%` }} />
+            </div>
           </div>
-          <div className="h-1 rounded-full bg-muted/50 overflow-hidden">
-            <div className="h-full rounded-full bg-emerald-500 transition-all duration-1000" style={{ width: `${Math.max(2, progress)}%` }} />
-          </div>
-        </div>
-      )}
-    </div>
-  ) : null;
+        )}
+      </div>
+    );
+  }
 
   const footerActions = (canClockIn || canClockOut) ? (
-    <div className="px-4 pb-4 pt-1 flex flex-col gap-1.5">
-      <div className="flex gap-2">
+    <div className="px-4 pb-4 pt-1 flex items-center gap-3">
+      <div className="flex-1 flex gap-2">
         {canClockIn && (
           <Button size="sm"
             onClick={() => clockIn.mutate({ shiftId: shift.id, preCapture: gpsCapture })}
@@ -379,7 +258,7 @@ const TodayCard: React.FC<TodayCardProps> = ({ shift, now, isManager }) => {
             title={!gpsCapture && !gpsCapturing ? 'Waiting for GPS fix…' : undefined}
             className="flex-1 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 rounded-xl font-bold text-xs disabled:opacity-50">
             {clockIn.isPending
-              ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Clocking in…</>
+              ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />In…</>
               : gpsCapturing
               ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Locating…</>
               : <><LogIn className="h-3.5 w-3.5 mr-1.5" />Clock In</>}
@@ -389,77 +268,75 @@ const TodayCard: React.FC<TodayCardProps> = ({ shift, now, isManager }) => {
           <Button size="sm"
             onClick={() => clockOut.mutate({ shiftId: shift.id })}
             disabled={clockOut.isPending}
-            className="flex-1 bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20 rounded-xl font-bold text-xs">
+            className="flex-1 bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20 rounded-xl font-bold text-xs shadow-none">
             {clockOut.isPending
-              ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Clocking out…</>
+              ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Out…</>
               : <><LogOut className="h-3.5 w-3.5 mr-1.5" />Clock Out</>}
           </Button>
         )}
       </div>
-      <div className="flex items-center justify-between">
-        {gpsIndicator}
-        <p className="text-[9px] text-muted-foreground/50 font-mono">
-          Clock-in window · GPS required
-        </p>
-      </div>
+      {gpsIndicator}
     </div>
   ) : null;
 
+  // Map to TimesheetRow structure for the shared card component
+  const timesheetEntry: TimesheetRow = useMemo(() => {
+    return {
+      id: shift.id,
+      date: shift.shift_date,
+      employeeId: shift.assigned_employee_id || '',
+      employee: shift.assigned_profiles ? `${shift.assigned_profiles.first_name || ''} ${shift.assigned_profiles.last_name || ''}`.trim() : 'Unknown',
+      organization: shift.organizations?.name || '',
+      department: shift.departments?.name || '',
+      subDepartment: shift.sub_departments?.name || '',
+      group: shift.roster_subgroup?.roster_group?.name || shift.group_type || '',
+      subGroup: shift.sub_group_name || '',
+      role: shift.roles?.name || '',
+      remunerationLevel: shift.remuneration_levels?.level_name || '',
+      scheduledStart: shift.start_time,
+      scheduledEnd: shift.end_time,
+      clockIn: shift.actual_start || '',
+      clockOut: shift.actual_end || '',
+      adjustedStart: (() => {
+          if (shift.timesheet_start_time) return shift.timesheet_start_time;
+          const snapped = snapToQuarterHour(shift.actual_start);
+          return snapped;
+      })(),
+      adjustedEnd: (() => {
+          if (shift.timesheet_end_time) return shift.timesheet_end_time;
+          const snapped = snapToQuarterHour(shift.actual_end);
+          return snapped;
+      })(),
+      isAdjustedManual: !!shift.timesheet_start_time,
+      length: String(shift.scheduled_length_minutes || 0),
+      paidBreak: String(shift.paid_break_minutes || 0),
+      unpaidBreak: String(shift.unpaid_break_minutes || 0),
+      netLength: String(shift.net_length_minutes || 0),
+      approximatePay: '',
+      differential: '0', 
+      liveStatus: shift.lifecycle_status || '',
+      timesheetStatus: shift.timesheet_status || 'draft',
+      attendanceStatus: shift.attendance_status,
+      notes: shift.timesheet_notes,
+      rejectedReason: shift.timesheet_rejected_reason,
+    };
+  }, [shift]);
+
   return (
-    <SharedShiftCard
-      organization={shift.organizations?.name ?? ''}
-      department={shift.departments?.name ?? ''}
-      subGroup={shift.sub_group_name ?? undefined}
-      role={shift.roles?.name ?? 'Unassigned Role'}
-      shiftDate={format(parseISO(shift.shift_date), 'EEE d MMM')}
-      startTime={formatTime12(shift.start_time)}
-      endTime={formatTime12(shift.end_time)}
-      netLength={shift.net_length_minutes ?? shift.scheduled_length_minutes ?? 0}
-      paidBreak={shift.paid_break_minutes ?? 0}
-      unpaidBreak={shift.unpaid_break_minutes ?? 0}
-      groupVariant={getGroupVariant(shift)}
-      topContent={topContent}
-      statusIcons={(shift.actual_start || shift.actual_end || shift.lifecycle_status === 'Completed') ? <AttendanceMetrics shift={shift} /> : undefined}
-      footerActions={footerActions}
-      isExpired={false}
-    />
-  );
-};
-
-// ── Log card using SharedShiftCard ────────────────────────────────────────────
-
-const LogCard: React.FC<{ shift: Shift }> = ({ shift }) => {
-  const status = (shift.attendance_status ?? 'unknown') as AttendanceStatus;
-  const isAutoClockOut = shift.attendance_note === 'auto_clocked_out';
-
-  const topContent = isAutoClockOut ? (
-    <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3">
-      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30">
-        <LogOut className="h-3 w-3" />DID NOT CLOCK OUT
-      </span>
-    </div>
-  ) : null;
-
-  const statusIcons = (shift.actual_start || shift.actual_end || status === 'no_show') ? (
-    <AttendanceMetrics shift={shift} />
-  ) : undefined;
-
-  return (
-    <SharedShiftCard
-      organization={shift.organizations?.name ?? ''}
-      department={shift.departments?.name ?? ''}
-      subGroup={shift.sub_group_name ?? undefined}
-      role={shift.roles?.name ?? 'Unassigned Role'}
-      shiftDate={format(parseISO(shift.shift_date), 'EEE d MMM')}
-      startTime={formatTime12(shift.start_time)}
-      endTime={formatTime12(shift.end_time)}
-      netLength={shift.net_length_minutes ?? shift.scheduled_length_minutes ?? 0}
-      paidBreak={shift.paid_break_minutes ?? 0}
-      unpaidBreak={shift.unpaid_break_minutes ?? 0}
-      groupVariant={getGroupVariant(shift)}
-      topContent={topContent}
-      statusIcons={statusIcons}
-      isExpired={false}
+    <TimesheetMobileCard
+      entry={timesheetEntry}
+      isSelected={false}
+      isSelectMode={false}
+      onToggleSelect={() => {}}
+      readOnly={false}
+      isManager={false}
+      employeeHeader={
+        <div className="mb-2 space-y-2">
+            {topContent}
+        </div>
+      }
+      employeeActions={footerActions}
+      hideGlow={true}
     />
   );
 };
@@ -474,19 +351,36 @@ const TotalsBar: React.FC<{ shifts: Shift[] }> = ({ shifts }) => {
     let noShowCount  = 0;
 
     for (const s of shifts) {
-      const status = s.attendance_status ?? 'unknown';
-      if (status === 'late')    lateInCount++;
-      if (status === 'no_show') noShowCount++;
+      const tsStatus = (s.timesheet_status || '').toLowerCase();
+      
+      // No-Show metric: counts finalized no-shows
+      if (tsStatus === 'no_show' || s.attendance_status === 'no_show') {
+        noShowCount++;
+        continue; // No hours worked for no-shows
+      }
 
-      if (s.actual_start && s.actual_end) {
-        const worked = Math.max(0, differenceInMinutes(new Date(s.actual_end), new Date(s.actual_start)));
-        hoursWorked += worked;
+      // Worked, Late, and Early metrics only count for APPROVED timesheets
+      if (tsStatus === 'approved' && s.timesheet_start_time && s.timesheet_end_time) {
+        // Calculate worked hours from adjusted (billable) times
+        const start = new Date(`${s.shift_date}T${s.timesheet_start_time}`);
+        const end = new Date(`${s.shift_date}T${s.timesheet_end_time}`);
+        if (end < start) end.setDate(end.getDate() + 1); // Overnight support
+        
+        const durationMins = differenceInMinutes(end, start);
+        const unpaidSub = s.unpaid_break_minutes || 0;
+        hoursWorked += Math.max(0, durationMins - unpaidSub);
 
-        // Early out: clocked out 5+ min before scheduled end
-        const scheduledEnd = s.end_at
-          ? new Date(s.end_at).getTime()
-          : new Date(`${s.shift_date}T${s.end_time}`).getTime();
-        if (new Date(s.actual_end).getTime() < scheduledEnd - 5 * 60 * 1000) {
+        // Late In: based on adjusted start vs scheduled start
+        const scheduledStart = new Date(`${s.shift_date}T${s.start_time}`).getTime();
+        // If adjusted start is >5 mins after scheduled, count as late
+        if (start.getTime() > scheduledStart + 5 * 60 * 1000) {
+          lateInCount++;
+        }
+
+        // Early Out: based on adjusted end vs scheduled end
+        const scheduledEnd = toMs(s, 'end');
+        // If adjusted end is <5 mins before scheduled, count as early out
+        if (end.getTime() < scheduledEnd - 5 * 60 * 1000) {
           earlyOutCount++;
         }
       }
@@ -547,52 +441,136 @@ const TotalsBar: React.FC<{ shifts: Shift[] }> = ({ shifts }) => {
   );
 };
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+// ── Status Filter Drawer ────────────────────────────────────────────────────────
+
+interface StatusFilterDrawerProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  current: StatusFilter;
+  onSelect: (filter: StatusFilter) => void;
+}
+
+const StatusFilterDrawer: React.FC<StatusFilterDrawerProps> = ({ open, onOpenChange, current, onSelect }) => {
+  const options: { value: StatusFilter; label: string; icon: React.FC<any>; color: string }[] = [
+    { value: 'all', label: 'All statuses', icon: BarChart3, color: 'text-muted-foreground' },
+    { value: 'checked_in', label: 'Completed', icon: CheckCircle, color: 'text-emerald-500' },
+    { value: 'late', label: 'Late In', icon: Timer, color: 'text-amber-500' },
+    { value: 'no_show', label: 'No Show', icon: UserX, color: 'text-rose-500' },
+    { value: 'unknown', label: 'No Record', icon: Fingerprint, color: 'text-muted-foreground' },
+  ];
+
+  return (
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialog.Header>
+        <ResponsiveDialog.Title>Filter by Status</ResponsiveDialog.Title>
+        <ResponsiveDialog.Description>Show records with a specific attendance status</ResponsiveDialog.Description>
+      </ResponsiveDialog.Header>
+      <ResponsiveDialog.Body className="p-4 pt-0">
+        <div className="grid grid-cols-1 gap-2">
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => {
+                onSelect(opt.value);
+                onOpenChange(false);
+              }}
+              className={cn(
+                "flex items-center gap-3 w-full p-4 rounded-xl border text-sm font-bold transition-all",
+                current === opt.value
+                  ? "bg-primary/10 border-primary text-primary"
+                  : "bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50"
+              )}
+            >
+              <opt.icon className={cn("h-5 w-5", opt.color)} />
+              <span>{opt.label}</span>
+              {current === opt.value && <div className="ml-auto h-2 w-2 rounded-full bg-primary" />}
+            </button>
+          ))}
+        </div>
+      </ResponsiveDialog.Body>
+    </ResponsiveDialog>
+  );
+};
 
 const AttendancePage: React.FC = () => {
-  const now  = useLiveClock();
-  const { user, isManagerOrAbove } = useAuth();
-  const isManager = isManagerOrAbove();
+  const { user } = useAuth();
+  const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
 
-  const [tab, setTab]           = useState<Tab>('today');
-  const [mode, setMode]         = useState<Mode>('W');
+  const [viewType, setViewType] = useState<ViewType>('week');
   const [anchor, setAnchor]     = useState<Date>(() => new Date());
-  const [calOpen, setCalOpen]   = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
 
-  const todayStr     = format(now, 'yyyy-MM-dd');
-  // Include yesterday so overnight shifts that cross midnight remain visible
-  // until the employee clocks out (e.g. Wed 19:30–00:30 still shows on Thu).
-  const yesterdayStr = format(subDays(now, 1), 'yyyy-MM-dd');
+  // Derive date range from anchor + viewType (centralised via UnifiedRosterNavigator utils)
+  const range      = useMemo(() => computeRange(anchor, viewType), [anchor, viewType]);
+  const rangeStart = format(range.start, 'yyyy-MM-dd');
+  const rangeEnd   = format(range.end,   'yyyy-MM-dd');
 
-  // Today's data — fetch [yesterday, today] so overnight shifts from yesterday
-  // are included; filter to relevant shifts in sortedToday below.
-  const { data: todayRaw = [], isLoading: todayLoading } = useQuery({
-    queryKey: shiftKeys.attendance(user?.id ?? '', yesterdayStr, todayStr),
-    queryFn:  () => shiftsQueries.getEmployeeShiftsForAttendance(user!.id, yesterdayStr, todayStr),
-    enabled:  !!user?.id && tab === 'today',
-    staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
-  });
+  // Consider current date for short polling interval if viewing current range
+  const now = new Date();
+  const isViewingToday = now >= parseISO(rangeStart) && now <= parseISO(rangeEnd);
 
-  // Log range data — same attendance query for history
-  const { start: rangeStart, end: rangeEnd, label: rangeLabel } = getDateRange(anchor, mode);
-
-  const { data: logShifts = [], isLoading: logsLoading } = useQuery({
+  const { data: logShifts = [], isLoading: logsLoading, refetch } = useQuery({
     queryKey: shiftKeys.attendance(user?.id ?? '', rangeStart, rangeEnd),
     queryFn:  () => shiftsQueries.getEmployeeShiftsForAttendance(user!.id, rangeStart, rangeEnd),
-    enabled:  !!user?.id && tab === 'logs',
-    staleTime: 2 * 60 * 1000,
+    enabled:  !!user?.id,
+    staleTime: isViewingToday ? 30 * 1000 : 2 * 60 * 1000,
+    refetchInterval: isViewingToday ? 60 * 1000 : false,
   });
 
+  // Listen to timesheet updates in real-time
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel('timesheets_attendance')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'timesheets',
+          filter: `employee_id=eq.${user.id}`,
+        },
+        () => {
+          refetch();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, refetch]);
+
   const filteredLogs = useMemo(() => {
-    const sorted = [...logShifts].sort((a, b) => {
-      const d = a.shift_date.localeCompare(b.shift_date);
+    let sorted = [...logShifts].sort((a, b) => {
+      // Show most recent dates first in the unified log
+      const d = b.shift_date.localeCompare(a.shift_date);
+      // For same date, sort chronologically
       return d !== 0 ? d : a.start_time.localeCompare(b.start_time);
     });
+
+    // 1. Apply Scope Filters (Organization, Department, Sub-Department)
+    if (scope && sorted.length > 0) {
+      if (scope.org_ids?.length > 0) {
+        sorted = sorted.filter(s => scope.org_ids.includes(s.organization_id));
+      }
+      if (scope.dept_ids?.length > 0) {
+        sorted = sorted.filter(s => scope.dept_ids.includes(s.department_id));
+      }
+      if (scope.subdept_ids?.length > 0) {
+        // Support department-level shifts (null subdept) if parent department is selected
+        sorted = sorted.filter(s => {
+          const subDeptMatch = s.sub_department_id && scope.subdept_ids.includes(s.sub_department_id);
+          const isDeptLevel = !s.sub_department_id;
+          return subDeptMatch || isDeptLevel;
+        });
+      }
+    }
+
     if (statusFilter === 'all') return sorted;
     return sorted.filter(s => (s.attendance_status ?? 'unknown') === statusFilter);
-  }, [logShifts, statusFilter]);
+  }, [logShifts, statusFilter, scope]);
 
   const groupedLogs = useMemo(() => {
     const groups: { date: string; shifts: Shift[] }[] = [];
@@ -603,162 +581,67 @@ const AttendancePage: React.FC = () => {
     }
     return groups;
   }, [filteredLogs]);
-
-  const sortedToday = useMemo(() => {
-    return todayRaw
-      .filter(shift => {
-        // Always show shifts that started today
-        if (shift.shift_date === todayStr) return true;
-        
-        // Show yesterday's overnight shifts (they end today)
-        // We keep them visible even after clock-out for consistency with today's shifts
-        return (
-          shift.shift_date === yesterdayStr &&
-          shift.is_overnight === true
-        );
-      })
-      .sort((a, b) => toMs(a, 'start') - toMs(b, 'start'));
-  }, [todayRaw, todayStr, yesterdayStr],
-  );
-
-
   return (
     <motion.div
       variants={pageVariants}
       initial="hidden"
       animate="show"
-      className="h-full flex flex-col px-4 md:px-6 py-6 gap-5 overflow-y-auto pb-24 md:pb-6"
+      className="h-full flex flex-col px-4 md:px-6 py-6 gap-5 overflow-hidden"
     >
 
-      {/* ── Header ── */}
-      <motion.div variants={itemVariants} className="flex items-start justify-between shrink-0">
-        <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            <Fingerprint className="h-5 w-5 text-emerald-500" />
-            <h1 className="text-2xl font-black tracking-tight text-foreground">My Attendance</h1>
-          </div>
-          <p className="text-sm text-muted-foreground">{format(now, 'EEEE, d MMMM yyyy')}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-3xl font-mono font-black text-foreground tabular-nums leading-none">{format(now, 'HH:mm')}</p>
-          <p className="text-xs font-mono text-muted-foreground tabular-nums">:{format(now, 'ss')}</p>
-        </div>
-      </motion.div>
+      {/* ── Unified Header ── */}
+      <PersonalPageHeader
+        title="My Attendance"
+        Icon={Fingerprint}
+        scope={scope}
+        setScope={setScope}
+        isGammaLocked={isGammaLocked}
+      />
 
-      {/* ── Tab switcher ── */}
-      <motion.div variants={itemVariants} className="flex rounded-xl bg-muted/50 p-1 gap-1 shrink-0">
-        {(['today', 'logs'] as Tab[]).map(t => (
-          <button key={t} onClick={() => setTab(t)}
+
+      {/* ══════════════ UNIFIED LOGS VIEW ══════════════ */}
+      <div className="flex-1 flex flex-col min-h-0 gap-4">
+        {/* Controls row */}
+        <div className="flex items-center gap-2 shrink-0 w-full overflow-x-hidden pb-1">
+          <UnifiedRosterNavigator
+            date={anchor}
+            viewType={viewType}
+            onChange={(d) => setAnchor(d)}
+            onViewTypeChange={(v) => { setViewType(v); setAnchor(new Date()); }}
+            showPicker
+            className="flex-1"
+          />
+
+          {/* Status filter trigger */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setFilterDrawerOpen(true)}
             className={cn(
-              'flex-1 py-2 rounded-lg text-sm font-bold transition-all',
-              tab === t ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground',
-            )}>
-            {t === 'today' ? "Today's Shifts" : 'Logs'}
-          </button>
-        ))}
-      </motion.div>
+              'h-8 w-8 p-0 bg-muted/30 border-muted-foreground/10 hover:bg-muted/50 transition-colors flex-shrink-0',
+              statusFilter !== 'all' && 'bg-primary/10 border-primary/20 text-primary hover:bg-primary/20',
+            )}
+          >
+            <Filter className="h-3.5 w-3.5 shrink-0" />
+          </Button>
 
-      {/* ══════════════ TODAY TAB ══════════════ */}
-      {tab === 'today' && (
-        <div className="flex-1 min-h-0">
-          {todayLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : sortedToday.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
-              <CheckCircle className="h-10 w-10 text-muted-foreground/40" />
-              <p className="text-base font-bold text-foreground">No shifts scheduled today</p>
-              <p className="text-sm text-muted-foreground">Check My Roster for upcoming shifts</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                {sortedToday.map(shift => (
-                  <TodayCard key={shift.id} shift={shift} now={now} isManager={isManager} />
-                ))}
-              </div>
-              <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground border-t border-border pt-3">
-                <MapPin className="h-3 w-3" />Clock-in window: 1 h before start · GPS required
-              </p>
-            </div>
-          )}
+          <StatusFilterDrawer
+            open={filterDrawerOpen}
+            onOpenChange={setFilterDrawerOpen}
+            current={statusFilter}
+            onSelect={setStatusFilter}
+          />
         </div>
-      )}
-
-      {/* ══════════════ LOGS TAB ══════════════ */}
-      {tab === 'logs' && (
-        <div className="flex-1 flex flex-col min-h-0 gap-4">
-
-          {/* Controls row */}
-          <div className="flex items-center gap-2 flex-wrap shrink-0">
-            {/* Mode pills */}
-            <div className="flex rounded-lg bg-muted/50 p-0.5 gap-0.5">
-              {(['D', '3D', 'W', 'M'] as Mode[]).map(m => (
-                <button key={m} onClick={() => { setMode(m); setAnchor(new Date()); }}
-                  className={cn(
-                    'px-3 py-1 rounded-md text-xs font-black transition-all',
-                    mode === m ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground',
-                  )}>
-                  {m}
-                </button>
-              ))}
-            </div>
-
-            {/* Date nav */}
-            <div className="flex items-center gap-1 flex-1 min-w-[160px]">
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
-                onClick={() => setAnchor(a => navigateAnchor(a, mode, -1))}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-xs font-bold text-foreground text-center flex-1 font-mono">{rangeLabel}</span>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
-                onClick={() => setAnchor(a => navigateAnchor(a, mode, 1))}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Calendar picker */}
-            <Popover open={calOpen} onOpenChange={setCalOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 w-8 p-0">
-                  <CalendarIcon className="h-3.5 w-3.5" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <DayPicker
-                  mode="single"
-                  selected={anchor}
-                  onSelect={d => { if (d) { setAnchor(d); setCalOpen(false); } }}
-                  showOutsideDays
-                />
-              </PopoverContent>
-            </Popover>
-
-            {/* Status filter */}
-            <Select value={statusFilter} onValueChange={v => setStatusFilter(v as StatusFilter)}>
-              <SelectTrigger className="h-8 w-[130px] text-xs">
-                <Filter className="h-3 w-3 mr-1.5 text-muted-foreground shrink-0" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="checked_in">Completed</SelectItem>
-                <SelectItem value="late">Late In</SelectItem>
-                <SelectItem value="no_show">No Show</SelectItem>
-                <SelectItem value="unknown">No Record</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
 
           {logsLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pb-4">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pb-32">
               {/* Totals */}
               {logShifts.length > 0 && <TotalsBar shifts={logShifts} />}
+
 
               {groupedLogs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
@@ -786,8 +669,8 @@ const AttendancePage: React.FC = () => {
                         <div className="flex-1 h-px bg-border" />
                         <div className="text-[10px] text-muted-foreground/60 font-mono">{shifts.length} shift{shifts.length > 1 ? 's' : ''}</div>
                       </div>
-                      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 mb-4">
-                        {shifts.map(s => <LogCard key={s.id} shift={s} />)}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5 mb-4">
+                        {shifts.map(s => <AttendanceCard key={s.id} shift={s} now={now} />)}
                       </div>
                     </div>
                   );
@@ -796,7 +679,6 @@ const AttendancePage: React.FC = () => {
             </div>
           )}
         </div>
-      )}
 
     </motion.div>
   );

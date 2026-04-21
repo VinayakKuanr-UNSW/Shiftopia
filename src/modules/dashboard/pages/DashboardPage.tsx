@@ -94,7 +94,7 @@ const DashboardPage: React.FC = () => {
   const isLoading = isLoadingWeekly || isLoadingUpcoming;
 
   // Actions
-  const handleViewSchedule = () => navigate('/roster');
+  const handleViewSchedule = () => navigate('/my-roster');
   const handleNewRequest = () => {
     // Placeholder for now
     console.log('New Request clicked');

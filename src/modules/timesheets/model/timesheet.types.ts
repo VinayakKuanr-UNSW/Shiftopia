@@ -69,6 +69,8 @@ export interface TimesheetRow {
      * false → auto-snapped from Actual (or fell back to Scheduled). Display dimmed.
      */
     isAdjustedManual: boolean;
+    adjustedStartSource?: 'manual' | 'snapped' | null;
+    adjustedEndSource?: 'manual' | 'snapped' | null;
     length: string; // Auto-calculated
     paidBreak: string;
     unpaidBreak: string;
@@ -82,10 +84,14 @@ export interface TimesheetRow {
     timesheetStatus: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | string;
     // Attendance (from shifts.attendance_status)
     attendanceStatus?: string | null;
-    // Minutes delta: actual_start vs scheduled_start (positive = late, negative = early)
     varianceMinutes?: number | null;
+    clockInVarianceMinutes?: number | null;
+    clockOutVarianceMinutes?: number | null;
     // Minutes delta: adjusted_start vs actual_start (positive = adjusted later than actual)
     adjustedVarianceMinutes?: number | null;
+    // Manager notes
+    notes?: string | null;
+    rejectedReason?: string | null;
     // Status Dot (Badge)
     statusDot?: { color: string; label: string } | null;
     // Raw fields for internal UI logic (indicators)

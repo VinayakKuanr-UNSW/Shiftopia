@@ -70,7 +70,7 @@ Duplicate components existed in two locations:
 - **Already migrated** (re-exported):
   - Planning types (BidStatus, SwapRequest, etc.) → `@/modules/planning`
   - Timesheet types → `@/modules/timesheets`
-  - Audit types → `@/modules/timesheets`
+  - History types → `@/modules/timesheets`
 
 **Remaining Types (Legacy):**
 
@@ -108,7 +108,7 @@ Duplicate components existed in two locations:
 - `src/modules/timesheets` - 6 files
 - `src/modules/insights` - 4 files
 - `src/modules/users` - 3 files
-- `src/modules/audit` - 2 files
+- `src/modules/history` - 2 files
 - `src/modules/auth` - 1 file
 - `src/modules/search` - 1 file
 - `src/modules/core` - 1 file

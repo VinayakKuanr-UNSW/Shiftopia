@@ -66,7 +66,7 @@ const BottomNavbar: React.FC = () => {
     { label: 'Insights',   Icon: BarChart3,       path: '/insights' },
     { label: 'Grid',       Icon: Grid3x3,         path: '/grid' },
     { label: 'Users',      Icon: Users,           path: '/users' },
-    { label: 'Audit',      Icon: ShieldCheck,     path: '/audit' },
+
     { label: 'Settings',   Icon: Settings,        path: '/settings' },
     { label: 'Perform',    Icon: TrendingUp,      path: '/performance' },
   ];
@@ -81,7 +81,7 @@ const BottomNavbar: React.FC = () => {
         cn(
           "relative flex items-center justify-center h-full rounded-full transition-all duration-300 ease-out flex-shrink-0 overflow-hidden",
           isActive 
-            ? "bg-foreground text-background shadow-[0_0_20px_rgba(0,0,0,0.1)] dark:shadow-[0_0_20px_rgba(255,255,255,0.1)] px-4 max-w-[150px] nav-item-active" 
+            ? "bg-foreground text-background shadow-[0_4px_12px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_12px_rgba(255,255,255,0.05)] px-4 max-w-[150px] nav-item-active" 
             : "w-[48px] max-w-[48px] px-0 text-muted-foreground hover:bg-muted/50"
         )
       }
@@ -170,7 +170,7 @@ const BottomNavbar: React.FC = () => {
         initial={{ y: 100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-        className="md:hidden fixed bottom-6 left-4 right-4 z-[60] h-[72px] bg-background/70 dark:bg-black/40 backdrop-blur-3xl border border-white/20 dark:border-white/10 shadow-[0_24px_40px_-10px_rgba(0,0,0,0.2)] rounded-[36px] flex items-center p-1.5 gap-1.5 overflow-hidden"
+        className="md:hidden fixed bottom-6 left-4 right-4 z-[60] h-[72px] bg-background/80 dark:bg-black/60 backdrop-blur-3xl border border-white/20 dark:border-white/10 shadow-[0_24px_40px_-10px_rgba(0,0,0,0.3)] rounded-[36px] flex items-center p-2 gap-2 overflow-hidden"
       >
         {/* HOME BUTTON (Pinned Left - Fixed Width) */}
         <NavLink
@@ -179,7 +179,7 @@ const BottomNavbar: React.FC = () => {
             cn(
               "relative flex items-center justify-center h-full rounded-full transition-all duration-300 flex-shrink-0 z-10",
               isActive 
-                ? "w-[48px] bg-primary text-primary-foreground shadow-[0_0_20px_rgba(var(--primary),0.3)]" 
+                ? "w-[48px] bg-primary text-primary-foreground shadow-[0_8px_16px_rgba(var(--primary-rgb),0.2)]" 
                 : "w-[48px] bg-card text-foreground shadow-sm hover:bg-muted"
             )
           }
@@ -190,19 +190,19 @@ const BottomNavbar: React.FC = () => {
         </NavLink>
 
         {/* DIVIDER */}
-        <div className="w-px h-8 bg-border/40 rounded-full flex-shrink-0" />
+        <div className="w-px h-8 bg-border/40 rounded-full flex-shrink-0 mx-0.5" />
 
         {/* SCROLLABLE TRACK */}
         <div 
           ref={scrollContainerRef}
-          className="flex-1 h-full overflow-x-auto no-scrollbar flex items-center gap-1 relative"
+          className="flex-1 h-full overflow-x-auto no-scrollbar flex items-center justify-between px-3 relative"
           style={{ WebkitOverflowScrolling: 'touch' }}
         >
           {middleItems.map(item => <NavItem key={item.path} item={item} />)}
         </div>
 
         {/* DIVIDER */}
-        <div className="w-px h-8 bg-border/40 rounded-full flex-shrink-0" />
+        <div className="w-px h-8 bg-border/40 rounded-full flex-shrink-0 mx-0.5" />
 
         {/* MORE TOGGLE (Pinned Right - Fixed Width) */}
         <button
@@ -210,7 +210,7 @@ const BottomNavbar: React.FC = () => {
           className={cn(
             "relative flex items-center justify-center h-full w-[48px] rounded-full transition-all duration-300 flex-shrink-0 z-10",
             (moreOpen || isMoreRouteActive)
-              ? "bg-foreground text-background shadow-[0_0_20px_rgba(0,0,0,0.1)] dark:shadow-[0_0_20px_rgba(255,255,255,0.1)]" 
+              ? "bg-foreground text-background shadow-[0_4px_12px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_12px_rgba(255,255,255,0.05)]" 
               : "bg-card text-foreground shadow-sm hover:bg-muted"
           )}
         >

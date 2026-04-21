@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/platform/realtime/client';
-import { getSydneyNow, isSydneyPast } from '@/modules/core/lib/date.utils';
+import { getSydneyNow, isSydneyPast, isSydneyStarted } from '@/modules/core/lib/date.utils';
 import {
   Plus,
   Check,
@@ -38,7 +38,7 @@ import {
   EnhancedAddShiftModal,
   ShiftContext,
 } from '@/modules/rosters/ui/dialogs/EnhancedAddShiftModal';
-import { ShiftAuditSheet } from '@/modules/audit/components/ShiftAuditSheet';
+
 import { BulkActionsToolbar } from '@/modules/rosters/ui/components/BulkActionsToolbar';
 import { AddSubGroupDialog } from '@/modules/rosters/ui/dialogs/AddSubGroupDialog';
 import {
@@ -830,9 +830,6 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   }, [templateStartDate, templateEndDate]);
 
 
-  // ==================== AUDIT SHEET ====================
-  const [auditShiftId, setAuditShiftId] = useState<string | null>(null);
-
   // ==================== MODAL STATE ====================
   const [isAddShiftOpen, setIsAddShiftOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -1535,7 +1532,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     date: Date
   ) => {
     // Check if this is a past shift (Date-wise)
-    const isPastDate = isSydneyPast(date);
+    const isPastDate = isSydneyStarted(format(date, 'yyyy-MM-dd'), shift.startTime);
 
     // Strict Locking Check (Includes past TIME on current day + 4h rule)
     const isLocked = shift.isLocked;
@@ -1571,19 +1568,8 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="bg-popover border-border min-w-[160px] z-50">
-          {/* Normalization: Check calculation from handleEditShift for consistency */}
           {(() => {
-            const [h, m] = shift.startTime.split(':').map(Number);
-            let hasStarted = false;
-
-            if (shift.rawShift.scheduled_start) {
-              hasStarted = getSydneyNow() >= new Date(shift.rawShift.scheduled_start);
-            } else {
-              // Fallback to local parsing if scheduled_start is missing
-              const shiftDateObj = parseISO(shift.rawShift.shift_date);
-              shiftDateObj.setHours(h, m, 0, 0);
-              hasStarted = getSydneyNow() >= shiftDateObj;
-            }
+            const hasStarted = isSydneyStarted(shift.rawShift.shift_date, shift.startTime);
 
             if (hasStarted && shift.rawShift.lifecycle_status !== 'Published') { // 'Published' is already readonly by other logic, but this covers Draft/Started
               return (
@@ -1607,14 +1593,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                     <Trash2 className="h-4 w-4 mr-2" />
                     Delete Shift
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-border" />
-                  <DropdownMenuItem
-                    onClick={(e) => { e.stopPropagation(); setAuditShiftId(shift.rawShift.id); }}
-                    className="text-muted-foreground hover:bg-accent cursor-pointer"
-                  >
-                    <History className="h-4 w-4 mr-2" />
-                    Audit Trail
-                  </DropdownMenuItem>
+
                 </>
               );
             }
@@ -1631,14 +1610,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                       <Trash2 className="h-4 w-4 mr-2" />
                       Delete Shift (Locked)
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator className="bg-border" />
-                    <DropdownMenuItem
-                      onClick={(e) => { e.stopPropagation(); setAuditShiftId(shift.rawShift.id); }}
-                      className="text-muted-foreground hover:bg-accent cursor-pointer"
-                    >
-                      <History className="h-4 w-4 mr-2" />
-                      Audit Trail
-                    </DropdownMenuItem>
+
                   </>
                 ) : (
                   <>
@@ -1691,14 +1663,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                       <Trash2 className="h-4 w-4 mr-2" />
                       Delete Shift
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator className="bg-border" />
-                    <DropdownMenuItem
-                      onClick={(e) => { e.stopPropagation(); setAuditShiftId(shift.rawShift.id); }}
-                      className="text-muted-foreground hover:bg-accent cursor-pointer"
-                    >
-                      <History className="h-4 w-4 mr-2" />
-                      Audit Trail
-                    </DropdownMenuItem>
+
                   </>
                 )}
               </>
@@ -1714,16 +1679,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         key={shift.id}
         className="h-full relative group/card"
         onDoubleClick={() => {
-          const [h, m] = shift.startTime.split(':').map(Number);
-          let hasStarted = false;
-
-          if (shift.rawShift.scheduled_start) {
-            hasStarted = getSydneyNow() >= new Date(shift.rawShift.scheduled_start);
-          } else {
-            const shiftDateObj = parseISO(shift.rawShift.shift_date);
-            shiftDateObj.setHours(h, m, 0, 0);
-            hasStarted = getSydneyNow() >= shiftDateObj;
-          }
+          const hasStarted = isSydneyStarted(shift.rawShift.shift_date, shift.startTime);
 
           if (hasStarted && shift.rawShift.lifecycle_status !== 'Published') {
             toast({
@@ -1745,12 +1701,11 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           groupColor={accentColor}
           compliance={complianceMap?.[shift.id]}
           headerAction={canEdit && !isBulkMode ? menu : undefined}
-          className={cn(isPastDate && "opacity-60")}
           isSelected={isBulkMode && selectedShiftIds.includes(shift.id)}
-          onClick={() => isBulkMode && handleToggleShiftSelection(shift.id)}
           isLocked={isLocked || (isDnDModeActive && !shift.isDraft)}
           isPast={isPastDate}
           isDnDActive={isDnDModeActive}
+          onClick={() => isBulkMode && handleToggleShiftSelection(shift.id)}
         />
       </div>
     );
@@ -1801,7 +1756,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
             onShiftDelete={handleDeleteShift as any}
             onShiftPublish={handleRequestPublish as any}
             onShiftUnpublish={handleRequestUnpublish as any}
-            onShiftAudit={(id) => setAuditShiftId(id)}
+
             onAddSubGroup={(group) => handleAddSubGroup(group as any)}
             onSubGroupAction={(action, subGroup, group) => {
               setActiveSubGroup({ id: subGroup.id, name: subGroup.name, groupExternalId: (group as any).type || '' });
@@ -2208,9 +2163,16 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                                   shift={shift}
                                                   groupType={group.type}
                                                   subGroupName={subGroup.name}
-                                                  disabled={isBulkMode || cellIsPast || !canEdit || !isDnDModeActive || (isDnDModeActive && !shift.isDraft)}
+                                                  disabled={
+                                                    isBulkMode || 
+                                                    cellIsPast || 
+                                                    isSydneyStarted(format(date, 'yyyy-MM-dd'), shift.startTime) ||
+                                                    !canEdit || 
+                                                    !isDnDModeActive || 
+                                                    (isDnDModeActive && !shift.isDraft)
+                                                  }
                                                 >
-                                                  {(canEdit && !cellIsPast && shift.isDraft) ? (
+                                                  {(canEdit && !cellIsPast && !isSydneyStarted(format(date, 'yyyy-MM-dd'), shift.startTime) && shift.isDraft) ? (
                                                     <DroppableShiftAssign
                                                       shiftId={shift.id}
                                                       shiftRole={shift.role}
@@ -2301,12 +2263,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Shift Audit Trail Sheet */}
-        <ShiftAuditSheet
-          shiftId={auditShiftId}
-          open={auditShiftId !== null}
-          onClose={() => setAuditShiftId(null)}
-        />
+
 
       {/* Add/Edit Shift Modal */}
       <EnhancedAddShiftModal

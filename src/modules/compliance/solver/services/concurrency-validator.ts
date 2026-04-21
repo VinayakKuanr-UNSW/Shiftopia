@@ -60,7 +60,7 @@ export interface ConcurrencyCheckResult {
     feasible:     boolean;
     /** Human-readable blocking violation summaries (for error messages). */
     violations:   string[];
-    /** Full solver result for audit logging. */
+    /** Full solver result for history record. */
     solverResult: SolverResult;
     /** ISO timestamp of the revalidation. */
     revalidatedAt: string;

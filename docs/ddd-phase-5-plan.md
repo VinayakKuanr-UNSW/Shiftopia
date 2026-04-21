@@ -101,7 +101,7 @@ src/api/
 ```
 
 **Action:**
-- Audit remaining files in `src/api`
+- Evaluate remaining files in `src/api`
 - Migrate to appropriate modules
 - Delete empty api folder
 
@@ -142,7 +142,7 @@ src/api/
 ### Phase 5B: Router & API Cleanup (Week 2)
 1. Move AppRouter to src/router
 2. Update imports
-3. Audit src/api
+3. Evaluate src/api
 4. Migrate remaining services
 5. Clean up api folder
 
@@ -169,7 +169,7 @@ src/api/
 - API layer cleanup (unknown services)
 
 **Mitigation:**
-- Audit before migrating
+- Review before migrating
 - Document each service's purpose
 - Verify no breaking changes
 

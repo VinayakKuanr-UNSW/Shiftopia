@@ -34,14 +34,15 @@ import {
   Hand,
   Camera,
 } from 'lucide-react';
-import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, isSameMonth } from 'date-fns';
+import { format, addDays, startOfMonth, endOfMonth, addMonths } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import {
   useTemplates,
   useRostersLookup,
 } from '@/modules/rosters/state/useRosterShifts';
-import { CalendarRangePicker } from './CalendarRangePicker';
+import { UnifiedRosterNavigator, type ViewType } from './UnifiedRosterNavigator';
+export type { ViewType } from './UnifiedRosterNavigator';
 import { RosterFilterPopover } from './RosterFilterPopover';
 import { useRosterUI, RosterMode } from '@/modules/rosters/contexts/RosterUIContext';
 import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
@@ -56,7 +57,6 @@ import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 /* ============================================================
    TYPES
    ============================================================ */
-export type ViewType = 'day' | '3day' | 'week' | 'month';
 
 interface RosterData {
   id: string;
@@ -309,26 +309,6 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
     }
   }, [activeRangeBounds, onTemplateDatesChange]);
 
-  const displayLabel = React.useMemo(() => {
-    switch (viewType) {
-      case 'day': return format(selectedDate, 'MMM d, yyyy');
-      case '3day': {
-        const end = addDays(selectedDate, 2);
-        return `${format(selectedDate, 'MMM d')} – ${format(end, isSameMonth(selectedDate, end) ? 'd' : 'MMM d')}`;
-      }
-      case 'week': {
-        // Assume selectedDate is start of week
-        const end = addDays(selectedDate, 6);
-        return `${format(selectedDate, 'MMM d')} – ${format(end, isSameMonth(selectedDate, end) ? 'd' : 'MMM d')}`;
-      }
-      case 'month': return format(selectedDate, 'MMMM yyyy');
-      default: return 'Select Date';
-    }
-  }, [viewType, selectedDate]);
-
-  // Navigation use store actions now for consistency
-  const handlePrevious = () => navigatePrevious();
-  const handleNext = () => navigateNext();
 
   return (
     <div className="w-full h-16 flex-shrink-0 z-50 bg-white/90 dark:bg-slate-950/40 backdrop-blur-2xl border-b border-slate-200 dark:border-white/10 px-8 flex items-center shadow-sm dark:shadow-2xl relative">
@@ -369,68 +349,15 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
         </div>
 
         {/* Center Section: Navigation & View */}
-        <div className="flex items-center gap-6">
-          <div className="flex flex-col items-center gap-0.5">
-            <span className="text-[8px] uppercase tracking-widest text-muted-foreground/50 font-bold select-none">Time Range</span>
-            <ToggleGroup
-              type="single"
-              value={viewType}
-              onValueChange={(v) => v && onViewTypeChange(v as ViewType)}
-              className="bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-lg p-0.5"
-            >
-              {[
-                { id: 'day',   label: 'Day' },
-                { id: '3day',  label: '3D' },
-                { id: 'week',  label: 'Week' },
-                { id: 'month', label: 'Month' },
-              ].map((v) => (
-                <ToggleGroupItem
-                  key={v.id}
-                  value={v.id}
-                  className="px-2.5 py-1 text-[10px] uppercase font-black rounded-md transition-all h-7 min-w-[40px] data-[state=on]:bg-blue-600 data-[state=on]:text-white text-slate-300 dark:text-white/20 hover:text-slate-500 dark:hover:text-white/40"
-                >
-                  {v.label}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-          </div>
-
-
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-1 h-8">
-            <IconButton
-              icon={<ChevronLeft className="h-4 w-4" />}
-              tooltip="Prev"
-              onClick={handlePrevious}
-              variant="ghost"
-              className="h-6 w-6"
-            />
-
-            <CalendarRangePicker
-              selectedDate={selectedDate}
-              viewType={viewType}
-              minDate={activeRangeBounds.monthStart}
-              maxDate={activeRangeBounds.monthEnd}
-              onRangeSelect={(date) => {
-                if (viewType === 'week') {
-                  onDateChange(startOfWeek(date, { weekStartsOn: 1 }));
-                } else if (viewType === 'month') {
-                  onDateChange(startOfMonth(date));
-                } else {
-                  onDateChange(date);
-                }
-              }}
-              displayLabel={displayLabel}
-            />
-
-            <IconButton
-              icon={<ChevronRight className="h-4 w-4" />}
-              tooltip="Next"
-              onClick={handleNext}
-              variant="ghost"
-              className="h-6 w-6"
-            />
-          </div>
-        </div>
+        <UnifiedRosterNavigator
+          variant="full"
+          date={selectedDate}
+          viewType={viewType}
+          onChange={(date) => onDateChange(date)}
+          onViewTypeChange={onViewTypeChange}
+          minDate={activeRangeBounds.monthStart}
+          maxDate={activeRangeBounds.monthEnd}
+        />
 
         {/* Right Section: Actions */}
         <div className="flex items-center gap-6">
@@ -517,9 +444,13 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
               tooltip={
                 activeMode === 'events'
                   ? 'DnD Mode — not available in Events mode'
-                  : isDnDModeActive
-                    ? 'Deactivate DnD Mode'
-                    : 'Activate DnD Mode'
+                  : isBulkMode
+                    ? 'DnD Mode — not available in Bulk selection mode'
+                    : isBucketView
+                      ? 'DnD Mode — not available in Bucket view'
+                      : isDnDModeActive
+                        ? 'Deactivate DnD Mode'
+                        : 'Activate DnD Mode'
               }
               onClick={() => {
                 const nextActive = !isDnDModeActive;
@@ -532,7 +463,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
               }}
               isActive={isDnDModeActive}
               variant={isDnDModeActive ? 'warning' : 'default'}
-              disabled={activeMode === 'events'}
+              disabled={activeMode === 'events' || isBulkMode || isBucketView}
             />
 
             <Separator orientation="vertical" className="h-5 bg-slate-200 dark:bg-white/10 mx-0.5" />
@@ -545,17 +476,30 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
                   ? "Buckets — switch to Group mode to enable"
                   : viewType === 'day'
                     ? "Buckets — not available in Day view"
-                    : "Shift Buckets"
+                    : isDnDModeActive
+                      ? "Buckets — not available in DnD mode"
+                      : isBulkMode
+                        ? "Buckets — not available in Bulk selection mode"
+                        : "Shift Buckets"
               }
               onClick={() => setIsBucketView(!isBucketView)}
               isActive={isBucketView}
-              disabled={activeMode !== 'group' || viewType === 'day'}
+              disabled={activeMode !== 'group' || viewType === 'day' || isDnDModeActive || isBulkMode}
             />
             <IconButton
               icon={<Layers className="h-4 w-4" />}
-              tooltip={isBulkMode ? "Exit Bulk Selection (Esc)" : "Bulk Selection mode"}
+              tooltip={
+                isDnDModeActive
+                  ? "Bulk Selection — not available in DnD mode"
+                  : isBucketView
+                    ? "Bulk Selection — not available in Bucket view"
+                    : isBulkMode
+                      ? "Exit Bulk Selection (Esc)"
+                      : "Bulk Selection mode"
+              }
               onClick={onBulkModeToggle || (() => { })}
               isActive={isBulkMode}
+              disabled={isDnDModeActive || isBucketView}
             />
           </div>
 

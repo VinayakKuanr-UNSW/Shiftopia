@@ -1028,7 +1028,7 @@ const NewRostersPage: React.FC = () => {
               onSwapShift={handleSwapShift}
               onCancelShift={handleCancelSingleShift}
               onUnpublishShift={handleUnpublishShift}
-              onViewAudit={(id) => modalsRef.current?.openAudit(id)}
+
             />
           )}
 
@@ -1146,7 +1146,7 @@ const NewRostersPage: React.FC = () => {
         />
       )}
 
-      {/* Modals (audit, add/edit shift, bulk assign, auto-scheduler) */}
+      {/* Modals (add/edit shift, bulk assign, auto-scheduler) */}
       <RosterModals
         ref={modalsRef}
         selectedShiftIds={Array.from(selectedShiftIds)}

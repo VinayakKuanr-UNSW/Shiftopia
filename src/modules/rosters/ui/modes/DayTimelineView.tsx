@@ -23,7 +23,7 @@ import { cn } from '@/modules/core/lib/utils';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { TemplateGroupType } from '@/modules/rosters/api/shifts.api';
 import {
-  Edit2, Trash2, Send, Undo2, History, MoreHorizontal,
+  Edit2, Trash2, Send, Undo2, MoreHorizontal,
   Plus, Copy, ChevronsLeft, ChevronsRight, Lock, Clock,
 } from 'lucide-react';
 import {
@@ -232,7 +232,7 @@ export interface DayTimelineViewProps {
   onShiftDelete:     (shift: DTShift) => void;
   onShiftPublish:    (shift: DTShift) => void;
   onShiftUnpublish:  (shift: DTShift) => void;
-  onShiftAudit:      (shiftId: string) => void;
+
   onAddSubGroup?:    (group: DTGroup) => void;
   onSubGroupAction?: (action: 'rename' | 'clone' | 'delete', subGroup: DTSubGroup, group: DTGroup) => void;
   onEmployeeDrop?:   (shiftId: string, dragItem: EmployeeDragItem) => void;
@@ -279,7 +279,7 @@ const DayTimelineView: React.FC<DayTimelineViewProps> = ({
   isBulkMode, isDnDModeActive, selectedShiftIds, onBulkToggle,
   isBucketView,
   zoom,
-  onSlotClick, onShiftEdit, onShiftDelete, onShiftPublish, onShiftUnpublish, onShiftAudit,
+  onSlotClick, onShiftEdit, onShiftDelete, onShiftPublish, onShiftUnpublish,
   onAddSubGroup, onSubGroupAction, onEmployeeDrop,
 }) => {
   const { toast } = useToast();
@@ -816,7 +816,7 @@ const DayTimelineView: React.FC<DayTimelineViewProps> = ({
                               onDelete={onShiftDelete}
                               onPublish={onShiftPublish}
                               onUnpublish={onShiftUnpublish}
-                              onAudit={onShiftAudit}
+
                               onDragStart={(id, y) => {
                                 const s = toMins(sh.startTime);
                                 let e = toMins(sh.endTime); if (e <= s) e += 1440;
@@ -945,7 +945,7 @@ interface ShiftCardProps {
   onDelete:         (shift: DTShift) => void;
   onPublish:        (shift: DTShift) => void;
   onUnpublish:      (shift: DTShift) => void;
-  onAudit:          (id: string) => void;
+
   onDragStart:      (id: string, y: number) => void;
   onResizeStart:    (id: string, y: number) => void;
   onResizeTopStart: (id: string, y: number) => void;
@@ -955,7 +955,7 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
   shift, top, left, width, height,
   cardColor: cc, group, subGroup, selectedDate,
   canEdit, isBulkMode, isDnDModeActive, isSelected, isDragging,
-  onBulkToggle, onEdit, onDelete, onPublish, onUnpublish, onAudit,
+  onBulkToggle, onEdit, onDelete, onPublish, onUnpublish,
   onDragStart, onResizeStart, onResizeTopStart,
 }) => {
   const compact = height < 80;
@@ -970,6 +970,7 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
     trading_status:     shift.rawShift.trading_status    ?? null,
     is_cancelled:       shift.rawShift.is_cancelled      ?? false,
     scheduled_start:    shift.rawShift.scheduled_start   ?? null,
+    scheduled_end:      shift.rawShift.scheduled_end     ?? null,
     actual_start:       shift.rawShift.actual_start      ?? null,
     emergency_source:   (shift.rawShift as any).emergency_source ?? null,
   }), [shift.rawShift]);
@@ -1116,10 +1117,7 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
                         <Undo2 className="mr-2 h-4 w-4" /> Unpublish Shift
                       </DropdownMenuItem>
                     )}
-                    <DropdownMenuItem onSelect={() => onAudit(shift.id)} className="cursor-pointer">
-                      <History className="mr-2 h-4 w-4" /> View History
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
+
                     <DropdownMenuItem onSelect={() => onDelete(shift)} className="text-red-600 dark:text-red-400 cursor-pointer">
                       <Trash2 className="mr-2 h-4 w-4" /> Delete Shift
                     </DropdownMenuItem>

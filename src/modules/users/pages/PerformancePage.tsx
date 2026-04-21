@@ -142,15 +142,7 @@ const PerformancePage: React.FC = () => {
     const handleRefresh = async () => {
         setIsRefreshing(true);
         try {
-            // Refresh metrics for all employees that have shift events
-            const { data: emps } = await supabase
-                .from('shift_events')
-                .select('employee_id')
-                .limit(500);
-            const uniqueIds = [...new Set((emps || []).map(e => e.employee_id))];
-            for (const id of uniqueIds) {
-                await supabase.rpc('refresh_employee_performance_metrics', { p_employee_id: id });
-            }
+            // Metrics refresh logic removed as shift_events table is decommissioned.
             await queryClient.invalidateQueries({
                 queryKey: ['quarterly_performance_report'],
             });

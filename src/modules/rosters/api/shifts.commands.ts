@@ -592,7 +592,7 @@ export const shiftsCommands = {
         if (!shiftId || !isValidUuid(shiftId)) return false;
 
         const result = await callAuthenticatedRpc(
-            'delete_shift_with_audit',
+            'sm_delete_shift',
             (userId) => ({ p_shift_id: shiftId, p_deleted_by: userId, p_reason: 'Manual deletion' }),
             DeleteShiftResponseSchema,
         );

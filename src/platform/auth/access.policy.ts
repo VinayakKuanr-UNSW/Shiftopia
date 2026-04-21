@@ -48,7 +48,7 @@ export const MANAGERIAL_PAGES: Record<string, AccessLevel> = {
     'timesheets': 'gamma',
     'open_bids': 'gamma',
     'swap_requests': 'gamma',
-    'audit': 'delta',
+
     'broadcasts': 'gamma',
     'configs': 'delta',
     'users': 'epsilon',

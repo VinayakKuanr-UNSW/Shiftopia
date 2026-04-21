@@ -32,7 +32,7 @@ import {
 import { BidComplianceModal } from '../components/BidComplianceModal';
 import { Drawer, DrawerContent, DrawerTitle, DrawerClose } from '@/modules/core/ui/primitives/drawer';
 
-import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
+import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { FunctionBar } from '@/modules/core/ui/components/FunctionBar';
 import type { ParticipationStatus } from '../../model/bid.types';
@@ -585,7 +585,7 @@ export const EmployeeBidsPage: React.FC = () => {
     // SELECTION HANDLERS (only applicable to not_participated eligible shifts)
     // ========================================================================
     const handleSelectAll = (isChecked: boolean) => {
-        const eligible = bidOpportunities
+        const eligible = filteredBidOpportunities
             .filter(o => o.participationStatus === 'not_participated' && o.isEligible)
             .map(o => o.id);
         setSelectedShiftIds(isChecked ? eligible : []);
@@ -1005,12 +1005,15 @@ export const EmployeeBidsPage: React.FC = () => {
     // ========================================================================
     return (
         <motion.div className="w-full text-foreground pb-24 md:pb-0" variants={pageVariants} initial="hidden" animate="show">
-            <ScopeFilterBanner
-                mode="personal"
-                onScopeChange={setScope}
-                hidden={isGammaLocked}
-                className="mb-2 md:mb-6"
-            />
+            <div className="px-4 pt-6">
+                <PersonalPageHeader
+                    title="My Bids"
+                    Icon={Gavel}
+                    scope={scope}
+                    setScope={setScope}
+                    isGammaLocked={isGammaLocked}
+                />
+            </div>
 
             {/* ═══════════════════════════════════════════════════════════════
                 STICKY HEADER — 2 rows: title+actions | unified date strip

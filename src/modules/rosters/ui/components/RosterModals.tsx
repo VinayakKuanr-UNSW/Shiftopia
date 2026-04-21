@@ -11,7 +11,7 @@
  */
 
 import React, { useState, forwardRef, useImperativeHandle } from 'react';
-import { ShiftAuditSheet } from '@/modules/audit/components/ShiftAuditSheet';
+
 import {
     EnhancedAddShiftModal,
     ShiftContext,
@@ -56,7 +56,7 @@ interface RosterModalsProps {
 export interface RosterModalsHandle {
     openAddShift: (context: ShiftContext) => void;
     openEditShift: (shift: any, context: ShiftContext) => void;
-    openAudit: (shiftId: string) => void;
+
     openBulkAssign: () => void;
     openAutoScheduler: () => void;
 }
@@ -84,7 +84,7 @@ export const RosterModals = forwardRef<RosterModalsHandle, RosterModalsProps>((
     const [editShift, setEditShift] = useState<any>(null);
     const [editContext, setEditContext] = useState<ShiftContext | null>(null);
 
-    const [auditShiftId, setAuditShiftId] = useState<string | null>(null);
+
     const [isBulkAssignOpen, setIsBulkAssignOpen] = useState(false);
     const [isAutoSchedulerOpen, setIsAutoSchedulerOpen] = useState(false);
 
@@ -98,19 +98,14 @@ export const RosterModals = forwardRef<RosterModalsHandle, RosterModalsProps>((
             setEditContext(context);
             setIsEditOpen(true);
         },
-        openAudit: (shiftId) => setAuditShiftId(shiftId),
+
         openBulkAssign: () => setIsBulkAssignOpen(true),
         openAutoScheduler: () => setIsAutoSchedulerOpen(true),
     }));
 
     return (
         <>
-            {/* Audit Trail Sheet */}
-            <ShiftAuditSheet
-                shiftId={auditShiftId}
-                open={auditShiftId !== null}
-                onClose={() => setAuditShiftId(null)}
-            />
+
 
             {/* Add Shift Modal */}
             <EnhancedAddShiftModal

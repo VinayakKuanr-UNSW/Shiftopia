@@ -138,6 +138,13 @@ export interface Shift {
     deleted_at: string | null;
     deleted_by: string | null;
     notes: string | null;
+    // Joined Timesheet Data
+    timesheet_status?: string | null;
+    timesheet_notes?: string | null;
+    timesheet_rejected_reason?: string | null;
+    timesheet_start_time?: string | null;
+    timesheet_end_time?: string | null;
+    
     is_recurring: boolean;
     recurrence_rule: string | null;
     confirmed_at: string | null;

@@ -22,6 +22,12 @@ import {
     type EmergencySource,
 } from './shift-fsm';
 import { type ShiftUrgency } from './bidding-urgency';
+import { 
+    ShieldCheck, 
+    Lock, 
+    Edit, 
+    type LucideIcon 
+} from 'lucide-react';
 
 // ─── Tone ────────────────────────────────────────────────────────────────────
 
@@ -44,6 +50,8 @@ export type RingColor = 'purple' | 'emerald' | 'yellow' | 'red' | 'orange' | 'bl
 export interface ShiftUIContextInput extends ShiftFSMInput {
     /** UTC timestamp of the shift start — used for TTS calculation */
     scheduled_start: string | Date | null | undefined;
+    /** UTC timestamp of the shift end — used to detect No Show */
+    scheduled_end: string | Date | null | undefined;
     /** Actual clock-in time — used to detect "Late" (past start, not clocked in) */
     actual_start?: string | null | undefined;
     /** Written by backend assignment APIs — never set from UI */
@@ -87,6 +95,15 @@ export type ShiftAction =
     | 'CLOCK_IN' | 'CLOCK_OUT' | 'MARK_NO_SHOW'
     | 'CANCEL';
 
+export interface ProtectionContext {
+    status: 'LOCKED' | 'PROTECTED' | 'DRAFT';
+    label: string;
+    isLocked: boolean;
+    isProtected: boolean;
+    icon: LucideIcon;
+    colorClass: string;
+}
+
 // ─── Core helpers ─────────────────────────────────────────────────────────────
 
 /**
@@ -119,6 +136,7 @@ export function getShiftUIContext(shift: ShiftUIContextInput): ShiftUIContext {
     // ── Ring color — priority ordered ─────────────────────────────────────────
     // Purple  > Emerald > Yellow > Red > Orange > Blue
     const isPastStart = start > 0 && now > start;
+    const isPastEnd = shift.scheduled_end ? now > new Date(shift.scheduled_end).getTime() : false;
 
     const ringColor: RingColor = (() => {
         // Special case: Draft shifts past start_time should have NO strip
@@ -126,12 +144,18 @@ export function getShiftUIContext(shift: ShiftUIContextInput): ShiftUIContext {
 
         if (state === 'S13') return 'purple';                          // Completed
         if (state === 'S11') return 'emerald';                         // In Progress
-        // Late: Published, start time passed, no clock-in yet
+        
+        // Late / No Show detection logic
         if (
             isPastStart &&
             !shift.actual_start &&
             shift.lifecycle_status === 'Published'
-        ) return 'yellow';
+        ) {
+            // If the shift has ended, it's a No Show → Red (Danger)
+            if (isPastEnd) return 'red';
+            // Otherwise it's just Late → Yellow (Warning)
+            return 'yellow';
+        }
 
         if (urgency === 'emergent') return 'red';
         if (urgency === 'urgent')   return 'orange';
@@ -199,6 +223,50 @@ export function getLockState(state: ShiftStateID | string): ShiftLockState {
     }
     // S11, S13, S15 — fully locked
     return { fullyLocked: true, partialLock: false };
+}
+
+/**
+ * Get protection and lock state context for a shift
+ */
+export function getProtectionContext(
+    shift: { lifecycle_status?: string | null }, 
+    isPast: boolean
+): ProtectionContext {
+    const status = (shift.lifecycle_status || '').toLowerCase();
+    
+    // Past shifts (past now or considered expired) are LOCKED
+    if (isPast) {
+        return {
+            status: 'LOCKED',
+            label: 'LOCKED',
+            isLocked: true,
+            isProtected: false,
+            icon: Lock,
+            colorClass: 'text-slate-500' // Neutral/Grey for locked
+        };
+    }
+
+    // Published shifts are PROTECTED
+    if (status === 'published') {
+        return {
+            status: 'PROTECTED',
+            label: 'PROTECTED',
+            isLocked: false,
+            isProtected: true,
+            icon: ShieldCheck,
+            colorClass: 'text-blue-500' // Recognition of publication
+        };
+    }
+
+    // Otherwise it's a DRAFT
+    return {
+        status: 'DRAFT',
+        label: 'DRAFT',
+        isLocked: false,
+        isProtected: false,
+        icon: Edit,
+        colorClass: 'text-gray-400'
+    };
 }
 
 // ─── Status dot ──────────────────────────────────────────────────────────────
@@ -299,20 +367,30 @@ export function getStatusDotInfo(shift: ShiftDotInput): StatusBadge | null {
         return { color: '#10B981', label: 'In Progress (On Time)' };
     }
 
-    // 5. Published past start, no clock-in → Late (Missing)
-    if (lc === 'published' && schedStartMs !== null && now > schedStartMs) {
+    // 5. Past start, no clock-in
+    if (schedStartMs !== null && now > schedStartMs) {
+        // Drafts past start get no dot
+        if (lc === 'draft') return null;
+
+        // If the shift has already ended and no clock-in was recorded, it's a No Show
+        if (schedEndMs !== null && now > schedEndMs) {
+            return { color: '#7F1D1D', label: 'No Show' };
+        }
+        
+        // Any other shift that has passed its start time without clock-in is Late
         return { color: '#EAB308', label: 'Late (Missing)' };
     }
 
-    // 6. Draft past start → no dot
-    if (lc === 'draft' && schedStartMs !== null && now > schedStartMs) return null;
-
-    // 7. Future/Current — TTS-based
+    // 6. Future/Current — TTS-based
     if (schedStartMs === null) return { color: '#3B82F6', label: 'Normal' };
 
     const ttsMs = schedStartMs - now;
-    if (ttsMs <= 4  * 60 * 60 * 1000) return { color: '#EF4444', label: 'Emergency' };
-    if (ttsMs <= 24 * 60 * 60 * 1000) return { color: '#F59E0B', label: 'Urgent'    };
+    
+    // Only apply urgency labels to future shifts
+    if (ttsMs > 0 && ttsMs <= 4  * 60 * 60 * 1000) return { color: '#EF4444', label: 'Emergency' };
+    if (ttsMs > 0 && ttsMs <= 24 * 60 * 60 * 1000) return { color: '#F59E0B', label: 'Urgent'    };
+    
+    // For anything further out, or any unhandled past edge cases
     return { color: '#3B82F6', label: 'Normal' };
 }
 

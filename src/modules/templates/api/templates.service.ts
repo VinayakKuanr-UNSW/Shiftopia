@@ -147,7 +147,6 @@ export const templatesService = {
 
   async deleteTemplate(id: string): Promise<void> {
     // First, delete all child shifts using the cascade RPC
-    // This ensures shifts are properly audited and moved to deleted_shifts
     const { data: cascadeResult, error: cascadeError } = await supabase
       .rpc('delete_template_shifts_cascade', { p_template_id: id });
 

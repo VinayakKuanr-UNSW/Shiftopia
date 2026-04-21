@@ -19,7 +19,7 @@ export const shiftsRepo = {
      */
     async deleteShift(shiftId: string): Promise<DeleteShiftResult> {
         try {
-            // Best effort to get user ID for audit
+            // Best effort to get user ID for telemetry/tracking
             const userId = (await supabase.auth.getUser()).data.user?.id;
 
             const { data, error } = await supabase.rpc('delete_shift_cascade', {

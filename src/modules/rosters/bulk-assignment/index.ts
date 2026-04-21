@@ -14,7 +14,7 @@ export type {
     BulkAssignmentResult,
     BulkAssignmentOptions,
     EmployeeInfo,
-    BulkAssignmentAuditLog,
+
 } from './types';
 
 export { BulkAssignmentController, bulkAssignmentController } from './bulk-assignment.controller';

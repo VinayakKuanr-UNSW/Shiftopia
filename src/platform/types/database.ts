@@ -92,74 +92,6 @@ export type Database = {
           },
         ]
       }
-      audit_logs: {
-        Row: {
-          action: string
-          actor_email: string | null
-          actor_id: string | null
-          changed_at: string | null
-          changed_by_user_id: string | null
-          created_at: string | null
-          entity_id: string | null
-          entity_type: string
-          id: string
-          ip_address: unknown
-          new_data: Json | null
-          new_values: Json | null
-          old_data: Json | null
-          old_values: Json | null
-          record_id: string | null
-          table_name: string | null
-          user_agent: string | null
-        }
-        Insert: {
-          action: string
-          actor_email?: string | null
-          actor_id?: string | null
-          changed_at?: string | null
-          changed_by_user_id?: string | null
-          created_at?: string | null
-          entity_id?: string | null
-          entity_type: string
-          id?: string
-          ip_address?: unknown
-          new_data?: Json | null
-          new_values?: Json | null
-          old_data?: Json | null
-          old_values?: Json | null
-          record_id?: string | null
-          table_name?: string | null
-          user_agent?: string | null
-        }
-        Update: {
-          action?: string
-          actor_email?: string | null
-          actor_id?: string | null
-          changed_at?: string | null
-          changed_by_user_id?: string | null
-          created_at?: string | null
-          entity_id?: string | null
-          entity_type?: string
-          id?: string
-          ip_address?: unknown
-          new_data?: Json | null
-          new_values?: Json | null
-          old_data?: Json | null
-          old_values?: Json | null
-          record_id?: string | null
-          table_name?: string | null
-          user_agent?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "audit_logs_actor_id_fkey"
-            columns: ["actor_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       availabilities: {
         Row: {
           approved_at: string | null
@@ -302,51 +234,6 @@ export type Database = {
             columns: ["rule_id"]
             isOneToOne: false
             referencedRelation: "availability_rules"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      bid_allocation_log: {
-        Row: {
-          algorithm_version: string | null
-          allocated_to_employee_id: string
-          allocation_algorithm: string | null
-          allocation_date: string | null
-          id: string
-          shift_id: string
-          total_bids_received: number | null
-        }
-        Insert: {
-          algorithm_version?: string | null
-          allocated_to_employee_id: string
-          allocation_algorithm?: string | null
-          allocation_date?: string | null
-          id?: string
-          shift_id: string
-          total_bids_received?: number | null
-        }
-        Update: {
-          algorithm_version?: string | null
-          allocated_to_employee_id?: string
-          allocation_algorithm?: string | null
-          allocation_date?: string | null
-          id?: string
-          shift_id?: string
-          total_bids_received?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bid_allocation_log_allocated_to_employee_id_fkey"
-            columns: ["allocated_to_employee_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bid_allocation_log_shift_id_fkey"
-            columns: ["shift_id"]
-            isOneToOne: false
-            referencedRelation: "shifts"
             referencedColumns: ["id"]
           },
         ]
@@ -823,39 +710,6 @@ export type Database = {
           performed_by?: string | null
           results?: Json
           shift_id?: string | null
-        }
-        Relationships: []
-      }
-      deleted_shifts: {
-        Row: {
-          deleted_at: string | null
-          deleted_by: string | null
-          deleted_reason: string | null
-          department_id: string | null
-          id: string
-          organization_id: string | null
-          snapshot_data: Json
-          template_id: string | null
-        }
-        Insert: {
-          deleted_at?: string | null
-          deleted_by?: string | null
-          deleted_reason?: string | null
-          department_id?: string | null
-          id: string
-          organization_id?: string | null
-          snapshot_data: Json
-          template_id?: string | null
-        }
-        Update: {
-          deleted_at?: string | null
-          deleted_by?: string | null
-          deleted_reason?: string | null
-          department_id?: string | null
-          id?: string
-          organization_id?: string | null
-          snapshot_data?: Json
-          template_id?: string | null
         }
         Relationships: []
       }
@@ -5218,13 +5072,6 @@ export type Database = {
         | "swapped"
         | "dropped"
         | "no_show"
-      audit_action:
-        | "create"
-        | "update"
-        | "delete"
-        | "publish"
-        | "unpublish"
-        | "save"
       availability_type: "available" | "unavailable" | "preferred" | "limited"
       bid_status: "pending" | "accepted" | "rejected" | "withdrawn"
       bidding_priority: "normal" | "urgent" | "critical"
@@ -5285,54 +5132,6 @@ export type Database = {
         | "on_bidding_normal"
         | "on_bidding_urgent"
         | "bidding_closed_no_winner"
-      shift_event_type:
-        | "SHIFT_CREATED"
-        | "SHIFT_GENERATED"
-        | "SHIFT_GENERATION_FAILED"
-        | "SHIFT_GROUP_CHANGED"
-        | "SHIFT_SUBGROUP_CHANGED"
-        | "SHIFT_ROLE_CHANGED"
-        | "SHIFT_REQUIREMENTS_CHANGED"
-        | "SHIFT_EVENT_TAGS_CHANGED"
-        | "SHIFT_TIME_CHANGED"
-        | "SHIFT_BREAKS_CHANGED"
-        | "SHIFT_NET_LENGTH_RECALCULATED"
-        | "SHIFT_ASSIGNED"
-        | "SHIFT_UNASSIGNED"
-        | "SHIFT_REASSIGNED"
-        | "SHIFT_COMPLIANCE_CHECKED"
-        | "SHIFT_COMPLIANCE_PASSED"
-        | "SHIFT_COMPLIANCE_WARNING"
-        | "SHIFT_COMPLIANCE_FAILED"
-        | "SHIFT_COMPLIANCE_OVERRIDE_APPLIED"
-        | "SHIFT_COMPLIANCE_OVERRIDE_REMOVED"
-        | "SHIFT_BIDDING_OPENED"
-        | "SHIFT_BIDDING_CLOSED"
-        | "SHIFT_BID_PLACED"
-        | "SHIFT_BID_WITHDRAWN"
-        | "SHIFT_BID_SELECTED"
-        | "SHIFT_BID_ACCEPTED"
-        | "SHIFT_BID_REJECTED"
-        | "SHIFT_TRADE_POSTED"
-        | "SHIFT_TRADE_OFFER_PLACED"
-        | "SHIFT_TRADE_APPROVED"
-        | "SHIFT_TRADE_REJECTED"
-        | "SHIFT_TRADE_CANCELLED"
-        | "SHIFT_CANCELLED"
-        | "SHIFT_CANCELLATION_REVERSED"
-        | "SHIFT_STARTED"
-        | "SHIFT_COMPLETED"
-        | "SHIFT_PUBLISHED"
-        | "SHIFT_LOCKED"
-        | "SHIFT_UNLOCKED"
-        | "SHIFT_VERSION_CONFLICT"
-        | "SHIFT_DATA_CORRECTED"
-        | "SHIFT_CANCELLED_STANDARD"
-        | "SHIFT_PUSHED_TO_BIDDING"
-        | "SHIFT_CANCELLED_LATE"
-        | "SHIFT_PUSHED_TO_BIDDING_URGENT"
-        | "SHIFT_CANCELLED_CRITICAL"
-        | "SHIFT_REQUIRES_MANAGER_REVIEW"
       shift_fulfillment_status: "scheduled" | "bidding" | "offered" | "none"
       shift_lifecycle:
         | "Draft"
@@ -5543,14 +5342,6 @@ export const Constants = {
         "dropped",
         "no_show",
       ],
-      audit_action: [
-        "create",
-        "update",
-        "delete",
-        "publish",
-        "unpublish",
-        "save",
-      ],
       availability_type: ["available", "unavailable", "preferred", "limited"],
       bid_status: ["pending", "accepted", "rejected", "withdrawn"],
       bidding_priority: ["normal", "urgent", "critical"],
@@ -5617,55 +5408,6 @@ export const Constants = {
         "on_bidding_normal",
         "on_bidding_urgent",
         "bidding_closed_no_winner",
-      ],
-      shift_event_type: [
-        "SHIFT_CREATED",
-        "SHIFT_GENERATED",
-        "SHIFT_GENERATION_FAILED",
-        "SHIFT_GROUP_CHANGED",
-        "SHIFT_SUBGROUP_CHANGED",
-        "SHIFT_ROLE_CHANGED",
-        "SHIFT_REQUIREMENTS_CHANGED",
-        "SHIFT_EVENT_TAGS_CHANGED",
-        "SHIFT_TIME_CHANGED",
-        "SHIFT_BREAKS_CHANGED",
-        "SHIFT_NET_LENGTH_RECALCULATED",
-        "SHIFT_ASSIGNED",
-        "SHIFT_UNASSIGNED",
-        "SHIFT_REASSIGNED",
-        "SHIFT_COMPLIANCE_CHECKED",
-        "SHIFT_COMPLIANCE_PASSED",
-        "SHIFT_COMPLIANCE_WARNING",
-        "SHIFT_COMPLIANCE_FAILED",
-        "SHIFT_COMPLIANCE_OVERRIDE_APPLIED",
-        "SHIFT_COMPLIANCE_OVERRIDE_REMOVED",
-        "SHIFT_BIDDING_OPENED",
-        "SHIFT_BIDDING_CLOSED",
-        "SHIFT_BID_PLACED",
-        "SHIFT_BID_WITHDRAWN",
-        "SHIFT_BID_SELECTED",
-        "SHIFT_BID_ACCEPTED",
-        "SHIFT_BID_REJECTED",
-        "SHIFT_TRADE_POSTED",
-        "SHIFT_TRADE_OFFER_PLACED",
-        "SHIFT_TRADE_APPROVED",
-        "SHIFT_TRADE_REJECTED",
-        "SHIFT_TRADE_CANCELLED",
-        "SHIFT_CANCELLED",
-        "SHIFT_CANCELLATION_REVERSED",
-        "SHIFT_STARTED",
-        "SHIFT_COMPLETED",
-        "SHIFT_PUBLISHED",
-        "SHIFT_LOCKED",
-        "SHIFT_UNLOCKED",
-        "SHIFT_VERSION_CONFLICT",
-        "SHIFT_DATA_CORRECTED",
-        "SHIFT_CANCELLED_STANDARD",
-        "SHIFT_PUSHED_TO_BIDDING",
-        "SHIFT_CANCELLED_LATE",
-        "SHIFT_PUSHED_TO_BIDDING_URGENT",
-        "SHIFT_CANCELLED_CRITICAL",
-        "SHIFT_REQUIRES_MANAGER_REVIEW",
       ],
       shift_fulfillment_status: ["scheduled", "bidding", "offered", "none"],
       shift_lifecycle: [

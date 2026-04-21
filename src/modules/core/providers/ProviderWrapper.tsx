@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { TooltipProvider } from '@/modules/core/ui/primitives/tooltip';
 import { AuthProvider } from '@/platform/auth/AuthProvider';
+import { ScopeFilterProvider } from '@/platform/auth/ScopeFilterContext';
 import { SearchProvider } from '@/modules/core/contexts/SearchContext';
 import { ThemeProvider } from '@/modules/core/contexts/ThemeContext';
 import { OrgSelectionProvider } from '@/modules/core/contexts/OrgSelectionContext';
@@ -30,25 +31,12 @@ const queryClient = new QueryClient({
     queries: {
       retry:     shouldRetry,
       retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 10_000), // 1s → 2s → cap 10s
-
-      // 30 s default staleTime — short enough for operational shift data to stay
-      // fresh, long enough to avoid unnecessary refetches on every mount.
-      // Per-hook staleTime overrides this (lookup hooks use 5 min, list hooks 0).
       staleTime: 30_000,
-
-      // Keep query data in memory for 10 min after the last subscriber unmounts.
-      // Navigating away and back renders instantly from cache + background refetch.
       gcTime: 10 * 60_000,
-
-      // Refetch when the user returns to the tab — critical for roster managers
-      // who work across multiple browser tabs simultaneously.
       refetchOnWindowFocus: true,
-
-      // Refetch automatically when the network comes back online.
       refetchOnReconnect: true,
     },
     mutations: {
-      // Never retry mutations — they are not guaranteed to be idempotent.
       retry: false,
     },
   },
@@ -63,23 +51,25 @@ const ProviderWrapper: React.FC<ProviderWrapperProps> = ({ children }) => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
-          <OrgSelectionProvider>
-            <ThemeProvider>
-              <SearchProvider>
-                <SidebarProvider defaultOpen={true}>
-                  <div className="h-full w-full overflow-hidden">
-                    <Toaster />
-                    <Sonner />
-                    <RosterUIProvider>
-                      <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
-                        {children}
-                      </BrowserRouter>
-                    </RosterUIProvider>
-                  </div>
-                </SidebarProvider>
-              </SearchProvider>
-            </ThemeProvider>
-          </OrgSelectionProvider>
+          <ScopeFilterProvider>
+            <OrgSelectionProvider>
+              <ThemeProvider>
+                <SearchProvider>
+                  <SidebarProvider defaultOpen={true}>
+                    <div className="h-full w-full overflow-hidden">
+                      <Toaster />
+                      <Sonner />
+                      <RosterUIProvider>
+                        <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+                          {children}
+                        </BrowserRouter>
+                      </RosterUIProvider>
+                    </div>
+                  </SidebarProvider>
+                </SearchProvider>
+              </ThemeProvider>
+            </OrgSelectionProvider>
+          </ScopeFilterProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

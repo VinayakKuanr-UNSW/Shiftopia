@@ -10,6 +10,11 @@ import {
   isSameDay,
 } from 'date-fns';
 import { getTodayInTimezone, isTodayInTimezone } from '@/modules/core/lib/date.utils';
+import {
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
+import { CalendarView } from '@/modules/rosters/hooks/useRosterView';
 import { cn } from '@/modules/core/lib/utils';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -30,6 +35,10 @@ interface MonthViewProps {
   getShiftsForDate: (date: Date, options?: { includeContinuations?: boolean }) => ShiftWithDetails[];
   pendingOfferCount: number;
   offerDates: Set<string>;
+  onPrevious?: () => void;
+  onNext?: () => void;
+  view?: CalendarView;
+  onViewChange?: (view: CalendarView) => void;
 }
 
 const SYDNEY_TZ = 'Australia/Sydney';
@@ -58,7 +67,15 @@ const getGradientClass = (color: string): string => {
   }
 };
 
-const MonthView: React.FC<MonthViewProps> = ({ date, getShiftsForDate, offerDates }) => {
+const MonthView: React.FC<MonthViewProps> = ({ 
+  date, 
+  getShiftsForDate, 
+  offerDates, 
+  onPrevious, 
+  onNext,
+  view,
+  onViewChange
+}) => {
   const isMobile = useIsMobile();
   const [selectedDay, setSelectedDay] = useState<Date>(date);
   const [selectedShift, setSelectedShift] = useState<{
@@ -90,80 +107,140 @@ const MonthView: React.FC<MonthViewProps> = ({ date, getShiftsForDate, offerDate
     const hasOffer = offerDates.has(selectedDateStr);
 
     return (
-      <div className="h-full flex flex-col overflow-hidden bg-background">
+      <div className="h-full flex flex-col overflow-hidden bg-background/50">
 
-        {/* Compact month mini-grid */}
-        <div className="flex-shrink-0 bg-card/40 backdrop-blur-xl border-b border-border py-2 px-3">
-          <div className="grid grid-cols-7 mb-1.5">
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, idx) => (
-              <div key={idx} className="text-center text-[10px] font-black text-muted-foreground/40 uppercase tracking-widest">
-                {d}
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-y-1">
-            {allDays.map((day) => {
-              const belongsToMonth = isSameMonth(day, date);
-              const isToday        = isTodayInTimezone(day, SYDNEY_TZ);
-              const isSelected     = isSameDay(day, selectedDay);
-              const dayShifts      = getShiftsForDate(day, { includeContinuations: false });
-
-              return (
-                <button
-                  key={day.toISOString()}
-                  onClick={() => setSelectedDay(day)}
-                  className={cn(
-                    'relative flex flex-col items-center justify-center py-1.5 rounded-xl transition-all',
-                    !belongsToMonth && 'opacity-10 pointer-events-none',
-                    isSelected
-                      ? 'bg-primary text-primary-foreground scale-105 shadow-lg shadow-primary/20'
-                      : 'hover:bg-muted/60'
-                  )}
+        {/* Disconnected Calendar Card */}
+        <div className="flex-shrink-0 p-3 pb-1">
+          <div className={cn(
+            "bg-card rounded-[32px] shadow-[0_20px_50px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-border/40 overflow-hidden transition-all duration-500",
+            "backdrop-blur-2xl ring-1 ring-white/10"
+          )}>
+            {/* Calendar Title & Navigation & View Switcher */}
+            <div className="pt-3 pb-1 px-4 flex flex-wrap items-center justify-between gap-x-2 gap-y-3">
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={onPrevious}
+                  className="p-1.5 -ml-1 rounded-full hover:bg-muted/60 text-muted-foreground/50 hover:text-foreground transition-all shrink-0"
                 >
-                  <span className={cn(
-                    'text-xs font-black tracking-tight',
-                    isToday && !isSelected && 'text-primary underline decoration-primary/50 underline-offset-2'
-                  )}>
-                    {format(day, 'd')}
-                  </span>
-
-                  {/* Shift density dots */}
-                  <div className="flex gap-0.5 mt-1 h-1 justify-center">
-                    {dayShifts.slice(0, 3).map((s) => (
-                      <div
-                        key={s.shift.id}
-                        className={cn(
-                          'w-1 h-1 rounded-full',
-                          isSelected ? 'bg-primary-foreground/70' : 'bg-primary/50'
-                        )}
-                      />
-                    ))}
-                  </div>
-
-                  {/* Offer dot */}
-                  {offerDates.has(format(day, 'yyyy-MM-dd')) && belongsToMonth && (
-                    <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
-                  )}
+                  <ChevronLeft className="h-4 w-4" />
                 </button>
-              );
-            })}
+                
+                <h2 className="text-[13px] font-black tracking-tight text-foreground uppercase truncate max-w-[100px]">
+                  {format(date, 'MMM, yyyy')}
+                </h2>
+
+                <button 
+                  onClick={onNext}
+                  className="p-1.5 -mr-1 rounded-full hover:bg-muted/60 text-muted-foreground/50 hover:text-foreground transition-all shrink-0"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Integrated View Switcher */}
+              <div className="flex items-center bg-muted/40 dark:bg-muted/20 rounded-xl p-0.5 gap-0.5 shrink-0">
+                {(['day', '3day', 'week', 'month'] as CalendarView[]).map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => onViewChange?.(v)}
+                    className={cn(
+                      'px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all',
+                      view === v
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground/60 hover:text-foreground'
+                    )}
+                  >
+                    {v === '3day' ? '3D' : v[0]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Calendar Content */}
+            <div className="px-2 pb-3">
+              {/* Capsule Weekday Header */}
+              <div className="grid grid-cols-7 mb-2 bg-muted/20 dark:bg-muted/10 rounded-xl py-1.5 px-0.5">
+                {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((d, idx) => (
+                  <div key={idx} className="text-center text-[8px] font-black text-muted-foreground/50 uppercase tracking-[0.1em]">
+                    {d}
+                  </div>
+                ))}
+              </div>
+
+              {/* Day Grid */}
+              <div className="grid grid-cols-7 gap-y-0.5">
+                {allDays.map((day) => {
+                  const belongsToMonth = isSameMonth(day, date);
+                  const isToday        = isTodayInTimezone(day, SYDNEY_TZ);
+                  const isSelected     = isSameDay(day, selectedDay);
+                  const dayShifts      = getShiftsForDate(day, { includeContinuations: false });
+
+                  return (
+                    <button
+                      key={day.toISOString()}
+                      onClick={() => setSelectedDay(day)}
+                      disabled={!belongsToMonth}
+                      className={cn(
+                        'relative flex flex-col items-center justify-center py-0.5 transition-all duration-300',
+                        !belongsToMonth && 'opacity-20 pointer-events-none'
+                      )}
+                    >
+                      {/* Selection/Today Highlight */}
+                      <div className={cn(
+                        'absolute inset-0 m-auto w-[32px] h-[32px] rounded-full flex items-center justify-center transition-all duration-500',
+                        isSelected 
+                          ? 'bg-primary text-primary-foreground scale-105 shadow-sm shadow-primary/40 z-10' 
+                          : isToday 
+                            ? 'bg-primary/10 text-primary ring-1 ring-primary/20' 
+                            : 'hover:bg-muted/40'
+                      )}>
+                        <span className="text-[10px] font-bold tracking-tight">
+                          {format(day, 'd')}
+                        </span>
+                      </div>
+                      
+                      {/* Spacer */}
+                      <div className="h-[32px] w-[32px]" />
+
+                      {/* Shift density dots */}
+                      <div className="flex gap-0.5 mt-0.5 h-0.5 justify-center z-20">
+                        {dayShifts.slice(0, 3).map((s) => (
+                          <div
+                            key={s.shift.id}
+                            className={cn(
+                              'w-0.5 h-0.5 rounded-full',
+                              isSelected ? 'bg-primary-foreground/70' : 'bg-primary/50'
+                            )}
+                          />
+                        ))}
+                      </div>
+
+                      {/* Offer indicator dot */}
+                      {offerDates.has(format(day, 'yyyy-MM-dd')) && (
+                         <div className="absolute top-1 right-1/4 w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse shadow-sm" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Agenda header */}
-        <div className="flex-shrink-0 px-5 py-2 flex items-center justify-between border-b border-border bg-muted/20">
+        <div className="flex-shrink-0 px-5 py-2.5 flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-muted-foreground/70">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">
               {format(selectedDay, 'EEEE, d MMMM')}
             </p>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-[10px] text-primary/70 font-bold">
-                {agendaShifts.length} {agendaShifts.length === 1 ? 'shift' : 'shifts'}
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[12px] text-foreground font-black">
+                {agendaShifts.length} {agendaShifts.length === 1 ? 'Shift' : 'Shifts'}
               </span>
               {hasOffer && (
                 <>
                   <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                  <span className="text-[10px] text-amber-500 font-bold">Offer pending</span>
+                  <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">Offer pending</span>
                 </>
               )}
             </div>

@@ -266,7 +266,7 @@ export async function executeAssignShift(
 
         if (!employeeId) {
             // Unassign — delegate entirely to sm_unassign_shift RPC (handles bidding_status reset,
-            // audit, and FOR UPDATE lock to prevent TOCTOU races).
+            // and FOR UPDATE lock to prevent TOCTOU races).
             const { data: rpcResult, error: rpcError } = await (supabase as any)
                 .rpc('sm_unassign_shift', { p_shift_id: shiftId, p_user_id: userId ?? null });
             if (rpcError) return { success: false, error: rpcError.message };
@@ -276,7 +276,7 @@ export async function executeAssignShift(
 
         // Assign — path splits by lifecycle_status:
         //   Published (S5) → sm_emergency_assign RPC (S5→S4, sets assignment_outcome='confirmed',
-        //                     fulfillment_status='scheduled', bidding_status='not_on_bidding', audit)
+        //                     fulfillment_status='scheduled', bidding_status='not_on_bidding')
         //   Draft (S1)     → direct UPDATE (S1→S2, no outcome field needed)
         const lifecycleStatus = (shift as any).lifecycle_status;
 

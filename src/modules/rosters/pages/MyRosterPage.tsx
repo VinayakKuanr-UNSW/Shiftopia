@@ -8,7 +8,7 @@ import { CalendarDays, Info, Loader2, Mail } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
+import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
 
@@ -53,16 +53,16 @@ const MyRosterPage: React.FC = () => {
     // h-full fills the noPadding main area (overflow-hidden in AppLayout)
     <div className="h-full flex flex-col overflow-hidden bg-background">
 
-      {/* Scope filter — slim, collapses away when gamma-locked */}
-      {!isGammaLocked && (
-        <div className="flex-shrink-0">
-          <ScopeFilterBanner
-            mode="personal"
-            onScopeChange={setScope}
-            hidden={isGammaLocked}
-          />
-        </div>
-      )}
+      {/* ── Unified Header ── */}
+      <div className="px-4 pt-6">
+        <PersonalPageHeader
+          title="My Roster"
+          Icon={CalendarDays}
+          scope={scope}
+          setScope={setScope}
+          isGammaLocked={isGammaLocked}
+        />
+      </div>
 
       {/* Calendar area — fills all remaining vertical space */}
       <div className="flex-1 min-h-0 overflow-hidden">

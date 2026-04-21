@@ -426,17 +426,12 @@ function getGroupColorName(hex: string): string {
 /**
  * Get group color by name
  */
-export function getGroupColor(name: string): string {
-    switch (name) {
-        case 'Convention Centre':
-            return '#3b82f6';
-        case 'Exhibition Centre':
-            return '#10b981';
-        case 'Theatre':
-            return '#ef4444';
-        default:
-            return '#6b7280';
-    }
+export function getGroupColor(name: string | null | undefined): string {
+    const n = (name || '').toLowerCase();
+    if (n.includes('convention')) return '#3b82f6'; // blue
+    if (n.includes('exhibition')) return '#10b981'; // green
+    if (n.includes('theatre')) return '#ef4444';    // red
+    return '#6b7280'; // gray default
 }
 
 /**

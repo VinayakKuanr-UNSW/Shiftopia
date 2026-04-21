@@ -1168,7 +1168,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                             )}
                           </div>
                         )}
-                        <CompliancePanel hook={bidsPanel} className="flex-1" />
+
                       </>
                     )}
                   </div>
@@ -1191,15 +1191,6 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                     </Button>
                   ) : !bidsPanel.canProceed ? (
                     <>
-                      <Button disabled className="w-full min-h-[44px] rounded-xl text-[11px] font-semibold uppercase tracking-wider opacity-30 cursor-not-allowed border border-border/50 bg-transparent">
-                        <CircleX className="h-4 w-4 mr-2" /> Blocked
-                      </Button>
-                      <Button variant="ghost" onClick={bidsPanel.run} className="w-full min-h-[44px] text-[9px] text-muted-foreground/40 hover:text-muted-foreground uppercase tracking-wider font-semibold">
-                        Re-run Audit
-                      </Button>
-                    </>
-                  ) : (
-                    <>
                       <motion.div whileTap={{ scale: 0.98 }}>
                         <Button
                           onClick={handleAssign}
@@ -1217,9 +1208,6 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                           {(bidsPanel.result?.buckets.B.length ?? 0) > 0 ? 'Override & Assign' : 'Assign Role'}
                         </Button>
                       </motion.div>
-                      <Button variant="ghost" onClick={bidsPanel.run} className="w-full min-h-[44px] text-[9px] text-muted-foreground/40 hover:text-muted-foreground uppercase tracking-wider font-semibold">
-                        Re-run Audit
-                      </Button>
                     </>
                   )}
                 </div>
@@ -1362,90 +1350,10 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
           </ScrollArea>
         </div>
 
-        {/* ── Pane 3: Compliance Audit ────────────────────────────────── */}
-        <div className="flex-1 flex flex-col bg-card/5 min-w-0">
-          <PaneHeader
-            title="Compliance Audit"
-            subtitle={selectedBid ? selectedBid.employeeName : 'Select a bidder'}
-            icon={<Shield className="h-3.5 w-3.5" />}
-            accentClass="text-primary/50"
-          />
 
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <AnimatePresence mode="wait">
-              {!selectedBid ? (
-                <motion.div key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col items-center justify-center gap-4 text-muted-foreground/15">
-                  <Sparkles className="h-8 w-8" />
-                  <div className="text-center">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em]">Engine Standby</p>
-                    <p className="text-[9px] mt-1 font-mono">Select a candidate to run the audit</p>
-                  </div>
-                </motion.div>
-              ) : (
-                <motion.div key="panel" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 overflow-hidden">
-                  <ScrollArea className="h-full">
-                    <div className="p-4">
-                      <CompliancePanel hook={bidsPanel} className="flex-1" />
-                    </div>
-                  </ScrollArea>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
 
-          {/* ── Action Footer ─── */}
-          <div className="shrink-0 p-4 border-t border-border/40 space-y-2 bg-card/30 backdrop-blur-sm">
-            {bidsPanel.status === 'idle' || bidsPanel.status === 'error' ? (
-              <Button
-                onClick={bidsPanel.run}
-                disabled={!selectedBid}
-                className="w-full h-10 text-[11px] font-semibold uppercase tracking-wider rounded-xl shadow-md shadow-primary/10"
-              >
-                <ShieldCheck className="h-4 w-4 mr-2" />
-                Run Compliance
-              </Button>
-            ) : bidsPanel.status === 'running' ? (
-              <Button disabled className="w-full h-10 rounded-xl text-[11px] font-semibold uppercase tracking-wider">
-                <Loader2 className="h-4 w-4 animate-spin mr-2" /> Analyzing…
-              </Button>
-            ) : !bidsPanel.canProceed ? (
-              <>
-                <Button disabled className="w-full h-10 rounded-xl text-[11px] font-semibold uppercase tracking-wider opacity-30 cursor-not-allowed border border-border/50 bg-transparent">
-                  <CircleX className="h-4 w-4 mr-2" /> Blocked
-                </Button>
-                <Button variant="ghost" onClick={bidsPanel.run} className="w-full h-8 text-[9px] text-muted-foreground/40 hover:text-muted-foreground uppercase tracking-wider font-semibold">
-                  Re-run Audit
-                </Button>
-              </>
-            ) : (
-              <>
-                <motion.div whileTap={{ scale: 0.98 }}>
-                  <Button
-                    onClick={handleAssign}
-                    disabled={isAssigning}
-                    className={cn(
-                      'w-full h-10 rounded-xl text-[11px] font-semibold uppercase tracking-wider shadow-lg',
-                      (bidsPanel.result?.buckets.B.length ?? 0) > 0
-                        ? 'bg-amber-500 text-amber-950 hover:bg-amber-400 shadow-amber-500/20'
-                        : 'bg-emerald-500 text-white hover:bg-emerald-400 shadow-emerald-500/20',
-                    )}
-                  >
-                    {isAssigning
-                      ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      : <LucideUserCheck className="h-4 w-4 mr-2" />}
-                    {(bidsPanel.result?.buckets.B.length ?? 0) > 0 ? 'Override & Assign' : 'Assign Role'}
-                  </Button>
-                </motion.div>
-                <Button variant="ghost" onClick={bidsPanel.run} className="w-full h-8 text-[9px] text-muted-foreground/40 hover:text-muted-foreground uppercase tracking-wider font-semibold">
-                  Re-run Audit
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* ── Pane 4: Intelligence & Actions ─────────────────────────── */}
-        <div className="w-[22%] min-w-[240px] max-w-[300px] flex flex-col bg-card/20">
+        {/* ── Pane 3: Intelligence & Actions ─────────────────────────── */}
+        <div className="flex-1 flex flex-col bg-card/20 min-w-0">
           <PaneHeader
             title="Intelligence"
             subtitle="Recommendations & actions"
