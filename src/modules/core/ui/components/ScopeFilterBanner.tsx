@@ -56,7 +56,7 @@ export const ScopeFilterBanner: React.FC<ScopeFilterBannerProps> = ({
 
     return (
         <div className={cn(
-            'relative z-50 rounded-2xl border border-border dark:border-white/5 bg-background/80 dark:bg-white/[0.02] backdrop-blur-md p-1 shadow-sm dark:shadow-none',
+            'relative z-50 w-full',
             className
         )}>
             {mode === 'personal' ? (

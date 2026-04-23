@@ -113,7 +113,7 @@ async function checkShiftsNotLocked(shiftIds: string[]): Promise<GuardViolation[
 
     const { data, error } = await (supabase as any)
         .from('shifts')
-        .select('id, is_locked, trading_status, shift_date, start_time')
+        .select('id, is_locked, trading_status, start_at')
         .in('id', shiftIds);
 
     if (error || !data) return violations;
@@ -132,14 +132,13 @@ async function checkShiftsNotLocked(shiftIds: string[]): Promise<GuardViolation[
         }
 
         // 4-hour time lock (#9 from spec)
-        if (row.shift_date && row.start_time) {
-            const [h, m] = row.start_time.split(':').map(Number);
-            const shiftStart = new Date(row.shift_date + 'T' + String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':00');
+        if (row.start_at) {
+            const shiftStart = new Date(row.start_at);
             const hoursUntil = (shiftStart.getTime() - now.getTime()) / 36e5;
             if (hoursUntil >= 0 && hoursUntil < 4) {
                 violations.push({
                     code: 'SHIFT_LOCKED',
-                    message: `Shift on ${row.shift_date} starts in less than 4 hours and is time-locked.`,
+                    message: `Shift starting at ${shiftStart.toLocaleString()} starts in less than 4 hours and is time-locked.`,
                     entity_id: row.id,
                 });
             }
@@ -194,7 +193,7 @@ async function checkEmployeesActive(employeeIds: string[]): Promise<GuardViolati
 
     const { data, error } = await (supabase as any)
         .from('profiles')
-        .select('id, status, deleted_at')
+        .select('id, status, is_active')
         .in('id', employeeIds);
 
     if (error || !data) return violations;
@@ -207,8 +206,8 @@ async function checkEmployeesActive(employeeIds: string[]): Promise<GuardViolati
             continue;
         }
         const profile = (data || []).find((p: any) => p.id === id);
-        if (profile?.deleted_at) {
-            violations.push({ code: 'EMPLOYEE_INACTIVE', message: `Employee ${id} account has been deleted.`, entity_id: id });
+        if (profile?.is_active === false) {
+            violations.push({ code: 'EMPLOYEE_INACTIVE', message: `Employee ${id} account is inactive.`, entity_id: id });
             continue;
         }
         // Check for explicit inactive/terminated/suspended status if your profiles table has a status column

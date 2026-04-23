@@ -53,7 +53,7 @@ export const ShiftBucketRow: React.FC<ShiftBucketRowProps> = ({
             className={cn(
                 'flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors group',
                 'hover:bg-accent/20',
-                isLocked && 'opacity-60'
+                isLocked && 'opacity-30'
             )}
         >
             {/* Assignment indicator */}

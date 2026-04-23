@@ -24,6 +24,7 @@ import {
     CopyPlus,
     ShieldCheck,
 } from 'lucide-react';
+import { DefenderShieldIcon } from '@/modules/core/ui/icons/DefenderShieldIcon';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
 import {
@@ -99,7 +100,7 @@ function getInitials(name: string): string {
 function getLifecycleIcon(status: string) {
     const s = (status || 'draft').toLowerCase();
     if (s === 'draft') return <Edit className="h-3.5 w-3.5 text-gray-400" />;
-    if (s === 'published') return <ShieldCheck className="h-3.5 w-3.5 text-blue-500" />;
+    if (s === 'published') return <DefenderShieldIcon className="h-3.5 w-3.5 text-black dark:text-white" />;
     if (s === 'inprogress' || s === 'on_going') return <Hourglass className="h-3.5 w-3.5 text-orange-500" />;
     if (s === 'completed') return <CheckCircle className="h-3.5 w-3.5 text-green-500" />;
     if (s === 'cancelled') return <XCircle className="h-3.5 w-3.5 text-red-500" />;
@@ -222,7 +223,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                 isDragging && 'opacity-50 scale-95',
                 isDragOver && 'ring-2 ring-blue-400 ring-offset-1',
                 // No dot + past = fully expired draft → greyscale whole card
-                dot === null && isPast && 'grayscale opacity-60 cursor-not-allowed',
+                dot === null && isPast && 'grayscale opacity-30 cursor-not-allowed',
                 dot === null && isFullyLocked && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
                 isDraft && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'border-dashed opacity-[0.98]',
                 !isDraft && !isFullyLocked && !isPast && 'border-solid',
@@ -287,7 +288,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                                         <protection.icon className={cn(
                                             "h-3 w-3",
                                             protection.status === 'LOCKED' ? "text-slate-500" :
-                                            protection.status === 'PROTECTED' ? "text-blue-500" :
+                                            protection.status === 'PROTECTED' ? "text-black dark:text-white" :
                                             isFullyLocked ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"
                                         )} />
                                     </div>
@@ -307,7 +308,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
 
                 {/* Body — greyscaled for past shifts while header/dot stays crisp */}
                 <div className={cn("px-3 py-1.5 flex flex-col gap-1 flex-1 relative z-[20]",
-                    isPast && dot !== null && "grayscale opacity-60")}>
+                    isPast && dot !== null && "grayscale opacity-30")}>
                     <div className="flex flex-col items-center justify-center min-h-[20px] gap-0.5">
                         <div className="text-sm font-semibold text-foreground truncate text-center">{employeeName || 'Unassigned'}</div>
                     </div>
@@ -409,7 +410,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                 isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background border-primary/50 bg-primary/5 dark:bg-primary/20',
                 isDragging && 'opacity-50 scale-95',
                 isDragOver && 'ring-2 ring-blue-400 ring-offset-2',
-                dot === null && isPast && 'grayscale opacity-60 cursor-not-allowed',
+                dot === null && isPast && 'grayscale opacity-30 cursor-not-allowed',
                 dot === null && isFullyLocked && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
                 isDraft && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'border-dashed opacity-[0.98]',
                 !isDraft && !isFullyLocked && !isPast && 'border-solid',
@@ -462,7 +463,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                                 <protection.icon className={cn(
                                     "h-3.5 w-3.5",
                                     protection.status === 'LOCKED' ? "text-slate-500" :
-                                    protection.status === 'PROTECTED' ? "text-blue-500" :
+                                    protection.status === 'PROTECTED' ? "text-black dark:text-white" :
                                     isFullyLocked ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"
                                 )} />
                             </div>
@@ -478,7 +479,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
 
                 {/* Body — greyscaled for past shifts while header (dot) stays crisp */}
                 <div className={cn("p-4 space-y-3 relative z-[20]",
-                    isPast && dot !== null && "grayscale opacity-60")}>
+                    isPast && dot !== null && "grayscale opacity-30")}>
                     <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9 border border-border">
                             <AvatarFallback className={cn('text-xs font-bold', employeeName ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground')}>

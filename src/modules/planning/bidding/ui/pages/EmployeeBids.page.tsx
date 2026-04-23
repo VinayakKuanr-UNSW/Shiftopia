@@ -31,10 +31,11 @@ import {
 } from '@/modules/core/ui/primitives/alert-dialog';
 import { BidComplianceModal } from '../components/BidComplianceModal';
 import { Drawer, DrawerContent, DrawerTitle, DrawerClose } from '@/modules/core/ui/primitives/drawer';
+import { UnifiedModuleFunctionBar } from '@/modules/core/ui/components/UnifiedModuleFunctionBar';
 
 import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-import { FunctionBar } from '@/modules/core/ui/components/FunctionBar';
+import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import type { ParticipationStatus } from '../../model/bid.types';
 
 // ============================================================================
@@ -113,25 +114,35 @@ interface ShiftOpportunity extends ShiftData {
 // HELPERS
 // ============================================================================
 
-export type BidPriority = 'normal' | 'urgent';
+export type BidPriority = 'normal' | 'urgent' | 'emergent';
 
 export const PRIORITY_CONFIG: Record<BidPriority, {
     label: string;
     badgeCls: string;
     icon: React.ElementType;
     chipActiveCls: string;
+    color: string;
 }> = {
+    emergent: {
+        label: 'Emergent',
+        badgeCls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
+        icon: Flame,
+        chipActiveCls: 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400',
+        color: 'text-rose-500',
+    },
     urgent: {
         label: 'Urgent',
         badgeCls: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
         icon: Zap,
         chipActiveCls: 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400',
+        color: 'text-amber-500',
     },
     normal: {
         label: 'Normal',
         badgeCls: 'bg-slate-500/10 text-muted-foreground border-slate-500/20',
         icon: Signal,
         chipActiveCls: 'bg-muted/40 border-border text-foreground',
+        color: 'text-slate-400',
     },
 };
 
@@ -182,9 +193,8 @@ function getParticipationStatus(
     userId: string
 ): ParticipationStatus {
     // Not eligible: user dropped or rejected the offer this iteration
-    if (shift.last_dropped_by === userId || shift.droppedById === userId || shift.last_rejected_by === userId) {
-        return 'not_eligible';
-    }
+    if (shift.last_rejected_by === userId) return 'rejected_this_itr';
+    if (shift.last_dropped_by === userId || shift.droppedById === userId) return 'dropped_this_itr';
 
     const currentIteration = shift.bidding_iteration || 1;
 
@@ -211,19 +221,7 @@ function getParticipationStatus(
     return 'not_participated';
 }
 
-// ============================================================================
-// DATE PRESETS
-// ============================================================================
-const DATE_PRESETS = [
-    { id: 'today'     as const, label: 'Today'     },
-    { id: 'tomorrow'  as const, label: 'Tomorrow'  },
-    { id: 'this_week' as const, label: 'This Week' },
-    { id: 'weekend'   as const, label: 'Weekend'   },
-    { id: 'next_week' as const, label: 'Next Week' },
-    { id: 'all'       as const, label: 'All Dates' },
-] as const;
 
-type DatePreset = typeof DATE_PRESETS[number]['id'];
 
 // ============================================================================
 // MOTION VARIANTS
@@ -251,10 +249,11 @@ export const EmployeeBidsPage: React.FC = () => {
     const { scope, setScope, scopeKey, isGammaLocked, isLoading: isScopeLoading } = useScopeFilter('personal');
     const { toast } = useToast();
     const queryClient = useQueryClient();
+    const { isDark } = useTheme();
     const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
     const [priorityFilter, setPriorityFilter] = useState<BidPriority | 'all'>('all');
-    const [datePreset, setDatePreset] = useState<DatePreset>('today');
-    const [stripDate, setStripDate] = useState<string | null>(null);
+    const [startDate, setStartDate] = useState<Date>(() => new Date());
+    const [endDate, setEndDate]     = useState<Date>(() => new Date());
     const [expandedHistoryIds, setExpandedHistoryIds] = useState<Set<string>>(new Set());
     const [drawerOpp, setDrawerOpp] = useState<ShiftOpportunity | null>(null);
 
@@ -263,10 +262,6 @@ export const EmployeeBidsPage: React.FC = () => {
         const d = new Date(); d.setHours(0, 0, 0, 0); return d;
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [todayStr]);
-    const stripDays = React.useMemo(
-        () => Array.from({ length: 14 }, (_, i) => addDays(todayDate, i)),
-        [todayDate]
-    );
 
     // Selection (for bulk bid on not_participated eligible shifts)
     const [selectedShiftIds, setSelectedShiftIds] = useState<any[]>([]);
@@ -542,44 +537,12 @@ export const EmployeeBidsPage: React.FC = () => {
     // DATE-FILTERED BID OPPORTUNITIES
     // ========================================================================
     const filteredBidOpportunities = React.useMemo(() => {
-        if (stripDate) return bidOpportunities.filter(opp => opp.date === stripDate);
+        const startStr = format(startDate, 'yyyy-MM-dd');
+        const endStr = format(endDate, 'yyyy-MM-dd');
         return bidOpportunities.filter(opp => {
-            const oppDate = new Date(opp.date + 'T00:00:00');
-            switch (datePreset) {
-                case 'today':     return opp.date === todayStr;
-                case 'tomorrow':  return opp.date === format(addDays(todayDate, 1), 'yyyy-MM-dd');
-                case 'this_week': {
-                    const ws = startOfWeek(todayDate, { weekStartsOn: 1 });
-                    const we = endOfWeek(todayDate, { weekStartsOn: 1 });
-                    return oppDate >= ws && oppDate <= we;
-                }
-                case 'weekend': {
-                    const ws = startOfWeek(todayDate, { weekStartsOn: 1 });
-                    const sat = format(addDays(ws, 5), 'yyyy-MM-dd');
-                    const sun = format(addDays(ws, 6), 'yyyy-MM-dd');
-                    return opp.date === sat || opp.date === sun;
-                }
-                case 'next_week': {
-                    const nm = addDays(startOfWeek(todayDate, { weekStartsOn: 1 }), 7);
-                    const ns = addDays(nm, 6);
-                    return oppDate >= nm && oppDate <= ns;
-                }
-                default: return true;
-            }
+            return opp.date >= startStr && opp.date <= endStr;
         });
-    }, [bidOpportunities, datePreset, stripDate, todayStr, todayDate]);
-
-    const nextAvailableDate = React.useMemo(() => {
-        if (datePreset !== 'today' || filteredBidOpportunities.length > 0 || stripDate) return null;
-        for (let i = 1; i <= 30; i++) {
-            const d = format(addDays(todayDate, i), 'yyyy-MM-dd');
-            const dayData = shiftsByDate.get(d);
-            if (dayData && dayData.count > 0) {
-                return { date: d, count: dayData.count, label: format(parseISO(d), 'EEE, d MMM') };
-            }
-        }
-        return null;
-    }, [datePreset, filteredBidOpportunities.length, stripDate, shiftsByDate, todayDate]);
+    }, [bidOpportunities, startDate, endDate]);
 
     // ========================================================================
     // SELECTION HANDLERS (only applicable to not_participated eligible shifts)
@@ -727,7 +690,8 @@ export const EmployeeBidsPage: React.FC = () => {
         const tr = calculateTimeRemaining(biddingCloses.toISOString());
 
         const isTerminal = participationStatus === 'selected' ||
-                           participationStatus === 'not_eligible' ||
+                           participationStatus === 'dropped_this_itr' ||
+                           participationStatus === 'rejected_this_itr' ||
                            participationStatus === 'expired';
         const timerDisplay = isTerminal ? null
             : tr.isExpired ? 'Bidding Closed'
@@ -739,9 +703,15 @@ export const EmployeeBidsPage: React.FC = () => {
             <div className="flex flex-col gap-2">
 
                 {/* ── CURRENT ITERATION STATUS ── */}
-                {participationStatus === 'not_eligible' && (
+                {participationStatus === 'dropped_this_itr' && (
                     <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-medium">
                         <XCircle className="h-4 w-4 shrink-0" /> You dropped this shift
+                    </div>
+                )}
+
+                {participationStatus === 'rejected_this_itr' && (
+                    <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-medium">
+                        <XCircle className="h-4 w-4 shrink-0" /> You rejected this offer
                     </div>
                 )}
 
@@ -933,7 +903,8 @@ export const EmployeeBidsPage: React.FC = () => {
             if (participationStatus === 'selected')     return { label: 'Selected',     cls: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' };
             if (participationStatus === 'pending')      return { label: 'Pending',       cls: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' };
             if (participationStatus === 'rejected')     return { label: 'Not Selected',  cls: 'bg-slate-500/10 text-muted-foreground border-slate-500/20' };
-            if (participationStatus === 'not_eligible') return { label: 'Dropped',       cls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' };
+            if (participationStatus === 'dropped_this_itr') return { label: 'Dropped',       cls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' };
+            if (participationStatus === 'rejected_this_itr') return { label: 'Rejected',      cls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' };
             if (participationStatus === 'expired' || (participationStatus === 'not_participated' && isExpired))
                 return { label: 'Closed', cls: 'bg-slate-500/10 text-muted-foreground border-slate-500/20' };
             if (!opp.isEligible) return { label: 'Ineligible', cls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' };
@@ -1000,175 +971,121 @@ export const EmployeeBidsPage: React.FC = () => {
         );
     };
 
-    // ========================================================================
-    // RENDER
-    // ========================================================================
     return (
-        <motion.div className="w-full text-foreground pb-24 md:pb-0" variants={pageVariants} initial="hidden" animate="show">
-            <div className="px-4 pt-6">
-                <PersonalPageHeader
-                    title="My Bids"
-                    Icon={Gavel}
-                    scope={scope}
-                    setScope={setScope}
-                    isGammaLocked={isGammaLocked}
-                />
-            </div>
+        <motion.div 
+            className="h-full flex flex-col w-full text-foreground overflow-hidden" 
+            variants={pageVariants} 
+            initial="hidden" 
+            animate="show"
+        >
+            <div className="sticky top-0 z-30 -mx-4 px-4 md:-mx-8 md:px-8 pt-4 pb-4 lg:pb-6">
+                <div className={cn(
+                    "rounded-[32px] p-4 lg:p-6 transition-all border",
+                    isDark 
+                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                )}>
+                    {/* Row 1: Page Header (Title + Clock) */}
+                    <PersonalPageHeader
+                        title="My Bids"
+                        Icon={Gavel}
+                        scope={scope}
+                        setScope={setScope}
+                        isGammaLocked={isGammaLocked}
+                        className="mb-4 lg:mb-6"
+                    />
 
-            {/* ═══════════════════════════════════════════════════════════════
-                STICKY HEADER — 2 rows: title+actions | unified date strip
-            ═══════════════════════════════════════════════════════════════ */}
-            <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/40 -mx-4 px-4 md:-mx-8 md:px-8 mb-5">
-
-                {/* ── Row 1: Title + Priority toggles + view/refresh ── */}
-                <div className="flex items-center gap-2 pt-2.5 pb-2">
-
-                    {/* Left: title + count */}
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <span className="text-sm font-black text-foreground tracking-tight leading-none">Open Shifts</span>
-                        <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-primary/10 text-primary text-[10px] font-black leading-none tabular-nums">
-                            {filteredBidOpportunities.length}
-                        </span>
-                        {eligibilityLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/40 shrink-0" />}
-                    </div>
-
-                    {/* Priority toggles — tap to activate, tap again to clear */}
-                    <div className="flex items-center gap-1">
-                        {(['normal', 'urgent'] as const).map(p => {
-                            const conf = PRIORITY_CONFIG[p];
-                            const active = priorityFilter === p;
-                            return (
-                                <motion.button
-                                    key={p}
-                                    onClick={() => setPriorityFilter(active ? 'all' : p)}
-                                    whileTap={{ scale: 0.88 }}
+                    {/* Row 2: Unified Function Bar */}
+                    <UnifiedModuleFunctionBar
+                        leftContent={
+                            <div className="flex flex-col gap-0.5">
+                                <div className="flex items-center gap-1.5 lg:gap-2">
+                                    <Calendar className="h-3.5 w-3.5 lg:h-4 lg:w-4 text-primary" />
+                                    <span className="text-[10px] lg:text-sm font-black text-foreground tracking-tight whitespace-nowrap uppercase">
+                                        <span className="hidden sm:inline">Open Shifts</span>
+                                        <span className="sm:hidden">Shifts</span>
+                                    </span>
+                                    <span className="inline-flex items-center justify-center h-4 lg:h-5 min-w-[16px] lg:min-w-[20px] px-1 lg:px-1.5 rounded-full bg-primary/10 text-primary text-[9px] lg:text-[10px] font-black tabular-nums">
+                                        {filteredBidOpportunities.length}
+                                    </span>
+                                </div>
+                            </div>
+                        }
+                        startDate={startDate}
+                        endDate={endDate}
+                        onDateChange={(start, end) => {
+                            setStartDate(start);
+                            setEndDate(end);
+                        }}
+                        viewMode={viewMode}
+                        onViewModeChange={setViewMode}
+                        onRefresh={() => {
+                            queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
+                            queryClient.invalidateQueries({ queryKey: ['myBids'] });
+                        }}
+                        isLoading={eligibilityLoading}
+                        className="bg-transparent border-none p-0 shadow-none"
+                        filters={
+                            <div className={cn(
+                                "flex items-center gap-1 p-1 h-9 rounded-lg",
+                                isDark ? "bg-[#111827]/60" : "bg-slate-200/50"
+                            )}>
+                                <button
+                                    onClick={() => setPriorityFilter('all')}
                                     className={cn(
-                                        'flex items-center gap-1 px-2.5 h-8 rounded-full border text-[10px] font-black uppercase tracking-wider transition-all',
-                                        active ? conf.chipActiveCls : 'border-border/30 text-muted-foreground/50 hover:bg-muted/30 hover:text-foreground'
+                                        'px-3 h-7 rounded-md text-[10px] font-black uppercase tracking-wider transition-all',
+                                        priorityFilter === 'all' 
+                                            ? (isDark ? 'bg-white/20 text-white' : 'bg-slate-900 text-white shadow-sm') 
+                                            : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-slate-900/5')
                                     )}
                                 >
-                                    <conf.icon className="h-3 w-3" />
-                                    <span className="hidden sm:inline">{conf.label}</span>
-                                </motion.button>
-                            );
-                        })}
-                    </div>
-
-                    {/* View toggle + Refresh */}
-                    <div className="flex items-center gap-1 pl-2 border-l border-border/30">
-                        <button
-                            onClick={() => setViewMode(v => v === 'card' ? 'table' : 'card')}
-                            className="h-8 w-8 flex items-center justify-center rounded-lg border border-border/30 text-muted-foreground/50 hover:bg-muted/30 hover:text-foreground transition-colors"
-                            title={viewMode === 'card' ? 'Table view' : 'Card view'}
-                        >
-                            {viewMode === 'card'
-                                ? <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none"><rect x="0.5" y="0.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2"/><rect x="8" y="0.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2"/><rect x="0.5" y="8" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2"/><rect x="8" y="8" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2"/></svg>
-                                : <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none"><rect x="0.5" y="1.5" width="13" height="1.5" rx="0.75" fill="currentColor"/><rect x="0.5" y="6" width="13" height="1.5" rx="0.75" fill="currentColor"/><rect x="0.5" y="10.5" width="13" height="1.5" rx="0.75" fill="currentColor"/></svg>
-                            }
-                        </button>
-                        <button
-                            onClick={() => {
-                                queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
-                                queryClient.invalidateQueries({ queryKey: ['myBids'] });
-                            }}
-                            className="h-8 w-8 flex items-center justify-center rounded-lg border border-border/30 text-muted-foreground/50 hover:bg-muted/30 hover:text-foreground transition-colors"
-                            title="Refresh"
-                        >
-                            <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none"><path d="M13 2.5C11.6 1 9.9 0 8 0 4.1 0 1 3.1 1 7s3.1 7 7 7c3.3 0 6-2.1 6.9-5H13c-.9 2.3-3.1 4-5.5 4-3.3 0-6-2.7-6-6s2.7-6 6-6c1.7 0 3.1.7 4.2 1.8L9 5h5V0l-1 2.5z" fill="currentColor"/></svg>
-                        </button>
-                    </div>
-                </div>
-
-                {/* ── Row 2: Unified date selector — presets + individual days in one strip ── */}
-                {/* Preset pills first, then a hairline separator, then scrollable day cells */}
-                <div className="flex gap-1.5 pb-3 overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-
-                    {/* Preset pills: All | Today | Tmrw | Week | Wknd | Next */}
-                    {([
-                        { id: 'all'       as DatePreset, label: 'All'  },
-                        { id: 'today'     as DatePreset, label: 'Today' },
-                        { id: 'tomorrow'  as DatePreset, label: 'Tmrw' },
-                        { id: 'this_week' as DatePreset, label: 'Week' },
-                        { id: 'weekend'   as DatePreset, label: 'Wknd' },
-                        { id: 'next_week' as DatePreset, label: 'Next Wk' },
-                    ] as const).map(preset => {
-                        const isActive = !stripDate && datePreset === preset.id;
-                        const dotDate = preset.id === 'today' ? todayStr
-                                      : preset.id === 'tomorrow' ? format(addDays(todayDate, 1), 'yyyy-MM-dd')
-                                      : null;
-                        const dotData = dotDate ? shiftsByDate.get(dotDate) : null;
-                        return (
-                            <motion.button
-                                key={preset.id}
-                                onClick={() => { setDatePreset(preset.id); setStripDate(null); }}
-                                whileTap={{ scale: 0.92 }}
-                                className={cn(
-                                    'shrink-0 flex flex-col items-center justify-center px-3 min-h-[52px] rounded-xl border text-[11px] font-bold whitespace-nowrap transition-all',
-                                    isActive
-                                        ? 'bg-foreground text-background border-foreground'
-                                        : 'border-border/40 text-muted-foreground hover:border-border hover:text-foreground'
-                                )}
-                            >
-                                {preset.label}
-                                {dotData && dotData.count > 0 && (
-                                    <span className={cn('h-1 w-1 rounded-full mt-1', isActive ? 'bg-background/50' : dotData.hasUrgent ? 'bg-amber-500' : 'bg-primary')} />
-                                )}
-                            </motion.button>
-                        );
-                    })}
-
-                    {/* Hairline separator */}
-                    <div className="shrink-0 w-px bg-border/50 self-stretch mx-0.5 my-2" />
-
-                    {/* Individual day pills */}
-                    {stripDays.map(day => {
-                        const dayStr = format(day, 'yyyy-MM-dd');
-                        const dayData = shiftsByDate.get(dayStr);
-                        const isSelected = stripDate === dayStr;
-                        const isCurrentDay = dayStr === todayStr;
-                        return (
-                            <motion.button
-                                key={dayStr}
-                                onClick={() => setStripDate(isSelected ? null : dayStr)}
-                                whileTap={{ scale: 0.88 }}
-                                className={cn(
-                                    'shrink-0 flex flex-col items-center w-12 min-h-[52px] py-2 rounded-xl border transition-all',
-                                    isSelected
-                                        ? 'bg-foreground border-foreground text-background'
-                                        : isCurrentDay && !stripDate
-                                        ? 'bg-primary/10 border-primary/40 text-primary'
-                                        : 'border-border/30 text-muted-foreground hover:bg-muted/30 hover:border-border'
-                                )}
-                            >
-                                <span className="text-[10px] font-semibold uppercase tracking-wide leading-none opacity-60 mt-1">
-                                    {format(day, 'EEE')}
-                                </span>
-                                <span className="text-base font-black leading-none tabular-nums mt-1">
-                                    {format(day, 'd')}
-                                </span>
-                                <div className="h-2 flex items-center justify-center mt-0.5">
-                                    {dayData && dayData.count > 0
-                                        ? <span className={cn('h-1 w-1 rounded-full', isSelected ? 'bg-background/60' : dayData.hasUrgent ? 'bg-amber-500' : 'bg-primary')} />
-                                        : <span className="h-1 w-1" />
-                                    }
-                                </div>
-                            </motion.button>
-                        );
-                    })}
+                                    All
+                                </button>
+                                {(['normal', 'urgent', 'emergent'] as const).map(p => {
+                                    const conf = PRIORITY_CONFIG[p];
+                                    const active = priorityFilter === p;
+                                    return (
+                                        <button
+                                            key={p}
+                                            onClick={() => setPriorityFilter(p)}
+                                            className={cn(
+                                                'flex items-center gap-1.5 px-2 lg:px-2.5 h-7 rounded-md text-[10px] font-black uppercase tracking-wider transition-all',
+                                                active 
+                                                    ? (isDark ? 'bg-white/20 text-white' : 'bg-slate-900 text-white shadow-sm') 
+                                                    : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-slate-900/5')
+                                            )}
+                                        >
+                                            <conf.icon className="w-3 h-3 lg:hidden" />
+                                            <div className={cn("hidden lg:block w-1.5 h-1.5 rounded-full", conf.color.replace('text-', 'bg-'))} />
+                                            <span className="hidden sm:inline">{conf.label}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        }
+                    />
                 </div>
             </div>
 
             {/* ── CARD / TABLE VIEW ── */}
-            {viewMode === 'card' ? (
-                <AnimatePresence mode="wait">
-                    <motion.div
-                        key={`${priorityFilter}-${datePreset}-${stripDate ?? ''}`}
-                        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
-                        variants={pageVariants}
-                        initial="hidden"
-                        animate="show"
-                        exit={{ opacity: 0, transition: { duration: 0.15 } }}
-                    >
+            <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+                <div className={cn(
+                    "h-full rounded-[32px] transition-all border flex flex-col overflow-hidden",
+                    isDark 
+                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                )}>
+                {viewMode === 'card' ? (
+                <div className="flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none">
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={`${priorityFilter}-${startDate.toISOString()}-${endDate.toISOString()}`}
+                            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6"
+                            variants={pageVariants}
+                            initial="hidden"
+                            animate="show"
+                            exit={{ opacity: 0, transition: { duration: 0.15 } }}
+                        >
                         {filteredBidOpportunities.map(opp => renderOpportunityCard(opp))}
                         {filteredBidOpportunities.length === 0 && (
                             <motion.div variants={itemVariants} className="col-span-full">
@@ -1177,179 +1094,174 @@ export const EmployeeBidsPage: React.FC = () => {
                                         <Calendar className="h-6 w-6 text-muted-foreground/40" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-semibold text-foreground/60">
-                                            {stripDate
-                                                ? `No shifts on ${format(parseISO(stripDate), 'EEE, d MMM')}`
-                                                : datePreset === 'today'
-                                                ? 'No open shifts today'
-                                                : 'No shifts match your filters'}
-                                        </p>
-                                        {nextAvailableDate && (
-                                            <p className="text-xs text-muted-foreground/50 mt-1.5">
-                                                Next available:{' '}
-                                                <button
-                                                    onClick={() => setStripDate(nextAvailableDate.date)}
-                                                    className="text-primary font-semibold hover:underline"
-                                                >
-                                                    {nextAvailableDate.label} ({nextAvailableDate.count} shift{nextAvailableDate.count !== 1 ? 's' : ''})
-                                                </button>
-                                            </p>
-                                        )}
-                                        {!nextAvailableDate && datePreset !== 'all' && (
-                                            <button
-                                                onClick={() => { setDatePreset('all'); setStripDate(null); }}
-                                                className="text-xs text-primary hover:underline mt-1.5 block mx-auto"
-                                            >
-                                                Show all dates
-                                            </button>
-                                        )}
+                                        <p className="text-sm font-semibold text-foreground/60">No shifts match your filters</p>
+                                        <p className="text-xs text-muted-foreground/40 mt-1">Try expanding your date range or clearing priority filters.</p>
                                     </div>
                                 </div>
                             </motion.div>
                         )}
-                    </motion.div>
-                </AnimatePresence>
-            ) : (
-                /* ── LIST / TABLE VIEW ── */
-                <>
-                    {/* Mobile: vertical list rows, tap → bottom drawer */}
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={`list-${priorityFilter}-${datePreset}-${stripDate ?? ''}`}
-                            className="md:hidden border border-border/40 rounded-xl overflow-hidden"
-                            variants={pageVariants}
-                            initial="hidden"
-                            animate="show"
-                            exit={{ opacity: 0, transition: { duration: 0.12 } }}
-                        >
-                            {filteredBidOpportunities.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-                                    <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
-                                        <Calendar className="h-6 w-6 text-muted-foreground/40" />
-                                    </div>
-                                    <p className="text-sm font-semibold text-foreground/60">No shifts match your filters</p>
-                                </div>
-                            ) : (
-                                filteredBidOpportunities.map(renderBidListItem)
-                            )}
                         </motion.div>
                     </AnimatePresence>
+                </div>
+                ) : (
+                    <div className="flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none">
+                        {/* Mobile: vertical list rows, tap → bottom drawer */}
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={`list-${priorityFilter}-${startDate.toISOString()}-${endDate.toISOString()}`}
+                                className="md:hidden border border-border/40 rounded-xl overflow-hidden"
+                                variants={pageVariants}
+                                initial="hidden"
+                                animate="show"
+                                exit={{ opacity: 0, transition: { duration: 0.12 } }}
+                            >
+                                {filteredBidOpportunities.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                                        <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
+                                            <Calendar className="h-6 w-6 text-muted-foreground/40" />
+                                        </div>
+                                        <p className="text-sm font-semibold text-foreground/60">No shifts match your filters</p>
+                                    </div>
+                                ) : (
+                                    filteredBidOpportunities.map(renderBidListItem)
+                                )}
+                            </motion.div>
+                        </AnimatePresence>
 
-                    {/* Desktop: traditional sortable table */}
-                    <div className="hidden md:block overflow-x-auto border border-border rounded-lg">
-                        <table className="w-full text-sm text-foreground">
-                            <thead className="bg-muted/60 text-xs">
-                                <tr>
-                                    <th className="p-3 text-left w-[40px]">
-                                        <input
-                                            type="checkbox"
-                                            checked={
-                                                filteredBidOpportunities.some(o => o.participationStatus === 'not_participated' && o.isEligible) &&
-                                                filteredBidOpportunities
-                                                    .filter(o => o.participationStatus === 'not_participated' && o.isEligible)
-                                                    .every(o => selectedShiftIds.includes(o.id))
-                                            }
-                                            onChange={(e) => handleSelectAll(e.target.checked)}
-                                        />
-                                    </th>
-                                    <SortableTableHeader sortKey="department" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Dept</SortableTableHeader>
-                                    <SortableTableHeader sortKey="subGroup" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Sub</SortableTableHeader>
-                                    <SortableTableHeader sortKey="role" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Role</SortableTableHeader>
-                                    <SortableTableHeader sortKey="date" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Date</SortableTableHeader>
-                                    <th className="p-3 text-left">Time</th>
-                                    <th className="p-3 text-left">Net</th>
-                                    <th className="p-3 text-left">ITR</th>
-                                    <th className="p-3 text-left w-[200px]">Status / Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredBidOpportunities.map(opp => {
-                                    const { participationStatus, currentBid } = opp;
-                                    const shiftStart = opp.startAt
-                                        ? new Date(opp.startAt)
-                                        : parseZonedDateTime(opp.date, opp.startTime, SYDNEY_TZ);
-                                    const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
-                                    const isExpired = new Date() >= biddingCloses;
-                                    const canSelect = participationStatus === 'not_participated' && opp.isEligible;
+                        {/* Desktop: traditional sortable table */}
+                        <div className="hidden md:block overflow-x-auto border border-border rounded-lg">
+                            <table className="w-full text-sm text-foreground">
+                                <thead className="bg-muted/60 text-xs text-muted-foreground uppercase tracking-wider font-black">
+                                    <tr>
+                                        <th className="p-3 text-left w-[40px]">
+                                            <input
+                                                type="checkbox"
+                                                checked={
+                                                    filteredBidOpportunities.some(o => o.participationStatus === 'not_participated' && o.isEligible) &&
+                                                    filteredBidOpportunities
+                                                        .filter(o => o.participationStatus === 'not_participated' && o.isEligible)
+                                                        .every(o => selectedShiftIds.includes(o.id))
+                                                }
+                                                onChange={(e) => handleSelectAll(e.target.checked)}
+                                                className="h-4 w-4 rounded border-border/50 accent-primary"
+                                            />
+                                        </th>
+                                        <SortableTableHeader sortKey="department" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Dept</SortableTableHeader>
+                                        <SortableTableHeader sortKey="subGroup" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Sub</SortableTableHeader>
+                                        <SortableTableHeader sortKey="role" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Role</SortableTableHeader>
+                                        <SortableTableHeader sortKey="date" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Date</SortableTableHeader>
+                                        <th className="p-3 text-left">Time</th>
+                                        <th className="p-3 text-left">Net</th>
+                                        <th className="p-3 text-left">ITR</th>
+                                        <th className="p-3 text-left w-[200px]">Status / Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredBidOpportunities.map(opp => {
+                                        const { participationStatus, currentBid } = opp;
+                                        const shiftStart = opp.startAt
+                                            ? new Date(opp.startAt)
+                                            : parseZonedDateTime(opp.date, opp.startTime, SYDNEY_TZ);
+                                        const biddingCloses = new Date(shiftStart.getTime() - 4 * 60 * 60 * 1000);
+                                        const isExpired = new Date() >= biddingCloses;
+                                        const canSelect = participationStatus === 'not_participated' && opp.isEligible;
 
-                                    return (
-                                        <tr key={opp.id} className="border-t border-border/50 hover:bg-muted/30 transition-colors">
-                                            <td className="p-3">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedShiftIds.includes(opp.id)}
-                                                    onChange={() => handleSelectShift(opp.id)}
-                                                    disabled={!canSelect}
-                                                />
-                                            </td>
-                                            <td className="p-3">{opp.department}</td>
-                                            <td className="p-3">{opp.subGroup}</td>
-                                            <td className="p-3">{opp.role}</td>
-                                            <td className="p-3">{opp.date}</td>
-                                            <td className="p-3">{opp.startTime}–{opp.endTime}</td>
-                                            <td className="p-3">{Math.round(opp.netLength)}m</td>
-                                            <td className="p-3 text-xs font-mono text-muted-foreground">
-                                                {(opp.bidding_iteration || 1) > 1 ? `ITR ${opp.bidding_iteration}` : '—'}
-                                            </td>
-                                            <td className="p-3">
-                                                {participationStatus === 'not_eligible' && (
-                                                    <span className="text-xs text-rose-500 flex items-center gap-1"><XCircle size={12} /> Dropped</span>
-                                                )}
-                                                {participationStatus === 'not_participated' && !isExpired && (
-                                                    opp.isEligible ? (
-                                                        <Button
-                                                            size="sm"
-                                                            className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
-                                                            disabled={placeBidMutation.isPending}
-                                                            onClick={() => handleQuickBid(opp)}
-                                                        >
-                                                            {placeBidMutation.isPending && placeBidMutation.variables === opp.id
-                                                                ? <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                                                                : <ThumbsUp className="mr-1 h-3 w-3" />
-                                                            }
-                                                            Bid
-                                                        </Button>
-                                                    ) : (
-                                                        <span className="text-xs text-rose-500 flex items-center gap-1"><Ban size={12} /> Ineligible</span>
-                                                    )
-                                                )}
-                                                {participationStatus === 'not_participated' && isExpired && (
-                                                    <span className="text-xs text-slate-400 flex items-center gap-1"><Ban size={12} /> Closed</span>
-                                                )}
-                                                {participationStatus === 'pending' && (
-                                                    <div className="flex gap-2 items-center">
-                                                        <span className="text-xs text-amber-500 flex items-center gap-1"><Clock size={12} /> Pending</span>
-                                                        {!isExpired && currentBid && (
+                                        return (
+                                            <tr key={opp.id} className="border-t border-border/50 hover:bg-muted/30 transition-colors">
+                                                <td className="p-3">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedShiftIds.includes(opp.id)}
+                                                        onChange={() => handleSelectShift(opp.id)}
+                                                        disabled={!canSelect}
+                                                        className="h-4 w-4 rounded border-border/50 accent-primary"
+                                                    />
+                                                </td>
+                                                <td className="p-3 font-medium">{opp.department}</td>
+                                                <td className="p-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={cn("w-1.5 h-1.5 rounded-full", opp.subGroupColor || 'bg-slate-400')} />
+                                                        {opp.subGroup}
+                                                    </div>
+                                                </td>
+                                                <td className="p-3 font-bold text-primary">{opp.role}</td>
+                                                <td className="p-3">{format(parseISO(opp.date), 'EEE d MMM')}</td>
+                                                <td className="p-3 tabular-nums font-mono">{opp.startTime}–{opp.endTime}</td>
+                                                <td className="p-3 font-mono text-muted-foreground">{Math.round(opp.netLength)}m</td>
+                                                <td className="p-3 text-xs font-mono text-muted-foreground/50">
+                                                    {(opp.bidding_iteration || 1) > 1 ? `ITR ${opp.bidding_iteration}` : '—'}
+                                                </td>
+                                                <td className="p-3">
+                                                    {participationStatus === 'dropped_this_itr' && (
+                                                        <span className="text-xs text-rose-500 flex items-center gap-1 font-bold"><XCircle size={12} /> Dropped</span>
+                                                    )}
+                                                    {participationStatus === 'rejected_this_itr' && (
+                                                        <span className="text-xs text-rose-500 flex items-center gap-1 font-bold"><XCircle size={12} /> Rejected</span>
+                                                    )}
+                                                    {participationStatus === 'not_participated' && !isExpired && (
+                                                        opp.isEligible ? (
                                                             <Button
                                                                 size="sm"
-                                                                variant="outline"
-                                                                className="h-7 text-xs border-border/40 hover:bg-red-500/10 hover:text-red-400"
-                                                                onClick={() => handleWithdrawBid(currentBid.id)}
-                                                                disabled={withdrawBidMutation.isPending}
+                                                                className="h-8 text-xs font-black uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                                                                disabled={placeBidMutation.isPending}
+                                                                onClick={() => handleQuickBid(opp)}
                                                             >
-                                                                <XCircle className="mr-1 h-3 w-3" /> Withdraw
+                                                                {placeBidMutation.isPending && placeBidMutation.variables === opp.id
+                                                                    ? <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                                                    : <ThumbsUp className="mr-1 h-3 w-3" />
+                                                                }
+                                                                Bid
                                                             </Button>
-                                                        )}
-                                                    </div>
-                                                )}
-                                                {participationStatus === 'selected' && (
-                                                    <span className="text-xs text-emerald-400 flex items-center gap-1"><CheckCircle size={12} /> Selected</span>
-                                                )}
-                                                {participationStatus === 'rejected' && (
-                                                    <span className="text-xs text-slate-400 flex items-center gap-1"><Ban size={12} /> Not Selected</span>
-                                                )}
-                                                {participationStatus === 'expired' && (
-                                                    <span className="text-xs text-slate-400 flex items-center gap-1"><Ban size={12} /> Expired</span>
-                                                )}
+                                                        ) : (
+                                                            <span className="text-xs text-rose-500 flex items-center gap-1 font-medium opacity-60"><Ban size={12} /> Ineligible</span>
+                                                        )
+                                                    )}
+                                                    {participationStatus === 'not_participated' && isExpired && (
+                                                        <span className="text-xs text-slate-400 flex items-center gap-1 font-medium italic"><Ban size={12} /> Closed</span>
+                                                    )}
+                                                    {participationStatus === 'pending' && (
+                                                        <div className="flex gap-2 items-center">
+                                                            <span className="text-xs text-amber-500 flex items-center gap-1 font-bold"><Clock size={12} /> Pending</span>
+                                                            {!isExpired && currentBid && (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="h-7 text-[10px] font-black uppercase tracking-widest border-border/40 hover:bg-red-500/10 hover:text-red-400"
+                                                                    onClick={() => handleWithdrawBid(currentBid.id)}
+                                                                    disabled={withdrawBidMutation.isPending}
+                                                                >
+                                                                    Withdraw
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    {participationStatus === 'selected' && (
+                                                        <span className="text-xs text-emerald-400 flex items-center gap-1 font-bold"><CheckCircle size={12} /> Selected</span>
+                                                    )}
+                                                    {participationStatus === 'rejected' && (
+                                                        <span className="text-xs text-slate-400 flex items-center gap-1 font-medium"><Ban size={12} /> Not Selected</span>
+                                                    )}
+                                                    {participationStatus === 'expired' && (
+                                                        <span className="text-xs text-slate-400 flex items-center gap-1 font-medium"><Ban size={12} /> Expired</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    {filteredBidOpportunities.length === 0 && (
+                                        <tr>
+                                            <td colSpan={9} className="p-12 text-center text-muted-foreground/60 italic text-sm">
+                                                No matching shifts found.
                                             </td>
                                         </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                </>
-            )}
+                )}
+                </div>
+            </div>
 
             {/* ── FLOATING BULK ACTION BAR ── */}
             <AnimatePresence>
@@ -1364,7 +1276,7 @@ export const EmployeeBidsPage: React.FC = () => {
                             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500 text-[12px] font-bold text-white shadow-sm">
                                 {selectedShiftIds.length}
                             </span>
-                            <span className="text-sm font-semibold">Selected</span>
+                            <span className="text-sm font-semibold uppercase tracking-wider">Selected</span>
                         </div>
 
                         <div className="h-5 w-[1px] bg-white/20 dark:bg-black/10 mx-1" />
@@ -1372,7 +1284,7 @@ export const EmployeeBidsPage: React.FC = () => {
                         <div className="flex items-center gap-1">
                             <Button
                                 size="sm"
-                                className="h-8 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 rounded-full"
+                                className="h-8 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase tracking-widest px-4 rounded-full"
                                 onClick={handleBulkBid}
                                 disabled={placeBidMutation.isPending}
                             >
@@ -1382,7 +1294,7 @@ export const EmployeeBidsPage: React.FC = () => {
                             <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-8 text-white/70 dark:text-slate-500 hover:text-white dark:hover:text-slate-900 text-xs rounded-full px-3"
+                                className="h-8 text-white/70 dark:text-slate-500 hover:text-white dark:hover:text-slate-900 text-[10px] font-black uppercase tracking-widest rounded-full px-3"
                                 onClick={() => setSelectedShiftIds([])}
                             >
                                 Clear
@@ -1394,34 +1306,34 @@ export const EmployeeBidsPage: React.FC = () => {
 
             {/* ── COMPLIANCE WARNING DIALOG ── */}
             <AlertDialog open={showComplianceDialog} onOpenChange={setShowComplianceDialog}>
-                <AlertDialogContent className="bg-background border-border text-foreground">
+                <AlertDialogContent className="bg-background border-border text-foreground rounded-[24px]">
                     <AlertDialogHeader>
-                        <AlertDialogTitle className="flex items-center gap-2">
-                            <ShieldAlert className="h-5 w-5 text-amber-500" />
+                        <AlertDialogTitle className="flex items-center gap-2 text-xl font-black uppercase tracking-tight">
+                            <ShieldAlert className="h-6 w-6 text-amber-500" />
                             {complianceResult?.status === 'violated' ? 'Compliance Issue' : 'Advisory Notice'}
                         </AlertDialogTitle>
-                        <AlertDialogDescription>
+                        <AlertDialogDescription className="text-base font-medium">
                             {complianceResult?.status === 'violated'
                                 ? 'This shift has a blocking compliance issue. You cannot bid on this shift.'
                                 : 'This shift has a compliance warning. You may still proceed, but your bid may be reviewed.'}
                         </AlertDialogDescription>
                         <div className="space-y-1 mt-2">
                             {complianceResult?.violations.map((v, i) => (
-                                <div key={i} className="flex items-center gap-2 text-sm text-red-500">
+                                <div key={i} className="flex items-center gap-2 text-sm text-red-500 font-bold bg-red-500/5 p-2 rounded-lg border border-red-500/10">
                                     <XCircle className="h-4 w-4 shrink-0" /> {v}
                                 </div>
                             ))}
                             {complianceResult?.warnings.map((w, i) => (
-                                <div key={i} className="flex items-center gap-2 text-sm text-amber-500">
+                                <div key={i} className="flex items-center gap-2 text-sm text-amber-500 font-bold bg-amber-500/5 p-2 rounded-lg border border-amber-500/10">
                                     <AlertTriangle className="h-4 w-4 shrink-0" /> {w}
                                 </div>
                             ))}
                         </div>
                     </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel onClick={handleCancelBid}>Cancel</AlertDialogCancel>
+                    <AlertDialogFooter className="mt-4 gap-2">
+                        <AlertDialogCancel onClick={handleCancelBid} className="rounded-xl border-border/50 font-black uppercase tracking-widest text-[10px]">Cancel</AlertDialogCancel>
                         {complianceResult?.status !== 'violated' && (
-                            <AlertDialogAction onClick={handleConfirmBidWithWarning}>
+                            <AlertDialogAction onClick={handleConfirmBidWithWarning} className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black uppercase tracking-widest text-[10px]">
                                 Proceed Anyway
                             </AlertDialogAction>
                         )}
@@ -1446,7 +1358,7 @@ export const EmployeeBidsPage: React.FC = () => {
 
             {/* ── BID DETAIL DRAWER (mobile list tap) ── */}
             <Drawer open={drawerOpp !== null} onOpenChange={open => { if (!open) setDrawerOpp(null); }}>
-                <DrawerContent className="max-h-[88dvh] flex flex-col">
+                <DrawerContent className="max-h-[88dvh] flex flex-col rounded-t-[32px]">
                     <div className="overflow-y-auto flex-1 px-4 pb-8">
                         {drawerOpp && (() => {
                             const opp = drawerOpp;
@@ -1469,8 +1381,8 @@ export const EmployeeBidsPage: React.FC = () => {
                                     {/* Header */}
                                     <div className="flex items-start justify-between pt-2 pb-4 border-b border-border/40">
                                         <div className="min-w-0 pr-3">
-                                            <DrawerTitle className="text-base font-bold leading-tight">{opp.role}</DrawerTitle>
-                                            <p className="text-sm text-muted-foreground mt-0.5 truncate">
+                                            <DrawerTitle className="text-lg font-black uppercase tracking-tight">{opp.role}</DrawerTitle>
+                                            <p className="text-sm text-muted-foreground mt-0.5 truncate font-medium">
                                                 {opp.department}{opp.subGroup && opp.subGroup !== opp.department ? ` · ${opp.subGroup}` : ''}
                                             </p>
                                             {priority !== 'normal' && (
@@ -1480,8 +1392,8 @@ export const EmployeeBidsPage: React.FC = () => {
                                             )}
                                         </div>
                                         <DrawerClose asChild>
-                                            <button className="shrink-0 h-8 w-8 flex items-center justify-center rounded-full bg-muted/50 text-muted-foreground hover:bg-muted transition-colors">
-                                                <X className="h-4 w-4" />
+                                            <button className="shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-muted/50 text-muted-foreground hover:bg-muted transition-colors">
+                                                <X className="h-5 w-5" />
                                             </button>
                                         </DrawerClose>
                                     </div>
@@ -1494,69 +1406,77 @@ export const EmployeeBidsPage: React.FC = () => {
                                             { label: 'Duration', value: netStr },
                                             { label: 'Level',    value: opp.remunerationLevel },
                                         ].map(({ label, value, mono }) => (
-                                            <div key={label} className="flex flex-col gap-0.5 p-3 rounded-xl bg-muted/30 border border-border/30">
-                                                <span className="text-[9px] uppercase tracking-widest text-muted-foreground/50 font-bold">{label}</span>
-                                                <span className={cn('text-sm font-semibold mt-0.5', mono && 'font-mono')}>{value}</span>
+                                            <div key={label} className="flex flex-col gap-0.5 p-3 rounded-2xl bg-muted/30 border border-border/30">
+                                                <span className="text-[9px] uppercase tracking-widest text-muted-foreground/50 font-black">{label}</span>
+                                                <span className={cn('text-sm font-bold mt-0.5', mono && 'font-mono')}>{value}</span>
                                             </div>
                                         ))}
                                     </div>
 
                                     {/* Bidding timer */}
                                     {!isExpired && timerStr && (
-                                        <div className="flex items-center gap-2 mt-4 px-3 py-2.5 rounded-xl bg-amber-500/8 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-sm">
-                                            <Clock className="h-4 w-4 shrink-0" />
+                                        <div className="flex items-center gap-2 mt-4 px-4 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-sm font-bold">
+                                            <Clock className="h-5 w-5 shrink-0" />
                                             <span>Closes in <strong>{timerStr}</strong></span>
                                         </div>
                                     )}
 
                                     {/* Iteration badge */}
                                     {(opp.bidding_iteration || 1) > 1 && (
-                                        <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-xl bg-muted/30 border border-border/30 text-xs text-muted-foreground font-mono">
-                                            <History className="h-3.5 w-3.5" />
+                                        <div className="flex items-center gap-2 mt-2 px-4 py-2.5 rounded-2xl bg-muted/30 border border-border/30 text-xs text-muted-foreground font-mono font-bold uppercase tracking-wider">
+                                            <History className="h-4 w-4" />
                                             Iteration {opp.bidding_iteration}
                                         </div>
                                     )}
 
                                     {/* Actions */}
-                                    <div className="flex flex-col gap-2 mt-5">
-                                        {participationStatus === 'not_eligible' && (
-                                            <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-medium">
-                                                <XCircle className="h-4 w-4 shrink-0" /> You dropped this shift
+                                    <div className="flex flex-col gap-2 mt-6">
+                                        {participationStatus === 'dropped_this_itr' && (
+                                            <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-black uppercase tracking-wider">
+                                                <XCircle className="h-5 w-5 shrink-0" /> You dropped this shift
+                                            </div>
+                                        )}
+                                        {participationStatus === 'rejected_this_itr' && (
+                                            <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-black uppercase tracking-wider">
+                                                <XCircle className="h-5 w-5 shrink-0" /> You rejected this offer
                                             </div>
                                         )}
                                         {participationStatus === 'not_participated' && opp.isEligible && !isExpired && (
                                             <Button
-                                                className="w-full h-12 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-900/20"
+                                                className="w-full h-14 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-base uppercase tracking-widest shadow-xl shadow-indigo-900/30 rounded-2xl transition-all active:scale-[0.98]"
                                                 onClick={() => { handleQuickBid(opp); setDrawerOpp(null); }}
                                                 disabled={placeBidMutation.isPending}
                                             >
                                                 {placeBidMutation.isPending && placeBidMutation.variables === opp.id
-                                                    ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                    : <ThumbsUp className="mr-2 h-4 w-4" />
+                                                    ? <Loader2 className="mr-3 h-5 w-5 animate-spin" />
+                                                    : <ThumbsUp className="mr-3 h-5 w-5" />
                                                 }
                                                 {placeBidMutation.isPending && placeBidMutation.variables === opp.id ? 'Placing…' : 'Bid Now'}
                                             </Button>
                                         )}
                                         {participationStatus === 'not_participated' && !opp.isEligible && (
-                                            <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-medium">
-                                                <Ban className="h-4 w-4 shrink-0" />
-                                                <span>{opp.ineligibilityReason ?? 'Ineligible for this shift'}</span>
+                                            <div className="w-full flex flex-col items-center justify-center gap-1.5 py-4 px-4 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-bold">
+                                                <div className="flex items-center gap-2 font-black uppercase tracking-wider">
+                                                    <Ban className="h-5 w-5 shrink-0" />
+                                                    Ineligible
+                                                </div>
+                                                <span className="text-[11px] opacity-70 text-center">{opp.ineligibilityReason ?? 'You do not meet the qualifications for this shift.'}</span>
                                             </div>
                                         )}
                                         {participationStatus === 'not_participated' && isExpired && (
-                                            <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-muted/30 border border-border/30 text-muted-foreground text-sm">
-                                                <Ban className="h-4 w-4 shrink-0" /> Bidding Closed
+                                            <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-muted/30 border border-border/30 text-muted-foreground text-sm font-black uppercase tracking-wider">
+                                                <Ban className="h-5 w-5 shrink-0" /> Bidding Closed
                                             </div>
                                         )}
                                         {participationStatus === 'pending' && (
                                             <>
-                                                <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm font-medium">
-                                                    <Clock className="h-4 w-4 shrink-0" /> Awaiting Manager Review
+                                                <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm font-black uppercase tracking-wider">
+                                                    <Clock className="h-5 w-5 shrink-0" /> Awaiting Review
                                                 </div>
                                                 {!isExpired && currentBid && (
                                                     <Button
                                                         variant="outline"
-                                                        className="w-full h-11 border-border/50 hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 text-sm"
+                                                        className="w-full h-12 border-border/50 hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl"
                                                         onClick={() => { handleWithdrawBid(currentBid.id); setDrawerOpp(null); }}
                                                         disabled={withdrawBidMutation.isPending}
                                                     >
@@ -1566,18 +1486,13 @@ export const EmployeeBidsPage: React.FC = () => {
                                             </>
                                         )}
                                         {participationStatus === 'selected' && (
-                                            <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-sm font-medium">
-                                                <CheckCircle className="h-4 w-4 shrink-0" /> Bid Selected — Assigned to You
+                                            <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-sm font-black uppercase tracking-wider">
+                                                <CheckCircle className="h-5 w-5 shrink-0" /> Assigned to You
                                             </div>
                                         )}
                                         {participationStatus === 'rejected' && (
-                                            <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-muted/30 border border-border/30 text-muted-foreground text-sm">
-                                                <Ban className="h-4 w-4 shrink-0" /> Not Selected This Round
-                                            </div>
-                                        )}
-                                        {participationStatus === 'expired' && (
-                                            <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-muted/30 border border-border/30 text-muted-foreground text-sm">
-                                                <Ban className="h-4 w-4 shrink-0" /> Bidding Closed
+                                            <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-muted/30 border border-border/30 text-muted-foreground text-sm font-black uppercase tracking-wider">
+                                                <Ban className="h-5 w-5 shrink-0" /> Not Selected
                                             </div>
                                         )}
                                     </div>

@@ -39,17 +39,17 @@ export type { ShiftFilters };
 
 // ── Shared optimistic-update helpers ─────────────────────────────────────────
 
-type Snapshot = [readonly unknown[], Shift[] | undefined][];
+export type Snapshot = [readonly unknown[], Shift[] | undefined][];
 
-function snapshotLists(queryClient: ReturnType<typeof useQueryClient>): Snapshot {
+export function snapshotLists(queryClient: ReturnType<typeof useQueryClient>): Snapshot {
   return queryClient.getQueriesData<Shift[]>({ queryKey: shiftKeys.lists });
 }
 
-function rollbackLists(queryClient: ReturnType<typeof useQueryClient>, snapshot: Snapshot) {
+export function rollbackLists(queryClient: ReturnType<typeof useQueryClient>, snapshot: Snapshot) {
   snapshot.forEach(([key, data]) => queryClient.setQueryData<Shift[]>(key as QueryKey, data));
 }
 
-function patchLists(
+export function patchLists(
   queryClient: ReturnType<typeof useQueryClient>,
   updater: (old: Shift[]) => Shift[],
 ) {

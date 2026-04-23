@@ -10,6 +10,8 @@ export type BidStatus = 'pending' | 'accepted' | 'rejected' | 'withdrawn' | 'sel
  */
 export type ParticipationStatus =
     | 'not_eligible'      // user is last_dropped_by — cannot re-bid
+    | 'dropped_this_itr'  // user dropped the shift this iteration
+    | 'rejected_this_itr' // user rejected the shift offer this iteration
     | 'not_participated'  // no bid placed in current iteration
     | 'pending'           // active bid awaiting manager review
     | 'selected'          // bid accepted / selected

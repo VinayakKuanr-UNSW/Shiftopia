@@ -18,16 +18,13 @@ import {
   BarChart3, Filter,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
-import {
-  UnifiedRosterNavigator,
-  ViewType,
-  computeRange,
-} from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
+import { CustomDateRangePicker } from '@/modules/core/ui/components/CustomDateRangePicker';
 import { useAuth } from '@/platform/auth/useAuth';
 import { supabase } from '@/platform/realtime/client';
 import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 import { useClockIn, useClockOut } from '@/modules/rosters/state/useClockInOut';
+import { useSettings } from '@/modules/settings/hooks/useSettings';
 import { TimesheetMobileCard } from '@/modules/timesheets/ui/components/TimesheetMobileCard';
 import type { TimesheetRow } from '@/modules/timesheets/model/timesheet.types';
 import { snapToQuarterHour } from '@/modules/timesheets/api/timesheets.supabase.api';
@@ -54,6 +51,8 @@ import {
 
 import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { UnifiedModuleFunctionBar } from '@/modules/core/ui/components/UnifiedModuleFunctionBar';
+import { useTheme } from '@/modules/core/contexts/ThemeContext';
 
 // ── Motion variants ────────────────────────────────────────────────────────────
 
@@ -119,9 +118,10 @@ function getShiftTiming(shift: Shift, now: Date): ShiftTiming {
 interface AttendanceCardProps {
   shift: Shift;
   now: Date;
+  useGroupColoring?: boolean;
 }
 
-const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now }) => {
+const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupColoring }) => {
   const clockIn  = useClockIn();
   const clockOut = useClockOut();
 
@@ -319,6 +319,7 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now }) => {
       attendanceStatus: shift.attendance_status,
       notes: shift.timesheet_notes,
       rejectedReason: shift.timesheet_rejected_reason,
+      groupType: shift.group_type,
     };
   }, [shift]);
 
@@ -337,6 +338,7 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now }) => {
       }
       employeeActions={footerActions}
       hideGlow={true}
+      useGroupColoring={useGroupColoring}
     />
   );
 };
@@ -496,15 +498,16 @@ const AttendancePage: React.FC = () => {
   const { user } = useAuth();
   const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
 
-  const [viewType, setViewType] = useState<ViewType>('week');
-  const [anchor, setAnchor]     = useState<Date>(() => new Date());
+  const [startDate, setStartDate] = useState<Date>(() => new Date());
+  const [endDate, setEndDate]     = useState<Date>(() => new Date());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+  const { isDark } = useTheme();
+  const { orgBranding } = useSettings();
+  const useGroupColoring = orgBranding?.enable_group_coloring || false;
 
-  // Derive date range from anchor + viewType (centralised via UnifiedRosterNavigator utils)
-  const range      = useMemo(() => computeRange(anchor, viewType), [anchor, viewType]);
-  const rangeStart = format(range.start, 'yyyy-MM-dd');
-  const rangeEnd   = format(range.end,   'yyyy-MM-dd');
+  const rangeStart = format(startDate, 'yyyy-MM-dd');
+  const rangeEnd   = format(endDate,   'yyyy-MM-dd');
 
   // Consider current date for short polling interval if viewing current range
   const now = new Date();
@@ -586,59 +589,86 @@ const AttendancePage: React.FC = () => {
       variants={pageVariants}
       initial="hidden"
       animate="show"
-      className="h-full flex flex-col px-4 md:px-6 py-6 gap-5 overflow-hidden"
+      className="h-full flex flex-col overflow-hidden"
     >
-
-      {/* ── Unified Header ── */}
-      <PersonalPageHeader
-        title="My Attendance"
-        Icon={Fingerprint}
-        scope={scope}
-        setScope={setScope}
-        isGammaLocked={isGammaLocked}
-      />
-
-
-      {/* ══════════════ UNIFIED LOGS VIEW ══════════════ */}
-      <div className="flex-1 flex flex-col min-h-0 gap-4">
-        {/* Controls row */}
-        <div className="flex items-center gap-2 shrink-0 w-full overflow-x-hidden pb-1">
-          <UnifiedRosterNavigator
-            date={anchor}
-            viewType={viewType}
-            onChange={(d) => setAnchor(d)}
-            onViewTypeChange={(v) => { setViewType(v); setAnchor(new Date()); }}
-            showPicker
-            className="flex-1"
+      {/* ── Unified Header ────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-30 -mx-4 px-4 md:-mx-8 md:px-8 pt-4 pb-4 lg:pb-6">
+        <div className={cn(
+            "rounded-[32px] p-4 lg:p-6 transition-all border",
+            isDark 
+                ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+                : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+        )}>
+          {/* Row 1 & 2: Identity & Scope Filter */}
+          <PersonalPageHeader
+            title="My Attendance"
+            Icon={Fingerprint}
+            scope={scope}
+            setScope={setScope}
+            isGammaLocked={isGammaLocked}
+            className="mb-4 lg:mb-6"
           />
 
-          {/* Status filter trigger */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setFilterDrawerOpen(true)}
-            className={cn(
-              'h-8 w-8 p-0 bg-muted/30 border-muted-foreground/10 hover:bg-muted/50 transition-colors flex-shrink-0',
-              statusFilter !== 'all' && 'bg-primary/10 border-primary/20 text-primary hover:bg-primary/20',
-            )}
-          >
-            <Filter className="h-3.5 w-3.5 shrink-0" />
-          </Button>
+          {/* Row 3: Function Bar */}
+          <UnifiedModuleFunctionBar
+            startDate={startDate}
+            endDate={endDate}
+            onDateChange={(start, end) => {
+              setStartDate(start);
+              setEndDate(end);
+            }}
+            viewMode="card"
+            onViewModeChange={() => {}} // Not used yet
+            onRefresh={() => refetch()}
+            isLoading={logsLoading}
+            className="mt-1"
+            filters={
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFilterDrawerOpen(true)}
+                  className={cn(
+                    'h-10 lg:h-11 px-4 rounded-xl font-black uppercase text-[10px] tracking-wider transition-all shadow-sm',
+                    isDark ? "bg-[#111827]/60 border-white/5" : "bg-slate-100 border-slate-200/50",
+                    statusFilter !== 'all' && (isDark ? 'bg-primary/10 border-primary/20 text-primary' : 'bg-primary/5 border-primary/10 text-primary'),
+                  )}
+                >
+                  <Filter className="h-3.5 w-3.5 mr-2 opacity-50" />
+                  <span>Filter</span>
+                </Button>
 
-          <StatusFilterDrawer
-            open={filterDrawerOpen}
-            onOpenChange={setFilterDrawerOpen}
-            current={statusFilter}
-            onSelect={setStatusFilter}
+                <StatusFilterDrawer
+                  open={filterDrawerOpen}
+                  onOpenChange={setFilterDrawerOpen}
+                  current={statusFilter}
+                  onSelect={setStatusFilter}
+                />
+              </>
+            }
           />
         </div>
+      </div>
 
+      {/* ── Main Content Area ─────────────────────────────────────────── */}
+      <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+        <div className={cn(
+            "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col",
+            isDark 
+                ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+                : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+        )}>
           {logsLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="flex-1 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-primary/60" />
+                <span className="text-sm text-muted-foreground font-medium tracking-wide">
+                  Loading attendance records…
+                </span>
+              </div>
             </div>
           ) : (
-            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pb-32">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-6 p-4 lg:p-6 pb-32 scrollbar-none">
               {/* Totals */}
               {logShifts.length > 0 && <TotalsBar shifts={logShifts} />}
 
@@ -670,7 +700,7 @@ const AttendancePage: React.FC = () => {
                         <div className="text-[10px] text-muted-foreground/60 font-mono">{shifts.length} shift{shifts.length > 1 ? 's' : ''}</div>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5 mb-4">
-                        {shifts.map(s => <AttendanceCard key={s.id} shift={s} now={now} />)}
+                        {shifts.map(s => <AttendanceCard key={s.id} shift={s} now={now} useGroupColoring={useGroupColoring} />)}
                       </div>
                     </div>
                   );
@@ -679,6 +709,7 @@ const AttendancePage: React.FC = () => {
             </div>
           )}
         </div>
+      </div>
 
     </motion.div>
   );

@@ -30,6 +30,7 @@ interface TimesheetMobileCardProps {
     employeeHeader?: React.ReactNode;
     employeeActions?: React.ReactNode;
     hideGlow?: boolean;
+    useGroupColoring?: boolean;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -130,6 +131,7 @@ export const TimesheetMobileCard: React.FC<TimesheetMobileCardProps> = ({
     employeeHeader,
     employeeActions,
     hideGlow = false,
+    useGroupColoring = false,
 }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [localAdjStart, setLocalAdjStart] = useState(entry.adjustedStart || '');
@@ -146,35 +148,39 @@ export const TimesheetMobileCard: React.FC<TimesheetMobileCardProps> = ({
     const isPending = entry.timesheetStatus?.toLowerCase() === 'submitted' || entry.timesheetStatus?.toLowerCase() === 'draft';
     
     const theme = useMemo(() => {
+        const type = entry.groupType;
         const group = (entry.group || '').toLowerCase();
         const dept = (entry.department || '').toLowerCase();
         const subDept = (entry.subDepartment || '').toLowerCase();
         const org = (entry.organization || '').toLowerCase();
         
-        const isConvention = group.includes('convention') || dept.includes('convention') || subDept.includes('convention') || org.includes('convention');
-        const isExhibition = group.includes('exhibition') || dept.includes('exhibition') || subDept.includes('exhibition') || org.includes('exhibition');
-        const isTheatre = group.includes('theatre') || dept.includes('theatre') || subDept.includes('theatre') || org.includes('theatre');
+        const isConvention = type === 'convention_centre' || group.includes('convention') || dept.includes('convention') || subDept.includes('convention') || org.includes('convention');
+        const isExhibition = type === 'exhibition_centre' || group.includes('exhibition') || dept.includes('exhibition') || subDept.includes('exhibition') || org.includes('exhibition');
+        const isTheatre = type === 'theatre' || group.includes('theatre') || dept.includes('theatre') || subDept.includes('theatre') || org.includes('theatre');
 
         if (isConvention) return { 
             color: '#2563eb', 
             secondary: '#3b82f6', 
-            atmosphere: ['#1d4ed8', '#2563eb', '#60a5fa'] 
+            atmosphere: ['#1d4ed8', '#2563eb', '#60a5fa'],
+            tint: 'rgba(37, 99, 235, 0.04)'
         };
         
         if (isExhibition) return { 
             color: '#10b981', 
             secondary: '#059669', 
-            atmosphere: ['#059669', '#10b981', '#34d399'] 
+            atmosphere: ['#059669', '#10b981', '#34d399'],
+            tint: 'rgba(16, 185, 129, 0.04)'
         };
         
         if (isTheatre) return { 
             color: '#ef4444', 
             secondary: '#dc2626', 
-            atmosphere: ['#991b1b', '#ef4444', '#f87171'] 
+            atmosphere: ['#991b1b', '#ef4444', '#f87171'],
+            tint: 'rgba(239, 68, 68, 0.04)'
         };
         
-        return { color: '#9333ea', secondary: '#a855f7', atmosphere: ['#7e22ce', '#9333ea', '#c084fc'] };
-    }, [entry.group, entry.department, entry.subDepartment, entry.organization]);
+        return { color: '#9333ea', secondary: '#a855f7', atmosphere: ['#7e22ce', '#9333ea', '#c084fc'], tint: 'transparent' };
+    }, [entry.groupType, entry.group, entry.department, entry.subDepartment, entry.organization]);
 
     const themeColor = theme.color;
 
@@ -239,7 +245,8 @@ export const TimesheetMobileCard: React.FC<TimesheetMobileCardProps> = ({
                 borderColor: isSelected ? themeColor : 'rgba(120, 120, 120, 0.08)',
                 boxShadow: isSelected 
                     ? `0 20px 60px -10px ${themeColor}22` 
-                    : '0 8px 32px -4px rgba(0,0,0,0.1)'
+                    : '0 8px 32px -4px rgba(0,0,0,0.1)',
+                backgroundColor: useGroupColoring ? theme.tint : undefined
             }}
             className={cn(
                 'relative rounded-[32px] border overflow-hidden transition-all duration-500',
@@ -248,6 +255,14 @@ export const TimesheetMobileCard: React.FC<TimesheetMobileCardProps> = ({
                 isPast && !isFinalized && 'grayscale-[0.5] opacity-90'
             )}
         >
+            {/* Group Accent Bar */}
+            {useGroupColoring && theme.tint !== 'transparent' && (
+                <div 
+                    className="absolute left-0 top-0 bottom-0 w-1.5 z-30"
+                    style={{ backgroundColor: themeColor }}
+                />
+            )}
+
             {!hideGlow && (
                 <>
                     <div 
@@ -291,8 +306,6 @@ export const TimesheetMobileCard: React.FC<TimesheetMobileCardProps> = ({
                             </p>
                         </div>
                     </div>
-                </div>
-
                     <TimesheetStatusBadge
                         status={displayStatus.variant}
                         className="shrink-0"
@@ -302,8 +315,9 @@ export const TimesheetMobileCard: React.FC<TimesheetMobileCardProps> = ({
                 {protection.status !== 'DRAFT' && !isFinalized && (
                     <div className="mb-4 flex items-center gap-2">
                         <div className={cn(
-                            "px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 border backdrop-blur-md",
-                            protection.status === 'LOCKED' ? "bg-slate-500/10 border-slate-500/20 text-slate-500" : "bg-blue-500/10 border-blue-500/20 text-blue-500"
+                            "px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 border backdrop-blur-md transition-colors",
+                            protection.status === 'LOCKED' ? "bg-slate-500/10 border-slate-500/20" : "bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10",
+                            protection.colorClass
                         )}>
                             <protection.icon className="w-3 h-3" />
                             {protection.label}

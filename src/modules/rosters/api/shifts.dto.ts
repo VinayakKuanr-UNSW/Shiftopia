@@ -38,6 +38,7 @@ export interface CreateShiftData {
     assignment_outcome?: 'confirmed' | 'no_show' | 'emergency_assigned' | 'pending' | null;
     /** null = normal assignment, manual = forced, auto = assigned when TTS < 4h */
     emergency_source?: 'manual' | 'auto' | null;
+    is_training?: boolean;
 }
 
 export interface UpdateShiftData extends Partial<CreateShiftData> {

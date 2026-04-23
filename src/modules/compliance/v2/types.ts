@@ -110,6 +110,7 @@ export interface ShiftV2 {
     sub_department_id?:      string;   // from shifts.sub_department_id
     required_qualifications: QualId[];
     is_ordinary_hours:       boolean;
+    is_training?:            boolean;        // training shift — reduced minimum (2h vs 3h/4h)
     break_minutes:           number;         // total break recorded (for R08 check)
     unpaid_break_minutes?:   number;         // unpaid portion (for net-hours calculation)
 }

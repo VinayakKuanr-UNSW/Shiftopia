@@ -8,7 +8,11 @@ import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 /**
  * Hook for managing shift swaps with real database data
  */
-export const useSwaps = (scopeOverrides?: { organizationId?: string; departmentId?: string | null; subDepartmentId?: string | null }) => {
+export const useSwaps = (scopeOverrides?: { 
+    organizationId?: string; 
+    departmentId?: string | string[] | null; 
+    subDepartmentId?: string | string[] | null 
+}) => {
     const { toast } = useToast();
     const queryClient = useQueryClient();
     const { user, activeContract } = useAuth();

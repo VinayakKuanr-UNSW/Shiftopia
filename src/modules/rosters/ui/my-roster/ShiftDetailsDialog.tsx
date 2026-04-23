@@ -51,6 +51,16 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   const dropShiftMutation = useDropShift();
   const isDropping = dropShiftMutation.isPending;
 
+  const isPast = React.useMemo(() => {
+    if (!shiftData?.shift?.shift_date || !shiftData?.shift?.end_time) return false;
+    try {
+      const endStr = `${shiftData.shift.shift_date}T${shiftData.shift.end_time}`;
+      return new Date(endStr).getTime() < Date.now();
+    } catch {
+      return false;
+    }
+  }, [shiftData?.shift?.shift_date, shiftData?.shift?.end_time]);
+
   if (!shiftData) return null;
   const { shift, groupName, groupColor, subGroupName } = shiftData;
 
@@ -72,15 +82,6 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   const hasCheckedIn = shift.attendance_status === 'checked_in' || shift.attendance_status === 'late';
 
   const isS3PendingOffer = shift.lifecycle_status === 'Published' && shift.assignment_status === 'assigned' && !shift.assignment_outcome;
-  const isPast = React.useMemo(() => {
-    if (!shift.shift_date || !shift.end_time) return false;
-    try {
-      const endStr = `${shift.shift_date}T${shift.end_time}`;
-      return new Date(endStr).getTime() < Date.now();
-    } catch {
-      return false;
-    }
-  }, [shift.shift_date, shift.end_time]);
 
   const isLockedFromActions = shift.is_cancelled || !!existingSwapRequest || isPendingInOffer || isWithinLockoutPeriod || isS3PendingOffer || isActiveOrCommenced || hasCheckedIn || isPast;
 

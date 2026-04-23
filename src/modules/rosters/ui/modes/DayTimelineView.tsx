@@ -36,13 +36,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/modules/core/ui/primitives/tooltip';
+import { useQueryClient } from '@tanstack/react-query';
 import {
-  useUpdateShift,
   useBulkPublishShifts,
   useBulkUnpublishShifts,
   useBulkDeleteShifts,
-  useBulkUpdateShiftTimes,
+  snapshotLists,
+  rollbackLists,
+  patchLists,
 } from '@/modules/rosters/state/useRosterShifts';
+import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
 import type { RingColor } from '@/modules/rosters/domain/shift-ui';
 
@@ -70,7 +73,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
 } from '@/modules/core/ui/primitives/alert-dialog';
-import { S2ComplianceRerunModal } from '../dialogs/S2ComplianceRerunModal';
+import { executeAssignShift } from '@/modules/rosters/domain/commands/assignShift.command';
 
 // ─── Fixed layout constants ────────────────────────────────────────────────
 const START_HOUR    = 0;            // 00:00
@@ -283,8 +286,7 @@ const DayTimelineView: React.FC<DayTimelineViewProps> = ({
   onAddSubGroup, onSubGroupAction, onEmployeeDrop,
 }) => {
   const { toast } = useToast();
-  const updateShift = useUpdateShift();
-  const bulkUpdateTimes = useBulkUpdateShiftTimes();
+  const queryClient = useQueryClient();
   const bulkPublish = useBulkPublishShifts();
   const bulkDelete  = useBulkDeleteShifts();
   const bulkUnpublish = useBulkUnpublishShifts();
@@ -303,10 +305,8 @@ const DayTimelineView: React.FC<DayTimelineViewProps> = ({
 
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
-  const [pendingS2Compliance, setPendingS2Compliance] = useState<{
-    shift: DTShift;
-    newTimes: { start: string; end: string };
-  } | null>(null);
+  // S2ComplianceRerunModal removed — all timing changes now flow through
+  // executeAssignShift which runs the full V2 compliance engine.
 
   const handleExecuteBulkAction = async () => {
     if (!pendingBulkAction) return;
@@ -319,13 +319,30 @@ const DayTimelineView: React.FC<DayTimelineViewProps> = ({
       } else if (pendingBulkAction.type === 'delete') {
         await bulkDelete.mutateAsync(pendingBulkAction.shiftIds);
       } else if (pendingBulkAction.type === 'resize' && pendingBulkAction.newTimes) {
-        await bulkUpdateTimes.mutateAsync({
-          shiftIds: pendingBulkAction.shiftIds,
-          updates: {
-            start_time: pendingBulkAction.newTimes.start,
-            end_time: pendingBulkAction.newTimes.end
+        // Compliance-gated resize: route each shift through the domain command
+        // so that R02 (min duration) and R08 (meal break) are enforced.
+        let blocked = false;
+        for (const sid of pendingBulkAction.shiftIds) {
+          const result = await executeAssignShift({
+            shiftId: sid,
+            employeeId: undefined as any,   // preserve current assignment
+            targetStartTime: pendingBulkAction.newTimes.start,
+            targetEndTime:   pendingBulkAction.newTimes.end,
+          });
+          if (!result.success) {
+            toast({
+              title: 'Resize Blocked',
+              description: result.error ?? 'Compliance check failed for one or more shifts.',
+              variant: 'destructive',
+            });
+            blocked = true;
+            break;
           }
-        });
+        }
+        if (blocked) {
+          setPendingBulkAction(null);
+          return;
+        }
       }
       setPendingBulkAction(null);
     } catch (err) {
@@ -431,7 +448,7 @@ const DayTimelineView: React.FC<DayTimelineViewProps> = ({
     const ns = fromMins(snapTo(prev.previewS));
     const ne = fromMins(snapTo(prev.previewE));
 
-    // [New Validation] Prevent moving/resizing into the past
+    // [Validation] Prevent moving/resizing into the past
     const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
     const now = getSydneyNow();
     const newStartAt = parseZonedDateTime(selectedDateStr, ns, SYDNEY_TZ);
@@ -446,38 +463,67 @@ const DayTimelineView: React.FC<DayTimelineViewProps> = ({
     }
 
     if (ns !== fromMins(prev.origS) || ne !== fromMins(prev.origE)) {
+      if (!prev.shiftId) return;
+
+      // ── Optimistic update: patch the cache IMMEDIATELY so the UI
+      //    reflects the new position without waiting for the server. ──
+      const snapshot = snapshotLists(queryClient);
+      patchLists(queryClient, (old) =>
+        old.map(s =>
+          s.id === prev.shiftId
+            ? { ...s, start_time: ns, end_time: ne }
+            : s,
+        ),
+      );
+
       try {
-        if (prev.shiftId) {
-          // Find the shift object to check its state
-          const shiftObj = visualGroups
-            .flatMap(g => g.subGroups)
-            .flatMap(sg => sg.shifts[dateKey] ?? [])
-            .find(s => s.id === prev.shiftId);
+        // Unified compliance-gated path: ALL timing changes (move & resize)
+        // for both assigned and unassigned shifts flow through executeAssignShift.
+        // - Assigned shifts: full V2 compliance (all 12 rules incl. R01 overlap)
+        // - Unassigned shifts: skeleton compliance (R02 min duration, R08 meal break)
+        const result = await executeAssignShift({
+          shiftId: prev.shiftId,
+          employeeId: undefined as any,   // preserve current assignment
+          targetStartTime: ns,
+          targetEndTime:   ne,
+        });
 
-          const stateId = shiftObj ? determineShiftState(shiftObj.rawShift) : 'UNKNOWN';
+        if (!result.success) {
+          // ── Rollback: compliance rejected the move ──
+          rollbackLists(queryClient, snapshot);
+          toast({
+            title: 'Timing Change Blocked',
+            description: result.error ?? 'Compliance check failed.',
+            variant: 'destructive',
+          });
+          return;
+        }
 
-          if (stateId === 'S2' && shiftObj) {
-            // S2 Shift (Assigned) - Rerun compliance
-            setPendingS2Compliance({
-              shift: shiftObj,
-              newTimes: { start: ns, end: ne }
-            });
-          } else {
-            // Normal flow or bulk-style confirmation
-            setPendingBulkAction({
-              type: 'resize',
-              shiftIds: [prev.shiftId],
-              count: 1,
-              timeRange: `${fromMins(prev.origS)}–${fromMins(prev.origE)}`,
-              newTimes: { start: ns, end: ne }
-            });
-          }
+        // Surface advisory warnings (non-blocking)
+        if (result.advisories && result.advisories.length > 0) {
+          toast({
+            title: 'Shift Updated (with warnings)',
+            description: result.advisories[0],
+          });
         }
       } catch (err) {
+        // ── Rollback: network / unexpected error ──
+        rollbackLists(queryClient, snapshot);
         console.error('[DayTimeline] Time update failed', err);
+        toast({
+          title: 'Update Failed',
+          description: 'An unexpected error occurred.',
+          variant: 'destructive',
+        });
+      } finally {
+        // Always reconcile with the server to pick up any side-effects
+        queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+        if (prev.shiftId) {
+          queryClient.invalidateQueries({ queryKey: shiftKeys.detail(prev.shiftId) });
+        }
       }
     }
-  }, [drag, updateShift, bulkUpdateTimes]);
+  }, [drag, selectedDate, toast, visualGroups, dateKey, queryClient]);
 
   useEffect(() => {
     if (!drag) return;
@@ -904,30 +950,8 @@ const DayTimelineView: React.FC<DayTimelineViewProps> = ({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* S2 Compliance Rerun Modal */}
-      {pendingS2Compliance && (
-        <S2ComplianceRerunModal
-          isOpen={!!pendingS2Compliance}
-          onClose={() => setPendingS2Compliance(null)}
-          shift={pendingS2Compliance.shift}
-          newTimes={pendingS2Compliance.newTimes}
-          onConfirm={async () => {
-            const { shift, newTimes } = pendingS2Compliance;
-            setPendingS2Compliance(null);
-            try {
-              await updateShift.mutateAsync({
-                shiftId: shift.id,
-                updates: {
-                  start_time: newTimes.start,
-                  end_time: newTimes.end
-                }
-              });
-            } catch (err) {
-              console.error('[DayTimeline] S2 update failed', err);
-            }
-          }}
-        />
-      )}
+      {/* S2ComplianceRerunModal removed — timing changes now go through
+          executeAssignShift's compliance-gated pipeline (blocking toast UX) */}
     </div>
   );
 };

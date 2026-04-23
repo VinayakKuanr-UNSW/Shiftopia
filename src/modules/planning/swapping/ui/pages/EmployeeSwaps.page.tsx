@@ -47,6 +47,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { useToast } from '@/modules/core/hooks/use-toast';
+import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { useSwaps } from '../../state/useSwaps';
 import { ShiftSwap, swapsApi } from '../../api/swaps.api';
 import { format, differenceInMinutes, parse } from 'date-fns';
@@ -55,6 +56,7 @@ import { ViewOffersModal } from '../components/ViewOffersModal';
 import { UnifiedSwapModal } from '../components/UnifiedSwapModal';
 import { Drawer, DrawerContent, DrawerTitle, DrawerClose } from '@/modules/core/ui/primitives/drawer';
 import { useQuery } from '@tanstack/react-query';
+import { UnifiedModuleFunctionBar } from '@/modules/core/ui/components/UnifiedModuleFunctionBar';
 
 import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
@@ -218,24 +220,28 @@ export const PRIORITY_CONFIG: Record<SwapPriority, {
     badgeCls: string;
     icon: React.ElementType;
     chipActiveCls: string;
+    color: string;
 }> = {
     emergent: {
         label: 'Emergent',
         badgeCls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
         icon: Flame,
         chipActiveCls: 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400',
+        color: 'text-rose-500',
     },
     urgent: {
         label: 'Urgent',
         badgeCls: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
         icon: Zap,
         chipActiveCls: 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400',
+        color: 'text-amber-500',
     },
     normal: {
         label: 'Normal',
         badgeCls: 'bg-slate-500/10 text-muted-foreground border-slate-500/20',
         icon: Signal,
         chipActiveCls: 'bg-muted/40 border-border text-foreground',
+        color: 'text-slate-400',
     },
 };
 
@@ -300,6 +306,7 @@ const isSwapExpired = (now: Date, startAt?: string, shiftDate?: string, startTim
 export const EmployeeSwapsPage: React.FC = () => {
     const now = useMinuteTick();
     const { toast } = useToast();
+    const { isDark } = useTheme();
     // Personal scope filter
     const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
 
@@ -321,8 +328,8 @@ export const EmployeeSwapsPage: React.FC = () => {
         userId,
     } = useSwaps({
         organizationId: scope.org_ids[0],
-        departmentId: scope.dept_ids[0],
-        subDepartmentId: scope.subdept_ids[0]
+        departmentId: scope.dept_ids.length > 0 ? scope.dept_ids : null,
+        subDepartmentId: scope.subdept_ids.length > 0 ? scope.subdept_ids : null
     });
 
     // §2 Combined State helper — derive C1-C7 from swap status
@@ -343,6 +350,8 @@ export const EmployeeSwapsPage: React.FC = () => {
     const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [priorityFilter, setPriorityFilter] = useState<ShiftUrgency | 'all'>('all');
+    const [startDate, setStartDate] = useState<Date>(() => new Date());
+    const [endDate, setEndDate]     = useState<Date>(() => new Date());
 
     // Modal State
     const [offerSwapTarget, setOfferSwapTarget] = useState<ShiftSwap | null>(null);
@@ -405,23 +414,32 @@ export const EmployeeSwapsPage: React.FC = () => {
     //    Include: OPEN, MANAGER_PENDING, APPROVED, REJECTED, CANCELLED, EXPIRED
     //    Where I am the requester.
     const filteredMySwaps = React.useMemo(() => {
+        const startStr = format(startDate, 'yyyy-MM-dd');
+        const endStr = format(endDate, 'yyyy-MM-dd');
         return mySwapsSort.sortedData.filter((swap) => {
             // Only show swaps I created
             if (swap.requester_id !== userId) return false;
 
+            const shift = (swap as any).requester_shift;
+            
+            // Date filter
+            const shiftDateStr = shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'yyyy-MM-dd') : shift?.shift_date;
+            if (shiftDateStr && (shiftDateStr < startStr || shiftDateStr > endStr)) return false;
+
             // Priority filter
             if (priorityFilter !== 'all') {
-                const shift = (swap as any).requester_shift;
                 const p = getSwapPriority(now, shift?.shift_date, shift?.start_time, shift?.start_at, shift?.tz_identifier);
                 if (p !== priorityFilter) return false;
             }
 
             return true;
         });
-    }, [mySwapsSort.sortedData, userId, priorityFilter, now]);
+    }, [mySwapsSort.sortedData, userId, priorityFilter, now, startDate, endDate]);
 
     // 3. Filter available swaps — NO DUPLICATES with My Swap Offers
     const filteredAvailableSwaps = React.useMemo(() => {
+        const startStr = format(startDate, 'yyyy-MM-dd');
+        const endStr = format(endDate, 'yyyy-MM-dd');
         return availableSort.sortedData.filter((swap) => {
             // Exclude my own swaps (safety check)
             if (swap.requester_id === userId) return false;
@@ -430,26 +448,41 @@ export const EmployeeSwapsPage: React.FC = () => {
             // Exclude if I already offered on this swap
             if (myActiveOfferSwapIds.has(swap.id)) return false;
 
+            const shift = (swap as any).requester_shift;
+            
+            // Date filter
+            const shiftDateStr = shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'yyyy-MM-dd') : shift?.shift_date;
+            if (shiftDateStr && (shiftDateStr < startStr || shiftDateStr > endStr)) return false;
+
             // Priority filter
             if (priorityFilter !== 'all') {
-                const shift = (swap as any).requester_shift;
                 const p = getSwapPriority(now, shift?.shift_date, shift?.start_time, shift?.start_at, shift?.tz_identifier);
                 if (p !== priorityFilter) return false;
             }
 
             return true;
         });
-    }, [availableSort.sortedData, userId, myActiveOfferSwapIds, priorityFilter, now]);
+    }, [availableSort.sortedData, userId, myActiveOfferSwapIds, priorityFilter, now, startDate, endDate]);
 
     // 4. My Swap Offers — swaps where I offered (requester_id !== userId)
     const filteredMyOffers = React.useMemo(() => {
+        const startStr = format(startDate, 'yyyy-MM-dd');
+        const endStr = format(endDate, 'yyyy-MM-dd');
         return myOffersSort.sortedData.filter((swap) => {
             // Already filtered in myOffersSort for requester_id !== userId
             // But double check my offer exists
             const myOffer = ((swap as any).swap_offers || []).find((o: any) => o.offerer_id === userId || o.offerer?.id === userId);
-            return !!myOffer;
+            if (!myOffer) return false;
+            
+            const shift = (swap as any).requester_shift;
+            
+            // Date filter
+            const shiftDateStr = shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'yyyy-MM-dd') : shift?.shift_date;
+            if (shiftDateStr && (shiftDateStr < startStr || shiftDateStr > endStr)) return false;
+            
+            return true;
         });
-    }, [myOffersSort.sortedData, userId]);
+    }, [myOffersSort.sortedData, userId, startDate, endDate]);
 
 
     // ========================================================================
@@ -873,119 +906,131 @@ export const EmployeeSwapsPage: React.FC = () => {
     };
 
     return (
-        <motion.div className="w-full text-foreground pb-24 md:pb-0" variants={pageVariants} initial="hidden" animate="show">
+        <motion.div 
+            className="h-full flex flex-col w-full text-foreground overflow-hidden" 
+            variants={pageVariants} 
+            initial="hidden" 
+            animate="show"
+        >
 
 
             {/* Scope Filter */}
-            <div className="px-4 pt-6">
-                <PersonalPageHeader
-                    title="My Swaps"
-                    Icon={ArrowLeftRight}
-                    scope={scope}
-                    setScope={setScope}
-                    isGammaLocked={isGammaLocked}
-                />
-            </div>
+            <div className="sticky top-0 z-30 -mx-4 px-4 md:-mx-8 md:px-8 pt-4 pb-4 lg:pb-6">
+                <div className={cn(
+                    "rounded-[32px] p-4 lg:p-6 transition-all border",
+                    isDark 
+                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                )}>
+                    {/* Row 1: Page Header (Title + Clock) */}
+                    <PersonalPageHeader
+                        title="My Swaps"
+                        Icon={ArrowLeftRight}
+                        scope={scope}
+                        setScope={setScope}
+                        isGammaLocked={isGammaLocked}
+                        className="mb-4 lg:mb-6"
+                    />
 
-            {/* ═══════════════════════════════════════════════════════════════
-                STICKY HEADER — 2 rows: title+actions | tab navigation
-            ═══════════════════════════════════════════════════════════════ */}
-            <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border/40 -mx-4 px-4 md:-mx-8 md:px-8 mb-5">
-
-                {/* ── Row 1: Title + active count + priority toggles + view/refresh ── */}
-                <div className="flex items-center gap-2 pt-2.5 pb-2">
-
-                    {/* Left: icon + title + active count */}
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <ArrowLeftRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
-                        <span className="text-sm font-black text-foreground tracking-tight leading-none">Swaps</span>
-                        <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-primary/10 text-primary text-[10px] font-black leading-none tabular-nums">
-                            {activeTab === 'available-swaps' ? filteredAvailableSwaps.length
-                             : activeTab === 'my-offers' ? filteredMyOffers.length
-                             : filteredMySwaps.length}
-                        </span>
-                        {(isLoading || isRefreshing) && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/40 shrink-0" />}
-                    </div>
-
-                    {/* Priority toggles — icon always, label on sm+ */}
-                    <div className="flex items-center gap-1">
-                        {(['normal', 'urgent', 'emergent'] as const).map(p => {
-                            const conf = PRIORITY_CONFIG[p];
-                            const active = priorityFilter === p;
-                            return (
-                                <motion.button
-                                    key={p}
-                                    onClick={() => setPriorityFilter(active ? 'all' : p)}
-                                    whileTap={{ scale: 0.88 }}
+                    {/* Row 2: Unified Function Bar */}
+                    <UnifiedModuleFunctionBar
+                        leftContent={
+                            <div className={cn(
+                                "flex items-center gap-1 p-1 rounded-xl",
+                                isDark ? "bg-[#111827]/60" : "bg-slate-200/50"
+                            )}>
+                                {([
+                                    { id: 'available-swaps' as TabType, label: 'Available',  mobileLabel: 'Available', count: filteredAvailableSwaps.length },
+                                    { id: 'my-offers'       as TabType, label: 'My Offers',  mobileLabel: 'Offers',    count: filteredMyOffers.length },
+                                    { id: 'my-swaps'        as TabType, label: 'My Swaps',   mobileLabel: 'Mine',      count: filteredMySwaps.length },
+                                ] as const).map(tab => {
+                                    const isActive = activeTab === tab.id;
+                                    return (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => setActiveTab(tab.id)}
+                                            className={cn(
+                                                'flex items-center gap-1.5 px-3 h-9 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all',
+                                                isActive
+                                                    ? 'bg-[#7b61ff] text-white shadow-sm'
+                                                    : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-slate-900/5')
+                                            )}
+                                        >
+                                            <span className="hidden sm:inline">{tab.label}</span>
+                                            <span className="sm:hidden">{tab.mobileLabel}</span>
+                                            <span className={cn(
+                                                "inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[9px] font-black tabular-nums",
+                                                isActive 
+                                                    ? "bg-white/20 text-white" 
+                                                    : (isDark ? "bg-white/5 text-white/40" : "bg-slate-900/5 text-slate-900/40")
+                                            )}>
+                                                {tab.count}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        }
+                        startDate={startDate}
+                        endDate={endDate}
+                        onDateChange={(start, end) => {
+                            setStartDate(start);
+                            setEndDate(end);
+                        }}
+                        viewMode={viewMode}
+                        onViewModeChange={setViewMode}
+                        onRefresh={handleRefresh}
+                        isLoading={isLoading || isRefreshing}
+                        className="bg-transparent border-none p-0 shadow-none"
+                        filters={
+                            <div className={cn(
+                                "flex items-center gap-1 p-1 h-9 rounded-lg",
+                                isDark ? "bg-[#111827]/60" : "bg-slate-200/50"
+                            )}>
+                                <button
+                                    onClick={() => setPriorityFilter('all')}
                                     className={cn(
-                                        'flex items-center gap-1 px-2.5 h-8 rounded-full border text-[10px] font-black uppercase tracking-wider transition-all',
-                                        active ? conf.chipActiveCls : 'border-border/30 text-muted-foreground/50 hover:bg-muted/30 hover:text-foreground'
+                                        'px-3 h-7 rounded-md text-[10px] font-black uppercase tracking-wider transition-all',
+                                        priorityFilter === 'all' 
+                                             ? (isDark ? 'bg-white/20 text-white' : 'bg-slate-900 text-white shadow-sm') 
+                                             : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-slate-900/5')
                                     )}
                                 >
-                                    <conf.icon className="h-3 w-3" />
-                                    <span className="hidden sm:inline">{conf.label}</span>
-                                </motion.button>
-                            );
-                        })}
-                    </div>
-
-                    {/* View toggle + Refresh */}
-                    <div className="flex items-center gap-1 pl-2 border-l border-border/30">
-                        <button
-                            onClick={() => setViewMode(v => v === 'card' ? 'table' : 'card')}
-                            className="h-8 w-8 flex items-center justify-center rounded-lg border border-border/30 text-muted-foreground/50 hover:bg-muted/30 hover:text-foreground transition-colors"
-                            title={viewMode === 'card' ? 'Table view' : 'Card view'}
-                        >
-                            {viewMode === 'card'
-                                ? <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none"><rect x="0.5" y="0.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2"/><rect x="8" y="0.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2"/><rect x="0.5" y="8" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2"/><rect x="8" y="8" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.2"/></svg>
-                                : <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none"><rect x="0.5" y="1.5" width="13" height="1.5" rx="0.75" fill="currentColor"/><rect x="0.5" y="6" width="13" height="1.5" rx="0.75" fill="currentColor"/><rect x="0.5" y="10.5" width="13" height="1.5" rx="0.75" fill="currentColor"/></svg>
-                            }
-                        </button>
-                        <button
-                            onClick={handleRefresh}
-                            className="h-8 w-8 flex items-center justify-center rounded-lg border border-border/30 text-muted-foreground/50 hover:bg-muted/30 hover:text-foreground transition-colors"
-                            title="Refresh"
-                        >
-                            <svg className="h-3.5 w-3.5" viewBox="0 0 14 14" fill="none"><path d="M13 2.5C11.6 1 9.9 0 8 0 4.1 0 1 3.1 1 7s3.1 7 7 7c3.3 0 6-2.1 6.9-5H13c-.9 2.3-3.1 4-5.5 4-3.3 0-6-2.7-6-6s2.7-6 6-6c1.7 0 3.1.7 4.2 1.8L9 5h5V0l-1 2.5z" fill="currentColor"/></svg>
-                        </button>
-                    </div>
-                </div>
-
-                {/* ── Row 2: Tab navigation — full-width underline style ── */}
-                <div className="flex -mb-px">
-                    {([
-                        { id: 'available-swaps' as TabType, label: 'Available',  mobileLabel: 'Available', count: filteredAvailableSwaps.length },
-                        { id: 'my-offers'       as TabType, label: 'My Offers',  mobileLabel: 'Offers',    count: filteredMyOffers.length },
-                        { id: 'my-swaps'        as TabType, label: 'My Swaps',   mobileLabel: 'Mine',      count: filteredMySwaps.length },
-                    ] as const).map(tab => {
-                        const isActive = activeTab === tab.id;
-                        return (
-                            <motion.button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                whileTap={{ scale: 0.97 }}
-                                className={cn(
-                                    'flex-1 flex items-center justify-center gap-1.5 py-2.5 min-h-[44px] text-[11px] font-bold uppercase tracking-wide border-b-2 transition-all',
-                                    isActive
-                                        ? 'border-primary text-foreground'
-                                        : 'border-transparent text-muted-foreground/60 hover:text-foreground hover:border-border'
-                                )}
-                            >
-                                <span className="hidden sm:inline">{tab.label}</span>
-                                <span className="sm:hidden">{tab.mobileLabel}</span>
-                                <span className={cn(
-                                    'inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[9px] font-black leading-none tabular-nums transition-all',
-                                    isActive ? 'bg-primary/10 text-primary' : 'bg-muted/50 text-muted-foreground/50'
-                                )}>
-                                    {tab.count}
-                                </span>
-                            </motion.button>
-                        );
-                    })}
+                                    All
+                                </button>
+                                {(['normal', 'urgent', 'emergent'] as const).map(p => {
+                                    const conf = PRIORITY_CONFIG[p];
+                                    const active = priorityFilter === p;
+                                    return (
+                                        <button
+                                            key={p}
+                                            onClick={() => setPriorityFilter(p)}
+                                            className={cn(
+                                                'flex items-center gap-1.5 px-2 lg:px-2.5 h-7 rounded-md text-[10px] font-black uppercase tracking-wider transition-all',
+                                                active 
+                                                     ? (isDark ? 'bg-white/20 text-white' : 'bg-slate-900 text-white shadow-sm') 
+                                                     : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-slate-900/5')
+                                            )}
+                                        >
+                                            <conf.icon className="w-3 h-3 lg:hidden" />
+                                            <div className={cn("hidden lg:block w-1.5 h-1.5 rounded-full", conf.color.replace('text-', 'bg-'))} />
+                                            <span className="hidden sm:inline">{conf.label}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        }
+                    />
                 </div>
             </div>
 
-            {/* Content */}
+            <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+                <div className={cn(
+                    "h-full rounded-[32px] transition-all border flex flex-col overflow-hidden",
+                    isDark 
+                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                )}>
             {isLoading ? (
                 <div className="flex items-center justify-center py-16">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
@@ -993,10 +1038,11 @@ export const EmployeeSwapsPage: React.FC = () => {
                 </div>
             ) : activeTab === 'available-swaps' ? (
                 viewMode === 'card' ? (
+                <div className="flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none">
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={`available-${priorityFilter}`}
-                            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+                            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6"
                             variants={pageVariants}
                             initial="hidden"
                             animate="show"
@@ -1021,8 +1067,10 @@ export const EmployeeSwapsPage: React.FC = () => {
                             )}
                         </motion.div>
                     </AnimatePresence>
+                </div>
                 ) : (
                     <>
+                    <div className="flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none">
                         {/* Mobile: list */}
                         <AnimatePresence mode="wait">
                             <motion.div
@@ -1107,6 +1155,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                                 </tbody>
                             </table>
                         </div>
+                    </div>
                     </>
                 )
             ) : activeTab === 'my-offers' ? (
@@ -1360,6 +1409,8 @@ export const EmployeeSwapsPage: React.FC = () => {
                     </>
                 )
             )}
+                </div>
+            </div>
 
             {/* Modals */}
             <UnifiedSwapModal

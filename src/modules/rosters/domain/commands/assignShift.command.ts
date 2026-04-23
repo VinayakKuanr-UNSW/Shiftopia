@@ -1,28 +1,23 @@
 /**
- * Assign Shift Command
+ * Assign / Persist Shift Command
  *
- * Domain layer — assigns / unassigns an employee to a shift.
+ * Domain layer — the single, fail-closed entry point for ALL shift mutations
+ * that require compliance validation:
+ *   - Assigning / unassigning an employee
+ *   - Moving a shift to a different date (DnD cross-column)
+ *   - Changing a shift's start/end times (Day Mode resize / drag)
  *
  * Compliance model (V2 — full rule coverage):
  *   ALL 12 compliance rules are evaluated via the V2 engine before the RPC write.
- *   This replaces the previous availability-only pre-check.
  *
- *   Rules enforced (stage: 'PUBLISH'):
- *     R01 — No overlapping shifts                  (BLOCKING, all contexts)
- *     R02 — Minimum shift length                   (BLOCKING, all contexts)
- *     R03 — Maximum daily hours (12h)              (BLOCKING, all contexts)
- *     R04 — Max working days in 28-day window      (BLOCKING, all contexts)
- *     R05 — Student visa 48h/fortnight             (BLOCKING when contract = STUDENT_VISA)
- *     R06 — Ordinary hours averaging               (BLOCKING when applicable)
- *     R07 — Minimum rest gap between shifts        (BLOCKING, all contexts)
- *     R09 — Maximum consecutive working days       (BLOCKING, all contexts)
- *     R10 — Role/contract match                    (BLOCKING, all contexts)
- *     R11 — Required qualifications held           (BLOCKING, all contexts)
- *     R12 — Qualifications not expired             (BLOCKING, all contexts)
- *     R_AVAIL — Availability match                 (BLOCKING for MANUAL/AUTO; advisory for BID/TRADE)
+ *   For ASSIGNED shifts:
+ *     R01–R11 + R_AVAIL — full employee-centric evaluation.
+ *
+ *   For UNASSIGNED shifts (skeleton mode):
+ *     R01 (No overlap), R02 (Minimum shift length), R08 (Meal break) — shift-level only.
  *
  *   Fail-closed: if the compliance engine cannot run (DB/network error),
- *   the assignment is BLOCKED — never silently allowed.
+ *   the mutation is BLOCKED — never silently allowed.
  */
 
 import { supabase }                      from '@/platform/realtime/client';
@@ -47,6 +42,12 @@ export interface AssignShiftInput {
     employeeId: string | null;
     /** Assignment context — controls availability enforcement. Default: 'MANUAL' */
     context?:  AssignmentContext;
+    /** Output date to move the shift to. If provided, shift_date is updated. */
+    targetDate?: string;
+    /** New start time (HH:mm). If provided, start_time is updated. */
+    targetStartTime?: string;
+    /** New end time (HH:mm). If provided, end_time is updated. */
+    targetEndTime?: string;
     /** If true, availability warnings (Bucket B) will NOT block the assignment */
     ignoreWarnings?: boolean;
 }
@@ -81,6 +82,7 @@ async function runFullCompliancePreCheck(
         unpaid_break_minutes: number | null;
         required_skills:      string[] | null;
         required_licenses:    string[] | null;
+        is_training?:         boolean;
     },
     context:        AssignmentContext,
     ignoreWarnings: boolean,
@@ -106,6 +108,7 @@ async function runFullCompliancePreCheck(
             ...(shift.required_licenses ?? []),
         ],
         is_ordinary_hours:    true,
+        is_training:          shift.is_training ?? false,
         break_minutes:        shift.unpaid_break_minutes ?? 0,
         unpaid_break_minutes: shift.unpaid_break_minutes ?? 0,
     };
@@ -162,9 +165,8 @@ async function runFullCompliancePreCheck(
                 ? 'Employee already has an assigned shift during this time.'
                 : 'Employee has not declared availability for this shift time.';
 
-        // LOCKED (FAIL) blocks all contexts; WARN (Bucket B) blocks only MANUAL/AUTO
-        // If ignoreWarnings is true, we allow availability warnings (Bucket B) to pass.
-        if (avMatch.status === 'FAIL' || (enforce && !ignoreWarnings)) {
+        // LOCKED (FAIL) blocks all contexts; WARN (Bucket B) is now always advisory
+        if (avMatch.status === 'FAIL') {
             return { error: label, advisories: [] };
         }
         advisories.push(label);
@@ -181,19 +183,88 @@ async function runFullCompliancePreCheck(
 }
 
 // =============================================================================
+// SKELETON COMPLIANCE PRE-CHECK  (unassigned shifts — shift-level rules only)
+// =============================================================================
+
+/**
+ * Run shift-level compliance rules (R01, R02, R08) for unassigned shifts.
+ * No employee context is needed — this validates the shift structure itself.
+ */
+function runSkeletonComplianceCheck(
+    shift: {
+        id:                   string;
+        shift_date:           string;
+        start_time:           string;
+        end_time:             string;
+        role_id:              string | null;
+        unpaid_break_minutes: number | null;
+        is_training?:         boolean;
+    },
+): { error: string | null; advisories: string[] } {
+    const candidateShift: ShiftV2 = {
+        shift_id:                shift.id,
+        shift_date:              shift.shift_date,
+        start_time:              shift.start_time,
+        end_time:                shift.end_time,
+        role_id:                 shift.role_id ?? '',
+        required_qualifications: [],
+        is_ordinary_hours:       true,
+        is_training:             shift.is_training ?? false,
+        break_minutes:           shift.unpaid_break_minutes ?? 0,
+        unpaid_break_minutes:    shift.unpaid_break_minutes ?? 0,
+    };
+
+    // Skeleton mode: employee_id = 'skeleton' triggers the engine to
+    // only run R01 (overlap), R02 (min duration), R08 (meal break).
+    const result = evaluateCompliance(
+        {
+            employee_id: 'skeleton',
+            employee_context: {
+                employee_id:             'skeleton',
+                contract_type:           'CASUAL',
+                contracted_weekly_hours: 0,
+                assigned_role_ids:       [],
+                contracts:               [],
+                qualifications:          [],
+            },
+            existing_shifts:   [],
+            candidate_changes: {
+                add_shifts:    [candidateShift],
+                remove_shifts: [],
+            },
+            mode:           'SIMULATED',
+            operation_type: 'ASSIGN',
+            stage:          'DRAFT',
+        },
+    ) as ComplianceResultV2;
+
+    const blockingHits = result.rule_hits.filter(h => h.severity === 'BLOCKING');
+    if (blockingHits.length > 0) {
+        return { error: blockingHits[0].message, advisories: [] };
+    }
+
+    const advisories = result.rule_hits
+        .filter(h => h.severity === 'WARNING')
+        .map(h => h.message);
+
+    return { error: null, advisories };
+}
+
+// =============================================================================
 // MAIN COMMAND
 // =============================================================================
 
 /**
- * Execute assign shift command.
+ * Execute assign/persist shift command.
  *
- * Runs full V2 compliance (all 12 rules) before the DB write.
- * FAIL-CLOSED: any exception during compliance checks blocks the assignment.
+ * Runs full V2 compliance (all 12 rules) before the DB write for assigned shifts.
+ * Runs skeleton compliance (R01, R02, R08) for unassigned shifts when times change.
+ * FAIL-CLOSED: any exception during compliance checks blocks the mutation.
  */
 export async function executeAssignShift(
     input: AssignShiftInput,
 ): Promise<AssignShiftOutput> {
-    const { shiftId, employeeId, context = 'MANUAL' } = input;
+    const { shiftId, employeeId, context = 'MANUAL', targetDate, targetStartTime, targetEndTime } = input;
 
     if (!shiftId) {
         return { success: false, error: 'Shift ID is required' };
@@ -216,7 +287,9 @@ export async function executeAssignShift(
                 role_id,
                 unpaid_break_minutes,
                 required_skills,
-                required_licenses
+                required_licenses,
+                assigned_employee_id,
+                is_training
             `)
             .eq('id', shiftId)
             .single();
@@ -243,17 +316,36 @@ export async function executeAssignShift(
             }
         }
 
-        // 2. Full V2 compliance pre-check (all rules) when assigning
-        //    For unassignment (employeeId = null) no compliance check is needed.
+        // Build the "effective" shift with any target overrides applied
+        const effectiveShift = {
+            ...shift,
+            shift_date: targetDate ?? (shift as any).shift_date,
+            start_time: targetStartTime ?? (shift as any).start_time,
+            end_time:   targetEndTime ?? (shift as any).end_time,
+        };
+
+        // 2. Compliance pre-check
         let advisories: string[] = [];
-        if (employeeId) {
-            // FAIL-CLOSED: runFullCompliancePreCheck never catches exceptions.
-            // If it throws, the outer catch returns a blocking error.
+
+        // Determine who the effective employee is for compliance
+        const effectiveEmployeeId = employeeId ?? (shift as any).assigned_employee_id;
+
+        if (effectiveEmployeeId) {
+            // ASSIGNED shift — run full V2 compliance (all 12 rules)
             const check = await runFullCompliancePreCheck(
-                employeeId,
-                shift as Parameters<typeof runFullCompliancePreCheck>[1],
+                effectiveEmployeeId,
+                effectiveShift as Parameters<typeof runFullCompliancePreCheck>[1],
                 context,
                 input.ignoreWarnings ?? false,
+            );
+            if (check.error) {
+                return { success: false, error: check.error };
+            }
+            advisories = check.advisories;
+        } else if (targetStartTime || targetEndTime) {
+            // UNASSIGNED shift with time changes — run skeleton compliance (R02, R08)
+            const check = runSkeletonComplianceCheck(
+                effectiveShift as Parameters<typeof runSkeletonComplianceCheck>[0],
             );
             if (check.error) {
                 return { success: false, error: check.error };
@@ -264,13 +356,43 @@ export async function executeAssignShift(
         // 3. Execute DB write via FSM RPCs.
         const userId = (await supabase.auth.getUser()).data.user?.id;
 
-        if (!employeeId) {
-            // Unassign — delegate entirely to sm_unassign_shift RPC (handles bidding_status reset,
+        if (employeeId === null && !targetDate && !targetStartTime && !targetEndTime) {
+            // Pure unassign — delegate entirely to sm_unassign_shift RPC (handles bidding_status reset,
             // and FOR UPDATE lock to prevent TOCTOU races).
             const { data: rpcResult, error: rpcError } = await (supabase as any)
                 .rpc('sm_unassign_shift', { p_shift_id: shiftId, p_user_id: userId ?? null });
             if (rpcError) return { success: false, error: rpcError.message };
             if (rpcResult && rpcResult.success === false) return { success: false, error: rpcResult.error };
+            return { success: true, advisories };
+        }
+
+        // Build the update payload for metadata changes (date, times)
+        const metadataPayload: any = {};
+        if (targetDate && targetDate !== (shift as any).shift_date) {
+            metadataPayload.shift_date = targetDate;
+        }
+        if (targetStartTime && targetStartTime !== (shift as any).start_time) {
+            metadataPayload.start_time = targetStartTime;
+        }
+        if (targetEndTime && targetEndTime !== (shift as any).end_time) {
+            metadataPayload.end_time = targetEndTime;
+        }
+
+        // If no employee change but we have metadata changes → pure timing/date update
+        if (employeeId === undefined || employeeId === (shift as any).assigned_employee_id) {
+            if (Object.keys(metadataPayload).length > 0) {
+                metadataPayload.updated_at = new Date().toISOString();
+                metadataPayload.last_modified_by = userId;
+
+                const { error: updateError } = await supabase
+                    .from('shifts')
+                    .update(metadataPayload)
+                    .eq('id', shiftId);
+
+                if (updateError) {
+                    return { success: false, error: updateError.message };
+                }
+            }
             return { success: true, advisories };
         }
 
@@ -281,6 +403,17 @@ export async function executeAssignShift(
         const lifecycleStatus = (shift as any).lifecycle_status;
 
         if (lifecycleStatus === 'Published') {
+            // Apply metadata updates first (date/time changes)
+            if (Object.keys(metadataPayload).length > 0) {
+                metadataPayload.updated_at = new Date().toISOString();
+                metadataPayload.last_modified_by = userId;
+                const { error: dateUpdateError } = await supabase
+                    .from('shifts')
+                    .update(metadataPayload)
+                    .eq('id', shiftId);
+                if (dateUpdateError) return { success: false, error: dateUpdateError.message };
+            }
+
             const { data: rpcResult, error: rpcError } = await (supabase as any)
                 .rpc('sm_emergency_assign', {
                     p_shift_id:    shiftId,
@@ -294,16 +427,22 @@ export async function executeAssignShift(
         }
 
         // Draft shift — direct UPDATE (S1→S2)
+        const updatePayload: any = {
+            ...metadataPayload,
+            updated_at:           new Date().toISOString(),
+            last_modified_by:     userId,
+        };
+
+        if (employeeId) {
+            updatePayload.assigned_employee_id = employeeId;
+            updatePayload.assigned_at = new Date().toISOString();
+            updatePayload.assignment_status = 'assigned';
+            updatePayload.assignment_source = 'manual';
+        }
+
         const { error: updateError } = await supabase
             .from('shifts')
-            .update({
-                assigned_employee_id: employeeId,
-                assigned_at:          new Date().toISOString(),
-                assignment_status:    'assigned',
-                assignment_source:    'manual',
-                last_modified_by:     userId,
-                updated_at:           new Date().toISOString(),
-            })
+            .update(updatePayload)
             .eq('id', shiftId);
 
         if (updateError) {

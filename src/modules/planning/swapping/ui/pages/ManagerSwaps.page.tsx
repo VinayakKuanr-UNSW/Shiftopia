@@ -18,9 +18,10 @@ import { SwapRequestWithDetails, SwapStatus } from '../../model/swap.types';
 import { SwapPriority, PRIORITY_CONFIG } from './EmployeeSwaps.page';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
-import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { SharedShiftCard } from '../../../../planning/ui/components/SharedShiftCard';
+import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { useTheme } from '@/modules/core/contexts/ThemeContext';
 
 /* ============================================================
    DESIGN TOKENS (Deprecated hex scales, using theme-aware variables)
@@ -501,6 +502,7 @@ export const ManagerSwapsPage: React.FC = () => {
     const isMobile = useIsMobile();
     const orgSelection = useOrgSelection();
     const { scope, setScope, scopeKey, isGammaLocked } = useScopeFilter('managerial');
+    const { isDark } = useTheme();
 
     const currentOrgId = scope.org_ids[0] || orgSelection.organizationId;
     const currentDeptId = scope.dept_ids.length === 1 ? scope.dept_ids[0] : undefined;
@@ -512,6 +514,7 @@ export const ManagerSwapsPage: React.FC = () => {
     const [actionConfirm, setActionConfirm] = useState<{
         ids: string[];
         status: 'approved' | 'rejected';
+        reason?: string;
     } | null>(null);
     // Single-item compliance approval modal (replaces simple confirm for single approvals)
     const [complianceApprovalTarget, setComplianceApprovalTarget] = useState<SwapRequestManagement | null>(null);
@@ -597,7 +600,7 @@ export const ManagerSwapsPage: React.FC = () => {
             if (status === 'approved') {
                 await Promise.all(ids.map(id => swapsApi.approveSwapRequest(id)));
             } else {
-                await Promise.all(ids.map(id => swapsApi.rejectSwapRequest(id, 'Manager Action')));
+                await Promise.all(ids.map(id => swapsApi.rejectSwapRequest(id, actionConfirm.reason || 'Manager Action')));
             }
             toast({ title: 'Success', description: `Request(s) ${status} successfully` });
             fetchData();
@@ -631,87 +634,92 @@ export const ManagerSwapsPage: React.FC = () => {
 
     // ==================== RENDER ====================
     return (
-        <div className="flex flex-col h-full min-h-screen bg-background pb-24 md:pb-0">
+        <div className="h-full flex flex-col overflow-hidden">
             {/* Ambient glow */}
             <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/[0.05] blur-[150px] rounded-full pointer-events-none" />
 
-            {/* ── HEADER ── */}
-            <div className="sticky top-0 z-50 backdrop-blur-xl border-b border-border bg-card/80">
-                <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-5">
-                    {/* Scope Filter */}
-                    <ScopeFilterBanner
-                        mode="managerial"
-                        onScopeChange={setScope}
-                        hidden={isGammaLocked}
-                        multiSelect={false}
-                        className="mb-5"
+            {/* ── Unified Header ────────────────────────────────────────────── */}
+            <div className="sticky top-0 z-30 -mx-4 px-4 md:-mx-8 md:px-8 pt-4 pb-4 lg:pb-6">
+                <div className={cn(
+                    "rounded-[32px] p-4 lg:p-6 transition-all border",
+                    isDark 
+                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                )}>
+                    {/* Row 1: Identity & Clock + Row 2: Scope Filter */}
+                    <PersonalPageHeader
+                        title="Swap Requests"
+                        Icon={ArrowLeftRight}
+                        scope={scope}
+                        setScope={setScope}
+                        isGammaLocked={isGammaLocked}
                     />
 
-                    {/* Title + Status Tabs */}
-                    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-                        <div>
-                            <h1 className="text-2xl font-black text-foreground tracking-tight leading-none mb-1">
-                                Swap Requests
-                            </h1>
-                            <p className="text-[11px] font-mono text-muted-foreground/60 uppercase tracking-[0.2em] font-black">
-                                Manager Review Console
-                            </p>
-                        </div>
-
-                        {/* Status Tabs */}
+                    {/* Row 3: Function Bar / Status Tabs */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4 lg:mt-6">
                         <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
-                        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/30 border border-border flex-nowrap min-w-max md:min-w-0">
-                            {STATUS_TABS.map(tab => {
-                                const isActive = statusFilter === tab.id;
-                                const colors = accentMap[tab.accent];
-                                const TabIcon = tab.icon;
-                                return (
-                                    <button
-                                        key={tab.id}
-                                        onClick={() => setStatusFilter(tab.id as any)}
-                                        className={cn(
-                                            "relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-black transition-all duration-300",
-                                            isActive
-                                                ? `${colors.bg} ${colors.text} shadow-sm`
-                                                : "text-muted-foreground/50 hover:text-foreground hover:bg-muted/50"
-                                        )}
-                                    >
-                                        <TabIcon className="h-3.5 w-3.5" />
-                                        <span className="hidden sm:inline">{tab.label}</span>
-                                        <span className={cn(
-                                            "min-w-[18px] h-[18px] rounded-full text-[9px] font-black flex items-center justify-center px-1",
-                                            isActive ? `${colors.bg} ${colors.text} ring-1 ${colors.ring}` : "bg-muted text-muted-foreground/40"
-                                        )}>
-                                            {statusCounts[tab.id] || 0}
-                                        </span>
-                                        {isActive && (
-                                            <motion.div
-                                                layoutId="activeSwapTab"
-                                                className={`absolute inset-0 rounded-xl ring-1 ${colors.ring}`}
-                                                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                                            />
-                                        )}
-                                    </button>
-                                );
-                            })}
+                            <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/30 border border-border flex-nowrap min-w-max md:min-w-0">
+                                {STATUS_TABS.map(tab => {
+                                    const isActive = statusFilter === tab.id;
+                                    const colors = accentMap[tab.accent];
+                                    const TabIcon = tab.icon;
+                                    return (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => setStatusFilter(tab.id as any)}
+                                            className={cn(
+                                                "relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-black transition-all duration-300",
+                                                isActive
+                                                    ? `${colors.bg} ${colors.text} shadow-sm`
+                                                    : "text-muted-foreground/50 hover:text-foreground hover:bg-muted/50"
+                                            )}
+                                        >
+                                            <TabIcon className="h-3.5 w-3.5" />
+                                            <span className="hidden sm:inline">{tab.label}</span>
+                                            <span className={cn(
+                                                "min-w-[18px] h-[18px] rounded-full text-[9px] font-black flex items-center justify-center px-1",
+                                                isActive ? `${colors.bg} ${colors.text} ring-1 ${colors.ring}` : "bg-muted text-muted-foreground/40"
+                                            )}>
+                                                {statusCounts[tab.id] || 0}
+                                            </span>
+                                            {isActive && (
+                                                <motion.div
+                                                    layoutId="activeSwapTab"
+                                                    className={`absolute inset-0 rounded-xl ring-1 ${colors.ring}`}
+                                                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                                                />
+                                            )}
+                                        </button>
+                                    );
+                                })}
 
-                            {/* Refresh */}
-                            <button
-                                onClick={fetchData}
-                                className="ml-1 h-8 w-8 rounded-xl flex items-center justify-center text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-all border border-transparent hover:border-primary/20"
-                                title="Refresh"
-                            >
-                                <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
-                            </button>
+                                {/* Refresh */}
+                                <button
+                                    onClick={fetchData}
+                                    className="ml-1 h-8 w-8 rounded-xl flex items-center justify-center text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-all border border-transparent hover:border-primary/20"
+                                    title="Refresh"
+                                >
+                                    <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+                                </button>
+                            </div>
                         </div>
+
+                        <div className="hidden lg:block text-[10px] font-mono text-muted-foreground/40 uppercase tracking-[0.2em] font-black">
+                            Manager Review Console
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* ── CONTENT ── */}
-            <div className="flex-1 overflow-y-auto">
-                <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-6">
+            {/* ── Main Content Area ─────────────────────────── */}
+            <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+                <div className={cn(
+                    "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col",
+                    isDark 
+                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                )}>
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6">
                     {isLoading ? (
                         <div className="flex flex-col items-center justify-center py-32 gap-4">
                             <div className="h-10 w-10 rounded-full border-2 border-border border-t-indigo-500 animate-spin" />
@@ -877,6 +885,7 @@ export const ManagerSwapsPage: React.FC = () => {
                     )}
                 </div>
             </div>
+        </div>
 
             {/* ── BULK ACTION BAR ── */}
             <AnimatePresence>
@@ -946,10 +955,10 @@ export const ManagerSwapsPage: React.FC = () => {
                             }
                             setSelectedIds(new Set());
                         }}
-                        onReject={() => {
+                        onReject={(reason?: string) => {
                             const id = complianceApprovalTarget.id;
                             setComplianceApprovalTarget(null);
-                            setActionConfirm({ ids: [id], status: 'rejected' });
+                            setActionConfirm({ ids: [id], status: 'rejected', reason });
                         }}
                         swapId={complianceApprovalTarget.id}
                         requesterEmployeeId={complianceApprovalTarget.requesterEmployeeId}

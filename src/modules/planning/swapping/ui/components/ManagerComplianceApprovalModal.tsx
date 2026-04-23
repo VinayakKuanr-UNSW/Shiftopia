@@ -1,21 +1,3 @@
-/**
- * ManagerComplianceApprovalModal
- *
- * Opens when a manager clicks "Approve" on a single MANAGER_PENDING swap.
- * Runs the v2 compliance engine (evaluateCompliance) against both parties'
- * CURRENT rosters — catching any schedule drift since the original offer
- * was accepted.
- *
- * Flow:
- *   1. Manager clicks "Run Compliance" (no auto-run on open)
- *   2. Fetch both shifts from DB
- *   3. Fetch both rosters (±28 days)
- *   4. Build v2 ComplianceInputV2 for each party
- *   5. useCompliancePanel evaluates both and classifies hits into A/B/C/D buckets
- *   6. CompliancePanel renders results — deterministic and explainable
- *   7. Block approval if panel.canProceed is false
- */
-
 import { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
@@ -27,13 +9,15 @@ import {
     Gavel,
     X,
     Check,
+    Play,
+    MessageSquareX
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { supabase } from '@/platform/realtime/client';
 import { getScenarioWindow } from '@/modules/compliance';
 import { fetchEmployeeContextV2 } from '@/modules/compliance/employee-context';
 import type { ComplianceInputV2, ShiftV2 } from '@/modules/compliance/v2/types';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Drawer, DrawerContent } from '@/modules/core/ui/primitives/drawer';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { useCompliancePanel } from '@/modules/compliance/ui/useCompliancePanel';
@@ -72,8 +56,8 @@ export interface ManagerComplianceApprovalModalProps {
     onClose: () => void;
     /** Called when manager confirms approval (after compliance passes) */
     onApprove: () => Promise<void>;
-    /** Called when manager clicks Reject Instead */
-    onReject: () => void;
+    /** Called when manager confirms rejection (with optional reason) */
+    onReject: (reason?: string) => void;
 
     swapId: string;
     requesterEmployeeId: string;
@@ -134,6 +118,8 @@ export function ManagerComplianceApprovalModal({
     offererShiftId,
 }: ManagerComplianceApprovalModalProps) {
     const [isApproving, setIsApproving] = useState(false);
+    const [isRejectingState, setIsRejectingState] = useState(false);
+    const [rejectReason, setRejectReason] = useState('');
 
     // -------------------------------------------------------------------------
     // Build inputs for useCompliancePanel
@@ -243,7 +229,11 @@ export function ManagerComplianceApprovalModal({
     // Reset panel when modal closes
     // -------------------------------------------------------------------------
     useEffect(() => {
-        if (!isOpen) panel.reset();
+        if (!isOpen) {
+            panel.reset();
+            setIsRejectingState(false);
+            setRejectReason('');
+        }
     }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // -------------------------------------------------------------------------
@@ -258,6 +248,10 @@ export function ManagerComplianceApprovalModal({
         }
     };
 
+    const handleConfirmReject = () => {
+        onReject(rejectReason || 'Manager Rejected');
+    };
+
     const isMobile = useIsMobile();
 
     if (!isOpen) return null;
@@ -266,123 +260,204 @@ export function ManagerComplianceApprovalModal({
     // Inner content shared between mobile Drawer and desktop overlay
     // -------------------------------------------------------------------------
     const innerContent = (
-        <>
-            {/* Top accent stripe */}
-            <div className={cn(
-                'h-1.5 flex-shrink-0',
-                panel.status === 'idle'    ? 'bg-primary/20' :
-                panel.status === 'running' ? 'bg-primary/30' :
-                panel.status === 'error'   ? 'bg-rose-500' :
-                canApprove ? 'bg-emerald-500' : 'bg-rose-500'
-            )} />
+        <div className="flex flex-col h-full bg-background relative overflow-hidden">
+            {/* Ambient Base Glow */}
+            <div className="absolute top-0 right-1/4 w-64 h-64 bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
 
             {/* ── HEADER ── */}
-            <div className="flex items-center justify-between px-6 pt-5 pb-4 flex-shrink-0 border-b border-border/50">
-                <div className="flex items-center gap-3">
-                    <div className="h-11 w-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                        <Shield className="h-5 w-5 text-primary" />
-                    </div>
+            <div className="flex flex-col px-6 pt-6 pb-4 flex-shrink-0 z-10">
+                <div className="flex items-start justify-between">
                     <div>
-                        <h2 className="text-lg font-black text-foreground tracking-tight">Compliance Review</h2>
-                        <p className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-[0.2em] font-black">Manager Approval Gate</p>
+                        <div className="flex items-center gap-2 mb-1.5">
+                            <Shield className="h-4 w-4 text-primary" />
+                            <h2 className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-[0.3em] font-black">
+                                Compliance Gate
+                            </h2>
+                        </div>
+                        <h1 className="text-2xl font-black text-foreground tracking-tighter">
+                            Swap Approval Review
+                        </h1>
                     </div>
-                </div>
-                <button
-                    onClick={onClose}
-                    className="h-11 w-11 min-h-[44px] rounded-xl flex items-center justify-center text-muted-foreground/40 hover:text-foreground hover:bg-muted transition-all"
-                >
-                    <X className="h-4 w-4" />
-                </button>
-            </div>
-
-            {/* ── PARTIES SUMMARY ── */}
-            <div className="flex items-center gap-4 px-6 py-4 flex-shrink-0 border-b border-border/30 bg-muted/20">
-                <div className="flex items-center gap-2.5">
-                    <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-indigo-600 text-white text-[10px] font-black">
-                            {getInitials(requesterName)}
-                        </AvatarFallback>
-                    </Avatar>
-                    <div>
-                        <div className="text-[11px] font-black text-foreground">{requesterName}</div>
-                        <div className="text-[9px] text-muted-foreground/50 uppercase tracking-wider font-black">Requester</div>
-                    </div>
-                </div>
-                <div className="flex-1 flex items-center justify-center">
-                    <ArrowLeftRight className="h-4 w-4 text-primary/40" />
-                </div>
-                <div className="flex items-center gap-2.5">
-                    <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-emerald-600 text-white text-[10px] font-black">
-                            {getInitials(offererName)}
-                        </AvatarFallback>
-                    </Avatar>
-                    <div>
-                        <div className="text-[11px] font-black text-foreground">{offererName}</div>
-                        <div className="text-[9px] text-muted-foreground/50 uppercase tracking-wider font-black">Offerer</div>
-                    </div>
-                </div>
-            </div>
-
-            {/* ── BODY ── */}
-            <div className="flex-1 overflow-y-auto p-6">
-                <CompliancePanel
-                    hook={panel}
-                    partyAName={requesterName}
-                    partyBName={offererName}
-                />
-            </div>
-
-            {/* ── FOOTER ── */}
-            <div className="flex items-center justify-between gap-3 px-6 py-5 flex-shrink-0 border-t border-border/50 bg-card/80">
-                <div className="flex items-center gap-2">
-                    <Button
-                        variant="ghost"
+                    <button
                         onClick={onClose}
-                        className="rounded-xl text-muted-foreground hover:bg-muted font-black uppercase tracking-widest text-[10px] min-h-[44px] px-4"
+                        className="h-10 w-10 shrink-0 rounded-2xl flex items-center justify-center bg-muted/30 text-muted-foreground/60 hover:text-foreground hover:bg-muted/80 transition-colors border border-border/50"
                     >
-                        Cancel
-                    </Button>
-                    {panel.status !== 'idle' && panel.status !== 'running' && (
-                        <Button
-                            variant="ghost"
-                            onClick={() => panel.run()}
-                            className="rounded-xl text-muted-foreground/60 hover:bg-muted font-black uppercase tracking-widest text-[10px] min-h-[44px] px-4 gap-1.5"
-                        >
-                            <RefreshCw className="h-3 w-3" />
-                            Re-run
-                        </Button>
-                    )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                    <Button
-                        onClick={onReject}
-                        disabled={isApproving}
-                        className="rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[10px] font-black uppercase tracking-wider min-h-[44px] px-4 gap-1.5"
-                    >
-                        <X className="h-3.5 w-3.5" />
-                        Reject Instead
-                    </Button>
-                    <Button
-                        onClick={handleApprove}
-                        disabled={!canApprove || isApproving}
-                        className={cn(
-                            'rounded-xl text-[10px] font-black uppercase tracking-wider min-h-[44px] px-5 gap-1.5 border-none',
-                            canApprove
-                                ? 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20'
-                                : 'bg-muted text-muted-foreground/40 cursor-not-allowed',
-                        )}
-                    >
-                        {isApproving ? (
-                            <><Loader2 className="h-3.5 w-3.5 animate-spin" />Approving...</>
-                        ) : (
-                            <><Check className="h-3.5 w-3.5" /><Gavel className="h-3.5 w-3.5" />Confirm Approval</>
-                        )}
-                    </Button>
+                        <X className="h-4 w-4" />
+                    </button>
                 </div>
             </div>
-        </>
+
+            {/* ── PARTIES SUMMARY (HIGH FIDELITY) ── */}
+            <div className="px-6 pb-5 flex-shrink-0 z-10">
+                <div className="relative flex items-center p-4 rounded-[1.5rem] bg-gradient-to-b from-muted/30 to-muted/10 border border-border/50 shadow-sm overflow-hidden">
+                    {/* Background decoration */}
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.02]" />
+                    <div className="flex-1 flex justify-center flex-col items-center gap-2">
+                        <Avatar className="h-12 w-12 border-2 border-indigo-500/20 shadow-xl shadow-indigo-500/10">
+                            <AvatarFallback className="bg-indigo-600 text-white text-[12px] font-black">
+                                {getInitials(requesterName)}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div className="text-center">
+                            <div className="text-[11px] font-black text-foreground tracking-tight">{requesterName}</div>
+                            <div className="text-[9px] text-muted-foreground/60 uppercase tracking-[0.2em] font-black mt-0.5">Requester</div>
+                        </div>
+                    </div>
+
+                    <div className="h-8 w-px bg-border/50 mx-2" />
+                    <div className="h-8 w-8 shrink-0 rounded-full bg-background border border-border/50 flex items-center justify-center -ml-4 -mr-4 z-10 shadow-sm">
+                        <ArrowLeftRight className="h-3 w-3 text-muted-foreground/40" />
+                    </div>
+                    <div className="h-8 w-px bg-border/50 mx-2" />
+
+                    <div className="flex-1 flex justify-center flex-col items-center gap-2">
+                        <Avatar className="h-12 w-12 border-2 border-emerald-500/20 shadow-xl shadow-emerald-500/10">
+                            <AvatarFallback className="bg-emerald-600 text-white text-[12px] font-black">
+                                {getInitials(offererName)}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div className="text-center">
+                            <div className="text-[11px] font-black text-foreground tracking-tight">{offererName}</div>
+                            <div className="text-[9px] text-muted-foreground/60 uppercase tracking-[0.2em] font-black mt-0.5">Offerer</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* ── BODY (Scrollable) ── */}
+            <div className="flex-1 overflow-y-auto px-6 pb-32 z-10 scrollbar-none relative">
+                <AnimatePresence mode="wait">
+                    {isRejectingState ? (
+                        <motion.div
+                            key="rejecting-view"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="bg-rose-500/5 border border-rose-500/20 rounded-2xl p-5"
+                        >
+                            <div className="flex items-center gap-2 mb-4">
+                                <MessageSquareX className="h-5 w-5 text-rose-500" />
+                                <h3 className="text-[13px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">
+                                    Reject Swap
+                                </h3>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground/80 mb-3 font-medium leading-relaxed">
+                                Please provide a reason for rejecting this swap. This will be visible to the employees.
+                            </p>
+                            <textarea
+                                className="lovable-input w-full min-h-[120px] text-sm resize-none"
+                                value={rejectReason}
+                                onChange={(e) => setRejectReason(e.target.value)}
+                                placeholder="E.g. Not enough coverage during this shift..."
+                                autoFocus
+                            />
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="compliance-view"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                        >
+                            <CompliancePanel
+                                hook={panel}
+                                partyAName={requesterName}
+                                partyBName={offererName}
+                            />
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+
+            {/* ── STICKY FOOTER ACTION BAR ── */}
+            <div className="absolute bottom-0 left-0 right-0 z-20">
+                {/* Gradient fade to show scrollability */}
+                <div className="h-12 bg-gradient-to-t from-background to-transparent w-full pointer-events-none" />
+                
+                <div className="bg-card/90 backdrop-blur-xl border-t border-border p-4 md:p-6 pb-safe">
+                    <AnimatePresence mode="wait">
+                        {isRejectingState ? (
+                            <motion.div
+                                key="reject-actions"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 20 }}
+                                className="flex flex-col gap-3"
+                            >
+                                <Button
+                                    onClick={handleConfirmReject}
+                                    disabled={!rejectReason.trim() || isApproving}
+                                    className="w-full min-h-[56px] rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black uppercase tracking-[0.1em] text-xs shadow-xl shadow-rose-500/20 disabled:opacity-50"
+                                >
+                                    Confirm Rejection
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    onClick={() => setIsRejectingState(false)}
+                                    className="w-full min-h-[48px] rounded-xl text-muted-foreground hover:bg-muted font-bold text-[11px] uppercase tracking-widest"
+                                >
+                                    Cancel
+                                </Button>
+                            </motion.div>
+                        ) : (
+                            <motion.div
+                                key="main-actions"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 20 }}
+                                className="flex flex-col sm:flex-row items-center justify-between gap-3"
+                            >
+                                <div className="w-full sm:w-auto">
+                                    <Button
+                                        onClick={() => setIsRejectingState(true)}
+                                        disabled={isApproving}
+                                        className="w-full sm:w-auto min-h-[48px] rounded-xl bg-transparent hover:bg-rose-500/10 text-rose-500 border border-border/50 text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-2"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                        Reject Instead
+                                    </Button>
+                                </div>
+
+                                <div className="w-full sm:w-auto flex-1 max-w-[400px]">
+                                    {panel.status === 'idle' || panel.status === 'running' || panel.status === 'stale' ? (
+                                        <Button
+                                            onClick={() => panel.run()}
+                                            disabled={panel.status === 'running'}
+                                            className="w-full min-h-[56px] rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-[0.1em] text-xs shadow-xl shadow-indigo-500/20 w-full"
+                                        >
+                                            {panel.status === 'running' ? (
+                                                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Verifying Rules...</>
+                                            ) : (
+                                                <><Play className="h-4 w-4 mr-2 fill-current" /> Initialize Compliance</>
+                                            )}
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            onClick={handleApprove}
+                                            disabled={!canApprove || isApproving}
+                                            className={cn(
+                                                "w-full min-h-[56px] rounded-2xl font-black uppercase tracking-[0.1em] text-xs shadow-xl flex items-center justify-center gap-2 transition-all",
+                                                canApprove
+                                                    ? 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-emerald-500/20'
+                                                    : 'bg-muted text-muted-foreground/40 cursor-not-allowed shadow-none',
+                                            )}
+                                        >
+                                            {isApproving ? (
+                                                <><Loader2 className="h-4 w-4 animate-spin" /> Finalizing...</>
+                                            ) : canApprove ? (
+                                                <><Check className="h-4 w-4" /> <Gavel className="h-5 w-5 ml-1" /> Approve Swap</>
+                                            ) : (
+                                                <><Shield className="h-4 w-4" /> Compliance Failed</>
+                                            )}
+                                        </Button>
+                                    )}
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+            </div>
+        </div>
     );
 
     // -------------------------------------------------------------------------
@@ -391,7 +466,7 @@ export function ManagerComplianceApprovalModal({
     if (isMobile) {
         return (
             <Drawer open={isOpen} onOpenChange={(open) => !open && onClose()}>
-                <DrawerContent className="h-[90dvh] bg-card border-border p-0 overflow-hidden flex flex-col">
+                <DrawerContent className="h-[92dvh] bg-card border-border p-0 overflow-hidden flex flex-col rounded-t-[2.5rem]">
                     {innerContent}
                 </DrawerContent>
             </Drawer>
@@ -407,11 +482,11 @@ export function ManagerComplianceApprovalModal({
             onClick={(e) => e.target === e.currentTarget && onClose()}
         >
             <motion.div
-                initial={{ scale: 0.92, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.92, opacity: 0 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-[2.5rem] border border-border shadow-2xl overflow-hidden bg-card"
+                initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                className="relative w-full max-w-2xl h-[85vh] flex flex-col rounded-[2.5rem] border border-border shadow-2xl overflow-hidden bg-background"
             >
                 {innerContent}
             </motion.div>

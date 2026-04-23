@@ -73,6 +73,8 @@ import {
   preflightDelete,
   preflightUnassign,
 } from '@/modules/rosters/domain/bulk-action-engine';
+import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { LayoutGrid } from 'lucide-react';
 import type { ToolbarPreflightData } from '@/modules/rosters/ui/components/BulkActionsToolbar';
 import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import { executeAssignShift } from '@/modules/rosters/domain/commands/assignShift.command';
@@ -784,29 +786,21 @@ const NewRostersPage: React.FC = () => {
       const originalDate = (shift as any).rawShift?.shift_date || (shift as any).date;
       const dateChanged = originalDate !== dateKey;
 
-      if (dateChanged) {
-        await updateShiftMutation.mutateAsync({
-          shiftId: shift.id,
-          updates: {
-            shift_date: dateKey,
-            assigned_employee_id: employeeId,
-          },
+      const result = await executeAssignShift({
+        shiftId: shift.id,
+        employeeId,
+        context: 'MANUAL',
+        targetDate: dateChanged ? dateKey : undefined,
+        ignoreWarnings: options.ignoreWarnings,
+      });
+
+      if (!result.success) {
+        toast({
+          title: 'Assignment blocked',
+          description: result.error ?? 'Compliance check failed.',
+          variant: 'destructive',
         });
-      } else {
-        const result = await executeAssignShift({
-          shiftId: shift.id,
-          employeeId,
-          context: 'MANUAL',
-          ignoreWarnings: options.ignoreWarnings,
-        });
-        if (!result.success) {
-          toast({
-            title: 'Assignment blocked',
-            description: result.error ?? 'Compliance check failed.',
-            variant: 'destructive',
-          });
-          return;
-        }
+        return;
       }
 
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
@@ -906,58 +900,66 @@ const NewRostersPage: React.FC = () => {
 
   // ==================== RENDER ====================
   return (
-    <div className="flex flex-col h-full min-h-0 bg-slate-50 dark:bg-[#030405] overflow-hidden">
-      {/* Scope Filter */}
-      <ScopeFilterBanner
-        mode="managerial"
-        onScopeChange={setScope}
-        hidden={isGammaLocked}
-        multiSelect={false}
-        className="m-4 mb-2 relative z-[40]"
-      />
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* ── Unified Header ────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-30 -mx-4 px-4 md:-mx-8 md:px-8 pt-4 pb-4 lg:pb-6">
+        <div className={cn(
+          "rounded-[32px] p-4 lg:p-6 transition-all border",
+          isDark 
+            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+        )}>
+          {/* Row 1: Identity & Clock + Row 2: Scope Filter */}
+          <PersonalPageHeader
+            title="Roster Planner"
+            Icon={LayoutGrid}
+            scope={scope}
+            setScope={setScope}
+            isGammaLocked={isGammaLocked}
+          />
 
-      {/* Function Bar */}
-      <div className="relative z-[10]">
-        <RosterFunctionBar
-          // Context state
-          selectedOrganizationId={selectedOrganizationId}
-          selectedRosterId={selectedRosterId}
-          selectedDepartmentId={selectedDepartmentIds[0] || null}
-          selectedSubDepartmentId={selectedSubDepartmentIds[0] || null}
-          // Context callbacks
-          onRosterChange={setSelectedRosterId}
-          // Ghost Cell Navigation - receive template date bounds
-          onTemplateDatesChange={(startDate, endDate) => {
-            setTemplateStartDate(startDate);
-            setTemplateEndDate(endDate);
-          }}
-          // Date & View
-          selectedDate={selectedDate}
-          viewType={viewType}
-          onDateChange={setSelectedDate}
-          onViewTypeChange={handleViewTypeChange}
-          // Toggle states
-          showAvailabilities={showAvailabilities}
-          showUnfilledPanel={showUnfilledPanel}
-          isRefreshing={isRefreshing}
-          // Toggle callbacks
-          onAvailabilitiesToggle={() => setShowAvailabilities(!showAvailabilities)}
-          onUnfilledPanelToggle={() => setShowUnfilledPanel(!showUnfilledPanel)}
-          onRefresh={handleRefresh}
-          onFiltersClick={() => setShowFilters(!showFilters)}
-          canEdit={canEdit}
-          // Bulk Mode
-          isBulkMode={bulkModeActive}
-          onBulkModeToggle={() => handleBulkModeToggle(!bulkModeActive)}
-          onAutoScheduleClick={() => modalsRef.current?.openAutoScheduler()}
-        />
+          {/* Row 3: Function Bar */}
+          <div className="mt-4 lg:mt-6">
+            <RosterFunctionBar
+              // Context state
+              selectedOrganizationId={selectedOrganizationId}
+              selectedRosterId={selectedRosterId}
+              selectedDepartmentId={selectedDepartmentIds[0] || null}
+              selectedSubDepartmentId={selectedSubDepartmentIds[0] || null}
+              // Context callbacks
+              onRosterChange={setSelectedRosterId}
+              // Ghost Cell Navigation - receive template date bounds
+              onTemplateDatesChange={(startDate, endDate) => {
+                setTemplateStartDate(startDate);
+                setTemplateEndDate(endDate);
+              }}
+              // Date & View
+              selectedDate={selectedDate}
+              viewType={viewType}
+              onDateChange={setSelectedDate}
+              onViewTypeChange={handleViewTypeChange}
+              // Toggle states
+              showAvailabilities={showAvailabilities}
+              showUnfilledPanel={showUnfilledPanel}
+              isRefreshing={isRefreshing}
+              // Toggle callbacks
+              onAvailabilitiesToggle={() => setShowAvailabilities(!showAvailabilities)}
+              onUnfilledPanelToggle={() => setShowUnfilledPanel(!showUnfilledPanel)}
+              onRefresh={handleRefresh}
+              onFiltersClick={() => setShowFilters(!showFilters)}
+              canEdit={canEdit}
+              // Bulk Mode
+              isBulkMode={bulkModeActive}
+              onBulkModeToggle={() => handleBulkModeToggle(!bulkModeActive)}
+              onAutoScheduleClick={() => modalsRef.current?.openAutoScheduler()}
+            />
+          </div>
+        </div>
       </div>
-
-      {/* Mode Selector row REMOVED - now integrated into FunctionBar */}
 
       {/* Bulk Mode Banner — sticky amber bar shown while bulk selection is active */}
       {bulkModeActive && (
-        <div className="flex-shrink-0 bg-amber-500/10 border-b border-amber-500/30 px-6 py-2 flex items-center justify-between">
+        <div className="flex-shrink-0 bg-amber-500/10 border-y border-amber-500/30 px-6 py-2 flex items-center justify-between mb-2">
           <div className="flex items-center gap-3 text-amber-700 dark:text-amber-300 text-sm font-medium">
             <span>Bulk selection active — click shifts to select</span>
             {selectedShiftIds.size > 0 && (
@@ -975,9 +977,16 @@ const NewRostersPage: React.FC = () => {
         </div>
       )}
 
-      {/* Main Content — single DndProvider covers all mode views + side panel */}
-      <DndProvider backend={HTML5Backend}>
-      <div className="flex-1 min-h-0 overflow-hidden flex relative">
+      {/* ── Main Content Area ─────────────────────────── */}
+      <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+        <div className={cn(
+          "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col",
+          isDark 
+            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+        )}>
+          <DndProvider backend={HTML5Backend}>
+            <div className="flex-1 min-h-0 overflow-hidden flex relative">
         {/* Loading Overlay */}
         {isLoading && (
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
@@ -1119,9 +1128,11 @@ const NewRostersPage: React.FC = () => {
               onPickShift={handlePickUnfilled}
             />
           </div>
+          </div>
+          </div>
+          </DndProvider>
         </div>
       </div>
-      </DndProvider>
 
       {/* Bulk Toolbar */}
       {bulkModeActive && selectedShiftIds.size > 0 && (

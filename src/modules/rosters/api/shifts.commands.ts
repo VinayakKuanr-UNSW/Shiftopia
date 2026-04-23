@@ -161,6 +161,7 @@ export const shiftsCommands = {
             created_by_user_id: user.id,
             creation_source: shiftData.creation_source ?? (shiftData.is_from_template ? 'template' : 'manual'),
             assignment_source: shiftData.assigned_employee_id ? (shiftData.assignment_source ?? 'direct') : null,
+            is_training: shiftData.is_training ?? false,
         };
 
         const newShiftId = await callRpc('sm_create_shift', {
@@ -202,8 +203,12 @@ export const shiftsCommands = {
                 payload.display_order = updates.display_order;
             if (updates.shift_group_id !== undefined)
                 payload.shift_group_id = safeUuid(updates.shift_group_id);
-            if (updates.shift_subgroup_id !== undefined)
-                payload.roster_subgroup_id = safeUuid(updates.shift_subgroup_id);
+            if (updates.shift_subgroup_id !== undefined) {
+                const safeSubgroupId = safeUuid(updates.shift_subgroup_id);
+                if (safeSubgroupId) {
+                    payload.roster_subgroup_id = safeSubgroupId;
+                }
+            }
             if (updates.role_id !== undefined)
                 payload.role_id = safeUuid(updates.role_id);
             if (updates.remuneration_level_id !== undefined)
@@ -240,6 +245,8 @@ export const shiftsCommands = {
             if (updates.notes !== undefined) payload.notes = updates.notes;
             if (updates.cancellation_reason !== undefined)
                 payload.cancellation_reason = updates.cancellation_reason;
+            if (updates.is_training !== undefined)
+                payload.is_training = updates.is_training;
 
             // 4. Execute DB write — direct UPDATE on shifts table.
             //    The legacy RPC `sm_update_shift` fails because it tries to call

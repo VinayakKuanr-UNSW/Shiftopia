@@ -70,7 +70,7 @@ const PageLoader: React.FC = () => (
 /* =======================
    ROUTES WHERE MAIN AREA HAS NO PADDING (fullscreen canvas pages)
    ======================= */
-const NO_PADDING_ROUTES = new Set(['/my-roster', '/rosters']);
+const NO_PADDING_ROUTES = new Set(['/rosters']);
 
 /* =======================
    PERSISTENT AUTH LAYOUT

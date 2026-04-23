@@ -212,7 +212,7 @@ function HeaderBanner({
     const hasBlockers = blockers > 0 || systemFails > 0;
 
     const bannerCls = cn(
-        'relative overflow-hidden rounded-xl border p-4 transition-all duration-300',
+        'relative overflow-hidden rounded-2xl border p-4 md:p-5 transition-all duration-300 shadow-sm',
         hasResults && canProceed && !isStale
             ? 'bg-gradient-to-br from-emerald-50/80 via-white to-emerald-50/80 border-emerald-500/20 dark:from-emerald-950/80 dark:via-emerald-950/40 dark:to-slate-900/80 dark:border-emerald-500/30'
             : hasResults && hasBlockers
@@ -251,7 +251,7 @@ function HeaderBanner({
                         <h3 className={cn(
                             'text-base font-black tracking-tight uppercase',
                             hasResults && canProceed && !isStale ? 'text-emerald-700 dark:text-emerald-400'
-                                : hasResults && hasBlockers       ? 'text-red-700 dark:text-red-400'
+                                : hasResults && hasBlockers       ? 'text-red-700 dark:text-rose-400'
                                 : hasResults && warnings > 0      ? 'text-amber-700 dark:text-amber-400'
                                 : 'text-foreground',
                         )}>
@@ -346,8 +346,8 @@ function IdleRuleList() {
             </p>
             <div className="space-y-1.5">
                 {rules.map(rule => (
-                    <div key={rule.rule_id} className="flex items-center gap-3 px-3 py-2 rounded-xl border border-border/50 bg-muted/20">
-                        <span className="text-[9px] font-black font-mono px-1.5 py-0.5 rounded bg-muted border border-border/60 text-muted-foreground/50 shrink-0 w-8 text-center">
+                    <div key={rule.rule_id} className="flex items-center gap-3 px-3 py-2 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/30 transition-colors">
+                        <span className="text-[9px] font-black font-mono px-1.5 py-0.5 rounded bg-muted/80 border border-border/80 text-muted-foreground/60 shrink-0 min-w-[2.2rem] text-center shadow-sm">
                             {getRuleCode(rule.rule_id)}
                         </span>
                         <span className="text-[11px] text-muted-foreground/50 font-medium truncate">{rule.description}</span>

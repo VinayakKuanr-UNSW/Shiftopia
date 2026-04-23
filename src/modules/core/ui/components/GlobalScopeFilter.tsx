@@ -168,19 +168,19 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
             <button
                 onClick={() => !isDisabled && setIsOpen(!isOpen)}
                 className={cn(
-                    "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                    "border min-w-[80px] sm:min-w-[150px] justify-between w-full",
+                    "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
+                    "border-0 min-w-[120px] sm:min-w-[180px] justify-between w-full h-14",
                     isDisabled
-                        ? "bg-slate-100 dark:bg-white/[0.02] border-slate-200 dark:border-white/[0.06] text-slate-400 dark:text-white/40 cursor-not-allowed"
-                        : "bg-white dark:bg-white/[0.04] border-slate-200 dark:border-white/[0.08] text-slate-700 dark:text-white/80 hover:bg-slate-50 dark:hover:bg-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.12] cursor-pointer"
+                        ? "bg-slate-100 dark:bg-white/[0.02] text-slate-400 dark:text-white/40 cursor-not-allowed opacity-50"
+                        : "bg-white dark:bg-[#1c2333] text-slate-700 dark:text-white/80 hover:bg-slate-50 dark:hover:bg-[#252d40] cursor-pointer shadow-sm"
                 )}
                 disabled={isDisabled}
                 type="button"
             >
-                <span className="flex items-center gap-1.5 sm:gap-2">
-                    {icon}
-                    <span className="truncate max-w-[80px] sm:max-w-[140px] text-xs sm:text-sm">{displayText}</span>
-                </span>
+                <div className="flex flex-col items-start gap-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/30 leading-none">{label}</span>
+                    <span className="truncate max-w-[120px] sm:max-w-[180px] text-xs sm:text-sm font-semibold">{displayText}</span>
+                </div>
                 {locked ? (
                     <Lock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400/60 flex-shrink-0" />
                 ) : (
@@ -482,15 +482,14 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
 
     return (
         <div className={cn(
-            "flex flex-col gap-1 p-1.5 rounded-xl relative z-30",
-            "bg-slate-50 dark:bg-[#1a2744]/20 border border-slate-200 dark:border-white/[0.03] backdrop-blur-xl shadow-lg",
+            "flex flex-col gap-1 rounded-xl relative z-30 w-full",
             className
         )}>
             <div className="flex items-center gap-1.5 w-full">
                 <div className="flex-1 min-w-0">
                     <MultiSelect
-                        label="Venue"
-                        icon={<Building2 className="w-3.5 h-3.5 text-slate-400 dark:text-white/30" />}
+                        label="Location"
+                        icon={<Building2 className="w-4 h-4 text-slate-400 dark:text-white/30" />}
                         options={orgs.map(o => ({ id: o.id, name: o.name }))}
                         selected={selectedOrgIds}
                         onChange={setSelectedOrgIds}

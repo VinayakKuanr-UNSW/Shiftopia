@@ -6,7 +6,8 @@ import { Label } from '@/modules/core/ui/primitives/label';
 import { Tabs, TabsContent } from '@/modules/core/ui/primitives/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/modules/core/ui/primitives/select';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Check, User, Shield, Bell, CreditCard, Link, Loader2, Save } from 'lucide-react';
+import { Check, User, Shield, Bell, CreditCard, Link, Loader2, Save, Palette } from 'lucide-react';
+import { Switch } from '@/modules/core/ui/primitives/switch';
 import { useSettings } from '../hooks/useSettings';
 import { supabase } from '@/platform/realtime/client';
 import { toast } from '@/modules/core/ui/primitives/use-toast';
@@ -46,6 +47,7 @@ const AppearanceSettings: React.FC = () => {
   const [chartStyle, setChartStyle] = useState('default');
   const [language, setLanguage] = useState('en-GB');
   const [cookieBanner, setCookieBanner] = useState('default');
+  const [enableGroupColoring, setEnableGroupColoring] = useState(false);
   const [hexError, setHexError] = useState(false);
 
   useEffect(() => {
@@ -56,6 +58,7 @@ const AppearanceSettings: React.FC = () => {
       setChartStyle(orgBranding.chart_style || 'default');
       setLanguage(orgBranding.language || 'en-GB');
       setCookieBanner(orgBranding.cookie_banner || 'default');
+      setEnableGroupColoring(orgBranding.enable_group_coloring || false);
     }
   }, [orgBranding, updateBranding.isPending]);
 
@@ -94,6 +97,7 @@ const AppearanceSettings: React.FC = () => {
       chart_style: chartStyle,
       language,
       cookie_banner: cookieBanner,
+      enable_group_coloring: enableGroupColoring,
     });
   };
 
@@ -262,6 +266,33 @@ const AppearanceSettings: React.FC = () => {
               )}
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="h-px bg-white/5 w-full"></div>
+
+      {/* Group Coloring Section */}
+      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 items-start">
+        <div>
+          <h3 className="text-base font-semibold text-white">Advanced coloring</h3>
+          <p className="text-sm text-blue-200/60 mt-1">
+            Group-based card themes.
+          </p>
+        </div>
+        <div className="p-6 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+              <Palette className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-white">Group-based Card Coloring</p>
+              <p className="text-xs text-blue-200/40 mt-0.5">Automatically color-code timecards by center (Convention, Exhibition, Theatre).</p>
+            </div>
+          </div>
+          <Switch 
+            checked={enableGroupColoring} 
+            onCheckedChange={setEnableGroupColoring}
+          />
         </div>
       </div>
 

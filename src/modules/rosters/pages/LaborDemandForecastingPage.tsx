@@ -25,6 +25,9 @@ import {
 } from 'recharts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useTheme } from '@/modules/core/contexts/ThemeContext';
+import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
 
 // Domain
 import { shiftsQueries } from '../api/shifts.queries';
@@ -592,9 +595,14 @@ const ConfirmDialog: React.FC<{
    ============================================================= */
 const LaborDemandForecastingPage: React.FC = () => {
 
-  // ── Scope ───────────────────────────────────────────────────
+  const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
+  const { isDark } = useTheme();
+
+  const organizationId = scope.org_ids[0];
+  const departmentId = scope.dept_ids[0];
+  const subDepartmentId = scope.subdept_ids[0];
+
   const {
-    organizationId, departmentId, subDepartmentId,
     departmentName, subDepartmentName, hasCompleteSelection,
   } = useOrgSelection();
 
@@ -823,415 +831,418 @@ const LaborDemandForecastingPage: React.FC = () => {
      RENDER
      ============================================================= */
   return (
-    <div className="min-h-full bg-background">
-      <div className="max-w-[1280px] mx-auto px-4 md:px-6 py-6 space-y-5 pb-24 md:pb-6">
-
-        {/* ===================== SCOPE HEADER ===================== */}
-        <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
-          <ScopeHeader
-            selectedDate={selectedDate}
-            onDateChange={setSelectedDate}
-            isFetching={isFetching && !isLoading}
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* ── Unified Header ────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-30 -mx-4 px-4 md:-mx-8 md:px-8 pt-4 pb-4 lg:pb-6">
+        <div className={cn(
+          "rounded-[32px] p-4 lg:p-6 transition-all border",
+          isDark 
+            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+        )}>
+          {/* Row 1: Identity & Clock + Row 2: Scope Filter */}
+          <PersonalPageHeader
+            title="Labor Demand Forecasting"
+            Icon={TrendingUp}
+            scope={scope}
+            setScope={setScope}
+            isGammaLocked={isGammaLocked}
           />
-        </motion.div>
 
-        {/* ===================== PAGE TITLE ===================== */}
-        <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, delay: 0.05 }}>
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">Labor Demand Forecasting</h1>
+          {/* Row 3: Function Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4 lg:mt-6">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center border border-border/60 rounded-xl overflow-hidden bg-card/50">
+                {(['preview', 'raw'] as ViewMode[]).map(mode => (
+                  <button key={mode} onClick={() => setViewMode(mode)}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 text-xs font-black transition-all capitalize uppercase tracking-widest',
+                      viewMode === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    )}
+                  >
+                    {mode === 'preview' ? <Eye className="h-3 w-3" /> : <Database className="h-3 w-3" />}
+                    {mode === 'preview' ? 'Preview' : 'Raw Data'}
+                  </button>
+                ))}
+              </div>
               <YCertBadge />
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 bg-card/50 border border-border/60 rounded-xl px-3 py-1.5">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="h-6 px-1 text-xs font-black font-mono bg-transparent text-foreground focus:outline-none"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
                 <span className={cn('h-1.5 w-1.5 rounded-full', isFetching ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400')} />
                 {isFetching ? 'Updating…' : `Last refreshed: ${format(new Date(), 'HH:mm')}`}
               </div>
             </div>
-
-            {/* View Mode Toggle */}
-            <div className="flex items-center border border-border/60 rounded-xl overflow-hidden bg-card">
-              {(['preview', 'raw'] as ViewMode[]).map(mode => (
-                <button key={mode} onClick={() => setViewMode(mode)}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all capitalize',
-                    viewMode === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                  )}
-                >
-                  {mode === 'preview' ? <Eye className="h-3.5 w-3.5" /> : <Database className="h-3.5 w-3.5" />}
-                  {mode === 'preview' ? 'Preview' : 'Raw Data'}
-                </button>
-              ))}
-            </div>
           </div>
-        </motion.div>
+        </div>
+      </div>
 
-        {/* ===================== RAW DATA MODE ===================== */}
-        <AnimatePresence mode="wait">
-          {viewMode === 'raw' ? (
-            <RawDataPanel
-              key="raw"
-              timelineData={timelineData}
-              shiftCount={shifts.length}
-              orgId={organizationId ?? '—'}
-              date={selectedDate}
-            />
-          ) : (
-            <motion.div key="preview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-5">
-
-              {/* ===================== METRICS ROW ===================== */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <MetricCard label="Req. Peak Headcount" value={isLoading ? '—' : metrics.peakRequired} trend="up" status="neutral" skeleton={isLoading} />
-                <MetricCard label="Curr. Coverage Peak" value={isLoading ? '—' : metrics.peakExisting} status={metrics.peakExisting < metrics.peakRequired ? 'warn' : 'ok'} skeleton={isLoading} />
-                <MetricCard label="Coverage Gap Peak"   value={isLoading ? '—' : metrics.peakGap}      status={metrics.peakGap > 5 ? 'critical' : metrics.peakGap > 0 ? 'warn' : 'ok'} valueColor={metrics.peakGap > 0 ? 'text-red-400' : undefined} skeleton={isLoading} />
-                <MetricCard label="Total Req. Hours"    value={isLoading ? '—' : metrics.totalReqHours}      status="neutral" skeleton={isLoading} />
-                <MetricCard label="Existing Sched. Hours" value={isLoading ? '—' : metrics.existingSchedHours} status="neutral" skeleton={isLoading} />
-                <MetricCard label="Residual Hours"      value={isLoading ? '—' : metrics.residualHours}   status={metrics.residualHours > 20 ? 'warn' : 'neutral'} valueColor={metrics.residualHours > 0 ? 'text-amber-400' : undefined} skeleton={isLoading} />
-              </div>
-
-              {/* ===================== CHART ===================== */}
-              <div className="bg-card border border-border/60 rounded-xl p-5">
-                <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-                  <div className="flex items-center gap-2">
-                    <Activity className="h-4 w-4 text-fuchsia-400" />
-                    <span className="font-semibold text-sm">Demand vs Coverage Timeline</span>
-                    {hasShifts && (
-                      <Badge className="bg-muted/60 text-muted-foreground border border-border/40 text-[10px]">
-                        {selectedDate} · {shifts.length} shifts
-                      </Badge>
-                    )}
+      {/* ── Main Content Area ─────────────────────────── */}
+      <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+        <div className={cn(
+          "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col",
+          isDark 
+            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+        )}>
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 space-y-5">
+            <AnimatePresence mode="wait">
+              {viewMode === 'raw' ? (
+                <RawDataPanel
+                  key="raw"
+                  timelineData={timelineData}
+                  shiftCount={shifts.length}
+                  orgId={organizationId ?? '—'}
+                  date={selectedDate}
+                />
+              ) : (
+                <motion.div key="preview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-5">
+                  {/* ... rest of the original preview content ... */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <MetricCard label="Req. Peak Headcount" value={shiftsLoading ? '—' : metrics.peakRequired} trend="up" status="neutral" skeleton={shiftsLoading} />
+                    <MetricCard label="Curr. Coverage Peak" value={shiftsLoading ? '—' : metrics.peakExisting} status={metrics.peakExisting < metrics.peakRequired ? 'warn' : 'ok'} skeleton={shiftsLoading} />
+                    <MetricCard label="Coverage Gap Peak"   value={shiftsLoading ? '—' : metrics.peakGap}      status={metrics.peakGap > 5 ? 'critical' : metrics.peakGap > 0 ? 'warn' : 'ok'} valueColor={metrics.peakGap > 0 ? 'text-red-400' : undefined} skeleton={shiftsLoading} />
+                    <MetricCard label="Total Req. Hours"    value={shiftsLoading ? '—' : metrics.totalReqHours}      status="neutral" skeleton={shiftsLoading} />
+                    <MetricCard label="Existing Sched. Hours" value={shiftsLoading ? '—' : metrics.existingSchedHours} status="neutral" skeleton={shiftsLoading} />
+                    <MetricCard label="Residual Hours"      value={shiftsLoading ? '—' : metrics.residualHours}   status={metrics.residualHours > 20 ? 'warn' : 'neutral'} valueColor={metrics.residualHours > 0 ? 'text-amber-400' : undefined} skeleton={shiftsLoading} />
                   </div>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <TogglePill active={showNewInjection} onClick={() => setShowNewInjection(v => !v)} color="#38bdf8" label="New Shift Injection" />
-                    <TogglePill active={showRequired}     onClick={() => setShowRequired(v => !v)}     color="#818cf8" label="Show Required" />
-                    <TogglePill active={showExisting}     onClick={() => setShowExisting(v => !v)}     color="#34d399" label="Show Existing" />
-                    <TogglePill active={showResidual}     onClick={() => setShowResidual(v => !v)}     color="#f87171" label="Show Residual" />
-                  </div>
-                </div>
 
-                {isLoading ? (
-                  <div className="h-[280px] flex items-center justify-center">
-                    <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground/40" />
-                  </div>
-                ) : !hasShifts ? (
-                  <div className="h-[280px] flex items-center justify-center">
-                    <EmptyState message="No shifts found for this date and scope" />
-                  </div>
-                ) : (
-                  <div className="h-[280px] w-full relative">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={timelineData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="ldf-eg" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%"  stopColor="#34d399" stopOpacity={0.35} />
-                            <stop offset="95%" stopColor="#34d399" stopOpacity={0.03} />
-                          </linearGradient>
-                          <linearGradient id="ldf-rg" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%"  stopColor="#f87171" stopOpacity={0.55} />
-                            <stop offset="95%" stopColor="#f87171" stopOpacity={0.05} />
-                          </linearGradient>
-                          <linearGradient id="ldf-ig" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%"  stopColor="#38bdf8" stopOpacity={0.45} />
-                            <stop offset="95%" stopColor="#38bdf8" stopOpacity={0.05} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.07)" vertical={false} />
-                        <XAxis dataKey="time" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval={2} />
-                        <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-                        <RechartsTooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(148,163,184,0.12)', strokeWidth: 1 }} />
+                  <div className="bg-card/40 backdrop-blur-sm border border-border/60 rounded-2xl p-5">
+                    <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+                      <div className="flex items-center gap-2">
+                        <Activity className="h-4 w-4 text-fuchsia-400" />
+                        <span className="font-semibold text-sm">Demand vs Coverage Timeline</span>
+                        {shifts.length > 0 && (
+                          <Badge className="bg-muted/60 text-muted-foreground border border-border/40 text-[10px]">
+                            {selectedDate} · {shifts.length} shifts
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <TogglePill active={showNewInjection} onClick={() => setShowNewInjection(v => !v)} color="#38bdf8" label="New Shift Injection" />
+                        <TogglePill active={showRequired}     onClick={() => setShowRequired(v => !v)}     color="#818cf8" label="Show Required" />
+                        <TogglePill active={showExisting}     onClick={() => setShowExisting(v => !v)}     color="#34d399" label="Show Existing" />
+                        <TogglePill active={showResidual}     onClick={() => setShowResidual(v => !v)}     color="#f87171" label="Show Residual" />
+                      </div>
+                    </div>
 
-                        {showExisting && (
-                          <Area stackId="cov" type="monotone" dataKey="existing" stroke="#34d399" strokeWidth={2} fill="url(#ldf-eg)" dot={false} activeDot={{ r: 4, strokeWidth: 0, fill: '#34d399' }} />
-                        )}
-                        {showResidual && (
-                          <Area stackId="cov" type="monotone" dataKey="residual" stroke="transparent" fill="url(#ldf-rg)" dot={false} />
-                        )}
-                        {showNewInjection && (
-                          <Area type="monotone" dataKey="injection" stroke="#38bdf8" strokeWidth={1.5} fill="url(#ldf-ig)" dot={false} strokeDasharray="4 2" />
-                        )}
-                        {showRequired && (
-                          <Line type="monotone" dataKey="required" stroke="#818cf8" strokeWidth={2} strokeDasharray="6 3" dot={false} activeDot={{ r: 4, strokeWidth: 0, fill: '#818cf8' }} />
-                        )}
+                    {shiftsLoading ? (
+                      <div className="h-[280px] flex items-center justify-center">
+                        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground/40" />
+                      </div>
+                    ) : shifts.length === 0 ? (
+                      <div className="h-[280px] flex items-center justify-center">
+                        <EmptyState message="No shifts found for this date and scope" />
+                      </div>
+                    ) : (
+                      <div className="h-[280px] w-full relative">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart data={timelineData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="ldf-eg" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%"  stopColor="#34d399" stopOpacity={0.35} />
+                                <stop offset="95%" stopColor="#34d399" stopOpacity={0.03} />
+                              </linearGradient>
+                              <linearGradient id="ldf-rg" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%"  stopColor="#f87171" stopOpacity={0.55} />
+                                <stop offset="95%" stopColor="#f87171" stopOpacity={0.05} />
+                              </linearGradient>
+                              <linearGradient id="ldf-ig" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%"  stopColor="#38bdf8" stopOpacity={0.45} />
+                                <stop offset="95%" stopColor="#38bdf8" stopOpacity={0.05} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.07)" vertical={false} />
+                            <XAxis dataKey="time" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval={2} />
+                            <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+                            <RechartsTooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(148,163,184,0.12)', strokeWidth: 1 }} />
+
+                            {showExisting && (
+                              <Area stackId="cov" type="monotone" dataKey="existing" stroke="#34d399" strokeWidth={2} fill="url(#ldf-eg)" dot={false} activeDot={{ r: 4, strokeWidth: 0, fill: '#34d399' }} />
+                            )}
+                            {showResidual && (
+                              <Area stackId="cov" type="monotone" dataKey="residual" stroke="transparent" fill="url(#ldf-rg)" dot={false} />
+                            )}
+                            {showNewInjection && (
+                              <Area type="monotone" dataKey="injection" stroke="#38bdf8" strokeWidth={1.5} fill="url(#ldf-ig)" dot={false} strokeDasharray="4 2" />
+                            )}
+                            {showRequired && (
+                              <Line type="monotone" dataKey="required" stroke="#818cf8" strokeWidth={2} strokeDasharray="6 3" dot={false} activeDot={{ r: 4, strokeWidth: 0, fill: '#818cf8' }} />
+                            )}
+                            {metrics.peakGap > 0 && (
+                              <ReferenceLine x={metrics.peakGapTime} stroke="#ef4444" strokeDasharray="4 2" strokeOpacity={0.5} />
+                            )}
+                          </ComposedChart>
+                        </ResponsiveContainer>
+
                         {metrics.peakGap > 0 && (
-                          <ReferenceLine x={metrics.peakGapTime} stroke="#ef4444" strokeDasharray="4 2" strokeOpacity={0.5} />
+                          <div className="absolute top-2 left-1/2 -translate-x-1/2 pointer-events-none">
+                            <div className="bg-red-500/90 text-white text-sm font-black px-3 py-1 rounded-lg shadow-lg whitespace-nowrap">
+                              Peak Gap: {metrics.peakGap} @ {metrics.peakGapTime}
+                            </div>
+                          </div>
                         )}
-                      </ComposedChart>
-                    </ResponsiveContainer>
-
-                    {/* Peak Gap annotation */}
-                    {metrics.peakGap > 0 && (
-                      <div className="absolute top-2 left-1/2 -translate-x-1/2 pointer-events-none">
-                        <div className="bg-red-500/90 text-white text-sm font-black px-3 py-1 rounded-lg shadow-lg whitespace-nowrap">
-                          Peak Gap: {metrics.peakGap} @ {metrics.peakGapTime}
-                        </div>
                       </div>
                     )}
                   </div>
-                )}
-              </div>
 
-              {/* ===================== COVERAGE SCAN + INJECTION ===================== */}
-              <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                    <div className="lg:col-span-3 bg-card/40 backdrop-blur-sm border border-border/60 rounded-2xl p-5">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <Activity className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-semibold text-sm">Coverage Scan</span>
+                        </div>
+                        <button onClick={() => setShowDetailsModal(true)} className="text-xs font-medium text-primary hover:text-primary/80 transition-colors">
+                          View Details
+                        </button>
+                      </div>
+                      {shiftsLoading ? (
+                        <div className="space-y-3 animate-pulse">
+                          {[1,2,3].map(i => <div key={i} className="h-10 bg-muted rounded" />)}
+                        </div>
+                      ) : shifts.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-6">No shift data available</p>
+                      ) : (
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-border/40">
+                              {['Role','Req. Hours','Existing','Gap','Status'].map((h, i) => (
+                                <th key={h} className={cn('pb-2 text-xs uppercase tracking-wide text-muted-foreground font-medium', i > 0 ? 'text-right' : 'text-left')}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {roleCoverageData.length === 0 ? (
+                              <tr><td colSpan={5} className="py-4 text-center text-sm text-muted-foreground">No role data</td></tr>
+                            ) : roleCoverageData.map((row, i) => (
+                              <tr key={i} className="border-b border-border/20 last:border-0">
+                                <td className="py-3 text-sm font-medium">{row.role}</td>
+                                <td className="py-3 text-sm text-right text-muted-foreground">{row.reqHours}h</td>
+                                <td className="py-3 text-sm text-right text-muted-foreground">{row.existing}h</td>
+                                <td className={cn('py-3 text-sm text-right font-bold', row.gap < -3 ? 'text-red-400' : row.gap < 0 ? 'text-amber-400' : 'text-emerald-400')}>
+                                  {row.gap === 0 ? '0' : `${row.gap}h`}
+                                </td>
+                                <td className="py-3 text-right"><StatusBadge status={row.status} /></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
 
-                {/* Coverage Scan */}
-                <div className="lg:col-span-3 bg-card border border-border/60 rounded-xl p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Activity className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-semibold text-sm">Coverage Scan</span>
-                    </div>
-                    <button onClick={() => setShowDetailsModal(true)} className="text-xs font-medium text-primary hover:text-primary/80 transition-colors">
-                      View Details
-                    </button>
-                  </div>
-
-                  {isLoading ? (
-                    <div className="space-y-3 animate-pulse">
-                      {[1,2,3].map(i => <div key={i} className="h-10 bg-muted rounded" />)}
-                    </div>
-                  ) : !hasShifts ? (
-                    <p className="text-sm text-muted-foreground text-center py-6">No shift data available</p>
-                  ) : (
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-border/40">
-                          {['Role','Req. Hours','Existing','Gap','Status'].map((h, i) => (
-                            <th key={h} className={cn('pb-2 text-xs uppercase tracking-wide text-muted-foreground font-medium', i > 0 ? 'text-right' : 'text-left')}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {roleCoverageData.length === 0 ? (
-                          <tr><td colSpan={5} className="py-4 text-center text-sm text-muted-foreground">No role data</td></tr>
-                        ) : roleCoverageData.map((row, i) => (
-                          <tr key={i} className="border-b border-border/20 last:border-0">
-                            <td className="py-3 text-sm font-medium">{row.role}</td>
-                            <td className="py-3 text-sm text-right text-muted-foreground">{row.reqHours}h</td>
-                            <td className="py-3 text-sm text-right text-muted-foreground">{row.existing}h</td>
-                            <td className={cn('py-3 text-sm text-right font-bold', row.gap < -3 ? 'text-red-400' : row.gap < 0 ? 'text-amber-400' : 'text-emerald-400')}>
-                              {row.gap === 0 ? '0' : `${row.gap}h`}
-                            </td>
-                            <td className="py-3 text-right"><StatusBadge status={row.status} /></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-
-                {/* Proposed Injection */}
-                <div className="lg:col-span-2 bg-card border border-border/60 rounded-xl p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Plus className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-semibold text-sm">Proposed Injection</span>
-                    </div>
-                    {totalProposedShifts > 0 && (
-                      <Badge className="bg-primary/15 text-primary border border-primary/30 text-xs font-semibold">
-                        {totalProposedShifts} New Shifts
-                      </Badge>
-                    )}
-                  </div>
-
-                  {isLoading ? (
-                    <div className="space-y-3 animate-pulse">
-                      {[1,2].map(i => <div key={i} className="h-16 bg-muted rounded-lg" />)}
-                    </div>
-                  ) : proposedInjection.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground">
-                      <CheckCircle2 className="h-8 w-8 text-emerald-400/50" />
-                      <p className="text-sm font-medium text-emerald-400">Full coverage</p>
-                      <p className="text-xs">All shifts have assigned employees</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {proposedInjection.map((g, i) => (
-                        <div key={i} className="p-3 rounded-lg bg-background/50 border border-border/30">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <p className="text-sm font-semibold">{g.roleName}</p>
-                              <p className="text-[11px] text-muted-foreground mt-0.5">{g.description}</p>
+                    <div className="lg:col-span-2 bg-card/40 backdrop-blur-sm border border-border/60 rounded-2xl p-5">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <Plus className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-semibold text-sm">Proposed Injection</span>
+                        </div>
+                        {totalProposedShifts > 0 && (
+                          <Badge className="bg-primary/15 text-primary border border-primary/30 text-xs font-semibold">
+                            {totalProposedShifts} New Shifts
+                          </Badge>
+                        )}
+                      </div>
+                      {shiftsLoading ? (
+                        <div className="space-y-3 animate-pulse">
+                          {[1,2].map(i => <div key={i} className="h-16 bg-muted rounded-lg" />)}
+                        </div>
+                      ) : proposedInjection.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground">
+                          <CheckCircle2 className="h-8 w-8 text-emerald-400/50" />
+                          <p className="text-sm font-medium text-emerald-400">Full coverage</p>
+                          <p className="text-xs">All shifts have assigned employees</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {proposedInjection.map((g, i) => (
+                            <div key={i} className="p-3 rounded-xl bg-background/50 border border-border/30">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <p className="text-sm font-semibold">{g.roleName}</p>
+                                  <p className="text-[11px] text-muted-foreground mt-0.5">{g.description}</p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <p className="text-sm font-bold">{g.count} Shifts</p>
+                                  <p className="text-[11px] text-muted-foreground">~{g.avgHours}h avg</p>
+                                </div>
+                              </div>
                             </div>
-                            <div className="text-right shrink-0">
-                              <p className="text-sm font-bold">{g.count} Shifts</p>
-                              <p className="text-[11px] text-muted-foreground">~{g.avgHours}h avg</p>
+                          ))}
+                          <div className="pt-2 border-t border-border/40 space-y-1.5">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Total Hours to Fill</span>
+                              <span className="font-bold">{totalProposedHours.toFixed(1)} Hrs</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Projected Cost Add.</span>
+                              <span className="font-bold text-emerald-400">+{formatCurrency(budgetData.variance)}</span>
                             </div>
                           </div>
                         </div>
-                      ))}
-
-                      <div className="pt-2 border-t border-border/40 space-y-1.5">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Total Hours to Fill</span>
-                          <span className="font-bold">{totalProposedHours.toFixed(1)} Hrs</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Projected Cost Add.</span>
-                          <span className="font-bold text-emerald-400">+{formatCurrency(budgetData.variance)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* ===================== CONFIG + OPTIMIZATION ===================== */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-                {/* Configuration & Rules */}
-                <div className="bg-card border border-border/60 rounded-xl p-5">
-                  <div className="flex items-center gap-2 mb-5">
-                    <Settings2 className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-semibold text-sm">Configuration & Rules</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <ConfigCheckbox checked={useFtBaseline}     onChange={setUseFtBaseline}     label="Use Full-Time Baseline" />
-                    <ConfigCheckbox checked={mergeMicroPeaks}   onChange={setMergeMicroPeaks}   label="Merge Micro Peaks (<1h)" />
-                    <ConfigCheckbox checked={respectBudget}     onChange={setRespectBudget}     label="Respect Budget Cap" />
-                    <ConfigCheckbox checked={enforceCompliance} onChange={setEnforceCompliance} label="Enforce Compliance 100%" />
-                    <ConfigCheckbox checked={preventOvertime}   onChange={setPreventOvertime}   label="Prevent Overtime"
-                      badge={!preventOvertime ? 'Overtime Risk: Low' : undefined} badgeVariant="warn" />
-                  </div>
-                </div>
-
-                {/* Optimization Strategy */}
-                <div className="bg-card border border-border/60 rounded-xl p-5">
-                  <div className="flex items-center justify-between mb-5">
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-semibold text-sm">Optimization Strategy</span>
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" className="text-xs gap-1.5 h-8">
-                          {strategyLabel}<ChevronDown className="h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleStrategyChange('lean')}>Lean</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleStrategyChange('balanced')}>Balanced (Recommended)</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleStrategyChange('conservative')}>Conservative</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  <div className="space-y-5">
-                    <OptSlider label="Cost Efficiency"    value={costWeight}    onChange={setCostWeight}    color="#38bdf8" />
-                    <OptSlider label="Service Coverage"   value={serviceWeight} onChange={setServiceWeight} color="#34d399" />
-                    <OptSlider label="Fatigue Management" value={fatigueWeight} onChange={setFatigueWeight} color="#a78bfa" />
-                  </div>
-                </div>
-              </div>
-
-              {/* ===================== COMPLIANCE + BUDGET ===================== */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-                {/* Compliance Preview */}
-                <div className="bg-card border border-border/60 rounded-xl p-5">
-                  <div className="flex items-center gap-2 mb-4">
-                    <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-semibold text-sm">Compliance Preview</span>
-                  </div>
-                  <div className="flex items-start gap-4">
-                    <div className={cn(
-                      'h-12 w-12 rounded-xl flex items-center justify-center shrink-0',
-                      enforceCompliance
-                        ? 'bg-emerald-500/15 border border-emerald-500/30'
-                        : 'bg-amber-500/15 border border-amber-500/30'
-                    )}>
-                      {enforceCompliance
-                        ? <CheckCircle2 className="h-6 w-6 text-emerald-400" />
-                        : <AlertTriangle className="h-6 w-6 text-amber-400" />
-                      }
-                    </div>
-                    <div>
-                      <p className={cn('font-semibold text-base', enforceCompliance ? 'text-emerald-400' : 'text-amber-400')}>
-                        {enforceCompliance ? 'No violations detected' : 'Soft compliance mode'}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {enforceCompliance
-                          ? 'Checked against Union Agreement v2.4'
-                          : 'Violations may be permitted — enable Enforce Compliance for strict mode'}
-                      </p>
-                      {preventOvertime && (
-                        <p className="text-xs text-emerald-400 mt-1.5">Overtime guard active ✓</p>
                       )}
                     </div>
                   </div>
-                </div>
 
-                {/* Budget Impact */}
-                <div className="bg-card border border-border/60 rounded-xl p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-semibold text-sm">Budget Impact</span>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="bg-card/40 backdrop-blur-sm border border-border/60 rounded-2xl p-5">
+                      <div className="flex items-center gap-2 mb-5">
+                        <Settings2 className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-semibold text-sm">Configuration & Rules</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <ConfigCheckbox checked={useFtBaseline}     onChange={setUseFtBaseline}     label="Use Full-Time Baseline" />
+                        <ConfigCheckbox checked={mergeMicroPeaks}   onChange={setMergeMicroPeaks}   label="Merge Micro Peaks (<1h)" />
+                        <ConfigCheckbox checked={respectBudget}     onChange={setRespectBudget}     label="Respect Budget Cap" />
+                        <ConfigCheckbox checked={enforceCompliance} onChange={setEnforceCompliance} label="Enforce Compliance 100%" />
+                        <ConfigCheckbox checked={preventOvertime}   onChange={setPreventOvertime}   label="Prevent Overtime"
+                          badge={!preventOvertime ? 'Overtime Risk: Low' : undefined} badgeVariant="warn" />
+                      </div>
                     </div>
-                    <span className={cn(
-                      'text-xs font-semibold px-2.5 py-1 rounded-full border',
-                      budgetData.withinBudget
-                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                        : 'bg-red-500/15 text-red-400 border-red-500/30'
-                    )}>
-                      {budgetData.withinBudget ? 'Within Budget' : 'Over Budget'}
-                    </span>
+                    <div className="bg-card/40 backdrop-blur-sm border border-border/60 rounded-2xl p-5">
+                      <div className="flex items-center justify-between mb-5">
+                        <div className="flex items-center gap-2">
+                          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-semibold text-sm">Optimization Strategy</span>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="text-xs gap-1.5 h-8">
+                              {strategyLabel}<ChevronDown className="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleStrategyChange('lean')}>Lean</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleStrategyChange('balanced')}>Balanced (Recommended)</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleStrategyChange('conservative')}>Conservative</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      <div className="space-y-5">
+                        <OptSlider label="Cost Efficiency"    value={costWeight}    onChange={setCostWeight}    color="#38bdf8" />
+                        <OptSlider label="Service Coverage"   value={serviceWeight} onChange={setServiceWeight} color="#34d399" />
+                        <OptSlider label="Fatigue Management" value={fatigueWeight} onChange={setFatigueWeight} color="#a78bfa" />
+                      </div>
+                    </div>
                   </div>
-                  {isLoading ? (
-                    <div className="animate-pulse space-y-3"><div className="h-8 bg-muted rounded" /><div className="h-3 bg-muted rounded w-full" /></div>
-                  ) : (
-                    <>
-                      <div className="grid grid-cols-3 gap-4 mb-3">
-                        {[
-                          { label: 'Current Spend', value: formatCurrency(budgetData.currentSpend), color: 'text-foreground' },
-                          { label: 'Projected Total', value: formatCurrency(budgetData.projectedTotal), color: 'text-foreground' },
-                          { label: 'Variance', value: `+${formatCurrency(budgetData.variance)}`, color: 'text-emerald-400' },
-                        ].map(({ label, value, color }) => (
-                          <div key={label}>
-                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">{label}</p>
-                            <p className={cn('text-xl font-bold', color)}>{value}</p>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="bg-card/40 backdrop-blur-sm border border-border/60 rounded-2xl p-5">
+                      <div className="flex items-center gap-2 mb-4">
+                        <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-semibold text-sm">Compliance Preview</span>
+                      </div>
+                      <div className="flex items-start gap-4">
+                        <div className={cn(
+                          'h-12 w-12 rounded-xl flex items-center justify-center shrink-0',
+                          enforceCompliance
+                            ? 'bg-emerald-500/15 border border-emerald-500/30'
+                            : 'bg-amber-500/15 border border-amber-500/30'
+                        )}>
+                          {enforceCompliance
+                            ? <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+                            : <AlertTriangle className="h-6 w-6 text-amber-400" />
+                          }
+                        </div>
+                        <div>
+                          <p className={cn('font-semibold text-base', enforceCompliance ? 'text-emerald-400' : 'text-amber-400')}>
+                            {enforceCompliance ? 'No violations detected' : 'Soft compliance mode'}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {enforceCompliance
+                              ? 'Checked against Union Agreement v2.4'
+                              : 'Violations may be permitted — enable Enforce Compliance for strict mode'}
+                          </p>
+                          {preventOvertime && (
+                            <p className="text-xs text-emerald-400 mt-1.5">Overtime guard active ✓</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-card/40 backdrop-blur-sm border border-border/60 rounded-2xl p-5">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <DollarSign className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-semibold text-sm">Budget Impact</span>
+                        </div>
+                        <span className={cn(
+                          'text-xs font-semibold px-2.5 py-1 rounded-full border',
+                          budgetData.withinBudget
+                            ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                            : 'bg-red-500/15 text-red-400 border-red-500/30'
+                        )}>
+                          {budgetData.withinBudget ? 'Within Budget' : 'Over Budget'}
+                        </span>
+                      </div>
+                      {shiftsLoading ? (
+                        <div className="animate-pulse space-y-3"><div className="h-8 bg-muted rounded" /><div className="h-3 bg-muted rounded w-full" /></div>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-3 gap-4 mb-3">
+                            {[
+                              { label: 'Current Spend', value: formatCurrency(budgetData.currentSpend), color: 'text-foreground' },
+                              { label: 'Projected Total', value: formatCurrency(budgetData.projectedTotal), color: 'text-foreground' },
+                              { label: 'Variance', value: `+${formatCurrency(budgetData.variance)}`, color: 'text-emerald-400' },
+                            ].map(({ label, value, color }) => (
+                              <div key={label}>
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">{label}</p>
+                                <p className={cn('text-xl font-bold', color)}>{value}</p>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                      <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
-                        <div
-                          className={cn('h-full rounded-full transition-all duration-500', budgetData.withinBudget ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' : 'bg-gradient-to-r from-red-500 to-red-400')}
-                          style={{ width: `${budgetData.pct}%` }}
-                        />
-                      </div>
-                      <p className="text-[10px] text-muted-foreground mt-1.5">{budgetData.pct.toFixed(1)}% of {formatCurrency(budgetData.budgetCap)} budget cap</p>
-                    </>
-                  )}
-                </div>
-              </div>
+                          <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
+                            <div
+                              className={cn('h-full rounded-full transition-all duration-500', budgetData.withinBudget ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' : 'bg-gradient-to-r from-red-500 to-red-400')}
+                              style={{ width: `${budgetData.pct}%` }}
+                            />
+                          </div>
+                          <p className="text-[10px] text-muted-foreground mt-1.5">{budgetData.pct.toFixed(1)}% of {formatCurrency(budgetData.budgetCap)} budget cap</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
 
-              {/* ===================== FOOTER ACTION BAR ===================== */}
-              <div className="flex items-center justify-between gap-4 flex-wrap bg-card border border-border/60 rounded-xl px-5 py-4">
-                <div className="flex items-start gap-2.5 text-xs text-muted-foreground max-w-[520px]">
-                  <Info className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                  <span>
-                    This generation applies only to{' '}
-                    <span className="font-semibold text-foreground">{subDepartmentName || departmentName || 'the current scope'}</span>.
-                    Other sub-departments are strictly isolated and not affected.
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Button variant="outline" onClick={() => window.history.back()}>Cancel</Button>
-                  <Button
-                    onClick={() => setShowConfirmDialog(true)}
-                    disabled={!hasShifts || totalProposedShifts === 0 || isLoading}
-                    className="gap-2 font-semibold px-6"
-                  >
-                    <Zap className="h-4 w-4" />
-                    Confirm & Inject
-                    {totalProposedShifts > 0 && (
-                      <Badge className="ml-1 bg-primary-foreground/20 text-primary-foreground border-0 text-xs">
-                        {totalProposedShifts}
-                      </Badge>
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-            </motion.div>
-          )}
-        </AnimatePresence>
+                  <div className="flex items-center justify-between gap-4 flex-wrap bg-card/40 backdrop-blur-sm border border-border/60 rounded-2xl px-5 py-4">
+                    <div className="flex items-start gap-2.5 text-xs text-muted-foreground max-w-[520px]">
+                      <Info className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                      <span>
+                        This generation applies only to{' '}
+                        <span className="font-semibold text-foreground">{subDepartmentName || departmentName || 'the current scope'}</span>.
+                        Other sub-departments are strictly isolated and not affected.
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Button variant="outline" className="rounded-xl h-10 px-6 font-bold" onClick={() => window.history.back()}>Cancel</Button>
+                      <Button
+                        onClick={() => setShowConfirmDialog(true)}
+                        disabled={shifts.length === 0 || totalProposedShifts === 0 || shiftsLoading}
+                        className="gap-2 font-bold px-8 h-10 rounded-xl shadow-lg shadow-primary/20"
+                      >
+                        <Zap className="h-4 w-4" />
+                        Confirm & Inject
+                        {totalProposedShifts > 0 && (
+                          <Badge className="ml-1 bg-primary-foreground/20 text-primary-foreground border-0 text-xs">
+                            {totalProposedShifts}
+                          </Badge>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
       </div>
 
       {/* ===================== MODALS ===================== */}
@@ -1250,6 +1261,7 @@ const LaborDemandForecastingPage: React.FC = () => {
       </AnimatePresence>
     </div>
   );
+
 };
 
 export default LaborDemandForecastingPage;

@@ -69,11 +69,11 @@ export function isEligible(
         if (avMatch.status !== 'PASS') {
             const label = availabilityStatusLabel(avMatch);
 
-            if (enforce) {
-                // MANUAL / AUTO: availability mismatch blocks the assignment
+            if (avMatch.status === 'FAIL' && enforce) {
+                // FAIL (Overlap) blocks ONLY for MANUAL/AUTO
                 reasons.push(label);
             } else {
-                // BID / TRADE: surfaced as advisory only
+                // Surface as advisory in bidding/trading or if just a WARN
                 advisories.push(label);
             }
         }
@@ -129,17 +129,15 @@ export function checkAvailabilityOnly(
     const reasons:    string[] = [];
     const advisories: string[] = [];
 
-    if (hasLock) {
+    if (hasLock && enforce) {
         const msg = 'Employee already has an assigned shift during this time (time slot is locked).';
-        // Locked interval is always rejected for ALL contexts
         reasons.push(msg);
+    } else if (hasLock && !enforce) {
+        const msg = 'Employee already has an assigned shift during this time (time slot is locked).';
+        advisories.push(msg);
     } else if (notDeclHits.length > 0) {
         const msg = 'Employee has not declared availability for this shift time.';
-        if (enforce) {
-            reasons.push(msg);
-        } else {
-            advisories.push(msg);
-        }
+        advisories.push(msg);
     }
 
     return {

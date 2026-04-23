@@ -1189,26 +1189,30 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                     <Button disabled className="w-full min-h-[44px] rounded-xl text-[11px] font-semibold uppercase tracking-wider">
                       <Loader2 className="h-4 w-4 animate-spin mr-2" /> Analyzing…
                     </Button>
-                  ) : !bidsPanel.canProceed ? (
-                    <>
-                      <motion.div whileTap={{ scale: 0.98 }}>
-                        <Button
-                          onClick={handleAssign}
-                          disabled={isAssigning}
-                          className={cn(
-                            'w-full min-h-[44px] rounded-xl text-[11px] font-semibold uppercase tracking-wider shadow-lg',
-                            (bidsPanel.result?.buckets.B.length ?? 0) > 0
-                              ? 'bg-amber-500 text-amber-950 hover:bg-amber-400 shadow-amber-500/20'
-                              : 'bg-emerald-500 text-white hover:bg-emerald-400 shadow-emerald-500/20',
-                          )}
-                        >
-                          {isAssigning
-                            ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                            : <LucideUserCheck className="h-4 w-4 mr-2" />}
-                          {(bidsPanel.result?.buckets.B.length ?? 0) > 0 ? 'Override & Assign' : 'Assign Role'}
-                        </Button>
-                      </motion.div>
-                    </>
+                  ) : (
+                    <motion.div whileTap={{ scale: blockingIssues.length > 0 ? 1 : 0.98 }}>
+                      <Button
+                        onClick={handleAssign}
+                        disabled={isAssigning || blockingIssues.length > 0}
+                        className={cn(
+                          'w-full min-h-[44px] rounded-xl text-[11px] font-semibold uppercase tracking-wider shadow-lg',
+                          blockingIssues.length > 0
+                            ? 'bg-muted/50 text-muted-foreground/40 cursor-not-allowed shadow-none border border-border/40'
+                            : warningIssues.length > 0
+                            ? 'bg-amber-500 text-amber-950 hover:bg-amber-400 shadow-amber-500/20'
+                            : 'bg-emerald-500 text-white hover:bg-emerald-400 shadow-emerald-500/20',
+                        )}
+                      >
+                        {isAssigning
+                          ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          : <LucideUserCheck className="h-4 w-4 mr-2" />}
+                        {blockingIssues.length > 0
+                          ? 'Blocked by Compliance'
+                          : warningIssues.length > 0
+                          ? 'Override & Assign'
+                          : 'Assign Role'}
+                      </Button>
+                    </motion.div>
                   )}
                 </div>
               </div>
@@ -1474,6 +1478,57 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                 </AnimatePresence>
               </div>
             </ScrollArea>
+
+            {/* Action Footer */}
+            <div className="shrink-0 p-5 border-t border-white/[0.05] bg-white/[0.02] backdrop-blur-md">
+              <AnimatePresence mode="wait">
+                {!selectedBid ? (
+                  <div className="h-[44px] flex items-center justify-center rounded-xl border border-dashed border-white/[0.05] bg-white/[0.01]">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/10">Select a candidate</span>
+                  </div>
+                ) : bidsPanel.status === 'idle' || bidsPanel.status === 'error' ? (
+                  <Button
+                    onClick={bidsPanel.run}
+                    className="w-full h-11 text-[11px] font-semibold uppercase tracking-wider rounded-xl shadow-lg shadow-primary/10"
+                  >
+                    <ShieldCheck className="h-4 w-4 mr-2" />
+                    Run Compliance Check
+                  </Button>
+                ) : bidsPanel.status === 'running' ? (
+                  <Button disabled className="w-full h-11 rounded-xl text-[11px] font-semibold uppercase tracking-wider bg-white/5">
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" /> Compliance logic running…
+                  </Button>
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    whileTap={{ scale: blockingIssues.length > 0 ? 1 : 0.98 }}
+                  >
+                    <Button
+                      onClick={handleAssign}
+                      disabled={isAssigning || blockingIssues.length > 0}
+                      className={cn(
+                        'w-full h-11 rounded-xl text-[11px] font-semibold uppercase tracking-wider shadow-lg transition-all duration-300',
+                        blockingIssues.length > 0
+                          ? 'bg-muted/50 text-muted-foreground/40 cursor-not-allowed shadow-none border border-border/40'
+                          : warningIssues.length > 0
+                          ? 'bg-amber-500 text-amber-950 hover:bg-amber-400 shadow-amber-500/20'
+                          : 'bg-emerald-500 text-white hover:bg-emerald-400 shadow-emerald-500/20',
+                      )}
+                    >
+                      {isAssigning
+                        ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        : <LucideUserCheck className="h-4 w-4 mr-2" />}
+                      {blockingIssues.length > 0
+                        ? 'Blocked by Compliance'
+                        : warningIssues.length > 0
+                        ? 'Override & Assign Role'
+                        : 'Finalize Assignment'}
+                    </Button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
 

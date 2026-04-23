@@ -187,7 +187,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
         onClick && 'cursor-pointer hover:shadow-lg',
         isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
         isDragging && 'opacity-50',
-        dot === null && isPast && 'grayscale opacity-60 cursor-not-allowed',
+        dot === null && isPast && 'grayscale opacity-30 cursor-not-allowed',
         className
       )}
       onClick={isPast ? undefined : onClick}
@@ -207,7 +207,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
       </div>
 
       {/* BODY */}
-      <div className={cn("p-3 flex flex-col gap-2 flex-1", isPast && dot !== null && "grayscale opacity-60")}>
+      <div className={cn("p-3 flex flex-col gap-2 flex-1", isPast && dot !== null && "grayscale opacity-30")}>
 
         {/* IDENTITY */}
         <div className="text-center space-y-1">

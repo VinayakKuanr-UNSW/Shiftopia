@@ -108,8 +108,6 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
     const isMobile = useIsMobile();
     const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
     const [showRejectConfirm, setShowRejectConfirm] = useState<string | null>(null);
-    // Mobile tab: 'inbox' shows the offer list; 'detail' shows the selected offer
-    const [mobileTab, setMobileTab] = useState<'inbox' | 'detail'>('inbox');
 
     // Fetch offers
     const { data: offers, isLoading: isLoadingOffers } = useQuery({
@@ -181,181 +179,115 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
             <>
                 <Drawer open={isOpen} onOpenChange={(open) => !open && onClose()}>
                     <DrawerContent className="bg-background border-border max-h-[92vh] flex flex-col">
-                        <DrawerHeader className="pb-2">
-                            <DrawerTitle className="text-base font-black tracking-tight">
-                                {mobileTab === 'inbox' ? 'Swap Offers' : 'Offer Details'}
+                        <DrawerHeader className="pb-4">
+                            <DrawerTitle className="text-xl font-black tracking-tight">
+                                Swap Offers
                             </DrawerTitle>
-                            <DrawerDescription className="text-xs text-muted-foreground">
-                                {mobileTab === 'inbox'
-                                    ? `${displayOffers.length} offer${displayOffers.length !== 1 ? 's' : ''} for this request`
-                                    : selectedOffer?.offerer?.full_name
-                                        ? `From ${selectedOffer.offerer.full_name}`
-                                        : 'Review and respond'}
+                            <DrawerDescription className="text-sm font-medium mt-1 text-muted-foreground">
+                                {displayOffers.length} active offer{displayOffers.length !== 1 ? 's' : ''} for this request
                             </DrawerDescription>
                         </DrawerHeader>
 
-                        {/* Tab pills */}
-                        <div className="flex gap-2 px-4 mb-3">
-                            <button
-                                onClick={() => setMobileTab('inbox')}
-                                className={cn(
-                                    'flex-1 h-9 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all',
-                                    mobileTab === 'inbox'
-                                        ? 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/30'
-                                        : 'bg-muted/40 text-muted-foreground border border-border'
-                                )}
-                            >
-                                Inbox ({displayOffers.length})
-                            </button>
-                            <button
-                                onClick={() => { if (selectedOfferId) setMobileTab('detail'); }}
-                                disabled={!selectedOfferId}
-                                className={cn(
-                                    'flex-1 h-9 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all disabled:opacity-40',
-                                    mobileTab === 'detail'
-                                        ? 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/30'
-                                        : 'bg-muted/40 text-muted-foreground border border-border'
-                                )}
-                            >
-                                Details
-                            </button>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-2">
-                            {mobileTab === 'inbox' ? (
-                                isLoadingOffers ? (
-                                    [1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl bg-muted/40" />)
-                                ) : displayOffers.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-16 opacity-30">
-                                        <MessageSquare className="h-8 w-8 mb-3 stroke-[1]" />
-                                        <p className="text-[10px] font-black uppercase tracking-widest">No Offers Yet</p>
-                                    </div>
-                                ) : (
-                                    displayOffers.map((offer) => (
-                                        <button
-                                            key={offer.id}
-                                            onClick={() => { setSelectedOfferId(offer.id); setMobileTab('detail'); }}
-                                            className={cn(
-                                                'w-full text-left p-3.5 rounded-xl border flex items-center justify-between gap-3 transition-all active:scale-[0.98]',
-                                                selectedOfferId === offer.id
-                                                    ? 'bg-indigo-500/10 border-indigo-500/40'
-                                                    : 'bg-card border-border'
-                                            )}
-                                        >
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                <Avatar className="h-9 w-9 flex-shrink-0">
-                                                    <AvatarFallback className="text-[10px] font-black bg-muted">
+                        <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-6 custom-scrollbar">
+                            {isLoadingOffers ? (
+                                [1, 2].map(i => <Skeleton key={i} className="h-64 w-full rounded-[2rem] bg-muted/40" />)
+                            ) : displayOffers.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-16 opacity-30">
+                                    <MessageSquare className="h-8 w-8 mb-3 stroke-[1]" />
+                                    <p className="text-[10px] font-black uppercase tracking-widest">No Offers Yet</p>
+                                </div>
+                            ) : (
+                                displayOffers.map((offer) => (
+                                    <div key={offer.id} className="space-y-4 p-5 rounded-[2rem] border border-border bg-card shadow-sm">
+                                        {/* Header */}
+                                        <div className="flex items-center justify-between pb-4 border-b border-border/50">
+                                            <div className="flex items-center gap-3">
+                                                <Avatar className="h-10 w-10 border border-border/50">
+                                                    <AvatarFallback className="text-[11px] font-black bg-muted">
                                                         {getInitials(offer.offerer?.full_name || '?')}
                                                     </AvatarFallback>
                                                 </Avatar>
-                                                <div className="min-w-0">
-                                                    <p className="text-[12px] font-black text-foreground truncate">
+                                                <div>
+                                                    <p className="text-sm font-black text-foreground">
                                                         {offer.offerer?.full_name || 'Anonymous'}
                                                     </p>
-                                                    <p className="text-[10px] text-muted-foreground">
-                                                        {offer.offered_shift
-                                                            ? `${format(new Date(offer.offered_shift.shiftDate), 'EEE, MMM d')} · ${offer.offered_shift.startTime.slice(0, 5)}`
-                                                            : 'N/A'}
+                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                                                        {[offer.offered_shift?.organizations?.name, offer.offered_shift?.departments?.name, offer.offered_shift?.sub_departments?.name].filter(Boolean).join(' → ') || 'Unspecified'}
                                                     </p>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2 flex-shrink-0">
-                                                <Badge className={cn(
-                                                    'text-[8px] h-4 px-1.5 font-black uppercase tracking-widest',
-                                                    offer.status === 'SUBMITTED' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
-                                                        offer.status === 'SELECTED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
-                                                            'bg-slate-500/10 text-slate-500 border-slate-500/20'
-                                                )} variant="outline">
-                                                    {offer.status === 'SUBMITTED' ? 'Pending' : offer.status}
-                                                </Badge>
-                                                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40" />
-                                            </div>
-                                        </button>
-                                    ))
-                                )
-                            ) : selectedOffer ? (
-                                /* Detail tab */
-                                <div className="space-y-4">
-                                    {/* Swap comparison */}
-                                    <div className="flex items-center gap-3">
-                                        <div className={cn('flex-1 p-4 rounded-2xl border flex flex-col items-center gap-2 text-center', getGroupColor(selectedOffer.offered_shift?.roles?.group_type || selectedOffer.offered_shift?.roles?.groupType, selectedOffer.offered_shift?.departments?.name))}>
-                                            <span className="text-[9px] font-black uppercase tracking-widest opacity-60">They Give</span>
-                                            <div className="text-xs font-black text-foreground">
-                                                {selectedOffer.offered_shift ? format(new Date(selectedOffer.offered_shift.shiftDate), 'EEE, MMM d') : 'N/A'}
-                                            </div>
-                                            <div className="text-[10px] font-bold opacity-70">
-                                                {selectedOffer.offered_shift ? `${formatTime(selectedOffer.offered_shift.startTime)} – ${formatTime(selectedOffer.offered_shift.endTime)}` : 'N/A'}
-                                            </div>
+                                            <Badge className={cn(
+                                                'text-[9px] h-5 px-2 font-black uppercase tracking-widest',
+                                                offer.status === 'SUBMITTED' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+                                                    offer.status === 'SELECTED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                                                        'bg-slate-500/10 text-slate-500 border-slate-500/20'
+                                            )} variant="outline">
+                                                {offer.status === 'SUBMITTED' ? 'Pending' : offer.status}
+                                            </Badge>
                                         </div>
-                                        <div className="h-8 w-8 rounded-full bg-muted border border-border flex items-center justify-center flex-shrink-0">
-                                            <ArrowLeftRight className="h-3.5 w-3.5 text-muted-foreground" />
-                                        </div>
-                                        <div className={cn('flex-1 p-4 rounded-2xl border flex flex-col items-center gap-2 text-center', getGroupColor(myShift?.roles?.group_type || myShift?.roles?.groupType, myShift?.departments?.name))}>
-                                            <span className="text-[9px] font-black uppercase tracking-widest opacity-60">You Give</span>
-                                            <div className="text-xs font-black text-foreground">
-                                                {myShift ? format(new Date(myShift.shiftDate), 'EEE, MMM d') : 'N/A'}
-                                            </div>
-                                            <div className="text-[10px] font-bold opacity-70">
-                                                {myShift ? `${formatTime(myShift.startTime)} – ${formatTime(myShift.endTime)}` : 'N/A'}
-                                            </div>
-                                        </div>
-                                    </div>
 
-                                    {/* Info */}
-                                    <div className="bg-muted/30 border border-border p-4 rounded-2xl space-y-3 text-sm">
-                                        <div>
-                                            <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 mb-0.5">From</p>
-                                            <p className="text-[12px] font-bold text-foreground">{selectedOffer.offerer?.full_name || 'Anonymous'}</p>
+                                        {/* Swap comparison */}
+                                        <div className="flex items-center gap-3">
+                                            <div className={cn('flex-1 p-4 rounded-2xl border flex flex-col items-center gap-2 text-center', getGroupColor(offer.offered_shift?.roles?.group_type || offer.offered_shift?.roles?.groupType, offer.offered_shift?.departments?.name))}>
+                                                <span className="text-[9px] font-black uppercase tracking-widest opacity-60">They Give</span>
+                                                <div className="text-xs font-black text-foreground">
+                                                    {offer.offered_shift ? format(new Date(offer.offered_shift.shiftDate), 'EEE, MMM d') : 'N/A'}
+                                                </div>
+                                                <div className="text-[10px] font-bold opacity-70">
+                                                    {offer.offered_shift ? `${formatTime(offer.offered_shift.startTime)} – ${formatTime(offer.offered_shift.endTime)}` : 'N/A'}
+                                                </div>
+                                            </div>
+                                            <div className="h-8 w-8 rounded-full bg-muted border border-border flex items-center justify-center flex-shrink-0">
+                                                <ArrowLeftRight className="h-3.5 w-3.5 text-muted-foreground" />
+                                            </div>
+                                            <div className={cn('flex-1 p-4 rounded-2xl border flex flex-col items-center gap-2 text-center', getGroupColor(myShift?.roles?.group_type || myShift?.roles?.groupType, myShift?.departments?.name))}>
+                                                <span className="text-[9px] font-black uppercase tracking-widest opacity-60">You Give</span>
+                                                <div className="text-xs font-black text-foreground">
+                                                    {myShift ? format(new Date(myShift.shiftDate), 'EEE, MMM d') : 'N/A'}
+                                                </div>
+                                                <div className="text-[10px] font-bold opacity-70">
+                                                    {myShift ? `${formatTime(myShift.startTime)} – ${formatTime(myShift.endTime)}` : 'N/A'}
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60 mb-0.5">Location</p>
-                                            <p className="text-[11px] font-bold text-foreground">
-                                                {[selectedOffer.offered_shift?.organizations?.name, selectedOffer.offered_shift?.departments?.name, selectedOffer.offered_shift?.sub_departments?.name].filter(Boolean).join(' → ') || 'Unspecified'}
+
+                                        <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10">
+                                            <Info className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                                            <p className="text-[11px] text-amber-500/80 font-medium leading-relaxed">
+                                                Approving this offer will automatically decline all other pending offers.
                                             </p>
                                         </div>
-                                    </div>
 
-                                    <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10">
-                                        <Info className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                                        <p className="text-[11px] text-amber-500/80 font-medium leading-relaxed">
-                                            Approving this offer will automatically decline all other pending offers.
-                                        </p>
+                                        {/* Actions */}
+                                        {offer.status === 'SUBMITTED' && currentSwap?.status === 'OPEN' ? (
+                                            <div className="flex flex-col gap-2 pt-2 border-t border-border/50">
+                                                <Button
+                                                    onClick={() => onAccept(offer)}
+                                                    disabled={isAccepting || isDeclining}
+                                                    className="h-13 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-indigo-600 hover:bg-indigo-500 text-white mt-2"
+                                                >
+                                                    {isAccepting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Send className="h-4 w-4 mr-2" />Approve & Send to Manager</>}
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    onClick={() => setShowRejectConfirm(offer.id)}
+                                                    disabled={isAccepting || isDeclining}
+                                                    className="h-11 rounded-2xl font-black text-[10px] uppercase tracking-widest text-muted-foreground hover:text-rose-500 hover:bg-rose-500/5"
+                                                >
+                                                    Reject Offer
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <div className={cn(
+                                                'flex items-center justify-center gap-3 p-4 rounded-2xl border text-[11px] font-black uppercase tracking-widest mt-2',
+                                                offer.status === 'SELECTED' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' : 'bg-slate-500/10 border-slate-500/30 text-slate-500'
+                                            )}>
+                                                {offer.status === 'SELECTED' ? <CheckCircle2 className="h-4 w-4" /> : <X className="h-4 w-4" />}
+                                                {offer.status === 'SELECTED' ? 'Awaiting Manager' : offer.status}
+                                            </div>
+                                        )}
                                     </div>
-
-                                    {/* Actions */}
-                                    {selectedOffer.status === 'SUBMITTED' && currentSwap?.status === 'OPEN' ? (
-                                        <div className="flex flex-col gap-2 pt-2">
-                                            <Button
-                                                onClick={handleAccept}
-                                                disabled={isAccepting || isDeclining}
-                                                className="h-13 rounded-2xl font-black text-[11px] uppercase tracking-widest bg-indigo-600 hover:bg-indigo-500 text-white"
-                                            >
-                                                {isAccepting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Send className="h-4 w-4 mr-2" />Approve & Send to Manager</>}
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                onClick={() => setShowRejectConfirm(selectedOffer.id)}
-                                                disabled={isAccepting || isDeclining}
-                                                className="h-11 rounded-2xl font-black text-[10px] uppercase tracking-widest text-muted-foreground hover:text-rose-500 hover:bg-rose-500/5"
-                                            >
-                                                Reject Offer
-                                            </Button>
-                                        </div>
-                                    ) : (
-                                        <div className={cn(
-                                            'flex items-center justify-center gap-3 p-4 rounded-2xl border text-[11px] font-black uppercase tracking-widest',
-                                            selectedOffer.status === 'SELECTED' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' : 'bg-slate-500/10 border-slate-500/30 text-slate-500'
-                                        )}>
-                                            {selectedOffer.status === 'SELECTED' ? <CheckCircle2 className="h-4 w-4" /> : <X className="h-4 w-4" />}
-                                            {selectedOffer.status === 'SELECTED' ? 'Awaiting Manager' : selectedOffer.status}
-                                        </div>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="flex flex-col items-center justify-center py-16 opacity-30">
-                                    <Inbox className="h-8 w-8 mb-3 stroke-[1] animate-pulse" />
-                                    <p className="text-[10px] font-black uppercase tracking-widest">Select an Offer</p>
-                                </div>
+                                ))
                             )}
                         </div>
 

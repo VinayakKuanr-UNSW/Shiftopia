@@ -33,6 +33,7 @@ interface TimesheetTableProps {
     onDateChange?: (date: Date) => void;
     onRefresh?: () => void;
     isRefreshing?: boolean;
+    hideTopControls?: boolean;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -51,6 +52,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
     onDateChange,
     onRefresh,
     isRefreshing,
+    hideTopControls = false,
 }) => {
     // ── Filter state (owned here, shared to both mobile + desktop) ─────────────
     const [appliedFilters, setAppliedFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
@@ -231,27 +233,29 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
             <div className="hidden md:block space-y-5">
 
                 {/* Unified function bar */}
-                <TimesheetFunctionBar
-                    viewMode={viewMode}
-                    onViewChange={onViewChange}
-                    selectedDate={selectedDate}
-                    onDateChange={onDateChange ?? (() => {})}
-                    searchQuery={searchQuery}
-                    setSearchQuery={setSearchQuery ?? (() => {})}
-                    entries={entries}
-                    appliedFilters={appliedFilters}
-                    onApplyFilters={setAppliedFilters}
-                    activeFilterCount={activeFilterCount}
-                    onExportPDF={handleExportPDF}
-                    onExportSpreadsheet={handleExportXLSX}
-                    onRefresh={onRefresh ?? (() => {})}
-                    isRefreshing={isRefreshing ?? false}
-                    isSelectMode={isSelectMode}
-                    onToggleSelectMode={handleToggleSelectMode}
-                    selectedCount={selectedIds.length}
-                    onBulkApprove={handleBulkApprove}
-                    onBulkReject={handleBulkReject}
-                />
+                {!hideTopControls && (
+                    <TimesheetFunctionBar
+                        viewMode={viewMode}
+                        onViewChange={onViewChange}
+                        selectedDate={selectedDate}
+                        onDateChange={onDateChange ?? (() => {})}
+                        searchQuery={searchQuery}
+                        setSearchQuery={setSearchQuery ?? (() => {})}
+                        entries={entries}
+                        appliedFilters={appliedFilters}
+                        onApplyFilters={setAppliedFilters}
+                        activeFilterCount={activeFilterCount}
+                        onExportPDF={handleExportPDF}
+                        onExportSpreadsheet={handleExportXLSX}
+                        onRefresh={onRefresh ?? (() => {})}
+                        isRefreshing={isRefreshing ?? false}
+                        isSelectMode={isSelectMode}
+                        onToggleSelectMode={handleToggleSelectMode}
+                        selectedCount={selectedIds.length}
+                        onBulkApprove={handleBulkApprove}
+                        onBulkReject={handleBulkReject}
+                    />
+                )}
 
                 {/* Table View */}
                 {viewMode === "table" && (

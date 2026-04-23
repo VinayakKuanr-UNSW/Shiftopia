@@ -19,7 +19,6 @@ import {
   Zap,
   Lock,
   Wand2,
-  History,
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
@@ -52,7 +51,6 @@ import { ShiftCardLegend } from '@/modules/rosters/ui/components/ShiftCardLegend
 import {
   Shift,
   TemplateGroupType,
-  isValidUuid,
 } from '@/modules/rosters/api/shifts.api';
 import { useRosterStructure } from '@/modules/rosters/state/useRosterStructure';
 import { RosterStructure, RosterGroupStructure, RosterSubGroupStructure } from '@/modules/rosters/model/roster.types';
@@ -67,6 +65,9 @@ import {
   usePublishShift,
   useUnpublishShift,
   useEmployees,
+  snapshotLists,
+  rollbackLists,
+  patchLists,
 } from '@/modules/rosters/state/useRosterShifts';
 import { 
   useAddSubGroup, 
@@ -107,8 +108,8 @@ import {
 import { DndAssignModal } from '@/modules/rosters/ui/dialogs/DndAssignModal';
 import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
-import { complianceService } from '@/modules/rosters/services/compliance.service';
-import { calculateMinutesBetweenTimes } from '@/modules/rosters/domain/shift.entity';
+// complianceService and calculateMinutesBetweenTimes removed — handleShiftDrop now
+// routes through executeAssignShift which encapsulates all compliance logic.
 import { groupShiftsIntoBuckets, type ShiftBucket as ShiftBucketType } from '@/modules/rosters/utils/bucket.utils';
 import { ShiftBucket, type BucketShiftData } from '@/modules/rosters/ui/components/ShiftBucket';
 import { canDragShift, canDropOnTarget } from '@/modules/rosters/utils/dnd.utils';
@@ -637,36 +638,49 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
         return;
       }
 
-      // --- Compliance check for assigned draft shifts (ONLY on date change) ---
-      if (shift.assigned_employee_id && isValidUuid(shift.assigned_employee_id) && shift.lifecycle_status === 'Draft' && targetDate !== item.shiftDate) {
-        try {
-          const netMinutes =
-            calculateMinutesBetweenTimes(shift.start_time, shift.end_time)
-            - (shift.unpaid_break_minutes || 0);
+      // ── Optimistic cache update (instant UI feedback) ──
+      const snapshot = snapshotLists(queryClient);
+      patchLists(queryClient, (old) =>
+        old.map(s =>
+          s.id === item.shiftId
+            ? {
+                ...s,
+                ...(targetDate !== item.shiftDate ? { shift_date: targetDate } : {}),
+                group_type: targetGroupType === 'unassigned' ? null : targetGroupType,
+                sub_group_name: targetSubGroup === 'Unassigned' ? null : targetSubGroup,
+                shift_group_id: targetGroupType === 'unassigned' ? null : targetGroupId,
+              }
+            : s,
+        ) as any,
+      );
 
-          const validation = await complianceService.validateShiftCompliance(
-            shift.assigned_employee_id,
-            targetDate, // Always use targetDate here as we're in the "date changed" block
-            shift.start_time,
-            shift.end_time,
-            netMinutes,
-            shift.id,
-          );
+      // --- Compliance-gated check for ALL shifts on date change ---
+      // Routes through the unified executeAssignShift command which runs:
+      //   Assigned shifts: full V2 compliance (all 12 rules incl. R01 overlap)
+      //   Unassigned shifts: skeleton compliance (R02 min duration, R08 meal break)
+      if (targetDate !== item.shiftDate) {
+        const result = await executeAssignShift({
+          shiftId: shift.id,
+          employeeId: undefined as any,   // preserve current assignment
+          targetDate,
+        });
 
-          if (!validation.isValid) {
-            const reasons = validation.violations.map((v: any) => v.message || v.rule || 'Compliance violation').join('; ');
-            toast({
-              title: 'Compliance Check Failed',
-              description: `Cannot move shift to different date: ${reasons}`,
-              variant: 'destructive',
-            });
-            return;
-          }
-        } catch (compErr) {
-          console.error('Compliance check error during DnD:', compErr);
+        if (!result.success) {
+          // ── Rollback: compliance rejected the move ──
+          rollbackLists(queryClient, snapshot);
           toast({
-            title: 'Compliance Warning',
-            description: 'Could not verify compliance for the new date. Proceeding.',
+            title: 'Move Blocked',
+            description: result.error ?? 'Compliance check failed.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        // Surface advisory warnings (non-blocking)
+        if (result.advisories && result.advisories.length > 0) {
+          toast({
+            title: 'Warning',
+            description: result.advisories[0],
           });
         }
       }
@@ -681,12 +695,17 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           shiftDate: shift.shift_date || null,
         };
 
+        // If the shift is dropped into the 'unassigned' bucket in Group Mode, 
+        // we do NOT want to null out its roster_subgroup_id / group_type as this violates NOT NULL constraints.
+        // It simply gets unassigned from whatever employee or stays unassigned.
         await shiftsCommands.moveShift(item.shiftId, {
-          groupType: targetGroupType === 'unassigned' ? null : targetGroupType,
-          subGroupName: targetSubGroup === 'Unassigned' ? null : targetSubGroup,
-          shiftGroupId: targetGroupType === 'unassigned' ? null : targetGroupId,
-          rosterSubgroupId: targetGroupType === 'unassigned' ? null : targetSubGroupId,
-          shiftDate: targetDate !== item.shiftDate ? targetDate : null,
+          groupType: targetGroupType === 'unassigned' ? undefined : targetGroupType,
+          subGroupName: targetSubGroup === 'Unassigned' ? undefined : targetSubGroup,
+          shiftGroupId: targetGroupType === 'unassigned' ? undefined : targetGroupId,
+          rosterSubgroupId: targetGroupType === 'unassigned' ? undefined : targetSubGroupId,
+          // Date change already applied by executeAssignShift above — only pass
+          // non-date group metadata changes to moveShift to avoid double-write.
+          shiftDate: null,
         });
 
         // Store for Undo
@@ -704,16 +723,18 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
             </ToastAction>
           ),
         });
-
-        // Invalidate caches so the grid refetches with the new position
-        queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
-        queryClient.invalidateQueries({ queryKey: shiftKeys.detail(item.shiftId) });
       } catch (error) {
+        // ── Rollback: moveShift failed ──
+        rollbackLists(queryClient, snapshot);
         toast({
           title: 'Failed to move shift',
           description: error instanceof Error ? error.message : 'Unknown error',
           variant: 'destructive',
         });
+      } finally {
+        // Always reconcile with the server
+        queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+        queryClient.invalidateQueries({ queryKey: shiftKeys.detail(item.shiftId) });
       }
     },
     [externalShifts, queryClient, toast]

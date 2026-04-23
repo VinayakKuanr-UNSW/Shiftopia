@@ -26,8 +26,8 @@ import {
     ShieldCheck, 
     Lock, 
     Edit, 
-    type LucideIcon 
 } from 'lucide-react';
+import { DefenderShieldIcon } from '@/modules/core/ui/icons/DefenderShieldIcon';
 
 // ─── Tone ────────────────────────────────────────────────────────────────────
 
@@ -100,7 +100,7 @@ export interface ProtectionContext {
     label: string;
     isLocked: boolean;
     isProtected: boolean;
-    icon: LucideIcon;
+    icon: React.ComponentType<{ className?: string, size?: number | string }>;
     colorClass: string;
 }
 
@@ -238,7 +238,7 @@ export function getProtectionContext(
     if (isPast) {
         return {
             status: 'LOCKED',
-            label: 'LOCKED',
+            label: 'Locked',
             isLocked: true,
             isProtected: false,
             icon: Lock,
@@ -247,21 +247,21 @@ export function getProtectionContext(
     }
 
     // Published shifts are PROTECTED
-    if (status === 'published') {
+    if (status === 'published' || status === 'completed') {
         return {
             status: 'PROTECTED',
-            label: 'PROTECTED',
+            label: 'Protected',
             isLocked: false,
             isProtected: true,
-            icon: ShieldCheck,
-            colorClass: 'text-blue-500' // Recognition of publication
+            icon: DefenderShieldIcon,
+            colorClass: 'text-black dark:text-white' // Black icon as requested
         };
     }
 
     // Otherwise it's a DRAFT
     return {
         status: 'DRAFT',
-        label: 'DRAFT',
+        label: 'Draft',
         isLocked: false,
         isProtected: false,
         icon: Edit,

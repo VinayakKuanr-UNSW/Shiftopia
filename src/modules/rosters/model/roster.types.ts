@@ -428,10 +428,10 @@ function getGroupColorName(hex: string): string {
  */
 export function getGroupColor(name: string | null | undefined): string {
     const n = (name || '').toLowerCase();
-    if (n.includes('convention')) return '#3b82f6'; // blue
-    if (n.includes('exhibition')) return '#10b981'; // green
-    if (n.includes('theatre')) return '#ef4444';    // red
-    return '#6b7280'; // gray default
+    if (n.includes('convention')) return 'convention_centre';
+    if (n.includes('exhibition')) return 'exhibition_centre';
+    if (n.includes('theatre')) return 'theatre';
+    return 'default_yellow';
 }
 
 /**

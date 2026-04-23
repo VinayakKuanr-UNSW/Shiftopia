@@ -100,72 +100,31 @@ const MonthView: React.FC<MonthViewProps> = ({
   });
   if (currentWeek.length > 0) weeks.push(currentWeek);
 
-  // ── MOBILE — Outlook-style compact grid + scrollable agenda ───────────────
-  if (isMobile) {
-    const agendaShifts = getShiftsForDate(selectedDay, { includeContinuations: false });
-    const selectedDateStr = format(selectedDay, 'yyyy-MM-dd');
-    const hasOffer = offerDates.has(selectedDateStr);
-
-    return (
-      <div className="h-full flex flex-col overflow-hidden bg-background/50">
-
-        {/* Disconnected Calendar Card */}
-        <div className="flex-shrink-0 p-3 pb-1">
-          <div className={cn(
-            "bg-card rounded-[32px] shadow-[0_20px_50px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-border/40 overflow-hidden transition-all duration-500",
-            "backdrop-blur-2xl ring-1 ring-white/10"
-          )}>
-            {/* Calendar Title & Navigation & View Switcher */}
-            <div className="pt-3 pb-1 px-4 flex flex-wrap items-center justify-between gap-x-2 gap-y-3">
-              <div className="flex items-center gap-1">
-                <button 
-                  onClick={onPrevious}
-                  className="p-1.5 -ml-1 rounded-full hover:bg-muted/60 text-muted-foreground/50 hover:text-foreground transition-all shrink-0"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                
-                <h2 className="text-[13px] font-black tracking-tight text-foreground uppercase truncate max-w-[100px]">
-                  {format(date, 'MMM, yyyy')}
-                </h2>
-
-                <button 
-                  onClick={onNext}
-                  className="p-1.5 -mr-1 rounded-full hover:bg-muted/60 text-muted-foreground/50 hover:text-foreground transition-all shrink-0"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-
-              {/* Integrated View Switcher */}
-              <div className="flex items-center bg-muted/40 dark:bg-muted/20 rounded-xl p-0.5 gap-0.5 shrink-0">
-                {(['day', '3day', 'week', 'month'] as CalendarView[]).map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => onViewChange?.(v)}
-                    className={cn(
-                      'px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all',
-                      view === v
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground/60 hover:text-foreground'
-                    )}
-                  >
-                    {v === '3day' ? '3D' : v[0]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Calendar Content */}
-            <div className="px-2 pb-3">
-              {/* Capsule Weekday Header */}
-              <div className="grid grid-cols-7 mb-2 bg-muted/20 dark:bg-muted/10 rounded-xl py-1.5 px-0.5">
-                {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((d, idx) => (
-                  <div key={idx} className="text-center text-[8px] font-black text-muted-foreground/50 uppercase tracking-[0.1em]">
-                    {d}
-                  </div>
-                ))}
-              </div>
+    // ── MOBILE — Outlook-style compact grid + scrollable agenda ───────────────
+    if (isMobile) {
+      const agendaShifts = getShiftsForDate(selectedDay, { includeContinuations: false });
+      const selectedDateStr = format(selectedDay, 'yyyy-MM-dd');
+      const hasOffer = offerDates.has(selectedDateStr);
+  
+      return (
+        <div className="h-full flex flex-col overflow-hidden bg-background/50">
+  
+          {/* Calendar Card — simplified to just the grid */}
+          <div className="flex-shrink-0 p-3 pb-1">
+            <div className={cn(
+              "bg-card rounded-[32px] shadow-[0_20px_50px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-border/40 overflow-hidden transition-all duration-500",
+              "backdrop-blur-2xl ring-1 ring-white/10"
+            )}>
+              {/* Calendar Content */}
+              <div className="px-2 py-3">
+                {/* Capsule Weekday Header */}
+                <div className="grid grid-cols-7 mb-2 bg-muted/20 dark:bg-muted/10 rounded-xl py-1.5 px-0.5">
+                  {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((d, idx) => (
+                    <div key={idx} className="text-center text-[8px] font-black text-muted-foreground/50 uppercase tracking-[0.1em]">
+                      {d}
+                    </div>
+                  ))}
+                </div>
 
               {/* Day Grid */}
               <div className="grid grid-cols-7 gap-y-0.5">

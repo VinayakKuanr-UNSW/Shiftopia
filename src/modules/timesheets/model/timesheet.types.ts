@@ -99,6 +99,7 @@ export interface TimesheetRow {
     rawActualEnd?: string | null;
     rawStartAt?: string | null;
     rawEndAt?: string | null;
+    groupType?: 'convention_centre' | 'exhibition_centre' | 'theatre' | string | null;
 }
 
 /**

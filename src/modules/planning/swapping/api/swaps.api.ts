@@ -220,13 +220,15 @@ export const swapsApi = {
                     *,
                     roles(name),
                     departments(name),
-                    sub_departments(name)
+                    sub_departments(name),
+                    organizations(name)
                 ),
                 target_shift:shifts!target_shift_id(
                     *,
                     roles(name),
                     departments(name),
-                    sub_departments(name)
+                    sub_departments(name),
+                    organizations(name)
                 ),
                 requested_by:profiles!requester_id(*),
                 swap_with:profiles!target_id(*)
@@ -245,16 +247,25 @@ export const swapsApi = {
                         *,
                         roles(name),
                         departments(name),
-                        sub_departments(name)
+                        sub_departments(name),
+                        organizations(name)
                     ),
                     target_shift:shifts!target_shift_id(
                         *,
                         roles(name),
                         departments(name),
-                        sub_departments(name)
+                        sub_departments(name),
+                        organizations(name)
                     ),
                     requested_by:profiles!requester_id(*),
                     swap_with:profiles!target_id(*)
+                ),
+                offered_shift:shifts!offered_shift_id(
+                    id, shift_date, start_time, end_time, unpaid_break_minutes, lifecycle_status,
+                    roles(name),
+                    departments(name),
+                    sub_departments(name),
+                    organizations(name)
                 )
             `)
             .eq('offerer_id', employeeId);
@@ -286,6 +297,7 @@ export const swapsApi = {
                     swap_request_id: o.swap_request_id,
                     offerer_id: o.offerer_id,
                     offered_shift_id: o.offered_shift_id,
+                    offered_shift: o.offered_shift,
                     status: o.status,
                     created_at: o.created_at
                 });
@@ -298,7 +310,7 @@ export const swapsApi = {
         const allSwaps = [...myRequests, ...myOffersAsSwaps];
         const uniqueSwaps = Array.from(new Map(allSwaps.map(item => [item.id, item])).values());
 
-        return uniqueSwaps;
+        return uniqueSwaps.map(mapDbToSwapRequest);
     },
 
     /**
@@ -311,8 +323,8 @@ export const swapsApi = {
         currentEmployeeId: string,
         filters: {
             organizationId: string;
-            departmentId?: string;
-            subDepartmentId?: string;
+            departmentId?: string | string[];
+            subDepartmentId?: string | string[];
         }
     ): Promise<ShiftSwapRelations[]> {
         const { organizationId, departmentId, subDepartmentId } = filters;
@@ -326,13 +338,15 @@ export const swapsApi = {
                     *,
                     roles(name),
                     departments(name),
-                    sub_departments(name)
+                    sub_departments(name),
+                    organizations(name)
                 ),
                 target_shift:shifts!target_shift_id(
                     *,
                     roles(name),
                     departments(name),
-                    sub_departments(name)
+                    sub_departments(name),
+                    organizations(name)
                 ),
                 requested_by:profiles!requester_id(*),
                 swap_with:profiles!target_id(*)
@@ -343,10 +357,18 @@ export const swapsApi = {
             .eq('requester_shift.organization_id', organizationId);
 
         // Hierarchy Filters
-        if (subDepartmentId && isValidUuid(subDepartmentId)) {
-            query = query.eq('requester_shift.sub_department_id', subDepartmentId);
-        } else if (departmentId && isValidUuid(departmentId)) {
-            query = query.eq('requester_shift.department_id', departmentId);
+        if (subDepartmentId) {
+            if (Array.isArray(subDepartmentId) && subDepartmentId.length > 0) {
+                query = query.in('requester_shift.sub_department_id', subDepartmentId);
+            } else if (typeof subDepartmentId === 'string' && isValidUuid(subDepartmentId)) {
+                query = query.eq('requester_shift.sub_department_id', subDepartmentId);
+            }
+        } else if (departmentId) {
+            if (Array.isArray(departmentId) && departmentId.length > 0) {
+                query = query.in('requester_shift.department_id', departmentId);
+            } else if (typeof departmentId === 'string' && isValidUuid(departmentId)) {
+                query = query.eq('requester_shift.department_id', departmentId);
+            }
         }
 
         const { data, error } = await query;
@@ -357,7 +379,7 @@ export const swapsApi = {
         }
 
         console.log('[API LOG] Fetched swaps count:', data?.length || 0);
-        return data || [];
+        return (data || []).map(mapDbToSwapRequest);
     },
 
     /**
@@ -372,13 +394,15 @@ export const swapsApi = {
                     *,
                     roles(name),
                     departments(name),
-                    sub_departments(name)
+                    sub_departments(name),
+                    organizations(name)
                 ),
                 target_shift:shifts!target_shift_id(
                     *,
                     roles(name),
                     departments(name),
-                    sub_departments(name)
+                    sub_departments(name),
+                    organizations(name)
                 ),
                 requested_by:profiles!requester_id(*),
                 swap_with:profiles!target_id(*)
@@ -486,7 +510,8 @@ export const swapsApi = {
                     id, shift_date, start_time, end_time, unpaid_break_minutes, lifecycle_status,
                     roles(name),
                     departments(name),
-                    sub_departments(name)
+                    sub_departments(name),
+                    organizations(name)
                 )
             `)
             .eq('swap_request_id', swapId)
@@ -510,8 +535,8 @@ export const swapsApi = {
     async fetchSwapRequests(filters: {
         status?: string;
         organizationId: string; // Mandatory for managers
-        departmentId?: string;
-        subDepartmentId?: string;
+        departmentId?: string | string[];
+        subDepartmentId?: string | string[];
     }): Promise<SwapRequestWithDetails[]> {
         console.log('[API] Fetching all swap requests with filters:', filters);
 
@@ -531,14 +556,16 @@ export const swapsApi = {
                     roles(name),
                     remuneration_levels(hourly_rate_min),
                     departments(name),
-                    sub_departments(name)
+                    sub_departments(name),
+                    organizations(name)
                 ),
                 target_shift:shifts!target_shift_id(
                     *,
                     roles(name),
                     remuneration_levels(hourly_rate_min),
                     departments(name),
-                    sub_departments(name)
+                    sub_departments(name),
+                    organizations(name)
                 ),
                 requested_by:profiles!requester_id(*),
                 swap_with:profiles!target_id(*),
@@ -551,7 +578,9 @@ export const swapsApi = {
                     offered_shift:shifts!offered_shift_id(
                         id, shift_date, start_time, end_time, unpaid_break_minutes, lifecycle_status,
                         roles(name),
-                        departments(name)
+                        departments(name),
+                        sub_departments(name),
+                        organizations(name)
                     ),
                     offerer:profiles!offerer_id(id, first_name, last_name, avatar_url)
                 )
@@ -564,10 +593,18 @@ export const swapsApi = {
         }
 
         // Hierarchy Filters
-        if (subDepartmentId && isValidUuid(subDepartmentId)) {
-            query = query.eq('requester_shift.sub_department_id', subDepartmentId);
-        } else if (departmentId && isValidUuid(departmentId)) {
-            query = query.eq('requester_shift.department_id', departmentId);
+        if (subDepartmentId) {
+            if (Array.isArray(subDepartmentId) && subDepartmentId.length > 0) {
+                query = query.in('requester_shift.sub_department_id', subDepartmentId);
+            } else if (typeof subDepartmentId === 'string' && isValidUuid(subDepartmentId)) {
+                query = query.eq('requester_shift.sub_department_id', subDepartmentId);
+            }
+        } else if (departmentId) {
+            if (Array.isArray(departmentId) && departmentId.length > 0) {
+                query = query.in('requester_shift.department_id', departmentId);
+            } else if (typeof departmentId === 'string' && isValidUuid(departmentId)) {
+                query = query.eq('requester_shift.department_id', departmentId);
+            }
         }
 
         const { data, error } = await query;
@@ -577,6 +614,7 @@ export const swapsApi = {
             throw error;
         }
 
+        console.log('[API LOG] Fetched manager swaps count:', data?.length || 0);
         return (data || []).map(mapDbToSwapRequest);
     },
 

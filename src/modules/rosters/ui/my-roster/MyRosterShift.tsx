@@ -100,7 +100,8 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
           'flex flex-col justify-center px-2 py-1 h-full relative overflow-hidden',
           'shadow-md',
           'text-foreground',
-          cardClass
+          cardClass,
+          isPast && 'grayscale opacity-30 shadow-none hover:scale-100 active:scale-100 cursor-default'
         )}
         onClick={(e) => onClick?.(e)}
         style={style}
@@ -139,7 +140,8 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
         'p-3 h-full flex flex-col justify-between relative overflow-hidden',
         'shadow-lg',
         'text-foreground',
-        cardClass
+        cardClass,
+        isPast && 'grayscale opacity-30 shadow-none hover:scale-100 active:scale-100 cursor-default'
       )}
       onClick={() => onClick?.()}
       style={style}

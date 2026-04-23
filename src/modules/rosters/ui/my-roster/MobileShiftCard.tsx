@@ -136,7 +136,7 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, sel
       className={cn(
         "relative overflow-hidden rounded-2xl p-6 min-h-[180px] border border-border/40 shadow-xl flex flex-col justify-between transition-all",
         getGradientClass(groupColor),
-        isPast && "grayscale opacity-70"
+        isPast && "grayscale opacity-30"
       )}
     >
       {/* Header: GROUP | SUBGROUP */}
@@ -151,8 +151,9 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, sel
         </div>
         {protection.status !== 'DRAFT' && (
             <div className={cn(
-                "px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 backdrop-blur-md border",
-                protection.status === 'LOCKED' ? "bg-slate-500/10 border-slate-500/20 text-slate-500" : "bg-blue-500/10 border-blue-500/20 text-blue-500"
+                "px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 backdrop-blur-md border transition-colors",
+                protection.status === 'LOCKED' ? "bg-slate-500/10 border-slate-500/20" : "bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10",
+                protection.colorClass
             )}>
                 <protection.icon className="w-3 h-3" />
                 {protection.label}

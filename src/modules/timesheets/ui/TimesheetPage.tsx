@@ -1,9 +1,13 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
-import { Clock } from 'lucide-react';
+import { Clock, Calendar, RefreshCw } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+
 
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';
+import { useTheme } from '@/modules/core/contexts/ThemeContext';
+import { cn } from '@/modules/core/lib/utils';
 import { TimesheetTable } from './components/TimesheetTable';
 import {
     getShiftsForTimesheet,
@@ -17,6 +21,19 @@ import { useScopeFilter, ScopeMode } from '@/platform/auth/useScopeFilter';
 import { getStatusDotInfo } from '@/modules/rosters/domain/shift-ui';
 import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
 
+// ── Motion variants ────────────────────────────────────────────────────────────
+const pageVariants = {
+    hidden: { opacity: 0, y: 10 },
+    show: { 
+        opacity: 1, 
+        y: 0,
+        transition: {
+            duration: 0.3,
+            staggerChildren: 0.05
+        }
+    }
+};
+
 /**
  * TimesheetPage
  *
@@ -24,6 +41,7 @@ import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHea
  * Categorical filters (group, subgroup, role, status) are managed inside TimesheetTable.
  */
 export const TimesheetPage: React.FC = () => {
+    const { isDark } = useTheme();
     const { isManagerOrAbove, hasPermission, user } = useAuth();
 
     const scopeMode: ScopeMode = isManagerOrAbove() ? 'managerial' : 'personal';
@@ -173,34 +191,150 @@ export const TimesheetPage: React.FC = () => {
 
     // ── Render ─────────────────────────────────────────────────────────────────
     return (
-        <div className="p-4 md:p-8 space-y-8">
-            <PersonalPageHeader
-                title="Timesheets"
-                Icon={Clock}
-                scope={scope}
-                setScope={setScope}
-                isGammaLocked={isGammaLocked}
-                mode={scopeMode}
-            />
+        <motion.div 
+            className="h-full flex flex-col w-full text-foreground overflow-hidden" 
+            variants={pageVariants} 
+            initial="hidden" 
+            animate="show"
+        >
+            {/* ── Unified Header ────────────────────────────────────────────── */}
+            <div className="sticky top-0 z-30 -mx-4 px-4 md:-mx-8 md:px-8 pt-4 pb-4 lg:pb-6">
+                <div className={cn(
+                    "rounded-[32px] p-4 lg:p-6 transition-all border",
+                    isDark 
+                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                )}>
+                    {/* Row 1: Identity & Clock + Row 2: Scope Filter */}
+                    <PersonalPageHeader
+                        title="Timesheets"
+                        Icon={Clock}
+                        scope={scope}
+                        setScope={setScope}
+                        isGammaLocked={isGammaLocked}
+                        mode={scopeMode}
+                        className="mb-4 lg:mb-6"
+                    />
 
-            <div className="bg-card border rounded-[2rem] p-6 md:p-10 shadow-xl">
-                <TimesheetTable
-                    entries={entries}
-                    selectedDate={selectedDate}
-                    onDateChange={setSelectedDate}
-                    readOnly={!canEdit}
-                    viewMode={viewMode}
-                    onViewChange={setViewMode}
-                    searchQuery={searchQuery}
-                    setSearchQuery={setSearchQuery}
-                    onSaveEntry={handleSaveEntry}
-                    onBulkAction={handleBulkAction}
-                    onMarkNoShow={handleMarkNoShow}
-                    onRefresh={handleRefresh}
-                    isRefreshing={loading}
-                />
+                    {/* Row 3: Function Bar */}
+                    <div className={cn(
+                        "flex flex-row items-center gap-2 w-full transition-all p-1.5 rounded-2xl border overflow-hidden",
+                        isDark 
+                            ? "bg-[#111827]/60 backdrop-blur-md border-white/5 shadow-inner shadow-black/20" 
+                            : "bg-slate-100/50 border-slate-200/50"
+                    )}>
+                        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none py-0.5">
+                            {/* Date Picker (Simplified for Row 3) */}
+                            <div className={cn(
+                                "h-10 lg:h-11 px-4 rounded-xl flex items-center gap-2 flex-shrink-0",
+                                isDark ? "bg-[#111827]/60" : "bg-white shadow-sm border border-slate-200/50"
+                            )}>
+                                <Calendar className="h-4 w-4 text-primary" />
+                                <input 
+                                    type="date" 
+                                    value={format(selectedDate, 'yyyy-MM-dd')}
+                                    onChange={(e) => setSelectedDate(new Date(e.target.value))}
+                                    className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest text-foreground focus:ring-0"
+                                />
+                            </div>
+
+                            <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
+
+                            {/* Search Input */}
+                            <div className={cn(
+                                "h-10 lg:h-11 px-4 rounded-xl flex items-center gap-3 flex-1 min-w-[200px]",
+                                isDark ? "bg-[#111827]/60" : "bg-white shadow-sm border border-slate-200/50"
+                            )}>
+                                <Clock className="h-4 w-4 text-muted-foreground/40" />
+                                <input
+                                    type="text"
+                                    placeholder="SEARCH EMPLOYEES..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="bg-transparent border-none w-full text-[10px] font-black uppercase tracking-widest placeholder:text-muted-foreground/20 focus:ring-0"
+                                />
+                            </div>
+
+                            <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
+
+                            {/* View Toggle */}
+                            <div className={cn(
+                                "flex items-center p-1 rounded-xl",
+                                isDark ? "bg-[#111827]/60" : "bg-slate-200/50"
+                            )}>
+                                <button
+                                    onClick={() => setViewMode('table')}
+                                    className={cn(
+                                        "px-3 h-8 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all",
+                                        viewMode === 'table' 
+                                            ? "bg-primary text-primary-foreground shadow-sm" 
+                                            : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    Table
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('timecard')}
+                                    className={cn(
+                                        "px-3 h-8 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all",
+                                        viewMode === 'timecard' 
+                                            ? "bg-primary text-primary-foreground shadow-sm" 
+                                            : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    Cards
+                                </button>
+                            </div>
+
+                            <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
+
+                            {/* Refresh Button */}
+                            <button
+                                onClick={handleRefresh}
+                                disabled={loading}
+                                className={cn(
+                                    "h-10 w-10 lg:h-11 lg:w-11 rounded-xl flex items-center justify-center transition-all",
+                                    isDark 
+                                        ? "bg-[#111827]/60 text-muted-foreground hover:text-white" 
+                                        : "bg-slate-200/50 text-slate-500 hover:text-slate-900 hover:bg-slate-200"
+                                )}
+                            >
+                                <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
+
+            {/* ── Main Content Area ─────────────────────────── */}
+            <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+                <div className={cn(
+                    "h-full rounded-[32px] transition-all border flex flex-col overflow-hidden",
+                    isDark 
+                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                )}>
+                    <div className="flex-1 overflow-y-auto p-4 lg:p-8 scrollbar-none">
+                        <TimesheetTable
+                            entries={entries}
+                            selectedDate={selectedDate}
+                            onDateChange={setSelectedDate}
+                            readOnly={!canEdit}
+                            viewMode={viewMode}
+                            onViewChange={setViewMode}
+                            searchQuery={searchQuery}
+                            setSearchQuery={setSearchQuery}
+                            onSaveEntry={handleSaveEntry}
+                            onBulkAction={handleBulkAction}
+                            onMarkNoShow={handleMarkNoShow}
+                            onRefresh={handleRefresh}
+                            isRefreshing={loading}
+                            hideTopControls // We've moved these to Row 3
+                        />
+                    </div>
+                </div>
+            </div>
+        </motion.div>
     );
 };
 
