@@ -16,6 +16,7 @@ interface UnifiedModuleFunctionBarProps {
     filters?: React.ReactNode;
     leftContent?: React.ReactNode;
     className?: string;
+    transparent?: boolean;
 }
 
 export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> = ({
@@ -28,16 +29,19 @@ export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> =
     isLoading = false,
     filters,
     leftContent,
-    className
+    className,
+    transparent = false
 }) => {
     const { isDark } = useTheme();
 
     return (
         <div className={cn(
-            "flex flex-row items-center gap-2 w-full transition-all p-1.5 rounded-2xl border overflow-hidden",
-            isDark 
-                ? "bg-[#1c2333]/40 backdrop-blur-md border-white/5 shadow-2xl shadow-black/20" 
-                : "bg-white/60 backdrop-blur-md border-white/80 shadow-lg shadow-slate-200/50",
+            "flex flex-row items-center gap-2 w-full transition-all p-1.5 rounded-2xl overflow-hidden",
+            !transparent && (
+                isDark 
+                    ? "bg-[#1c2333]/40 backdrop-blur-md border border-white/5 shadow-2xl shadow-black/20" 
+                    : "bg-white/60 backdrop-blur-md border border-white/80 shadow-lg shadow-slate-200/50"
+            ),
             className
         )}>
             {/* 1. Left Content (Title or Tabs) - Visible on Desktop, Hidden on small mobile to save space if needed, 

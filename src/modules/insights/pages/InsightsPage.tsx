@@ -15,6 +15,11 @@ import type { DatePreset, InsightsFilters } from '../model/metric.types';
 import OverviewTab from '../ui/views/OverviewTab';
 import WorkforceTab from '../ui/views/WorkforceTab';
 import ComplianceCostTab from '../ui/views/ComplianceCostTab';
+import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { InsightsFunctionBar } from '../ui/components/InsightsFunctionBar';
+import { useTheme } from '@/modules/core/contexts/ThemeContext';
+import { cn } from '@/modules/core/lib/utils';
+import { BarChart3 } from 'lucide-react';
 
 const PRESETS: DatePreset[] = ['THIS_WEEK', 'THIS_MONTH', 'LAST_30', 'LAST_90'];
 
@@ -31,6 +36,8 @@ const InsightsPage: React.FC = () => {
         subdeptIds: scope.subdept_ids.length ? scope.subdept_ids : undefined,
     }), [startDate, endDate, scope]);
 
+    const { isDark } = useTheme();
+
     function handleRefresh() {
         queryClient.invalidateQueries({ queryKey: ['insights_summary'] });
         queryClient.invalidateQueries({ queryKey: ['insights_trend'] });
@@ -39,79 +46,60 @@ const InsightsPage: React.FC = () => {
     }
 
     return (
-        <div className="min-h-screen bg-background">
-            <div className="p-4 md:p-8 space-y-6 pb-24 md:pb-8">
-                {/* ── Page header ──────────────────────────────────── */}
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                    <div>
-                        <h1 className="text-3xl font-bold text-foreground">Insights & Analytics</h1>
-                        <p className="text-muted-foreground mt-1 text-sm">
-                            Real-time workforce metrics derived from your live roster data
-                        </p>
+        <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-6">
+            <Tabs defaultValue="overview" className="flex-1 flex flex-col min-h-0 space-y-6">
+                {/* ── Unified Header Block (Rows 1-3) ────────────────────────────── */}
+                <div className="flex-shrink-0">
+                    <div className={cn(
+                        "rounded-[32px] p-4 lg:p-6 transition-all border",
+                        isDark 
+                            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+                            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                    )}>
+                        {/* Row 1 & 2: Identity & Scope Filter */}
+                        <PersonalPageHeader
+                            title="My Insights"
+                            Icon={BarChart3}
+                            scope={scope}
+                            setScope={setScope}
+                            isGammaLocked={isGammaLocked}
+                            className="mb-4 lg:mb-6"
+                        />
+
+                        {/* Row 3: Module Function Bar (Integrated with Tabs) */}
+                        <InsightsFunctionBar
+                            preset={preset}
+                            onPresetChange={v => setPreset(v as DatePreset)}
+                            presetLabels={DATE_PRESET_LABELS}
+                            presets={PRESETS}
+                            startDate={startDate}
+                            endDate={endDate}
+                            onRefresh={handleRefresh}
+                            className="mt-1"
+                        />
                     </div>
-                    <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-2 self-start">
-                        <RefreshCw size={14} />
-                        Refresh
-                    </Button>
                 </div>
 
-                {/* ── Scope filter ─────────────────────────────────── */}
-                <ScopeFilterBanner
-                    mode="managerial"
-                    onScopeChange={setScope}
-                    hidden={isGammaLocked}
-                />
-
-                {/* ── Date range selector ──────────────────────────── */}
-                <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-sm text-muted-foreground shrink-0">Period:</span>
-                    <Select value={preset} onValueChange={v => setPreset(v as DatePreset)}>
-                        <SelectTrigger className="w-[160px] h-9 text-sm bg-card border-border">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {PRESETS.map(p => (
-                                <SelectItem key={p} value={p}>
-                                    {DATE_PRESET_LABELS[p]}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <span className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded">
-                        {startDate} → {endDate}
-                    </span>
-                </div>
-
-                {/* ── Tabs ─────────────────────────────────────────── */}
-                <Tabs defaultValue="overview" className="space-y-6">
-                    <TabsList className="bg-muted/50 border border-border h-10 p-1 w-full sm:w-auto">
-                        <TabsTrigger value="overview" className="gap-1.5 text-sm">
-                            <BarChart2 size={14} />
-                            Overview
-                        </TabsTrigger>
-                        <TabsTrigger value="workforce" className="gap-1.5 text-sm">
-                            <Users size={14} />
-                            Workforce
-                        </TabsTrigger>
-                        <TabsTrigger value="compliance" className="gap-1.5 text-sm">
-                            <ShieldCheck size={14} />
-                            Compliance & Cost
-                        </TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="overview">
+                {/* ── Main Content Area (Glassmorphic Container) ─────────────────── */}
+                <div className={cn(
+                    "flex-1 min-h-0 overflow-y-auto rounded-[32px] border transition-all p-4 lg:p-8 custom-scrollbar",
+                    isDark 
+                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                )}>
+                    <TabsContent value="overview" className="mt-0 outline-none">
                         <OverviewTab filters={filters} />
                     </TabsContent>
 
-                    <TabsContent value="workforce">
+                    <TabsContent value="workforce" className="mt-0 outline-none">
                         <WorkforceTab filters={filters} scope={scope} />
                     </TabsContent>
 
-                    <TabsContent value="compliance">
+                    <TabsContent value="compliance" className="mt-0 outline-none">
                         <ComplianceCostTab filters={filters} />
                     </TabsContent>
-                </Tabs>
-            </div>
+                </div>
+            </Tabs>
         </div>
     );
 };

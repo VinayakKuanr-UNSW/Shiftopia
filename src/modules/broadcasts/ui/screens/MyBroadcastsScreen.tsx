@@ -62,20 +62,34 @@ import { ChannelView } from '../views/ChannelView.view';
 export interface MyBroadcastsScreenProps {
   layout: 'desktop' | 'tablet' | 'mobile';
   scope?: import('@/platform/auth/types').ScopeSelection;
+  searchQuery?: string;
+  refreshTrigger?: number;
+  onInChannelChange?: (inChannel: boolean) => void;
 }
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
-export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
+export function MyBroadcastsScreen({ 
+  layout, 
+  scope,
+  searchQuery: hoistedSearchQuery = '',
+  refreshTrigger = 0,
+  onInChannelChange,
+}: MyBroadcastsScreenProps) {
   const { toast } = useToast();
   const { user } = useAuth();
 
   // State
   const [selectedGroup, setSelectedGroup] = useState<EmployeeBroadcastGroup | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<BroadcastChannelWithStats | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [internalSearchQuery, setInternalSearchQuery] = useState('');
+  
+  // Use hoisted search for group filtering, internal search for channel filtering
+  const effectiveGroupSearch = hoistedSearchQuery;
+  const effectiveChannelSearch = internalSearchQuery;
+
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [channelSheetOpen, setChannelSheetOpen] = useState(false);
 
@@ -108,6 +122,18 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
     };
   }, [toast, refetch]);
 
+  // Sync refresh
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      refetch();
+    }
+  }, [refreshTrigger, refetch]);
+
+  // Sync state with parent
+  useEffect(() => {
+    onInChannelChange?.(!!selectedGroup);
+  }, [selectedGroup, onInChannelChange]);
+
   // Auto-select first channel when group is selected
   useEffect(() => {
     if (selectedGroup && selectedGroup.channels?.length > 0 && !selectedChannel) {
@@ -131,14 +157,24 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
   const handleSelectGroup = (group: EmployeeBroadcastGroup) => {
     setSelectedGroup(group);
     setSelectedChannel(null);
-    setSearchQuery('');
+    setInternalSearchQuery('');
   };
 
   const handleBack = () => {
     setSelectedGroup(null);
     setSelectedChannel(null);
-    setSearchQuery('');
+    setInternalSearchQuery('');
   };
+
+  // Filter groups using hoisted search
+  const finalFilteredGroups = useMemo(() => {
+    let result = filteredGroups;
+    if (effectiveGroupSearch) {
+      const q = effectiveGroupSearch.toLowerCase();
+      result = result.filter(g => g.name.toLowerCase().includes(q));
+    }
+    return result;
+  }, [filteredGroups, effectiveGroupSearch]);
 
   // Loading state
   if (isLoading) {
@@ -175,51 +211,6 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
       </div>
     );
   }
-
-  // ========================================
-  // RENDER: HEADER (Groups View)
-  // ========================================
-
-  const renderGroupsHeader = () => (
-    <motion.div
-      initial={{ opacity: 0, y: -20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-card/80 backdrop-blur-2xl border border-border rounded-2xl md:rounded-3xl px-4 md:px-8 py-6 md:py-8 mb-6 md:mb-8 relative overflow-hidden shadow-sm"
-    >
-      <div className="absolute top-0 right-0 w-64 md:w-96 h-64 md:h-96 bg-primary/10 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-
-      <div className="relative z-10 flex flex-col items-start gap-4 md:gap-6">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 md:gap-6 w-full">
-          <div className="flex items-center gap-4 md:gap-6">
-            <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/20">
-              <Radio className="h-6 w-6 md:h-8 md:w-8 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-foreground tracking-tight">Broadcasts</h1>
-              <p className="text-muted-foreground mt-1 font-medium text-sm md:text-base">
-                Company announcements and updates
-              </p>
-            </div>
-          </div>
-
-          {/* Status indicators */}
-          <div className="flex flex-wrap items-center gap-2 md:gap-3">
-            {isOnline ? (
-              <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[10px] md:text-xs font-bold uppercase tracking-wider">
-                <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-                Online
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 rounded-full bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 text-[10px] md:text-xs font-bold uppercase tracking-wider">
-                <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-red-500" />
-                Offline
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
 
   // ========================================
   // RENDER: CHANNEL SIDEBAR
@@ -267,7 +258,7 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
                 isActive={selectedChannel?.id === channel.id}
                 onClick={() => {
                   setSelectedChannel(channel);
-                  setSearchQuery('');
+                  setInternalSearchQuery('');
                   setChannelSheetOpen(false);
                 }}
                 compact={compact}
@@ -309,14 +300,13 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
           : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
 
     return (
-      <div className="w-full min-h-screen p-4 md:p-8 pb-24 md:pb-8 bg-transparent">
-        {renderGroupsHeader()}
-
-        {filteredGroups.length === 0 ? (
+    return (
+      <div className="w-full h-full p-4 md:p-8 overflow-y-auto">
+        {finalFilteredGroups.length === 0 ? (
           <EmptyGroups />
         ) : (
           <div className={cn('grid gap-4 md:gap-6', gridCols)}>
-            {filteredGroups.map((group, index) => (
+            {finalFilteredGroups.map((group, index) => (
               <motion.div
                 key={group.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -355,8 +345,8 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
               channelId={selectedChannel.id}
               channelName={selectedChannel.name}
               channelDescription={selectedChannel.description}
-              onSearch={setSearchQuery}
-              searchQuery={searchQuery}
+              onSearch={setInternalSearchQuery}
+              searchQuery={internalSearchQuery}
             />
           ) : (
             <EmptyChannels />
@@ -383,8 +373,8 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
               channelId={selectedChannel.id}
               channelName={selectedChannel.name}
               channelDescription={selectedChannel.description}
-              onSearch={setSearchQuery}
-              searchQuery={searchQuery}
+              onSearch={setInternalSearchQuery}
+              searchQuery={internalSearchQuery}
               compact
             />
           ) : (
@@ -446,7 +436,7 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
                       isActive={selectedChannel?.id === channel.id}
                       onClick={() => {
                         setSelectedChannel(channel);
-                        setSearchQuery('');
+                        setInternalSearchQuery('');
                         setChannelSheetOpen(false);
                       }}
                     />
@@ -465,8 +455,8 @@ export function MyBroadcastsScreen({ layout, scope }: MyBroadcastsScreenProps) {
             channelId={selectedChannel.id}
             channelName={selectedChannel.name}
             channelDescription={selectedChannel.description}
-            onSearch={setSearchQuery}
-            searchQuery={searchQuery}
+            onSearch={setInternalSearchQuery}
+            searchQuery={internalSearchQuery}
             compact
           />
         ) : (

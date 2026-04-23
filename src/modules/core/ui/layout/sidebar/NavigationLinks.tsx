@@ -17,12 +17,15 @@ import {
   ScrollText,
   BarChart3,
   ClipboardList,
+  Fingerprint,
+  Radio,
 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/platform/auth/useAuth';
 import NavItem from './NavItem';
 import NavSection from './NavSection';
 import { useSidebar } from '@/modules/core/ui/primitives/sidebar';
+import { useTranslation } from 'react-i18next';
 
 interface NavigationLinksProps {
   openMenus: { [key: string]: boolean };
@@ -30,6 +33,7 @@ interface NavigationLinksProps {
 }
 
 const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu }) => {
+  const { t } = useTranslation();
   const location = useLocation();
   const { hasPermission } = useAuth();
   const { state } = useSidebar();
@@ -45,14 +49,14 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
     <div className="flex-1 overflow-y-auto py-4 px-3">
       <NavItem
         icon={<LayoutDashboard className="h-5 w-5" />}
-        label="Dashboard"
+        label={t('common.dashboard')}
         path="/dashboard"
         active={isRouteActive('/dashboard')}
         sectionColor="primary"
       />
 
       <NavSection
-        title="My Workspace"
+        title={t('nav.overview')}
         isOpen={openMenus['workspace']}
         onToggle={() => toggleMenu('workspace')}
         collapsed={isCollapsed}
@@ -60,7 +64,7 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
       >
         <NavItem
           icon={<Calendar className="h-5 w-5" />}
-          label="My Roster"
+          label={t('nav.my_roster')}
           path="/my-roster"
           active={isRouteActive('/my-roster')}
           indent
@@ -68,17 +72,49 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
         />
         <NavItem
           icon={<CalendarDays className="h-5 w-5" />}
-          label="Availabilities"
-          path="/availabilities"
-          active={isRouteActive('/availabilities')}
+          label={t('nav.my_availabilities')}
+          path="/my-availabilities"
+          active={isRouteActive('/my-availabilities')}
+          indent
+          sectionColor="purple"
+        />
+        <NavItem
+          icon={<Fingerprint className="h-5 w-5" />}
+          label={t('nav.my_attendance')}
+          path="/my-attendance"
+          active={isRouteActive('/my-attendance')}
           indent
           sectionColor="purple"
         />
         <NavItem
           icon={<BadgeCheck className="h-5 w-5" />}
-          label="My Bids"
-          path="/bids"
-          active={isRouteActive('/bids')}
+          label={t('nav.my_bids')}
+          path="/my-bids"
+          active={isRouteActive('/my-bids')}
+          indent
+          sectionColor="purple"
+        />
+        <NavItem
+          icon={<RefreshCw className="h-5 w-5" />}
+          label={t('nav.my_swaps')}
+          path="/my-swaps"
+          active={isRouteActive('/my-swaps')}
+          indent
+          sectionColor="purple"
+        />
+        <NavItem
+          icon={<Radio className="h-5 w-5" />}
+          label={t('nav.my_broadcasts')}
+          path="/my-broadcasts"
+          active={isRouteActive('/my-broadcasts')}
+          indent
+          sectionColor="purple"
+        />
+        <NavItem
+          icon={<BellRing className="h-5 w-5" />}
+          label={t('nav.my_notifications')}
+          path="/my-notifications"
+          active={isRouteActive('/my-notifications')}
           indent
           sectionColor="purple"
         />
@@ -86,7 +122,7 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
 
       {(hasPermission('templates') || hasPermission('rosters') || hasPermission('timesheet-view')) && (
         <NavSection
-          title="Rostering"
+          title={t('nav.rostering')}
           isOpen={openMenus['rostering']}
           onToggle={() => toggleMenu('rostering')}
           collapsed={isCollapsed}
@@ -95,7 +131,7 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
           {hasPermission('templates') && (
             <NavItem
               icon={<Workflow className="h-5 w-5" />}
-              label="Templates"
+              label={t('nav.templates')}
               path="/templates"
               active={isRouteActive('/templates')}
               indent
@@ -105,7 +141,7 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
           {hasPermission('rosters') && (
             <NavItem
               icon={<FileSpreadsheet className="h-5 w-5" />}
-              label="Rosters"
+              label={t('nav.rosters')}
               path="/rosters"
               active={isRouteActive('/rosters')}
               indent
@@ -115,7 +151,7 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
           {hasPermission('timesheet-view') && (
             <NavItem
               icon={<Clock className="h-5 w-5" />}
-              label="Timesheet"
+              label={t('nav.timesheet')}
               path="/timesheet"
               active={isRouteActive('/timesheet')}
               indent
@@ -127,7 +163,7 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
 
       {hasPermission('management') && (
         <NavSection
-          title="Management"
+          title={t('nav.management')}
           isOpen={openMenus['management']}
           onToggle={() => toggleMenu('management')}
           collapsed={isCollapsed}
@@ -135,23 +171,16 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
         >
           <NavItem
             icon={<BadgeCheck className="h-5 w-5" />}
-            label="Open Bids"
+            label={t('nav.open_bids')}
             path="/management/bids"
             active={isRouteActive('/management/bids')}
             indent
             sectionColor="green"
           />
+
           <NavItem
             icon={<RefreshCw className="h-5 w-5" />}
-            label="My Swaps"
-            path="/my-swaps"
-            active={isRouteActive('/my-swaps')}
-            indent
-            sectionColor="purple"
-          />
-          <NavItem
-            icon={<RefreshCw className="h-5 w-5" />}
-            label="Swap Requests"
+            label={t('nav.swap_requests')}
             path="/management/swaps"
             active={isRouteActive('/management/swaps')}
             indent
@@ -163,7 +192,7 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
       {hasPermission('broadcast') && (
         <NavItem
           icon={<BellRing className="h-5 w-5" />}
-          label="Broadcast"
+          label={t('nav.broadcast')}
           path="/broadcast"
           active={isRouteActive('/broadcast')}
           sectionColor="amber"
@@ -173,7 +202,7 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
       {hasPermission('insights') && (
         <NavItem
           icon={<TrendingUp className="h-5 w-5" />}
-          label="Insights"
+          label={t('nav.insights')}
           path="/insights"
           active={isRouteActive('/insights')}
           sectionColor="amber"
@@ -184,12 +213,22 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
       {hasPermission('management') && (
         <NavItem
           icon={<BarChart3 className="h-5 w-5" />}
-          label="Performance"
+          label={t('nav.performance')}
           path="/performance"
           active={isRouteActive('/performance')}
           sectionColor="green"
         />
       )}
+
+      <div className="mt-auto pt-4 border-t border-border/20">
+        <NavItem
+          icon={<Settings className="h-5 w-5" />}
+          label={t('common.settings')}
+          path="/settings"
+          active={isRouteActive('/settings')}
+          sectionColor="blue"
+        />
+      </div>
 
 
 

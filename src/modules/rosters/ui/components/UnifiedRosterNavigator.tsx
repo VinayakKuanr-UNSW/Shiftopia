@@ -193,21 +193,18 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
     return (
       <div className={cn('flex items-center gap-4', className)}>
         {/* View type — ToggleGroup */}
-        <div className="flex flex-col items-center gap-0.5">
-          <span className="text-[8px] uppercase tracking-widest text-muted-foreground/50 font-bold select-none">
-            Time Range
-          </span>
+        <div className="flex-shrink-0 flex items-center bg-slate-100/50 dark:bg-black/20 border border-slate-200 dark:border-white/5 rounded-xl p-1 h-10 shadow-sm">
           <ToggleGroup
             type="single"
             value={viewType}
             onValueChange={(v) => v && onViewTypeChange(v as ViewType)}
-            className="bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-lg p-0.5"
+            className="flex items-center gap-0.5"
           >
             {VIEW_OPTIONS.map((v) => (
               <ToggleGroupItem
                 key={v.value}
                 value={v.value}
-                className="px-2.5 py-1 text-[10px] uppercase font-black rounded-md transition-all h-7 min-w-[40px] data-[state=on]:bg-blue-600 data-[state=on]:text-white text-slate-300 dark:text-white/20 hover:text-slate-500 dark:hover:text-white/40"
+                className="px-2 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all h-8 min-w-[36px] data-[state=on]:bg-blue-600 data-[state=on]:text-white text-slate-400 dark:text-white/40 hover:text-slate-600 dark:hover:text-white/60 border-none shadow-none"
               >
                 {v.label}
               </ToggleGroupItem>
@@ -216,7 +213,7 @@ export const UnifiedRosterNavigator: React.FC<UnifiedRosterNavigatorProps> = ({
         </div>
 
         {/* Date navigation */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-1 h-8">
+        <div className="flex-shrink-0 flex items-center gap-0.5 bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-1.5 h-10 shadow-sm dark:shadow-none">
           <button
             onClick={handlePrev}
             disabled={prevDisabled}

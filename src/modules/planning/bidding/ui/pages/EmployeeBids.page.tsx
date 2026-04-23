@@ -978,7 +978,7 @@ export const EmployeeBidsPage: React.FC = () => {
             initial="hidden" 
             animate="show"
         >
-            <div className="sticky top-0 z-30 -mx-4 px-4 md:-mx-8 md:px-8 pt-4 pb-4 lg:pb-6">
+            <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
                 <div className={cn(
                     "rounded-[32px] p-4 lg:p-6 transition-all border",
                     isDark 
@@ -997,6 +997,7 @@ export const EmployeeBidsPage: React.FC = () => {
 
                     {/* Row 2: Unified Function Bar */}
                     <UnifiedModuleFunctionBar
+                        transparent
                         leftContent={
                             <div className="flex flex-col gap-0.5">
                                 <div className="flex items-center gap-1.5 lg:gap-2">

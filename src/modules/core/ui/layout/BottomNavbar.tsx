@@ -49,9 +49,9 @@ const BottomNavbar: React.FC = () => {
 
   const middleItems = [
     { label: 'Roster', icon: Calendar, path: '/my-roster' },
-    { label: 'Atten', icon: Fingerprint, path: '/attendance' },
-    { label: 'Avail', icon: CalendarDays, path: '/availabilities' },
-    { label: 'Bids', icon: BadgeCheck, path: '/bids' },
+    { label: 'Atten', icon: Fingerprint, path: '/my-attendance' },
+    { label: 'Avail', icon: CalendarDays, path: '/my-availabilities' },
+    { label: 'Bids', icon: BadgeCheck, path: '/my-bids' },
     { label: 'Swaps', icon: RefreshCw, path: '/my-swaps' },
     { label: 'Radio', icon: Radio, path: '/my-broadcasts' },
     { label: 'Notif', icon: BellRing, path: '/my-notifications' },

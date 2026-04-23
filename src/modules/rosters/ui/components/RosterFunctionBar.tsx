@@ -116,6 +116,7 @@ export interface RosterFunctionBarProps {
 
   /** Number of active filters — shows an orange dot badge on the Filter button when > 0 */
   activeFilterCount?: number;
+  transparent?: boolean;
 }
 
 /* ============================================================
@@ -206,6 +207,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
   onBulkModeToggle,
   onAutoScheduleClick,
   activeFilterCount = 0,
+  transparent = false,
 }) => {
   const {
     activeMode,
@@ -311,36 +313,40 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
 
 
   return (
-    <div className="w-full h-16 flex-shrink-0 z-50 bg-white/90 dark:bg-slate-950/40 backdrop-blur-2xl border-b border-slate-200 dark:border-white/10 px-8 flex items-center shadow-sm dark:shadow-2xl relative">
+    <div className={cn(
+      "w-full h-16 flex-shrink-0 z-50 px-4 flex items-center relative transition-all",
+      !transparent 
+        ? "bg-white/90 dark:bg-slate-950/40 backdrop-blur-2xl border-b border-slate-200 dark:border-white/10 shadow-sm dark:shadow-2xl" 
+        : "bg-transparent border-none shadow-none"
+    )}>
       {/* Subtle top highlight for premium feel */}
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
-      <div className="w-full flex items-center justify-between">
+      <div className="w-full flex items-center justify-between gap-2">
 
         {/* Left Section: Context & Modes */}
-        <div className="flex items-center gap-2">
-          <div className="flex flex-col items-center gap-0.5">
-            <span className="text-[8px] uppercase tracking-widest text-muted-foreground/50 font-bold select-none">View By</span>
+        <div className="flex-shrink-0 flex items-center justify-start">
+          <div className="flex items-center bg-slate-100/50 dark:bg-black/20 border border-slate-200 dark:border-white/5 rounded-xl p-1 h-10 shadow-sm">
             <ToggleGroup
               type="single"
               value={activeMode}
               onValueChange={(v) => v && setActiveMode(v as RosterMode)}
-              className="bg-slate-100 dark:bg-black/20 border border-slate-200 dark:border-white/5 rounded-xl p-1"
+              className="flex items-center gap-0.5"
             >
               {[
-                { id: 'group', icon: <Box className="h-4 w-4" />, label: 'Group' },
-                { id: 'people', icon: <Users className="h-4 w-4" />, label: 'People' },
-                { id: 'events', icon: <CalendarDays className="h-4 w-4" />, label: 'Events' },
-                { id: 'roles', icon: <Briefcase className="h-4 w-4" />, label: 'Roles' },
+                { id: 'group', icon: <Box className="h-3.5 w-3.5" />, label: 'Group' },
+                { id: 'people', icon: <Users className="h-3.5 w-3.5" />, label: 'People' },
+                { id: 'events', icon: <CalendarDays className="h-3.5 w-3.5" />, label: 'Events' },
+                { id: 'roles', icon: <Briefcase className="h-3.5 w-3.5" />, label: 'Roles' },
               ].map((m) => (
                 <ToggleGroupItem
                   key={m.id}
                   value={m.id}
-                  className="h-7 px-4 text-[11px] font-black uppercase tracking-wider rounded-lg data-[state=on]:bg-white dark:data-[state=on]:bg-white/10 data-[state=on]:text-slate-900 dark:data-[state=on]:text-white text-slate-400 dark:text-white/40 hover:text-slate-600 dark:hover:text-white/60 transition-all"
+                  className="h-8 px-2.5 text-[10px] font-black uppercase tracking-wider rounded-lg data-[state=on]:bg-white dark:data-[state=on]:bg-white/10 data-[state=on]:text-slate-900 dark:data-[state=on]:text-white text-slate-400 dark:text-white/40 hover:text-slate-600 dark:hover:text-white/60 transition-all border-none shadow-none"
                 >
                   <div className="flex items-center gap-2">
                     {m.icon}
-                    <span className="hidden xl:inline">{m.label}</span>
+                    <span className="hidden 2xl:inline">{m.label}</span>
                   </div>
                 </ToggleGroupItem>
               ))}
@@ -349,19 +355,21 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
         </div>
 
         {/* Center Section: Navigation & View */}
-        <UnifiedRosterNavigator
-          variant="full"
-          date={selectedDate}
-          viewType={viewType}
-          onChange={(date) => onDateChange(date)}
-          onViewTypeChange={onViewTypeChange}
-          minDate={activeRangeBounds.monthStart}
-          maxDate={activeRangeBounds.monthEnd}
-        />
+        <div className="flex-shrink-0 flex items-center justify-center">
+          <UnifiedRosterNavigator
+            variant="full"
+            date={selectedDate}
+            viewType={viewType}
+            onChange={(date) => onDateChange(date)}
+            onViewTypeChange={onViewTypeChange}
+            minDate={activeRangeBounds.monthStart}
+            maxDate={activeRangeBounds.monthEnd}
+          />
+        </div>
 
         {/* Right Section: Actions */}
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-2 py-1.5">
+        <div className="flex-shrink-0 flex items-center justify-end">
+          <div className="flex items-center gap-1 bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-1.5 h-10 shadow-sm dark:shadow-none">
 
             {/* ── Data group: Refresh + Filter ───────────────────────── */}
             <IconButton icon={<RefreshCw className="h-4 w-4" />} tooltip="Reload data" onClick={onRefresh} isLoading={isRefreshing} />

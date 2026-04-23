@@ -22,8 +22,11 @@ import {
   AlertDialogTitle,
 } from '@/modules/core/ui/primitives/alert-dialog';
 import { useToast } from '@/modules/core/hooks/use-toast';
-import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { TemplateFunctionBar } from '../ui/components/TemplateFunctionBar';
+import { cn } from '@/modules/core/lib/utils';
+import { useTheme } from '@/modules/core/contexts/ThemeContext';
 
 const TemplatesPage: React.FC = () => {
   const { toast } = useToast();
@@ -222,117 +225,142 @@ const TemplatesPage: React.FC = () => {
       ) ?? 0,
   }));
 
-  const renderContent = () => {
-    if (error && !isLoading && templates.length === 0) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full w-full">
-          <AlertTriangle className="h-10 w-10 text-red-500 mb-4" />
-          <p>{error}</p>
-          <Button onClick={() => fetchTemplates({
-            organizationId,
-            departmentId: departmentId || undefined,
-            subDepartmentId: subDepartmentId || undefined,
-          })} className="mt-4">Retry</Button>
-        </div>
-      );
-    }
+  const [statusFilter, setStatusFilter] = useState<'published' | 'draft' | 'archived'>('published');
+  const [searchQuery, setSearchQuery] = useState('');
+  const { isDark } = useTheme();
 
-    if ((isLoading || isScopeLoading) && templates.length === 0) {
-      return (
-        <div className="flex items-center justify-center h-full w-full">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-      );
-    }
+  const counts = useMemo(
+    () => ({
+      draft: templates.filter((t) => t.status === 'draft').length,
+      published: templates.filter((t) => t.status === 'published').length,
+      archived: templates.filter((t) => t.status === 'archived').length,
+    }),
+    [templates]
+  );
 
-    return (
-      <>
-        {/* Mobile sidebar drawer */}
-        <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
-          <SheetContent side="left" className="p-0 w-[320px]">
-            <TemplatesSidebar
-              templates={sidebarTemplates}
-              selectedTemplateId={
-                currentTemplate?.id ? String(currentTemplate.id) : null
-              }
-              isLoading={isLoading}
-              onSelectTemplate={(id) => { handleSelectTemplate(id); setMobileSidebarOpen(false); }}
-              onCreateTemplate={() => { setCreateDialogOpen(true); setMobileSidebarOpen(false); }}
-              onDeleteTemplate={deleteTemplate}
-              onDuplicateTemplate={duplicateTemplate}
-              onRenameTemplate={renameTemplate}
-              onArchiveTemplate={handleArchiveTemplate}
-            />
-          </SheetContent>
-        </Sheet>
-
-        {/* Desktop sidebar — always visible */}
-        <div className="hidden md:flex">
-          <TemplatesSidebar
-            templates={sidebarTemplates}
-            selectedTemplateId={
-              currentTemplate?.id ? String(currentTemplate.id) : null
-            }
-            isLoading={isLoading}
-            onSelectTemplate={handleSelectTemplate}
-            onCreateTemplate={() => setCreateDialogOpen(true)}
-            onDeleteTemplate={deleteTemplate}
-            onDuplicateTemplate={duplicateTemplate}
-            onRenameTemplate={renameTemplate}
-            onArchiveTemplate={handleArchiveTemplate}
-          />
-        </div>
-
-        <div className="flex-1 overflow-hidden">
-          {/* Mobile hamburger to open sidebar */}
-          <div className="md:hidden flex items-center px-4 pt-3">
-            <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => setMobileSidebarOpen(true)}>
-              <Menu className="h-5 w-5" />
-            </Button>
-          </div>
-          {localTemplate ? (
-            <TemplateEditor
-              template={localTemplate}
-              isSaving={isSaving}
-              hasUnsavedChanges={hasUnsavedChanges}
-              onBack={handleBack}
-              onUpdateGroup={updateLocalGroup}
-              onAddSubgroup={addLocalSubgroup}
-              onUpdateSubgroup={updateLocalSubgroup}
-              onDeleteSubgroup={deleteLocalSubgroup}
-              onCloneSubgroup={cloneLocalSubgroup}
-              onAddShift={addLocalShift}
-              onUpdateShift={updateLocalShift}
-              onDeleteShift={deleteLocalShift}
-              onSaveChanges={handleSaveChanges}
-              onUpdateStatus={handleUpdateStatus}
-              onDiscardChanges={discardChanges}
-            />
-          ) : (
-            <div className="flex flex-col flex-1 items-center justify-center h-full text-muted-foreground bg-muted/20">
-              <FileText className="h-16 w-16 mb-4 opacity-50" />
-              <p className="text-lg font-medium">Select a template to view details</p>
-              <p className="text-sm opacity-60">
-                Or create a new one from the sidebar
-              </p>
-            </div>
-          )}
-        </div>
-      </>
-    );
+  const sidebarProps = {
+    templates: sidebarTemplates,
+    selectedTemplateId: currentTemplate?.id ? String(currentTemplate.id) : null,
+    isLoading: isLoading,
+    onSelectTemplate: handleSelectTemplate,
+    onCreateTemplate: () => setCreateDialogOpen(true),
+    onDeleteTemplate: deleteTemplate,
+    onDuplicateTemplate: duplicateTemplate,
+    onRenameTemplate: renameTemplate,
+    onArchiveTemplate: handleArchiveTemplate,
+    statusFilter,
+    searchQuery,
   };
 
   return (
-    <div className="flex flex-col h-full pb-24 md:pb-0">
-      <ScopeFilterBanner
-        mode="managerial"
-        onScopeChange={setScope}
-        hidden={isGammaLocked}
-        multiSelect={false}
-        className="m-4 mb-0"
-      />
-      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-        {renderContent()}
+    <div className="h-full flex flex-col overflow-hidden px-4 md:px-8 pb-24 md:pb-0">
+      {/* ── Unified Header ────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
+        <div className={cn(
+          "rounded-[32px] p-4 lg:p-6 transition-all border",
+          isDark 
+            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+        )}>
+          {/* Row 1: Identity & Clock + Row 2: Scope Filter */}
+          <PersonalPageHeader
+            title="My Templates"
+            Icon={FileText}
+            scope={scope}
+            setScope={setScope}
+            isGammaLocked={isGammaLocked}
+            mode="managerial"
+          />
+
+          {/* Row 3: Function Bar */}
+          <div className="mt-4 lg:mt-6">
+            <TemplateFunctionBar
+              transparent
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
+              searchQuery={searchQuery}
+              onSearchQueryChange={setSearchQuery}
+              onCreateTemplate={() => setCreateDialogOpen(true)}
+              counts={counts}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Main Content Area ─────────────────────────── */}
+      <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+        <div className={cn(
+          "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col md:flex-row",
+          isDark 
+            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+        )}>
+          {error && !isLoading && templates.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full w-full">
+              <AlertTriangle className="h-10 w-10 text-red-500 mb-4" />
+              <p>{error}</p>
+              <Button onClick={() => fetchTemplates({
+                organizationId,
+                departmentId: departmentId || undefined,
+                subDepartmentId: subDepartmentId || undefined,
+              })} className="mt-4">Retry</Button>
+            </div>
+          ) : (isLoading || isScopeLoading) && templates.length === 0 ? (
+            <div className="flex items-center justify-center h-full w-full">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+          ) : (
+            <>
+              {/* Mobile sidebar drawer */}
+              <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+                <SheetContent side="left" className="p-0 w-[320px]">
+                  <TemplatesSidebar {...sidebarProps} onSelectTemplate={(id) => { handleSelectTemplate(id); setMobileSidebarOpen(false); }} />
+                </SheetContent>
+              </Sheet>
+
+              {/* Desktop sidebar — always visible */}
+              <div className="hidden md:flex border-r border-slate-200 dark:border-white/5 bg-slate-50/50 dark:bg-black/10">
+                <TemplatesSidebar {...sidebarProps} />
+              </div>
+
+              <div className="flex-1 overflow-hidden flex flex-col">
+                {/* Mobile hamburger to open sidebar */}
+                <div className="md:hidden flex items-center px-4 pt-3">
+                  <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => setMobileSidebarOpen(true)}>
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </div>
+                {localTemplate ? (
+                  <TemplateEditor
+                    template={localTemplate}
+                    isSaving={isSaving}
+                    hasUnsavedChanges={hasUnsavedChanges}
+                    onBack={handleBack}
+                    onUpdateGroup={updateLocalGroup}
+                    onAddSubgroup={addLocalSubgroup}
+                    onUpdateSubgroup={updateLocalSubgroup}
+                    onDeleteSubgroup={deleteLocalSubgroup}
+                    onCloneSubgroup={cloneLocalSubgroup}
+                    onAddShift={addLocalShift}
+                    onUpdateShift={updateLocalShift}
+                    onDeleteShift={deleteLocalShift}
+                    onSaveChanges={handleSaveChanges}
+                    onUpdateStatus={handleUpdateStatus}
+                    onDiscardChanges={discardChanges}
+                  />
+                ) : (
+                  <div className="flex flex-col flex-1 items-center justify-center h-full text-muted-foreground bg-muted/5">
+                    <FileText className="h-16 w-16 mb-4 opacity-50" />
+                    <p className="text-lg font-medium">Select a template to view details</p>
+                    <p className="text-sm opacity-60">
+                      Or create a new one from the functional bar
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <CreateTemplateDialog

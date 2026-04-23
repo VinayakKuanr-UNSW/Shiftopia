@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import SettingsLayout from '@/modules/core/ui/layout/SettingsLayout';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useTheme } from '@/modules/core/contexts/ThemeContext';
+import { cn } from '@/modules/core/lib/utils';
+import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { SettingsFunctionBar } from '../ui/components/SettingsFunctionBar';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { Tabs, TabsContent } from '@/modules/core/ui/primitives/tabs';
@@ -11,6 +14,7 @@ import { Switch } from '@/modules/core/ui/primitives/switch';
 import { useSettings } from '../hooks/useSettings';
 import { supabase } from '@/platform/realtime/client';
 import { toast } from '@/modules/core/ui/primitives/use-toast';
+import { useTranslation } from 'react-i18next';
 
 /* ============================================================
    HELPERS
@@ -42,6 +46,7 @@ const DEFAULT_BRAND_COLOR = '#A48AFB';
    APPEARANCE SETTINGS
    ============================================================ */
 const AppearanceSettings: React.FC = () => {
+  const { t } = useTranslation();
   const { orgBranding, updateBranding, isOrgLoading } = useSettings();
   const [brandColor, setBrandColor] = useState(DEFAULT_BRAND_COLOR);
   const [chartStyle, setChartStyle] = useState('default');
@@ -114,7 +119,7 @@ const AppearanceSettings: React.FC = () => {
       {/* Brand Color Section */}
       <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 items-start">
         <div>
-          <h3 className="text-base font-semibold text-white">Brand color</h3>
+          <h3 className="text-base font-semibold text-white">{t('settings.brand_color')}</h3>
           <p className="text-sm text-blue-200/60 mt-1">
             Global color for your organization.
           </p>
@@ -144,7 +149,7 @@ const AppearanceSettings: React.FC = () => {
               onClick={handleReset}
               className="text-white/40 hover:text-white hover:bg-white/5"
             >
-              Reset to default
+              {t('common.cancel')}
             </Button>
           </div>
           {hexError && <p className="text-xs text-red-400 ml-1">Please enter a valid hex code (e.g. A48AFB)</p>}
@@ -156,7 +161,7 @@ const AppearanceSettings: React.FC = () => {
       {/* Dashboard Charts Section */}
       <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 items-start">
         <div>
-          <h3 className="text-base font-semibold text-white">Dashboard charts</h3>
+          <h3 className="text-base font-semibold text-white">{t('settings.chart_style')}</h3>
           <p className="text-sm text-blue-200/60 mt-1">
             Visual style for analytics.
           </p>
@@ -200,9 +205,9 @@ const AppearanceSettings: React.FC = () => {
       {/* Language Section */}
       <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 items-start">
         <div>
-          <h3 className="text-base font-semibold text-white">Language</h3>
+          <h3 className="text-base font-semibold text-white">{t('settings.language')}</h3>
           <p className="text-sm text-blue-200/60 mt-1">
-            Default display language.
+            {t('settings.language_description')}
           </p>
         </div>
         <div>
@@ -229,7 +234,7 @@ const AppearanceSettings: React.FC = () => {
       {/* Cookie Banner Section */}
       <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 items-start">
         <div>
-          <h3 className="text-base font-semibold text-white">Cookie banner</h3>
+          <h3 className="text-base font-semibold text-white">{t('settings.cookie_banner')}</h3>
           <p className="text-sm text-blue-200/60 mt-1">
             Display cookie banners to visitors.
           </p>
@@ -451,44 +456,82 @@ const SecuritySettings: React.FC = () => {
    MAIN SETTINGS PAGE
    ============================================================ */
 const SettingsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { section = 'appearance' } = useParams<{ section?: string }>();
 
+  const { isDark } = useTheme();
+  const navigate = useNavigate();
+
+  const handleSectionChange = (newSection: string) => {
+    navigate(`/settings/${newSection}`);
+  };
+
   return (
-    <div className="pb-24 md:pb-0">
-      <SettingsLayout
-        title="Settings"
-        description="Manage your account settings and preferences."
-      >
-        <Tabs value={section} className="w-full">
-          <TabsContent value="appearance">
-            <AppearanceSettings />
-          </TabsContent>
-          <TabsContent value="profile">
-            <ProfileSettings />
-          </TabsContent>
-          <TabsContent value="security">
-            <SecuritySettings />
-          </TabsContent>
-          
-          {/* Static placeholders for pending features */}
-          {['account', 'notifications', 'billing', 'integrations'].map(tab => (
-            <TabsContent key={tab} value={tab}>
-              <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-                <div className="p-4 rounded-full bg-white/5 border border-white/10">
-                  {tab === 'notifications' ? <Bell className="h-8 w-8 text-white/40" /> : 
-                   tab === 'billing' ? <CreditCard className="h-8 w-8 text-white/40" /> : 
-                   tab === 'integrations' ? <Link className="h-8 w-8 text-white/40" /> :
-                   <User className="h-8 w-8 text-white/40" />}
-                </div>
-                <div>
-                  <h3 className="text-lg font-medium text-white capitalize">{tab} Settings</h3>
-                  <p className="text-blue-200/60 max-w-sm mt-1">This section is currently under development.</p>
-                </div>
-              </div>
+    <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-6">
+      {/* ── Unified Header ────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
+        <div className={cn(
+            "rounded-[32px] p-4 lg:p-6 transition-all border",
+            isDark 
+                ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+                : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+        )}>
+          {/* Row 1 & 2: Identity & Scope Filter */}
+          <PersonalPageHeader
+            title={t('settings.title')}
+            Icon={Palette}
+            mode="managerial" // Settings is usually org-wide/managerial
+            className="mb-4 lg:mb-6"
+          />
+
+          {/* Row 3: Settings Function Bar */}
+          <SettingsFunctionBar
+            activeSection={section}
+            onSectionChange={handleSectionChange}
+            transparent
+          />
+        </div>
+      </div>
+
+      {/* ── Main Content Area ─────────────────────────────────────────── */}
+      <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+        <div className={cn(
+            "h-full rounded-[32px] overflow-auto transition-all border p-6 lg:p-10",
+            isDark 
+                ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+                : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+        )}>
+          <Tabs value={section} className="w-full">
+            <TabsContent value="appearance">
+              <AppearanceSettings />
             </TabsContent>
-          ))}
-        </Tabs>
-      </SettingsLayout>
+            <TabsContent value="profile">
+              <ProfileSettings />
+            </TabsContent>
+            <TabsContent value="security">
+              <SecuritySettings />
+            </TabsContent>
+            
+            {/* Static placeholders for pending features */}
+            {['account', 'notifications', 'billing', 'integrations'].map(tab => (
+              <TabsContent key={tab} value={tab}>
+                <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+                  <div className="p-4 rounded-full bg-white/5 border border-white/10">
+                    {tab === 'notifications' ? <Bell className="h-8 w-8 text-white/40" /> : 
+                     tab === 'billing' ? <CreditCard className="h-8 w-8 text-white/40" /> : 
+                     tab === 'integrations' ? <Link className="h-8 w-8 text-white/40" /> :
+                     <User className="h-8 w-8 text-white/40" />}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-medium text-white capitalize">{tab} Settings</h3>
+                    <p className="text-blue-200/60 max-w-sm mt-1">This section is currently under development.</p>
+                  </div>
+                </div>
+              </TabsContent>
+            ))}
+          </Tabs>
+        </div>
+      </div>
     </div>
   );
 };

@@ -15,11 +15,16 @@ import {
   Briefcase,
   ArrowRight,
   MapPin,
-  CalendarDays
+  CalendarDays,
+  RefreshCw,
+  Plus,
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/modules/core/ui/primitives/card';
 import { Badge } from '@/modules/core/ui/primitives/badge';
+import { useTheme } from '@/modules/core/contexts/ThemeContext';
+import { cn } from '@/modules/core/lib/utils';
+import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
 import { useEmployeeShifts } from '@/modules/rosters/state/useRosterShifts';
 import {
   startOfWeek,
@@ -100,189 +105,187 @@ const DashboardPage: React.FC = () => {
     console.log('New Request clicked');
   };
 
+  const { isDark } = useTheme();
+
   return (
-    <motion.div
-      variants={pageVariants}
-      initial="hidden"
-      animate="show"
-      className="space-y-4 md:space-y-8 p-1 pb-24 md:pb-0"
-    >
-      {/* Welcome Section */}
-      <motion.div
-        variants={itemVariants}
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary/80 to-indigo-600 dark:from-indigo-900 dark:via-purple-900 dark:to-indigo-950 p-4 sm:p-6 md:p-10 shadow-2xl"
-      >
-        <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 dark:bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/10 rounded-full blur-2xl translate-y-1/3 -translate-x-1/3 pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div>
-            <Badge variant="glass" className="mb-3 backdrop-blur-md bg-white/10 dark:bg-white/10 border-white/20 dark:border-white/20 text-white dark:text-white">
-              {user?.systemRole?.toUpperCase() || 'MEMBER'}
-            </Badge>
-            <h1 className="text-3xl md:text-5xl font-heading font-bold text-white dark:text-white mb-2 tracking-tight">
-              Welcome back, {firstName}
-            </h1>
-            <p className="text-blue-100/80 text-lg max-w-xl">
-              You have <span className="text-white dark:text-white font-semibold">{upcomingCount} upcoming shifts</span> this week.
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <Button
-              variant="glass"
-              className="bg-white/10 dark:bg-white/10 hover:bg-white/20 dark:hover:bg-white/20 border-white/20 dark:border-white/20"
-              onClick={handleViewSchedule}
-            >
-              View Schedule
-            </Button>
-            <Button
-              variant="default"
-              className="bg-white dark:bg-white text-primary dark:text-primary hover:bg-white/90 dark:hover:bg-white/90 shadow-xl shadow-black/20"
-              onClick={handleNewRequest}
-              disabled
-            >
-              New Request
-            </Button>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Main Grid */}
-      <motion.div
-        variants={pageVariants}
-        className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6"
-      >
-        <StatCard
-          icon={<Calendar className="h-6 w-6 text-blue-400" />}
-          title="Shifts This Week"
-          value={isLoading ? '-' : stats.count.toString()}
-          trend="Current Roster"
-          trendUp={true}
-          delay={0.1}
-          loading={isLoading}
-        />
-        <StatCard
-          icon={<Clock className="h-6 w-6 text-emerald-400" />}
-          title="Hours Logged"
-          value={isLoading ? '-' : String(stats.hours)}
-          trend="This Week"
-          trendUp={true}
-          delay={0.2}
-          loading={isLoading}
-        />
-        <StatCard
-          icon={<Users className="h-6 w-6 text-purple-400" />}
-          title="Team Members"
-          value="-"
-          trend="Unavailable"
-          trendUp={true}
-          delay={0.3}
-          loading={false}
-        />
-        <StatCard
-          icon={<Briefcase className="h-6 w-6 text-amber-400" />}
-          title="Next Payday"
-          value="Fri"
-          trend="Weekly Cycle"
-          trendUp={true}
-          delay={0.4}
-        />
-      </motion.div>
-
-      {/* Bento Grid Content */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
-        {/* Left Column (2/3) */}
-        <div className="md:col-span-2 lg:col-span-2 space-y-8">
-          {/* Upcoming Shifts */}
-          <motion.div variants={itemVariants}>
-            <Card className="h-full border-border bg-card/50 backdrop-blur-xl">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-xl">Upcoming Shifts</CardTitle>
-                  <CardDescription>Your schedule for the next few days</CardDescription>
-                </div>
-                <Button variant="ghost" size="sm" className="gap-1" onClick={handleViewSchedule}>
-                  View All <ArrowRight className="h-4 w-4" />
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* ── Unified Header ────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
+        <div className={cn(
+          "rounded-[32px] p-4 lg:p-6 transition-all border",
+          isDark 
+            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+        )}>
+          {/* Row 1 & 2: Identity & Scope Filter */}
+          <PersonalPageHeader
+            title={`Welcome back, ${firstName}`}
+            Icon={TrendingUp}
+            rightActions={
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="rounded-xl font-black uppercase tracking-widest text-[10px]"
+                  onClick={() => window.location.reload()}
+                >
+                  <RefreshCw className="h-3 w-3 mr-2" />
+                  Refresh
                 </Button>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {isLoading ? (
-                  <div className="text-center py-8 text-muted-foreground">Loading schedule...</div>
-                ) : displayShifts.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No upcoming shifts scheduled.
-                    <div className="mt-2">
-                      <Button variant="link" onClick={handleViewSchedule}>Check Roster</Button>
-                    </div>
-                  </div>
-                ) : (
-                  <AnimatePresence mode="popLayout">
-                    {displayShifts.map((shift) => (
-                      <ShiftItem
-                        key={shift.id}
-                        shift={shift}
-                      />
-                    ))}
-                  </AnimatePresence>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
+                <Button 
+                  className="rounded-xl font-black uppercase tracking-widest text-[10px] bg-primary text-white shadow-lg shadow-primary/20"
+                  onClick={handleViewSchedule}
+                >
+                  My Roster
+                </Button>
+              </div>
+            }
+            className="mb-4 lg:mb-6"
+          />
 
-          {/* Manager Quick View (Conditional) */}
-          {(user?.systemRole === 'admin' || user?.systemRole === 'manager') && (
-            <motion.div variants={itemVariants}>
-              <Card className="border-border bg-gradient-to-br from-card/80 to-card/40 backdrop-blur-xl">
-                <CardHeader>
-                  <CardTitle className="text-xl">Manager Overview</CardTitle>
-                  <CardDescription>Quick actions and status updates</CardDescription>
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 flex flex-col items-center justify-center text-center">
-                    <span className="text-3xl font-bold text-primary">-</span>
-                    <span className="text-sm text-primary/80 font-medium mt-1">Open Shifts</span>
-                  </div>
-                  <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 flex flex-col items-center justify-center text-center">
-                    <span className="text-3xl font-bold text-amber-500">-</span>
-                    <span className="text-sm text-amber-500/80 font-medium mt-1">Pending items</span>
-                  </div>
-                  <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col items-center justify-center text-center">
-                    <span className="text-3xl font-bold text-emerald-500">-</span>
-                    <span className="text-sm text-emerald-500/80 font-medium mt-1">Coverage</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-        </div>
-
-        {/* Right Column (1/3) */}
-        <div className="space-y-8">
-          {/* Recent Activity */}
-          <motion.div variants={itemVariants}>
-            <Card className="h-full border-border bg-card/30 backdrop-blur-md">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bell className="h-5 w-5 text-primary" />
-                  Recent Activity
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="relative border-l border-border ml-3 space-y-4 md:space-y-8 py-2">
-                  <ActivityItem
-                    icon={<CheckCircle className="h-4 w-4 text-emerald-400" />}
-                    title="System Update"
-                    time="Just now"
-                    description="Dashboard has been updated with real-time data."
-                  />
-                  {/* Real activity feed to be implemented */}
+          {/* Row 3: Quick Stats Function Bar */}
+          <div className={cn(
+            "flex flex-wrap items-center gap-4 lg:gap-8 p-1 rounded-2xl",
+            isDark ? "bg-black/20" : "bg-white/60 border border-slate-200/50 shadow-inner"
+          )}>
+             <div className="flex items-center gap-4 px-4 py-2">
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60">Weekly Shifts</span>
+                  <span className="text-sm font-black text-foreground">{isLoading ? '...' : stats.count}</span>
                 </div>
-              </CardContent>
-            </Card>
-          </motion.div>
+                <div className="h-8 w-[1px] bg-border/20 mx-2" />
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60">Hours Logged</span>
+                  <span className="text-sm font-black text-foreground">{isLoading ? '...' : stats.hours}</span>
+                </div>
+                <div className="h-8 w-[1px] bg-border/20 mx-2" />
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/60">Upcoming</span>
+                  <span className="text-sm font-black text-foreground">{upcomingCount}</span>
+                </div>
+             </div>
+
+             <div className="ml-auto flex items-center gap-2 pr-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="rounded-lg font-black uppercase tracking-widest text-[9px] text-primary"
+                  onClick={handleNewRequest}
+                  disabled
+                >
+                  <Plus className="h-3 w-3 mr-2" />
+                  New Request
+                </Button>
+             </div>
+          </div>
         </div>
       </div>
-    </motion.div>
+
+      {/* ── Main Content Area ─────────────────────────────────────────── */}
+      <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+        <div className={cn(
+          "h-full rounded-[32px] overflow-auto transition-all border p-6 lg:p-10 scrollbar-none",
+          isDark 
+            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+        )}>
+          <div className="max-w-7xl mx-auto space-y-10">
+            {/* Bento Grid Content */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Left Side: Schedule & Activity (2/3) */}
+              <div className="lg:col-span-2 space-y-8">
+                <section>
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-[11px] font-black uppercase tracking-[0.4em] text-muted-foreground/40">Upcoming Schedule</h3>
+                    <Button variant="link" size="sm" className="text-primary font-black text-[10px] uppercase tracking-widest" onClick={handleViewSchedule}>
+                      View Full Roster <ArrowRight className="ml-2 h-3 w-3" />
+                    </Button>
+                  </div>
+                  
+                  {isLoading ? (
+                    <div className="grid gap-4">
+                      {[1, 2, 3].map(i => (
+                        <div key={i} className="h-24 w-full bg-primary/5 rounded-2xl animate-pulse" />
+                      ))}
+                    </div>
+                  ) : displayShifts.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 bg-muted/10 rounded-3xl border border-dashed border-border/40">
+                      <CalendarDays className="h-10 w-10 text-muted-foreground/20 mb-4" />
+                      <p className="text-sm font-black uppercase tracking-widest text-muted-foreground/40">No upcoming shifts</p>
+                    </div>
+                  ) : (
+                    <div className="grid gap-4">
+                      {displayShifts.map((shift) => (
+                        <ShiftItem key={shift.id} shift={shift} />
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                {(user?.systemRole === 'admin' || user?.systemRole === 'manager') && (
+                  <section>
+                    <h3 className="text-[11px] font-black uppercase tracking-[0.4em] text-muted-foreground/40 mb-6">Managerial Insights</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className={cn(
+                        "p-6 rounded-2xl border transition-all hover:scale-[1.02]",
+                        isDark ? "bg-primary/10 border-primary/20" : "bg-primary/5 border-primary/10"
+                      )}>
+                        <span className="text-3xl font-black text-primary">-</span>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-primary/60 mt-1">Open Shifts</p>
+                      </div>
+                      <div className={cn(
+                        "p-6 rounded-2xl border transition-all hover:scale-[1.02]",
+                        isDark ? "bg-amber-500/10 border-amber-500/20" : "bg-amber-500/5 border-amber-500/10"
+                      )}>
+                        <span className="text-3xl font-black text-amber-500">-</span>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-amber-500/60 mt-1">Pending Bids</p>
+                      </div>
+                      <div className={cn(
+                        "p-6 rounded-2xl border transition-all hover:scale-[1.02]",
+                        isDark ? "bg-emerald-500/10 border-emerald-500/20" : "bg-emerald-500/5 border-emerald-500/10"
+                      )}>
+                        <span className="text-3xl font-black text-emerald-500">-</span>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500/60 mt-1">Team Coverage</p>
+                      </div>
+                    </div>
+                  </section>
+                )}
+              </div>
+
+              {/* Right Side: Activity & Pulse (1/3) */}
+              <div className="space-y-8">
+                <section className={cn(
+                  "h-full rounded-3xl border p-6",
+                  isDark ? "bg-white/[0.02] border-white/5" : "bg-slate-50/50 border-slate-100 shadow-inner"
+                )}>
+                  <div className="flex items-center gap-3 mb-8">
+                    <div className="p-2 rounded-xl bg-primary/10">
+                      <Bell className="h-4 w-4 text-primary" />
+                    </div>
+                    <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground/60">Live Activity</h3>
+                  </div>
+
+                  <div className="relative border-l-2 border-border/20 ml-3 space-y-8 pl-6 py-2">
+                    <ActivityItem
+                      icon={<CheckCircle className="h-4 w-4 text-emerald-500" />}
+                      title="System Ready"
+                      time="Just now"
+                      description="Roster engine optimized for current venue load."
+                    />
+                    <ActivityItem
+                      icon={<Clock className="h-4 w-4 text-primary" />}
+                      title="Auto-Pilot Active"
+                      time="15m ago"
+                      description="Smart bidding thresholds updated for next week."
+                    />
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 

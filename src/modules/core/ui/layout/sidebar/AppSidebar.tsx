@@ -42,6 +42,7 @@ import { useNotifications } from '@/modules/core/hooks/useNotifications';
 import { ACCESS_LEVEL_CONFIG } from '@/platform/auth/constants';
 import { SidebarUser } from './SidebarUser';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/modules/core/ui/primitives/collapsible';
+import { useTranslation } from 'react-i18next';
 
 /* ============================================================
    ICON COLOR MAP
@@ -219,6 +220,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
    APP SIDEBAR COMPONENT
    ============================================================ */
 const AppSidebar: React.FC = () => {
+  const { t } = useTranslation();
   const location = useLocation();
   const { user, hasPermission, logout } = useAuth();
   const { unreadCount } = useNotifications();
@@ -235,7 +237,7 @@ const AppSidebar: React.FC = () => {
   // Prefetching logic for predictive loading
   const handlePrefetch = (route: string) => {
     switch (route) {
-      case '/bids':
+      case '/my-bids':
         if (user?.id) {
           queryClient.prefetchQuery({
             queryKey: ['bids', 'employee', user.id],
@@ -289,7 +291,7 @@ const AppSidebar: React.FC = () => {
             to="/dashboard"
             icon={LayoutDashboard}
             iconColor={iconColorMap.dashboard}
-            label="Dashboard"
+            label={t('common.dashboard')}
             isActive={isRouteActive('/dashboard')}
             description="Overview & analytics"
           />
@@ -298,7 +300,7 @@ const AppSidebar: React.FC = () => {
         {/* ---------- My Workspace Section ---------- */}
         <CollapsibleSection
           icon={UserCircle2}
-          title="Overview"
+          title={t('nav.overview')}
           color={iconColorMap.sectionMyWorkspace}
           defaultOpen={true}
         >
@@ -306,44 +308,44 @@ const AppSidebar: React.FC = () => {
             to="/my-roster"
             icon={Calendar}
             iconColor={iconColorMap.myRoster}
-            label="My Roster"
+            label={t('nav.my_roster')}
             isActive={isRouteActive('/my-roster')}
             description="Your assigned shifts"
           />
 
           <NavigationItem
-            to="/attendance"
+            to="/my-attendance"
             icon={Fingerprint}
             iconColor={iconColorMap.attendance}
-            label="My Attendance"
-            isActive={isRouteActive('/attendance')}
+            label={t('nav.my_attendance')}
+            isActive={isRouteActive('/my-attendance')}
             description="Clock in & out"
           />
 
           <NavigationItem
-            to="/availabilities"
+            to="/my-availabilities"
             icon={CalendarDays}
             iconColor={iconColorMap.availabilities}
-            label="My Availabilities"
-            isActive={isRouteActive('/availabilities')}
+            label={t('nav.my_availabilities')}
+            isActive={isRouteActive('/my-availabilities')}
             description="Manage your schedule"
           />
 
           <NavigationItem
-            to="/bids"
+            to="/my-bids"
             icon={BadgeCheck}
             iconColor={iconColorMap.myBids}
-            label="My Bids"
-            isActive={isRouteActive('/bids')}
+            label={t('nav.my_bids')}
+            isActive={isRouteActive('/my-bids')}
             description="Shift bid requests"
-            onMouseEnter={() => handlePrefetch('/bids')}
+            onMouseEnter={() => handlePrefetch('/my-bids')}
           />
 
           <NavigationItem
             to="/my-swaps"
             icon={RefreshCw}
             iconColor={iconColorMap.mySwaps}
-            label="My Swaps"
+            label={t('nav.my_swaps')}
             isActive={isRouteActive('/my-swaps')}
             description="Manage shift swaps"
             onMouseEnter={() => handlePrefetch('/my-swaps')}
@@ -353,7 +355,7 @@ const AppSidebar: React.FC = () => {
             to="/my-broadcasts"
             icon={Radio}
             iconColor={iconColorMap.myBroadcasts}
-            label="My Broadcasts"
+            label={t('nav.my_broadcasts')}
             isActive={isRouteActive('/my-broadcasts')}
             description="View announcements"
           />
@@ -362,7 +364,7 @@ const AppSidebar: React.FC = () => {
             to="/my-notifications"
             icon={BellRing}
             iconColor={iconColorMap.notifications}
-            label="My Notifications"
+            label={t('nav.my_notifications')}
             isActive={isRouteActive('/my-notifications')}
             badge={unreadCount > 0 ? (unreadCount > 9 ? '9+' : String(unreadCount)) : undefined}
             description="View workspace updates"
@@ -375,7 +377,7 @@ const AppSidebar: React.FC = () => {
           hasPermission('timesheet-view')) && (
             <CollapsibleSection
               icon={FolderKanban}
-              title="Rostering"
+              title={t('nav.rostering')}
               color={iconColorMap.sectionRostering}
               defaultOpen={true}
             >
@@ -384,7 +386,7 @@ const AppSidebar: React.FC = () => {
                   to="/templates"
                   icon={Workflow}
                   iconColor={iconColorMap.templates}
-                  label="Templates"
+                  label={t('nav.templates')}
                   isActive={isRouteActive('/templates')}
                   description="Shift templates"
                 />
@@ -395,7 +397,7 @@ const AppSidebar: React.FC = () => {
                   to="/rosters"
                   icon={FileSpreadsheet}
                   iconColor={iconColorMap.rosters}
-                  label="Rosters"
+                  label={t('nav.rosters')}
                   isActive={isRouteActive('/rosters')}
                   description="Manage schedules"
                 />
@@ -406,7 +408,7 @@ const AppSidebar: React.FC = () => {
                   to="/labor-demand"
                   icon={Activity}
                   iconColor={iconColorMap.laborDemand}
-                  label="Labor Demand"
+                  label={t('nav.labor_demand')}
                   isActive={isRouteActive('/labor-demand')}
                   description="Demand forecasting"
                 />
@@ -417,7 +419,7 @@ const AppSidebar: React.FC = () => {
                   to="/timesheet"
                   icon={Clock}
                   iconColor={iconColorMap.timesheet}
-                  label="Timesheet"
+                  label={t('nav.timesheet')}
                   isActive={isRouteActive('/timesheet')}
                   description="Time tracking"
                 />
@@ -429,7 +431,7 @@ const AppSidebar: React.FC = () => {
         {hasPermission('management') && (
           <CollapsibleSection
             icon={Shield}
-            title="Management"
+            title={t('nav.management')}
             color={iconColorMap.sectionManagement}
             defaultOpen={true}
           >
@@ -437,7 +439,7 @@ const AppSidebar: React.FC = () => {
               to="/management/bids"
               icon={BadgeCheck}
               iconColor={iconColorMap.openBids}
-              label="Open Bids"
+              label={t('nav.open_bids')}
               isActive={isRouteActive('/management/bids')}
               description="Review bid requests"
               onMouseEnter={() => handlePrefetch('/management/bids')}
@@ -447,7 +449,7 @@ const AppSidebar: React.FC = () => {
               to="/management/swaps"
               icon={RefreshCw}
               iconColor={iconColorMap.swapRequests}
-              label="Swap Requests"
+              label={t('nav.swap_requests')}
               isActive={isRouteActive('/management/swaps')}
               description="Approve shift swaps"
             />
@@ -460,7 +462,7 @@ const AppSidebar: React.FC = () => {
           hasPermission('management')) && (
             <CollapsibleSection
               icon={Sparkles}
-              title="Features"
+              title={t('nav.features')}
               color={iconColorMap.sectionFeatures}
               defaultOpen={true}
             >
@@ -469,7 +471,7 @@ const AppSidebar: React.FC = () => {
                   to="/broadcast"
                   icon={BellRing}
                   iconColor={iconColorMap.broadcast}
-                  label="Broadcast"
+                  label={t('nav.broadcast')}
                   isActive={isRouteActive('/broadcast')}
                   description="Send notifications"
                 />
@@ -480,7 +482,7 @@ const AppSidebar: React.FC = () => {
                   to="/insights"
                   icon={TrendingUp}
                   iconColor={iconColorMap.insights}
-                  label="Insights"
+                  label={t('nav.insights')}
                   isActive={isRouteActive('/insights')}
                   description="Analytics & reports"
                 />
@@ -491,7 +493,7 @@ const AppSidebar: React.FC = () => {
                   to="/performance"
                   icon={BarChart3}
                   iconColor={iconColorMap.performance}
-                  label="Performance"
+                  label={t('nav.performance')}
                   isActive={isRouteActive('/performance')}
                   description="Quarterly metrics"
                 />
@@ -503,7 +505,7 @@ const AppSidebar: React.FC = () => {
         {(hasPermission('insights') || hasPermission('management')) && (
           <CollapsibleSection
             icon={Shield}
-            title="Admin"
+            title={t('common.admin')}
             color={iconColorMap.sectionManagement}
             defaultOpen={true}
           >
@@ -512,7 +514,7 @@ const AppSidebar: React.FC = () => {
                 to="/grid"
                 icon={Grid3x3}
                 iconColor={iconColorMap.insights}
-                label="Grid"
+                label={t('nav.grid')}
                 isActive={isRouteActive('/grid')}
                 description="Annual Shift Grid"
               />
@@ -523,13 +525,25 @@ const AppSidebar: React.FC = () => {
                 to="/users"
                 icon={Users}
                 iconColor={iconColorMap.contracts}
-                label="Users"
+                label={t('nav.users')}
                 isActive={isRouteActive('/users')}
                 description="Manage users"
               />
             )}
           </CollapsibleSection>
         )}
+
+        {/* ---------- Settings ---------- */}
+        <div className="pt-2">
+          <NavigationItem
+            to="/settings"
+            icon={Settings}
+            iconColor="text-slate-400"
+            label={t('common.settings')}
+            isActive={isRouteActive('/settings')}
+            description={t('settings.language_description')}
+          />
+        </div>
       </div>
 
       {/* ==================== FOOTER ==================== */}

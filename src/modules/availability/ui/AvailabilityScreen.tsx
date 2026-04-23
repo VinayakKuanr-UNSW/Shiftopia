@@ -35,9 +35,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
-import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
 import { CalendarDays } from 'lucide-react';
-import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 
 import { useAvailability } from '../state/useAvailability';
 import { useAvailabilityEditing } from '../state/useAvailabilityEditing';
@@ -77,7 +75,6 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
   const [activeTab, setActiveTab] = useState<TabType>('calendar');
   const [bottomTab, setBottomTab] = useState<'logs' | 'configure'>('logs');
   const { isDark } = useTheme();
-  const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
 
   const { toast } = useToast();
 
@@ -299,32 +296,14 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
         variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
         className="flex flex-col h-full w-full overflow-hidden"
       >
-        {/* ── Unified Header ── */}
-        <div className="sticky top-0 z-30 -mx-4 px-4 md:-mx-8 md:px-8 pt-4 pb-4 lg:pb-6">
-          <div className={cn(
-              "rounded-[32px] p-4 lg:p-6 transition-all border",
-              isDark 
-                  ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                  : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
-          )}>
-            <PersonalPageHeader
-              title="Availabilities"
-              Icon={CalendarDays}
-              scope={scope}
-              setScope={setScope}
-              isGammaLocked={isGammaLocked}
-              className="mb-4 lg:mb-6"
-            />
-            {renderFunctionBar()}
-          </div>
+        {/* ── Unified Function Bar (Internal) ── */}
+        <div className="px-6 py-4">
+          {renderFunctionBar()}
         </div>
 
-        <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+        <div className="flex-1 min-h-0 overflow-hidden px-6 pb-6">
           <div className={cn(
-              "h-full flex overflow-hidden rounded-[32px] border transition-all",
-              isDark 
-                  ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                  : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+              "h-full flex overflow-hidden rounded-[24px] border border-border/50 bg-card/30"
           )}>
           {/* LEFT: Calendar */}
           <motion.div variants={itemVariants} className="flex-[2] min-w-[400px] border-r border-border overflow-hidden">
@@ -374,24 +353,9 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
         variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
         className="flex flex-col h-full w-full overflow-hidden bg-background"
       >
-        {/* ── Unified Header ── */}
-        <div className="sticky top-0 z-30 px-4 pt-4 pb-2">
-          <div className={cn(
-            "rounded-[32px] p-4 transition-all border",
-            isDark 
-              ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-              : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
-          )}>
-            <PersonalPageHeader
-              title="Availabilities"
-              Icon={CalendarDays}
-              scope={scope}
-              setScope={setScope}
-              isGammaLocked={isGammaLocked}
-              className="mb-4"
-            />
-            {renderFunctionBar()}
-          </div>
+        {/* ── Unified Function Bar (Internal) ── */}
+        <div className="px-4 py-2">
+          {renderFunctionBar()}
         </div>
 
         {/* TOP: Calendar */}
@@ -470,22 +434,9 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
       variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
       className="flex flex-col h-full w-full overflow-hidden bg-background"
     >
-      {/* ── Unified Header ── */}
-      <div className="sticky top-0 z-30 px-4 pt-4 pb-2">
-        <div className={cn(
-          "rounded-[32px] p-4 transition-all border",
-          isDark 
-            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
-        )}>
-          <PersonalPageHeader
-            title="Availabilities"
-            Icon={CalendarDays}
-            scope={scope}
-            setScope={setScope}
-            isGammaLocked={isGammaLocked}
-            className="mb-3"
-          />
+      {/* ── Unified Header (Internal Nav) ── */}
+      <div className="px-4 py-2">
+        <div className="rounded-[16px] p-3 transition-all border border-border/50 bg-card/30">
           {/* Simplified Month Nav for Mobile */}
           <div className="flex items-center justify-between gap-2 px-1">
              <div className="flex items-center gap-1">

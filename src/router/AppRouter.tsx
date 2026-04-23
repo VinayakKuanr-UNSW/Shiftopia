@@ -70,7 +70,7 @@ const PageLoader: React.FC = () => (
 /* =======================
    ROUTES WHERE MAIN AREA HAS NO PADDING (fullscreen canvas pages)
    ======================= */
-const NO_PADDING_ROUTES = new Set(['/rosters']);
+const NO_PADDING_ROUTES = new Set(['/rosters', '/settings']);
 
 /* =======================
    PERSISTENT AUTH LAYOUT
@@ -151,9 +151,9 @@ const AppRouter: React.FC = () => {
                     {/* ── My Workspace ── */}
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/my-roster" element={<MyRosterPage />} />
-                    <Route path="/attendance" element={<AttendancePage />} />
-                    <Route path="/availabilities" element={<AvailabilityPage />} />
-                    <Route path="/bids" element={<EmployeeBidsPage />} />
+                    <Route path="/my-attendance" element={<AttendancePage />} />
+                    <Route path="/my-availabilities" element={<AvailabilityPage />} />
+                    <Route path="/my-bids" element={<EmployeeBidsPage />} />
                     <Route path="/my-swaps" element={<EmployeeSwapsPage />} />
                     <Route path="/my-notifications" element={<MyNotificationsPage />} />
 

@@ -108,7 +108,7 @@ const MyRosterNavigator: React.FC<{
                             <span className="tracking-tight">{label}</span>
                         </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0" align="center">
                         <CalendarPrimitive
                             mode="single"
                             selected={selectedDate}
@@ -178,7 +178,7 @@ const MyRosterPage: React.FC = () => {
     <div className="h-full flex flex-col overflow-hidden">
       
       {/* ── Unified Header ────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30 -mx-4 px-4 md:-mx-8 md:px-8 pt-4 pb-4 lg:pb-6">
+      <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
         <div className={cn(
             "rounded-[32px] p-4 lg:p-6 transition-all border",
             isDark 

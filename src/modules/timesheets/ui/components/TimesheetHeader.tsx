@@ -119,7 +119,7 @@ export const TimesheetFunctionBar: React.FC<TimesheetFunctionBarProps> = ({
                             {format(selectedDate, 'EEE, MMM d')}
                         </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 bg-popover border-border rounded-2xl shadow-2xl" align="start">
+                    <PopoverContent className="w-auto p-0 bg-popover border-border rounded-2xl shadow-2xl" align="center">
                         <CalendarComponent
                             mode="single"
                             selected={selectedDate}

@@ -1,0 +1,53 @@
+{
+  "common": {
+    "welcome": "Welcome back",
+    "dashboard": "Dashboard",
+    "settings": "Settings",
+    "logout": "Logout",
+    "save": "Save Changes",
+    "cancel": "Cancel",
+    "loading": "Loading...",
+    "search": "Search...",
+    "refresh": "Refresh",
+    "period": "Period",
+    "admin": "Admin"
+  },
+  "nav": {
+    "overview": "Overview",
+    "my_roster": "My Roster",
+    "my_attendance": "My Attendance",
+    "my_availabilities": "My Availabilities",
+    "my_bids": "My Bids",
+    "my_swaps": "My Swaps",
+    "my_broadcasts": "My Broadcasts",
+    "my_notifications": "My Notifications",
+    "rostering": "Rostering",
+    "templates": "Templates",
+    "rosters": "Rosters",
+    "labor_demand": "Labor Demand",
+    "timesheet": "Timesheet",
+    "management": "Management",
+    "open_bids": "Open Bids",
+    "swap_requests": "Swap Requests",
+    "features": "Features",
+    "broadcast": "Broadcast",
+    "insights": "Insights",
+    "performance": "Performance",
+    "grid": "Grid",
+    "users": "Users"
+  },
+  "settings": {
+    "title": "My Settings",
+    "appearance": "Appearance",
+    "profile": "Profile",
+    "security": "Security",
+    "notifications": "Notifications",
+    "billing": "Billing & Plans",
+    "integrations": "Integrations",
+    "language": "Language",
+    "language_description": "Default display language.",
+    "brand_color": "Brand Color",
+    "chart_style": "Dashboard charts",
+    "cookie_banner": "Cookie banner"
+  }
+}

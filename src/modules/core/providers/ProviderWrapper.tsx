@@ -12,6 +12,7 @@ import { RosterUIProvider } from '@/modules/rosters/contexts/RosterUIContext';
 import { SidebarProvider } from '@/modules/core/ui/primitives/sidebar';
 import { Toaster } from '@/modules/core/ui/primitives/toaster';
 import { Toaster as Sonner } from '@/modules/core/ui/primitives/sonner';
+import { LocaleProvider } from './LocaleProvider';
 
 /**
  * Smart retry: skip immediately on 4xx client errors (auth failures, validation,
@@ -53,21 +54,23 @@ const ProviderWrapper: React.FC<ProviderWrapperProps> = ({ children }) => {
         <AuthProvider>
           <ScopeFilterProvider>
             <OrgSelectionProvider>
-              <ThemeProvider>
-                <SearchProvider>
-                  <SidebarProvider defaultOpen={true}>
-                    <div className="h-full w-full overflow-hidden">
-                      <Toaster />
-                      <Sonner />
-                      <RosterUIProvider>
-                        <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
-                          {children}
-                        </BrowserRouter>
-                      </RosterUIProvider>
-                    </div>
-                  </SidebarProvider>
-                </SearchProvider>
-              </ThemeProvider>
+              <LocaleProvider>
+                <ThemeProvider>
+                  <SearchProvider>
+                    <SidebarProvider defaultOpen={true}>
+                      <div className="h-full w-full overflow-hidden">
+                        <Toaster />
+                        <Sonner />
+                        <RosterUIProvider>
+                          <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+                            {children}
+                          </BrowserRouter>
+                        </RosterUIProvider>
+                      </div>
+                    </SidebarProvider>
+                  </SearchProvider>
+                </ThemeProvider>
+              </LocaleProvider>
             </OrgSelectionProvider>
           </ScopeFilterProvider>
         </AuthProvider>

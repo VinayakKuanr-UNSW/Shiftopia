@@ -58,6 +58,8 @@ interface Template {
   subDepartmentName?: string;
 }
 
+type StatusFilter = 'published' | 'draft' | 'archived';
+
 interface TemplatesSidebarProps {
   templates: Template[];
   selectedTemplateId: string | null;
@@ -68,9 +70,9 @@ interface TemplatesSidebarProps {
   onRenameTemplate?: (id: string, name: string) => Promise<boolean>;
   onArchiveTemplate: (id: string) => void;
   isLoading?: boolean;
+  statusFilter: StatusFilter;
+  searchQuery: string;
 }
-
-type StatusFilter = 'published' | 'draft' | 'archived';
 
 /* ============================================================
    HELPERS
@@ -94,10 +96,9 @@ export const TemplatesSidebar: React.FC<TemplatesSidebarProps> = ({
   onRenameTemplate,
   onArchiveTemplate,
   isLoading = false,
+  statusFilter,
+  searchQuery,
 }) => {
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('published');
-  const [searchQuery, setSearchQuery] = useState('');
-
   // Rename Dialog State
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [renameId, setRenameId] = useState<string | null>(null);
@@ -148,87 +149,8 @@ export const TemplatesSidebar: React.FC<TemplatesSidebarProps> = ({
     }
   };
 
-  const counts = useMemo(
-    () => ({
-      draft: templates.filter((t) => t.status === 'draft').length,
-      published: templates.filter((t) => t.status === 'published').length,
-      archived: templates.filter((t) => t.status === 'archived').length,
-    }),
-    [templates]
-  );
-
   return (
-    <div className="flex flex-col h-full bg-card border-r border-border w-[320px]">
-      {/* Header */}
-      <div className="p-4 border-b border-border space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Templates</h2>
-          <Button size="sm" onClick={onCreateTemplate}>
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Status Toggle */}
-        <div className="flex p-1 bg-muted rounded-lg overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => setStatusFilter('published')}
-            className={cn(
-              'flex-1 px-2 py-2 text-xs font-medium rounded-md transition-all min-w-[80px]',
-              statusFilter === 'published'
-                ? 'bg-emerald-500/20 text-emerald-500 shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <div className="flex items-center justify-center gap-1.5">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              Ready
-              <span className="opacity-50">({counts.published})</span>
-            </div>
-          </button>
-          <button
-            onClick={() => setStatusFilter('draft')}
-            className={cn(
-              'flex-1 px-2 py-2 text-xs font-medium rounded-md transition-all min-w-[80px]',
-              statusFilter === 'draft'
-                ? 'bg-amber-500/20 text-amber-500 shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <div className="flex items-center justify-center gap-1.5">
-              <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-              Draft
-              <span className="opacity-50">({counts.draft})</span>
-            </div>
-          </button>
-          <button
-            onClick={() => setStatusFilter('archived')}
-            className={cn(
-              'flex-1 px-2 py-2 text-xs font-medium rounded-md transition-all min-w-[80px]',
-              statusFilter === 'archived'
-                ? 'bg-purple-500/20 text-purple-500 shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <div className="flex items-center justify-center gap-1.5">
-              <div className="h-1.5 w-1.5 rounded-full bg-purple-500" />
-              Archive
-              <span className="opacity-50">({counts.archived})</span>
-            </div>
-          </button>
-        </div>
-
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search templates..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 h-9"
-          />
-        </div>
-      </div>
-
+    <div className="flex flex-col h-full bg-transparent w-[320px]">
       {/* Template List */}
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-2">
@@ -248,7 +170,7 @@ export const TemplatesSidebar: React.FC<TemplatesSidebarProps> = ({
               statusFilter={statusFilter}
               hasSearch={!!searchQuery}
               onCreateTemplate={onCreateTemplate}
-              onSwitchToDraft={() => setStatusFilter('draft')}
+              onSwitchToDraft={() => {}} // Controlled by parent now
             />
           ) : (
             filteredTemplates.map((template) => (
@@ -296,13 +218,6 @@ export const TemplatesSidebar: React.FC<TemplatesSidebarProps> = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <div className="p-3 border-t border-border">
-        <Button variant="outline" className="w-full" onClick={onCreateTemplate}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Template
-        </Button>
-      </div>
     </div>
   );
 };

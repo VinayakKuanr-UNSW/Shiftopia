@@ -900,9 +900,9 @@ const NewRostersPage: React.FC = () => {
 
   // ==================== RENDER ====================
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden px-4 md:px-8">
       {/* ── Unified Header ────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30 -mx-4 px-4 md:-mx-8 md:px-8 pt-4 pb-4 lg:pb-6">
+      <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
         <div className={cn(
           "rounded-[32px] p-4 lg:p-6 transition-all border",
           isDark 
@@ -921,6 +921,7 @@ const NewRostersPage: React.FC = () => {
           {/* Row 3: Function Bar */}
           <div className="mt-4 lg:mt-6">
             <RosterFunctionBar
+              transparent
               // Context state
               selectedOrganizationId={selectedOrganizationId}
               selectedRosterId={selectedRosterId}

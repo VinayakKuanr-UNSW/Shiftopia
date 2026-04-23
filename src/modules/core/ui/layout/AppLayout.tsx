@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
 import AppSidebar from './sidebar/AppSidebar';
 import BottomNavbar from './BottomNavbar';
 import { cn } from '@/modules/core/lib/utils';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Sheet, SheetContent } from '@/modules/core/ui/primitives/sheet';
 import { useSidebar } from '@/modules/core/ui/primitives/sidebar';
+import { useTranslation } from 'react-i18next';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -13,6 +15,7 @@ interface AppLayoutProps {
 }
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children, noPadding = false }) => {
+  const { t } = useTranslation();
   const { state, openMobile, setOpenMobile, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
 
@@ -51,6 +54,21 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, noPadding = false }) =>
         ) : (
           <ChevronLeft className="h-4 w-4" />
         )}
+      </Button>
+
+      {/* Settings Shortcut Button next to toggle */}
+      <Button
+        variant="ghost"
+        size="icon"
+        asChild
+        className={cn(
+          "hidden md:flex fixed top-4 z-[100] h-8 w-8 rounded-full bg-card border border-border/50 shadow-md hover:bg-muted transition-all duration-300",
+          isCollapsed ? "left-14" : "left-[308px]"
+        )}
+      >
+        <NavLink to="/settings" aria-label={t('common.settings')}>
+          <Settings className="h-4 w-4" />
+        </NavLink>
       </Button>
 
       {/* Main Area */}

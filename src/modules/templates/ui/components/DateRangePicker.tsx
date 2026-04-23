@@ -69,7 +69,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           {formatDateRange()}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 bg-card border-border backdrop-blur-xl" align="start">
+      <PopoverContent className="w-auto p-0 bg-card border-border backdrop-blur-xl" align="center">
         <div className="p-4 space-y-4">
           <div>
             <label className="text-sm font-medium text-foreground mb-2 block">

@@ -111,7 +111,7 @@ const SearchPage: React.FC = () => {
                     navigate(`/timesheet/${result.id}`);
                     break;
                   case 'bid':
-                    navigate(`/bids/${result.id}`);
+                    navigate(`/my-bids/${result.id}`);
                     break;
                 }
               }}

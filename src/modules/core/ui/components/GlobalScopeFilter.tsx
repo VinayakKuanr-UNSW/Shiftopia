@@ -12,6 +12,16 @@ import {
     SheetDescription,
 } from '@/modules/core/ui/primitives/sheet';
 import { Button } from '@/modules/core/ui/primitives/button';
+import { Popover, PopoverTrigger, PopoverContent } from '@/modules/core/ui/primitives/popover';
+import {
+    Command,
+    CommandInput,
+    CommandList,
+    CommandEmpty,
+    CommandGroup,
+    CommandItem,
+    CommandShortcut,
+} from '@/modules/core/ui/primitives/command';
 
 // =============================================
 // Types
@@ -90,13 +100,11 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
 
     const toggleOption = (id: string) => {
         if (!multiSelect) {
-            // Single-select: just pick this one
             onChange([id]);
             setIsOpen(false);
             return;
         }
         if (selected.includes(id)) {
-            // Don't allow deselecting the last item
             if (selected.length > 1) {
                 onChange(selected.filter(s => s !== id));
             }
@@ -107,7 +115,6 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
 
     const toggleAll = () => {
         if (allSelected) {
-            // Keep only the first selected
             onChange([options[0].id]);
         } else {
             onChange(options.map(o => o.id));
@@ -163,90 +170,140 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
         );
     }
 
-    return (
-        <div className="relative">
-            <button
-                onClick={() => !isDisabled && setIsOpen(!isOpen)}
-                className={cn(
-                    "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
-                    "border-0 min-w-[120px] sm:min-w-[180px] justify-between w-full h-14",
-                    isDisabled
-                        ? "bg-slate-100 dark:bg-white/[0.02] text-slate-400 dark:text-white/40 cursor-not-allowed opacity-50"
-                        : "bg-white dark:bg-[#1c2333] text-slate-700 dark:text-white/80 hover:bg-slate-50 dark:hover:bg-[#252d40] cursor-pointer shadow-sm"
-                )}
-                disabled={isDisabled}
-                type="button"
-            >
-                <div className="flex flex-col items-start gap-0.5">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/30 leading-none">{label}</span>
-                    <span className="truncate max-w-[120px] sm:max-w-[180px] text-xs sm:text-sm font-semibold">{displayText}</span>
-                </div>
-                {locked ? (
-                    <Lock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400/60 flex-shrink-0" />
-                ) : (
-                    <ChevronDown className={cn(
-                        "w-3.5 h-3.5 text-slate-400 dark:text-white/40 flex-shrink-0 transition-transform",
-                        isOpen && "rotate-180"
-                    )} />
-                )}
-            </button>
+    // Handle keyboard for closing
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setIsOpen(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen]);
 
-            {isOpen && !isDisabled && (
-                <>
-                    <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-                    <div className="absolute top-full mt-1 left-0 z-50 min-w-[220px] max-h-[280px] overflow-y-auto rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1a2744] shadow-xl backdrop-blur-xl">
-                        {/* Select All — only in multi-select mode */}
-                        {multiSelect && options.length > 1 && (
-                            <>
-                                <button
-                                    onClick={toggleAll}
-                                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-600 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors"
-                                    type="button"
-                                >
-                                    <div className={cn(
-                                        "w-4 h-4 rounded border flex items-center justify-center text-[10px] font-bold",
-                                        allSelected
-                                            ? "bg-primary border-primary text-white"
-                                            : "border-slate-300 dark:border-white/20"
-                                    )}>
-                                        {allSelected && '✓'}
-                                    </div>
-                                    <span className="font-medium">Select All</span>
-                                </button>
-                                <div className="border-t border-slate-100 dark:border-white/[0.06]" />
-                            </>
-                        )}
-                        {/* Options */}
-                        {options.map(opt => (
-                            <button
-                                key={opt.id}
-                                onClick={() => toggleOption(opt.id)}
-                                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 dark:text-white/80 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors"
-                                type="button"
-                            >
-                                <div className={cn(
-                                    "w-4 h-4 rounded flex items-center justify-center text-[10px] font-bold",
-                                    multiSelect ? "border" : "",
-                                    selected.includes(opt.id)
-                                        ? multiSelect
-                                            ? "bg-primary border-primary text-white"
-                                            : "text-primary"
-                                        : "border-slate-300 dark:border-white/20"
-                                )}>
-                                    {selected.includes(opt.id) && (multiSelect ? '✓' : '●')}
-                                </div>
-                                <span className="truncate">{opt.name}</span>
-                            </button>
-                        ))}
-                        {options.length === 0 && (
-                            <div className="px-3 py-2 text-sm text-slate-400 dark:text-white/40 italic">
-                                No options available
-                            </div>
-                        )}
+    return (
+        <Popover open={isOpen} onOpenChange={setIsOpen}>
+            <PopoverTrigger asChild>
+                <button
+                    className={cn(
+                        "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300",
+                        "border-0 min-w-[120px] sm:min-w-[180px] justify-between w-full h-14",
+                        "hover:scale-[1.02] active:scale-[0.98] relative z-50",
+                        isOpen ? "ring-2 ring-primary bg-primary/5 shadow-primary/20" : "",
+                        isDisabled
+                            ? "bg-indigo-50/20 dark:bg-white/[0.02] text-slate-400 dark:text-white/40 cursor-not-allowed opacity-50"
+                            : "bg-white dark:bg-[#1c2333] text-slate-700 dark:text-white/80 hover:bg-indigo-50/50 dark:hover:bg-[#252d40] cursor-pointer shadow-lg shadow-black/5"
+                    )}
+                    disabled={isDisabled}
+                    type="button"
+                >
+                    <div className="flex flex-col items-start gap-0.5">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-white/30 leading-none">{label}</span>
+                        <span className="truncate max-w-[120px] sm:max-w-[180px] text-xs sm:text-sm font-semibold">{displayText}</span>
                     </div>
-                </>
-            )}
-        </div>
+                    {locked ? (
+                        <Lock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400/60 flex-shrink-0" />
+                    ) : (
+                        <ChevronDown className={cn(
+                            "w-3.5 h-3.5 text-slate-400 dark:text-white/40 flex-shrink-0 transition-transform",
+                            isOpen && "rotate-180"
+                        )} />
+                    )}
+                </button>
+            </PopoverTrigger>
+
+            <PopoverContent 
+                className="w-[var(--radix-popover-trigger-width)] border-none shadow-none p-0 bg-transparent overflow-visible z-50 pointer-events-auto outline-none"
+                sideOffset={10}
+                align="center"
+            >
+                <Command 
+                    className="bg-transparent overflow-visible w-full outline-none"
+                    onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                            setIsOpen(false);
+                            e.preventDefault();
+                        }
+                    }}
+                >
+                    <div className="flex flex-col gap-1.5 w-full">
+                        {/* Search Bar Container */}
+                        <div className="bg-white dark:bg-[#1a2333] rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-slate-200 dark:border-white/10 overflow-hidden [&_[cmdk-input-wrapper]]:border-b-0">
+                            <CommandInput 
+                                placeholder={`Search ${label}...`} 
+                                className="h-14 text-base border-none ring-0 focus:ring-0 focus-visible:ring-0 outline-none focus:outline-none focus-visible:outline-none shadow-none w-full bg-transparent"
+                                autoFocus
+                            />
+                        </div>
+
+                        {/* Results Container */}
+                        <div className="bg-white dark:bg-[#1a2333] rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] border border-slate-200 dark:border-white/10 overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-300">
+                            <CommandList className="max-h-[50vh] p-1.5 scrollbar-none overflow-x-hidden">
+                                <CommandEmpty className="py-8 text-center text-muted-foreground font-medium text-sm">No {label.toLowerCase()} found.</CommandEmpty>
+                                
+                                <CommandGroup heading={label} className="px-1">
+                                    {multiSelect && options.length > 1 && (
+                                        <CommandItem
+                                            onSelect={toggleAll}
+                                            className="flex items-center gap-3 px-4 py-3 rounded-xl mb-1 cursor-pointer transition-all aria-selected:bg-primary aria-selected:text-primary-foreground group"
+                                        >
+                                            <div className={cn(
+                                                "w-5 h-5 rounded-md border flex items-center justify-center transition-all",
+                                                allSelected 
+                                                    ? "bg-white border-white text-primary" 
+                                                    : "border-muted-foreground/30 group-aria-selected:border-white/40"
+                                            )}>
+                                                {allSelected && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                                            </div>
+                                            <span className="font-semibold text-sm sm:text-base">Select All</span>
+                                            <CommandShortcut className="group-aria-selected:text-white/60">⌘A</CommandShortcut>
+                                        </CommandItem>
+                                    )}
+
+                                    {options.map((opt) => {
+                                        const isSelected = selected.includes(opt.id);
+                                        return (
+                                            <CommandItem
+                                                key={opt.id}
+                                                onSelect={() => {
+                                                    toggleOption(opt.id);
+                                                }}
+                                                className={cn(
+                                                    "flex items-center gap-3 px-4 py-3 rounded-xl mb-1 cursor-pointer transition-all",
+                                                    "aria-selected:bg-primary aria-selected:text-primary-foreground group"
+                                                )}
+                                            >
+                                                <div className={cn(
+                                                    "w-5 h-5 rounded-md border flex items-center justify-center transition-all",
+                                                    isSelected 
+                                                        ? "bg-white border-white text-primary" 
+                                                        : "border-muted-foreground/30 group-aria-selected:border-white/40"
+                                                )}>
+                                                    {isSelected && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="font-semibold text-sm sm:text-base capitalize">{opt.name}</span>
+                                                </div>
+                                                <CommandShortcut className="group-aria-selected:text-white/60">↵</CommandShortcut>
+                                            </CommandItem>
+                                        );
+                                    })}
+                                </CommandGroup>
+                            </CommandList>
+                            
+                            <div className="p-3 bg-indigo-50/50 dark:bg-muted/20 border-t border-primary/5 dark:border-white/5 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em] text-primary/50 dark:text-muted-foreground/50">
+                                <div className="flex items-center gap-4">
+                                    <span className="flex items-center gap-1"><kbd className="px-1 py-0.5 rounded border border-primary/10 dark:border-border/40 bg-white/80 dark:bg-background/50 text-primary/70 dark:text-inherit">↑↓</kbd> Nav</span>
+                                    <span className="flex items-center gap-1"><kbd className="px-1 py-0.5 rounded border border-primary/10 dark:border-border/40 bg-white/80 dark:bg-background/50 text-primary/70 dark:text-inherit">↵</kbd> Select</span>
+                                </div>
+                                <span className="flex items-center gap-1"><kbd className="px-1 py-0.5 rounded border border-primary/10 dark:border-border/40 bg-white/80 dark:bg-background/50 text-primary/70 dark:text-inherit">esc</kbd> Close</span>
+                            </div>
+                        </div>
+                    </div>
+                </Command>
+            </PopoverContent>
+        </Popover>
     );
 };
 

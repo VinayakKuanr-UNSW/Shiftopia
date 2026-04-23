@@ -169,7 +169,8 @@ export const CalendarRangePicker: React.FC<CalendarRangePickerProps> = ({
                         ? "bg-[#1a2744] border-white/10"
                         : "bg-white border-gray-200 shadow-lg"
                 )}
-                align="start"
+                align="center"
+                sideOffset={8}
             >
                 {viewType === 'month' ? (
                     // MONTH VIEW: Show Month/Year Picker with custom dropdowns

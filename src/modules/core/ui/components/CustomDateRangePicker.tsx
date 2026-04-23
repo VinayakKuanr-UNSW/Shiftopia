@@ -85,7 +85,7 @@ export const CustomDateRangePicker: React.FC<CustomDateRangePickerProps> = ({
                         </span>
                     </button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent className="w-auto p-0" align="center">
                     <Calendar
                         initialFocus
                         mode="single"
@@ -109,7 +109,7 @@ export const CustomDateRangePicker: React.FC<CustomDateRangePickerProps> = ({
                         </span>
                     </button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent className="w-auto p-0" align="center">
                     <Calendar
                         initialFocus
                         mode="single"

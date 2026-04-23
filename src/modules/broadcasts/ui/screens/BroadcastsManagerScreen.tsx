@@ -56,6 +56,11 @@ export interface BroadcastsManagerScreenProps {
   scope?: import('@/platform/auth/types').ScopeSelection;
   /** Notifies the parent when the ControlRoom opens/closes so it can hide the scope banner */
   onControlRoomChange?: (open: boolean) => void;
+  // Hoisted standard props
+  searchQuery?: string;
+  refreshTrigger?: number;
+  showCreateDialogOverride?: boolean;
+  onCloseCreateDialog?: () => void;
 }
 
 type MobileTab = 'groups' | 'analytics' | 'activity';
@@ -64,7 +69,15 @@ type MobileTab = 'groups' | 'analytics' | 'activity';
 // COMPONENT
 // ============================================================================
 
-export function BroadcastsManagerScreen({ layout, scope, onControlRoomChange }: BroadcastsManagerScreenProps) {
+export function BroadcastsManagerScreen({ 
+  layout, 
+  scope, 
+  onControlRoomChange,
+  searchQuery = '',
+  refreshTrigger = 0,
+  showCreateDialogOverride = false,
+  onCloseCreateDialog,
+}: BroadcastsManagerScreenProps) {
   const { toast } = useToast();
 
   // ========================================
@@ -114,9 +127,28 @@ export function BroadcastsManagerScreen({ layout, scope, onControlRoomChange }: 
   }, [selectedGroupId, onControlRoomChange]);
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  
+  // Sync internal create dialog state with hoisted override
+  React.useEffect(() => {
+    if (showCreateDialogOverride) setShowCreateDialog(true);
+  }, [showCreateDialogOverride]);
+
+  // Handle closing by notifying parent
+  const handleCloseCreateDialog = () => {
+    setShowCreateDialog(false);
+    onCloseCreateDialog?.();
+  };
+
   const [editingGroup, setEditingGroup] = useState<BroadcastGroupWithStats | null>(null);
   const [mobileTab, setMobileTab] = useState<MobileTab>('groups');
   const [showAnalytics, setShowAnalytics] = useState(true);
+
+  // Sync refresh trigger
+  React.useEffect(() => {
+    if (refreshTrigger > 0) {
+      refetch();
+    }
+  }, [refreshTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ========================================
   // HANDLERS
@@ -157,47 +189,11 @@ export function BroadcastsManagerScreen({ layout, scope, onControlRoomChange }: 
     );
   }
 
-  // ========================================
-  // RENDER: HEADER
-  // ========================================
-
-  const renderHeader = () => (
-    <div className="flex-shrink-0 border-b bg-background">
-
-      {/* Title & Actions */}
-      <div className="p-4 md:p-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-1 md:mb-2 flex items-center gap-2 md:gap-3">
-              <Megaphone className="h-6 w-6 md:h-10 md:w-10 text-primary" />
-              Broadcast Center
-            </h1>
-            <p className="text-sm md:text-lg text-muted-foreground">
-              Manage your communication channels and reach your team instantly.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 md:gap-3">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleRefresh}
-              className="h-9 w-9 md:h-11 md:w-11"
-              disabled={isLoading}
-            >
-              <RefreshCw className={cn('h-4 w-4 md:h-5 md:w-5', isLoading && 'animate-spin')} />
-            </Button>
-            <Button
-              onClick={() => setShowCreateDialog(true)}
-              className="h-9 md:h-11 px-4 md:px-6 gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-lg shadow-primary/20"
-            >
-              <Plus className="h-4 w-4 md:h-5 md:w-5" />
-              <span className="hidden sm:inline">Create Group</span>
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  const filteredGroups = React.useMemo(() => {
+    return groups
+      .filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [groups, searchQuery]);
 
   // ========================================
   // RENDER: GROUPS SECTION
@@ -208,12 +204,12 @@ export function BroadcastsManagerScreen({ layout, scope, onControlRoomChange }: 
       <div className="flex items-center justify-between">
         <h2 className="text-xl md:text-2xl font-bold text-foreground">My Groups</h2>
         <Badge variant="secondary" className="text-xs md:text-sm">
-          {groups.length} active groups
+          {filteredGroups.length} active groups
         </Badge>
       </div>
 
       <BroadcastGroupsView
-        groups={groups}
+        groups={filteredGroups}
         isLoading={isLoading}
         onGroupClick={(id) => setSelectedGroupId(id)}
         onDeleteGroup={deleteGroup}
@@ -252,7 +248,7 @@ export function BroadcastsManagerScreen({ layout, scope, onControlRoomChange }: 
     <>
       <CreateGroupDialog
         isOpen={showCreateDialog}
-        onClose={() => setShowCreateDialog(false)}
+        onClose={handleCloseCreateDialog}
         initialOrganizationId={selectedOrgId}
         initialDepartmentId={selectedDeptId}
         initialSubDepartmentId={selectedSubDeptId}
@@ -274,9 +270,7 @@ export function BroadcastsManagerScreen({ layout, scope, onControlRoomChange }: 
 
   if (layout === 'desktop') {
     return (
-      <div className="min-h-screen bg-background">
-        {renderHeader()}
-
+      <div className="h-full flex flex-col overflow-hidden">
         {/* Analytics Section */}
         <div className="px-8 pt-6">
           {renderAnalyticsSection()}
@@ -305,8 +299,7 @@ export function BroadcastsManagerScreen({ layout, scope, onControlRoomChange }: 
 
   if (layout === 'tablet') {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        {renderHeader()}
+      <div className="h-full flex flex-col overflow-hidden">
 
         <ScrollArea className="flex-1">
           <div className="p-6 space-y-6">
@@ -351,8 +344,7 @@ export function BroadcastsManagerScreen({ layout, scope, onControlRoomChange }: 
   // ========================================
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {renderHeader()}
+    <div className="h-full flex flex-col overflow-hidden">
 
       {/* Tab Content */}
       <div className="flex-1 overflow-hidden">

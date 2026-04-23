@@ -19,6 +19,10 @@ import {
     SelectValue,
 } from '@/modules/core/ui/primitives/select';
 import { Button } from '@/modules/core/ui/primitives/button';
+import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { PerformanceFunctionBar } from '../ui/components/PerformanceFunctionBar';
+import { useTheme } from '@/modules/core/contexts/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 /* ═══════════════════ TYPES ═══════════════════ */
 type SortKey = keyof QuarterlyReportRow;
@@ -46,27 +50,6 @@ interface ColumnDef {
     thresholdKey?: string;
 }
 
-const COLUMNS: ColumnDef[] = [
-    // Identity
-    { key: 'employee_name', label: 'Employee', group: 'Identity' },
-    // Offer Behaviour
-    { key: 'offers_sent', label: 'Offers', group: 'Offer Behaviour' },
-    { key: 'acceptance_rate', label: 'Accept %', group: 'Offer Behaviour', isRate: true, thresholdKey: 'acceptance_rate' },
-    { key: 'rejection_rate', label: 'Reject %', group: 'Offer Behaviour', isRate: true },
-    { key: 'ignorance_rate', label: 'Ignored %', group: 'Offer Behaviour', isRate: true },
-    // Assignment
-    { key: 'assigned', label: 'Assigned', group: 'Assignment' },
-    { key: 'emergency_assigned', label: 'Emergency', group: 'Assignment' },
-    // Reliability
-    { key: 'cancel_rate', label: 'Cancel %', group: 'Reliability', isRate: true, thresholdKey: 'cancel_rate' },
-    { key: 'late_cancel_rate', label: 'Late Cancel %', group: 'Reliability', isRate: true, thresholdKey: 'late_cancel_rate' },
-    { key: 'swap_rate', label: 'Swap %', group: 'Reliability', isRate: true },
-    { key: 'reliability_score', label: 'Score', group: 'Reliability', isRate: true, thresholdKey: 'reliability_score' },
-    // Attendance
-    { key: 'late_clock_in_rate', label: 'Late In %', group: 'Attendance', isRate: true },
-    { key: 'early_clock_out_rate', label: 'Early Out %', group: 'Attendance', isRate: true },
-    { key: 'no_show_rate', label: 'No-Show %', group: 'Attendance', isRate: true, thresholdKey: 'no_show_rate' },
-];
 
 /* ═══════════════════ QUARTER OPTIONS ═══════════════════ */
 const buildQuarterOptions = () => {
@@ -82,7 +65,7 @@ const buildQuarterOptions = () => {
 };
 
 /* ═══════════════════ MAIN COMPONENT ═══════════════════ */
-const PerformancePage: React.FC = () => {
+export default function PerformancePage() {
     const queryClient = useQueryClient();
     const quarterOptions = useMemo(buildQuarterOptions, []);
     const defaultQ = quarterOptions[0];
@@ -92,6 +75,30 @@ const PerformancePage: React.FC = () => {
     const [sortKey, setSortKey] = useState<SortKey>('employee_name');
     const [sortDir, setSortDir] = useState<SortDir>('asc');
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const { isDark } = useTheme();
+    const { t } = useTranslation();
+
+    const columns: ColumnDef[] = [
+        // Identity
+        { key: 'employee_name', label: t('nav.users'), group: 'Identity' },
+        // Offer Behaviour
+        { key: 'offers_sent', label: t('nav.open_bids'), group: 'Offer Behaviour' },
+        { key: 'acceptance_rate', label: 'Accept %', group: 'Offer Behaviour', isRate: true, thresholdKey: 'acceptance_rate' },
+        { key: 'rejection_rate', label: 'Reject %', group: 'Offer Behaviour', isRate: true },
+        { key: 'ignorance_rate', label: 'Ignored %', group: 'Offer Behaviour', isRate: true },
+        // Assignment
+        { key: 'assigned', label: t('nav.rostering'), group: 'Assignment' },
+        { key: 'emergency_assigned', label: 'Emergency', group: 'Assignment' },
+        // Reliability
+        { key: 'cancel_rate', label: 'Cancel %', group: 'Reliability', isRate: true, thresholdKey: 'cancel_rate' },
+        { key: 'late_cancel_rate', label: 'Late Cancel %', group: 'Reliability', isRate: true, thresholdKey: 'late_cancel_rate' },
+        { key: 'swap_rate', label: 'Swap %', group: 'Reliability', isRate: true },
+        { key: 'reliability_score', label: 'Score', group: 'Reliability', isRate: true, thresholdKey: 'reliability_score' },
+        // Attendance
+        { key: 'late_clock_in_rate', label: 'Late In %', group: 'Attendance', isRate: true },
+        { key: 'early_clock_out_rate', label: 'Early Out %', group: 'Attendance', isRate: true },
+        { key: 'no_show_rate', label: 'No-Show %', group: 'Attendance', isRate: true, thresholdKey: 'no_show_rate' },
+    ];
 
     const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
     const { data: rows = [], isLoading } = useQuarterlyReport(selectedYear, selectedQuarter, scope);
@@ -192,89 +199,80 @@ const PerformancePage: React.FC = () => {
     };
 
     return (
-        <div className="w-full min-h-screen p-4 md:p-6 lg:p-8 space-y-6 pb-24 md:pb-8">
-            {/* ═══ SCOPE FILTER ═══ */}
-            <ScopeFilterBanner
-                mode="managerial"
-                onScopeChange={setScope}
-                hidden={isGammaLocked}
-            />
+        <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-6">
+            {/* ── Unified Header Block (Rows 1-3) ────────────────────────────── */}
+            <div className="flex-shrink-0">
+                <div className={cn(
+                    "rounded-[32px] p-4 lg:p-6 transition-all border",
+                    isDark 
+                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                )}>
+                    {/* Row 1 & 2: Identity & Scope Filter */}
+                    <PersonalPageHeader
+                        title={t('nav.performance')}
+                        Icon={BarChart3}
+                        scope={scope}
+                        setScope={setScope}
+                        isGammaLocked={isGammaLocked}
+                        className="mb-4 lg:mb-6"
+                    />
 
-            {/* ═══ HEADER ═══ */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg">
-                        <BarChart3 className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                        <h1 className="text-3xl font-black text-foreground tracking-tight">Performance</h1>
-                        <p className="text-sm text-muted-foreground font-medium">Quarterly employee metrics overview</p>
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                    <Select
-                        value={`Q${selectedQuarter} ${selectedYear}`}
-                        onValueChange={handleQuarterChange}
-                    >
-                        <SelectTrigger className="w-40 bg-card border-border/50 h-10 rounded-xl text-sm font-semibold">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-card border-border text-foreground rounded-xl">
-                            {quarterOptions.map(o => (
-                                <SelectItem key={o.label} value={o.label} className="font-semibold">
-                                    {o.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleRefresh}
-                        disabled={isRefreshing}
-                        className="h-10 px-4 rounded-xl gap-2"
-                    >
-                        <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />
-                        Refresh All
-                    </Button>
+                    {/* Row 3: Module Function Bar */}
+                    <PerformanceFunctionBar
+                        selectedQuarterLabel={`Q${selectedQuarter} ${selectedYear}`}
+                        quarterOptions={quarterOptions}
+                        onQuarterChange={handleQuarterChange}
+                        onRefresh={handleRefresh}
+                        isLoading={isRefreshing}
+                        className="mt-1"
+                    />
                 </div>
             </div>
 
-            {/* ═══ SUMMARY ROW ═══ */}
-            {summary && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {([
-                        { label: 'Avg Acceptance', value: summary.acceptance_rate, key: 'acceptance_rate' },
-                        { label: 'Avg Cancellation', value: summary.cancel_rate, key: 'cancel_rate' },
-                        { label: 'Avg No-Show', value: summary.no_show_rate, key: 'no_show_rate' },
-                        { label: 'Avg Reliability', value: summary.reliability_score, key: 'reliability_score' },
-                    ] as const).map(s => {
-                        const st = getReportCellStatus(s.key, s.value);
-                        return (
-                            <div
-                                key={s.key}
-                                className={cn(
-                                    'rounded-xl border p-4 text-center transition-colors',
-                                    st === 'good' ? 'bg-emerald-500/10 border-emerald-500/20' :
-                                        st === 'warn' ? 'bg-amber-500/10 border-amber-500/20' :
-                                            'bg-red-500/10 border-red-500/20',
-                                )}
-                            >
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-1">{s.label}</p>
-                                <p className={cn('text-2xl font-black tabular-nums', statusTextColor[st])}>
-                                    {s.value.toFixed(1)}%
-                                </p>
-                                <p className="text-[9px] text-muted-foreground mt-0.5">Company Average</p>
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
+            {/* ── Main Content Area ────────────────────────────────────────── */}
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-6 pr-1 custom-scrollbar">
+                {/* ═══ SUMMARY ROW ═══ */}
+                {summary && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {([
+                            { label: 'Avg Acceptance', value: summary.acceptance_rate, key: 'acceptance_rate' },
+                            { label: 'Avg Cancellation', value: summary.cancel_rate, key: 'cancel_rate' },
+                            { label: 'Avg No-Show', value: summary.no_show_rate, key: 'no_show_rate' },
+                            { label: 'Avg Reliability', value: summary.reliability_score, key: 'reliability_score' },
+                        ] as const).map(s => {
+                            const st = getReportCellStatus(s.key, s.value);
+                            return (
+                                <div
+                                    key={s.key}
+                                    className={cn(
+                                        'rounded-[24px] border p-5 transition-all',
+                                        isDark 
+                                            ? "bg-[#1c2333]/40 border-white/5 shadow-lg" 
+                                            : "bg-white/70 backdrop-blur-md border-white shadow-md",
+                                        st === 'good' ? 'bg-emerald-500/5' :
+                                            st === 'warn' ? 'bg-amber-500/5' :
+                                                'bg-red-500/5',
+                                    )}
+                                >
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-black mb-1.5 opacity-60">{s.label}</p>
+                                    <p className={cn('text-3xl font-black tabular-nums tracking-tight', statusTextColor[st])}>
+                                        {s.value.toFixed(1)}%
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground/50 mt-1 font-medium">Company Average</p>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
 
-            {/* ═══ TABLE ═══ */}
-            <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+                {/* ═══ TABLE ═══ */}
+                <div className={cn(
+                    "rounded-[32px] border transition-all overflow-hidden",
+                    isDark 
+                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                )}>
                 {isLoading ? (
                     <div className="flex items-center justify-center h-48">
                         <p className="text-muted-foreground text-sm animate-pulse">Loading report…</p>
@@ -304,7 +302,7 @@ const PerformancePage: React.FC = () => {
                                 </tr>
                                 {/* Column Headers */}
                                 <tr className="border-b border-border bg-muted/20">
-                                    {COLUMNS.map(col => (
+                                    {columns.map(col => (
                                         <th
                                             key={col.key}
                                             onClick={() => handleSort(col.key)}
@@ -327,7 +325,7 @@ const PerformancePage: React.FC = () => {
                                             idx % 2 === 0 ? 'bg-transparent' : 'bg-muted/5',
                                         )}
                                     >
-                                        {COLUMNS.map(col => (
+                                        {columns.map(col => (
                                             <td
                                                 key={col.key}
                                                 className={cn(
@@ -346,13 +344,14 @@ const PerformancePage: React.FC = () => {
                     </div>
                 )}
             </div>
+          </div>
 
-            {/* ═══ FOOTER ═══ */}
-            <p className="text-[10px] text-muted-foreground text-right">
-                {rows.length} employee{rows.length !== 1 ? 's' : ''} · Q{selectedQuarter} {selectedYear}
+          {/* ═══ FOOTER ═══ */}
+          <div className="flex justify-end pt-2">
+            <p className="text-[10px] text-muted-foreground/60 font-black uppercase tracking-widest">
+              {rows.length} {rows.length === 1 ? 'Employee' : 'Employees'} &bull; Q{selectedQuarter} {selectedYear}
             </p>
+          </div>
         </div>
     );
-};
-
-export default PerformancePage;
+}

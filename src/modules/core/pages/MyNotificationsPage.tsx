@@ -29,6 +29,7 @@ import {
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { cn } from '@/modules/core/lib/utils';
+import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
 import { pageVariants, itemVariants, listItemSpring } from '@/modules/core/ui/motion/presets';
 
@@ -132,112 +133,131 @@ const MyNotificationsPage: React.FC = () => {
     navigate(resolveNotificationLink(n));
   };
 
+  const { isDark } = useTheme();
+
   return (
-    <motion.div
-      variants={pageVariants}
-      initial="hidden"
-      animate="show"
-      className="flex flex-col h-full bg-background p-4 sm:p-6 md:p-8 pb-24 md:pb-8"
-    >
-      {/* Unified Header */}
-      <PersonalPageHeader
-        title="My Notifications"
-        Icon={Bell}
-        rightActions={
-          unreadCount > 0 && (
-            <Button
-              onClick={markAllRead}
-              variant="link"
-              size="sm"
-              className="text-primary font-semibold hover:no-underline px-0"
-            >
-              Mark all as read
-            </Button>
-          )
-        }
-      />
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* ── Unified Header ────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
+        <div className={cn(
+          "rounded-[32px] p-4 lg:p-6 transition-all border",
+          isDark 
+            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+        )}>
+          {/* Row 1 & 2: Identity & Scope Filter */}
+          <PersonalPageHeader
+            title="My Notifications"
+            Icon={Bell}
+            rightActions={
+              unreadCount > 0 && (
+                <Button
+                  onClick={markAllRead}
+                  variant="link"
+                  size="sm"
+                  className="text-primary font-semibold hover:no-underline px-0 text-[10px] uppercase tracking-widest"
+                >
+                  Mark all as read
+                </Button>
+              )
+            }
+            className="mb-4 lg:mb-6"
+          />
 
-      <div className="flex flex-col gap-6">
-        {/* Tabs — segmented control */}
-        <motion.div variants={itemVariants} className="flex p-1 bg-muted/30 rounded-lg border border-border/40 w-full sm:w-fit">
-          <button
-            onClick={() => setActiveTab('all')}
-            className={cn(
-              "flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2 min-h-[44px] rounded-md text-sm font-medium transition-all duration-200",
-              activeTab === 'all'
-                ? "bg-background shadow-sm text-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            )}
-          >
-            All
-            <span className={cn(
-              "ml-1 text-[10px] px-1.5 py-0.5 rounded-full",
-              activeTab === 'all' ? "bg-muted text-foreground" : "bg-muted/50 text-muted-foreground"
+          {/* Row 3: Notifications Function Bar */}
+          <div className="flex flex-col lg:flex-row items-center gap-4 w-full">
+            {/* Tabs Pod */}
+            <div className={cn(
+              "flex p-1 rounded-xl w-full lg:w-auto",
+              isDark ? "bg-black/20" : "bg-white/60 border border-slate-200/50 shadow-inner"
             )}>
-              {notifications.length}
-            </span>
-          </button>
-          <button
-            onClick={() => setActiveTab('unread')}
-            className={cn(
-              "flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2 min-h-[44px] rounded-md text-sm font-medium transition-all duration-200",
-              activeTab === 'unread'
-                ? "bg-background shadow-sm text-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            )}
-          >
-            Unread
-            {unreadCount > 0 && (
-              <span className={cn(
-                "ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary"
-              )}>
-                {unreadCount}
-              </span>
-            )}
-          </button>
-        </motion.div>
+              <button
+                onClick={() => setActiveTab('all')}
+                className={cn(
+                  "flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 h-10 lg:h-11 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                  activeTab === 'all'
+                    ? "bg-primary text-white shadow-lg shadow-primary/20"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                All ({notifications.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('unread')}
+                className={cn(
+                  "flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 h-10 lg:h-11 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                  activeTab === 'unread'
+                    ? "bg-primary text-white shadow-lg shadow-primary/20"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Unread {unreadCount > 0 && `(${unreadCount})`}
+              </button>
+            </div>
 
-        <motion.div variants={itemVariants} className="sticky top-0 z-20 flex items-center gap-3 bg-background/80 backdrop-blur-md pt-2 pb-4 border-b border-border/10">
-          <div className="relative flex-1 group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-            <Input
-              placeholder="Search notifications..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 h-10 bg-muted/20 border-border/40 rounded-lg focus:ring-primary/20 focus:border-primary/40 text-sm"
-            />
+            {/* Search Pod */}
+            <div className={cn(
+              "flex-1 flex items-center gap-2 w-full lg:w-auto p-1 rounded-xl",
+              isDark ? "bg-black/20" : "bg-white/60 border border-slate-200/50 shadow-inner"
+            )}>
+              <div className="pl-3 text-muted-foreground/40">
+                <Search className="h-4 w-4" />
+              </div>
+              <Input
+                placeholder="SEARCH NOTIFICATIONS..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 bg-transparent border-0 shadow-none focus:ring-0 text-[11px] font-black uppercase tracking-widest h-10 lg:h-11"
+              />
+            </div>
+
+            {/* Action Pods */}
+            <Button 
+              variant="outline" 
+              className={cn(
+                "h-10 lg:h-11 px-4 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border-0",
+                isDark ? "bg-white/5 text-white/40 hover:bg-white/10 hover:text-white" : "bg-white/60 text-slate-900/40 hover:bg-white hover:text-slate-900 border border-slate-200/50"
+              )}
+            >
+              <Filter className="h-3.5 w-3.5 mr-2" />
+              FILTERS
+            </Button>
           </div>
-          <Button variant="outline" size="sm" className="h-10 px-3 border-border/40 text-muted-foreground">
-            <Filter className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Filter</span>
-          </Button>
-        </motion.div>
+        </div>
+      </div>
 
-        <div className="flex-1 overflow-y-auto scrollbar-none pb-20">
+      {/* ── Main Content Area ─────────────────────────────────────────── */}
+      <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+        <div className={cn(
+          "h-full rounded-[32px] overflow-auto transition-all border p-6 lg:p-10 scrollbar-none",
+          isDark 
+            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+        )}>
           {loading ? (
-            <div className="space-y-3">
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} className="h-20 w-full bg-muted/30 rounded-lg animate-pulse border border-border/20" />
+            <div className="space-y-4">
+              {[1, 2, 3, 4, 5].map(i => (
+                <div key={i} className="h-24 w-full bg-primary/5 rounded-2xl animate-pulse" />
               ))}
             </div>
           ) : filteredNotifications.length === 0 ? (
             <motion.div
               variants={itemVariants}
-              className="flex flex-col items-center justify-center py-20 text-center opacity-70"
+              className="flex flex-col items-center justify-center py-24 text-center opacity-70"
             >
-              <div className="h-16 w-16 rounded-full bg-muted/40 flex items-center justify-center mb-4">
-                <Inbox className="h-8 w-8 text-muted-foreground/40" />
+              <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+                <Inbox className="h-10 w-10 text-primary/40" />
               </div>
-              <h3 className="text-xl font-bold text-foreground/80">You're all caught up</h3>
+              <h3 className="text-xl font-black uppercase tracking-widest text-foreground/80">You're all caught up</h3>
               <p className="text-muted-foreground max-w-sm mt-1 text-sm">
                 No notifications found. Enjoy your productive workspace!
               </p>
             </motion.div>
           ) : (
-            <motion.div variants={pageVariants} className="flex flex-col gap-8 pb-12">
+            <motion.div variants={pageVariants} className="flex flex-col gap-10 pb-12">
               {groupedNotifications.map((group) => (
-                <motion.section variants={itemVariants} key={group.title} className="flex flex-col gap-3">
-                  <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/60 ml-1">
+                <motion.section variants={itemVariants} key={group.title} className="flex flex-col gap-4">
+                  <h3 className="text-[11px] font-black uppercase tracking-[0.4em] text-muted-foreground/40 ml-1">
                     {group.title}
                   </h3>
 
@@ -254,74 +274,70 @@ const MyNotificationsPage: React.FC = () => {
                             {...listItemSpring}
                             onClick={() => handleNotificationClick(n)}
                             className={cn(
-                              "group relative flex items-start gap-4 p-4 rounded-xl cursor-pointer transition-all duration-200 border min-h-[44px]",
-                              "w-full shadow-sm hover:shadow-md hover:border-primary/20",
+                              "group relative flex items-start gap-5 p-5 rounded-2xl cursor-pointer transition-all duration-300 border",
                               isUnread
-                                ? "bg-primary/5 border-primary/10"
-                                : "bg-card border-border/40"
+                                ? (isDark ? "bg-primary/10 border-primary/20 shadow-lg shadow-primary/5" : "bg-primary/5 border-primary/20 shadow-md shadow-primary/5")
+                                : (isDark ? "bg-white/[0.02] border-white/5 hover:bg-white/[0.05]" : "bg-white border-slate-100 hover:border-slate-200 shadow-sm")
                             )}
                           >
-                            {isUnread && (
-                              <div className={cn("absolute left-0 top-3 bottom-3 w-1 rounded-r-full", meta.accent)} />
-                            )}
-
                             {/* Icon badge */}
                             <div className={cn(
-                              "relative h-8 w-8 shrink-0 rounded-lg flex items-center justify-center transition-transform shadow-sm",
-                              isUnread ? meta.color : "bg-muted"
+                              "relative h-12 w-12 shrink-0 rounded-xl flex items-center justify-center transition-all duration-300 shadow-lg",
+                              isUnread ? meta.color : (isDark ? "bg-white/5" : "bg-slate-100")
                             )}>
                               <Icon className={cn(
-                                "h-4 w-4",
+                                "h-5 w-5",
                                 isUnread ? "text-white" : "text-muted-foreground"
                               )} />
+                              {isUnread && (
+                                <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-primary ring-2 ring-background animate-pulse" />
+                              )}
                             </div>
 
-                            <div className="flex-1 min-w-0 pr-10">
-                              <div className="flex flex-col">
-                                <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-3 flex-wrap">
                                   <h4 className={cn(
-                                    "text-xs font-black uppercase tracking-wider",
+                                    "text-sm font-black uppercase tracking-wider",
                                     isUnread ? "text-foreground" : "text-muted-foreground"
                                   )}>
                                     {n.title}
                                   </h4>
-                                  {/* Type badge — light-mode safe */}
                                   <span className={cn(
-                                    "text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full",
+                                    "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full shadow-sm",
                                     BADGE_CLASSES[meta.tone]
                                   )}>
                                     {meta.label}
                                   </span>
                                 </div>
                                 <p className={cn(
-                                  "text-sm leading-snug break-words",
+                                  "text-sm leading-relaxed",
                                   isUnread ? "font-medium text-foreground/90" : "text-muted-foreground/80"
                                 )}>
                                   {n.message}
                                 </p>
                               </div>
 
-                              <div className="flex items-center gap-3 mt-2">
-                                <span className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
+                              <div className="flex items-center gap-4 mt-3">
+                                <span className="text-[10px] font-black text-muted-foreground/40 uppercase tracking-widest">
                                   {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
                                 </span>
 
                                 {n.link && (
-                                  <button className="text-[10px] font-black uppercase tracking-tighter text-primary hover:underline transition-colors flex items-center">
-                                    View details <ArrowRight className="ml-1 h-2 w-2" />
+                                  <button className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline transition-all flex items-center gap-1">
+                                    VIEW DETAILS <ArrowRight className="h-3 w-3" />
                                   </button>
                                 )}
                               </div>
                             </div>
 
-                            <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                               {isUnread && (
                                 <Button
                                   size="icon"
                                   variant="ghost"
-                                  className="h-8 w-8 rounded-lg hover:bg-primary/10 text-primary"
+                                  className="h-9 w-9 rounded-xl hover:bg-primary/20 text-primary"
                                   onClick={(e) => { e.stopPropagation(); markRead(n.id); }}
-                                  title="Mark as read"
                                 >
                                   <CheckCheck className="h-4 w-4" />
                                 </Button>
@@ -329,22 +345,12 @@ const MyNotificationsPage: React.FC = () => {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-8 w-8 rounded-lg hover:bg-red-500/10 text-red-500"
+                                className="h-9 w-9 rounded-xl hover:bg-rose-500/20 text-rose-500"
                                 onClick={(e) => { e.stopPropagation(); dismiss(n.id); }}
-                                title="Dismiss"
                               >
                                 <X className="h-4 w-4" />
                               </Button>
                             </div>
-
-                            {/* Unread pip — animated pulse */}
-                            {isUnread && (
-                              <motion.span
-                                className="absolute top-3 right-3 h-2 w-2 rounded-full bg-primary"
-                                animate={{ scale: [1, 1.2, 1] }}
-                                transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
-                              />
-                            )}
                           </motion.div>
                         );
                       })}
@@ -357,14 +363,12 @@ const MyNotificationsPage: React.FC = () => {
         </div>
       </div>
 
-      <motion.div
-        variants={itemVariants}
-        className="hidden md:flex items-center justify-between pt-6 border-t border-border/10 text-muted-foreground/40 text-[10px] font-bold uppercase tracking-widest mt-auto"
-      >
-        <p>Notifications are automatically cleared after 7 days</p>
+      {/* Footer Info */}
+      <div className="hidden md:flex items-center justify-between pt-4 text-muted-foreground/30 text-[9px] font-black uppercase tracking-widest px-4">
+        <p>Notifications are archived after 7 days</p>
         <div className="flex items-center gap-4">
           {(['Shifts', 'Bids', 'Swaps', 'Messages'] as const).map(kind => (
-            <span key={kind} className="flex items-center gap-1.5 opacity-60">
+            <span key={kind} className="flex items-center gap-2">
               <span className={cn(
                 "h-1.5 w-1.5 rounded-full",
                 kind === 'Shifts' ? 'bg-cyan-500' : kind === 'Bids' ? 'bg-green-500' : kind === 'Swaps' ? 'bg-orange-500' : 'bg-indigo-500'
@@ -372,8 +376,8 @@ const MyNotificationsPage: React.FC = () => {
             </span>
           ))}
         </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 };
 

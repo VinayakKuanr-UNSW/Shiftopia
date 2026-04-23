@@ -198,7 +198,7 @@ export const TimesheetPage: React.FC = () => {
             animate="show"
         >
             {/* ── Unified Header ────────────────────────────────────────────── */}
-            <div className="sticky top-0 z-30 -mx-4 px-4 md:-mx-8 md:px-8 pt-4 pb-4 lg:pb-6">
+            <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
                 <div className={cn(
                     "rounded-[32px] p-4 lg:p-6 transition-all border",
                     isDark 
@@ -217,12 +217,7 @@ export const TimesheetPage: React.FC = () => {
                     />
 
                     {/* Row 3: Function Bar */}
-                    <div className={cn(
-                        "flex flex-row items-center gap-2 w-full transition-all p-1.5 rounded-2xl border overflow-hidden",
-                        isDark 
-                            ? "bg-[#111827]/60 backdrop-blur-md border-white/5 shadow-inner shadow-black/20" 
-                            : "bg-slate-100/50 border-slate-200/50"
-                    )}>
+                    <div className="flex flex-row items-center gap-2 w-full transition-all p-1.5 rounded-2xl overflow-hidden mt-1">
                         <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none py-0.5">
                             {/* Date Picker (Simplified for Row 3) */}
                             <div className={cn(
