@@ -13,15 +13,24 @@ import { getTodayInTimezone, isTodayInTimezone } from '@/modules/core/lib/date.u
 import {
   ChevronLeft,
   ChevronRight,
+  Calendar,
 } from 'lucide-react';
 import { CalendarView } from '@/modules/rosters/hooks/useRosterView';
 import { cn } from '@/modules/core/lib/utils';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { motion, AnimatePresence } from 'framer-motion';
 import { listItemSpring } from '@/modules/core/ui/motion/presets';
-import ShiftDetailsDialog from './ShiftDetailsDialog';
-import { MobileShiftCard } from './MobileShiftCard';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/modules/core/ui/primitives/drawer';
 import { Shift } from '@/modules/rosters';
+import { MobileShiftCard } from './MobileShiftCard';
+import ShiftDetailsDialog from './ShiftDetailsDialog';
+import MyRosterShift from './MyRosterShift';
 
 interface ShiftWithDetails {
   shift: Shift;
@@ -78,6 +87,7 @@ const MonthView: React.FC<MonthViewProps> = ({
 }) => {
   const isMobile = useIsMobile();
   const [selectedDay, setSelectedDay] = useState<Date>(date);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedShift, setSelectedShift] = useState<{
     data: ShiftWithDetails;
     date: Date;
@@ -107,27 +117,20 @@ const MonthView: React.FC<MonthViewProps> = ({
       const hasOffer = offerDates.has(selectedDateStr);
   
       return (
-        <div className="h-full flex flex-col overflow-hidden bg-background/50">
-  
-          {/* Calendar Card — simplified to just the grid */}
-          <div className="flex-shrink-0 p-3 pb-1">
-            <div className={cn(
-              "bg-card rounded-[32px] shadow-[0_20px_50px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-border/40 overflow-hidden transition-all duration-500",
-              "backdrop-blur-2xl ring-1 ring-white/10"
-            )}>
-              {/* Calendar Content */}
-              <div className="px-2 py-3">
+        <div className="h-full flex flex-col overflow-hidden">
+          {/* Calendar Content */}
+          <div className="flex-1 px-3 py-4 flex flex-col">
                 {/* Capsule Weekday Header */}
-                <div className="grid grid-cols-7 mb-2 bg-muted/20 dark:bg-muted/10 rounded-xl py-1.5 px-0.5">
+                <div className="grid grid-cols-7 mb-4 bg-muted/20 dark:bg-muted/10 rounded-xl py-2 px-0.5">
                   {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((d, idx) => (
-                    <div key={idx} className="text-center text-[8px] font-black text-muted-foreground/50 uppercase tracking-[0.1em]">
+                    <div key={idx} className="text-center text-[10px] font-black text-muted-foreground/50 uppercase tracking-[0.1em]">
                       {d}
                     </div>
                   ))}
                 </div>
 
               {/* Day Grid */}
-              <div className="grid grid-cols-7 gap-y-0.5">
+              <div className="grid grid-cols-7 gap-y-2 flex-1 items-start">
                 {allDays.map((day) => {
                   const belongsToMonth = isSameMonth(day, date);
                   const isToday        = isTodayInTimezone(day, SYDNEY_TZ);
@@ -137,106 +140,136 @@ const MonthView: React.FC<MonthViewProps> = ({
                   return (
                     <button
                       key={day.toISOString()}
-                      onClick={() => setSelectedDay(day)}
+                      onClick={() => {
+                        setSelectedDay(day);
+                        setIsDrawerOpen(true);
+                      }}
                       disabled={!belongsToMonth}
                       className={cn(
-                        'relative flex flex-col items-center justify-center py-0.5 transition-all duration-300',
+                        'relative flex flex-col items-center justify-center py-1 transition-all duration-300',
                         !belongsToMonth && 'opacity-20 pointer-events-none'
                       )}
                     >
                       {/* Selection/Today Highlight */}
                       <div className={cn(
-                        'absolute inset-0 m-auto w-[32px] h-[32px] rounded-full flex items-center justify-center transition-all duration-500',
+                        'absolute inset-0 m-auto w-[36px] h-[36px] rounded-full flex items-center justify-center transition-all duration-500',
                         isSelected 
                           ? 'bg-primary text-primary-foreground scale-105 shadow-sm shadow-primary/40 z-10' 
                           : isToday 
                             ? 'bg-primary/10 text-primary ring-1 ring-primary/20' 
                             : 'hover:bg-muted/40'
                       )}>
-                        <span className="text-[10px] font-bold tracking-tight">
+                        <span className="text-[12px] font-bold tracking-tight">
                           {format(day, 'd')}
                         </span>
                       </div>
                       
                       {/* Spacer */}
-                      <div className="h-[32px] w-[32px]" />
+                      <div className="h-[36px] w-[36px]" />
 
-                      {/* Shift density dots */}
-                      <div className="flex gap-0.5 mt-0.5 h-0.5 justify-center z-20">
-                        {dayShifts.slice(0, 3).map((s) => (
-                          <div
-                            key={s.shift.id}
-                            className={cn(
-                              'w-0.5 h-0.5 rounded-full',
-                              isSelected ? 'bg-primary-foreground/70' : 'bg-primary/50'
-                            )}
-                          />
-                        ))}
+                      {/* Shift density dots - Colored by type */}
+                      <div className="flex gap-1 mt-1 h-1.5 justify-center z-20">
+                        {dayShifts.slice(0, 3).map((s) => {
+                          const type = s.groupColor?.toLowerCase();
+                          return (
+                            <div
+                              key={s.shift.id}
+                              className={cn(
+                                'w-1.5 h-1.5 rounded-full shadow-[0_0_4px_rgba(0,0,0,0.2)]',
+                                isSelected ? 'ring-1 ring-white/50' : ''
+                              )}
+                              style={{ 
+                                backgroundColor: 
+                                  type === 'convention' ? '#60a5fa' : // blue-400
+                                  type === 'exhibition' ? '#4ade80' : // green-400
+                                  type === 'theatre' ? '#f87171' :    // red-400
+                                  '#94a3b8'                           // slate-400
+                              }}
+                            />
+                          );
+                        })}
                       </div>
 
                       {/* Offer indicator dot */}
                       {offerDates.has(format(day, 'yyyy-MM-dd')) && (
-                         <div className="absolute top-1 right-1/4 w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse shadow-sm" />
+                         <div className="absolute top-0 right-1 w-2 h-2 bg-amber-400 rounded-full animate-pulse shadow-sm" />
                       )}
                     </button>
                   );
                 })}
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Agenda header */}
-        <div className="flex-shrink-0 px-5 py-2.5 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">
-              {format(selectedDay, 'EEEE, d MMMM')}
-            </p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-[12px] text-foreground font-black">
-                {agendaShifts.length} {agendaShifts.length === 1 ? 'Shift' : 'Shifts'}
-              </span>
-              {hasOffer && (
-                <>
-                  <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                  <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">Offer pending</span>
-                </>
-              )}
+        {/* Bottom Drawer for Shifts */}
+        <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
+          <DrawerContent className="max-h-[85vh] backdrop-blur-3xl bg-white/60 dark:bg-zinc-950/95 border-t border-white/10 rounded-t-[32px]">
+            <div className="sr-only">
+              <DrawerDescription>View all shifts for {format(selectedDay, 'PPPP')}</DrawerDescription>
             </div>
-          </div>
-        </div>
 
-        {/* Scrollable shift list */}
-        <div className="flex-1 overflow-y-auto overscroll-contain pb-24">
-          {agendaShifts.length === 0 ? (
-            <motion.div
-              key="empty"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center text-center py-16 px-8"
-            >
-              <p className="text-xs font-black tracking-[0.2em] text-muted-foreground/30 uppercase">
-                No shifts scheduled
-              </p>
-            </motion.div>
-          ) : (
-            <AnimatePresence mode="popLayout">
-              <div className="flex flex-col gap-3 p-4">
-                {agendaShifts.map((shiftData) => (
-                  <motion.div
-                    key={shiftData.shift.id}
-                    {...listItemSpring}
-                  >
-                    <MobileShiftCard
-                      shiftData={shiftData}
-                      selectedDay={selectedDay}
-                    />
-                  </motion.div>
-                ))}
+            {/* Premium Integrated Header */}
+            <div className="px-6 pt-8 pb-4">
+              <div className="flex items-end justify-between border-b border-foreground/[0.03] pb-4">
+                <div>
+                  <h2 className="text-[20px] font-black tracking-tight leading-none uppercase font-mono">
+                    {format(selectedDay, 'EEEE, d MMMM')}
+                  </h2>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/40 mt-2">
+                    {agendaShifts.length} {agendaShifts.length === 1 ? 'Shift' : 'Shifts'} Scheduled
+                  </p>
+                </div>
+                {hasOffer && (
+                  <div className="bg-amber-500/10 text-amber-500 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border border-amber-500/20 mb-1">
+                    Offer Pending
+                  </div>
+                )}
               </div>
-            </AnimatePresence>
-          )}
-        </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-0 py-0 scrollbar-none">
+              <AnimatePresence mode="popLayout">
+                {agendaShifts.length > 0 ? (
+                  <div className="flex flex-col">
+                    {agendaShifts.map((shiftData, idx) => (
+                      <motion.div
+                        key={shiftData.shift.id}
+                        {...listItemSpring}
+                        className={cn(
+                          "border-b border-foreground/[0.03] last:border-b-0",
+                          idx === 0 && "pt-2",
+                          "pb-2"
+                        )}
+                      >
+                        <MobileShiftCard
+                          shiftData={shiftData}
+                          selectedDay={selectedDay}
+                          onClick={() => setSelectedShift({ data: shiftData, date: selectedDay })}
+                        />
+                      </motion.div>
+                    ))}
+                    {/* Bottom spacer for safety */}
+                    <div className="h-12" />
+                  </div>
+                ) : (
+                  <motion.div
+                    key="empty"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex flex-col items-center justify-center py-20 text-center"
+                  >
+                    <div className="w-16 h-16 rounded-full bg-muted/20 flex items-center justify-center mb-4">
+                      <Calendar className="w-8 h-8 text-muted-foreground/40" />
+                    </div>
+                    <p className="text-sm font-black uppercase tracking-widest text-muted-foreground/30">
+                      No shifts scheduled
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </DrawerContent>
+        </Drawer>
+
 
         <ShiftDetailsDialog
           isOpen={!!selectedShift}
@@ -307,26 +340,15 @@ const MonthView: React.FC<MonthViewProps> = ({
                     {dayShifts.slice(0, 3).map((shiftData) => {
                       const isContinuation = shiftData.shift.shift_date !== format(day, 'yyyy-MM-dd');
                       return (
-                        <div
+                        <MyRosterShift
                           key={shiftData.shift.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedShift({ data: shiftData, date: day });
-                          }}
-                          className={cn(
-                            'text-[10px] text-foreground px-2 py-1.5 rounded-lg cursor-pointer',
-                            'hover:scale-[1.02] active:scale-[0.98] transition-transform',
-                            'border border-border/30 shadow-sm truncate',
-                            getGradientClass(shiftData.groupColor)
-                          )}
-                        >
-                          <div className="font-black truncate leading-tight">
-                            {formatTimeRange(shiftData.shift.start_time, shiftData.shift.end_time)}
-                          </div>
-                          <div className="text-[9px] opacity-60 truncate font-bold uppercase tracking-wider mt-0.5">
-                            {shiftData.shift.roles?.name || 'Shift'}
-                          </div>
-                        </div>
+                          shift={shiftData.shift}
+                          groupName={shiftData.groupName}
+                          groupColor={shiftData.groupColor}
+                          subGroupName={shiftData.subGroupName}
+                          compact={true}
+                          onClick={() => setSelectedShift({ data: shiftData, date: day })}
+                        />
                       );
                     })}
 

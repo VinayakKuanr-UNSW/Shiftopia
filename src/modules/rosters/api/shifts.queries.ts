@@ -27,6 +27,7 @@ export interface RosterSlot { groupType: string; subGroupName: string }
 const SHIFT_SELECT = `
   *,
   assignment_outcome,
+  attendance_status,
   offer_expires_at,
   organizations(id, name),
   departments(id, name),
@@ -34,16 +35,28 @@ const SHIFT_SELECT = `
   roles(id, name),
   remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max),
   assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
-  roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name))
+  roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name)),
+  timesheets(status)
 ` as const;
 
 /** Normalise a raw supabase row into our Shift interface shape */
-export function normalizeShiftRow(row: Record<string, unknown>): Shift {
-    return {
+export function normalizeShiftRow(row: Record<string, any>): Shift {
+    const shift = {
         ...row,
         is_trade_requested:
             !!row['trade_requested_at'] || row['trading_status'] === 'TradeRequested',
     } as unknown as Shift;
+
+    const ts = Array.isArray(row.timesheets) ? row.timesheets[0] : (row.timesheets || null);
+    if (ts && typeof ts === 'object') {
+        shift.timesheet_status = ts.status;
+    }
+
+    // Ensure attendance_status and assignment_outcome are preserved if they come from joined fields
+    if (!shift.attendance_status && row.attendance_status) shift.attendance_status = row.attendance_status;
+    if (!shift.assignment_outcome && row.assignment_outcome) shift.assignment_outcome = row.assignment_outcome;
+
+    return shift;
 }
 
 export const shiftsQueries = {
@@ -555,8 +568,8 @@ export const shiftsQueries = {
 
     async getEvents(organizationId?: string): Promise<{
         id: string; name: string; description: string | null;
-        event_type: string; venue: string | null;
-        start_date: string; end_date: string; status: string;
+        event_type: string | null; venue: string | null;
+        start_date: string; end_date: string; status: string | null;
     }[]> {
         try {
             let query = supabase
@@ -811,40 +824,70 @@ export const shiftsQueries = {
         try {
             if (!isValidUuid(employeeId)) return [];
 
-            // Declined offers are not tracked by assignment_outcome (no 'rejected' value in enum).
-            // Return empty array to prevent invalid DB queries.
-            if (status === 'Declined') return [];
+            // 1. Identify relevant shifts via shift_events to ensure persistence of history.
+            //    Using the events table allows us to see rejections and acceptances even if
+            //    the current state of the shift has changed (e.g., someone else accepted it later).
+            const eventType = status === 'Accepted' ? 'ACCEPTED' : 'REJECTED';
+            const { data: eventData, error: eventError } = await supabase
+                .from('shift_events')
+                .select('shift_id')
+                .eq('employee_id', employeeId)
+                .eq('event_type', eventType);
 
-            // Only 'confirmed' is a valid accepted outcome per DB constraint.
-            const outcome = 'confirmed' as const;
+            if (eventError) {
+                console.error(`[getMyOfferHistory] Event fetch error:`, eventError);
+                // Fallback to legacy behavior if events cannot be reached
+            }
 
             let query = supabase
                 .from('shifts')
                 .select(`
-                id,
-                shift_date,
-                start_time,
-                end_time,
-                notes,
-                assignment_outcome,
-                published_at,
-                paid_break_minutes,
-                unpaid_break_minutes,
-                break_minutes,
-                timezone,
-                offer_expires_at,
-                group_type,
-                sub_group_name,
-                roles(name),
-                departments(id, name),
-                sub_departments(name),
-                organizations(id, name),
-                remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max)
-            `)
-                .eq('assigned_employee_id', employeeId)
-                .eq('lifecycle_status', 'Published')
-                .eq('assignment_outcome', outcome)
+                    id,
+                    shift_date,
+                    start_time,
+                    end_time,
+                    notes,
+                    assignment_outcome,
+                    published_at,
+                    paid_break_minutes,
+                    unpaid_break_minutes,
+                    break_minutes,
+                    timezone,
+                    offer_expires_at,
+                    group_type,
+                    sub_group_name,
+                    roles(name),
+                    departments(id, name),
+                    sub_departments(name),
+                    organizations(id, name),
+                    remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max)
+                `)
                 .is('deleted_at', null);
+
+            // 2. Apply identity filter based on events if available, otherwise fallback to column matching
+            if (eventData && eventData.length > 0) {
+                const shiftIds = [...new Set(eventData.map(e => e.shift_id))];
+                query = query.in('id', shiftIds);
+            } else if (!eventError) {
+                // If query succeeded but returned no events, and we aren't in error,
+                // we should still try the legacy column check just in case events are missing
+                // but the columns are still set.
+                if (status === 'Accepted') {
+                    query = query
+                        .eq('assigned_employee_id', employeeId)
+                        .eq('assignment_outcome', 'confirmed' as const);
+                } else {
+                    query = query
+                        .eq('last_rejected_by', employeeId);
+                }
+            } else {
+                // Hard fallback on RPC error
+                if (status === 'Accepted') {
+                    query = query.eq('assigned_employee_id', employeeId).eq('assignment_outcome', 'confirmed' as const);
+                } else {
+                    query = query.eq('last_rejected_by', employeeId);
+                }
+            }
 
             if (filters?.organizationId && isValidUuid(filters.organizationId)) {
                 query = query.eq('organization_id', filters.organizationId);
@@ -867,7 +910,7 @@ export const shiftsQueries = {
                 status: status,
                 offered_at: shift.published_at,
                 offer_expires_at: (shift as any).offer_expires_at,
-                offered_by_name: 'Admin',
+                offered_by_name: 'System',
                 shift: {
                     id: shift.id,
                     shift_date: shift.shift_date,
@@ -944,7 +987,7 @@ export const shiftsQueries = {
                 remuneration_levels(level_name, hourly_rate_min)
             `)
                 .eq('organization_id', organizationId)
-                .in('bidding_status', ['on_bidding_normal', 'on_bidding_urgent', 'on_bidding'])
+                .in('bidding_status', ['on_bidding_normal', 'on_bidding_urgent'])
                 .is('deleted_at', null)
                 .eq('is_cancelled', false);
 
@@ -976,33 +1019,21 @@ export const shiftsQueries = {
         shift_id: string;
         employee_id: string;
         status: string;
-        bidding_iteration: number;
         created_at: string;
         profiles: { id: string; full_name: string | null; first_name: string | null; last_name: string | null; employment_type: string | null } | null;
     }[]> {
         try {
             if (!isValidUuid(shiftId)) return [];
 
-            // 1. Fetch current iteration from shift
-            const { data: shift } = await supabase
-                .from('shifts')
-                .select('bidding_iteration')
-                .eq('id', shiftId)
-                .single();
-            
-            const currentIteration = (shift as any)?.bidding_iteration || 1;
-
-            // 2. Fetch bids matching that iteration
             const { data, error } = await supabase
                 .from('shift_bids')
                 .select(`
-                id, shift_id, employee_id, status, bidding_iteration, created_at,
-                profiles!shift_bids_employee_id_fkey(
-                    id, full_name, first_name, last_name, employment_type
-                )
-            `)
+                    id, shift_id, employee_id, status, created_at,
+                    profiles!shift_bids_employee_id_fkey(
+                        id, full_name, first_name, last_name, employment_type
+                    )
+                `)
                 .eq('shift_id', shiftId)
-                .eq('bidding_iteration', currentIteration)
                 .order('created_at', { ascending: false });
 
             if (error) {

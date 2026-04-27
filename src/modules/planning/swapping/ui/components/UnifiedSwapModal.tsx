@@ -362,6 +362,7 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                     return (
                                         <div key={shift.id} className="relative group">
                                             <SharedShiftCard
+                                                variant="timecard"
                                                 organization={s.organization_name || ''}
                                                 department={s.departments?.name || ''}
                                                 subGroup={s.sub_departments?.name || ''}
@@ -608,13 +609,13 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
 
     return isMobile ? (
         <Drawer open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-            <DrawerContent className="h-[92dvh] bg-[#0A0C0E] border-white/10 p-0 overflow-hidden flex flex-col">
+            <DrawerContent className="h-[92dvh] bg-[#0A0C0E] border-white/10 p-0 overflow-hidden flex flex-col" aria-describedby={undefined}>
                 {modalContent}
             </DrawerContent>
         </Drawer>
     ) : (
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-            <DialogContent className="sm:max-w-[1040px] h-[720px] max-h-[90vh] bg-[#0A0C0E] border border-white/10 p-0 overflow-hidden shadow-[0_0_80px_-15px_rgba(0,0,0,0.8)] flex flex-col rounded-[2.5rem] [&>button]:hidden">
+            <DialogContent className="sm:max-w-[1040px] h-[720px] max-h-[90vh] bg-[#0A0C0E] border border-white/10 p-0 overflow-hidden shadow-[0_0_80px_-15px_rgba(0,0,0,0.8)] flex flex-col rounded-[2.5rem] [&>button]:hidden" aria-describedby={undefined}>
                 {modalContent}
             </DialogContent>
         </Dialog>

@@ -53,6 +53,8 @@ export interface TimesheetShiftRow {
     // Breaks
     paidBreakMinutes: number;
     unpaidBreakMinutes: number;
+    paidBreak: string;
+    unpaidBreak: string;
 
     // Calculated
     scheduledLengthMinutes: number;
@@ -69,6 +71,7 @@ export interface TimesheetShiftRow {
 
     // Attendance (from shifts table)
     attendanceStatus: string | null;
+    attendanceNote: string | null;
     // Minutes between actual times and scheduled times
     clockInVarianceMinutes: number | null;
     clockOutVarianceMinutes: number | null;
@@ -134,8 +137,9 @@ export function snapToQuarterHour(value: string | null | undefined): string | nu
 }
 
 export async function getShiftsForTimesheet(
-    date: string,
-    filters: TimesheetFilters = {}
+    startDate: string,
+    filters: TimesheetFilters = {},
+    endDate?: string
 ): Promise<TimesheetShiftRow[]> {
     try {
         // Query shifts without the employee join (no FK relationship)
@@ -151,9 +155,9 @@ export async function getShiftsForTimesheet(
                 assignment_status,
                 lifecycle_status,
                 attendance_status,
-                attendance_note,
                 actual_start,
                 actual_end,
+                attendance_note,
                 group_type,
                 sub_group_name,
                 roster_subgroup_id,
@@ -175,7 +179,8 @@ export async function getShiftsForTimesheet(
                 remuneration_levels(id, level_name, hourly_rate_min),
                 roster_subgroups!roster_subgroup_id(name, roster_groups(name))
             `)
-            .eq('shift_date', date)
+            .gte('shift_date', startDate)
+            .lte('shift_date', endDate || startDate)
             .in('lifecycle_status', ['Published', 'InProgress', 'Completed'])
             .is('deleted_at', null)
             .order('start_time');
@@ -212,7 +217,7 @@ export async function getShiftsForTimesheet(
         }
 
         // Fetch employees separately (no FK relationship in schema)
-        const employeeIds = [...new Set(shifts.map(s => s.assigned_employee_id).filter(Boolean))];
+        const employeeIds: string[] = Array.from(new Set(shifts.map(s => s.assigned_employee_id).filter((id): id is string => !!id)));
         let employeeMap = new Map<string, { first_name: string; last_name: string }>();
 
         if (employeeIds.length > 0) {
@@ -230,7 +235,7 @@ export async function getShiftsForTimesheet(
         }
 
         // Fetch timesheets for these shifts
-        const shiftIds = shifts.map(s => s.id);
+        const shiftIds: string[] = shifts.map(s => s.id);
         const { data: timesheets } = await supabase
             .from('timesheets')
             .select('*')
@@ -349,6 +354,8 @@ export async function getShiftsForTimesheet(
 
                 paidBreakMinutes: timesheet?.paid_break_minutes !== undefined ? timesheet.paid_break_minutes : (shift.paid_break_minutes || 0),
                 unpaidBreakMinutes: timesheet?.unpaid_break_minutes !== undefined ? timesheet.unpaid_break_minutes : (shift.unpaid_break_minutes || 0),
+                paidBreak: String(timesheet?.paid_break_minutes !== undefined ? timesheet.paid_break_minutes : (shift.paid_break_minutes || 0)),
+                unpaidBreak: String(timesheet?.unpaid_break_minutes !== undefined ? timesheet.unpaid_break_minutes : (shift.unpaid_break_minutes || 0)),
                 scheduledLengthMinutes: scheduledMins,
                 netLengthMinutes: calculatedNetMins,
 
@@ -380,6 +387,7 @@ export async function getShiftsForTimesheet(
                 rawEndAt: shift.end_at || null,
 
                 attendanceStatus: shift.attendance_status || null,
+                attendanceNote: shift.attendance_note || null,
                 clockInVarianceMinutes: (() => {
                     if (!shift.actual_start) return null;
                     const scheduledMs = new Date(
@@ -470,6 +478,8 @@ export async function updateTimesheetEntry(
         length?: string;
         netLength?: string;
         approximatePay?: string;
+        paidBreak?: string;
+        unpaidBreak?: string;
     }
 ): Promise<boolean> {
     try {
@@ -649,7 +659,6 @@ export async function markShiftAsNoShow(
             .from('shifts')
             .update({
                 attendance_status: 'no_show',
-                assignment_outcome: 'no_show',
                 lifecycle_status: 'Completed',
                 updated_at: new Date().toISOString(),
                 last_modified_by: userId

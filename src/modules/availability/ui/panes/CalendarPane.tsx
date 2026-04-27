@@ -260,9 +260,9 @@ export function CalendarPane({
               {isLocked ? (
                 <div className="flex-1 overflow-hidden space-y-0.5">
                   <div className="flex items-center gap-0.5 text-purple-700 dark:text-purple-300">
-                    <Lock className="h-2.5 w-2.5 flex-shrink-0" />
+
                     <span className="text-[9px] font-semibold uppercase tracking-wide">
-                      Locked
+                      Assigned
                     </span>
                   </div>
                   {dayAssigned.slice(0, 2).map((s) => (
@@ -318,8 +318,8 @@ export function CalendarPane({
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded bg-purple-400 border border-purple-500" />
-          <Lock className="h-2.5 w-2.5 text-purple-600 dark:text-purple-400" />
-          <span className="text-muted-foreground">Locked (assigned)</span>
+
+          <span className="text-muted-foreground">Assigned</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded bg-muted border border-border" />

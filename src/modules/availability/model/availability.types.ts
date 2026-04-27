@@ -34,6 +34,7 @@ export interface AvailabilityRule {
   repeat_type: RepeatType;  // 'none' | 'daily' | 'weekly' | 'fortnightly'
   repeat_days?: number[] | null; // e.g. [1, 2] (1=Mon)
   repeat_end_date?: string | null; // yyyy-MM-dd
+  reason?: string | null;
 
   // Metadata
   created_at: string;

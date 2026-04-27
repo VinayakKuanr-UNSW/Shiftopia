@@ -40,7 +40,7 @@ import { validateCompliance } from '@/modules/rosters/services/compliance.servic
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import type { ShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { calculateTimeRemaining, formatTimeRemaining } from './utils';
-import type { BidToggle, ManagerBidShift, EmployeeBid, ToggleCounts, IterationHistoryEntry } from './types';
+import type { BidToggle, ManagerBidShift, EmployeeBid, ToggleCounts } from './types';
 import { useManagerBidShifts } from './useOpenShifts';
 import { useShiftBids } from './useShiftBids';
 import { useTimeTicker } from './useTimeTicker';
@@ -460,6 +460,7 @@ const RoleCard: React.FC<RoleCardProps> = ({
 
   return (
     <SharedShiftCard
+      variant="timecard"
       organization={shift.organization}
       department={shift.department}
       subGroup={shift.subDepartment}
@@ -486,11 +487,6 @@ const RoleCard: React.FC<RoleCardProps> = ({
             <span className="text-[10px] font-bold tabular-nums text-muted-foreground/60">
               {shift.bidCount} {shift.bidCount === 1 ? 'bid' : 'bids'}
             </span>
-            {(shift.biddingIteration ?? 1) > 1 && (
-              <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20 leading-none uppercase tracking-wider font-mono">
-                ITR {shift.biddingIteration}
-              </span>
-            )}
           </div>
           {isResolved && (
             <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 leading-none uppercase tracking-wider">Filled</span>
@@ -566,12 +562,16 @@ interface OpenBidsViewProps {
   organizationId?: string | null;
   departmentId?: string | null;
   subDepartmentId?: string | null;
+  externalSearchQuery?: string;
+  viewMode?: 'card' | 'table';
 }
 
 export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
   organizationId,
   departmentId,
   subDepartmentId,
+  externalSearchQuery,
+  viewMode,
 }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -599,7 +599,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     subDepartmentId: subDepartmentId ?? undefined,
   });
 
-  const { bids, iterationHistory, currentIteration: shiftCurrentIteration, isLoading: isLoadingBids } = useShiftBids(expandedShiftId);
+  const { bids, isLoading: isLoadingBids } = useShiftBids(expandedShiftId);
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const expandedShift = useMemo(
@@ -613,10 +613,12 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     resolved: shifts.filter(s => s.toggle === 'resolved').length,
   }), [shifts]);
 
+  const activeSearchQuery = externalSearchQuery !== undefined ? externalSearchQuery : searchQuery;
+
   const filteredShifts = useMemo(() => {
     let result = shifts.filter(s => s.toggle === activeToggle);
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
+    if (activeSearchQuery) {
+      const q = activeSearchQuery.toLowerCase();
       result = result.filter(s =>
         s.role.toLowerCase().includes(q) ||
         s.department.toLowerCase().includes(q) ||
@@ -862,65 +864,88 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     <TooltipProvider delayDuration={0}>
       <div className="flex flex-col h-[calc(100vh-64px)] bg-background select-none text-foreground overflow-hidden">
 
-      {/* ─── FUNCTION BAR ─────────────────────────────────────────────── */}
-      {isMobile ? (
-        /* Mobile function bar */
-        <div className="shrink-0 border-b border-border/60 flex flex-col gap-2 px-4 py-3 bg-card/40 backdrop-blur-xl">
-          <div className="relative group/search">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40 group-focus-within/search:text-primary transition-colors" />
-            <Input
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search roles…"
-              className="w-full h-10 bg-muted/30 border-border/50 pl-9 text-[13px] placeholder:text-muted-foreground/30 focus-visible:ring-1 focus-visible:ring-primary/30 rounded-xl"
-            />
+      {/* ─── FUNCTION BAR (Hidden if external provided) ───────────────── */}
+      {!externalSearchQuery && (
+        isMobile ? (
+          /* Mobile function bar */
+          <div className="shrink-0 border-b border-border/60 flex flex-col gap-2 px-4 py-3 bg-card/40 backdrop-blur-xl">
+            <div className="relative group/search">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40 group-focus-within/search:text-primary transition-colors" />
+              <Input
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search roles…"
+                className="w-full h-10 bg-muted/30 border-border/50 pl-9 text-[13px] placeholder:text-muted-foreground/30 focus-visible:ring-1 focus-visible:ring-primary/30 rounded-xl"
+              />
+            </div>
+            <div className="flex items-center gap-1 overflow-x-auto flex-nowrap pb-0.5 -mx-1 px-1">
+              <ToggleChip active={activeToggle === 'urgent'} onClick={() => setActiveToggle('urgent')} icon={<Flame className="h-3 w-3" />} label="Urgent" count={counts.urgent} activeClass="bg-rose-500/10 text-rose-400 border-rose-500/20" />
+              <ToggleChip active={activeToggle === 'normal'} onClick={() => setActiveToggle('normal')} icon={<Clock className="h-3 w-3" />} label="Normal" count={counts.normal} activeClass="bg-amber-500/10 text-amber-400 border-amber-500/20" />
+              <ToggleChip active={activeToggle === 'resolved'} onClick={() => setActiveToggle('resolved')} icon={<CheckCircle className="h-3 w-3" />} label="Resolved" count={counts.resolved} activeClass="bg-emerald-500/10 text-emerald-400 border-emerald-500/20" />
+            </div>
           </div>
-          <div className="flex items-center gap-1 overflow-x-auto flex-nowrap pb-0.5 -mx-1 px-1">
-            <ToggleChip active={activeToggle === 'urgent'} onClick={() => setActiveToggle('urgent')} icon={<Flame className="h-3 w-3" />} label="Urgent" count={counts.urgent} activeClass="bg-rose-500/10 text-rose-400 border-rose-500/20" />
-            <ToggleChip active={activeToggle === 'normal'} onClick={() => setActiveToggle('normal')} icon={<Clock className="h-3 w-3" />} label="Normal" count={counts.normal} activeClass="bg-amber-500/10 text-amber-400 border-amber-500/20" />
-            <ToggleChip active={activeToggle === 'resolved'} onClick={() => setActiveToggle('resolved')} icon={<CheckCircle className="h-3 w-3" />} label="Resolved" count={counts.resolved} activeClass="bg-emerald-500/10 text-emerald-400 border-emerald-500/20" />
-          </div>
-        </div>
-      ) : (
-        /* Desktop function bar */
-        <div className="shrink-0 h-14 border-b border-border/60 flex items-center px-6 gap-4 bg-card/40 backdrop-blur-xl">
-          <div className="relative group/search">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40 group-focus-within/search:text-primary transition-colors" />
-            <Input
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search roles…"
-              className="w-60 h-9 bg-muted/30 border-border/50 pl-9 text-[13px] placeholder:text-muted-foreground/30 focus-visible:ring-1 focus-visible:ring-primary/30 rounded-xl"
-            />
-          </div>
+        ) : (
+          /* Desktop function bar */
+          <div className="shrink-0 h-14 border-b border-border/60 flex items-center px-6 gap-4 bg-card/40 backdrop-blur-xl">
+            <div className="relative group/search">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40 group-focus-within/search:text-primary transition-colors" />
+              <Input
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search roles…"
+                className="w-60 h-9 bg-muted/30 border-border/50 pl-9 text-[13px] placeholder:text-muted-foreground/30 focus-visible:ring-1 focus-visible:ring-primary/30 rounded-xl"
+              />
+            </div>
 
-          <Separator orientation="vertical" className="h-5 bg-border/40" />
+            <Separator orientation="vertical" className="h-5 bg-border/40" />
 
+            <div className="flex items-center gap-1 p-0.5 bg-muted/20 rounded-xl border border-border/40">
+              <ToggleChip active={activeToggle === 'urgent'} onClick={() => setActiveToggle('urgent')} icon={<Flame className="h-3 w-3" />} label="Urgent" count={counts.urgent} activeClass="bg-rose-500/10 text-rose-400 border-rose-500/20" />
+              <ToggleChip active={activeToggle === 'normal'} onClick={() => setActiveToggle('normal')} icon={<Clock className="h-3 w-3" />} label="Normal" count={counts.normal} activeClass="bg-amber-500/10 text-amber-400 border-amber-500/20" />
+              <ToggleChip active={activeToggle === 'resolved'} onClick={() => setActiveToggle('resolved')} icon={<CheckCircle className="h-3 w-3" />} label="Resolved" count={counts.resolved} activeClass="bg-emerald-500/10 text-emerald-400 border-emerald-500/20" />
+            </div>
+
+            <div className="flex-1" />
+
+            <Button
+              onClick={handleAutoAssign}
+              disabled={isAutoAssigning}
+              size="sm"
+              className="h-9 px-5 text-[11px] font-semibold uppercase tracking-wider rounded-xl shadow-lg shadow-primary/15"
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                {isAutoAssigning ? (
+                  <motion.span key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Assigning…
+                  </motion.span>
+                ) : (
+                  <motion.span key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
+                    <Zap className="h-3.5 w-3.5" /> Auto-Assign Safe Bids
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </Button>
+          </div>
+        )
+      )}
+
+      {/* Internal Toggle Bar (if external search is provided, we still need the status chips) */}
+      {externalSearchQuery !== undefined && (
+        <div className="shrink-0 h-12 px-6 flex items-center justify-between border-b border-border/40 bg-card/20 backdrop-blur-md">
           <div className="flex items-center gap-1 p-0.5 bg-muted/20 rounded-xl border border-border/40">
             <ToggleChip active={activeToggle === 'urgent'} onClick={() => setActiveToggle('urgent')} icon={<Flame className="h-3 w-3" />} label="Urgent" count={counts.urgent} activeClass="bg-rose-500/10 text-rose-400 border-rose-500/20" />
             <ToggleChip active={activeToggle === 'normal'} onClick={() => setActiveToggle('normal')} icon={<Clock className="h-3 w-3" />} label="Normal" count={counts.normal} activeClass="bg-amber-500/10 text-amber-400 border-amber-500/20" />
             <ToggleChip active={activeToggle === 'resolved'} onClick={() => setActiveToggle('resolved')} icon={<CheckCircle className="h-3 w-3" />} label="Resolved" count={counts.resolved} activeClass="bg-emerald-500/10 text-emerald-400 border-emerald-500/20" />
           </div>
 
-          <div className="flex-1" />
-
           <Button
             onClick={handleAutoAssign}
             disabled={isAutoAssigning}
-            size="sm"
-            className="h-9 px-5 text-[11px] font-semibold uppercase tracking-wider rounded-xl shadow-lg shadow-primary/15"
+            variant="ghost"
+            className="h-8 px-3 text-[9px] font-black uppercase tracking-wider rounded-lg"
           >
-            <AnimatePresence mode="wait" initial={false}>
-              {isAutoAssigning ? (
-                <motion.span key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Assigning…
-                </motion.span>
-              ) : (
-                <motion.span key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
-                  <Zap className="h-3.5 w-3.5" /> Auto-Assign Safe Bids
-                </motion.span>
-              )}
-            </AnimatePresence>
+            {isAutoAssigning ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <Zap className="h-3 w-3 mr-2" />}
+            Auto-Assign
           </Button>
         </div>
       )}
@@ -1026,51 +1051,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                       )}
                     </AnimatePresence>
 
-                    {/* Past Iterations */}
-                    {iterationHistory.length > 0 && (
-                      <div className="mt-4 border-t border-white/[0.05] pt-4">
-                        <div className="flex items-center gap-2 px-1 mb-3">
-                          <History className="h-3 w-3 text-white/20" />
-                          <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/25">
-                            Past Iterations
-                          </span>
-                        </div>
-                        <div className="space-y-3">
-                          {iterationHistory.map(entry => (
-                            <div key={entry.iteration} className="rounded-xl border border-white/[0.05] bg-white/[0.02] p-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="text-[9px] font-black font-mono uppercase tracking-widest text-white/30 bg-white/5 px-2 py-0.5 rounded-md">
-                                  ITR {entry.iteration}
-                                </span>
-                                <span className="text-[9px] text-white/20 font-mono">
-                                  {entry.bids.length} {entry.bids.length === 1 ? 'bid' : 'bids'}
-                                </span>
-                              </div>
-                              {entry.bids.length === 0 ? (
-                                <p className="text-[9px] text-white/15 font-mono">No bids received</p>
-                              ) : (
-                                <div className="space-y-1">
-                                  {entry.bids.map((b, i) => (
-                                    <div key={i} className="flex items-center justify-between">
-                                      <span className="text-[10px] text-white/40 truncate">{b.employeeName}</span>
-                                      <span className={cn(
-                                        'text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded',
-                                        b.status === 'accepted' ? 'bg-emerald-500/15 text-emerald-400' :
-                                        b.status === 'rejected' ? 'bg-red-500/15 text-red-400' :
-                                        b.status === 'withdrawn' ? 'bg-slate-500/15 text-slate-400' :
-                                        'bg-white/5 text-white/25'
-                                      )}>
-                                        {b.status}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+
                   </div>
                 </ScrollArea>
               </motion.div>
@@ -1305,51 +1286,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                 )}
               </AnimatePresence>
 
-              {/* ── ITERATION HISTORY — all past ITRs ── */}
-              {iterationHistory.length > 0 && (
-                <div className="mt-4 border-t border-white/[0.05] pt-4">
-                  <div className="flex items-center gap-2 px-1 mb-3">
-                    <History className="h-3 w-3 text-white/20" />
-                    <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/25">
-                      Past Iterations
-                    </span>
-                  </div>
-                  <div className="space-y-3">
-                    {iterationHistory.map(entry => (
-                      <div key={entry.iteration} className="rounded-xl border border-white/[0.05] bg-white/[0.02] p-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-[9px] font-black font-mono uppercase tracking-widest text-white/30 bg-white/5 px-2 py-0.5 rounded-md">
-                            ITR {entry.iteration}
-                          </span>
-                          <span className="text-[9px] text-white/20 font-mono">
-                            {entry.bids.length} {entry.bids.length === 1 ? 'bid' : 'bids'}
-                          </span>
-                        </div>
-                        {entry.bids.length === 0 ? (
-                          <p className="text-[9px] text-white/15 font-mono">No bids received</p>
-                        ) : (
-                          <div className="space-y-1">
-                            {entry.bids.map((b, i) => (
-                              <div key={i} className="flex items-center justify-between">
-                                <span className="text-[10px] text-white/40 truncate">{b.employeeName}</span>
-                                <span className={cn(
-                                  'text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded',
-                                  b.status === 'accepted' ? 'bg-emerald-500/15 text-emerald-400' :
-                                  b.status === 'rejected' ? 'bg-red-500/15 text-red-400' :
-                                  b.status === 'withdrawn' ? 'bg-slate-500/15 text-slate-400' :
-                                  'bg-white/5 text-white/25'
-                                )}>
-                                  {b.status}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+
             </div>
           </ScrollArea>
         </div>
@@ -1367,7 +1304,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
 
           <div className="flex-1 flex flex-col overflow-hidden">
             <ScrollArea className="flex-1">
-              <div className="p-4 space-y-3">
+              <div className="p-4 space-y-4">
                 <AnimatePresence mode="wait">
                   {!selectedBid ? (
                     <motion.div key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center gap-3 text-muted-foreground/20">

@@ -22,6 +22,9 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/modules/core/ui/primitives/popover';
+import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { useTheme } from '@/modules/core/contexts/ThemeContext';
+import { cn } from '@/modules/core/lib/utils';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -222,6 +225,7 @@ const GridPage: React.FC = () => {
     const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
     const queryClient = useQueryClient();
     const isMobile = useIsMobile();
+    const { isDark } = useTheme();
 
     const today = new Date();
     const [year, setYear] = useState(today.getFullYear());
@@ -387,383 +391,397 @@ const GridPage: React.FC = () => {
     const compMode = viewMode === 'compliance';
 
     return (
-        <div className="flex flex-col h-full bg-background pb-24 md:pb-0">
-            <div className="flex-1 min-h-0 flex flex-col px-4 md:px-6 pb-6 pt-6">
-                {/* ── Header ── */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
-                    <div className="flex items-center gap-4">
-                        <div className="p-2.5 bg-primary/10 rounded-xl">
-                            <Activity className="w-6 h-6 text-primary" />
-                        </div>
-                        <div>
-                            <h1 className="text-xl font-bold tracking-tight text-foreground">Annual Shift Grid</h1>
-                            <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground/60">Workforce Matrix</p>
-                        </div>
-                    </div>
+        <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4">
+            {/* ── Unified Header Block (Rows 1-3) ────────────────────────────── */}
+            <div className="flex-shrink-0">
+                <div className={cn(
+                    "rounded-[32px] p-4 lg:p-6 transition-all border",
+                    isDark 
+                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
+                )}>
+                    {/* Row 1 & 2: Identity & Scope Filter */}
+                    <PersonalPageHeader
+                        title="Annual Shift Grid"
+                        Icon={Activity}
+                        scope={scope}
+                        setScope={setScope}
+                        isGammaLocked={isGammaLocked}
+                        className="mb-4 lg:mb-6"
+                    />
 
-                    <div className="flex items-center gap-3 flex-wrap">
-                        {/* Stats */}
-                        <div className="flex items-center gap-6 px-4 py-2 bg-muted/30 rounded-xl border border-border/40 mr-2">
-                            <div className="flex items-center gap-2">
-                                <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                                <span className="text-xs font-bold text-foreground">
-                                    {isLoading ? <Loader2 className="h-3 w-3 animate-spin inline" /> : finalEmployees.length} Personnel
-                                </span>
+                    {/* Row 3: Module Function Bar */}
+                    <div className="flex flex-wrap items-center justify-between gap-4 mt-1">
+                        <div className="flex items-center gap-3 flex-wrap">
+                            {/* Stats Pod */}
+                            <div className="flex items-center gap-4 px-4 py-2 bg-muted/30 rounded-2xl border border-border/40">
+                                <div className="flex items-center gap-2">
+                                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span className="text-[11px] font-bold text-foreground">
+                                        {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : finalEmployees.length} PERSONNEL
+                                    </span>
+                                </div>
+                                <div className="h-3 w-[1px] bg-border/40" />
+                                <div className="flex items-center gap-2">
+                                    <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span className="text-[11px] font-bold text-foreground">
+                                        {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : shifts.length} SHIFTS
+                                    </span>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
-                                <span className="text-xs font-bold text-foreground">
-                                    {isLoading ? <Loader2 className="h-3 w-3 animate-spin inline" /> : shifts.length} Shifts
-                                </span>
+
+                            {/* View Toggle Pod */}
+                            <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-xl border border-border/40">
+                                {(['hours', 'compliance'] as const).map(mode => (
+                                    <button
+                                        key={mode}
+                                        onClick={() => setViewMode(mode)}
+                                        className={cn(
+                                            "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                                            viewMode === mode
+                                                ? "bg-background text-primary shadow-sm ring-1 ring-border/20"
+                                                : "text-muted-foreground hover:text-foreground"
+                                        )}
+                                    >
+                                        {mode}
+                                    </button>
+                                ))}
                             </div>
                         </div>
 
-                        {/* View toggle */}
-                        <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border border-border/40">
-                            {(['hours', 'compliance'] as const).map(mode => (
-                                <button
-                                    key={mode}
-                                    onClick={() => setViewMode(mode)}
-                                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
-                                        viewMode === mode
-                                            ? 'bg-background text-foreground shadow-sm'
-                                            : 'text-muted-foreground hover:text-foreground'
-                                    }`}
-                                >
-                                    {mode === 'hours' ? 'Hours' : 'Compliance'}
-                                </button>
-                            ))}
-                        </div>
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={handleRefresh}
+                                className="p-2.5 hover:bg-muted rounded-xl transition-colors text-muted-foreground hover:text-foreground border border-transparent hover:border-border/40"
+                                title="Refresh Data"
+                            >
+                                <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+                            </button>
 
-                        <button
-                            onClick={handleRefresh}
-                            className="p-2 hover:bg-muted rounded-lg transition-colors text-muted-foreground hover:text-foreground"
-                            title="Refresh Data"
-                        >
-                            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-                        </button>
-
-                        {/* Year selector */}
-                        <div className="flex items-center gap-2 bg-muted/40 p-1 rounded-lg border border-border/40">
-                            {[2024, 2025, 2026].map(y => (
-                                <button
-                                    key={y}
-                                    onClick={() => setYear(y)}
-                                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
-                                        year === y
-                                            ? 'bg-background text-foreground shadow-sm'
-                                            : 'text-muted-foreground hover:text-foreground'
-                                    }`}
-                                >
-                                    {y}
-                                </button>
-                            ))}
+                            {/* Year Selector Pod */}
+                            <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-xl border border-border/40">
+                                {[2024, 2025, 2026].map(y => (
+                                    <button
+                                        key={y}
+                                        onClick={() => setYear(y)}
+                                        className={cn(
+                                            "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                                            year === y
+                                                ? "bg-background text-primary shadow-sm ring-1 ring-border/20"
+                                                : "text-muted-foreground hover:text-foreground"
+                                        )}
+                                    >
+                                        {y}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                {/* ── Grid card ── */}
-                <div className="flex-1 bg-card border border-border/50 rounded-2xl shadow-xl shadow-black/5 overflow-hidden flex flex-col relative">
-                    {isLoading && (
-                        <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-[100] flex items-center justify-center flex-col gap-3">
-                            <div className="p-4 bg-background rounded-2xl shadow-2xl border border-border/50 flex flex-col items-center gap-4">
-                                <Loader2 className="h-8 w-8 text-primary animate-spin" />
-                                <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground animate-pulse">Syncing Matrix...</span>
-                            </div>
+            {/* ── Main Content Area ────────────────────────────────────────── */}
+            <div className={cn(
+                "flex-1 min-h-0 bg-card border border-border/50 rounded-[32px] shadow-2xl shadow-black/5 overflow-hidden flex flex-col relative",
+                isDark ? "bg-[#1c2333]/40" : "bg-white/70 backdrop-blur-md"
+            )}>
+                {isLoading && (
+                    <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] z-[100] flex items-center justify-center flex-col gap-3">
+                        <div className="p-4 bg-background rounded-2xl shadow-2xl border border-border/50 flex flex-col items-center gap-4">
+                            <Loader2 className="h-8 w-8 text-primary animate-spin" />
+                            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground animate-pulse">Syncing Matrix...</span>
                         </div>
-                    )}
+                    </div>
+                )}
 
-                    <div className="overflow-x-auto overflow-y-auto custom-scrollbar" ref={scrollContainerRef}>
-                        <table className="w-full border-collapse min-w-max">
-                            <thead>
-                                <tr className="bg-muted/50">
-                                    {/* Left sticky: Employee label */}
-                                    <th className="sticky left-0 z-40 bg-muted/95 backdrop-blur-md w-48 min-w-[12rem] p-4 text-left border-b border-r border-border/60">
-                                        <span className="text-[10px] uppercase tracking-widest font-extrabold text-muted-foreground">Employee</span>
-                                    </th>
+                <div className="overflow-x-auto overflow-y-auto custom-scrollbar" ref={scrollContainerRef}>
+                    <table className="w-full border-collapse min-w-max">
+                        <thead>
+                            <tr className="bg-muted/50">
+                                {/* Left sticky: Employee label */}
+                                <th className="sticky left-0 z-40 bg-muted/95 backdrop-blur-md w-48 min-w-[12rem] p-4 text-left border-b border-r border-border/60">
+                                    <span className="text-[10px] uppercase tracking-widest font-extrabold text-muted-foreground">Employee</span>
+                                </th>
 
-                                    
-
-                                    {weeks.map(week => (
-                                        <React.Fragment key={week.weekNum}>
-                                            {week.days.map(day => {
-                                                const dateStr = format(day, 'yyyy-MM-dd');
-                                                const isToday = dateStr === format(new Date(), 'yyyy-MM-dd');
-                                                return (
-                                                    <th
-                                                        key={dateStr}
-                                                        id={`col-${dateStr}`}
-                                                        className={`w-12 min-w-[3rem] p-2 text-center border-b border-border/30 transition-colors ${isToday ? 'bg-primary/5 ring-1 ring-inset ring-primary/20' : ''}`}
-                                                    >
-                                                        <div className={`text-[9px] uppercase font-bold ${isToday ? 'text-primary' : 'text-muted-foreground/60'}`}>
-                                                            {format(day, 'eee')}
-                                                        </div>
-                                                        <div className={`text-xs font-mono font-bold mt-0.5 ${isToday ? 'text-primary' : 'text-foreground/80'}`}>
-                                                            {format(day, 'MMM d')}
-                                                        </div>
-                                                    </th>
-                                                );
-                                            })}
-                                            {/* Weekly total header */}
-                                            <th className="w-20 min-w-[5rem] bg-primary/[0.03] p-2 text-center border-b border-l border-border/40">
-                                                <div className="text-[8px] uppercase font-black text-primary/40 tracking-tighter">W{week.weekNum}</div>
-                                                <div className="text-[9px] font-mono font-bold text-primary/60 mt-0.5">Total</div>
-                                            </th>
-                                        </React.Fragment>
-                                    ))}
-
-                                    {/* Right sticky: compliance column */}
-                                    <th className="sticky right-0 z-40 bg-muted/95 backdrop-blur-md w-44 min-w-[11rem] p-4 text-center border-b border-l border-border/60">
-                                        <span className="text-[10px] uppercase tracking-widest font-extrabold text-muted-foreground">Compliance</span>
-                                    </th>
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                {finalEmployees.map(emp => {
-                                    const empComp = complianceMap[emp.id];
-                                    const ovSev   = empComp?.overallSeverity ?? 'ok';
-
-                                    return (
-                                        <tr key={emp.id} className="group hover:bg-muted/30 transition-colors border-b border-border/20 last:border-0 text-center">
-                                            {/* Left sticky: employee */}
-                                            <td className="sticky left-0 z-30 bg-card/95 backdrop-blur-md p-3 border-r border-border/40 group-hover:bg-muted/50 transition-colors text-left">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 shadow-inner transition-colors ${avatarCls(ovSev)}`}>
-                                                        {getInitials(emp.first_name, emp.last_name)}
+                                {weeks.map(week => (
+                                    <React.Fragment key={week.weekNum}>
+                                        {week.days.map(day => {
+                                            const dateStr = format(day, 'yyyy-MM-dd');
+                                            const isToday = dateStr === format(new Date(), 'yyyy-MM-dd');
+                                            return (
+                                                <th
+                                                    key={dateStr}
+                                                    id={`col-${dateStr}`}
+                                                    className={`w-12 min-w-[3rem] p-2 text-center border-b border-border/30 transition-colors ${isToday ? 'bg-primary/5 ring-1 ring-inset ring-primary/20' : ''}`}
+                                                >
+                                                    <div className={`text-[9px] uppercase font-bold ${isToday ? 'text-primary' : 'text-muted-foreground/60'}`}>
+                                                        {format(day, 'eee')}
                                                     </div>
-                                                    <div className="flex flex-col min-w-0">
-                                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                                            <span className="text-xs font-semibold text-foreground/90 truncate">
-                                                                {emp.first_name} {emp.last_name}
-                                                            </span>
-                                                            {studentVisaMap[emp.id] && (
-                                                                <Badge variant="warning" className="h-3.5 px-1 text-[8px] font-extrabold gap-0.5 uppercase tracking-tighter shrink-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
-                                                                    <GraduationCap className="h-2 w-2" />
-                                                                    Visa
-                                                                </Badge>
-                                                            )}
-                                                        </div>
-                                                        <span className="text-[9px] text-muted-foreground font-mono truncate">{emp.id.split('-')[0]}</span>
+                                                    <div className={`text-xs font-mono font-bold mt-0.5 ${isToday ? 'text-primary' : 'text-foreground/80'}`}>
+                                                        {format(day, 'MMM d')}
                                                     </div>
+                                                </th>
+                                            );
+                                        })}
+                                        {/* Weekly total header */}
+                                        <th className="w-20 min-w-[5rem] bg-primary/[0.03] p-2 text-center border-b border-l border-border/40">
+                                            <div className="text-[8px] uppercase font-black text-primary/40 tracking-tighter">W{week.weekNum}</div>
+                                            <div className="text-[9px] font-mono font-bold text-primary/60 mt-0.5">Total</div>
+                                        </th>
+                                    </React.Fragment>
+                                ))}
+
+                                {/* Right sticky: compliance column */}
+                                <th className="sticky right-0 z-40 bg-muted/95 backdrop-blur-md w-44 min-w-[11rem] p-4 text-center border-b border-l border-border/60">
+                                    <span className="text-[10px] uppercase tracking-widest font-extrabold text-muted-foreground">Compliance</span>
+                                </th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            {finalEmployees.map(emp => {
+                                const empComp = complianceMap[emp.id];
+                                const ovSev   = empComp?.overallSeverity ?? 'ok';
+
+                                return (
+                                    <tr key={emp.id} className="group hover:bg-muted/30 transition-colors border-b border-border/20 last:border-0 text-center">
+                                        {/* Left sticky: employee */}
+                                        <td className="sticky left-0 z-30 bg-card/95 backdrop-blur-md p-3 border-r border-border/40 group-hover:bg-muted/50 transition-colors text-left">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 shadow-inner transition-colors ${avatarCls(ovSev)}`}>
+                                                    {getInitials(emp.first_name, emp.last_name)}
                                                 </div>
-                                            </td>
+                                                <div className="flex flex-col min-w-0">
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span className="text-xs font-semibold text-foreground/90 truncate">
+                                                            {emp.first_name} {emp.last_name}
+                                                        </span>
+                                                        {studentVisaMap[emp.id] && (
+                                                            <Badge variant="warning" className="h-3.5 px-1 text-[8px] font-extrabold gap-0.5 uppercase tracking-tighter shrink-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
+                                                                <GraduationCap className="h-2 w-2" />
+                                                                Visa
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-[9px] text-muted-foreground font-mono truncate">{emp.id.split('-')[0]}</span>
+                                                </div>
+                                            </div>
+                                        </td>
 
-                                            {/* Week columns */}
-                                            {weeks.map(week => {
-                                                const weekComp = empComp?.weeks[week.weekNum];
-                                                const wkSev    = weekComp?.worstSeverity ?? 'ok';
-                                                const wkHours  = weekComp?.weekHours ?? (aggregatedData[emp.id]?.byWeek[week.weekNum] || 0);
-                                                const wkDisplay = wkHours > 0
-                                                    ? parseFloat(wkHours.toFixed(1)).toString()
-                                                    : '';
+                                        {/* Week columns */}
+                                        {weeks.map(week => {
+                                            const weekComp = empComp?.weeks[week.weekNum];
+                                            const wkSev    = weekComp?.worstSeverity ?? 'ok';
+                                            const wkHours  = weekComp?.weekHours ?? (aggregatedData[emp.id]?.byWeek[week.weekNum] || 0);
+                                            const wkDisplay = wkHours > 0
+                                                ? parseFloat(wkHours.toFixed(1)).toString()
+                                                : '';
 
-                                                return (
-                                                    <React.Fragment key={week.weekNum}>
-                                                        {/* Daily cells */}
-                                                        {week.days.map(day => {
-                                                            const dateStr = format(day, 'yyyy-MM-dd');
-                                                            const shifts   = aggregatedData[emp.id]?.byDate[dateStr] || [];
-                                                            const isDraft = aggregatedData[emp.id]?.draftDates.has(dateStr) ?? false;
-                                                            const isViol  = empComp?.dailyViolations.has(dateStr) ?? false;
-                                                            const isWarn  = empComp?.dailyWarnings.has(dateStr) ?? false;
-                                                            
-                                                            const hours = shifts.reduce((sum, s) => sum + s.netHours, 0);
-                                                            const cellCls = getDailyCellClass(hours, isViol, isWarn, isDraft);
+                                            return (
+                                                <React.Fragment key={week.weekNum}>
+                                                    {/* Daily cells */}
+                                                    {week.days.map(day => {
+                                                        const dateStr = format(day, 'yyyy-MM-dd');
+                                                        const shifts   = aggregatedData[emp.id]?.byDate[dateStr] || [];
+                                                        const isDraft = aggregatedData[emp.id]?.draftDates.has(dateStr) ?? false;
+                                                        const isViol  = empComp?.dailyViolations.has(dateStr) ?? false;
+                                                        const isWarn  = empComp?.dailyWarnings.has(dateStr) ?? false;
+                                                        
+                                                        const hours = shifts.reduce((sum, s) => sum + s.netHours, 0);
+                                                        const cellCls = getDailyCellClass(hours, isViol, isWarn, isDraft);
 
-                                                            return (
-                                                                <td key={`${emp.id}-${dateStr}`} className="p-1 relative group/cell align-middle">
-                                                                    <div className={`w-full h-[2.1rem] rounded flex items-center justify-center p-[2px] transition-all duration-200 ${cellCls}`}>
-                                                                        {shifts.length > 0 ? (
-                                                                            compMode ? (
-                                                                                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
-                                                                            ) : (
-                                                                                <Popover>
-                                                                                    <PopoverTrigger asChild>
-                                                                                        <div role="button" className="w-full h-full flex flex-col items-center justify-center gap-[2px] cursor-pointer hover:bg-background/20 rounded-sm transition-colors overflow-hidden">
-                                                                                            <TooltipProvider delayDuration={200}>
-                                                                                                <Tooltip>
-                                                                                                    <TooltipTrigger asChild>
-                                                                                                        <div className="flex items-center justify-center px-1 py-[2px] w-full max-w-[95%] rounded-[3px] bg-background/60 hover:bg-background/95 shadow-sm transition-colors text-[9px] font-extrabold tracking-tight border border-foreground/10 text-current truncate leading-none">
-                                                                                                            {shifts[0].netHours % 1 === 0 ? shifts[0].netHours : shifts[0].netHours.toFixed(1)}{shifts[0].isDraft ? ' d' : ''}
-                                                                                                        </div>
-                                                                                                    </TooltipTrigger>
-                                                                                                    <TooltipContent side="top" className="flex flex-col gap-1 px-2.5 py-1.5 z-[200]">
-                                                                                                        <div className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
-                                                                                                            <span className="truncate max-w-[80px]">{shifts[0].deptName || 'N/A'}</span>
-                                                                                                            <span className="opacity-50 text-[8px]">▶</span>
-                                                                                                            <span className="truncate max-w-[80px]">{shifts[0].subDeptName || 'N/A'}</span>
-                                                                                                        </div>
-                                                                                                    </TooltipContent>
-                                                                                                </Tooltip>
-                                                                                            </TooltipProvider>
-
-                                                                                            {shifts.length > 1 && (
-                                                                                                <div className="text-[7.5px] font-bold text-current/80 leading-none">
-                                                                                                    +{shifts.length - 1} more
-                                                                                                </div>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    </PopoverTrigger>
-                                                                                    <PopoverContent side="right" align="start" className="w-64 p-0 z-[200] shadow-xl border-border/40 overflow-hidden">
-                                                                                        <div className="p-3 bg-muted/30 border-b border-border/40">
-                                                                                            <h4 className="text-xs font-bold">{format(day, 'EEEE, MMM d, yyyy')}</h4>
-                                                                                            <p className="text-[10px] text-muted-foreground">{shifts.length} shift{shifts.length > 1 ? 's' : ''} • {hours}h total</p>
-                                                                                        </div>
-                                                                                        <div className="flex flex-col overflow-y-auto max-h-[300px] p-2 gap-1.5">
-                                                                                            {shifts.map((s, idx) => (
-                                                                                                <div key={s.id || idx} className="flex flex-col p-2.5 rounded-md border border-border/30 bg-card hover:bg-muted/50 transition-colors">
-                                                                                                    <div className="flex items-center justify-between mb-1.5">
-                                                                                                        <span className="text-xs font-bold">{s.roleName || 'Unassigned Role'}</span>
-                                                                                                        <Badge variant="secondary" className="text-[9px] px-1.5 shadow-none font-bold">
-                                                                                                            {s.netHours}h
-                                                                                                        </Badge>
-                                                                                                    </div>
-                                                                                                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground flex-wrap">
-                                                                                                        <span>{s.deptName || 'Unknown Dept'}</span>
-                                                                                                        <span className="opacity-40 text-[8px]">▶</span>
-                                                                                                        <span>{s.subDeptName || 'Unknown SubDept'}</span>
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    </PopoverContent>
-                                                                                </Popover>
-                                                                            )
+                                                        return (
+                                                            <td key={`${emp.id}-${dateStr}`} className="p-1 relative group/cell align-middle">
+                                                                <div className={`w-full h-[2.1rem] rounded flex items-center justify-center p-[2px] transition-all duration-200 ${cellCls}`}>
+                                                                    {shifts.length > 0 ? (
+                                                                        compMode ? (
+                                                                            <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
                                                                         ) : (
-                                                                            hours === 0 ? <span className="opacity-30 text-muted-foreground font-black text-[10px] select-none">—</span> : <span className="w-0.5 h-0.5 my-auto rounded-full bg-muted-foreground/20 group-hover/cell:bg-muted-foreground/40 transition-colors" />
-                                                                        )}
-                                                                    </div>
-                                                                    {hours > 0 && (isViol || isWarn) && (
-                                                                        <div className="absolute inset-x-1 -top-7 bg-foreground text-background text-[9px] px-2 py-0.5 rounded shadow-xl opacity-0 group-hover/cell:opacity-100 transition-opacity pointer-events-none z-[100] whitespace-nowrap text-center font-bold">
-                                                                            {hours.toFixed(1)}h
-                                                                            {isViol ? ' ⚠ cap!' : isWarn ? ' ~ cap' : ''}
-                                                                        </div>
-                                                                    )}
-                                                                </td>
-                                                            );
-                                                        })}
+                                                                            <Popover>
+                                                                                <PopoverTrigger asChild>
+                                                                                    <div role="button" className="w-full h-full flex flex-col items-center justify-center gap-[2px] cursor-pointer hover:bg-background/20 rounded-sm transition-colors overflow-hidden">
+                                                                                        <TooltipProvider delayDuration={200}>
+                                                                                            <Tooltip>
+                                                                                                <TooltipTrigger asChild>
+                                                                                                    <div className="flex items-center justify-center px-1 py-[2px] w-full max-w-[95%] rounded-[3px] bg-background/60 hover:bg-background/95 shadow-sm transition-colors text-[9px] font-extrabold tracking-tight border border-foreground/10 text-current truncate leading-none">
+                                                                                                        {shifts[0].netHours % 1 === 0 ? shifts[0].netHours : shifts[0].netHours.toFixed(1)}{shifts[0].isDraft ? ' d' : ''}
+                                                                                                    </div>
+                                                                                                </TooltipTrigger>
+                                                                                                <TooltipContent side="top" className="flex flex-col gap-1 px-2.5 py-1.5 z-[200]">
+                                                                                                    <div className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
+                                                                                                        <span className="truncate max-w-[80px]">{shifts[0].deptName || 'N/A'}</span>
+                                                                                                        <span className="opacity-50 text-[8px]">▶</span>
+                                                                                                        <span className="truncate max-w-[80px]">{shifts[0].subDeptName || 'N/A'}</span>
+                                                                                                    </div>
+                                                                                                </TooltipContent>
+                                                                                            </Tooltip>
+                                                                                        </TooltipProvider>
 
-                                                        {/* Weekly total cell */}
-                                                        <td className={`${weeklyBg(wkSev)} p-1 align-middle transition-all relative group/wt`}>
-                                                            <div className="flex flex-col items-center gap-0.5">
-                                                                {/* Rolling window violation badges */}
-                                                                {weekComp && weekComp.windows.length > 0 && (
-                                                                    <div className="flex items-center gap-0.5 flex-wrap justify-center">
-                                                                        {weekComp.windows.map(w => (
-                                                                            <span
-                                                                                key={w.weeks}
-                                                                                className={`text-[7px] font-black px-1 py-0.5 rounded leading-none ${winBadgeCls(w.severity)}`}
-                                                                            >
-                                                                                {w.weeks}W
-                                                                            </span>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                                {/* Hours number */}
-                                                                {wkHours > 0 && (
-                                                                    <span className={`text-[11px] font-bold leading-none ${weeklyTextCls(wkSev)}`}>
-                                                                        {compMode && wkSev !== 'ok'
-                                                                            ? (wkSev === 'violation' ? '✕' : '~')
-                                                                            : wkDisplay}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-
-                                                            {/* Hover tooltip */}
-                                                            {weekComp && wkHours > 0 && (
-                                                                <div className="hidden group-hover/wt:block absolute bottom-full left-0 mb-1 bg-background border border-border/60 text-foreground text-[9px] px-2.5 py-2 rounded-lg shadow-2xl pointer-events-none z-50 whitespace-nowrap min-w-[14rem]">
-                                                                    <div className="font-black uppercase tracking-wider text-[8px] text-muted-foreground mb-1.5">
-                                                                        W{week.weekNum} — {wkHours.toFixed(1)}h this week
-                                                                    </div>
-                                                                    {weekComp.windows.length === 0 ? (
-                                                                        <div className="text-emerald-500 font-bold">All rolling windows OK</div>
+                                                                                        {shifts.length > 1 && (
+                                                                                            <div className="text-[7.5px] font-bold text-current/80 leading-none">
+                                                                                                +{shifts.length - 1} more
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </PopoverTrigger>
+                                                                                <PopoverContent side="right" align="start" className="w-64 p-0 z-[200] shadow-xl border-border/40 overflow-hidden">
+                                                                                    <div className="p-3 bg-muted/30 border-b border-border/40">
+                                                                                        <h4 className="text-xs font-bold">{format(day, 'EEEE, MMM d, yyyy')}</h4>
+                                                                                        <p className="text-[10px] text-muted-foreground">{shifts.length} shift{shifts.length > 1 ? 's' : ''} • {hours}h total</p>
+                                                                                    </div>
+                                                                                    <div className="flex flex-col overflow-y-auto max-h-[300px] p-2 gap-1.5">
+                                                                                        {shifts.map((s, idx) => (
+                                                                                            <div key={s.id || idx} className="flex flex-col p-2.5 rounded-md border border-border/30 bg-card hover:bg-muted/50 transition-colors">
+                                                                                                <div className="flex items-center justify-between mb-1.5">
+                                                                                                    <span className="text-xs font-bold">{s.roleName || 'Unassigned Role'}</span>
+                                                                                                    <Badge variant="secondary" className="text-[9px] px-1.5 shadow-none font-bold">
+                                                                                                        {s.netHours}h
+                                                                                                    </Badge>
+                                                                                                </div>
+                                                                                                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground flex-wrap">
+                                                                                                    <span>{s.deptName || 'Unknown Dept'}</span>
+                                                                                                    <span className="opacity-40 text-[8px]">▶</span>
+                                                                                                    <span>{s.subDeptName || 'Unknown SubDept'}</span>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </PopoverContent>
+                                                                            </Popover>
+                                                                        )
                                                                     ) : (
-                                                                        weekComp.windows.map(w => (
-                                                                            <div
-                                                                                key={w.weeks}
-                                                                                className={`flex items-center justify-between gap-4 py-0.5 font-semibold ${w.severity === 'violation' ? 'text-red-500' : 'text-amber-500'}`}
-                                                                            >
-                                                                                <span>{w.weeks}-week window:</span>
-                                                                                <span className="font-black tabular-nums">{w.hours}h / {w.limit}h</span>
-                                                                            </div>
-                                                                        ))
+                                                                        hours === 0 ? <span className="opacity-30 text-muted-foreground font-black text-[10px] select-none">—</span> : <span className="w-0.5 h-0.5 my-auto rounded-full bg-muted-foreground/20 group-hover/cell:bg-muted-foreground/40 transition-colors" />
                                                                     )}
-                                                                    {(empComp?.dailyViolations.size ?? 0) > 0 && (
-                                                                        <div className="mt-1 pt-1 border-t border-border/30 text-red-500 font-semibold">
-                                                                            Daily cap exceeded: {empComp?.dailyViolations.size} day(s)
-                                                                        </div>
-                                                                    )}
-                                                                    <div className="mt-1.5 pt-1.5 border-t border-border/30 text-[8px] text-muted-foreground">
-                                                                        EBA: {EBA_WEEKLY_LIMIT}h/wk → 76 / 114 / 152h limits
+                                                                </div>
+                                                                {hours > 0 && (isViol || isWarn) && (
+                                                                    <div className="absolute inset-x-1 -top-7 bg-foreground text-background text-[9px] px-2 py-0.5 rounded shadow-xl opacity-0 group-hover/cell:opacity-100 transition-opacity pointer-events-none z-[100] whitespace-nowrap text-center font-bold">
+                                                                        {hours.toFixed(1)}h
+                                                                        {isViol ? ' ⚠ cap!' : isWarn ? ' ~ cap' : ''}
                                                                     </div>
+                                                                )}
+                                                            </td>
+                                                        );
+                                                    })}
+
+                                                    {/* Weekly total cell */}
+                                                    <td className={`${weeklyBg(wkSev)} p-1 align-middle transition-all relative group/wt`}>
+                                                        <div className="flex flex-col items-center gap-0.5">
+                                                            {/* Rolling window violation badges */}
+                                                            {weekComp && weekComp.windows.length > 0 && (
+                                                                <div className="flex items-center gap-0.5 flex-wrap justify-center">
+                                                                    {weekComp.windows.map(w => (
+                                                                        <span
+                                                                            key={w.weeks}
+                                                                            className={`text-[7px] font-black px-1 py-0.5 rounded leading-none ${winBadgeCls(w.severity)}`}
+                                                                        >
+                                                                            {w.weeks}W
+                                                                        </span>
+                                                                    ))}
                                                                 </div>
                                                             )}
-                                                        </td>
-                                                    </React.Fragment>
-                                                );
-                                            })}
+                                                            {/* Hours number */}
+                                                            {wkHours > 0 && (
+                                                                <span className={`text-[11px] font-bold leading-none ${weeklyTextCls(wkSev)}`}>
+                                                                    {compMode && wkSev !== 'ok'
+                                                                        ? (wkSev === 'violation' ? '✕' : '~')
+                                                                        : wkDisplay}
+                                                                </span>
+                                                            )}
+                                                        </div>
 
-                                            {/* Right sticky: compliance summary */}
-                                            <td className="sticky right-0 z-30 bg-card/95 backdrop-blur-md p-3 border-l border-border/40 group-hover:bg-muted/50 transition-colors">
-                                                <div className="flex items-start gap-2 min-w-0">
-                                                    {ovSev === 'violation'
-                                                        ? <ShieldAlert className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
-                                                        : ovSev === 'warning'
-                                                        ? <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
-                                                        : <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                                                    }
-                                                    <div className="flex flex-col min-w-0">
-                                                        <span className={`text-[10px] font-extrabold uppercase tracking-tight leading-none mb-0.5 ${
-                                                            ovSev === 'violation' ? 'text-red-600 dark:text-red-400'
-                                                            : ovSev === 'warning'  ? 'text-amber-600 dark:text-amber-400'
-                                                            : 'text-emerald-600 dark:text-emerald-400'
-                                                        }`}>
-                                                            {ovSev === 'violation' ? 'Violation' : ovSev === 'warning' ? 'Near Limit' : 'OK'}
-                                                        </span>
-                                                        <span
-                                                            className="text-[9px] text-muted-foreground leading-tight truncate max-w-[8.5rem]"
-                                                            title={empComp?.worstDesc}
-                                                        >
-                                                            {empComp?.worstDesc || '—'}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
+                                                        {/* Hover tooltip */}
+                                                        {weekComp && wkHours > 0 && (
+                                                            <div className="hidden group-hover/wt:block absolute bottom-full left-0 mb-1 bg-background border border-border/60 text-foreground text-[9px] px-2.5 py-2 rounded-lg shadow-2xl pointer-events-none z-50 whitespace-nowrap min-w-[14rem]">
+                                                                <div className="font-black uppercase tracking-wider text-[8px] text-muted-foreground mb-1.5">
+                                                                    W{week.weekNum} — {wkHours.toFixed(1)}h this week
+                                                                </div>
+                                                                {weekComp.windows.length === 0 ? (
+                                                                    <div className="text-emerald-500 font-bold">All rolling windows OK</div>
+                                                                ) : (
+                                                                    weekComp.windows.map(w => (
+                                                                        <div
+                                                                            key={w.weeks}
+                                                                            className={`flex items-center justify-between gap-4 py-0.5 font-semibold ${w.severity === 'violation' ? 'text-red-500' : 'text-amber-500'}`}
+                                                                        >
+                                                                            <span>{w.weeks}-week window:</span>
+                                                                            <span className="font-black tabular-nums">{w.hours}h / {w.limit}h</span>
+                                                                        </div>
+                                                                    ))
+                                                                )}
+                                                                {(empComp?.dailyViolations.size ?? 0) > 0 && (
+                                                                    <div className="mt-1 pt-1 border-t border-border/30 text-red-500 font-semibold">
+                                                                        Daily cap exceeded: {empComp?.dailyViolations.size} day(s)
+                                                                    </div>
+                                                                )}
+                                                                <div className="mt-1.5 pt-1.5 border-t border-border/30 text-[8px] text-muted-foreground">
+                                                                    EBA: {EBA_WEEKLY_LIMIT}h/wk → 76 / 114 / 152h limits
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </React.Fragment>
+                                            );
+                                        })}
 
-                                {finalEmployees.length === 0 && !isLoading && (
-                                    <tr>
-                                        <td colSpan={100} className="p-20 text-center">
-                                            <div className="flex flex-col items-center gap-4 max-w-sm mx-auto">
-                                                <div className="bg-muted/30 p-4 rounded-full">
-                                                    <Users className="w-8 h-8 text-muted-foreground/40" />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <p className="text-sm font-semibold text-foreground/80">
-                                                        {!scope.org_ids[0] ? 'Organization Required' : 'No matches found'}
-                                                    </p>
-                                                    <p className="text-xs text-muted-foreground leading-relaxed">
-                                                        {!scope.org_ids[0]
-                                                            ? 'Please select an organization from the banner above to load data.'
-                                                            : `No personnel recorded for the selected filters in ${year}. Try adjusting your scope or year.`}
-                                                    </p>
-                                                </div>
-                                                <div className="mt-4 flex gap-4 text-[9px] font-mono opacity-20 uppercase tracking-widest border-t border-border/50 pt-4">
-                                                    <span>S:{shifts.length}</span>
-                                                    <span>P:{finalEmployees.length}</span>
-                                                    <span>O:{scope.org_ids[0]?.split('-')[0] || 'NONE'}</span>
-                                                    <span>D:{scope.dept_ids.length}</span>
+                                        {/* Right sticky: compliance summary */}
+                                        <td className="sticky right-0 z-30 bg-card/95 backdrop-blur-md p-3 border-l border-border/40 group-hover:bg-muted/50 transition-colors">
+                                            <div className="flex items-start gap-2 min-w-0">
+                                                {ovSev === 'violation'
+                                                    ? <ShieldAlert className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
+                                                    : ovSev === 'warning'
+                                                    ? <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                                                    : <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                                                }
+                                                <div className="flex flex-col min-w-0">
+                                                    <span className={`text-[10px] font-extrabold uppercase tracking-tight leading-none mb-0.5 ${
+                                                        ovSev === 'violation' ? 'text-red-600 dark:text-red-400'
+                                                        : ovSev === 'warning'  ? 'text-amber-600 dark:text-amber-400'
+                                                        : 'text-emerald-600 dark:text-emerald-400'
+                                                    }`}>
+                                                        {ovSev === 'violation' ? 'Violation' : ovSev === 'warning' ? 'Near Limit' : 'OK'}
+                                                    </span>
+                                                    <span
+                                                        className="text-[9px] text-muted-foreground leading-tight truncate max-w-[8.5rem]"
+                                                        title={empComp?.worstDesc}
+                                                    >
+                                                        {empComp?.worstDesc || '—'}
+                                                    </span>
                                                 </div>
                                             </div>
                                         </td>
                                     </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                                );
+                            })}
+
+                            {finalEmployees.length === 0 && !isLoading && (
+                                <tr>
+                                    <td colSpan={100} className="p-20 text-center">
+                                        <div className="flex flex-col items-center gap-4 max-w-sm mx-auto">
+                                            <div className="bg-muted/30 p-4 rounded-full">
+                                                <Users className="w-8 h-8 text-muted-foreground/40" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <p className="text-sm font-semibold text-foreground/80">
+                                                    {!scope.org_ids[0] ? 'Organization Required' : 'No matches found'}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground leading-relaxed">
+                                                    {!scope.org_ids[0]
+                                                        ? 'Please select an organization from the banner above to load data.'
+                                                        : `No personnel recorded for the selected filters in ${year}. Try adjusting your scope or year.`}
+                                                </p>
+                                            </div>
+                                            <div className="mt-4 flex gap-4 text-[9px] font-mono opacity-20 uppercase tracking-widest border-t border-border/50 pt-4">
+                                                <span>S:{shifts.length}</span>
+                                                <span>P:{finalEmployees.length}</span>
+                                                <span>O:{scope.org_ids[0]?.split('-')[0] || 'NONE'}</span>
+                                                <span>D:{scope.dept_ids.length}</span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -780,6 +798,7 @@ const GridPage: React.FC = () => {
             `}</style>
         </div>
     );
+
 };
 
 export default GridPage;

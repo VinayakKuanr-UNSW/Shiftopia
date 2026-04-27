@@ -610,7 +610,8 @@ function ShiftCard({ shift, label, color }: { shift: ShiftData; label: string; c
                 {label}
             </div>
             <SharedShiftCard
-                variant="nested"
+                variant="timecard"
+                isFlat={true}
                 organization=""
                 department={shift.department_name || ''}
                 role={shift.role_name || 'Shift'}

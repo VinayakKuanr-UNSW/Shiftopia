@@ -5,7 +5,6 @@ import { ManagerComplianceApprovalModal } from '../components/ManagerComplianceA
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
-import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { format, differenceInHours, parseISO, parse } from 'date-fns';
@@ -21,6 +20,7 @@ import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { SharedShiftCard } from '../../../../planning/ui/components/SharedShiftCard';
 import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { UnifiedModuleFunctionBar } from '@/modules/core/ui/components/UnifiedModuleFunctionBar';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 
 /* ============================================================
@@ -39,11 +39,7 @@ const formatTime = (time: string): string => {
     return `${display}:${m?.toString().padStart(2, '0') || '00'} ${period}`;
 };
 
-const getInitials = (name: string): string => {
-    const parts = name.trim().split(' ');
-    if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-    return name.slice(0, 2).toUpperCase();
-};
+
 
 // Redesigned: Metropolis Glass dynamic classes with deep venue mapping
 function getDeptGlassClass(data?: {
@@ -118,19 +114,21 @@ const accentMap: Record<string, { bg: string; text: string; ring: string; glow: 
    EMPLOYEE SHIFT PANE (within card)
    ============================================================ */
 
-const ShiftPane: React.FC<{ data: any; label: string }> = ({ data, label }) => {
+const ShiftPane: React.FC<{
+    label: string;
+    data: SwapRequestManagement['requestor'] | SwapRequestManagement['recipient'];
+    isRequester: boolean;
+}> = ({ label, data, isRequester }) => {
+    const { isDark } = useTheme();
     if (!data) {
         return (
-            <div className="flex-1 min-w-0 md:min-w-[200px] rounded-2xl border border-dashed border-border/60 p-5 flex flex-col items-center justify-center gap-2 bg-muted/5 backdrop-blur-sm">
-                <div className="h-10 w-10 rounded-full bg-muted/20 flex items-center justify-center">
-                    <ArrowLeftRight className="h-4 w-4 text-muted-foreground/30" />
-                </div>
-                <span className="text-[10px] font-mono font-black uppercase tracking-[0.2em] text-muted-foreground/40">Open Market</span>
+            <div className="flex-1 min-h-[140px] rounded-[32px] border border-dashed border-border/40 flex flex-col items-center justify-center gap-3 bg-muted/5 opacity-40 grayscale">
+                <Circle className="h-6 w-6 text-muted-foreground/30" />
+                <span className="text-[10px] font-mono text-muted-foreground/50 uppercase tracking-widest font-black">Open Market Swap</span>
             </div>
         );
     }
 
-    const isRequester = label === 'REQUESTER';
     const deptClass = getDeptGlassClass({
         deptName: data.deptName,
         orgName: data.orgName,
@@ -139,78 +137,51 @@ const ShiftPane: React.FC<{ data: any; label: string }> = ({ data, label }) => {
         subDepartmentId: data.subDepartmentId
     });
 
-
-
-
     return (
-        <div className={cn(
-            "flex-1 min-w-0 md:min-w-[240px] w-full p-4 md:p-6 rounded-xl md:rounded-[2rem] border transition-all duration-500 relative overflow-hidden group/pane dept-card-glass-base",
-            deptClass
-        )}>
-            {/* Glass Background Highlight */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/[0.05] blur-3xl rounded-full pointer-events-none" />
-
-            {/* Label */}
-            <div className="flex items-center justify-between mb-5 relative z-10">
-                <div className="flex items-center gap-2">
-                    <div className={cn(
-                        "h-1.5 w-6 rounded-full",
-                        isRequester ? "bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]" : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
-                    )} />
-                    <span className={cn(
-                        "text-[9px] font-black uppercase tracking-[0.25em]",
-                        isRequester ? "text-indigo-600 dark:text-indigo-400" : "text-emerald-600 dark:text-emerald-400"
-                    )}>
-                        {label}
-                    </span>
-                </div>
-                <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest bg-background/40 backdrop-blur-md border-border/50">
-                    {data.deptName || 'General'}
-                </Badge>
-            </div>
-
-            {/* Employee Row */}
-            <div className="flex items-center gap-3 mb-6 relative z-10">
-                <Avatar className="h-10 w-10 ring-2 ring-background shadow-xl">
-                    <AvatarImage src={data.avatar} />
-                    <AvatarFallback className={cn(
-                        "text-[10px] font-black",
-                        isRequester
-                            ? "bg-indigo-600 text-white"
-                            : "bg-emerald-600 text-white"
-                    )}>
-                        {getInitials(data.employeeName || '?')}
-                    </AvatarFallback>
-                </Avatar>
-                <div>
-                    <div className="text-[14px] font-black text-foreground leading-tight tracking-tight">{data.employeeName}</div>
-                    <div className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider opacity-60 italic">{data.roleName}</div>
-                </div>
-            </div>
-
-            {/* Shift Details (Redesigned Table-like Grid) */}
-            <div className="relative z-10 px-1">
-                <SharedShiftCard
-                    variant="nested"
-                    organization={data.orgName || 'ICC Sydney'}
-                    department={data.deptName || 'Department'}
-                    subGroup={data.subGroupName}
-                    role={data.roleName || 'Shift'}
-                    shiftDate={data.formattedDate || 'N/A'}
-                    startTime={data.time?.split(' - ')[0] || '00:00'}
-                    endTime={data.time?.split(' - ')[1] || '00:00'}
-                    netLength={data.durationNum * 60}
-                    paidBreak={0}
-                    unpaidBreak={0}
-                    groupVariant={
-                        deptClass.includes('convention') ? 'convention' :
-                        deptClass.includes('exhibition') ? 'exhibition' :
-                        deptClass.includes('theatre') ? 'theatre' : 'default'
-                    }
-                    complianceLabel="Compliant"
-
-                />
-            </div>
+        <div className="flex-1 min-w-0">
+            <SharedShiftCard
+                variant="timecard"
+                isFlat={false}
+                organization={data.orgName || 'ICC Sydney'}
+                department={data.deptName || 'Department'}
+                subGroup={data.subGroupName}
+                role={data.roleName || 'Shift'}
+                shiftDate={data.formattedDate || 'N/A'}
+                startTime={data.time?.split(' - ')[0] || '00:00'}
+                endTime={data.time?.split(' - ')[1] || '00:00'}
+                netLength={data.durationNum * 60}
+                paidBreak={0}
+                unpaidBreak={0}
+                groupVariant={
+                    deptClass.includes('convention') ? 'convention' :
+                    deptClass.includes('exhibition') ? 'exhibition' :
+                    deptClass.includes('theatre') ? 'theatre' : 'default'
+                }
+                employeeName={data.employeeName}
+                avatarUrl={data.avatar}
+                topContent={
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <div className={cn(
+                                "h-1.5 w-6 rounded-full",
+                                isRequester ? "bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]" : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+                            )} />
+                            <span className={cn(
+                                "text-[9px] font-black uppercase tracking-[0.25em]",
+                                isRequester ? "text-indigo-600 dark:text-indigo-400" : "text-emerald-600 dark:text-emerald-400"
+                            )}>
+                                {label}
+                            </span>
+                        </div>
+                    </div>
+                }
+                className={cn(
+                    "h-full border-none",
+                    isRequester 
+                        ? (isDark ? "bg-[#1c2333]/65 shadow-indigo-500/10" : "bg-white/80 shadow-indigo-200/50") 
+                        : (isDark ? "bg-[#141d2e]/65 shadow-emerald-500/10" : "bg-white/60 shadow-emerald-200/50")
+                )}
+            />
         </div>
     );
 };
@@ -342,6 +313,8 @@ interface SwapRequestManagement {
     offererEmployeeId: string | null;
     requesterShiftId: string;
     offererShiftId: string | null;
+    // Compliance snapshot saved at acceptance time (from swap_offers)
+    complianceSnapshot: any | null;
 }
 
 /** Compute duration hours from camelCase timing strings */
@@ -476,6 +449,7 @@ const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement =>
         offererEmployeeId: apiData.swap_with_employee_id || activeOffer?.offerer_id || null,
         requesterShiftId: apiData.original_shift_id,
         offererShiftId: apiData.offered_shift_id || activeOffer?.offered_shift_id || null,
+        complianceSnapshot: activeOffer?.compliance_snapshot ?? null,
     };
 };
 
@@ -520,6 +494,8 @@ export const ManagerSwapsPage: React.FC = () => {
     const [complianceApprovalTarget, setComplianceApprovalTarget] = useState<SwapRequestManagement | null>(null);
     const [swapRequests, setSwapRequests] = useState<SwapRequestManagement[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
+    const [searchQuery, setSearchQuery] = useState('');
 
     // ==================== DATA FETCHING ====================
     const fetchData = async () => {
@@ -560,9 +536,19 @@ export const ManagerSwapsPage: React.FC = () => {
 
     // ==================== COMPUTED ====================
     const filteredRequests = useMemo(() => {
-        if (statusFilter === 'all') return swapRequests;
-        return swapRequests.filter(r => r.status === statusFilter);
-    }, [swapRequests, statusFilter]);
+        let base = statusFilter === 'all' ? swapRequests : swapRequests.filter(r => r.status === statusFilter);
+        
+        if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase();
+            base = base.filter(r => 
+                r.requestor.employeeName.toLowerCase().includes(q) ||
+                r.recipient?.employeeName?.toLowerCase().includes(q) ||
+                r.requestor.roleName.toLowerCase().includes(q)
+            );
+        }
+        
+        return base;
+    }, [swapRequests, statusFilter, searchQuery]);
 
     const statusCounts = useMemo(() => {
         const counts: Record<string, number> = {
@@ -634,92 +620,79 @@ export const ManagerSwapsPage: React.FC = () => {
 
     // ==================== RENDER ====================
     return (
-        <div className="h-full flex flex-col overflow-hidden">
+        <div className="h-full flex flex-col overflow-hidden bg-background">
             {/* Ambient glow */}
             <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/[0.05] blur-[150px] rounded-full pointer-events-none" />
 
-            {/* ── Unified Header ────────────────────────────────────────────── */}
-            <div className="sticky top-0 z-30 -mx-4 px-4 md:-mx-8 md:px-8 pt-4 pb-4 lg:pb-6">
-                <div className={cn(
-                    "rounded-[32px] p-4 lg:p-6 transition-all border",
-                    isDark 
-                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
-                )}>
-                    {/* Row 1: Identity & Clock + Row 2: Scope Filter */}
-                    <PersonalPageHeader
-                        title="Swap Requests"
-                        Icon={ArrowLeftRight}
-                        scope={scope}
-                        setScope={setScope}
-                        isGammaLocked={isGammaLocked}
-                    />
-
-                    {/* Row 3: Function Bar / Status Tabs */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4 lg:mt-6">
-                        <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
-                            <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/30 border border-border flex-nowrap min-w-max md:min-w-0">
-                                {STATUS_TABS.map(tab => {
-                                    const isActive = statusFilter === tab.id;
-                                    const colors = accentMap[tab.accent];
-                                    const TabIcon = tab.icon;
-                                    return (
-                                        <button
-                                            key={tab.id}
-                                            onClick={() => setStatusFilter(tab.id as any)}
-                                            className={cn(
-                                                "relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-black transition-all duration-300",
-                                                isActive
-                                                    ? `${colors.bg} ${colors.text} shadow-sm`
-                                                    : "text-muted-foreground/50 hover:text-foreground hover:bg-muted/50"
-                                            )}
-                                        >
-                                            <TabIcon className="h-3.5 w-3.5" />
-                                            <span className="hidden sm:inline">{tab.label}</span>
-                                            <span className={cn(
-                                                "min-w-[18px] h-[18px] rounded-full text-[9px] font-black flex items-center justify-center px-1",
-                                                isActive ? `${colors.bg} ${colors.text} ring-1 ${colors.ring}` : "bg-muted text-muted-foreground/40"
-                                            )}>
-                                                {statusCounts[tab.id] || 0}
-                                            </span>
-                                            {isActive && (
-                                                <motion.div
-                                                    layoutId="activeSwapTab"
-                                                    className={`absolute inset-0 rounded-xl ring-1 ${colors.ring}`}
-                                                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                                                />
-                                            )}
-                                        </button>
-                                    );
-                                })}
-
-                                {/* Refresh */}
-                                <button
-                                    onClick={fetchData}
-                                    className="ml-1 h-8 w-8 rounded-xl flex items-center justify-center text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-all border border-transparent hover:border-primary/20"
-                                    title="Refresh"
-                                >
-                                    <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="hidden lg:block text-[10px] font-mono text-muted-foreground/40 uppercase tracking-[0.2em] font-black">
-                            Manager Review Console
-                        </div>
-                    </div>
-                </div>
+            {/* ── ROW 1: HEADER ────────────────────────────────────────────── */}
+            <div className="flex-shrink-0 p-4 lg:p-6 pb-0">
+                <PersonalPageHeader
+                    title="Swap Requests"
+                    Icon={ArrowLeftRight}
+                    mode="managerial"
+                    scope={scope}
+                    setScope={setScope}
+                    isGammaLocked={isGammaLocked}
+                />
             </div>
 
-            {/* ── Main Content Area ─────────────────────────── */}
-            <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+            {/* ── ROW 2: FUNCTION BAR ───────────────────────────────────────── */}
+            <div className="flex-shrink-0 px-4 lg:px-6 py-2">
+                <UnifiedModuleFunctionBar
+                    viewMode={viewMode}
+                    onViewModeChange={setViewMode}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                    onRefresh={fetchData}
+                    isLoading={isLoading}
+                >
+                    <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/30 border border-border flex-nowrap overflow-x-auto scrollbar-hide">
+                        {STATUS_TABS.map(tab => {
+                            const isActive = statusFilter === tab.id;
+                            const colors = accentMap[tab.accent];
+                            const TabIcon = tab.icon;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setStatusFilter(tab.id as any)}
+                                    className={cn(
+                                        "relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-black transition-all duration-300",
+                                        isActive
+                                            ? `${colors.bg} ${colors.text} shadow-sm`
+                                            : "text-muted-foreground/50 hover:text-foreground hover:bg-muted/50"
+                                    )}
+                                >
+                                    <TabIcon className="h-3.5 w-3.5" />
+                                    <span className="hidden sm:inline">{tab.label}</span>
+                                    <span className={cn(
+                                        "min-w-[18px] h-[18px] rounded-full text-[9px] font-black flex items-center justify-center px-1",
+                                        isActive ? `${colors.bg} ${colors.text} ring-1 ${colors.ring}` : "bg-muted text-muted-foreground/40"
+                                    )}>
+                                        {statusCounts[tab.id] || 0}
+                                    </span>
+                                    {isActive && (
+                                        <motion.div
+                                            layoutId="activeSwapTab"
+                                            className={`absolute inset-0 rounded-xl ring-1 ${colors.ring}`}
+                                            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                                        />
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </UnifiedModuleFunctionBar>
+            </div>
+
+            {/* ── ROW 3: CONTENT AREA ───────────────────────────────────────── */}
+            <div className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6">
                 <div className={cn(
                     "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col",
                     isDark 
                         ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
                         : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
                 )}>
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6">
+                    <div className="flex-1 overflow-y-auto custom-scrollbar px-4 lg:px-6 py-6">
                     {isLoading ? (
                         <div className="flex flex-col items-center justify-center py-32 gap-4">
                             <div className="h-10 w-10 rounded-full border-2 border-border border-t-indigo-500 animate-spin" />
@@ -741,7 +714,7 @@ export const ManagerSwapsPage: React.FC = () => {
                         </div>
                     ) : (
                         /* Request Cards */
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             {/* Select All (for pending) */}
                             {statusFilter === 'MANAGER_PENDING' && filteredRequests.length > 1 && (
                                 <div className="flex items-center gap-3 px-4 py-2">
@@ -793,13 +766,13 @@ export const ManagerSwapsPage: React.FC = () => {
 
                                             {/* Center: Swap Comparison */}
                                             <div className="flex-1 flex flex-col sm:flex-row items-center gap-2 p-3">
-                                                <ShiftPane data={request.requestor} label="REQUESTER" />
+                                                <ShiftPane data={request.requestor} label="REQUESTER" isRequester={true} />
                                                 <SwapDivider
                                                     hoursDiff={request.hoursDiff}
                                                     payDiff={request.payDiff}
                                                     compliance={request.complianceStatus}
                                                 />
-                                                <ShiftPane data={request.recipient} label="OFFERER" />
+                                                <ShiftPane data={request.recipient} label="OFFERER" isRequester={false} />
                                             </div>
 
 
@@ -967,6 +940,7 @@ export const ManagerSwapsPage: React.FC = () => {
                         offererEmployeeId={complianceApprovalTarget.offererEmployeeId}
                         offererName={complianceApprovalTarget.recipient?.employeeName ?? 'Offerer'}
                         offererShiftId={complianceApprovalTarget.offererShiftId}
+                        storedSnapshot={complianceApprovalTarget.complianceSnapshot}
                     />
                 )}
             </AnimatePresence>

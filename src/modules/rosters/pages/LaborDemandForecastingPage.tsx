@@ -52,11 +52,12 @@ import { cn } from '@/modules/core/lib/utils';
 
 // Icons
 import {
-  Activity, AlertTriangle, AlertCircle, Award, Building2,
-  CheckCircle2, ChevronDown, ChevronRight, Database, DollarSign,
-  Eye, GitBranch, Info, Layers, Lock, Plus,
-  RefreshCw, Settings2, ShieldCheck, TrendingUp, Zap, Calendar,
+  RefreshCw, Settings2, ShieldCheck, TrendingUp, Zap, Calendar, ChevronLeft, ChevronRight, Eye, Database,
+  AlertTriangle, AlertCircle, Activity, DollarSign, Plus, Info, GitBranch, Layers, Lock, Award, ChevronDown,
+  CheckCircle2, Building2, Clock,
 } from 'lucide-react';
+import { UnifiedRosterNavigator, ViewType } from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
+import { startOfWeek, startOfMonth } from 'date-fns';
 
 /* =============================================================
    CONSTANTS & UTILITIES
@@ -212,23 +213,22 @@ const ScopeHeader: React.FC<ScopeHeaderProps> = ({ selectedDate, onDateChange, i
           )}
         </div>
 
-        {/* Date picker + live indicator */}
+        {/* Date Navigator */}
         <div className="flex items-center gap-3 shrink-0">
           {isFetching && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mr-2">
               <RefreshCw className="h-3 w-3 animate-spin" />
               <span>Refreshing…</span>
             </div>
           )}
-          <div className="flex items-center gap-2">
-            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => onDateChange(e.target.value)}
-              className="h-8 px-3 text-sm rounded-lg border border-border/60 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
+          
+          <UnifiedRosterNavigator
+            variant="full"
+            date={new Date(selectedDate)}
+            viewType="day" // Forecasting is day-based in this implementation
+            onChange={(date) => onDateChange(format(date, 'yyyy-MM-dd'))}
+            onViewTypeChange={() => {}} // Locked to day for now as the chart is 24h
+          />
         </div>
       </div>
     </div>
@@ -831,9 +831,9 @@ const LaborDemandForecastingPage: React.FC = () => {
      RENDER
      ============================================================= */
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4">
       {/* ── Unified Header ────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30 -mx-4 px-4 md:-mx-8 md:px-8 pt-4 pb-4 lg:pb-6">
+      <div className="sticky top-0 z-30">
         <div className={cn(
           "rounded-[32px] p-4 lg:p-6 transition-all border",
           isDark 
@@ -844,6 +844,7 @@ const LaborDemandForecastingPage: React.FC = () => {
           <PersonalPageHeader
             title="Labor Demand Forecasting"
             Icon={TrendingUp}
+            mode="managerial"
             scope={scope}
             setScope={setScope}
             isGammaLocked={isGammaLocked}
@@ -888,14 +889,14 @@ const LaborDemandForecastingPage: React.FC = () => {
       </div>
 
       {/* ── Main Content Area ─────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <div className={cn(
           "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col",
           isDark 
             ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
             : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
         )}>
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 space-y-5">
+          <div className="flex-1 overflow-y-auto custom-scrollbar px-4 lg:px-6 py-4 space-y-4">
             <AnimatePresence mode="wait">
               {viewMode === 'raw' ? (
                 <RawDataPanel
@@ -906,7 +907,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                   date={selectedDate}
                 />
               ) : (
-                <motion.div key="preview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-5">
+                <motion.div key="preview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
                   {/* ... rest of the original preview content ... */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                     <MetricCard label="Req. Peak Headcount" value={shiftsLoading ? '—' : metrics.peakRequired} trend="up" status="neutral" skeleton={shiftsLoading} />
@@ -917,7 +918,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                     <MetricCard label="Residual Hours"      value={shiftsLoading ? '—' : metrics.residualHours}   status={metrics.residualHours > 20 ? 'warn' : 'neutral'} valueColor={metrics.residualHours > 0 ? 'text-amber-400' : undefined} skeleton={shiftsLoading} />
                   </div>
 
-                  <div className="bg-card/40 backdrop-blur-sm border border-border/60 rounded-2xl p-5">
+                  <div className="bg-card/40 backdrop-blur-sm border border-border/60 rounded-2xl p-4">
                     <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
                       <div className="flex items-center gap-2">
                         <Activity className="h-4 w-4 text-fuchsia-400" />

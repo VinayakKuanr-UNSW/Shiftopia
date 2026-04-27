@@ -65,7 +65,6 @@ export const biddingApi = {
                 *,
                 dropped_by_id,
                 last_dropped_by,
-                bidding_iteration,
                 organizations(id, name),
                 departments(id, name),
                 sub_departments(id, name),
@@ -163,30 +162,23 @@ export const biddingApi = {
      * Place a bid on a shift (EMPLOYEE ACTION)
      */
     async placeBid(shiftId: string, userId: string, notes?: string): Promise<Bid> {
-        // Fetch current iteration from shift
-        const { data: shiftData, error: shiftError } = await supabase
-            .from('shifts')
-            .select('bidding_iteration')
-            .eq('id', shiftId)
-            .single();
-
-        if (shiftError) throw shiftError;
-        const currentIteration = (shiftData as any).bidding_iteration || 1;
-
-        // Decliner exclusion: if this employee dropped or rejected the offer in the current
-        // iteration, they are ineligible to re-bid until the iteration advances.
-        const { data: shiftExclusion } = await supabase
+        // Check for decliner exclusion: if this employee dropped or rejected the offer,
+        // they are barred from re-bidding on this specific shift.
+        const { data: shiftExclusion, error: shiftError } = await supabase
             .from('shifts')
             .select('last_dropped_by, last_rejected_by')
             .eq('id', shiftId)
             .single();
 
+        if (shiftError) {
+            console.error('[bidding] Error checking exclusion:', shiftError);
+        }
+
         if (shiftExclusion) {
             const ex = shiftExclusion as any;
             if (ex.last_dropped_by === userId || ex.last_rejected_by === userId) {
                 throw new Error(
-                    'You dropped or rejected this shift in the current round. ' +
-                    'Re-bidding is not permitted until the next iteration begins.'
+                    'You dropped or rejected this shift. Re-bidding is not permitted.'
                 );
             }
         }
@@ -196,11 +188,10 @@ export const biddingApi = {
             .upsert({
                 shift_id: shiftId,
                 employee_id: userId,
-                bidding_iteration: currentIteration,
                 status: 'pending',
                 notes: notes,
                 created_at: new Date().toISOString()
-            } as any, { onConflict: 'shift_id, employee_id, bidding_iteration' })
+            } as any, { onConflict: 'shift_id, employee_id' })
             .select()
             .single();
 

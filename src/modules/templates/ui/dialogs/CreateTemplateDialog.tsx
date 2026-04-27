@@ -388,7 +388,7 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
 
               <div className="mt-8 flex items-center gap-2 text-[10px] text-muted-foreground font-medium">
                 <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                Prefilled & Locked from Global Scope
+                Prefilled from Global Scope
               </div>
             </div>
           </div>

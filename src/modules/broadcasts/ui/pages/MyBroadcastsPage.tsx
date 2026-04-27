@@ -19,10 +19,10 @@ export const MyBroadcastsPage: React.FC = () => {
   const [isInChannel, setIsInChannel] = useState(false);
 
   return (
-    <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6">
+    <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4">
       {/* ── Unified Header Block (Rows 1-3) ────────────────────────────── */}
       {!isInChannel && (
-        <div className="flex-shrink-0 mb-6">
+        <div className="flex-shrink-0">
           <div className={cn(
             "rounded-[32px] p-4 lg:p-6 transition-all border",
             isDark 
@@ -53,11 +53,10 @@ export const MyBroadcastsPage: React.FC = () => {
 
       {/* ── Main Content Area (Glassmorphic Container) ─────────────────── */}
       <div className={cn(
-        "flex-1 min-h-0 overflow-hidden",
-        !isInChannel && "rounded-[32px] border transition-all",
-        !isInChannel && (isDark 
+        "flex-1 min-h-0 overflow-hidden rounded-[32px] border transition-all",
+        isDark 
           ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-          : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50")
+          : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
       )}>
         <MyBroadcastsScreen 
           layout={breakpoint} 

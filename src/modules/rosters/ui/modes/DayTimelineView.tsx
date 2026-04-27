@@ -235,6 +235,7 @@ export interface DayTimelineViewProps {
   onShiftDelete:     (shift: DTShift) => void;
   onShiftPublish:    (shift: DTShift) => void;
   onShiftUnpublish:  (shift: DTShift) => void;
+  onShiftClone:      (shift: DTShift) => void;
 
   onAddSubGroup?:    (group: DTGroup) => void;
   onSubGroupAction?: (action: 'rename' | 'clone' | 'delete', subGroup: DTSubGroup, group: DTGroup) => void;
@@ -282,7 +283,7 @@ const DayTimelineView: React.FC<DayTimelineViewProps> = ({
   isBulkMode, isDnDModeActive, selectedShiftIds, onBulkToggle,
   isBucketView,
   zoom,
-  onSlotClick, onShiftEdit, onShiftDelete, onShiftPublish, onShiftUnpublish,
+  onSlotClick, onShiftEdit, onShiftDelete, onShiftPublish, onShiftUnpublish, onShiftClone,
   onAddSubGroup, onSubGroupAction, onEmployeeDrop,
 }) => {
   const { toast } = useToast();
@@ -862,6 +863,7 @@ const DayTimelineView: React.FC<DayTimelineViewProps> = ({
                               onDelete={onShiftDelete}
                               onPublish={onShiftPublish}
                               onUnpublish={onShiftUnpublish}
+                              onClone={onShiftClone}
 
                               onDragStart={(id, y) => {
                                 const s = toMins(sh.startTime);
@@ -969,6 +971,7 @@ interface ShiftCardProps {
   onDelete:         (shift: DTShift) => void;
   onPublish:        (shift: DTShift) => void;
   onUnpublish:      (shift: DTShift) => void;
+  onClone:          (shift: DTShift) => void;
 
   onDragStart:      (id: string, y: number) => void;
   onResizeStart:    (id: string, y: number) => void;
@@ -979,7 +982,7 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
   shift, top, left, width, height,
   cardColor: cc, group, subGroup, selectedDate,
   canEdit, isBulkMode, isDnDModeActive, isSelected, isDragging,
-  onBulkToggle, onEdit, onDelete, onPublish, onUnpublish,
+  onBulkToggle, onEdit, onDelete, onPublish, onUnpublish, onClone,
   onDragStart, onResizeStart, onResizeTopStart,
 }) => {
   const compact = height < 80;
@@ -1066,7 +1069,6 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
         </div>
       ) : (
         <>
-          {/* Header */}
           <div className={cn(
             'px-2 py-1 flex justify-between items-center shrink-0 h-7',
             cc.bg, cc.primaryText
@@ -1136,11 +1138,16 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
                         </DropdownMenuItem>
                       );
                     })()}
+                    
                     {shift.isPublished && (
                       <DropdownMenuItem onSelect={() => onUnpublish(shift)} className="text-amber-600 dark:text-amber-400 cursor-pointer">
                         <Undo2 className="mr-2 h-4 w-4" /> Unpublish Shift
                       </DropdownMenuItem>
                     )}
+
+                    <DropdownMenuItem onSelect={() => onClone(shift)} className="text-popover-foreground hover:bg-accent cursor-pointer">
+                      <Plus className="mr-2 h-4 w-4" /> Clone Shift
+                    </DropdownMenuItem>
 
                     <DropdownMenuItem onSelect={() => onDelete(shift)} className="text-red-600 dark:text-red-400 cursor-pointer">
                       <Trash2 className="mr-2 h-4 w-4" /> Delete Shift

@@ -79,6 +79,7 @@ export interface UseAvailabilityResult {
   startDate: string;
   endDate: string;
   month: Date;
+  getDayAvailability: (date: Date) => AvailabilitySlot[];
 }
 
 // ============================================================================
@@ -236,5 +237,9 @@ export function useAvailability(
     startDate,
     endDate,
     month,
+    getDayAvailability: (date: Date) => {
+      const dateStr = format(date, "yyyy-MM-dd");
+      return slots.filter((s) => s.slot_date === dateStr);
+    },
   };
 }

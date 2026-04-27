@@ -60,7 +60,7 @@ const MyRosterNavigator: React.FC<{
     );
 
     const toggleBaseCls = cn(
-        "px-3 h-8 lg:h-9 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
+        "px-2 lg:px-3 h-8 lg:h-9 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all",
         isDark ? "text-white/40 hover:text-white" : "text-slate-900/40 hover:text-slate-900"
     );
 
@@ -72,7 +72,7 @@ const MyRosterNavigator: React.FC<{
     ];
 
     return (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1.5 lg:gap-2">
             {/* View Toggle */}
             <div className={cn(
                 "flex items-center gap-1 p-1 rounded-xl",
@@ -175,10 +175,10 @@ const MyRosterPage: React.FC = () => {
 
   return (
     // h-full fills the noPadding main area (overflow-hidden in AppLayout)
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4">
       
       {/* ── Unified Header ────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
+      <div className="sticky top-0 z-30">
         <div className={cn(
             "rounded-[32px] p-4 lg:p-6 transition-all border",
             isDark 
@@ -198,7 +198,7 @@ const MyRosterPage: React.FC = () => {
           {/* Row 3: Roster Function Bar (Standardized Row) */}
           <div className="flex flex-row items-center gap-2 w-full transition-all overflow-hidden mt-1">
               {/* Scrollable Container for all tools */}
-              <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none py-0.5">
+              <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none py-0.5 pr-8">
                   <div className="flex-shrink-0">
                       <MyRosterNavigator
                           view={view}
@@ -211,31 +211,33 @@ const MyRosterPage: React.FC = () => {
                   <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
 
                   {/* Offers Button (Desktop Only) */}
-                  <button
-                    onClick={() => setShowOffersModal(true)}
-                    className={cn(
-                      'hidden md:flex items-center gap-2 h-10 lg:h-11 px-4 rounded-xl text-[10px] font-black transition-all flex-shrink-0 uppercase tracking-wider shadow-sm',
-                      isDark 
-                        ? "bg-[#111827]/60 text-white/70 hover:text-white" 
-                        : "bg-slate-100 text-slate-700 border border-slate-200/50 hover:bg-slate-200",
-                      pendingOfferCount > 0 && (isDark ? 'text-amber-400 border border-amber-500/30' : 'text-amber-600 border border-amber-500/30'),
-                    )}
-                  >
-                    <Mail className="h-3.5 w-3.5" />
-                    <span>Offers</span>
-                    {pendingOfferCount > 0 && (
-                      <span className="min-w-[18px] h-4.5 bg-amber-500 text-black font-black text-[10px] flex items-center justify-center rounded-full px-1 leading-none">
-                        {pendingOfferCount}
-                      </span>
-                    )}
-                  </button>
+                  <div className="pr-4 md:pr-0">
+                    <button
+                      onClick={() => setShowOffersModal(true)}
+                      className={cn(
+                        'hidden md:flex items-center gap-2 h-10 lg:h-11 px-4 rounded-xl text-[10px] font-black transition-all flex-shrink-0 uppercase tracking-wider shadow-sm',
+                        isDark 
+                          ? "bg-[#111827]/60 text-white/70 hover:text-white" 
+                          : "bg-slate-100 text-slate-700 border border-slate-200/50 hover:bg-slate-200",
+                        pendingOfferCount > 0 && (isDark ? 'text-amber-400 border border-amber-500/30' : 'text-amber-600 border border-amber-500/30'),
+                      )}
+                    >
+                      <Mail className="h-3.5 w-3.5" />
+                      <span>Offers</span>
+                      {pendingOfferCount > 0 && (
+                        <span className="min-w-[18px] h-4.5 bg-amber-500 text-black font-black text-[10px] flex items-center justify-center rounded-full px-1 leading-none">
+                          {pendingOfferCount}
+                        </span>
+                      )}
+                    </button>
+                  </div>
               </div>
           </div>
         </div>
       </div>
 
       {/* ── Main Content Area (Calendar View) ─────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <div className={cn(
             "h-full rounded-[32px] overflow-hidden transition-all border",
             isDark 
@@ -287,7 +289,10 @@ const MyRosterPage: React.FC = () => {
           className="md:hidden fixed bottom-24 right-5 z-40"
         >
           <button
-            onClick={() => setShowOffersModal(true)}
+            onClick={(e) => {
+              e.currentTarget.blur();
+              setShowOffersModal(true);
+            }}
             className={cn(
               "relative h-14 w-14 rounded-full flex items-center justify-center",
               "bg-amber-500 hover:bg-amber-400 active:scale-95 transition-all",

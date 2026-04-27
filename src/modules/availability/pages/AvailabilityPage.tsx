@@ -46,9 +46,9 @@ export const AvailabilityPage: React.FC = () => {
   const { isDark } = useTheme();
 
   return (
-    <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6">
+    <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4">
       {/* ── Unified Header Block (Rows 1-2) ────────────────────────────── */}
-      <div className="flex-shrink-0 mb-6">
+      <div className="flex-shrink-0">
         <div className={cn(
           "rounded-[32px] p-4 lg:p-6 transition-all border",
           isDark 

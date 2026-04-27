@@ -194,6 +194,7 @@ export interface ShiftFormDrawerContentProps {
     selectedRemLevel?: RemunerationLevel;
     isRoleLocked?: boolean;
     isEmployeeLocked?: boolean;
+    isScheduleDefined: boolean;
 }
 
 export interface RoleStepProps extends StepProps {

@@ -3,6 +3,14 @@ import { supabase } from '@/platform/realtime/client';
 import { useAuth } from '@/platform/auth/useAuth';
 import { toast } from '@/modules/core/ui/primitives/use-toast';
 
+export const SUPPORTED_LOCALES = [
+    { code: 'en-GB', label: 'English (UK)', flag: '🇬🇧' },
+    { code: 'en-US', label: 'English (US)', flag: '🇺🇸' },
+    { code: 'fr-FR', label: 'French (FR)', flag: '🇫🇷' },
+] as const;
+
+export type SupportedLocaleCode = typeof SUPPORTED_LOCALES[number]['code'];
+
 export interface UseSettingsProps {
     onSuccess?: () => void;
 }
@@ -94,8 +102,6 @@ export const useSettings = (props?: UseSettingsProps) => {
         mutationFn: async (newBranding: any) => {
             if (!organizationId) throw new Error('No active organization');
 
-            console.log('[useSettings] Committing Branding Update:', { organizationId, newBranding });
-
             // Merge with existing branding to prevent data loss
             const currentBranding = orgBranding || {};
             const merged = { ...currentBranding, ...newBranding };
@@ -107,31 +113,62 @@ export const useSettings = (props?: UseSettingsProps) => {
                 .select('branding')
                 .single();
 
-            if (error) {
-                console.error('[useSettings] Supabase Update Error:', error);
-                throw error;
-            }
+            if (error) throw error;
 
-            console.log('[useSettings] Server response:', data);
             return data.branding;
         },
         onSuccess: (updatedBranding) => {
-            console.log('[useSettings] Update Success, Updating Cache:', updatedBranding);
             queryClient.setQueryData(['organization-branding', organizationId], updatedBranding);
             toast({ title: 'Organization settings updated' });
             props?.onSuccess?.();
-            
+
             // Broadcast event for real-time theme sync
             window.dispatchEvent(new CustomEvent('branding-updated', { detail: updatedBranding }));
         },
         onError: (err: any) => {
-            console.error('[useSettings] Mutation Failed:', err);
-            toast({ 
-              title: 'Failed to update settings', 
+            toast({
+              title: 'Failed to update settings',
               description: err.message || 'Unknown error',
-              variant: 'destructive' 
+              variant: 'destructive'
             });
         }
+    });
+
+    // Update Language Mutation (silent auto-save, optimistic in UI)
+    const updateLanguage = useMutation({
+        mutationFn: async ({ language }: { language: string }) => {
+            if (!SUPPORTED_LOCALES.some(l => l.code === language)) throw new Error('Unsupported locale');
+            if (!organizationId) throw new Error('No active organization');
+
+            const currentBranding = orgBranding || {};
+            const merged = {
+                ...currentBranding,
+                language,
+                language_updated_at: new Date().toISOString(),
+            };
+
+            const { data, error } = await supabase
+                .from('organizations')
+                .update({ branding: merged })
+                .eq('id', organizationId)
+                .select('branding')
+                .single();
+
+            if (error) throw error;
+
+            return data.branding;
+        },
+        onSuccess: (updatedBranding) => {
+            queryClient.setQueryData(['organization-branding', organizationId], updatedBranding);
+            window.dispatchEvent(new CustomEvent('branding-updated', { detail: updatedBranding }));
+        },
+        onError: (err: any) => {
+            toast({
+                title: 'Failed to save language',
+                description: err.message,
+                variant: 'destructive',
+            });
+        },
     });
 
     return {
@@ -141,5 +178,6 @@ export const useSettings = (props?: UseSettingsProps) => {
         updateProfile,
         updatePreferences,
         updateBranding,
+        updateLanguage,
     };
 };

@@ -65,7 +65,7 @@ const UsersPage: React.FC = () => {
     const selectedUser = profiles?.find(p => p.id === selectedUserId);
 
     return (
-        <div className="h-full flex flex-col overflow-hidden">
+        <div className="h-full flex flex-col overflow-hidden space-y-4">
             {/* ── Unified Header ────────────────────────────────────────────── */}
             <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
                 <div className={cn(
@@ -94,7 +94,7 @@ const UsersPage: React.FC = () => {
             </div>
 
             {/* ── Main Content Area ─────────────────────────────────────────── */}
-            <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+            <div className="flex-1 min-h-0 overflow-hidden">
                 <div className={cn(
                     "h-full rounded-[32px] overflow-auto transition-all border p-6 lg:p-10 scrollbar-none",
                     isDark 

@@ -1,22 +1,25 @@
 import React from 'react';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { RefreshCcw, LayoutGrid, List } from 'lucide-react';
+import { RefreshCcw, LayoutGrid, List, Search } from 'lucide-react';
 import { CustomDateRangePicker } from './CustomDateRangePicker';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 
 interface UnifiedModuleFunctionBarProps {
-    startDate: Date;
-    endDate: Date;
-    onDateChange: (start: Date, end: Date) => void;
+    startDate?: Date;
+    endDate?: Date;
+    onDateChange?: (start: Date, end: Date) => void;
     viewMode: 'card' | 'table';
     onViewModeChange: (mode: 'card' | 'table') => void;
-    onRefresh: () => void;
+    onRefresh?: () => void;
     isLoading?: boolean;
     filters?: React.ReactNode;
     leftContent?: React.ReactNode;
     className?: string;
     transparent?: boolean;
+    searchQuery?: string;
+    onSearchChange?: (val: string) => void;
+    children?: React.ReactNode;
 }
 
 export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> = ({
@@ -30,7 +33,10 @@ export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> =
     filters,
     leftContent,
     className,
-    transparent = false
+    transparent = false,
+    searchQuery,
+    onSearchChange,
+    children
 }) => {
     const { isDark } = useTheme();
 
@@ -55,13 +61,15 @@ export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> =
             {/* Scrollable Container for all tools */}
             <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none py-0.5">
                 {/* 2. Date Range Picker (Start, End, Today) */}
-                <div className="flex-shrink-0">
-                    <CustomDateRangePicker
-                        startDate={startDate}
-                        endDate={endDate}
-                        onDateChange={onDateChange}
-                    />
-                </div>
+                {startDate && endDate && onDateChange && (
+                    <div className="flex-shrink-0">
+                        <CustomDateRangePicker
+                            startDate={startDate}
+                            endDate={endDate}
+                            onDateChange={onDateChange}
+                        />
+                    </div>
+                )}
 
                 {filters && (
                     <>
@@ -104,21 +112,49 @@ export const UnifiedModuleFunctionBar: React.FC<UnifiedModuleFunctionBarProps> =
                     </Button>
                 </div>
 
-                {/* 5. Refresh Button */}
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={onRefresh}
-                    disabled={isLoading}
-                    className={cn(
-                        "h-10 w-10 lg:h-11 lg:w-11 rounded-xl flex-shrink-0 transition-all",
-                        isDark 
-                            ? "bg-[#111827]/60 text-muted-foreground hover:text-white" 
-                            : "bg-slate-200/50 text-slate-500 hover:text-slate-900 hover:bg-slate-200"
-                    )}
-                >
-                    <RefreshCcw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-                </Button>
+                {/* 5. Children (e.g. status tabs) */}
+                {children && (
+                    <>
+                        <div className="h-6 w-px bg-border/20 flex-shrink-0" />
+                        {children}
+                    </>
+                )}
+
+                {/* 6. Search Input */}
+                {onSearchChange !== undefined && (
+                    <>
+                        <div className="h-6 w-px bg-border/20 flex-shrink-0" />
+                        <div className={cn(
+                            "flex items-center gap-2 px-3 h-10 rounded-xl min-w-[200px] border transition-all",
+                            isDark ? "bg-[#111827]/60 border-white/5" : "bg-slate-100 border-slate-200"
+                        )}>
+                            <Search className="h-3.5 w-3.5 text-muted-foreground/40" />
+                            <input
+                                type="text"
+                                value={searchQuery || ''}
+                                onChange={(e) => onSearchChange(e.target.value)}
+                                placeholder="SEARCH..."
+                                className="bg-transparent border-none text-[10px] font-black uppercase tracking-wider placeholder:text-muted-foreground/20 focus:ring-0 w-full"
+                            />
+                        </div>
+                    </>
+                )}
+
+                {/* 7. Refresh Button */}
+                {onRefresh && (
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={onRefresh}
+                        disabled={isLoading}
+                        className={cn(
+                            "h-10 w-10 lg:h-11 lg:w-11 rounded-xl flex-shrink-0 transition-all",
+                            isDark ? "bg-[#111827]/60 hover:bg-[#111827]/80" : "bg-slate-100 hover:bg-slate-200"
+                        )}
+                    >
+                        <RefreshCcw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+                    </Button>
+                )}
             </div>
         </div>
     );

@@ -56,6 +56,22 @@ export const insightsApi = {
         if (error) throw error;
         return (data ?? []) as DeptBreakdownRow[];
     },
+
+    /**
+     * Comprehensive analysis for a specific metric.
+     * Backed by get_metric_detailed_analysis RPC.
+     */
+    async getMetricAnalysis(metricId: string, filters: InsightsFilters) {
+        const { data, error } = await supabase.rpc('get_metric_detailed_analysis', {
+            p_metric_id:  metricId,
+            p_start_date: filters.startDate,
+            p_end_date:    filters.endDate,
+            p_org_ids:     filters.orgIds?.length     ? filters.orgIds     : null,
+            p_dept_ids:    filters.deptIds?.length    ? filters.deptIds    : null,
+        });
+        if (error) throw error;
+        return data;
+    }
 };
 
 // Re-export for convenience

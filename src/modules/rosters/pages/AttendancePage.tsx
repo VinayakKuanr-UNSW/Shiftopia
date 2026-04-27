@@ -589,10 +589,10 @@ const AttendancePage: React.FC = () => {
       variants={pageVariants}
       initial="hidden"
       animate="show"
-      className="h-full flex flex-col overflow-hidden"
+      className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4"
     >
       {/* ── Unified Header ────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
+      <div className="sticky top-0 z-30">
         <div className={cn(
             "rounded-[32px] p-4 lg:p-6 transition-all border",
             isDark 
@@ -652,7 +652,7 @@ const AttendancePage: React.FC = () => {
       </div>
 
       {/* ── Main Content Area ─────────────────────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <div className={cn(
             "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col",
             isDark 
@@ -669,7 +669,7 @@ const AttendancePage: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="flex-1 min-h-0 overflow-y-auto space-y-6 p-4 lg:p-6 pb-32 scrollbar-none">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 px-4 lg:px-6 py-4 pb-32 scrollbar-none">
               {/* Totals */}
               {logShifts.length > 0 && <TotalsBar shifts={logShifts} />}
 

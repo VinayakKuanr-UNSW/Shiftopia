@@ -62,7 +62,6 @@ export const AvailabilityList: React.FC<AvailabilityListProps> = ({
           rule={rule}
           onEdit={() => onEditRule(rule.id)}
           onDelete={() => onDeleteRule(rule.id)}
-          onDelete={() => onDeleteRule(rule.id)}
         />
       ))}
     </div>

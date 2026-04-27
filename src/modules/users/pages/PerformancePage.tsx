@@ -7,9 +7,9 @@ import {
     useQuarterlyReport,
     getCurrentQuarter,
     getReportCellStatus,
+    refreshAllPerformanceMetrics,
     type QuarterlyReportRow,
 } from '@/modules/users/hooks/usePerformanceMetrics';
-import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import {
     Select,
@@ -82,8 +82,9 @@ export default function PerformancePage() {
         // Identity
         { key: 'employee_name', label: t('nav.users'), group: 'Identity' },
         // Offer Behaviour
-        { key: 'offers_sent', label: t('nav.open_bids'), group: 'Offer Behaviour' },
+        { key: 'total_offers', label: 'Total Offers', group: 'Offer Behaviour' },
         { key: 'acceptance_rate', label: 'Accept %', group: 'Offer Behaviour', isRate: true, thresholdKey: 'acceptance_rate' },
+        { key: 'drop_rate', label: 'Drop Rate', group: 'Offer Behaviour', isRate: true },
         { key: 'rejection_rate', label: 'Reject %', group: 'Offer Behaviour', isRate: true },
         { key: 'ignorance_rate', label: 'Ignored %', group: 'Offer Behaviour', isRate: true },
         // Assignment
@@ -126,6 +127,7 @@ export default function PerformancePage() {
             rows.reduce((s, r) => s + fn(r), 0) / rows.length;
         return {
             acceptance_rate: avg(r => r.acceptance_rate),
+            drop_rate: avg(r => r.drop_rate),
             cancel_rate: avg(r => r.cancel_rate),
             no_show_rate: avg(r => r.no_show_rate),
             reliability_score: avg(r => r.reliability_score),
@@ -149,10 +151,11 @@ export default function PerformancePage() {
     const handleRefresh = async () => {
         setIsRefreshing(true);
         try {
-            // Metrics refresh logic removed as shift_events table is decommissioned.
-            await queryClient.invalidateQueries({
-                queryKey: ['quarterly_performance_report'],
-            });
+            // Recompute employee_performance_metrics for the current quarter
+            // (used by individual profile pages). The report table below is live.
+            await refreshAllPerformanceMetrics();
+            await queryClient.invalidateQueries({ queryKey: ['quarterly_performance_report'] });
+            await queryClient.invalidateQueries({ queryKey: ['performance_metrics'] });
         } catch (err) {
             console.error('Refresh error:', err);
         } finally {
@@ -185,7 +188,7 @@ export default function PerformancePage() {
     // Build group headers
     const groups: { name: string; span: number }[] = [];
     let prev = '';
-    for (const c of COLUMNS) {
+    for (const c of columns) {
         if (c.group !== prev) { groups.push({ name: c.group, span: 1 }); prev = c.group; }
         else { groups[groups.length - 1].span++; }
     }
@@ -199,7 +202,7 @@ export default function PerformancePage() {
     };
 
     return (
-        <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-6">
+        <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4">
             {/* ── Unified Header Block (Rows 1-3) ────────────────────────────── */}
             <div className="flex-shrink-0">
                 <div className={cn(
@@ -215,6 +218,8 @@ export default function PerformancePage() {
                         scope={scope}
                         setScope={setScope}
                         isGammaLocked={isGammaLocked}
+                        mode="managerial"
+                        multiSelect={true}
                         className="mb-4 lg:mb-6"
                     />
 
@@ -231,12 +236,13 @@ export default function PerformancePage() {
             </div>
 
             {/* ── Main Content Area ────────────────────────────────────────── */}
-            <div className="flex-1 min-h-0 overflow-y-auto space-y-6 pr-1 custom-scrollbar">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 custom-scrollbar">
                 {/* ═══ SUMMARY ROW ═══ */}
                 {summary && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                         {([
                             { label: 'Avg Acceptance', value: summary.acceptance_rate, key: 'acceptance_rate' },
+                            { label: 'Avg Drop Rate', value: summary.drop_rate, key: 'drop_rate' },
                             { label: 'Avg Cancellation', value: summary.cancel_rate, key: 'cancel_rate' },
                             { label: 'Avg No-Show', value: summary.no_show_rate, key: 'no_show_rate' },
                             { label: 'Avg Reliability', value: summary.reliability_score, key: 'reliability_score' },

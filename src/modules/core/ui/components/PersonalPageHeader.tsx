@@ -15,6 +15,7 @@ interface PersonalPageHeaderProps {
     setScope?: (scope: ScopeSelection) => void;
     isGammaLocked?: boolean;
     mode?: 'personal' | 'managerial';
+    multiSelect?: boolean;
     rightActions?: React.ReactNode;
     className?: string;
 }
@@ -32,6 +33,7 @@ export const PersonalPageHeader: React.FC<PersonalPageHeaderProps> = ({
     setScope,
     isGammaLocked = true,
     mode = 'personal',
+    multiSelect,
     rightActions,
     className,
 }) => {
@@ -48,7 +50,7 @@ export const PersonalPageHeader: React.FC<PersonalPageHeaderProps> = ({
     return (
         <div className={className}>
             {/* ── Title & Clock ── */}
-            <motion.div variants={itemVariants} className="flex items-start justify-between shrink-0 mb-4 lg:mb-6">
+            <motion.div variants={itemVariants} className="flex items-start justify-between shrink-0 mb-4">
                 <div>
                     <div className="flex items-center gap-2 mb-0.5">
                         <Icon className="h-6 w-6 text-primary" />
@@ -87,10 +89,11 @@ export const PersonalPageHeader: React.FC<PersonalPageHeaderProps> = ({
 
             {/* ── Global Scope Filter ── */}
             {showFilter && (
-                <motion.div variants={itemVariants} className="flex-shrink-0 mb-4 lg:mb-6">
+                <motion.div variants={itemVariants} className="flex-shrink-0 mb-4">
                     <ScopeFilterBanner
                         mode={mode}
                         onScopeChange={setScope}
+                        multiSelect={multiSelect}
                         hidden={isGammaLocked}
                     />
                 </motion.div>

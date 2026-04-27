@@ -217,7 +217,7 @@ export function MyBroadcastsScreen({
   // ========================================
 
   const renderChannelSidebar = (compact?: boolean) => (
-    <div className={cn('flex flex-col h-full', !compact && 'bg-muted/30 backdrop-blur-xl border-r border-border')}>
+    <div className={cn('flex flex-col h-full', !compact && 'bg-white/5 backdrop-blur-xl border-r border-white/5')}>
       <div className={cn('p-4 md:p-6 border-b border-border', compact && 'p-4')}>
         <Button
           variant="ghost"
@@ -300,7 +300,6 @@ export function MyBroadcastsScreen({
           : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
 
     return (
-    return (
       <div className="w-full h-full p-4 md:p-8 overflow-y-auto">
         {finalFilteredGroups.length === 0 ? (
           <EmptyGroups />
@@ -332,13 +331,13 @@ export function MyBroadcastsScreen({
 
   if (layout === 'desktop') {
     return (
-      <div className="flex h-screen w-full bg-transparent overflow-hidden">
+      <div className="flex h-full w-full bg-transparent overflow-hidden">
         {/* Sidebar - Channels List */}
-        <div className="w-[280px] lg:w-[300px] shrink-0 z-20">{renderChannelSidebar()}</div>
+        <div className="w-[280px] lg:w-[300px] shrink-0 z-20 border-r border-white/5">{renderChannelSidebar()}</div>
 
         {/* Main Content - Messages */}
-        <div className="flex-1 flex flex-col min-w-0 relative bg-background/50">
-          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+        <div className="flex-1 flex flex-col min-w-0 relative bg-black/5">
+          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
 
           {selectedChannel ? (
             <ChannelView
@@ -362,12 +361,12 @@ export function MyBroadcastsScreen({
 
   if (layout === 'tablet') {
     return (
-      <div className="flex h-screen w-full bg-transparent overflow-hidden">
+      <div className="flex h-full w-full bg-transparent overflow-hidden">
         {/* Sidebar - Channels List (narrower) */}
-        <div className="w-[220px] shrink-0 z-20">{renderChannelSidebar(true)}</div>
+        <div className="w-[220px] shrink-0 z-20 border-r border-white/5">{renderChannelSidebar(true)}</div>
 
         {/* Main Content - Messages */}
-        <div className="flex-1 flex flex-col min-w-0 relative bg-background/50">
+        <div className="flex-1 flex flex-col min-w-0 relative bg-black/5">
           {selectedChannel ? (
             <ChannelView
               channelId={selectedChannel.id}
@@ -390,7 +389,7 @@ export function MyBroadcastsScreen({
   // ========================================
 
   return (
-    <div className="flex flex-col h-screen w-full bg-transparent overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-transparent overflow-hidden">
       {/* Mobile Header */}
       <div className="flex-shrink-0 bg-card/90 backdrop-blur-xl border-b border-border px-4 py-3">
         <div className="flex items-center justify-between">
@@ -449,7 +448,7 @@ export function MyBroadcastsScreen({
       </div>
 
       {/* Main Content - Messages */}
-      <div className="flex-1 flex flex-col min-w-0 relative bg-background/50 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 relative bg-black/5 overflow-hidden">
         {selectedChannel ? (
           <ChannelView
             channelId={selectedChannel.id}

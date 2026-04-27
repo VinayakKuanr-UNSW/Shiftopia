@@ -6,6 +6,7 @@ import ShiftDetailsDialog from './ShiftDetailsDialog';
 import { cn } from '@/modules/core/lib/utils';
 import { format } from 'date-fns';
 import { calculateShiftLayout } from '../../utils/shift-layout.utils';
+import MyRosterShift from './MyRosterShift';
 
 interface ShiftWithDetails {
   shift: Shift;
@@ -59,50 +60,26 @@ const ThreeDayView: React.FC<ThreeDayViewProps> = ({
         <div className="min-w-[420px] flex-1 min-h-0 flex flex-col">
       <TimeGrid
         days={days}
-        renderShifts={(day) =>
+          renderShifts={(day) =>
           getShiftsForDate(day).map((shiftData) => {
-            const { shift, groupColor } = shiftData;
+            const { shift } = shiftData;
             const dateStr = format(day, 'yyyy-MM-dd');
             const { top, height } = calculateShiftLayout(shift, dateStr, HOUR_HEIGHT, 44);
 
             return (
               <div
                 key={shift.id}
-                className="absolute left-1 right-1"
+                className="absolute left-1 right-1 overflow-hidden"
                 style={{ top, height }}
               >
-                <div
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`${shift.roles?.name || 'Shift'}`}
+                <MyRosterShift
+                  shift={shift}
+                  groupName={shiftData.groupName}
+                  groupColor={shiftData.groupColor}
+                  subGroupName={shiftData.subGroupName}
                   onClick={() => setSelectedShift({ data: shiftData, date: day })}
-                  onKeyDown={(e) =>
-                    e.key === 'Enter' &&
-                    setSelectedShift({ data: shiftData, date: day })
-                  }
-                  className={cn(
-                    'h-full rounded-lg p-2 cursor-pointer',
-                    'border shadow-lg',
-                    'hover:scale-[1.01] active:scale-[0.99] transition-transform',
-                    'focus:outline-none focus:ring-2 focus:ring-primary/30',
-                    shift.lifecycle_status === 'Published' && shift.assignment_status === 'assigned' && !shift.assignment_outcome && 'opacity-60 border-dashed border-2',
-                    getGradientClass(groupColor)
-                  )}
-                >
-                  <div className="flex flex-col h-full justify-between text-foreground">
-                    <div>
-                      <div className="font-semibold text-xs truncate">
-                        {shift.roles?.name || 'No Role'}
-                      </div>
-                      <div className="text-[10px] opacity-70 truncate">
-                        {shiftData.subGroupName}
-                      </div>
-                    </div>
-                    <div className="text-[10px] opacity-80">
-                      {formatTime(shift.start_time)}-{formatTime(shift.end_time)}
-                    </div>
-                  </div>
-                </div>
+                  style={{ height }}
+                />
               </div>
             );
           })

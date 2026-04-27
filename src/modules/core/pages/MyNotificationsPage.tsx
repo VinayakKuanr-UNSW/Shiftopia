@@ -1,3 +1,4 @@
+// src/modules/core/pages/MyNotificationsPage.tsx
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -136,11 +137,11 @@ const MyNotificationsPage: React.FC = () => {
   const { isDark } = useTheme();
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4">
       {/* ── Unified Header ────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
+      <div className="flex-shrink-0">
         <div className={cn(
-          "rounded-[32px] p-4 lg:p-6 transition-all border",
+          "rounded-[32px] p-4 lg:p-6 transition-all border space-y-4",
           isDark 
             ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
             : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
@@ -161,7 +162,6 @@ const MyNotificationsPage: React.FC = () => {
                 </Button>
               )
             }
-            className="mb-4 lg:mb-6"
           />
 
           {/* Row 3: Notifications Function Bar */}
@@ -227,9 +227,8 @@ const MyNotificationsPage: React.FC = () => {
       </div>
 
       {/* ── Main Content Area ─────────────────────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
-        <div className={cn(
-          "h-full rounded-[32px] overflow-auto transition-all border p-6 lg:p-10 scrollbar-none",
+      <div className={cn(
+          "flex-1 min-h-0 overflow-auto rounded-[32px] transition-all border p-4 lg:p-6 scrollbar-none",
           isDark 
             ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
             : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
@@ -254,7 +253,7 @@ const MyNotificationsPage: React.FC = () => {
               </p>
             </motion.div>
           ) : (
-            <motion.div variants={pageVariants} className="flex flex-col gap-10 pb-12">
+            <motion.div variants={pageVariants} className="flex flex-col gap-4 pb-12">
               {groupedNotifications.map((group) => (
                 <motion.section variants={itemVariants} key={group.title} className="flex flex-col gap-4">
                   <h3 className="text-[11px] font-black uppercase tracking-[0.4em] text-muted-foreground/40 ml-1">
@@ -360,11 +359,10 @@ const MyNotificationsPage: React.FC = () => {
               ))}
             </motion.div>
           )}
-        </div>
       </div>
 
       {/* Footer Info */}
-      <div className="hidden md:flex items-center justify-between pt-4 text-muted-foreground/30 text-[9px] font-black uppercase tracking-widest px-4">
+      <div className="hidden md:flex items-center justify-between text-muted-foreground/30 text-[9px] font-black uppercase tracking-widest px-4">
         <p>Notifications are archived after 7 days</p>
         <div className="flex items-center gap-4">
           {(['Shifts', 'Bids', 'Swaps', 'Messages'] as const).map(kind => (

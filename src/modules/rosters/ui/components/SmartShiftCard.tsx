@@ -22,9 +22,8 @@ import {
     Flame,
     Lock,
     CopyPlus,
-    ShieldCheck,
+    Shield,
 } from 'lucide-react';
-import { DefenderShieldIcon } from '@/modules/core/ui/icons/DefenderShieldIcon';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
 import {
@@ -38,7 +37,8 @@ import {
     getShiftUIContext, 
     getLockState, 
     getStatusDotInfo,
-    getProtectionContext 
+    getProtectionContext,
+    getShiftStatusIcons
 } from '../../domain/shift-ui';
 
 
@@ -71,6 +71,7 @@ export interface SmartShiftCardProps {
     isDnDActive?: boolean;
     className?: string;
     compliancePending?: boolean;
+    showStatusIcons?: boolean;
 }
 
 const GROUP_COLORS: Record<string, { header: string; accent: string; text: string; badge: string }> = {
@@ -99,12 +100,12 @@ function getInitials(name: string): string {
 
 function getLifecycleIcon(status: string) {
     const s = (status || 'draft').toLowerCase();
-    if (s === 'draft') return <Edit className="h-3.5 w-3.5 text-gray-400" />;
-    if (s === 'published') return <DefenderShieldIcon className="h-3.5 w-3.5 text-black dark:text-white" />;
-    if (s === 'inprogress' || s === 'on_going') return <Hourglass className="h-3.5 w-3.5 text-orange-500" />;
-    if (s === 'completed') return <CheckCircle className="h-3.5 w-3.5 text-green-500" />;
-    if (s === 'cancelled') return <XCircle className="h-3.5 w-3.5 text-red-500" />;
-    return <Edit className="h-3.5 w-3.5 text-gray-400" />;
+    if (s === 'draft') return <Edit className="h-3.5 w-3.5 text-slate-400" />;
+    if (s === 'published') return null;
+    if (s === 'inprogress' || s === 'on_going') return <Hourglass className="h-3.5 w-3.5 text-slate-400" />;
+    if (s === 'completed') return <CheckCircle className="h-3.5 w-3.5 text-slate-400" />;
+    if (s === 'cancelled') return <XCircle className="h-3.5 w-3.5 text-slate-400" />;
+    return <Edit className="h-3.5 w-3.5 text-slate-400" />;
 }
 
 /**
@@ -154,6 +155,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     headerAction,
     groupColor = 'default_yellow',
     className,
+    showStatusIcons,
 }) => {
     const colors = GROUP_COLORS[groupColor] || GROUP_COLORS.default_yellow;
     const employeeName = shift.assigned_employee_id ? (shift as any).assigned_profiles ? `${(shift as any).assigned_profiles.first_name} ${(shift as any).assigned_profiles.last_name}` : 'Assigned' : null;
@@ -179,17 +181,8 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     // Centralized protection logic
     const protection = useMemo(() => getProtectionContext({ lifecycle_status: shift.lifecycle_status }, !!isPast), [shift.lifecycle_status, isPast]);
     const isProtected = protection.isProtected || fsmLock.partialLock;
-
-    const lockTooltip = useMemo(() => {
-        if (protection.status === 'LOCKED') return 'LOCKED — Past Date';
-        if (protection.status === 'PROTECTED') return 'PROTECTED — Published Shift';
-        if (stateId === 'S3') return 'Offer Sent — Schedule Protected';
-        if (stateId === 'S11') return 'Shift In Progress — Locked';
-        if (stateId === 'S13') return 'Shift Completed — Locked';
-        if (stateId === 'S15') return 'Shift Cancelled — Locked';
-        if (isLocked) return 'Roster/Group Locked';
-        return protection.label;
-    }, [stateId, isLocked, protection]);
+    
+    const statusStr = getNormalizedStatus(shift);
 
     const dot = getStatusDotInfo({
         lifecycle_status:   shift.lifecycle_status,
@@ -205,9 +198,12 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
         end_time:           shift.end_time,
     });
 
-    const statusStr = getNormalizedStatus(shift);
     const isDraft = statusStr === 'draft';
     const isPublished = statusStr === 'published';
+
+    const statusIcons = useMemo(() => 
+        showStatusIcons ? getShiftStatusIcons(shift) : [], 
+    [shift, showStatusIcons]);
 
     const { rotateX, rotateY, onMouseMove, onMouseLeave } = useTilt();
 
@@ -276,33 +272,25 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                                 <TooltipContent className="bg-rose-600 text-white border-none py-1 px-2 text-[10px] font-medium">{ctx.emergencyLabel}</TooltipContent>
                             </Tooltip>
                         )}
-                        {(isFullyLocked || isProtected || protection.status !== 'DRAFT') && (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <div className={cn(
-                                        "flex items-center justify-center rounded p-0.5 transition-colors",
-                                        protection.status === 'LOCKED' ? "bg-slate-500/10" : 
-                                        protection.status === 'PROTECTED' ? "bg-blue-500/10" :
-                                        isFullyLocked ? "bg-muted dark:bg-slate-800" : "bg-amber-500/10"
-                                    )}>
-                                        <protection.icon className={cn(
-                                            "h-3 w-3",
-                                            protection.status === 'LOCKED' ? "text-slate-500" :
-                                            protection.status === 'PROTECTED' ? "text-black dark:text-white" :
-                                            isFullyLocked ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"
-                                        )} />
-                                    </div>
-                                </TooltipTrigger>
-                                <TooltipContent className="bg-slate-900 text-white border-none py-1 px-2 text-[10px] font-bold">
-                                    {lockTooltip.toUpperCase()}
-                                </TooltipContent>
-                            </Tooltip>
-                        )}
+
                         {headerAction || (!isFullyLocked && (
                           <button className="min-h-[44px] min-w-[44px] flex items-center justify-center -mr-1">
                             <MoreHorizontal className="h-3.5 w-3.5 opacity-40" />
                           </button>
                         ))}
+
+                        {showStatusIcons && statusIcons.length > 0 && (
+                            <div className="flex items-center gap-1 ml-1">
+                                {statusIcons.map((si, i) => (
+                                    <Tooltip key={i}>
+                                        <TooltipTrigger asChild>
+                                            <si.icon className={cn("h-3 w-3", si.color)} />
+                                        </TooltipTrigger>
+                                        <TooltipContent className="text-[10px] py-1 px-2">{si.tooltip}</TooltipContent>
+                                    </Tooltip>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -349,6 +337,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
     headerAction,
     groupColor = 'default_yellow',
     className,
+    showStatusIcons,
 }) => {
     const colors = GROUP_COLORS[groupColor] || GROUP_COLORS.default_yellow;
     const employeeName = shift.assigned_employee_id ? (shift as any).assigned_profiles ? `${(shift as any).assigned_profiles.first_name} ${(shift as any).assigned_profiles.last_name}` : 'Assigned' : null;
@@ -377,6 +366,10 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
     const isProtected = protection.isProtected || fsmLock.partialLock;
     const isDraft = statusStr === 'draft';
     const isPublished = statusStr === 'published';
+
+    const statusIcons = useMemo(() => 
+        showStatusIcons ? getShiftStatusIcons(shift) : [], 
+    [shift, showStatusIcons]);
 
     const dot = getStatusDotInfo({
         lifecycle_status:   shift.lifecycle_status,
@@ -453,27 +446,26 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     </div>
                     <div className="flex items-center gap-1.5">
                         {shift.is_from_template && <Badge variant="outline" className="text-[9px] bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 h-4 px-1 gap-1"><CopyPlus className="h-2.5 w-2.5" />Template</Badge>}
-                        {(isFullyLocked || isProtected || protection.status !== 'DRAFT') && (
-                            <div className={cn(
-                                "flex items-center justify-center rounded p-1 mr-1 transition-colors",
-                                protection.status === 'LOCKED' ? "bg-slate-500/10" : 
-                                protection.status === 'PROTECTED' ? "bg-blue-500/10" :
-                                isFullyLocked ? "bg-muted dark:bg-slate-800" : "bg-amber-500/10"
-                            )}>
-                                <protection.icon className={cn(
-                                    "h-3.5 w-3.5",
-                                    protection.status === 'LOCKED' ? "text-slate-500" :
-                                    protection.status === 'PROTECTED' ? "text-black dark:text-white" :
-                                    isFullyLocked ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"
-                                )} />
-                            </div>
-                        )}
+
                         {getLifecycleIcon(statusStr)}
                         {headerAction || (!isFullyLocked && (
                           <button className="min-h-[44px] min-w-[44px] flex items-center justify-center -mr-1">
                             <MoreHorizontal className="h-4 w-4 opacity-50" />
                           </button>
                         ))}
+
+                        {showStatusIcons && statusIcons.length > 0 && (
+                            <div className="flex items-center gap-1.5 ml-1">
+                                {statusIcons.map((si, i) => (
+                                    <Tooltip key={i}>
+                                        <TooltipTrigger asChild>
+                                            <si.icon className={cn("h-3.5 w-3.5", si.color)} />
+                                        </TooltipTrigger>
+                                        <TooltipContent className="text-[11px] py-1 px-2">{si.tooltip}</TooltipContent>
+                                    </Tooltip>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
 

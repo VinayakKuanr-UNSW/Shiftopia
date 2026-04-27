@@ -42,7 +42,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   optimizeDeps: {
-    include: ['framer-motion', 'lucide-react', '@radix-ui/react-dialog'],
+    include: ['framer-motion', 'lucide-react', '@radix-ui/react-dialog', 'dompurify'],
   },
   ...(mode === 'production' && {
     esbuild: {

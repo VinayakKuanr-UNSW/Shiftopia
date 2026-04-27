@@ -5,17 +5,17 @@ import { Shift } from '@/modules/rosters';
 export type BidStatus = 'pending' | 'accepted' | 'rejected' | 'withdrawn' | 'selected';
 
 /**
- * Per-shift participation status for the CURRENT bidding iteration.
+ * Per-shift participation status.
  * Used by the unified "Open Shifts" view to drive per-card state machine.
  */
 export type ParticipationStatus =
-    | 'not_eligible'      // user is last_dropped_by — cannot re-bid
-    | 'dropped_this_itr'  // user dropped the shift this iteration
-    | 'rejected_this_itr' // user rejected the shift offer this iteration
-    | 'not_participated'  // no bid placed in current iteration
+    | 'not_eligible'      // user is last_dropped_by / last_rejected_by — cannot re-bid
+    | 'dropped'           // user dropped the shift
+    | 'rejected_offer'    // user rejected the shift offer
+    | 'not_participated'  // no bid placed
     | 'pending'           // active bid awaiting manager review
     | 'selected'          // bid accepted / selected
-    | 'rejected'          // bid rejected in current iteration
+    | 'rejected'          // bid rejected
     | 'expired';          // bidding window closed before user bid
 
 export interface Bid {
@@ -23,7 +23,6 @@ export interface Bid {
     shift_id: string;
     employee_id: string;
     status: BidStatus;
-    bidding_iteration?: number;
     created_at: string;
     updated_at?: string;
     notes?: string;

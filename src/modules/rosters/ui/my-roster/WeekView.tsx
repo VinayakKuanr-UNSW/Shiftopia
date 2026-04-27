@@ -6,6 +6,7 @@ import ShiftDetailsDialog from './ShiftDetailsDialog';
 import { cn } from '@/modules/core/lib/utils';
 import { format } from 'date-fns';
 import { calculateShiftLayout } from '../../utils/shift-layout.utils';
+import MyRosterShift from './MyRosterShift';
 
 interface ShiftWithDetails {
   shift: Shift;
@@ -60,41 +61,24 @@ const WeekView: React.FC<WeekViewProps> = ({ date, getShiftsForDate }) => {
             days={days}
             renderShifts={(day) =>
               getShiftsForDate(day, { includeContinuations: false }).map((shiftData) => {
-                const { shift, groupColor } = shiftData;
+                const { shift } = shiftData;
                 const dateStr = format(day, 'yyyy-MM-dd');
                 const { top, height } = calculateShiftLayout(shift, dateStr, HOUR_HEIGHT, 32);
 
                 return (
                   <div
                     key={shift.id}
-                    className="absolute left-0.5 right-0.5"
+                    className="absolute left-0.5 right-0.5 overflow-hidden"
                     style={{ top, height }}
                   >
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`${shift.roles?.name || 'Shift'}`}
+                    <MyRosterShift
+                      shift={shift}
+                      groupName={shiftData.groupName}
+                      groupColor={shiftData.groupColor}
+                      subGroupName={shiftData.subGroupName}
                       onClick={() => setSelectedShift({ data: shiftData, date: day })}
-                      onKeyDown={(e) =>
-                        e.key === 'Enter' &&
-                        setSelectedShift({ data: shiftData, date: day })
-                      }
-                      className={cn(
-                        'h-full rounded-md p-1.5 cursor-pointer overflow-hidden',
-                        'border shadow-md',
-                        'hover:scale-[1.02] active:scale-[0.98] transition-transform',
-                        'focus:outline-none focus:ring-2 focus:ring-primary/30',
-                        shift.lifecycle_status === 'Published' && shift.assignment_status === 'assigned' && !shift.assignment_outcome && 'opacity-60 border-dashed border-2',
-                        getGradientClass(groupColor)
-                      )}
-                    >
-                      <div className="text-foreground text-[10px] font-semibold truncate leading-tight">
-                        {shift.roles?.name || 'Shift'}
-                      </div>
-                      <div className="text-[9px] text-foreground/70 truncate">
-                        {formatTime(shift.start_time)}-{formatTime(shift.end_time)}
-                      </div>
-                    </div>
+                      style={{ height }}
+                    />
                   </div>
                 );
               })

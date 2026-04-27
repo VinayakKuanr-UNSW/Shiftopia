@@ -64,6 +64,7 @@ import {
   useBulkUnpublishShifts,
   usePublishShift,
   useUnpublishShift,
+  useCreateShift,
   useEmployees,
   snapshotLists,
   rollbackLists,
@@ -595,6 +596,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   const bulkUnpublishMutation = useBulkUnpublishShifts();
   const publishShiftMutation = usePublishShift();
   const unpublishShiftMutation = useUnpublishShift();
+  const createShiftMutation = useCreateShift();
   const addSubGroupMutation = useAddSubGroup();
   const addSubGroupRangeMutation = useAddSubGroupRange();
   const queryClient = useQueryClient();
@@ -1388,6 +1390,49 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     }
   };
 
+  const handleCloneShift = async (shift: ShiftDisplay) => {
+    try {
+      const { rawShift } = shift;
+      const cloneData: any = {
+        roster_id: rawShift.roster_id,
+        department_id: rawShift.department_id,
+        sub_department_id: rawShift.sub_department_id,
+        shift_date: rawShift.shift_date,
+        start_time: rawShift.start_time,
+        end_time: rawShift.end_time,
+        organization_id: rawShift.organization_id,
+        group_type: rawShift.group_type,
+        sub_group_name: rawShift.sub_group_name,
+        shift_group_id: (rawShift as any).shift_group_id,
+        shift_subgroup_id: (rawShift as any).shift_subgroup_id || (rawShift as any).roster_subgroup_id,
+        role_id: rawShift.role_id,
+        remuneration_level_id: rawShift.remuneration_level_id,
+        paid_break_minutes: rawShift.paid_break_minutes,
+        unpaid_break_minutes: rawShift.unpaid_break_minutes,
+        timezone: rawShift.timezone,
+        required_skills: rawShift.required_skills || [],
+        required_licenses: rawShift.required_licenses || [],
+        event_ids: rawShift.event_ids || [],
+        tags: rawShift.tags || [],
+        notes: rawShift.notes,
+        is_training: rawShift.is_training,
+        // assigned_employee_id is NOT copied as per refined requirements
+      };
+
+      await createShiftMutation.mutateAsync(cloneData);
+      toast({
+        title: 'Shift Cloned',
+        description: 'A new draft replica has been created (unassigned).',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Clone Failed',
+        description: error.message || 'Could not clone shift.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   // Push to Bidding - marks shift as available for bidding
   // Bidding window auto-closes 4 hours before shift start
   const handleRequestPublish = (shift: ShiftDisplay) => {
@@ -1592,88 +1637,27 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           {(() => {
             const hasStarted = isSydneyStarted(shift.rawShift.shift_date, shift.startTime);
 
-            if (hasStarted && shift.rawShift.lifecycle_status !== 'Published') { // 'Published' is already readonly by other logic, but this covers Draft/Started
-              return (
-                <>
-                  <DropdownMenuItem disabled className="text-muted-foreground/50 cursor-not-allowed">
-                    <Lock className="h-4 w-4 mr-2" />
-                    Edit Shift (Locked)
-                  </DropdownMenuItem>
-
-                  <DropdownMenuItem disabled className="text-muted-foreground/50 cursor-not-allowed">
-                    <Lock className="h-4 w-4 mr-2" />
-                    Publish (Locked)
-                  </DropdownMenuItem>
-
-                  <DropdownMenuSeparator className="bg-border" />
-
-                  <DropdownMenuItem
-                    onClick={() => handleDeleteShift(shift)}
-                    className="text-destructive hover:bg-destructive/10 cursor-pointer"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Shift
-                  </DropdownMenuItem>
-
-                </>
-              );
-            }
-
-            // Standard Menu for Future/Unstarted Context
             return (
               <>
-                {isLocked ? (
+                <DropdownMenuItem
+                  onClick={() => handleCloneShift(shift)}
+                  className="text-popover-foreground hover:bg-accent cursor-pointer"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Clone Shift
+                </DropdownMenuItem>
+
+                {hasStarted && shift.rawShift.lifecycle_status !== 'Published' ? (
                   <>
-                    <DropdownMenuItem
-                      onClick={() => handleDeleteShift(shift)}
-                      className="text-destructive hover:bg-destructive/10 cursor-pointer"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete Shift (Locked)
+                    <DropdownMenuItem disabled className="text-muted-foreground/50 cursor-not-allowed">
+                      <Lock className="h-4 w-4 mr-2" />
+                      Edit Shift (Locked)
                     </DropdownMenuItem>
 
-                  </>
-                ) : (
-                  <>
-                    {shift.isDraft && (
-                      <DropdownMenuItem
-                        onClick={() => handleEditShift(shift, group, subGroup, date)}
-                        className="text-popover-foreground hover:bg-accent cursor-pointer"
-                      >
-                        <Edit2 className="h-4 w-4 mr-2" />
-                        Edit Shift
-                      </DropdownMenuItem>
-                    )}
-
-                    {shift.isDraft && !shift.isPublished && (
-                      <DropdownMenuItem
-                        disabled={isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned')}
-                        onClick={() => handleRequestPublish(shift)}
-                        className={cn(
-                          "text-popover-foreground hover:bg-accent cursor-pointer",
-                          isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned') && "opacity-50 cursor-not-allowed"
-                        )}
-                      >
-                        <Send className="h-4 w-4 mr-2" />
-                        {isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned') 
-                          ? 'Publish (Assign Required)' 
-                          : 'Publish Shift'}
-                      </DropdownMenuItem>
-                    )}
-
-                    {shift.rawShift.lifecycle_status === 'Published' && (
-                      <DropdownMenuItem
-                        onClick={() => handleRequestUnpublish(shift)}
-                        className="text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
-                      >
-                        <Undo2 className="h-4 w-4 mr-2" />
-                        {shift.rawShift.lifecycle_status === 'Published' &&
-                         shift.rawShift.assignment_status === 'assigned' &&
-                         !shift.rawShift.assignment_outcome
-                          ? 'Retract Offer & Move to Draft'
-                          : 'Unpublish Shift'}
-                      </DropdownMenuItem>
-                    )}
+                    <DropdownMenuItem disabled className="text-muted-foreground/50 cursor-not-allowed">
+                      <Lock className="h-4 w-4 mr-2" />
+                      Publish (Locked)
+                    </DropdownMenuItem>
 
                     <DropdownMenuSeparator className="bg-border" />
 
@@ -1684,7 +1668,70 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                       <Trash2 className="h-4 w-4 mr-2" />
                       Delete Shift
                     </DropdownMenuItem>
+                  </>
+                ) : (
+                  <>
+                    {isLocked ? (
+                      <DropdownMenuItem
+                        onClick={() => handleDeleteShift(shift)}
+                        className="text-destructive hover:bg-destructive/10 cursor-pointer"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Shift (Locked)
+                      </DropdownMenuItem>
+                    ) : (
+                      <>
+                        {shift.isDraft && (
+                          <DropdownMenuItem
+                            onClick={() => handleEditShift(shift, group, subGroup, date)}
+                            className="text-popover-foreground hover:bg-accent cursor-pointer"
+                          >
+                            <Edit2 className="h-4 w-4 mr-2" />
+                            Edit Shift
+                          </DropdownMenuItem>
+                        )}
 
+                        {shift.isDraft && !shift.isPublished && (
+                          <DropdownMenuItem
+                            disabled={isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned')}
+                            onClick={() => handleRequestPublish(shift)}
+                            className={cn(
+                              "text-popover-foreground hover:bg-accent cursor-pointer",
+                              isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned') && "opacity-50 cursor-not-allowed"
+                            )}
+                          >
+                            <Send className="h-4 w-4 mr-2" />
+                            {isEmergency && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned') 
+                              ? 'Publish (Assign Required)' 
+                              : 'Publish Shift'}
+                          </DropdownMenuItem>
+                        )}
+
+                        {shift.rawShift.lifecycle_status === 'Published' && (
+                          <DropdownMenuItem
+                            onClick={() => handleRequestUnpublish(shift)}
+                            className="text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+                          >
+                            <Undo2 className="h-4 w-4 mr-2" />
+                            {shift.rawShift.lifecycle_status === 'Published' &&
+                             shift.rawShift.assignment_status === 'assigned' &&
+                             !shift.rawShift.assignment_outcome
+                              ? 'Retract Offer & Move to Draft'
+                              : 'Unpublish Shift'}
+                          </DropdownMenuItem>
+                        )}
+
+                        <DropdownMenuSeparator className="bg-border" />
+
+                        <DropdownMenuItem
+                          onClick={() => handleDeleteShift(shift)}
+                          className="text-destructive hover:bg-destructive/10 cursor-pointer"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete Shift
+                        </DropdownMenuItem>
+                      </>
+                    )}
                   </>
                 )}
               </>
@@ -1777,6 +1824,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
             onShiftDelete={handleDeleteShift as any}
             onShiftPublish={handleRequestPublish as any}
             onShiftUnpublish={handleRequestUnpublish as any}
+            onShiftClone={handleCloneShift as any}
 
             onAddSubGroup={(group) => handleAddSubGroup(group as any)}
             onSubGroupAction={(action, subGroup, group) => {

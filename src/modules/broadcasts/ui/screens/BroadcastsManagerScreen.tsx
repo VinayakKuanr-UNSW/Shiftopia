@@ -162,7 +162,14 @@ export function BroadcastsManagerScreen({
     });
   };
 
-  const handleCreateGroup = async (data: CreateBroadcastGroupRequest) => {
+  const handleCreateGroup = async (data: {
+    name: string;
+    description?: string;
+    icon?: string;
+    organizationId?: string | null;
+    departmentId?: string | null;
+    subDepartmentId?: string | null;
+  }) => {
     const newGroup = await createGroup({
       ...data,
       organizationId: data.organizationId || selectedOrgId || undefined,
@@ -173,6 +180,12 @@ export function BroadcastsManagerScreen({
       setSelectedGroupId(newGroup.id);
     }
   };
+
+  const filteredGroups = React.useMemo(() => {
+    return groups
+      .filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [groups, searchQuery]);
 
   // ========================================
   // CONTROL ROOM VIEW (Group Selected)
@@ -188,12 +201,6 @@ export function BroadcastsManagerScreen({
       </div>
     );
   }
-
-  const filteredGroups = React.useMemo(() => {
-    return groups
-      .filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [groups, searchQuery]);
 
   // ========================================
   // RENDER: GROUPS SECTION
@@ -271,22 +278,26 @@ export function BroadcastsManagerScreen({
   if (layout === 'desktop') {
     return (
       <div className="h-full flex flex-col overflow-hidden">
-        {/* Analytics Section */}
-        <div className="px-8 pt-6">
-          {renderAnalyticsSection()}
-        </div>
+        <ScrollArea className="flex-1">
+          <div className="space-y-6 pb-8">
+            {/* Analytics Section */}
+            <div className="px-4 lg:px-6 pt-4">
+              {renderAnalyticsSection()}
+            </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-8 w-full">
-          {/* Main Area - Groups */}
-          <div className="lg:col-span-2">
-            {renderGroupsSection()}
-          </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 px-4 lg:px-6 py-4 w-full">
+              {/* Main Area - Groups */}
+              <div className="lg:col-span-2">
+                {renderGroupsSection()}
+              </div>
 
-          {/* Sidebar - Activity */}
-          <div>
-            {renderActivitySection()}
+              {/* Sidebar - Activity */}
+              <div className="border-l border-border/50 pl-6">
+                {renderActivitySection()}
+              </div>
+            </div>
           </div>
-        </div>
+        </ScrollArea>
 
         {renderDialogs()}
       </div>

@@ -46,8 +46,8 @@ const InsightsPage: React.FC = () => {
     }
 
     return (
-        <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-6">
-            <Tabs defaultValue="overview" className="flex-1 flex flex-col min-h-0 space-y-6">
+        <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4">
+            <Tabs defaultValue="overview" className="flex-1 flex flex-col min-h-0 space-y-4">
                 {/* ── Unified Header Block (Rows 1-3) ────────────────────────────── */}
                 <div className="flex-shrink-0">
                     <div className={cn(

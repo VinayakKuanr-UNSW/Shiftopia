@@ -21,7 +21,7 @@ import {
     useDeclineOffer,
     useExpireOffer,
 } from '@/modules/rosters/state/useRosterShifts';
-import { useAuth } from '@/modules/auth/hooks/useAuth';
+import { useAuth } from '@/platform/auth/useAuth';
 import { cn } from '@/modules/core/lib/utils';
 import {
     Inbox,
@@ -157,20 +157,20 @@ const OfferItem: React.FC<{
     const netLength = computeNetLength(offer.shift);
 
     const footerActions = showActions ? (
-        <div className="flex gap-2 p-2">
+        <div className="flex gap-4 p-4 mt-auto">
             <Button
-                size="sm"
+                size="lg"
                 className={cn(
-                    'flex-1 font-black text-xs uppercase tracking-wider transition-all',
+                    'flex-1 h-12 rounded-2xl font-black text-sm uppercase tracking-[0.1em] transition-all shadow-xl active:scale-[0.98]',
                     isActionDisabled
                         ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                        : 'bg-emerald-600 hover:bg-emerald-500 text-white',
+                        : 'bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-emerald-500/20',
                 )}
                 onClick={() => !isActionDisabled && onAccept(offer.shift_id)}
                 disabled={isActionDisabled}
             >
                 {isProcessingThis ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <Loader2 className="h-5 w-5 animate-spin" />
                 ) : isLocked ? (
                     'Window Closed'
                 ) : (
@@ -178,9 +178,9 @@ const OfferItem: React.FC<{
                 )}
             </Button>
             <Button
-                size="sm"
+                size="lg"
                 variant="outline"
-                className="font-black text-xs uppercase tracking-wider text-destructive border-destructive/30 hover:bg-destructive/10"
+                className="flex-1 h-12 rounded-2xl font-black text-sm uppercase tracking-[0.1em] text-destructive border-destructive/20 hover:bg-destructive/10 transition-all active:scale-[0.98]"
                 onClick={() => !isActionDisabled && onDeclineRequest(offer.shift_id)}
                 disabled={isActionDisabled}
             >
@@ -188,20 +188,20 @@ const OfferItem: React.FC<{
             </Button>
         </div>
     ) : (
-        <div className="p-3 flex justify-center">
+        <div className="p-4 flex justify-center mt-auto">
             <Badge
                 variant="outline"
                 className={cn(
-                    'text-[10px] uppercase tracking-wider font-black flex items-center gap-1',
+                    'h-10 px-6 rounded-full text-[11px] uppercase tracking-widest font-black flex items-center gap-2',
                     offer.status === 'Accepted'
                         ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
                         : 'bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400',
                 )}
             >
                 {offer.status === 'Accepted' ? (
-                    <CheckCircle className="h-3 w-3" />
+                    <CheckCircle className="h-4 w-4" />
                 ) : (
-                    <XCircle className="h-3 w-3" />
+                    <XCircle className="h-4 w-4" />
                 )}
                 {offer.status}
             </Badge>
@@ -210,17 +210,18 @@ const OfferItem: React.FC<{
 
     return (
         <SharedShiftCard
+            variant="timecard"
             organization={offer.shift.organizations?.name || ''}
             department={offer.shift.departments?.name || ''}
             subGroup={offer.shift.sub_departments?.name}
             role={offer.shift.roles?.name || 'Shift'}
-            shiftDate={format(new Date(offer.shift.shift_date), 'EEE, MMM d')}
+            shiftDate={format(new Date(offer.shift.shift_date), 'EEE, MMM d, yyyy')}
             startTime={offer.shift.start_time.slice(0, 5)}
             endTime={offer.shift.end_time.slice(0, 5)}
             netLength={netLength}
             paidBreak={offer.shift.paid_break_minutes ?? offer.shift.break_minutes ?? 0}
             unpaidBreak={offer.shift.unpaid_break_minutes ?? 0}
-            timerText={timerText}
+            timerText={(showActions && !isProcessingThis && offer.status === 'Pending') ? timerText : null}
             isExpired={isExpired || isLocked}
             groupVariant={
                 offer.shift.group_type === 'convention_centre' ? 'convention' :
@@ -349,7 +350,7 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                 open={isOpen}
                 onOpenChange={(open) => !open && onClose()}
                 dialogClassName="sm:max-w-[480px] max-h-[82vh] p-0 overflow-hidden flex flex-col rounded-2xl [&>button]:hidden z-[150]"
-                drawerClassName="bg-background border-border"
+                drawerClassName="bg-background border-border h-[85vh] flex flex-col overflow-hidden rounded-t-[32px]"
             >
                 <ResponsiveDialog.Header className="sr-only">
                     <ResponsiveDialog.Title>My Shift Offers</ResponsiveDialog.Title>
@@ -445,7 +446,7 @@ export const MyOffersModal: React.FC<MyOffersModalProps> = ({
                 open={!!showDeclineConfirm}
                 onOpenChange={() => setShowDeclineConfirm(null)}
             >
-                <AlertDialogContent className="bg-background border border-border rounded-2xl p-6 max-w-sm z-[200] shadow-2xl">
+                <AlertDialogContent className="bg-background border border-border rounded-2xl p-6 max-w-sm z-[200] shadow-2xl" aria-describedby={undefined}>
                     <AlertDialogHeader>
                         <AlertDialogTitle className="font-black text-foreground tracking-tight">
                             Decline Shift?

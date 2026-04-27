@@ -4,8 +4,8 @@ import { format } from 'date-fns';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { AvailabilityStatus, AvailabilityFormPayload, AvailabilityRule } from '../../model/availability.types';
 import { EditState } from '../../state/useAvailabilityEditing';
-import { DayInteractionModal } from './DayInteractionModal';
-import { BatchApplyModal } from './BatchApplyModal';
+import DayInteractionModal from './DayInteractionModal';
+import BatchApplyModal from './BatchApplyModal';
 
 interface AvailabilityModalsProps {
   isDayModalOpen: boolean;
@@ -64,7 +64,7 @@ export function AvailabilityModals({
       start_time: slot.startTime,
       end_time: slot.endTime,
       repeat_type: 'none', // Day modal creates single entries by default
-      repeat_days: null,
+      repeat_days: undefined,
       reason: data.notes
     };
 

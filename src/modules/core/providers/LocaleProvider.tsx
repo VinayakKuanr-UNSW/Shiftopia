@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import i18n from '@/platform/i18n';
 import { useSettings } from '@/modules/settings/hooks/useSettings';
 
 interface LocaleProviderProps {
@@ -7,21 +7,19 @@ interface LocaleProviderProps {
 }
 
 export const LocaleProvider: React.FC<LocaleProviderProps> = ({ children }) => {
-  const { i18n } = useTranslation();
   const { orgBranding } = useSettings();
 
   useEffect(() => {
     if (orgBranding?.language) {
-      console.log('[LocaleProvider] Syncing language:', orgBranding.language);
       i18n.changeLanguage(orgBranding.language);
     }
   }, [orgBranding?.language, i18n]);
 
   useEffect(() => {
-    const handleUpdate = (e: any) => {
-      if (e.detail?.language) {
-        console.log('[LocaleProvider] Live sync language:', e.detail.language);
-        i18n.changeLanguage(e.detail.language);
+    const handleUpdate = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.language) {
+        i18n.changeLanguage(detail.language);
       }
     };
 

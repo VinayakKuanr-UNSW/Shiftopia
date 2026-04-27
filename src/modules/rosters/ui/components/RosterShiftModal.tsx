@@ -250,9 +250,6 @@ export const RosterShiftModal: React.FC<RosterShiftModalProps> = ({
           <div className="flex items-center gap-2 text-sm">
             <Calendar className="h-4 w-4 text-primary" />
             <span className="font-medium">{displayDate}</span>
-            <Badge variant="outline" className="ml-auto">
-              Locked
-            </Badge>
           </div>
           <div className="flex items-center gap-2 text-sm">
             <Building2 className="h-4 w-4 text-muted-foreground" />

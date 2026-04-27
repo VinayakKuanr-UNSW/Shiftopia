@@ -34,6 +34,7 @@ interface DayInteractionModalProps {
     notes?: string;
   }) => Promise<boolean>;
   onDelete: (date: Date) => Promise<boolean>;
+  isLocked?: boolean;
 }
 
 interface TimeSlotForm {
@@ -58,8 +59,14 @@ const timeToMinutes = (time: string): number => {
   return hours * 60 + minutes;
 };
 
-
+export default function DayInteractionModal({
+  isOpen,
+  onClose,
+  selectedDate,
+  existingAvailability,
+  onSave,
   onDelete,
+  isLocked = false,
 }: DayInteractionModalProps) {
   const [timeSlots, setTimeSlots] = useState<TimeSlotForm[]>([]);
   const [notes, setNotes] = useState('');
@@ -339,6 +346,12 @@ const timeToMinutes = (time: string): number => {
       </ResponsiveDialog.Header>
 
       <ResponsiveDialog.Body className="overflow-y-auto max-h-[70dvh]">
+        {isLocked && (
+          <div className="mb-4 flex items-center gap-2 p-3 bg-amber-50 text-amber-800 rounded-lg border border-amber-200 text-sm">
+            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+            <span>This calendar is locked. You cannot modify availability.</span>
+          </div>
+        )}
         <div className="space-y-6">
           {/* Quick Action Buttons */}
           <div className="flex flex-wrap gap-2 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -347,6 +360,7 @@ const timeToMinutes = (time: string): number => {
               variant="outline"
               size="sm"
               className="text-green-600 hover:text-green-700 hover:bg-green-50"
+              disabled={isLocked}
             >
               <CheckCircle className="h-4 w-4 mr-1" />
               Mark Fully Available
@@ -356,6 +370,7 @@ const timeToMinutes = (time: string): number => {
               variant="outline"
               size="sm"
               className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              disabled={isLocked}
             >
               <XCircle className="h-4 w-4 mr-1" />
               Mark Fully Unavailable
@@ -411,6 +426,7 @@ const timeToMinutes = (time: string): number => {
                         onChange={(e) => updateTimeSlot(slot.id, 'startTime', e.target.value)}
                         className="mt-1"
                         step="60"
+                        disabled={isLocked}
                       />
                     </div>
 
@@ -423,6 +439,7 @@ const timeToMinutes = (time: string): number => {
                         onChange={(e) => updateTimeSlot(slot.id, 'endTime', e.target.value)}
                         className="mt-1"
                         step="60"
+                        disabled={isLocked}
                       />
                     </div>
 
@@ -434,6 +451,7 @@ const timeToMinutes = (time: string): number => {
                         onValueChange={(value: 'Available' | 'Unavailable') =>
                           updateTimeSlot(slot.id, 'status', value)
                         }
+                        disabled={isLocked}
                       >
                         <SelectTrigger className="mt-1">
                           <SelectValue />
@@ -446,26 +464,30 @@ const timeToMinutes = (time: string): number => {
                     </div>
 
                     {/* Remove Button */}
-                    <Button
-                      onClick={() => removeTimeSlot(slot.id)}
-                      variant="outline"
-                      size="icon"
-                      className="text-red-600 hover:text-red-700 mt-5"
-                    >
-                      <Minus className="h-4 w-4" />
-                    </Button>
+                    {!isLocked && (
+                      <Button
+                        onClick={() => removeTimeSlot(slot.id)}
+                        variant="outline"
+                        size="icon"
+                        className="text-red-600 hover:text-red-700 mt-5"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 ))}
 
                 {/* Add Time Slot Button */}
-                <Button
-                  onClick={addTimeSlot}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Another Time Slot
-                </Button>
+                {!isLocked && (
+                  <Button
+                    onClick={addTimeSlot}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Another Time Slot
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -478,8 +500,9 @@ const timeToMinutes = (time: string): number => {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Add any additional notes about your availability..."
-              className="w-full px-3 py-2 border border-input rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+              className="w-full px-3 py-2 border border-input rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent disabled:opacity-50"
               rows={3}
+              disabled={isLocked}
             />
           </div>
 
@@ -490,7 +513,7 @@ const timeToMinutes = (time: string): number => {
       <ResponsiveDialog.Footer>
         <div className="flex justify-between w-full">
           <div className="flex gap-2">
-            {hasExistingData && (
+            {hasExistingData && !isLocked && (
               <Button
                 onClick={handleDelete}
                 variant="destructive"
@@ -505,12 +528,14 @@ const timeToMinutes = (time: string): number => {
             <Button onClick={onClose} variant="outline">
               Cancel
             </Button>
-            <Button
-              onClick={handleSave}
-              disabled={isSaving || isDeleting}
-            >
-              {isSaving || isDeleting ? 'Saving...' : 'Save Availability'}
-            </Button>
+            {!isLocked && (
+              <Button
+                onClick={handleSave}
+                disabled={isSaving || isDeleting}
+              >
+                {isSaving || isDeleting ? 'Saving...' : 'Save Availability'}
+              </Button>
+            )}
           </div>
         </div>
       </ResponsiveDialog.Footer>

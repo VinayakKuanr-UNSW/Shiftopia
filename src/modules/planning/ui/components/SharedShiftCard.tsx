@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 import {
@@ -48,12 +48,42 @@ export interface SharedShiftCardProps {
     topContent?: React.ReactNode;
     className?: string;
     onClick?: () => void;
-    variant?: 'default' | 'nested';
+    variant?: 'default' | 'nested' | 'timecard';
     /** Standardised shift for status dot derivation */
     shiftData?: any;
+    /** Removes outer border, shadow and background for seamless embedding */
+    isFlat?: boolean;
+    /** Attendance / Timesheet specific data */
+    employeeName?: string;
+    avatarUrl?: string;
+    clockIn?: string | null;
+    clockOut?: string | null;
+    adjustedStart?: string | null;
+    adjustedEnd?: string | null;
 }
 
-export const SharedShiftCard: React.FC<SharedShiftCardProps> = ({
+const DataRow: React.FC<{
+    label: string;
+    value: React.ReactNode;
+    emphasis?: boolean;
+    accentColor?: string;
+}> = ({ label, value, emphasis, accentColor }) => (
+    <div className="flex items-center justify-between py-1.5 border-b border-foreground/[0.04] last:border-0">
+        <span className="text-[11px] font-black text-muted-foreground/40 uppercase tracking-widest shrink-0">
+            {label}
+        </span>
+        <div className={cn(
+            "tabular-nums tracking-tight font-black font-mono flex items-center gap-2 text-right justify-end",
+            emphasis ? "text-[14px] text-foreground" : "text-[12px] text-foreground/70",
+            accentColor
+        )}>
+            {value}
+        </div>
+    </div>
+);
+
+export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(({
+    avatarUrl,
     organization,
     department,
     subGroup,
@@ -79,40 +109,213 @@ export const SharedShiftCard: React.FC<SharedShiftCardProps> = ({
     onClick,
     variant = 'default',
     shiftData,
-}) => {
+    isFlat = false,
+    employeeName,
+    clockIn,
+    clockOut,
+    adjustedStart,
+    adjustedEnd,
+}, ref) => {
     const protection = React.useMemo(() => getProtectionContext(
         { lifecycle_status: lifecycleStatus },
         isPast
     ), [lifecycleStatus, isPast]);
 
     // Premium Department Color Styling (Badges)
-    const getVariant = () => {
+    const getTheme = () => {
         const base = 'dept-card-glass-base';
         switch (groupVariant) {
             case 'convention': return { 
                 badge: 'dept-badge-convention', 
                 cardBg: `${base} dept-card-glass-convention`,
-                accent: 'text-blue-500'
+                accent: 'text-blue-500',
+                color: '#2563eb',
+                secondary: '#3b82f6',
+                atmosphere: ['#1d4ed8', '#2563eb', '#60a5fa'],
             };
             case 'exhibition': return { 
                 badge: 'dept-badge-exhibition', 
                 cardBg: `${base} dept-card-glass-exhibition`,
-                accent: 'text-emerald-500'
+                accent: 'text-emerald-500',
+                color: '#10b981',
+                secondary: '#059669',
+                atmosphere: ['#059669', '#10b981', '#34d399'],
             };
             case 'theatre': return { 
                 badge: 'dept-badge-theatre', 
                 cardBg: `${base} dept-card-glass-theatre`,
-                accent: 'text-rose-500'
+                accent: 'text-rose-500',
+                color: '#ef4444',
+                secondary: '#dc2626',
+                atmosphere: ['#991b1b', '#ef4444', '#f87171'],
             };
             default: return { 
                 badge: 'dept-badge-default', 
                 cardBg: `${base} dept-card-glass-default`,
-                accent: 'text-primary'
+                accent: 'text-primary',
+                color: '#9333ea',
+                secondary: '#a855f7',
+                atmosphere: ['#7e22ce', '#9333ea', '#c084fc'],
             };
         }
     };
 
     const isNested = variant === 'nested';
+    const isTimecard = variant === 'timecard';
+    const theme = getTheme();
+
+    const breadcrumbs = (
+        <div className={cn(
+            "text-[9px] mb-1 tracking-tight font-mono font-black uppercase flex items-center gap-1",
+            isTimecard ? "text-foreground/30" : "text-muted-foreground/40"
+        )}>
+            <span>{organization}</span>
+            <span className="text-primary/30">→</span>
+            <span>{department}</span>
+            {subGroup && subGroup !== 'General' && (
+                <>
+                    <span className="text-primary/30">→</span>
+                    <span>{subGroup}</span>
+                </>
+            )}
+        </div>
+    );
+
+    const statusDotInfo = shiftData ? getStatusDotInfo(shiftData) : null;
+
+    const statusDot = (() => {
+        if (!statusDotInfo) return null;
+        return (
+            <div className="flex items-center gap-2">
+                <div
+                    className="h-2 w-2 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.3)]"
+                    style={{ backgroundColor: statusDotInfo.color }}
+                />
+                <span className="text-[10px] font-black font-mono text-foreground uppercase tracking-widest">
+                    {statusDotInfo.label}
+                </span>
+            </div>
+        );
+    })();
+
+    if (isTimecard) {
+        return (
+            <motion.div
+                ref={ref}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={cn(
+                    'relative overflow-hidden transition-all duration-500',
+                    !isFlat && 'rounded-[32px] border backdrop-blur-3xl bg-white/65 dark:bg-zinc-950/95 shadow-lg',
+                    isFlat && 'bg-transparent border-none shadow-none rounded-none',
+                    (isExpired || (isPast && protection.status === 'LOCKED')) && "opacity-60 grayscale-[0.5]",
+                    className
+                )}
+                style={!isFlat ? {
+                    borderColor: 'rgba(120, 120, 120, 0.08)',
+                    boxShadow: '0 8px 32px -4px rgba(0,0,0,0.1)',
+                } : undefined}
+            >
+                {/* Glows */}
+                <div 
+                    style={{ 
+                        background: `radial-gradient(circle at center, ${theme.atmosphere[0]}, ${theme.atmosphere[1]}, ${theme.atmosphere[2]})`,
+                        mixBlendMode: 'screen'
+                    }}
+                    className="absolute -top-32 -right-32 w-96 h-96 blur-[120px] opacity-[0.35] dark:opacity-[0.2] pointer-events-none" 
+                />
+                <div 
+                    style={{ 
+                        background: `radial-gradient(circle at center, ${theme.secondary}, ${theme.color}, transparent)`,
+                        mixBlendMode: 'screen'
+                    }}
+                    className="absolute -bottom-48 -right-32 w-80 h-80 blur-[100px] opacity-[0.25] dark:opacity-[0.1] pointer-events-none" 
+                />
+
+                <div className="px-6 py-6 relative z-20 flex flex-col h-full">
+                    {topContent && (
+                        <div className="mb-4">
+                            {topContent}
+                        </div>
+                    )}
+                    <div className="mb-6">
+                        {breadcrumbs}
+                        <div className="flex items-center justify-between gap-4 mt-2">
+                            <div className="flex-1 min-w-0">
+                                <h1 className="text-[18px] font-black text-foreground tracking-tight leading-tight uppercase font-mono truncate">
+                                    {role}
+                                </h1>
+                                {employeeName && (
+                                    <div className="flex items-center gap-2 mt-1">
+                                        {avatarUrl && (
+                                            <div className="h-4 w-4 rounded-full overflow-hidden ring-1 ring-primary/20">
+                                                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                                            </div>
+                                        )}
+                                        <p className="text-[11px] font-black text-primary/60 uppercase tracking-[0.2em] font-mono">
+                                            {employeeName}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-1 mb-8 bg-foreground/[0.02] dark:bg-white/[0.02] p-4 rounded-2xl border border-foreground/[0.03]">
+                        <DataRow label="Shift Date" value={shiftDate} emphasis />
+                        <DataRow label="Scheduled" value={`${startTime} – ${endTime}`} emphasis />
+                        <DataRow label="Breaks" value={`Paid ${paidBreak}m · Unpaid ${unpaidBreak}m`} />
+                        <DataRow label="Net Length" value={`${(netLength / 60).toFixed(1)} Hours`} accentColor={theme.accent} />
+                        
+                        {(clockIn || clockOut) && (
+                            <div className="pt-2 mt-2 border-t border-foreground/[0.03] space-y-1">
+                                {clockIn && <DataRow label="Actual In" value={clockIn} />}
+                                {clockOut && <DataRow label="Actual Out" value={clockOut} />}
+                                {adjustedStart && <DataRow label="Billable In" value={adjustedStart} accentColor="text-indigo-500" />}
+                                {adjustedEnd && <DataRow label="Billable Out" value={adjustedEnd} accentColor="text-indigo-500" />}
+                            </div>
+                        )}
+
+                        {statusDot && (
+                            <DataRow label="Live Status" value={statusDot} />
+                        )}
+                    </div>
+
+                    {/* COUNTDOWN (for offers) */}
+                    {timerText && (
+                        <div className={cn(
+                            "mb-6 px-4 py-3 rounded-2xl text-[11px] font-black font-mono flex items-center justify-between tracking-tight transition-all",
+                            isExpired 
+                                ? "bg-rose-500/10 text-rose-500 border border-rose-500/20 shadow-[0_0_20px_rgba(244,63,94,0.15)]" 
+                                : "bg-amber-500/10 text-amber-500 border border-amber-500/20 shadow-[0_0_20px_rgba(245,158,11,0.15)]"
+                        )}>
+                            <div className="flex items-center gap-2.5">
+                                <Clock className={cn("w-3.5 h-3.5", !isExpired && "animate-pulse")} />
+                                <span className="uppercase tracking-widest">{isExpired ? 'OFFER CLOSED' : 'OFFER EXPIRES'}</span>
+                            </div>
+                            <span className="bg-foreground/5 px-2.5 py-1 rounded-full text-[10px]">
+                                {isExpired ? 'EXPIRED' : timerText}
+                            </span>
+                        </div>
+                    )}
+
+                    {statusIcons && (
+                        <div className="grid grid-cols-3 gap-3 mb-8">
+                            {statusIcons}
+                        </div>
+                    )}
+
+                    <div className="flex-1" />
+
+                    {footerActions && (
+                        <div className="pt-2">
+                            {footerActions}
+                        </div>
+                    )}
+                </div>
+            </motion.div>
+        );
+    }
 
     const content = (
         <>
@@ -126,69 +329,23 @@ export const SharedShiftCard: React.FC<SharedShiftCardProps> = ({
             {/* COMPACT BODY (px-4 py-3) */}
             <div className={cn("px-4 py-3 flex flex-col flex-1", isNested && "px-0 py-0")}>
                 {/* BREADCRUMB */}
-                <div className="text-[9px] text-muted-foreground/40 mb-1 tracking-tight font-mono font-black uppercase flex items-center gap-1">
-                    <span>{organization}</span>
-                    <span className="text-primary/30">→</span>
-                    <span>{department}</span>
-                    {subGroup && subGroup !== 'General' && (
-                        <>
-                            <span className="text-primary/30">→</span>
-                            <span>{subGroup}</span>
-                        </>
-                    )}
-                </div>
+                {breadcrumbs}
 
                 {/* ROLE + PRIORITY */}
                 <div className="flex items-start justify-between gap-2 mb-2">
-                    <h3 className="font-black text-sm text-foreground/90 tracking-tight leading-tight uppercase font-mono">
-                        {role}
-                    </h3>
-                    <div className="flex items-center gap-1.5">
-                        {(() => {
-                            const dot = shiftData ? getStatusDotInfo(shiftData) : null;
-                            if (!dot) return null;
-                            return (
-                                <TooltipProvider delayDuration={0}>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded-md border border-border/50 cursor-help transition-colors hover:bg-black/10 dark:hover:bg-white/10">
-                                                <div
-                                                    className="h-1.5 w-1.5 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.2)]"
-                                                    style={{ backgroundColor: dot.color }}
-                                                />
-                                                <span className="text-[9px] font-black font-mono text-muted-foreground/70">
-                                                    {dot.label.split(' ')[0].substring(0, 3).toUpperCase()}
-                                                </span>
-                                            </div>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="top" className="bg-popover/95 backdrop-blur-md border-border/50 px-2 py-1 shadow-xl">
-                                            <p className="text-[10px] font-bold uppercase tracking-widest">{dot.label}</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                            );
-                        })()}
+                    <div className="min-w-0 flex-1">
+                        <h3 className="font-black text-sm text-foreground/90 tracking-tight leading-tight uppercase font-mono truncate">
+                            {role}
+                        </h3>
+                        {employeeName && (
+                            <p className="text-[9px] font-black text-primary/60 uppercase tracking-widest mt-0.5 font-mono">
+                                {employeeName}
+                            </p>
+                        )}
                     </div>
-                    {protection.status !== 'DRAFT' && (
-                        <TooltipProvider delayDuration={0}>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <div className={cn(
-                                        "flex items-center gap-1.5 px-2 py-0.5 rounded-md border backdrop-blur-md transition-all h-6",
-                                        protection.status === 'LOCKED' ? "bg-slate-500/10 border-slate-500/20 text-slate-500" : "bg-blue-500/10 border-blue-500/20 text-blue-500"
-                                    )}>
-                                        <protection.icon className="h-3 w-3" />
-                                        <span className="text-[9px] font-black font-mono uppercase tracking-widest">
-                                            {protection.label}
-                                        </span>
-                                    </div>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="bg-popover/95 backdrop-blur-md border-border/50 px-2 py-1 shadow-xl">
-                                    <p className="text-[10px] font-bold uppercase tracking-widest">{protection.label}</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    )}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                        {statusDot}
+                    </div>
                 </div>
 
                 {/* TIMING BOXES */}
@@ -204,6 +361,16 @@ export const SharedShiftCard: React.FC<SharedShiftCardProps> = ({
                         <Clock className="h-3 w-3 text-primary/60" />
                         <span className="text-[10px] font-black font-mono tracking-tight leading-none uppercase">{startTime} – {endTime}</span>
                     </div>
+
+                    {/* Clock In/Out compact */}
+                    {(clockIn || clockOut) && (
+                        <div className="flex items-center gap-1.5 bg-indigo-500/10 px-2 py-1 rounded-lg border border-indigo-500/20 backdrop-blur-sm">
+                            <Signal className="h-3 w-3 text-indigo-500/60" />
+                            <span className="text-[10px] font-black font-mono tracking-tight leading-none uppercase text-indigo-500/80">
+                                {clockIn || '--:--'} – {clockOut || '--:--'}
+                            </span>
+                        </div>
+                    )}
                 </div>
 
                 {/* BREAKS & LENGTH */}
@@ -249,7 +416,11 @@ export const SharedShiftCard: React.FC<SharedShiftCardProps> = ({
 
     if (isNested) {
         return (
-            <div className={cn("flex flex-col h-full", className)} onClick={onClick}>
+            <div 
+                ref={ref}
+                className={cn("flex flex-col h-full", className)} 
+                onClick={onClick}
+            >
                 {content}
             </div>
         );
@@ -257,18 +428,21 @@ export const SharedShiftCard: React.FC<SharedShiftCardProps> = ({
 
     return (
         <motion.div
+            ref={ref}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
+            onClick={onClick}
             className={cn(
-                "group flex flex-col rounded-[1.2rem] overflow-hidden border transition-all duration-300 bg-card/40 backdrop-blur-xl shadow-lg h-full relative",
-                getVariant().cardBg,
-                onClick && "cursor-pointer hover:shadow-2xl hover:translate-y-[-2px] hover:border-primary/40",
+                "group flex flex-col overflow-hidden transition-all duration-300 h-full relative",
+                !isFlat && theme.cardBg,
+                !isFlat && "rounded-[1.2rem] border border-border/50 shadow-lg",
+                isFlat && "rounded-none border-none bg-transparent backdrop-blur-none shadow-none",
+                onClick && !isFlat && "cursor-pointer hover:shadow-2xl hover:translate-y-[-2px] hover:border-primary/40",
                 (isExpired || (isPast && protection.status === 'LOCKED')) && "opacity-60 grayscale-[0.8]",
                 className
             )}
-            onClick={onClick}
         >
             {content}
         </motion.div>
     );
-};
+});

@@ -253,7 +253,7 @@ const TemplatesPage: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden px-4 md:px-8 pb-24 md:pb-0">
+    <div className="h-full flex flex-col overflow-hidden px-4 md:px-8 pb-24 md:pb-0 space-y-4">
       {/* ── Unified Header ────────────────────────────────────────────── */}
       <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
         <div className={cn(
@@ -288,7 +288,7 @@ const TemplatesPage: React.FC = () => {
       </div>
 
       {/* ── Main Content Area ─────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <div className={cn(
           "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col md:flex-row",
           isDark 

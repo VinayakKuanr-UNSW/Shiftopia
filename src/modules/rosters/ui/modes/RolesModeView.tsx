@@ -17,7 +17,8 @@ import { cn } from '@/modules/core/lib/utils';
 import { isSydneyPast } from '@/modules/core/lib/date.utils';
 import { EnhancedAddShiftModal, ShiftContext } from '@/modules/rosters/ui/dialogs/EnhancedAddShiftModal';
 import { SmartShiftCard } from '@/modules/rosters/ui/components/SmartShiftCard';
-import { useShiftsByDateRange, useRemunerationLevels, useRoles, useUnpublishShift } from '@/modules/rosters/state/useRosterShifts';
+import { useShiftsByDateRange, useRemunerationLevels, useRoles, useUnpublishShift, useCreateShift } from '@/modules/rosters/state/useRosterShifts';
+import { useToast } from '@/modules/core/hooks/use-toast';
 import { Shift } from '@/modules/rosters/api/shifts.api';
 import { resolveGroupType, resolveShiftStatus } from '@/modules/rosters/utils/roster-utils';
 import { 
@@ -137,7 +138,8 @@ const DraggableShiftCard: React.FC<{
   onToggleSelection: (id: string) => void;
   isBulkMode: boolean;
   onAssignEmployee: (shiftId: string, employeeId: string, employeeName: string) => void;
-}> = ({ shift, isDnDModeActive, onEdit, isSelected, onToggleSelection, isBulkMode, onAssignEmployee }) => {
+  headerAction?: React.ReactNode;
+}> = ({ shift, isDnDModeActive, onEdit, isSelected, onToggleSelection, isBulkMode, onAssignEmployee, headerAction }) => {
   const { isPast, isLocked: isManagementLocked } = resolveShiftStatus(shift);
   const isLocked = isManagementLocked || (isDnDModeActive && shift.lifecycle_status !== 'Published');
 
@@ -180,8 +182,10 @@ const DraggableShiftCard: React.FC<{
           isLocked={isLocked}
           isPast={isPast}
           isDnDActive={isDnDModeActive}
+          showStatusIcons={true}
           groupColor={groupColor}
           isSelected={isSelected}
+          headerAction={headerAction}
         />
       </DroppableShiftAssign>
     </div>
@@ -259,6 +263,8 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   isBulkMode,
   onToggleShiftSelection,
 }) => {
+  const { toast } = useToast();
+  const createShiftMutation = useCreateShift();
   const activeDeptId = departmentIds[0];
   const activeSubDeptId = subDepartmentIds[0];
 
@@ -297,6 +303,93 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   const [confirmShiftId, setConfirmShiftId] = useState<string | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [collapsedLevels, setCollapsedLevels] = useState<Set<number>>(new Set());
+
+  const handleCloneShift = async (shift: Shift) => {
+    try {
+      const cloneData: any = {
+        roster_id: shift.roster_id,
+        department_id: shift.department_id,
+        sub_department_id: shift.sub_department_id,
+        shift_date: shift.shift_date,
+        start_time: shift.start_time,
+        end_time: shift.end_time,
+        organization_id: shift.organization_id,
+        group_type: (shift as any).group_type,
+        sub_group_name: (shift as any).sub_group_name,
+        shift_group_id: (shift as any).shift_group_id,
+        shift_subgroup_id: (shift as any).shift_subgroup_id || (shift as any).roster_subgroup_id,
+        role_id: shift.role_id,
+        remuneration_level_id: shift.remuneration_level_id,
+        paid_break_minutes: shift.paid_break_minutes,
+        unpaid_break_minutes: shift.unpaid_break_minutes,
+        timezone: shift.timezone,
+        required_skills: shift.required_skills || [],
+        required_licenses: shift.required_licenses || [],
+        event_ids: shift.event_ids || [],
+        tags: shift.tags || [],
+        notes: shift.notes,
+        is_training: shift.is_training,
+      };
+
+      await createShiftMutation.mutateAsync(cloneData);
+      toast({
+        title: 'Shift Cloned',
+        description: 'A new draft replica has been created (unassigned).',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Clone Failed',
+        description: error.message || 'Could not clone shift.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const buildShiftMenu = (shift: Shift) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="h-4 w-4 flex items-center justify-center hover:bg-muted dark:hover:bg-white/20 rounded transition-colors"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground opacity-60" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="bg-popover border-border min-w-[160px] z-50">
+        <DropdownMenuItem
+          onClick={() => onEditShift?.(shift)}
+          className="text-popover-foreground hover:bg-accent cursor-pointer"
+        >
+          <Edit2 className="h-4 w-4 mr-2" />
+          Edit Shift
+        </DropdownMenuItem>
+
+        <DropdownMenuItem
+          onClick={() => handleCloneShift(shift)}
+          className="text-popover-foreground hover:bg-accent cursor-pointer"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Clone Shift
+        </DropdownMenuItem>
+
+        {shift.lifecycle_status === 'Published' && (
+          <>
+            <DropdownMenuSeparator className="bg-border" />
+            <DropdownMenuItem
+              onClick={() => {
+                setConfirmShiftId(shift.id);
+                setIsConfirmOpen(true);
+              }}
+              className="text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+            >
+              <Undo2 className="h-4 w-4 mr-2" />
+              Unpublish Shift
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
   const dates = useMemo(() => {
     const numDays = viewType === 'day' ? 1 : viewType === '3day' ? 3 : viewType === 'week' ? 7 : 31;
@@ -459,6 +552,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                                 onToggleSelection={onToggleShiftSelection || (() => {})}
                                 isBulkMode={isBulkMode}
                                 onAssignEmployee={onAssignShift || (() => {})}
+                                headerAction={buildShiftMenu(s)}
                               />
                             ))}
                             {canEdit && !isBulkMode && !isShiftLocked(dStr, '23:59', 'roster_management') && (

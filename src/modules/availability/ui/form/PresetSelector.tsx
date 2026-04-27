@@ -252,7 +252,14 @@ export const PresetSelector: FC<PresetSelectorProps> = ({
   });
 
   const { toast } = useToast();
-  const { availabilityPresets } = useAvailability();
+  // TODO: Fetch presets from DB once migrated to new model
+  const availabilityPresets: AvailabilityPreset[] = [
+    { id: 'all-day-available', name: 'All Day Available', description: '00:00 - 23:59' },
+    { id: 'all-day-unavailable', name: 'All Day Unavailable', description: '00:00 - 23:59' },
+    { id: 'morning-shift', name: 'Morning (06:00 - 14:00)', description: 'Morning availability' },
+    { id: 'afternoon-shift', name: 'Afternoon (14:00 - 22:00)', description: 'Afternoon availability' },
+    { id: 'night-shift', name: 'Night (22:00 - 06:00)', description: 'Night availability' },
+  ];
 
   const currentPresetObj = availabilityPresets.find(
     (p) => p.id === selectedPreset
@@ -305,7 +312,7 @@ export const PresetSelector: FC<PresetSelectorProps> = ({
     return (
       <Button variant="outline" disabled className="flex items-center gap-2">
         <CalendarIcon className="h-4 w-4" aria-hidden="true" />
-        Apply Preset (Locked)
+        Apply Preset
       </Button>
     );
   }

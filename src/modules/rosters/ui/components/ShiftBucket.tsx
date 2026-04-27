@@ -31,6 +31,7 @@ export interface BucketShiftData {
     isDraft: boolean;
     isLocked: boolean;
     assignedEmployeeId?: string | null;
+    rawShift?: any;
 }
 
 export interface ShiftBucketProps {
@@ -171,6 +172,7 @@ export const ShiftBucket: React.FC<ShiftBucketProps> = ({
                             isPublished={shift.isPublished}
                             isDraft={shift.isDraft}
                             isLocked={shift.isLocked}
+                            rawShift={shift.rawShift}
                             canEdit={canEdit}
                             onEdit={onEditShift}
                             onDelete={onDeleteShift}

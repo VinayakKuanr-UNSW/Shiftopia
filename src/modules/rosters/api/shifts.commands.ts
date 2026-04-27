@@ -600,7 +600,7 @@ export const shiftsCommands = {
 
         const result = await callAuthenticatedRpc(
             'sm_delete_shift',
-            (userId) => ({ p_shift_id: shiftId, p_deleted_by: userId, p_reason: 'Manual deletion' }),
+            (userId) => ({ p_shift_id: shiftId, p_user_id: userId, p_reason: 'Manual deletion' }),
             DeleteShiftResponseSchema,
         );
 

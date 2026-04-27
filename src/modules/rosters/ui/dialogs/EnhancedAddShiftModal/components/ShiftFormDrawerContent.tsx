@@ -216,6 +216,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
     isSubGroupLocked,
     isRoleLocked,
     isEmployeeLocked,
+    isScheduleDefined,
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -964,21 +965,24 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                     <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/15 text-[8px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">
                                         Locked
                                     </span>
-                                ) : (
-                                    !isAssignmentEnabled && (
-                                        <span className="px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/15 text-[8px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400">
-                                            Complete schedule first
+                                ) : isTemplateMode ? (
+                                    <span className="px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/15 text-[8px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
+                                        Templates remain unassigned
+                                    </span>
+                                    ) : !isScheduleDefined && !isTemplateMode ? (
+                                        <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/15 text-[8px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">
+                                            Compliance pending details
                                         </span>
-                                    )
-                                )
+                                    ) : null
+
                             }
                         />
                         <div
                             className={cn(
                                 'transition-all duration-300',
-                                (!isAssignmentEnabled || isEmployeeLocked) &&
+                                (isEmployeeLocked || isTemplateMode) &&
                                     'opacity-70 grayscale pointer-events-none cursor-not-allowed',
-                                !isAssignmentEnabled && 'blur-[2px]',
+                                !isScheduleDefined && !isTemplateMode && 'opacity-90',
                             )}
                         >
                             <div className="rounded-xl border border-border bg-card dark:bg-white/[0.016] p-4 space-y-3">
@@ -1108,11 +1112,26 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                     </div>
                                 </div>
                             )}
-                            <CompliancePanel
-                                hook={compliancePanel}
-                                className="compliance-panel-integrated"
-                                disabled={isReadOnly || isLoadingShifts}
-                            />
+                            
+                            {isTemplateMode && !form.watch('assigned_employee_id') ? (
+                                <div className="text-center py-6">
+                                    <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 mx-auto mb-3 border border-emerald-500/20">
+                                        <CheckCircle2 className="h-5 w-5" />
+                                    </div>
+                                    <h3 className="text-[11px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mb-1">
+                                        Compliance Checks Passed
+                                    </h3>
+                                    <p className="text-[10px] text-muted-foreground/60 max-w-[200px] mx-auto leading-relaxed">
+                                        Templated shifts are validated when assigned to a specific employee.
+                                    </p>
+                                </div>
+                            ) : (
+                                <CompliancePanel
+                                    hook={compliancePanel}
+                                    className="compliance-panel-integrated"
+                                    disabled={isReadOnly || isLoadingShifts}
+                                />
+                            )}
                         </div>
                     </section>
 

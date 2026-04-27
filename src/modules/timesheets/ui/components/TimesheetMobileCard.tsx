@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, forwardRef } from 'react';
 import {
     UserX,
     ArrowRight,
@@ -16,6 +16,7 @@ import { getProtectionContext } from '@/modules/rosters/domain/shift-ui';
 import { TimesheetStatusBadge } from './TimesheetStatusBadge';
 import { getGroupColor } from '@/modules/rosters/model/roster.types';
 import type { TimesheetRow } from '../../model/timesheet.types';
+import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { isShiftFinished } from './TimesheetTable.utils';
 
 interface TimesheetMobileCardProps {
@@ -31,6 +32,7 @@ interface TimesheetMobileCardProps {
     employeeActions?: React.ReactNode;
     hideGlow?: boolean;
     useGroupColoring?: boolean;
+    className?: string;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -119,7 +121,7 @@ function getDisplayStatus(entry: TimesheetRow): { label: string; variant: string
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export const TimesheetMobileCard: React.FC<TimesheetMobileCardProps> = ({
+export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCardProps>(({
     entry,
     isSelected,
     isSelectMode,
@@ -132,7 +134,8 @@ export const TimesheetMobileCard: React.FC<TimesheetMobileCardProps> = ({
     employeeActions,
     hideGlow = false,
     useGroupColoring = false,
-}) => {
+    className,
+}, ref) => {
     const [isEditing, setIsEditing] = useState(false);
     const [localAdjStart, setLocalAdjStart] = useState(entry.adjustedStart || '');
     const [localAdjEnd, setLocalAdjEnd] = useState(entry.adjustedEnd || '');
@@ -236,245 +239,166 @@ export const TimesheetMobileCard: React.FC<TimesheetMobileCardProps> = ({
     };
 
     return (
-        <motion.div
-            layout
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.98 }}
-            style={{ 
-                borderColor: isSelected ? themeColor : 'rgba(120, 120, 120, 0.08)',
-                boxShadow: isSelected 
-                    ? `0 20px 60px -10px ${themeColor}22` 
-                    : '0 8px 32px -4px rgba(0,0,0,0.1)',
-                backgroundColor: useGroupColoring ? theme.tint : undefined
+        <SharedShiftCard
+            variant="timecard"
+            organization={entry.organization}
+            department={entry.department}
+            subGroup={entry.subGroup}
+            role={entry.role}
+            shiftDate={entry.date}
+            startTime={formatTime(entry.scheduledStart)}
+            endTime={formatTime(entry.scheduledEnd)}
+            netLength={parseInt(entry.netLength) || 0}
+            paidBreak={parseInt(entry.paidBreak) || 0}
+            unpaidBreak={parseInt(entry.unpaidBreak) || 0}
+            lifecycleStatus={entry.liveStatus}
+            groupVariant={(() => {
+                const type = entry.groupType;
+                const group = (entry.group || '').toLowerCase();
+                const dept = (entry.department || '').toLowerCase();
+                if (type === 'convention_centre' || group.includes('convention') || dept.includes('convention')) return 'convention';
+                if (type === 'exhibition_centre' || group.includes('exhibition') || dept.includes('exhibition')) return 'exhibition';
+                if (type === 'theatre' || group.includes('theatre') || dept.includes('theatre')) return 'theatre';
+                return 'default';
+            })()}
+            employeeName={entry.employee}
+            clockIn={formatTime(entry.clockIn)}
+            clockOut={formatTime(entry.clockOut)}
+            adjustedStart={formatTime(entry.adjustedStart)}
+            adjustedEnd={formatTime(entry.adjustedEnd)}
+            shiftData={{
+                lifecycle_status: entry.liveStatus,
+                assignment_outcome: entry.attendanceStatus,
+                actual_start: entry.clockIn,
+                actual_end: entry.clockOut,
+                shift_date: entry.date,
+                start_time: entry.scheduledStart,
+                end_time: entry.scheduledEnd,
             }}
-            className={cn(
-                'relative rounded-[32px] border overflow-hidden transition-all duration-500',
-                'backdrop-blur-3xl bg-white/60 dark:bg-zinc-950/95',
-                isSelected && 'ring-1 ring-primary/40',
-                isPast && !isFinalized && 'grayscale-[0.5] opacity-90'
-            )}
-        >
-            {/* Group Accent Bar */}
-            {useGroupColoring && theme.tint !== 'transparent' && (
-                <div 
-                    className="absolute left-0 top-0 bottom-0 w-1.5 z-30"
-                    style={{ backgroundColor: themeColor }}
-                />
-            )}
-
-            {!hideGlow && (
-                <>
-                    <div 
-                        style={{ 
-                            background: `radial-gradient(circle at center, ${theme.atmosphere[0]}, ${theme.atmosphere[1]}, ${theme.atmosphere[2]})`,
-                            mixBlendMode: 'screen'
-                        }}
-                        className="absolute -top-32 -right-32 w-96 h-96 blur-[120px] opacity-[0.35] dark:opacity-[0.2] pointer-events-none" 
-                    />
-                    <div 
-                        style={{ 
-                            background: `radial-gradient(circle at center, ${theme.secondary}, ${themeColor}, transparent)`,
-                            mixBlendMode: 'screen'
-                        }}
-                        className="absolute -bottom-48 -right-32 w-80 h-80 blur-[100px] opacity-[0.25] dark:opacity-[0.1] pointer-events-none" 
-                    />
-                </>
-            )}
-
-            <div className="px-6 py-5 relative z-20 h-full flex flex-col">
-                <div className="mb-2" />
-                <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-4 flex-1 min-w-0">
-                        {isSelectMode && (
-                            <button
-                                onClick={onToggleSelect}
-                                className={cn(
-                                    "shrink-0 h-10 w-10 rounded-xl border-2 flex items-center justify-center transition-all",
-                                    isSelected ? "bg-primary border-primary shadow-lg" : "border-foreground/10 bg-foreground/5"
-                                )}
-                            >
-                                {isSelected && <CheckSquare className="w-5 h-5 text-white" />}
-                            </button>
-                        )}
-                        <div className="min-w-0">
-                            <h1 className="text-2xl font-bold text-foreground tracking-tight leading-tight truncate">
-                                {entry.employee}
-                            </h1>
-                            <p className="text-[13px] font-medium text-foreground/40 mt-0.5 tracking-wide">
-                                {entry.role}
-                            </p>
-                        </div>
-                    </div>
-                    <TimesheetStatusBadge
-                        status={displayStatus.variant}
-                        className="shrink-0"
-                    />
-                </div>
-
-                {protection.status !== 'DRAFT' && !isFinalized && (
-                    <div className="mb-4 flex items-center gap-2">
-                        <div className={cn(
-                            "px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 border backdrop-blur-md transition-colors",
-                            protection.status === 'LOCKED' ? "bg-slate-500/10 border-slate-500/20" : "bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10",
-                            protection.colorClass
-                        )}>
-                            <protection.icon className="w-3 h-3" />
-                            {protection.label}
-                        </div>
-                    </div>
-                )}
-
-                <div className="space-y-1 mb-6">
-                    <DataRow 
-                        label="Scheduled" 
-                        start={formatTime(entry.scheduledStart)} 
-                        end={formatTime(entry.scheduledEnd)} 
-                        emphasis 
-                    />
-                    <div className="h-[1px] w-full bg-foreground/[0.04] my-2" />
-                    <DataRow 
-                        label="Actual" 
-                        start={formatTime(entry.clockIn)} 
-                        end={formatTime(entry.clockOut)} 
-                        muted={!entry.clockIn || entry.clockIn === '-'}
-                    />
-                    {isEditing ? (
-                        <div 
-                            style={{ borderColor: `${themeColor}33`, backgroundColor: `${themeColor}08` }}
-                            className="py-3 px-3 my-2 border rounded-2xl flex items-center justify-between transition-all"
-                        >
-                            <span style={{ color: themeColor }} className="text-[10px] font-bold uppercase tracking-widest">Adjusted</span>
-                            <div className="flex items-center gap-3">
-                                <input 
-                                    value={localAdjStart} 
-                                    onChange={e => setLocalAdjStart(e.target.value)} 
-                                    className="w-16 bg-foreground/5 border border-foreground/10 rounded-lg px-2 py-1 text-xs text-foreground text-center font-bold tabular-nums" 
-                                />
-                                <ArrowRight className="h-3 w-3 text-primary/40" />
-                                <input 
-                                    value={localAdjEnd} 
-                                    onChange={e => setLocalAdjEnd(e.target.value)} 
-                                    className="w-16 bg-foreground/5 border border-foreground/10 rounded-lg px-2 py-1 text-xs text-foreground text-center font-bold tabular-nums" 
-                                />
-                            </div>
-                        </div>
-                    ) : (
-                        <DataRow 
-                            label="Adjusted" 
-                            start={formatTime(entry.adjustedStart)} 
-                            end={formatTime(entry.adjustedEnd)} 
-                            muted={!entry.adjustedStart || entry.adjustedStart === '—'}
-                            accentColor="primary"
-                            style={{ color: themeColor }}
-                        />
+            topContent={isSelectMode && (
+                <button
+                    onClick={onToggleSelect}
+                    className={cn(
+                        "shrink-0 h-10 w-10 rounded-xl border-2 flex items-center justify-center transition-all",
+                        isSelected ? "bg-primary border-primary shadow-lg" : "border-foreground/10 bg-foreground/5"
                     )}
+                >
+                    {isSelected && <CheckSquare className="w-5 h-5 text-white" />}
+                </button>
+            )}
+            footerActions={
+                <div className="flex flex-col gap-3">
                     {isEditing ? (
-                        <div className="py-2 px-3 flex items-center justify-between transition-all">
-                            <span className="text-[10px] font-bold text-foreground/20 uppercase tracking-widest">Breaks (m)</span>
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center gap-1 bg-foreground/5 px-2 py-1 rounded-lg border border-foreground/5">
+                        <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Adj In</Label>
+                                    <input 
+                                        value={localAdjStart} 
+                                        onChange={e => setLocalAdjStart(e.target.value)} 
+                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-xs text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Adj Out</Label>
+                                    <input 
+                                        value={localAdjEnd} 
+                                        onChange={e => setLocalAdjEnd(e.target.value)} 
+                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-xs text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Paid Break</Label>
                                     <input 
                                         value={localPaidBreak} 
                                         onChange={e => setLocalPaidBreak(e.target.value)} 
-                                        className="w-8 bg-transparent text-xs text-foreground text-center font-bold tabular-nums" 
+                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-xs text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
                                     />
-                                    <span className="text-[9px] text-foreground/20">P</span>
                                 </div>
-                                <div className="flex items-center gap-1 bg-foreground/5 px-2 py-1 rounded-lg border border-foreground/5">
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Unpaid Break</Label>
                                     <input 
                                         value={localUnpaidBreak} 
                                         onChange={e => setLocalUnpaidBreak(e.target.value)} 
-                                        className="w-8 bg-transparent text-xs text-foreground text-center font-bold tabular-nums" 
+                                        className="w-full bg-foreground/5 border border-foreground/10 rounded-xl px-3 py-2 text-xs text-foreground font-bold tabular-nums focus:ring-1 focus:ring-primary/20 outline-none" 
                                     />
-                                    <span className="text-[9px] text-foreground/20">U</span>
                                 </div>
                             </div>
-                        </div>
-                    ) : (
-                        <DataRow 
-                            label="Breaks" 
-                            start={entry.paidBreak ? `${entry.paidBreak}m` : '0m'} 
-                            end={entry.unpaidBreak ? `${entry.unpaidBreak}m` : '0m'} 
-                            muted={(!entry.paidBreak || entry.paidBreak === '0') && (!entry.unpaidBreak || entry.unpaidBreak === '0')}
-                        />
-                    )}
-                </div>
-
-                <div className="flex-1" />
-                
-                {/* Action Area */}
-                <div className="flex items-center gap-3">
-                    {isEditing ? (
-                        <>
+                            <div className="flex gap-2">
                                 <Button
                                     onClick={handleSaveAdjustment}
-                                    className="flex-1 h-11 rounded-xl font-bold bg-primary text-white p-0 flex items-center justify-center transition-all active:scale-95"
+                                    className="flex-1 h-11 rounded-xl font-bold bg-primary text-white shadow-lg active:scale-95 transition-all"
                                 >
-                                <Check className="h-5 w-5" />
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                onClick={() => setIsEditing(false)}
-                                className="h-11 w-11 rounded-xl bg-foreground/5 text-foreground/40 hover:text-rose-500 p-0 flex items-center justify-center transition-all active:scale-95"
-                            >
-                                <X className="h-5 w-5" />
-                            </Button>
-                        </>
+                                    <Check className="h-5 w-5 mr-2" /> Save
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setIsEditing(false)}
+                                    className="h-11 px-4 rounded-xl border-border/50 text-foreground/40 hover:text-rose-500 hover:bg-rose-500/5 active:scale-95 transition-all"
+                                >
+                                    <X className="h-5 w-5" />
+                                </Button>
+                            </div>
+                        </div>
                     ) : isManager ? (
                         canAction ? (
-                            <div className="flex-1 flex items-center gap-3">
-                                <div className="flex-1 flex gap-1.5 overflow-hidden">
+                            <div className="flex flex-col gap-2">
+                                <div className="flex gap-2">
                                     <Button
                                         onClick={handleApprove}
                                         disabled={!isShiftOver}
-                                        className="flex-1 h-11 rounded-xl font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-30 disabled:grayscale p-0 flex items-center justify-center transition-all active:scale-95"
+                                        className="flex-1 h-11 rounded-xl font-black uppercase text-[10px] tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-30 transition-all active:scale-95"
                                     >
-                                        <Check className="h-5 w-5" />
+                                        Approve
                                     </Button>
                                     <Button
                                         onClick={handleReject}
                                         disabled={!isShiftOver}
-                                        className="flex-1 h-11 rounded-xl font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/10 hover:bg-rose-500/20 disabled:opacity-30 disabled:grayscale p-0 flex items-center justify-center transition-all active:scale-95"
+                                        className="flex-1 h-11 rounded-xl font-black uppercase text-[10px] tracking-widest bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/10 hover:bg-rose-500/20 disabled:opacity-30 transition-all active:scale-95"
                                     >
-                                        <X className="h-5 w-5" />
+                                        Reject
                                     </Button>
                                 </div>
-                                <div className="flex gap-1.5 shrink-0">
+                                <div className="flex gap-2">
                                     {showNoShowBtn && (
                                         <Button
-                                            variant="ghost"
+                                            variant="outline"
                                             onClick={() => onMarkNoShow?.(String(entry.id))}
                                             disabled={!isShiftOver}
-                                            className="h-11 w-11 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-500 disabled:opacity-30 p-0 flex items-center justify-center transition-all active:scale-95"
+                                            className="flex-1 h-10 rounded-xl border-rose-500/20 bg-rose-500/5 text-rose-600 dark:text-rose-400 text-[10px] font-black uppercase tracking-widest disabled:opacity-30 transition-all active:scale-95"
                                         >
-                                            <UserX className="h-4 w-4" />
+                                            <UserX className="h-3.5 w-3.5 mr-2" /> Mark No Show
                                         </Button>
                                     )}
                                     <Button
-                                        variant="ghost"
+                                        variant="outline"
                                         onClick={() => setIsEditing(true)}
                                         disabled={!isShiftOver}
-                                        className="h-11 w-11 rounded-xl bg-foreground/5 text-foreground/20 hover:text-foreground hover:bg-foreground/10 disabled:opacity-30 p-0 flex items-center justify-center transition-all active:scale-95"
+                                        className="flex-1 h-10 rounded-xl border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 text-[10px] font-black uppercase tracking-widest disabled:opacity-30 transition-all active:scale-95"
                                     >
-                                        <Edit3 className="h-4 w-4" />
+                                        <Edit3 className="h-3.5 w-3.5 mr-2" /> Adjust Times
                                     </Button>
                                 </div>
                             </div>
                         ) : (
-                            <div className="flex-1 flex flex-col justify-center">
-                                <div className="flex items-center justify-center px-4 py-3 bg-foreground/[0.04] border border-foreground/5 rounded-2xl text-foreground/40 text-[11px] font-black uppercase tracking-widest text-center">
-                                    Finalized Record
-                                </div>
+                            <div className="w-full flex items-center justify-center px-4 py-3 bg-foreground/[0.04] border border-foreground/5 rounded-2xl text-foreground/40 text-[10px] font-black uppercase tracking-widest">
+                                Finalized Record
                             </div>
                         )
                     ) : (
-                        <div className="flex-1">
+                        <div className="w-full">
                             {employeeActions}
                         </div>
                     )}
                 </div>
-            </div>
-        </motion.div>
+            }
+            className={cn(
+                isSelected && 'ring-2 ring-primary/60',
+                className
+            )}
+            ref={ref}
+        />
     );
-};
+});

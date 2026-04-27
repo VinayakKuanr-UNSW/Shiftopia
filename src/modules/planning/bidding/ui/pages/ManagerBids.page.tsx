@@ -7,6 +7,8 @@ import { Gavel } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { UnifiedModuleFunctionBar } from '@/modules/core/ui/components/UnifiedModuleFunctionBar';
+import { useState } from 'react';
 
 /**
  * ManagerBidsPage
@@ -20,6 +22,8 @@ import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 export const ManagerBidsPage: React.FC = () => {
     const { activeContract } = useAuth();
     const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
+    const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
+    const [searchQuery, setSearchQuery] = useState('');
 
     const { isDark } = useTheme();
 
@@ -32,30 +36,31 @@ export const ManagerBidsPage: React.FC = () => {
     }
 
     return (
-        <div className="h-full flex flex-col overflow-hidden">
-            {/* ── Unified Header ────────────────────────────────────────────── */}
-            <div className="sticky top-0 z-30 -mx-4 px-4 md:-mx-8 md:px-8 pt-4 pb-4 lg:pb-6">
-                <div className={cn(
-                    "rounded-[32px] p-4 lg:p-6 transition-all border",
-                    isDark 
-                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
-                )}>
-                    {/* Row 1: Identity & Clock + Row 2: Scope Filter */}
-                    <PersonalPageHeader
-                        title="Open Bids Manager"
-                        Icon={Gavel}
-                        scope={scope}
-                        setScope={setScope}
-                        isGammaLocked={isGammaLocked}
-                    />
-
-                    {/* Row 3: Function Bar / Tabs could go here if needed */}
-                </div>
+        <div className="h-full flex flex-col overflow-hidden bg-background">
+            {/* ── ROW 1: HEADER ────────────────────────────────────────────── */}
+            <div className="flex-shrink-0 p-4 lg:p-6 pb-0">
+                <PersonalPageHeader
+                    title="Open Bids Manager"
+                    Icon={Gavel}
+                    mode="managerial"
+                    scope={scope}
+                    setScope={setScope}
+                    isGammaLocked={isGammaLocked}
+                />
             </div>
 
-            {/* ── Main Content Area ─────────────────────────── */}
-            <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+            {/* ── ROW 2: FUNCTION BAR ───────────────────────────────────────── */}
+            <div className="flex-shrink-0 px-4 lg:px-6 py-2">
+                <UnifiedModuleFunctionBar
+                    viewMode={viewMode}
+                    onViewModeChange={setViewMode}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                />
+            </div>
+
+            {/* ── ROW 3: CONTENT AREA ───────────────────────────────────────── */}
+            <div className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6">
                 <div className={cn(
                     "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col",
                     isDark 
@@ -66,6 +71,8 @@ export const ManagerBidsPage: React.FC = () => {
                         organizationId={scope.org_ids[0] ?? null}
                         departmentId={scope.dept_ids[0] ?? null}
                         subDepartmentId={scope.subdept_ids[0] ?? null}
+                        externalSearchQuery={searchQuery}
+                        viewMode={viewMode}
                     />
                 </div>
             </div>

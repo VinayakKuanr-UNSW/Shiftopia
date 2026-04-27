@@ -14,6 +14,8 @@ import { useResolvedAvailability } from '@/modules/rosters/hooks/useResolvedAvai
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
 import { isSydneyPast } from '@/modules/core/lib/date.utils';
+import { useToast } from '@/modules/core/hooks/use-toast';
+import { useCreateShift } from '@/modules/rosters/state/useRosterShifts';
 import { 
   PeopleModeEmployee, 
   PeopleModeShift, 
@@ -152,6 +154,8 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   onAssignShift,
   onMoveShift,
 }) => {
+  const { toast } = useToast();
+  const createShiftMutation = useCreateShift();
   const { 
     bulkModeActive: globalBulkModeActive, 
     selectedShiftIds: globalSelectedShiftIds,
@@ -160,8 +164,54 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
 
   const { toggleShiftSelection: uiToggleShiftSelection } = useRosterUI();
 
-  const isBulkMode = bulkModeActive;
   const currentSelectedShifts = propsSelectedShifts;
+
+  const handleCloneShift = async (shift: PeopleModeShift) => {
+    try {
+      const { rawShift } = shift;
+      if (!rawShift) {
+        toast({ title: 'Error', description: 'Could not find raw shift data to clone.', variant: 'destructive' });
+        return;
+      }
+
+      const cloneData: any = {
+        roster_id: rawShift.roster_id,
+        department_id: rawShift.department_id,
+        sub_department_id: rawShift.sub_department_id,
+        shift_date: rawShift.shift_date,
+        start_time: rawShift.start_time,
+        end_time: rawShift.end_time,
+        organization_id: rawShift.organization_id,
+        group_type: rawShift.group_type,
+        sub_group_name: rawShift.sub_group_name,
+        shift_group_id: rawShift.shift_group_id,
+        shift_subgroup_id: rawShift.shift_subgroup_id || (rawShift as any).roster_subgroup_id,
+        role_id: rawShift.role_id,
+        remuneration_level_id: rawShift.remuneration_level_id,
+        paid_break_minutes: rawShift.paid_break_minutes,
+        unpaid_break_minutes: rawShift.unpaid_break_minutes,
+        timezone: rawShift.timezone,
+        required_skills: rawShift.required_skills || [],
+        required_licenses: rawShift.required_licenses || [],
+        event_ids: rawShift.event_ids || [],
+        tags: rawShift.tags || [],
+        notes: rawShift.notes,
+        is_training: rawShift.is_training,
+      };
+
+      await createShiftMutation.mutateAsync(cloneData);
+      toast({
+        title: 'Shift Cloned',
+        description: 'A new draft replica has been created (unassigned).',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Clone Failed',
+        description: error.message || 'Could not clone shift.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const buildShiftMenu = (shift: PeopleModeShift) => (
     <DropdownMenu>
@@ -180,6 +230,14 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
         >
           <Edit2 className="h-4 w-4 mr-2" />
           Edit Shift
+        </DropdownMenuItem>
+
+        <DropdownMenuItem
+          onClick={() => handleCloneShift(shift)}
+          className="text-popover-foreground hover:bg-accent cursor-pointer"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Clone Shift
         </DropdownMenuItem>
 
         {canUnpublish(shift) && onUnpublishShift && (
@@ -406,6 +464,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                                           isLocked={isLocked}
                                           isPast={isPast}
                                           isDnDActive={isDnDModeActive}
+                                          showStatusIcons={true}
                                           onClick={(e) => {
                                             if (isBulkMode) {
                                               // Prioritize prop-based toggle, then global store, then UI context

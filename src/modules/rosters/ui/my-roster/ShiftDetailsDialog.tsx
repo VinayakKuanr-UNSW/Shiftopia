@@ -70,7 +70,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   const isCommenced = isShiftCommenced(shift.shift_date, shift.start_time);
 
   const existingSwapRequest = mySwapRequests.find(
-    s => (s.requester_shift_id === shift.id || s.original_shift_id === shift.id) &&
+    s => (s.requester_shift_id === shift.id || s.target_shift_id === shift.id) &&
       (s.status === 'OPEN' || s.status === 'MANAGER_PENDING')
   );
 
@@ -169,8 +169,8 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
       <ResponsiveDialog
         open={isOpen}
         onOpenChange={onClose}
-        dialogClassName="max-w-md p-0 overflow-hidden bg-background border-border rounded-2xl"
-        drawerClassName="bg-background border-border"
+        dialogClassName="max-w-md p-0 overflow-hidden backdrop-blur-3xl bg-white/60 dark:bg-zinc-950/95 border border-white/10 shadow-2xl rounded-[32px]"
+        drawerClassName="backdrop-blur-3xl bg-white/60 dark:bg-zinc-950/95 border-t border-white/10 rounded-t-[32px]"
       >
         <ResponsiveDialog.Header className="sr-only">
           <ResponsiveDialog.Title>{shift.roles?.name || 'Shift'} Details</ResponsiveDialog.Title>
@@ -179,10 +179,11 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
           </ResponsiveDialog.Description>
         </ResponsiveDialog.Header>
 
-        {/* Shift Card */}
-        <div className="p-4 pb-0">
+        {/* Shift Card Content */}
+        <div className="p-0">
           <SharedShiftCard
-            variant="default"
+            variant="timecard"
+            isFlat={true}
             organization={shift.organizations?.name || ''}
             department={shift.departments?.name || ''}
             subGroup={shift.sub_departments?.name || subGroupName}
@@ -198,62 +199,64 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
             isPast={isPast}
             shiftData={shift}
             lifecycleStatus={shift.lifecycle_status}
+            className="pb-8" // Add some bottom padding for mobile drawers
             statusIcons={
-              <div className="col-span-3 flex flex-wrap gap-2 items-center">
+              <>
                 {shift.remuneration_levels?.level_name && (
-                  <Badge className="text-[9px] font-black bg-primary/10 text-primary border-primary/20 border uppercase tracking-wider">
+                  <Badge className="text-[9px] font-black bg-primary/10 text-primary border-primary/20 border uppercase tracking-wider h-8 flex items-center justify-center">
                     {shift.remuneration_levels.level_name}
                   </Badge>
                 )}
                 {shift.remuneration_levels?.hourly_rate_min && (
-                  <span className="text-[9px] font-mono font-black text-muted-foreground">
-                    ${shift.remuneration_levels.hourly_rate_min}/hr
-                  </span>
+                  <div className="flex items-center justify-center bg-muted/30 rounded-md border border-border/50 h-8">
+                    <span className="text-[9px] font-mono font-black text-muted-foreground uppercase">
+                      ${shift.remuneration_levels.hourly_rate_min}/hr
+                    </span>
+                  </div>
                 )}
+              </>
+            }
+            footerActions={
+              <div className="flex flex-col gap-2 w-full">
+                {!isLockedFromActions && (
+                  <div className="flex gap-2">
+                      <Button
+                          onClick={handleSwapShift}
+                          className={cn(
+                              'flex-1 h-12 rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all active:scale-95 shadow-md',
+                              'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20'
+                          )}
+                      >
+                      <ArrowLeftRight size={16} className="mr-2" />
+                      {swapLabel}
+                      </Button>
+                      <Button
+                          onClick={handleDropShift}
+                          className={cn(
+                              'flex-1 h-12 rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all active:scale-95 shadow-md',
+                              'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/20'
+                          )}
+                      >
+                      <X size={16} className="mr-2" />
+                      {dropLabel}
+                      </Button>
+                  </div>
+                )}
+                {isWithinLockoutPeriod && !isPast && !isActiveOrCommenced && (
+                  <div className="px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center gap-3">
+                    <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 font-mono">
+                      {"Emergent State: Lockout Active (<4h)"}
+                    </span>
 
+                  </div>
+                )}
               </div>
             }
+
           />
         </div>
 
-        {/* Action Buttons */}
-        <ResponsiveDialog.Footer className="p-4 pt-3">
-          <div className="flex flex-col sm:flex-row gap-2 w-full">
-            <Button
-              onClick={onClose}
-              variant="outline"
-              className="flex-1 border-border/50 bg-transparent hover:bg-muted rounded-full"
-            >
-              Close
-            </Button>
-            <Button
-              onClick={handleSwapShift}
-              disabled={isLockedFromActions}
-              className={cn(
-                'flex-1 rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed',
-                isWithinLockoutPeriod
-                  ? 'bg-muted text-muted-foreground border border-border'
-                  : 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20 dark:hover:bg-indigo-500/20'
-              )}
-            >
-              <ArrowLeftRight size={16} className="mr-2" />
-              {swapLabel}
-            </Button>
-            <Button
-              onClick={handleDropShift}
-              disabled={isLockedFromActions}
-              className={cn(
-                'flex-1 rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed',
-                isActiveOrCommenced || hasCheckedIn || isWithinLockoutPeriod
-                  ? 'bg-muted text-muted-foreground border border-border'
-                  : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20 dark:hover:bg-rose-500/20'
-              )}
-            >
-              <X size={16} className="mr-2" />
-              {dropLabel}
-            </Button>
-          </div>
-        </ResponsiveDialog.Footer>
       </ResponsiveDialog>
 
       {/* Swap Request Modal */}

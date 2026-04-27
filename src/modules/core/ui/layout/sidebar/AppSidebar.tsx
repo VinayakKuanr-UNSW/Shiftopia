@@ -533,24 +533,24 @@ const AppSidebar: React.FC = () => {
           </CollapsibleSection>
         )}
 
-        {/* ---------- Settings ---------- */}
-        <div className="pt-2">
-          <NavigationItem
-            to="/settings"
-            icon={Settings}
-            iconColor="text-slate-400"
-            label={t('common.settings')}
-            isActive={isRouteActive('/settings')}
-            description={t('settings.language_description')}
-          />
-        </div>
+
       </div>
 
       {/* ==================== FOOTER ==================== */}
       <div className="p-4 border-t border-border/50 space-y-4">
         {/* Quick Actions */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
           <ThemeSelector />
+          <Button
+            variant="ghost"
+            size="icon"
+            asChild
+            className="rounded-full h-10 w-10 hover:bg-white/5 text-slate-400 hover:text-white transition-all"
+          >
+            <NavLink to="/settings" title={t('common.settings')}>
+              <Settings className="h-5 w-5" />
+            </NavLink>
+          </Button>
         </div>
 
         <Separator className="bg-border/30" />

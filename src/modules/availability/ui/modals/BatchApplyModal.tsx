@@ -32,10 +32,14 @@ interface BatchApplyModalProps {
     name: string;
     timeSlots: Array<{ startTime: string; endTime: string }>;
   }>;
+  isLocked?: boolean;
 }
-
+export default function BatchApplyModal({
+  open,
+  onClose,
   onApply,
   availabilityPresets,
+  isLocked = false,
 }: BatchApplyModalProps) {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
@@ -118,6 +122,12 @@ interface BatchApplyModalProps {
       </ResponsiveDialog.Header>
 
       <ResponsiveDialog.Body className="overflow-y-auto max-h-[70dvh]">
+        {isLocked && (
+          <div className="mb-4 flex items-center gap-2 p-3 bg-amber-50 text-amber-800 rounded-lg border border-amber-200 text-sm">
+            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+            <span>This calendar is locked. You cannot modify availability.</span>
+          </div>
+        )}
         <div className="space-y-4">
 
           {/* Date Selection */}
@@ -132,7 +142,7 @@ interface BatchApplyModalProps {
                 selected={dateRange}
                 onSelect={setDateRange}
                 className="rounded-md"
-                disabled={(date) => isBefore(startOfDay(date), today)}
+                disabled={(date) => isLocked || isBefore(startOfDay(date), today)}
               />
             </div>
             {hasPastDates && (
@@ -150,10 +160,10 @@ interface BatchApplyModalProps {
               Configure Time Slots
             </Label>
 
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'preset' | 'custom')}>
+            <Tabs value={activeTab} onValueChange={(value) => !isLocked && setActiveTab(value as 'preset' | 'custom')}>
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="preset">Use Preset</TabsTrigger>
-                <TabsTrigger value="custom">Custom Times</TabsTrigger>
+                <TabsTrigger value="preset" disabled={isLocked}>Use Preset</TabsTrigger>
+                <TabsTrigger value="custom" disabled={isLocked}>Custom Times</TabsTrigger>
               </TabsList>
 
               <TabsContent value="preset" className="space-y-3">
@@ -166,6 +176,7 @@ interface BatchApplyModalProps {
                       size="sm"
                       onClick={() => handlePresetSelect(preset.id)}
                       className="h-auto p-3 text-left"
+                      disabled={isLocked}
                     >
                       <div>
                         <div className="font-medium">{preset.name}</div>
@@ -187,6 +198,7 @@ interface BatchApplyModalProps {
                         value={slot.startTime}
                         onChange={(e) => updateTimeSlot(index, 'startTime', e.target.value)}
                         className="w-24"
+                        disabled={isLocked}
                       />
                       <span className="text-sm text-muted-foreground">to</span>
                       <Input
@@ -194,35 +206,41 @@ interface BatchApplyModalProps {
                         value={slot.endTime}
                         onChange={(e) => updateTimeSlot(index, 'endTime', e.target.value)}
                         className="w-24"
+                        disabled={isLocked}
                       />
                       <select
                         value={slot.status}
                         onChange={(e) => updateTimeSlot(index, 'status', e.target.value)}
                         className="px-2 py-1 border rounded text-sm"
+                        disabled={isLocked}
                       >
                         <option value="Available">Available</option>
                         <option value="Unavailable">Unavailable</option>
                         <option value="Partial">Partial</option>
                       </select>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeTimeSlot(index)}
-                      >
-                        ×
-                      </Button>
+                      {!isLocked && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeTimeSlot(index)}
+                        >
+                          ×
+                        </Button>
+                      )}
                     </div>
                   ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addCustomTimeSlot}
-                    className="w-full"
-                  >
-                    Add Time Slot
-                  </Button>
+                  {!isLocked && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addCustomTimeSlot}
+                      className="w-full"
+                    >
+                      Add Time Slot
+                    </Button>
+                  )}
                 </div>
               </TabsContent>
             </Tabs>
@@ -237,6 +255,7 @@ interface BatchApplyModalProps {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
+              disabled={isLocked}
             />
           </div>
         </div>
@@ -246,7 +265,7 @@ interface BatchApplyModalProps {
         <Button type="button" variant="outline" onClick={onClose} className="min-h-[44px]">
           Cancel
         </Button>
-        <Button onClick={handleApply} disabled={!isValid} className="min-h-[44px]">
+        <Button onClick={handleApply} disabled={!isValid || isLocked} className="min-h-[44px]">
           {isValid && dateRange?.from && dateRange.to
             ? `Apply to ${format(dateRange.from, 'MMM d')} - ${format(dateRange.to, 'MMM d')}`
             : 'Apply to Range'

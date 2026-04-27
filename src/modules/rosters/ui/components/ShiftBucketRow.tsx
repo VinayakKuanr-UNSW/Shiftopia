@@ -7,6 +7,12 @@ import { Edit2, Trash2, Send, Lock, User, UserX, Undo2 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
+import { getShiftStatusIcons } from '../../domain/shift-ui';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/modules/core/ui/primitives/tooltip';
 
 export interface ShiftBucketRowProps {
     shiftId: string;
@@ -23,6 +29,8 @@ export interface ShiftBucketRowProps {
     onDelete: (shiftId: string) => void;
     onPublish: (shiftId: string) => void;
     onUnpublish: (shiftId: string) => void;
+    rawShift?: any;
+    showStatusIcons?: boolean;
 }
 
 function formatTime(time: string): string {
@@ -45,8 +53,14 @@ export const ShiftBucketRow: React.FC<ShiftBucketRowProps> = ({
     onDelete,
     onPublish,
     onUnpublish,
+    rawShift,
+    showStatusIcons = true, // Default to true in Roster views
 }) => {
     const disabled = isLocked || !canEdit;
+    
+    const statusIcons = React.useMemo(() => 
+        (showStatusIcons && rawShift) ? getShiftStatusIcons(rawShift) : [], 
+    [rawShift, showStatusIcons]);
 
     return (
         <div
@@ -93,6 +107,20 @@ export const ShiftBucketRow: React.FC<ShiftBucketRowProps> = ({
             {/* Lock icon */}
             {isLocked && (
                 <Lock className="h-3 w-3 text-amber-500 flex-shrink-0 ml-0.5" />
+            )}
+
+            {/* Status Icons (Roster Planner) */}
+            {showStatusIcons && statusIcons.length > 0 && (
+                <div className="flex items-center gap-1 ml-1 shrink-0">
+                    {statusIcons.map((si, i) => (
+                        <Tooltip key={i}>
+                            <TooltipTrigger asChild>
+                                <si.icon className={cn("h-3 w-3", si.color)} />
+                            </TooltipTrigger>
+                            <TooltipContent className="text-[10px] py-1 px-2">{si.tooltip}</TooltipContent>
+                        </Tooltip>
+                    ))}
+                </div>
             )}
 
             {/* Action buttons - visible on hover */}

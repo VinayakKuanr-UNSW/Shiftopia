@@ -309,10 +309,10 @@ export function useShiftFormOrchestrator({
     const isRoleLocked = isContextInherited && safeContext.mode === 'roles' && !!safeContext.roleId;
     const isEmployeeLocked = isContextInherited && safeContext.mode === 'people' && !!safeContext.employeeId;
 
-    // ── Dependency Ordering ──────────────────────────────────────────────────
-    // Assignment is disabled until Role, Date, and Times are set.
-    const isScheduleDefined = !!watchRoleId && !!watchShiftDate && !!watchStart && !!watchEnd;
-    const isAssignmentEnabled = !isReadOnly && isScheduleDefined;
+    // Assignment is disabled for templates (always unassigned) and in read-only modes.
+    // In Group/Role modes, we allow selection even if times aren't set yet (though compliance will be pending).
+    const isScheduleDefined = !!watchRoleId && (!!watchShiftDate || isTemplateMode) && !!watchStart && !!watchEnd;
+    const isAssignmentEnabled = !isReadOnly && !isTemplateMode;
 
     // ── Effects ──────────────────────────────────────────────────────────────
 
@@ -394,7 +394,7 @@ export function useShiftFormOrchestrator({
                 paid_break_minutes: undefined,
                 unpaid_break_minutes: undefined,
                 timezone: SYDNEY_TZ,
-                assigned_employee_id: context?.employeeId || null,
+                assigned_employee_id: isTemplateMode ? null : (context?.employeeId || null),
                 required_skills: [],
                 required_licenses: [],
                 event_ids: [],
@@ -402,7 +402,7 @@ export function useShiftFormOrchestrator({
                 is_training: false,
             });
         }// eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen, editMode, existingShift, context]);
+    }, [isOpen, editMode, existingShift, context, isTemplateMode]);
 
     // ── Compliance (v1 runner — used by AssignmentStep hover/select flow) ────
     const buildComplianceInput = useCallback(() => ({
@@ -444,11 +444,20 @@ export function useShiftFormOrchestrator({
     // Build the v2 ComplianceInputV2 from current form state.
     // Returns null if required fields are missing.
     const buildV2ComplianceInput = useCallback((): ComplianceInputV2 | null => {
-        if (!watchEmployeeId || !watchStart || !watchEnd || !watchShiftDate || !watchRoleId) {
+        // Base requirements for any check: times and role.
+        if (!watchStart || !watchEnd || !watchRoleId) {
             return null;
         }
 
-        const shiftDateStr = format(watchShiftDate, 'yyyy-MM-dd');
+        // Rostered shifts REQUIRE a date and an employee.
+        // Templates do not (they use mocks if missing).
+        if (!isTemplateMode && (!watchEmployeeId || !watchShiftDate)) {
+            return null;
+        }
+
+        const shiftDateStr = watchShiftDate 
+            ? format(watchShiftDate, 'yyyy-MM-dd') 
+            : format(new Date(), 'yyyy-MM-dd');
 
         return {
             employee_id: watchEmployeeId,
@@ -478,6 +487,7 @@ export function useShiftFormOrchestrator({
                     is_ordinary_hours: s.is_ordinary_hours ?? true,
                     break_minutes: s.unpaid_break_minutes || 0,
                     unpaid_break_minutes: s.unpaid_break_minutes || 0,
+                    is_training: s.is_training || false,
                 })),
             candidate_changes: {
                 add_shifts: [{
@@ -492,6 +502,7 @@ export function useShiftFormOrchestrator({
                     sub_department_id: resolvedContext.subDepartmentId ?? undefined,
                     required_qualifications: [],
                     is_ordinary_hours: true,
+                    is_training: watchIsTraining || false,
                     break_minutes:     0,
                     unpaid_break_minutes: Number(watchUnpaidBreak) || 0,
                 }],
@@ -505,45 +516,44 @@ export function useShiftFormOrchestrator({
         };
     }, [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchRoleId, watchUnpaidBreak, employeeExistingShifts, existingShift, resolvedContext, minShiftHours]);
 
-    // v2 CompliancePanel hook — single source of truth for compliance state
     const compliancePanel = useCompliancePanel({
         buildInputs: useCallback(async () => {
             if (isLoadingShifts) throw new Error('Fetching employee information...');
             const input = buildV2ComplianceInput();
+            
             if (!input) {
-                // Return a "Skeleton" input for shift-only checks if we have times
-                if (watchStart && watchEnd && watchShiftDate && watchRoleId) {
-                    return [{
-                        employee_id: 'skeleton',
-                        employee_context: {
-                            employee_id: 'skeleton',
-                            contract_type: 'CASUAL',
-                            contracted_weekly_hours: 0,
-                            assigned_role_ids: [],
-                            contracts: [],
-                            qualifications: [],
-                        },
-                        existing_shifts: [],
-                        candidate_changes: {
-                            add_shifts: [{
-                                shift_id: existingShift?.id ?? 'candidate',
-                                shift_date: format(watchShiftDate, 'yyyy-MM-dd'),
-                                start_time: watchStart,
-                                end_time: watchEnd,
-                                role_id: watchRoleId,
-                                required_qualifications: [],
-                                is_ordinary_hours: true,
-                                break_minutes: 0,
-                                unpaid_break_minutes: Number(watchUnpaidBreak) || 0,
-                            }],
-                            remove_shifts: existingShift?.id ? [existingShift.id] : [],
-                        },
-                        mode: 'SIMULATED',
-                        operation_type: 'ASSIGN',
-                        config: { min_shift_hours: minShiftHours },
-                    }] as [ComplianceInputV2];
-                }
-                throw new Error('Fill in role, date and shift times first.');
+                // If the form is incomplete, don't throw a red error. 
+                // Return a skeleton that the engine can process silently or that the UI can label as "Pending".
+                const mockDateStr = watchShiftDate ? format(watchShiftDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
+                return [{
+                    employee_id: watchEmployeeId || 'incomplete',
+                    employee_context: {
+                        employee_id: watchEmployeeId || 'incomplete',
+                        contract_type: 'CASUAL',
+                        contracted_weekly_hours: 0,
+                        assigned_role_ids: [],
+                        contracts: [],
+                        qualifications: [],
+                    },
+                    existing_shifts: [],
+                    candidate_changes: {
+                        add_shifts: [{
+                            shift_id: 'skeleton',
+                            shift_date: mockDateStr,
+                            start_time: watchStart || '09:00',
+                            end_time: watchEnd || '17:00',
+                            role_id: watchRoleId || 'unassigned',
+                            is_ordinary_hours: true,
+                            is_training: watchIsTraining || false,
+                            break_minutes: 0,
+                            unpaid_break_minutes: Number(watchUnpaidBreak) || 0,
+                        }],
+                        remove_shifts: [],
+                    },
+                    mode: 'SIMULATED',
+                    operation_type: 'ASSIGN',
+                    stage: 'DRAFT',
+                }] as [ComplianceInputV2];
             }
             // Fetch real employee context (contracts, qualifications, visa flag) from DB
             const employeeCtx = await fetchEmployeeContextV2(input.employee_id);
@@ -580,18 +590,6 @@ export function useShiftFormOrchestrator({
         stage: 'DRAFT',
     });
 
-    // ── Sync v2 panel → legacy complianceHasRun ──────────────────────────────
-    // The RE-RUN button calls compliancePanel.run() directly (v2 path).
-    // Without this sync, complianceHasRun (v1 flag used by isStepValid) would
-    // never become true after the panel run, keeping canSave = false even when
-    // all 9 rules pass.
-    useEffect(() => {
-        if (compliancePanel.status === 'results') {
-            setComplianceHasRun(true);
-            setComplianceNeedsRerun(false);
-        }
-    }, [compliancePanel.status]);  // eslint-disable-line react-hooks/exhaustive-deps
-
     // ── Save guard ───────────────────────────────────────────────────────────
     // All four gates must pass for the Create Shift button to be enabled:
     //   1. Step 1 complete (schedule fields + valid duration)
@@ -601,7 +599,7 @@ export function useShiftFormOrchestrator({
     const canSave = useMemo(() => {
         if (isReadOnly) return false;
         // Required fields check
-        const hasBaseFields = !!watchRoleId && !!watchShiftDate && !!watchStart && !!watchEnd && hasDepartment && (hasRoster || isTemplateMode);
+        const hasBaseFields = !!watchRoleId && (!!watchShiftDate || isTemplateMode) && !!watchStart && !!watchEnd && hasDepartment && (hasRoster || isTemplateMode);
         if (!hasBaseFields) return false;
 
         // Hard validation check
@@ -839,6 +837,7 @@ export function useShiftFormOrchestrator({
                     sub_group_name: values.sub_group_name,
                     shift_group_id: resolvedContext.groupId,
                     shift_subgroup_id: resolvedContext.subGroupId,
+                    is_training: values.is_training || false,
                 });
 
                 toast({ title: 'Shift Added' });
@@ -879,6 +878,7 @@ export function useShiftFormOrchestrator({
                     assignment_outcome: (values.assigned_employee_id
                         ? (isEmergencyAssignment ? 'emergency_assigned' : 'pending')
                         : null) as 'emergency_assigned' | 'pending' | null,
+                    is_training: values.is_training ?? false,
                 };
 
                 // Calculate UTC canonical timestamps (start_at, end_at)
@@ -939,8 +939,7 @@ export function useShiftFormOrchestrator({
     ]);
 
     // ── Return ────────────────────────────────────────────────────────────────
-    return {
-        // Form
+    const exposedValues = {
         form,
         isLoading,
 
@@ -1015,9 +1014,24 @@ export function useShiftFormOrchestrator({
         watchEmployeeId,
         watchTimezone,
 
-        // Emergency state
         isEmergencyAssignment,
+        isScheduleDefined,
+    };
 
+    // ── Sync v2 panel → legacy complianceHasRun ──────────────────────────────
+    // The RE-RUN button calls compliancePanel.run() directly (v2 path).
+    // Without this sync, complianceHasRun (v1 flag used by isStepValid) would
+    // never become true after the panel run, keeping canSave = false even when
+    // all 9 rules pass.
+    useEffect(() => {
+        if (compliancePanel.status === 'results') {
+            setComplianceHasRun(true);
+            setComplianceNeedsRerun(false);
+        }
+    }, [compliancePanel.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    return {
+        ...exposedValues,
         // Handlers
         handleSubmit,
         handleCancel,

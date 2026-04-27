@@ -5,12 +5,11 @@
       "args": [
         "/opt/homebrew/lib/node_modules/npm/bin/npx-cli.js",
         "-y",
-        "@supabase/mcp-server-supabase@latest",
-        "--access-token",
-        "sbp_761bb1cd2cf2d5db23aaa3392b5d09c4bbf6de21"
+        "@supabase/mcp-server-supabase@latest"
       ],
       "env": {
-        "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "SUPABASE_ACCESS_TOKEN": "sbp_d1e3f13d3b88929ce98ce8d6ac51de56cc26f9ac"
       }
     }
   }

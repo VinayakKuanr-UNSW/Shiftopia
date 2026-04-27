@@ -12,7 +12,7 @@ import {
 import { determineShiftState, getShiftStateDebugString } from '../../domain/shift-state.utils';
 import { Shift } from '../../api/shifts.api';
 import { computeShiftUrgency } from '../../domain/bidding-urgency';
-import { getStatusDotInfo, getProtectionContext } from '../../domain/shift-ui';
+import { getStatusDotInfo, getProtectionContext, getShiftStatusIcons } from '../../domain/shift-ui';
 
 /* ============================================================
    TYPES
@@ -65,6 +65,7 @@ interface ShiftCardCompactProps {
   onBid?: (shiftId: string) => void;
   onSwap?: (shiftId: string) => void;
   onCancel?: (shiftId: string) => void;
+  showStatusIcons?: boolean;
 }
 
 /* ============================================================
@@ -111,6 +112,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
   onBid,
   onSwap,
   onCancel,
+  showStatusIcons,
 }) => {
   const headerColor = getHeaderColor(shift.groupColor);
   const isDraft = shift.lifecycleStatus === 'draft';
@@ -150,6 +152,10 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
     start_time:         rawShift.start_time || shift.startTime || null,
     end_time:           rawShift.end_time || shift.endTime || null,
   });
+  
+  const statusIcons = useMemo(() => 
+    showStatusIcons ? getShiftStatusIcons(rawShift as any) : [], 
+  [rawShift, showStatusIcons]);
 
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -204,6 +210,19 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
         ) : (
           <MoreHorizontal className="h-4 w-4 opacity-50" />
         )}
+
+        {showStatusIcons && statusIcons.length > 0 && (
+          <div className="flex items-center gap-1 ml-1.5 shrink-0">
+            {statusIcons.map((si, i) => (
+              <Tooltip key={i}>
+                <TooltipTrigger asChild>
+                  <si.icon className={cn("h-3 w-3", si.color)} />
+                </TooltipTrigger>
+                <TooltipContent className="text-[10px] py-1 px-2">{si.tooltip}</TooltipContent>
+              </Tooltip>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* BODY */}
@@ -239,9 +258,6 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
               <div className="w-4 h-4 flex items-center justify-center font-mono font-bold text-[10px] text-muted-foreground border border-border rounded">#</div>
               {(() => {
                 const urg = computeShiftUrgency(rawShift.shift_date, rawShift.start_time);
-                const virtualBadge = stateId === 'S3' && urg === 'emergent' ? 'S3*'
-                                   : stateId === 'S5' && urg === 'emergent' ? 'S5*'
-                                   : null;
                 return (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -250,8 +266,8 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
                           {dot && (
                             <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 ring-1 ring-black/10" style={{ backgroundColor: dot.color }} />
                           )}
-                          <span className={cn("text-[9px] font-bold text-center", virtualBadge ? 'text-rose-500' : 'text-blue-600 dark:text-blue-400')}>
-                            {virtualBadge ?? stateId}
+                          <span className={cn("text-[9px] font-bold text-center text-blue-600 dark:text-blue-400")}>
+                            {stateId}
                           </span>
                         </div>
                       </div>
@@ -266,13 +282,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
               })()}
             </div>
 
-            {/* 2. LIFECYCLE */}
-            <div className="flex flex-col items-center gap-1">
-              <protection.icon className={cn("w-4 h-4", protection.colorClass)} />
-              <span className={cn("text-[9px] font-bold truncate w-full text-center", protection.colorClass)}>
-                {protection.label}
-              </span>
-            </div>
+
 
             {/* 3. ASSIGNMENT */}
             <div className="flex flex-col items-center gap-1">
@@ -289,10 +299,6 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
             {/* 4. OFFER (OUTCOME) */}
             <div className="flex flex-col items-center gap-1">
               {(() => {
-                // S3 + emergent: offer window closed, pending backend reset
-                if (stateId === 'S3' && computeShiftUrgency(rawShift.shift_date, rawShift.start_time) === 'emergent')
-                  return <Lock className="w-4 h-4 text-rose-500" />;
-
                 let o = shift.assignmentOutcome;
                 // S2 Logic: Draft + Assigned = Pending
                 if (stateId === 'S2' && !o) o = 'pending';
@@ -304,13 +310,8 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
                 if (o === 'emergency_assigned') return <Zap className="w-4 h-4 text-red-500" />;
                 return <Circle className="w-4 h-4 text-gray-300" />;
               })()}
-              <span className={cn("text-[9px] font-bold capitalize truncate w-full text-center",
-                stateId === 'S3' && computeShiftUrgency(rawShift.shift_date, rawShift.start_time) === 'emergent'
-                  ? 'text-rose-500'
-                  : 'text-muted-foreground'
-              )}>
+              <span className={cn("text-[9px] font-bold capitalize truncate w-full text-center", 'text-muted-foreground')}>
                 {(() => {
-                  if (stateId === 'S3' && computeShiftUrgency(rawShift.shift_date, rawShift.start_time) === 'emergent') return 'OfferExpired';
                   if (stateId === 'S2' && !shift.assignmentOutcome) return 'Pending';
                   if (typeof shift.assignmentOutcome === 'string') {
                     const o = shift.assignmentOutcome.toLowerCase();
@@ -330,10 +331,10 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
                 const b = rawShift.bidding_status;
                 const isActiveBidding = b === 'on_bidding' || b === 'on_bidding_normal' || b === 'on_bidding_urgent';
                 if (!isActiveBidding && b !== 'bidding_closed_no_winner') return <Ban className="w-4 h-4 text-gray-400" />;
-                if (b === 'bidding_closed_no_winner') return <Lock className="w-4 h-4 text-gray-600" />;
+                if (b === 'bidding_closed_no_winner') return <Ban className="w-4 h-4 text-gray-600" />;
                 const urg = computeShiftUrgency(rawShift.shift_date, rawShift.start_time);
                 // S5 + emergent: bidding window closed, pending backend reset
-                if (urg === 'emergent' && stateId === 'S5') return <Lock className="w-4 h-4 text-rose-500" />;
+                if (urg === 'emergent' && stateId === 'S5') return <Ban className="w-4 h-4 text-rose-500" />;
                 if (urg === 'emergent') return <Flame className="w-4 h-4 text-rose-500 animate-[pulse_0.8s_ease-in-out_infinite]" />;
                 if (urg === 'urgent')   return <Flame className="w-4 h-4 text-orange-500 animate-pulse" />;
                 return <Gavel className="w-4 h-4 text-blue-500" />;

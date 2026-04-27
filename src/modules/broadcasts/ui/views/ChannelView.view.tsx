@@ -61,39 +61,38 @@ export const ChannelView: React.FC<ChannelViewProps> = ({
   return (
     <>
       {/* Channel Header */}
-      <div className="bg-white/90 dark:bg-[#1a2744]/40 backdrop-blur-xl border-b border-slate-200 dark:border-white/5 px-4 md:px-8 py-4 md:py-5 sticky top-0 z-20">
-        <div className="flex items-center justify-between gap-3 md:gap-4">
-          <div className="flex items-center gap-3 md:gap-4 min-w-0">
-            <div className="p-2 md:p-2.5 rounded-lg md:rounded-xl bg-primary/20 text-primary dark:text-white shadow-sm">
-              <Hash className="h-5 w-5 md:h-6 md:w-6" />
+      <div className="bg-white/10 dark:bg-black/5 backdrop-blur-xl border-b border-slate-200 dark:border-white/5 px-6 md:px-8 py-5 md:py-6 sticky top-0 z-20">
+        <div className="flex items-center justify-between gap-4 md:gap-6">
+          <div className="flex items-center gap-4 md:gap-5 min-w-0">
+            <div className="p-3 md:p-3.5 rounded-2xl md:rounded-[20px] bg-primary/20 text-primary dark:text-white shadow-xl shadow-primary/5">
+              <Hash className="h-6 w-6 md:h-7 md:w-7" />
             </div>
 
             <div className="min-w-0">
               <div className="flex items-center gap-2 md:gap-3">
-                <h2 className="font-bold text-lg md:text-xl text-slate-900 dark:text-white tracking-tight truncate">
+                <h2 className="font-black text-xl md:text-2xl text-slate-900 dark:text-white tracking-tighter truncate">
                   {channelName}
                 </h2>
-                {/* Badges removed */}
               </div>
-              <p className="text-xs md:text-sm text-slate-500 dark:text-blue-200/60 truncate">
+              <p className="text-xs md:text-[13px] font-medium text-slate-500 dark:text-blue-200/40 truncate mt-0.5">
                 {channelDescription || 'Company broadcast channel'}
               </p>
             </div>
           </div>
 
           {/* Search */}
-          <div className="relative w-40 md:w-64 hidden sm:block">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-white/40" />
+          <div className="relative w-48 md:w-72 hidden sm:block">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-white/30" />
             <Input
-              placeholder="Search..."
+              placeholder="Search conversation..."
               value={searchQuery}
               onChange={(e) => onSearch(e.target.value)}
-              className="pl-9 md:pl-10 bg-slate-100 dark:bg-black/20 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white focus:border-primary/50 h-9 md:h-10 rounded-lg md:rounded-xl text-sm"
+              className="pl-11 md:pl-12 bg-slate-100/50 dark:bg-black/20 border-slate-200/50 dark:border-white/5 text-slate-900 dark:text-white focus:border-primary/50 focus:ring-1 focus:ring-primary/20 h-10 md:h-12 rounded-2xl md:rounded-3xl text-sm font-medium transition-all"
             />
             {searchQuery && (
               <button
                 onClick={() => onSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-white/40 hover:text-slate-700 dark:hover:text-white"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-white/40 hover:text-slate-700 dark:hover:text-white transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>

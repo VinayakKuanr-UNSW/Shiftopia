@@ -122,14 +122,30 @@ const determineDayStatus = (timeSlots: TimeSegment[]): 'Available' | 'Unavailabl
 
 export function MonthListView({ onSelectDate, isLocked = false }: MonthListViewProps) {
   const {
-    selectedMonth,
-    monthlyAvailabilities,
-    getDayAvailability,
-    getDayStatusColor,
-    isDateLocked,
-    applyPreset,
-    availabilityPresets
+    month,
+    slots,
+    isLoadingSlots,
+    deleteRule,
   } = useAvailability();
+
+  const getDayAvailability = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const daySlots = slots.filter((s) => s.slot_date === dateStr);
+    if (daySlots.length === 0) return null;
+    return {
+      timeSlots: daySlots.map(s => ({
+        startTime: s.start_time.substring(0, 5),
+        endTime: s.end_time.substring(0, 5),
+        status: 'Available' as const
+      }))
+    };
+  };
+
+  const isDateLocked = (date: Date) => {
+    // For now, we don't have assignedShifts here. 
+    // This should ideally be passed in or fetched.
+    return false;
+  };
 
   const { toast } = useToast();
   const [selectedPresets, setSelectedPresets] = useState<Record<string, string>>({});
@@ -137,10 +153,10 @@ export function MonthListView({ onSelectDate, isLocked = false }: MonthListViewP
 
   // Generate all days of the month
   const allDaysInMonth = useMemo(() => {
-    const start = startOfMonth(selectedMonth);
-    const end = endOfMonth(selectedMonth);
+    const start = startOfMonth(month);
+    const end = endOfMonth(month);
     return eachDayOfInterval({ start, end });
-  }, [selectedMonth]);
+  }, [month]);
 
   const getRelativeDateLabel = (date: Date) => {
     if (isToday(date)) return 'Today';
@@ -153,7 +169,7 @@ export function MonthListView({ onSelectDate, isLocked = false }: MonthListViewP
     if (isLocked || isDateLocked(date)) {
       toast({
         title: "Cannot Modify",
-        description: "This date is locked and cannot be modified.",
+        description: "This date is assigned and cannot be modified.",
         variant: "destructive"
       });
       return;
@@ -161,73 +177,21 @@ export function MonthListView({ onSelectDate, isLocked = false }: MonthListViewP
     onSelectDate(date);
   };
 
-  const handleApplyPreset = async (date: Date, presetId: string) => {
-    if (!presetId) return;
 
-    if (isLocked || isDateLocked(date)) {
-      toast({
-        title: "Cannot Apply Preset",
-        description: "This date is locked and cannot be modified.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const dateKey = format(date, 'yyyy-MM-dd');
-
-    const success = await applyPreset({
-      presetId,
-      startDate: date,
-      endDate: date
-    });
-
-    if (success) {
-      toast({
-        title: "Preset Applied",
-        description: `Applied preset to ${format(date, 'MMMM dd, yyyy')}`,
-      });
-
-      // Show visual confirmation for 2 seconds
-      setAppliedPresets(prev => ({ ...prev, [dateKey]: true }));
-      setTimeout(() => {
-        setAppliedPresets(prev => ({ ...prev, [dateKey]: false }));
-      }, 2000);
-
-      // Clear the selection after a brief delay
-      setTimeout(() => {
-        setSelectedPresets(prev => ({ ...prev, [dateKey]: '' }));
-      }, 500);
-    } else {
-      toast({
-        title: "Failed to Apply Preset",
-        description: "There was an error applying the preset. Please try again.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handlePresetChange = (date: Date, presetId: string) => {
-    const dateKey = format(date, 'yyyy-MM-dd');
-    setSelectedPresets(prev => ({ ...prev, [dateKey]: presetId }));
-
-    if (presetId) {
-      handleApplyPreset(date, presetId);
-    }
-  };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">
-          Availabilities for {format(selectedMonth, 'MMMM yyyy')}
+          Availabilities for {format(month, 'MMMM yyyy')}
         </h2>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Calendar className="h-4 w-4" />
           <span>{allDaysInMonth.length} days</span>
           {isLocked && (
             <Badge variant="destructive" className="ml-2">
-              Locked
+              Assigned
             </Badge>
           )}
         </div>
@@ -308,7 +272,7 @@ export function MonthListView({ onSelectDate, isLocked = false }: MonthListViewP
                         )}
                         {locked && !isPastDate && (
                           <Badge variant="destructive" className="text-xs">
-                            Locked
+                            Assigned
                           </Badge>
                         )}
 
@@ -333,36 +297,12 @@ export function MonthListView({ onSelectDate, isLocked = false }: MonthListViewP
                   })()}
 
 
-                  {/* Notes Preview */}
-                  {existingAvailability?.notes && (
-                    <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
-                      {existingAvailability.notes}
-                    </p>
-                  )}
+                  {/* Notes Preview removed as it is not in the materialized slot object */}
                 </div>
 
                 {/* Actions */}
                 <div className="flex items-center gap-3">
-                  {/* Preset Selector */}
-                  <Select
-                    value={selectedPresets[dateKey] || ''}
-                    onValueChange={(value) => handlePresetChange(date, value)}
-                    disabled={locked}
-                  >
-                    <SelectTrigger className={cn(
-                      "w-40",
-                      isPresetApplied && "border-green-500 bg-green-50"
-                    )}>
-                      <SelectValue placeholder="Apply preset" />
-                    </SelectTrigger>
-                    <SelectContent className="z-50 bg-white">
-                      {availabilityPresets.map((preset) => (
-                        <SelectItem key={preset.id} value={preset.id}>
-                          {preset.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+
 
                   {/* Add/Edit Availability Button */}
                   <Button

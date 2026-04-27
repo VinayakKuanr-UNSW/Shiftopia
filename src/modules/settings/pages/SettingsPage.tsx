@@ -11,10 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Check, User, Shield, Bell, CreditCard, Link, Loader2, Save, Palette } from 'lucide-react';
 import { Switch } from '@/modules/core/ui/primitives/switch';
-import { useSettings } from '../hooks/useSettings';
+import { useSettings, SUPPORTED_LOCALES } from '../hooks/useSettings';
 import { supabase } from '@/platform/realtime/client';
 import { toast } from '@/modules/core/ui/primitives/use-toast';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/platform/i18n';
 
 /* ============================================================
    HELPERS
@@ -47,7 +48,7 @@ const DEFAULT_BRAND_COLOR = '#A48AFB';
    ============================================================ */
 const AppearanceSettings: React.FC = () => {
   const { t } = useTranslation();
-  const { orgBranding, updateBranding, isOrgLoading } = useSettings();
+  const { orgBranding, updateBranding, updateLanguage, isOrgLoading } = useSettings();
   const [brandColor, setBrandColor] = useState(DEFAULT_BRAND_COLOR);
   const [chartStyle, setChartStyle] = useState('default');
   const [language, setLanguage] = useState('en-GB');
@@ -56,9 +57,7 @@ const AppearanceSettings: React.FC = () => {
   const [hexError, setHexError] = useState(false);
 
   useEffect(() => {
-    // Only update local state if we have branding data AND we aren't currently saving
-    // This prevents the UI from flickering back to the old color during the network request
-    if (orgBranding && !updateBranding.isPending) {
+    if (orgBranding && !updateBranding.isPending && !updateLanguage.isPending) {
       setBrandColor(orgBranding.brand_color || DEFAULT_BRAND_COLOR);
       setChartStyle(orgBranding.chart_style || 'default');
       setLanguage(orgBranding.language || 'en-GB');
@@ -100,7 +99,6 @@ const AppearanceSettings: React.FC = () => {
     updateBranding.mutate({
       brand_color: brandColor,
       chart_style: chartStyle,
-      language,
       cookie_banner: cookieBanner,
       enable_group_coloring: enableGroupColoring,
     });
@@ -211,19 +209,36 @@ const AppearanceSettings: React.FC = () => {
           </p>
         </div>
         <div>
-          <Select value={language} onValueChange={setLanguage}>
+          <Select value={language} onValueChange={(newLang) => {
+            const previous = language;
+            setLanguage(newLang);
+            i18n.changeLanguage(newLang);
+            window.dispatchEvent(new CustomEvent('branding-updated', { detail: { language: newLang } }));
+            updateLanguage.mutate(
+              { language: newLang },
+              {
+                onError: () => {
+                  setLanguage(previous);
+                  i18n.changeLanguage(previous);
+                  window.dispatchEvent(new CustomEvent('branding-updated', { detail: { language: previous } }));
+                },
+              }
+            );
+          }}>
             <SelectTrigger className="w-full sm:w-[280px] h-11 bg-white/5 border-white/10 text-white hover:bg-white/10 focus:border-primary/50">
               <div className="flex items-center gap-3">
                 <span className="text-lg">
-                  {language === 'en-GB' ? '🇬🇧' : language === 'en-US' ? '🇺🇸' : '🇫🇷'}
+                  {SUPPORTED_LOCALES.find(l => l.code === language)?.flag ?? '🌐'}
                 </span>
                 <SelectValue placeholder="Select language" />
               </div>
             </SelectTrigger>
             <SelectContent className="bg-[#1a2744] border-white/10 text-white backdrop-blur-xl">
-              <SelectItem value="en-GB" className="focus:bg-white/10 focus:text-white">English (UK)</SelectItem>
-              <SelectItem value="en-US" className="focus:bg-white/10 focus:text-white">English (US)</SelectItem>
-              <SelectItem value="fr-FR" className="focus:bg-white/10 focus:text-white">French (FR)</SelectItem>
+              {SUPPORTED_LOCALES.map(({ code, label, flag }) => (
+                <SelectItem key={code} value={code} className="focus:bg-white/10 focus:text-white">
+                  {flag} {label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -308,7 +323,7 @@ const AppearanceSettings: React.FC = () => {
           className="bg-primary hover:bg-primary/90 text-white h-11 px-8 rounded-xl shadow-glow transition-all"
         >
           {updateBranding.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-          Save Changes
+          {t('common.save')}
         </Button>
       </div>
     </div>
@@ -467,7 +482,7 @@ const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-6">
+    <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4">
       {/* ── Unified Header ────────────────────────────────────────────── */}
       <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
         <div className={cn(

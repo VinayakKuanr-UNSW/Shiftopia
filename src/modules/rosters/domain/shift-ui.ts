@@ -26,8 +26,11 @@ import {
     ShieldCheck, 
     Lock, 
     Edit, 
+    Shield,
+    Clock,
+    CheckCircle2,
 } from 'lucide-react';
-import { DefenderShieldIcon } from '@/modules/core/ui/icons/DefenderShieldIcon';
+import { type Shift } from './shift.entity';
 
 // ─── Tone ────────────────────────────────────────────────────────────────────
 
@@ -100,8 +103,19 @@ export interface ProtectionContext {
     label: string;
     isLocked: boolean;
     isProtected: boolean;
-    icon: React.ComponentType<{ className?: string, size?: number | string }>;
+    icon: React.ComponentType<{ className?: string, size?: number | string }> | undefined;
     colorClass: string;
+    icons: Array<{
+        Icon: React.ComponentType<{ className?: string, size?: number | string }>;
+        label: string;
+        colorClass: string;
+    }>;
+}
+
+export interface ShiftStatusIcon {
+    icon: React.ComponentType<{ className?: string; size?: string | number }>;
+    tooltip: string;
+    color: string;
 }
 
 // ─── Core helpers ─────────────────────────────────────────────────────────────
@@ -229,12 +243,47 @@ export function getLockState(state: ShiftStateID | string): ShiftLockState {
  * Get protection and lock state context for a shift
  */
 export function getProtectionContext(
-    shift: { lifecycle_status?: string | null }, 
+    shift: Partial<Shift>, 
     isPast: boolean
 ): ProtectionContext {
     const status = (shift.lifecycle_status || '').toLowerCase();
-    
-    // Past shifts (past now or considered expired) are LOCKED
+    const tsStatus = (shift.timesheet_status || '').toLowerCase();
+    const attStatus = (shift.attendance_status || '').toLowerCase();
+
+    const icons: ProtectionContext['icons'] = [];
+
+    // 1. Clock Icon: Finalized or No Show
+    const isNoShow = attStatus === 'no_show' || tsStatus === 'no_show';
+    const isFinalized = ['submitted', 'verified', 'approved', 'rejected'].includes(tsStatus);
+
+    if (isFinalized || isNoShow) {
+        icons.push({ 
+            Icon: Clock, 
+            label: isNoShow ? 'No Show' : 'Finalized',
+            colorClass: 'text-slate-400'
+        });
+    }
+
+    // 2. Shield Icon: Published
+    if (status === 'published' || status === 'completed') {
+        icons.push({ 
+            Icon: Shield, 
+            label: 'Published',
+            colorClass: 'text-slate-400'
+        });
+    }
+
+    // 3. Lock Icon: Past
+    if (isPast) {
+        icons.push({ 
+            Icon: Lock, 
+            label: 'Past',
+            colorClass: 'text-slate-400'
+        });
+    }
+
+    // Legacy return for backward compatibility if still used as single object
+    // Default to the most "important" state for the legacy fields
     if (isPast) {
         return {
             status: 'LOCKED',
@@ -242,31 +291,87 @@ export function getProtectionContext(
             isLocked: true,
             isProtected: false,
             icon: Lock,
-            colorClass: 'text-slate-500' // Neutral/Grey for locked
+            colorClass: 'text-slate-500',
+            icons
         };
     }
 
-    // Published shifts are PROTECTED
     if (status === 'published' || status === 'completed') {
         return {
             status: 'PROTECTED',
             label: 'Protected',
             isLocked: false,
             isProtected: true,
-            icon: DefenderShieldIcon,
-            colorClass: 'text-black dark:text-white' // Black icon as requested
+            icon: Shield,
+            colorClass: 'text-slate-400',
+            icons
         };
     }
 
-    // Otherwise it's a DRAFT
     return {
         status: 'DRAFT',
-        label: 'Draft',
+        label: 'Open',
         isLocked: false,
         isProtected: false,
-        icon: Edit,
-        colorClass: 'text-gray-400'
+        icon: undefined,
+        colorClass: '',
+        icons
     };
+}
+
+/**
+ * Derives specific status icons for Roster Planner cards.
+ * 
+ * 1. Lock -> Past shifts (now())
+ * 2. Shield -> Published & Future shifts
+ * 3. CheckCircle2 -> Finalized timesheets (approved/rejected/no_show)
+ */
+export function getShiftStatusIcons(shift: Partial<Shift>): ShiftStatusIcon[] {
+    const icons: ShiftStatusIcon[] = [];
+    const now = Date.now();
+    const schedStartMs = shift.start_at ? new Date(shift.start_at).getTime() : 
+                        (shift.shift_date && shift.start_time ? new Date(`${shift.shift_date}T${shift.start_time}`).getTime() : null);
+    const schedEndMs = shift.end_at ? new Date(shift.end_at).getTime() :
+                      (shift.shift_date && shift.end_time ? new Date(`${shift.shift_date}T${shift.end_time}`).getTime() : null);
+    
+    // Use the actual end time if available, otherwise scheduled end
+    const effectiveEndMs = shift.actual_end ? new Date(shift.actual_end).getTime() : (schedEndMs || 0);
+    const isPast = effectiveEndMs > 0 && now > effectiveEndMs;
+
+    // 1. Clock for Finalized or No Show
+    const tsStatus = (shift.timesheet_status || '').toLowerCase();
+    const attStatus = (shift.attendance_status || '').toLowerCase();
+    const isNoShow = attStatus === 'no_show' || tsStatus === 'no_show';
+    const isFinalized = ['submitted', 'verified', 'approved', 'rejected'].includes(tsStatus);
+
+    if (isFinalized || isNoShow) {
+        icons.push({
+            icon: Clock,
+            tooltip: isNoShow ? 'No Show' : 'Finalized',
+            color: 'text-slate-400'
+        });
+    }
+
+    // 2. Lock for Past shifts
+    if (isPast) {
+        icons.push({
+            icon: Lock,
+            tooltip: 'Past shift (Locked)',
+            color: 'text-slate-400'
+        });
+    }
+
+    // 3. Shield for Published shifts
+    const status = (shift.lifecycle_status || '').toLowerCase();
+    if (status === 'published' || status === 'completed') {
+        icons.push({
+            icon: Shield,
+            tooltip: 'Published (Protected)',
+            color: 'text-slate-400'
+        });
+    }
+
+    return icons;
 }
 
 // ─── Status dot ──────────────────────────────────────────────────────────────

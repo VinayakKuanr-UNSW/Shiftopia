@@ -29,16 +29,9 @@ interface ShiftRow {
  * Priority: start_at (ISO) → shift_date + start_time (local, assumed Sydney/UTC+11).
  * Returns null if neither field is usable.
  */
-function resolveStartTime(s: Pick<ShiftRow, 'start_at' | 'shift_date' | 'start_time'>): Date | null {
+function resolveStartTime(s: Pick<ShiftRow, 'start_at'>): Date | null {
   if (s.start_at) {
     const d = new Date(s.start_at);
-    if (!isNaN(d.getTime())) return d;
-  }
-  if (s.shift_date && s.start_time) {
-    // Treat shift_date + start_time as Sydney local (UTC+11 AEDT / UTC+10 AEST).
-    // We use a fixed +11 offset as a safe default; sub-minute precision is fine here.
-    const timeStr = s.start_time.length === 5 ? s.start_time : s.start_time.substring(0, 5); // HH:mm
-    const d = new Date(`${s.shift_date}T${timeStr}:00+11:00`);
     if (!isNaN(d.getTime())) return d;
   }
   return null;
@@ -177,8 +170,7 @@ Deno.serve(async (req: Request) => {
         .from('shifts')
         .update({
           lifecycle_status:  'Draft',
-          is_draft:          true,
-          is_published:      false,
+          // is_draft / is_published are generated columns — omitted.
           is_on_bidding:     false,
           bidding_status:    'not_on_bidding',
           assignment_status: 'unassigned',

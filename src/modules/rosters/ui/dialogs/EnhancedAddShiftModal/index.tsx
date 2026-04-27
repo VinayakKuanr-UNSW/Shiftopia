@@ -104,6 +104,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
 
         // Emergency state
         isEmergencyAssignment,
+        isScheduleDefined,
 
         // Handlers
         handleSubmit,
@@ -187,6 +188,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                                 isSubGroupLocked={isSubGroupLocked}
                                 isRoleLocked={isRoleLocked}
                                 isEmployeeLocked={isEmployeeLocked}
+                                isScheduleDefined={isScheduleDefined}
                             />
 
                             {/* STICKY FOOTER ACTIONS */}

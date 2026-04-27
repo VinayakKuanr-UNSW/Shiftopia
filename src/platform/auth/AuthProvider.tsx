@@ -193,6 +193,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const logout = async () => {
     await supabase.auth.signOut();
+    if (typeof window !== 'undefined') {
+      sessionStorage.clear();
+    }
     setUser(null);
     setActiveContractId(null);
     setActiveCertificateId(null);

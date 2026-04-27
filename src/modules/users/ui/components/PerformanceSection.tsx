@@ -91,8 +91,9 @@ const PerformanceSection: React.FC<PerformanceSectionProps> = ({ employeeId, qua
     const handleRefresh = async () => {
         setIsRefreshing(true);
         try {
-            const { error } = await supabase.rpc('refresh_employee_performance_metrics', {
-                p_employee_id: employeeId
+            const { error } = await supabase.rpc('compute_employee_quarter_metrics', {
+                p_employee_id: employeeId,
+                p_quarter_year: quarterYear,
             });
             if (error) throw error;
 

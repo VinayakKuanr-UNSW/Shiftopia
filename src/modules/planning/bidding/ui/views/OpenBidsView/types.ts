@@ -59,7 +59,6 @@ export interface ManagerBidShift {
   subDepartmentId?: string;
   groupType?: string | null;
   lifecycleStatus?: string;
-  biddingIteration?: number;
 }
 
 export interface EmployeeBid {
@@ -73,14 +72,9 @@ export interface EmployeeBid {
   isWinner: boolean;
   fatigueRisk?: 'low' | 'medium' | 'high';
   isBestMatch?: boolean;
-  biddingIteration?: number;
 }
 
-/** Lightweight summary of a past iteration for the history panel */
-export interface IterationHistoryEntry {
-  iteration: number;
-  bids: { employeeName: string; status: string }[];
-}
+
 
 export type BidToggle = 'urgent' | 'normal' | 'resolved';
 

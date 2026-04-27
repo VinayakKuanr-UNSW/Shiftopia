@@ -39,10 +39,9 @@ import { AlertCircle } from 'lucide-react';
 import {
   AvailabilityFormPayload,
   AvailabilityRule,
-  AvailabilityType,
   RepeatType,
 } from '../../model/availability.types';
-import { validateAvailabilityForm, parseRecurrenceRule } from '../../utils/validation.utils';
+import { validateAvailabilityForm } from '../../utils/validation.utils';
 
 interface AvailabilityFormProps {
   mode: 'create' | 'edit';
@@ -65,27 +64,20 @@ export function AvailabilityForm({
   const [startDate, setStartDate] = useState<Date>(
     existingRule ? parseISO(existingRule.start_date) : initialDate || new Date()
   );
-  const [endDate, setEndDate] = useState<Date>(
-    existingRule ? parseISO(existingRule.end_date) : initialDate || new Date()
-  );
+
   const [startTime, setStartTime] = useState<string | null>(
     existingRule?.start_time ? existingRule.start_time.substring(0, 5) : null
   );
   const [endTime, setEndTime] = useState<string | null>(
     existingRule?.end_time ? existingRule.end_time.substring(0, 5) : null
   );
-  const [availabilityType, setAvailabilityType] = useState<AvailabilityType>(
-    existingRule?.availability_type || 'available'
-  );
   const [reason, setReason] = useState<string>(existingRule?.reason || '');
 
-  // Parse recurrence rule if editing
-  const parsedRecurrence = existingRule?.recurrence_rule
-    ? parseRecurrenceRule(existingRule.recurrence_rule)
-    : { repeatType: 'none' as RepeatType, repeatDays: [] };
-
-  const [repeatType, setRepeatType] = useState<RepeatType>(parsedRecurrence.repeatType);
-  const [repeatDays, setRepeatDays] = useState<number[]>(parsedRecurrence.repeatDays || []);
+  const [repeatType, setRepeatType] = useState<RepeatType>(existingRule?.repeat_type || 'none');
+  const [repeatDays, setRepeatDays] = useState<number[]>(existingRule?.repeat_days || []);
+  const [repeatEndDate, setRepeatEndDate] = useState<Date | undefined>(
+    existingRule?.repeat_end_date ? parseISO(existingRule.repeat_end_date) : undefined
+  );
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -95,26 +87,22 @@ export function AvailabilityForm({
     if (open) {
       if (mode === 'edit' && existingRule) {
         setStartDate(parseISO(existingRule.start_date));
-        setEndDate(parseISO(existingRule.end_date));
         setStartTime(existingRule.start_time ? existingRule.start_time.substring(0, 5) : null);
         setEndTime(existingRule.end_time ? existingRule.end_time.substring(0, 5) : null);
-        setAvailabilityType(existingRule.availability_type);
         setReason(existingRule.reason || '');
-
-        const parsed = parseRecurrenceRule(existingRule.recurrence_rule);
-        setRepeatType(parsed.repeatType);
-        setRepeatDays(parsed.repeatDays || []);
+        setRepeatType(existingRule.repeat_type);
+        setRepeatDays(existingRule.repeat_days || []);
+        setRepeatEndDate(existingRule.repeat_end_date ? parseISO(existingRule.repeat_end_date) : undefined);
       } else if (mode === 'create') {
         // Reset to defaults for create mode
         const initial = initialDate || new Date();
         setStartDate(initial);
-        setEndDate(initial);
         setStartTime(null);
         setEndTime(null);
-        setAvailabilityType('available');
         setReason('');
         setRepeatType('none');
         setRepeatDays([]);
+        setRepeatEndDate(undefined);
       }
       setErrors([]);
     }
@@ -127,12 +115,12 @@ export function AvailabilityForm({
     // Build payload
     const payload: AvailabilityFormPayload = {
       start_date: startDate,
-      end_date: endDate,
+      end_date: repeatEndDate || startDate, // repeat_end_date fallback to start_date for 'none'
       start_time: startTime,
       end_time: endTime,
-      availability_type: availabilityType,
       repeat_type: repeatType,
-      repeat_days: repeatType === 'weekly' ? repeatDays : undefined,
+      repeat_days: repeatType === 'weekly' || repeatType === 'fortnightly' ? repeatDays : undefined,
+      repeat_end_date: repeatEndDate,
       reason: reason || undefined,
     };
 
@@ -208,15 +196,17 @@ export function AvailabilityForm({
                 onChange={(e) => setStartDate(startOfDay(parse(e.target.value, 'yyyy-MM-dd', new Date())))}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="end-date">End Date</Label>
-              <Input
-                id="end-date"
-                type="date"
-                value={format(endDate, 'yyyy-MM-dd')}
-                onChange={(e) => setEndDate(startOfDay(parse(e.target.value, 'yyyy-MM-dd', new Date())))}
-              />
-            </div>
+            {repeatType !== 'none' && (
+              <div className="space-y-2">
+                <Label htmlFor="repeat-end-date">Repeat Until</Label>
+                <Input
+                  id="repeat-end-date"
+                  type="date"
+                  value={repeatEndDate ? format(repeatEndDate, 'yyyy-MM-dd') : ''}
+                  onChange={(e) => setRepeatEndDate(startOfDay(parse(e.target.value, 'yyyy-MM-dd', new Date())))}
+                />
+              </div>
+            )}
           </div>
 
           {/* Time Range (Optional) */}
@@ -238,24 +228,7 @@ export function AvailabilityForm({
             </div>
           </div>
 
-          {/* Availability Type */}
-          <div className="space-y-2">
-            <Label htmlFor="availability-type">Availability Type</Label>
-            <Select
-              value={availabilityType}
-              onValueChange={(value) => setAvailabilityType(value as AvailabilityType)}
-            >
-              <SelectTrigger id="availability-type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="available">Available</SelectItem>
-                <SelectItem value="preferred">Preferred</SelectItem>
-                <SelectItem value="limited">Limited</SelectItem>
-                <SelectItem value="unavailable">Unavailable</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+
 
           {/* Repeat Type */}
           <div className="space-y-2">
@@ -271,13 +244,13 @@ export function AvailabilityForm({
                 <SelectItem value="none">Does not repeat</SelectItem>
                 <SelectItem value="daily">Daily</SelectItem>
                 <SelectItem value="weekly">Weekly</SelectItem>
-                <SelectItem value="monthly">Monthly</SelectItem>
+                <SelectItem value="fortnightly">Fortnightly</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {/* Weekly Repeat Days */}
-          {repeatType === 'weekly' && (
+          {(repeatType === 'weekly' || repeatType === 'fortnightly') && (
             <div className="space-y-2">
               <Label>Repeat on</Label>
               <div className="flex gap-2">

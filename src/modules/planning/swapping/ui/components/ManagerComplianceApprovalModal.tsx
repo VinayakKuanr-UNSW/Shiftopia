@@ -10,8 +10,16 @@ import {
     X,
     Check,
     Play,
-    MessageSquareX
+    MessageSquareX,
+    History,
+    Zap,
+    CheckCircle2,
+    AlertTriangle,
+    XCircle,
+    ChevronDown,
+    ChevronUp,
 } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { supabase } from '@/platform/realtime/client';
 import { getScenarioWindow } from '@/modules/compliance';
@@ -66,6 +74,134 @@ export interface ManagerComplianceApprovalModalProps {
     offererEmployeeId: string | null;
     offererName: string;
     offererShiftId: string | null;
+    /** Compliance snapshot saved at acceptance time (from swap_offers.compliance_snapshot) */
+    storedSnapshot?: any | null;
+}
+
+// =============================================================================
+// STORED SNAPSHOT PANEL
+// =============================================================================
+
+interface ConstraintRow {
+    constraint_id: string;
+    constraint_name: string;
+    employee_name: string;
+    status: 'pass' | 'fail' | 'warning';
+    blocking: boolean;
+    summary: string;
+    details?: string;
+}
+
+function StoredSnapshotPanel({ snapshot }: { snapshot: any }) {
+    const [expanded, setExpanded] = useState<string | null>(null);
+
+    if (!snapshot) {
+        return (
+            <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
+                <History className="h-8 w-8 text-muted-foreground/30" />
+                <p className="text-[12px] text-muted-foreground/50 font-medium">No stored snapshot available.</p>
+                <p className="text-[10px] text-muted-foreground/30">This swap may have been accepted before snapshot storage was enabled.</p>
+            </div>
+        );
+    }
+
+    const results: ConstraintRow[] = snapshot?.solverResult?.all_results ?? [];
+    const feasible: boolean = snapshot?.feasible ?? snapshot?.solverResult?.feasible ?? false;
+    const ts: string | undefined = snapshot?.timestamp;
+
+    const blockers = results.filter(r => r.status === 'fail' && r.blocking);
+    const warnings = results.filter(r => r.status === 'warning' || (r.status === 'fail' && !r.blocking));
+    const passed   = results.filter(r => r.status === 'pass');
+
+    const StatusIcon = ({ status, blocking }: { status: string; blocking: boolean }) => {
+        if (status === 'fail' && blocking) return <XCircle className="h-3.5 w-3.5 text-rose-500 shrink-0" />;
+        if (status === 'fail' || status === 'warning') return <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />;
+        return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />;
+    };
+
+    const ConstraintCard = ({ row }: { row: ConstraintRow }) => {
+        const key = `${row.constraint_id}-${row.employee_name}`;
+        const isOpen = expanded === key;
+        const isBlocker = row.status === 'fail' && row.blocking;
+        const isWarning = row.status === 'warning' || (row.status === 'fail' && !row.blocking);
+        return (
+            <button
+                onClick={() => setExpanded(isOpen ? null : key)}
+                className={cn(
+                    "w-full text-left flex flex-col gap-1 px-3 py-2.5 rounded-xl border transition-all",
+                    isBlocker  ? "bg-rose-500/5 border-rose-500/20 hover:bg-rose-500/10"
+                    : isWarning ? "bg-amber-500/5 border-amber-500/20 hover:bg-amber-500/10"
+                    : "bg-emerald-500/5 border-emerald-500/20 hover:bg-emerald-500/10"
+                )}
+            >
+                <div className="flex items-center gap-2">
+                    <StatusIcon status={row.status} blocking={row.blocking} />
+                    <span className="text-[11px] font-black text-foreground flex-1 text-left">{row.constraint_name}</span>
+                    <span className="text-[9px] font-mono text-muted-foreground/50">{row.employee_name}</span>
+                    {row.details ? (isOpen ? <ChevronUp className="h-3 w-3 text-muted-foreground/40" /> : <ChevronDown className="h-3 w-3 text-muted-foreground/40" />) : null}
+                </div>
+                <p className="text-[10px] text-muted-foreground/70 pl-5 text-left">{row.summary}</p>
+                {isOpen && row.details && (
+                    <p className="text-[10px] text-muted-foreground/50 pl-5 mt-1 text-left leading-relaxed">{row.details}</p>
+                )}
+            </button>
+        );
+    };
+
+    return (
+        <div className="space-y-4">
+            {/* Meta bar */}
+            <div className="flex items-center justify-between px-1">
+                <div className={cn(
+                    "flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg",
+                    feasible ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                )}>
+                    {feasible ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                    {feasible ? 'Passed at Acceptance' : 'Blocked at Acceptance'}
+                </div>
+                {ts && (
+                    <span className="text-[9px] font-mono text-muted-foreground/40">
+                        {format(parseISO(ts), 'dd MMM yyyy HH:mm')}
+                    </span>
+                )}
+            </div>
+
+            {/* Buckets */}
+            {blockers.length > 0 && (
+                <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5 px-1">
+                        <XCircle className="h-3 w-3 text-rose-500" />
+                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-rose-500">Blockers ({blockers.length})</span>
+                    </div>
+                    {blockers.map(r => <ConstraintCard key={`${r.constraint_id}-${r.employee_name}`} row={r} />)}
+                </div>
+            )}
+
+            {warnings.length > 0 && (
+                <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5 px-1">
+                        <AlertTriangle className="h-3 w-3 text-amber-500" />
+                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-500">Warnings ({warnings.length})</span>
+                    </div>
+                    {warnings.map(r => <ConstraintCard key={`${r.constraint_id}-${r.employee_name}`} row={r} />)}
+                </div>
+            )}
+
+            {passed.length > 0 && (
+                <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5 px-1">
+                        <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-500">Passed ({passed.length})</span>
+                    </div>
+                    {passed.map(r => <ConstraintCard key={`${r.constraint_id}-${r.employee_name}`} row={r} />)}
+                </div>
+            )}
+
+            {results.length === 0 && (
+                <p className="text-center text-[11px] text-muted-foreground/40 py-6">No constraint results in this snapshot.</p>
+            )}
+        </div>
+    );
 }
 
 // =============================================================================
@@ -116,10 +252,12 @@ export function ManagerComplianceApprovalModal({
     offererEmployeeId,
     offererName,
     offererShiftId,
+    storedSnapshot,
 }: ManagerComplianceApprovalModalProps) {
     const [isApproving, setIsApproving] = useState(false);
     const [isRejectingState, setIsRejectingState] = useState(false);
     const [rejectReason, setRejectReason] = useState('');
+    const [activeTab, setActiveTab] = useState<'live' | 'snapshot'>('live');
 
     // -------------------------------------------------------------------------
     // Build inputs for useCompliancePanel
@@ -233,6 +371,7 @@ export function ManagerComplianceApprovalModal({
             panel.reset();
             setIsRejectingState(false);
             setRejectReason('');
+            setActiveTab('live');
         }
     }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -324,6 +463,41 @@ export function ManagerComplianceApprovalModal({
                 </div>
             </div>
 
+            {/* ── TAB SWITCHER ── */}
+            {!isRejectingState && (
+                <div className="px-6 pb-3 flex-shrink-0 z-10">
+                    <div className="flex items-center gap-1 p-1 rounded-2xl bg-muted/30 border border-border/50 w-fit">
+                        <button
+                            onClick={() => setActiveTab('live')}
+                            className={cn(
+                                "flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                                activeTab === 'live'
+                                    ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                                    : "text-muted-foreground/50 hover:text-foreground hover:bg-muted/50"
+                            )}
+                        >
+                            <Zap className="h-3 w-3" />
+                            Live Analysis
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('snapshot')}
+                            className={cn(
+                                "flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                                activeTab === 'snapshot'
+                                    ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 shadow-sm"
+                                    : "text-muted-foreground/50 hover:text-foreground hover:bg-muted/50"
+                            )}
+                        >
+                            <History className="h-3 w-3" />
+                            Acceptance Snapshot
+                            {!storedSnapshot && (
+                                <span className="text-[8px] opacity-50 normal-case tracking-normal font-medium">none</span>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* ── BODY (Scrollable) ── */}
             <div className="flex-1 overflow-y-auto px-6 pb-32 z-10 scrollbar-none relative">
                 <AnimatePresence mode="wait">
@@ -351,6 +525,15 @@ export function ManagerComplianceApprovalModal({
                                 placeholder="E.g. Not enough coverage during this shift..."
                                 autoFocus
                             />
+                        </motion.div>
+                    ) : activeTab === 'snapshot' ? (
+                        <motion.div
+                            key="snapshot-view"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                        >
+                            <StoredSnapshotPanel snapshot={storedSnapshot} />
                         </motion.div>
                     ) : (
                         <motion.div

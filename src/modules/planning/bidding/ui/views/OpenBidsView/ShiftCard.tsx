@@ -48,6 +48,7 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
 
   return (
     <SharedShiftCard
+        variant="timecard"
         organization={shift.location}
         department={shift.department}
         subGroup={shift.subDepartment}

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import AppLayout from '@/modules/core/ui/layout/AppLayout';
 import { useAuth } from '@/platform/auth/useAuth';
 import { MobileAccessGuard } from '@/modules/core/ui/components/MobileAccessGuard';
+import { ErrorBoundary } from '@/modules/core';
 
 /* =======================
    EAGER LOADED PAGES
@@ -14,23 +15,23 @@ import LoginPage from '@/modules/auth/pages/LoginPage';
    LAZY LOADED PAGES
    ======================= */
 // Admin / Auth Utilities
-const UnauthorizedPage = lazy(() => import('@/modules/auth/pages/UnauthorizedPage'));
-const PendingAccessPage = lazy(() => import('@/modules/auth/pages/PendingAccessPage'));
-const SignUpPage = lazy(() => import('@/modules/auth/pages/SignUpPage'));
-const NotFound = lazy(() => import('@/modules/core/pages/NotFound'));
+const UnauthorizedPage = lazy(() => import('@/modules/auth/pages/UnauthorizedPage.tsx'));
+const PendingAccessPage = lazy(() => import('@/modules/auth/pages/PendingAccessPage.tsx'));
+const SignUpPage = lazy(() => import('@/modules/auth/pages/SignUpPage.tsx'));
+const NotFound = lazy(() => import('@/modules/core/pages/NotFound.tsx'));
 
 // Dashboard
 const DashboardPage = lazy(() => import('@/modules/dashboard/pages/DashboardPage'));
 
 // My Workspace
-const ProfilePage = lazy(() => import('@/modules/users/pages/ProfilePage'));
-const MyRosterPage = lazy(() => import('@/modules/rosters/pages/MyRosterPage'));
-const AvailabilityPage = lazy(() => import('@/modules/availability/pages/AvailabilityPage'));
-const EmployeeBidsPage = lazy(() => import('@/modules/planning/bidding/ui/pages/EmployeeBids.page'));
-const EmployeeSwapsPage = lazy(() => import('@/modules/planning/swapping/ui/pages/EmployeeSwaps.page'));
-const MyBroadcastsPage = lazy(() => import('@/modules/broadcasts/ui/pages/MyBroadcastsPage'));
-const AttendancePage = lazy(() => import('@/modules/rosters/pages/AttendancePage'));
-const MyNotificationsPage = lazy(() => import('@/modules/core/pages/MyNotificationsPage'));
+const ProfilePage = lazy(() => import('@/modules/users/pages/ProfilePage.tsx'));
+const MyRosterPage = lazy(() => import('@/modules/rosters/pages/MyRosterPage.tsx'));
+const AvailabilityPage = lazy(() => import('@/modules/availability/pages/AvailabilityPage.tsx'));
+const EmployeeBidsPage = lazy(() => import('@/modules/planning/bidding/ui/pages/EmployeeBids.page.tsx'));
+const EmployeeSwapsPage = lazy(() => import('@/modules/planning/swapping/ui/pages/EmployeeSwaps.page.tsx'));
+const MyBroadcastsPage = lazy(() => import('@/modules/broadcasts/ui/pages/MyBroadcastsPage.tsx'));
+const AttendancePage = lazy(() => import('@/modules/rosters/pages/AttendancePage.tsx'));
+const MyNotificationsPage = lazy(() => import('@/modules/core/pages/MyNotificationsPage.tsx'));
 
 // Rostering
 const TemplatesPage = lazy(() => import('@/modules/templates/pages/TemplatesPage'));
@@ -39,21 +40,21 @@ const LaborDemandForecastingPage = lazy(() => import('@/modules/rosters/pages/La
 const TimesheetPage = lazy(() => import('@/modules/timesheets/ui/TimesheetPage'));
 
 // Management
-const ManagerBidsPage = lazy(() => import('@/modules/planning/bidding/ui/pages/ManagerBids.page'));
-const ManagerSwapsPage = lazy(() => import('@/modules/planning/swapping/ui/pages/ManagerSwaps.page'));
-const BroadcastManagerPage = lazy(() => import('@/modules/broadcasts/ui/pages/BroadcastsManager.page'));
+const ManagerBidsPage = lazy(() => import('@/modules/planning/bidding/ui/pages/ManagerBids.page.tsx'));
+const ManagerSwapsPage = lazy(() => import('@/modules/planning/swapping/ui/pages/ManagerSwaps.page.tsx'));
+const BroadcastManagerPage = lazy(() => import('@/modules/broadcasts/ui/pages/BroadcastsManager.page.tsx'));
 
 // Features
-const InsightsPage = lazy(() => import('@/modules/insights/pages/InsightsPage'));
-const AnalysisPage = lazy(() => import('@/modules/insights/pages/AnalysisPage'));
-const GridPage = lazy(() => import('@/modules/insights/pages/GridPage'));
-const UsersPage = lazy(() => import('@/modules/users/pages/UsersPage'));
-const PerformancePage = lazy(() => import('@/modules/users/pages/PerformancePage'));
+const InsightsPage = lazy(() => import('@/modules/insights/pages/InsightsPage.tsx'));
+const AnalysisPage = lazy(() => import('@/modules/insights/pages/AnalysisPage.tsx'));
+const GridPage = lazy(() => import('@/modules/insights/pages/GridPage.tsx'));
+const UsersPage = lazy(() => import('@/modules/users/pages/UsersPage.tsx'));
+const PerformancePage = lazy(() => import('@/modules/users/pages/PerformancePage.tsx'));
 
-const SettingsPage = lazy(() => import('@/modules/settings/pages/SettingsPage'));
+const SettingsPage = lazy(() => import('@/modules/settings/pages/SettingsPage.tsx'));
 
 // Utility
-const SearchPage = lazy(() => import('@/modules/search/pages/SearchPage'));
+const SearchPage = lazy(() => import('@/modules/search/pages/SearchPage.tsx'));
 
 /* =======================
    LOADING FALLBACK
@@ -103,9 +104,11 @@ const AuthLayout: React.FC = () => {
 
     return (
         <AppLayout noPadding={noPadding}>
-            <Suspense fallback={<PageLoader />}>
-                <Outlet />
-            </Suspense>
+            <ErrorBoundary module="AuthLayout">
+                <Suspense fallback={<PageLoader />}>
+                    <Outlet />
+                </Suspense>
+            </ErrorBoundary>
         </AppLayout>
     );
 };

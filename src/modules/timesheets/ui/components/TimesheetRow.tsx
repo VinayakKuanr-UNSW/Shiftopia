@@ -562,18 +562,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                 <td className={cellClass}>
                     <div className="flex items-center gap-2">
                         <ShiftStatusBadge status={entry.liveStatus as any} />
-                        {protection.status !== 'DRAFT' && !isFinalized && (
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <protection.icon className={cn("h-3.5 w-3.5", protection.colorClass)} />
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p className="text-[10px] font-black uppercase tracking-widest">{protection.label}</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                        )}
+
                     </div>
                 </td>
                 {/* Timesheet status */}

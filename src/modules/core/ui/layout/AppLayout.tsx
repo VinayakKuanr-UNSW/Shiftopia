@@ -56,21 +56,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, noPadding = false }) =>
         )}
       </Button>
 
-      {/* Settings Shortcut Button next to toggle */}
-      <Button
-        variant="ghost"
-        size="icon"
-        asChild
-        className={cn(
-          "hidden md:flex fixed top-4 z-[100] h-8 w-8 rounded-full bg-card border border-border/50 shadow-md hover:bg-muted transition-all duration-300",
-          isCollapsed ? "left-14" : "left-[308px]"
-        )}
-      >
-        <NavLink to="/settings" aria-label={t('common.settings')}>
-          <Settings className="h-4 w-4" />
-        </NavLink>
-      </Button>
-
       {/* Main Area */}
       <main
         className={cn(

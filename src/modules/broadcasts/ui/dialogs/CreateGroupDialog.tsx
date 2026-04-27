@@ -11,8 +11,8 @@ export interface CreateGroupDialogProps {
     initialSubDepartmentId?: string | null;
     onCreate: (data: {
         name: string;
-        description: string;
-        icon: string;
+        description?: string;
+        icon?: string;
         organizationId?: string | null;
         departmentId?: string | null;
         subDepartmentId?: string | null;

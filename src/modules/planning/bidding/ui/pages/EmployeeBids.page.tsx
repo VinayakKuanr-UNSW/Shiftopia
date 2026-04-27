@@ -69,10 +69,9 @@ interface ShiftData {
     stateId?: string;
     lifecycleStatus?: string;
     subGroupColor?: string;
-    droppedById?: string | null;
     last_dropped_by?: string | null;
     last_rejected_by?: string | null;
-    bidding_iteration?: number;
+    droppedById?: string | null;
 }
 
 interface BidData {
@@ -99,15 +98,11 @@ interface BidData {
     groupType?: string | null;
     stateId?: string;
     subGroupColor?: string;
-    bidding_iteration?: number;
 }
 
-/** Atomic shift opportunity — shift + per-user participation for current iteration */
 interface ShiftOpportunity extends ShiftData {
     participationStatus: ParticipationStatus;
     currentBid: BidData | null;
-    /** Bids from previous iterations (read-only history) */
-    bidHistory: BidData[];
 }
 
 // ============================================================================
@@ -183,25 +178,18 @@ function getCardBg(groupType: string | null | undefined, dept: string): string {
     return `${base} dept-card-default`;
 }
 
-/**
- * Derive participation status for the CURRENT bidding iteration.
- * History (past iterations) is handled separately by bidHistory.
- */
 function getParticipationStatus(
     shift: ShiftData,
     allMyBids: BidData[],
     userId: string
 ): ParticipationStatus {
-    // Not eligible: user dropped or rejected the offer this iteration
-    if (shift.last_rejected_by === userId) return 'rejected_this_itr';
-    if (shift.last_dropped_by === userId || shift.droppedById === userId) return 'dropped_this_itr';
+    // Permanent lockout if user dropped or rejected
+    if (shift.last_rejected_by === userId) return 'rejected_offer';
+    if (shift.last_dropped_by === userId || shift.droppedById === userId) return 'dropped';
 
-    const currentIteration = shift.bidding_iteration || 1;
-
-    // Find user's bid for the CURRENT iteration only
+    // Find user's bid (only one active bid per shift now)
     const currentBid = allMyBids.find(b =>
         String(b.shiftId) === String(shift.id) &&
-        b.bidding_iteration === currentIteration &&
         b.status !== 'withdrawn'
     );
 
@@ -254,7 +242,6 @@ export const EmployeeBidsPage: React.FC = () => {
     const [priorityFilter, setPriorityFilter] = useState<BidPriority | 'all'>('all');
     const [startDate, setStartDate] = useState<Date>(() => new Date());
     const [endDate, setEndDate]     = useState<Date>(() => new Date());
-    const [expandedHistoryIds, setExpandedHistoryIds] = useState<Set<string>>(new Set());
     const [drawerOpp, setDrawerOpp] = useState<ShiftOpportunity | null>(null);
 
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -429,8 +416,7 @@ export const EmployeeBidsPage: React.FC = () => {
                 subGroupColor: getDeptColor(s.group_type, s.departments?.name || ''),
                 droppedById: (s as any).dropped_by_id,
                 last_dropped_by: (s as any).last_dropped_by,
-                last_rejected_by: (s as any).last_rejected_by ?? null,
-                bidding_iteration: (s as any).bidding_iteration || 1
+                last_rejected_by: (s as any).last_rejected_by ?? null
             };
         });
     }, [rawAvailableShifts, eligibilityMap]);
@@ -473,9 +459,7 @@ export const EmployeeBidsPage: React.FC = () => {
                 bidTime: format(parseISO(b.created_at), 'yyyy-MM-dd HH:mm'),
                 notes: b.notes,
                 groupType: s.group_type,
-                stateId: (s as any).stateId || determineShiftState(s as any),
-                subGroupColor: getDeptColor(s.group_type, s.departments?.name || ''),
-                bidding_iteration: b.bidding_iteration || 1
+                subGroupColor: getDeptColor(s.group_type, s.departments?.name || '')
             };
         }).filter(Boolean) as BidData[];
     }, [rawMyBids]);
@@ -498,23 +482,14 @@ export const EmployeeBidsPage: React.FC = () => {
                 return true;
             })
             .map(shift => {
-                const currentIteration = shift.bidding_iteration || 1;
-
                 const currentBid = myBids.find(b =>
                     String(b.shiftId) === String(shift.id) &&
-                    b.bidding_iteration === currentIteration &&
                     b.status !== 'withdrawn'
                 ) || null;
 
-                const bidHistory = myBids.filter(b =>
-                    String(b.shiftId) === String(shift.id) &&
-                    b.bidding_iteration !== currentIteration &&
-                    b.status !== 'withdrawn'
-                );
-
                 const participationStatus = getParticipationStatus(shift, myBids, user?.id || '');
 
-                return { ...shift, participationStatus, currentBid, bidHistory };
+                return { ...shift, participationStatus, currentBid };
             });
     }, [shiftsTableSort.sortedData, myBids, priorityFilter, user?.id]);
 
@@ -558,14 +533,7 @@ export const EmployeeBidsPage: React.FC = () => {
         setSelectedShiftIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
     };
 
-    const toggleHistory = (shiftId: string) => {
-        setExpandedHistoryIds(prev => {
-            const next = new Set(prev);
-            if (next.has(shiftId)) next.delete(shiftId);
-            else next.add(shiftId);
-            return next;
-        });
-    };
+
 
     // ========================================================================
     // COMPLIANCE HANDLERS
@@ -679,9 +647,7 @@ export const EmployeeBidsPage: React.FC = () => {
     // RENDER: Shift Opportunity Card
     // ========================================================================
     const renderOpportunityCard = (opp: ShiftOpportunity) => {
-        const { participationStatus, currentBid, bidHistory } = opp;
-        const currentIteration = opp.bidding_iteration || 1;
-        const isHistoryExpanded = expandedHistoryIds.has(String(opp.id));
+        const { participationStatus, currentBid } = opp;
 
         const shiftStart = opp.startAt
             ? new Date(opp.startAt)
@@ -690,8 +656,8 @@ export const EmployeeBidsPage: React.FC = () => {
         const tr = calculateTimeRemaining(biddingCloses.toISOString());
 
         const isTerminal = participationStatus === 'selected' ||
-                           participationStatus === 'dropped_this_itr' ||
-                           participationStatus === 'rejected_this_itr' ||
+                           participationStatus === 'dropped' ||
+                           participationStatus === 'rejected_offer' ||
                            participationStatus === 'expired';
         const timerDisplay = isTerminal ? null
             : tr.isExpired ? 'Bidding Closed'
@@ -702,14 +668,14 @@ export const EmployeeBidsPage: React.FC = () => {
         const footerActions = (
             <div className="flex flex-col gap-2">
 
-                {/* ── CURRENT ITERATION STATUS ── */}
-                {participationStatus === 'dropped_this_itr' && (
+                {/* ── STATUS INDICATORS ── */}
+                {participationStatus === 'dropped' && (
                     <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-medium">
                         <XCircle className="h-4 w-4 shrink-0" /> You dropped this shift
                     </div>
                 )}
 
-                {participationStatus === 'rejected_this_itr' && (
+                {participationStatus === 'rejected_offer' && (
                     <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-medium">
                         <XCircle className="h-4 w-4 shrink-0" /> You rejected this offer
                     </div>
@@ -776,57 +742,13 @@ export const EmployeeBidsPage: React.FC = () => {
 
                 {participationStatus === 'rejected' && (
                     <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/40 text-sm">
-                        <Ban className="h-4 w-4 shrink-0" /> Not Selected This Round
+                        <Ban className="h-4 w-4 shrink-0" /> Not Selected
                     </div>
                 )}
 
                 {participationStatus === 'expired' && (
                     <div className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40 text-sm">
                         <Ban className="h-4 w-4 shrink-0" /> Bidding Closed
-                    </div>
-                )}
-
-                {/* ── ITERATION HISTORY — ALL past ITRs, DNB for missed ── */}
-                {currentIteration > 1 && (
-                    <div className="mt-1 border-t border-slate-100 dark:border-white/[0.06] pt-2">
-                        <button
-                            onClick={() => toggleHistory(String(opp.id))}
-                            className="flex items-center gap-1.5 w-full text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-                        >
-                            {isHistoryExpanded
-                                ? <ChevronDown className="h-3 w-3" />
-                                : <ChevronRight className="h-3 w-3" />
-                            }
-                            <History className="h-3 w-3" />
-                            History ({currentIteration - 1} round{currentIteration - 1 !== 1 ? 's' : ''})
-                        </button>
-                        <AnimatePresence>
-                            {isHistoryExpanded && (
-                                <motion.div
-                                    initial={{ height: 0, opacity: 0 }}
-                                    animate={{ height: 'auto', opacity: 1 }}
-                                    exit={{ height: 0, opacity: 0 }}
-                                    transition={{ duration: 0.15 }}
-                                    className="overflow-hidden"
-                                >
-                                    <div className="mt-1.5 space-y-0.5">
-                                        {Array.from({ length: currentIteration - 1 }, (_, i) => i + 1).map(itr => {
-                                            const bid = bidHistory.find(b => b.bidding_iteration === itr);
-                                            return (
-                                                <div key={itr} className="flex items-center justify-between text-xs py-0.5">
-                                                    <span className="text-muted-foreground/60 font-mono">ITR {itr}</span>
-                                                    {bid ? (
-                                                        <BidStatusBadge status={bid.status} />
-                                                    ) : (
-                                                        <span className="text-[10px] font-bold uppercase tracking-tight px-1.5 py-0.5 rounded bg-slate-200 dark:bg-white/10 text-slate-400 dark:text-white/30">DNB</span>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
                     </div>
                 )}
             </div>
@@ -842,17 +764,13 @@ export const EmployeeBidsPage: React.FC = () => {
                     className="h-4 w-4 rounded border-border/50 text-primary focus:ring-primary/30 accent-primary"
                 />
                 <span className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-wider">Select</span>
-                {currentIteration > 1 && (
-                    <span className="ml-auto text-[9px] font-mono font-bold text-muted-foreground/40 bg-muted/20 px-1.5 py-0.5 rounded uppercase">
-                        ITR {currentIteration}
-                    </span>
-                )}
             </div>
         );
 
         return (
             <motion.div key={opp.id} {...listItemSpring} whileHover={{ y: -2, transition: { duration: 0.15 } }} whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}>
                 <SharedShiftCard
+                    variant="timecard"
                     organization={opp.organization}
                     department={opp.department}
                     subGroup={opp.subGroup}
@@ -903,8 +821,8 @@ export const EmployeeBidsPage: React.FC = () => {
             if (participationStatus === 'selected')     return { label: 'Selected',     cls: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' };
             if (participationStatus === 'pending')      return { label: 'Pending',       cls: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' };
             if (participationStatus === 'rejected')     return { label: 'Not Selected',  cls: 'bg-slate-500/10 text-muted-foreground border-slate-500/20' };
-            if (participationStatus === 'dropped_this_itr') return { label: 'Dropped',       cls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' };
-            if (participationStatus === 'rejected_this_itr') return { label: 'Rejected',      cls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' };
+            if (participationStatus === 'dropped')      return { label: 'Dropped',       cls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' };
+            if (participationStatus === 'rejected_offer') return { label: 'Rejected',      cls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' };
             if (participationStatus === 'expired' || (participationStatus === 'not_participated' && isExpired))
                 return { label: 'Closed', cls: 'bg-slate-500/10 text-muted-foreground border-slate-500/20' };
             if (!opp.isEligible) return { label: 'Ineligible', cls: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' };
@@ -972,106 +890,93 @@ export const EmployeeBidsPage: React.FC = () => {
     };
 
     return (
-        <motion.div 
-            className="h-full flex flex-col w-full text-foreground overflow-hidden" 
-            variants={pageVariants} 
-            initial="hidden" 
-            animate="show"
-        >
-            <div className="sticky top-0 z-30 pt-4 pb-4 lg:pb-6">
-                <div className={cn(
-                    "rounded-[32px] p-4 lg:p-6 transition-all border",
-                    isDark 
-                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
-                )}>
-                    {/* Row 1: Page Header (Title + Clock) */}
-                    <PersonalPageHeader
-                        title="My Bids"
-                        Icon={Gavel}
-                        scope={scope}
-                        setScope={setScope}
-                        isGammaLocked={isGammaLocked}
-                        className="mb-4 lg:mb-6"
-                    />
-
-                    {/* Row 2: Unified Function Bar */}
-                    <UnifiedModuleFunctionBar
-                        transparent
-                        leftContent={
-                            <div className="flex flex-col gap-0.5">
-                                <div className="flex items-center gap-1.5 lg:gap-2">
-                                    <Calendar className="h-3.5 w-3.5 lg:h-4 lg:w-4 text-primary" />
-                                    <span className="text-[10px] lg:text-sm font-black text-foreground tracking-tight whitespace-nowrap uppercase">
-                                        <span className="hidden sm:inline">Open Shifts</span>
-                                        <span className="sm:hidden">Shifts</span>
-                                    </span>
-                                    <span className="inline-flex items-center justify-center h-4 lg:h-5 min-w-[16px] lg:min-w-[20px] px-1 lg:px-1.5 rounded-full bg-primary/10 text-primary text-[9px] lg:text-[10px] font-black tabular-nums">
-                                        {filteredBidOpportunities.length}
-                                    </span>
-                                </div>
-                            </div>
-                        }
-                        startDate={startDate}
-                        endDate={endDate}
-                        onDateChange={(start, end) => {
-                            setStartDate(start);
-                            setEndDate(end);
-                        }}
-                        viewMode={viewMode}
-                        onViewModeChange={setViewMode}
-                        onRefresh={() => {
-                            queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
-                            queryClient.invalidateQueries({ queryKey: ['myBids'] });
-                        }}
-                        isLoading={eligibilityLoading}
-                        className="bg-transparent border-none p-0 shadow-none"
-                        filters={
-                            <div className={cn(
-                                "flex items-center gap-1 p-1 h-9 rounded-lg",
-                                isDark ? "bg-[#111827]/60" : "bg-slate-200/50"
-                            )}>
-                                <button
-                                    onClick={() => setPriorityFilter('all')}
-                                    className={cn(
-                                        'px-3 h-7 rounded-md text-[10px] font-black uppercase tracking-wider transition-all',
-                                        priorityFilter === 'all' 
-                                            ? (isDark ? 'bg-white/20 text-white' : 'bg-slate-900 text-white shadow-sm') 
-                                            : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-slate-900/5')
-                                    )}
-                                >
-                                    All
-                                </button>
-                                {(['normal', 'urgent', 'emergent'] as const).map(p => {
-                                    const conf = PRIORITY_CONFIG[p];
-                                    const active = priorityFilter === p;
-                                    return (
-                                        <button
-                                            key={p}
-                                            onClick={() => setPriorityFilter(p)}
-                                            className={cn(
-                                                'flex items-center gap-1.5 px-2 lg:px-2.5 h-7 rounded-md text-[10px] font-black uppercase tracking-wider transition-all',
-                                                active 
-                                                    ? (isDark ? 'bg-white/20 text-white' : 'bg-slate-900 text-white shadow-sm') 
-                                                    : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-slate-900/5')
-                                            )}
-                                        >
-                                            <conf.icon className="w-3 h-3 lg:hidden" />
-                                            <div className={cn("hidden lg:block w-1.5 h-1.5 rounded-full", conf.color.replace('text-', 'bg-'))} />
-                                            <span className="hidden sm:inline">{conf.label}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        }
-                    />
-                </div>
+        <div className="h-full flex flex-col overflow-hidden bg-background">
+            {/* ── ROW 1: HEADER ────────────────────────────────────────────── */}
+            <div className="flex-shrink-0 p-4 lg:p-6 pb-0">
+                <PersonalPageHeader
+                    title="My Bids"
+                    Icon={Gavel}
+                    scope={scope}
+                    setScope={setScope}
+                    isGammaLocked={isGammaLocked}
+                />
             </div>
 
-            {/* ── CARD / TABLE VIEW ── */}
-            <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+            {/* ── ROW 2: FUNCTION BAR ───────────────────────────────────────── */}
+            <div className="flex-shrink-0 px-4 lg:px-6 py-2">
+                <UnifiedModuleFunctionBar
+                    leftContent={
+                        <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5 lg:gap-2">
+                                <Calendar className="h-3.5 w-3.5 lg:h-4 lg:w-4 text-primary" />
+                                <span className="text-[10px] lg:text-sm font-black text-foreground tracking-tight whitespace-nowrap uppercase">
+                                    <span className="hidden sm:inline">Open Shifts</span>
+                                    <span className="sm:hidden">Shifts</span>
+                                </span>
+                                <span className="inline-flex items-center justify-center h-4 lg:h-5 min-w-[16px] lg:min-w-[20px] px-1 lg:px-1.5 rounded-full bg-primary/10 text-primary text-[9px] lg:text-[10px] font-black tabular-nums">
+                                    {filteredBidOpportunities.length}
+                                </span>
+                            </div>
+                        </div>
+                    }
+                    startDate={startDate}
+                    endDate={endDate}
+                    onDateChange={(start, end) => {
+                        setStartDate(start);
+                        setEndDate(end);
+                    }}
+                    viewMode={viewMode}
+                    onViewModeChange={setViewMode}
+                    onRefresh={() => {
+                        queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
+                        queryClient.invalidateQueries({ queryKey: ['myBids'] });
+                    }}
+                    isLoading={eligibilityLoading}
+                    filters={
+                        <div className={cn(
+                            "flex items-center gap-1 p-1 h-9 rounded-lg",
+                            isDark ? "bg-[#111827]/60" : "bg-slate-200/50"
+                        )}>
+                            <button
+                                onClick={() => setPriorityFilter('all')}
+                                className={cn(
+                                    'px-3 h-7 rounded-md text-[10px] font-black uppercase tracking-wider transition-all',
+                                    priorityFilter === 'all' 
+                                        ? (isDark ? 'bg-white/20 text-white' : 'bg-slate-900 text-white shadow-sm') 
+                                        : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-slate-900/5')
+                                )}
+                            >
+                                All
+                            </button>
+                            {(['normal', 'urgent', 'emergent'] as const).map(p => {
+                                const conf = PRIORITY_CONFIG[p];
+                                const active = priorityFilter === p;
+                                return (
+                                    <button
+                                        key={p}
+                                        onClick={() => setPriorityFilter(p)}
+                                        className={cn(
+                                            'flex items-center gap-1.5 px-2 lg:px-2.5 h-7 rounded-md text-[10px] font-black uppercase tracking-wider transition-all',
+                                            active 
+                                                ? (isDark ? 'bg-white/20 text-white' : 'bg-slate-900 text-white shadow-sm') 
+                                                : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-slate-900/5')
+                                        )}
+                                    >
+                                        <conf.icon className="w-3 h-3 lg:hidden" />
+                                        <div className={cn("hidden lg:block w-1.5 h-1.5 rounded-full", conf.color.replace('text-', 'bg-'))} />
+                                        <span className="hidden sm:inline">{conf.label}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    }
+                />
+            </div>
+
+            {/* ── ROW 3: CONTENT AREA ───────────────────────────────────────── */}
+            <div className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6">
                 <div className={cn(
-                    "h-full rounded-[32px] transition-all border flex flex-col overflow-hidden",
+                    "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col",
                     isDark 
                         ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
                         : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
@@ -1081,7 +986,7 @@ export const EmployeeBidsPage: React.FC = () => {
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={`${priorityFilter}-${startDate.toISOString()}-${endDate.toISOString()}`}
-                            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6"
+                            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4"
                             variants={pageVariants}
                             initial="hidden"
                             animate="show"
@@ -1153,7 +1058,6 @@ export const EmployeeBidsPage: React.FC = () => {
                                         <SortableTableHeader sortKey="date" currentSort={shiftsTableSort.sortConfig} onSort={shiftsTableSort.handleSort}>Date</SortableTableHeader>
                                         <th className="p-3 text-left">Time</th>
                                         <th className="p-3 text-left">Net</th>
-                                        <th className="p-3 text-left">ITR</th>
                                         <th className="p-3 text-left w-[200px]">Status / Action</th>
                                     </tr>
                                 </thead>
@@ -1189,14 +1093,11 @@ export const EmployeeBidsPage: React.FC = () => {
                                                 <td className="p-3">{format(parseISO(opp.date), 'EEE d MMM')}</td>
                                                 <td className="p-3 tabular-nums font-mono">{opp.startTime}–{opp.endTime}</td>
                                                 <td className="p-3 font-mono text-muted-foreground">{Math.round(opp.netLength)}m</td>
-                                                <td className="p-3 text-xs font-mono text-muted-foreground/50">
-                                                    {(opp.bidding_iteration || 1) > 1 ? `ITR ${opp.bidding_iteration}` : '—'}
-                                                </td>
                                                 <td className="p-3">
-                                                    {participationStatus === 'dropped_this_itr' && (
+                                                    {participationStatus === 'dropped' && (
                                                         <span className="text-xs text-rose-500 flex items-center gap-1 font-bold"><XCircle size={12} /> Dropped</span>
                                                     )}
-                                                    {participationStatus === 'rejected_this_itr' && (
+                                                    {participationStatus === 'rejected_offer' && (
                                                         <span className="text-xs text-rose-500 flex items-center gap-1 font-bold"><XCircle size={12} /> Rejected</span>
                                                     )}
                                                     {participationStatus === 'not_participated' && !isExpired && (
@@ -1307,7 +1208,7 @@ export const EmployeeBidsPage: React.FC = () => {
 
             {/* ── COMPLIANCE WARNING DIALOG ── */}
             <AlertDialog open={showComplianceDialog} onOpenChange={setShowComplianceDialog}>
-                <AlertDialogContent className="bg-background border-border text-foreground rounded-[24px]">
+                <AlertDialogContent className="bg-background border-border text-foreground rounded-[24px]" aria-describedby={undefined}>
                     <AlertDialogHeader>
                         <AlertDialogTitle className="flex items-center gap-2 text-xl font-black uppercase tracking-tight">
                             <ShieldAlert className="h-6 w-6 text-amber-500" />
@@ -1359,8 +1260,8 @@ export const EmployeeBidsPage: React.FC = () => {
 
             {/* ── BID DETAIL DRAWER (mobile list tap) ── */}
             <Drawer open={drawerOpp !== null} onOpenChange={open => { if (!open) setDrawerOpp(null); }}>
-                <DrawerContent className="max-h-[88dvh] flex flex-col rounded-t-[32px]">
-                    <div className="overflow-y-auto flex-1 px-4 pb-8">
+                <DrawerContent className="max-h-[88dvh] flex flex-col rounded-t-[32px]" aria-describedby={undefined}>
+                    <div className="flex-1 px-4 pb-8 pt-6">
                         {drawerOpp && (() => {
                             const opp = drawerOpp;
                             const { participationStatus, currentBid } = opp;
@@ -1371,139 +1272,130 @@ export const EmployeeBidsPage: React.FC = () => {
                             const tr = calculateTimeRemaining(biddingCloses.toISOString());
                             const isExpired = tr.isExpired;
                             const timerStr = formatTimeRemaining(tr);
-                            const priority = getBidPriority(opp);
-                            const pConf = PRIORITY_CONFIG[priority];
-                            const netH = Math.floor(opp.netLength / 60);
-                            const netM = Math.round(opp.netLength % 60);
-                            const netStr = netH > 0 ? `${netH}h${netM > 0 ? ` ${netM}m` : ''}` : `${netM}m`;
+
+                            const isTerminal = participationStatus === 'selected' || 
+                                               participationStatus === 'dropped' || 
+                                               participationStatus === 'rejected_offer' || 
+                                               participationStatus === 'expired';
+
+                            const footerActions = (
+                                <div className="flex flex-col gap-2 mt-4">
+                                    {participationStatus === 'dropped' && (
+                                        <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-black uppercase tracking-wider">
+                                            <XCircle className="h-5 w-5 shrink-0" /> You dropped this shift
+                                        </div>
+                                    )}
+                                    {participationStatus === 'rejected_offer' && (
+                                        <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-black uppercase tracking-wider">
+                                            <XCircle className="h-5 w-5 shrink-0" /> You rejected this offer
+                                        </div>
+                                    )}
+                                    {participationStatus === 'not_participated' && opp.isEligible && !isExpired && (
+                                        <Button
+                                            className="w-full h-14 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-base uppercase tracking-widest shadow-xl shadow-indigo-900/30 rounded-2xl transition-all active:scale-[0.98]"
+                                            onClick={() => { handleQuickBid(opp); setDrawerOpp(null); }}
+                                            disabled={placeBidMutation.isPending}
+                                        >
+                                            {placeBidMutation.isPending && placeBidMutation.variables === opp.id
+                                                ? <Loader2 className="mr-3 h-5 w-5 animate-spin" />
+                                                : <ThumbsUp className="mr-3 h-5 w-5" />
+                                            }
+                                            {placeBidMutation.isPending && placeBidMutation.variables === opp.id ? 'Placing…' : 'Bid Now'}
+                                        </Button>
+                                    )}
+                                    {participationStatus === 'not_participated' && !opp.isEligible && (
+                                        <div className="w-full flex flex-col items-center justify-center gap-1.5 py-4 px-4 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-bold">
+                                            <div className="flex items-center gap-2 font-black uppercase tracking-wider">
+                                                <Ban className="h-5 w-5 shrink-0" />
+                                                Ineligible
+                                            </div>
+                                            <span className="text-[11px] opacity-70 text-center">{opp.ineligibilityReason ?? 'You do not meet the qualifications for this shift.'}</span>
+                                        </div>
+                                    )}
+                                    {participationStatus === 'not_participated' && isExpired && (
+                                        <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-muted/30 border border-border/30 text-muted-foreground text-sm font-black uppercase tracking-wider">
+                                            <Ban className="h-5 w-5 shrink-0" /> Bidding Closed
+                                        </div>
+                                    )}
+                                    {participationStatus === 'pending' && (
+                                        <>
+                                            <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm font-black uppercase tracking-wider">
+                                                <Clock className="h-5 w-5 shrink-0" /> Awaiting Review
+                                            </div>
+                                            {!isExpired && currentBid && (
+                                                <Button
+                                                    variant="outline"
+                                                    className="w-full h-12 border-border/50 hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl"
+                                                    onClick={() => { handleWithdrawBid(currentBid.id); setDrawerOpp(null); }}
+                                                    disabled={withdrawBidMutation.isPending}
+                                                >
+                                                    <XCircle className="mr-2 h-4 w-4" /> Withdraw Bid
+                                                </Button>
+                                            )}
+                                        </>
+                                    )}
+                                    {participationStatus === 'selected' && (
+                                        <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-sm font-black uppercase tracking-wider">
+                                            <CheckCircle className="h-5 w-5 shrink-0" /> Assigned to You
+                                        </div>
+                                    )}
+                                    {participationStatus === 'rejected' && (
+                                        <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-muted/30 border border-border/30 text-muted-foreground text-sm font-black uppercase tracking-wider">
+                                            <Ban className="h-5 w-5 shrink-0" /> Not Selected
+                                        </div>
+                                    )}
+                                </div>
+                            );
 
                             return (
-                                <>
-                                    {/* Header */}
-                                    <div className="flex items-start justify-between pt-2 pb-4 border-b border-border/40">
-                                        <div className="min-w-0 pr-3">
-                                            <DrawerTitle className="text-lg font-black uppercase tracking-tight">{opp.role}</DrawerTitle>
-                                            <p className="text-sm text-muted-foreground mt-0.5 truncate font-medium">
-                                                {opp.department}{opp.subGroup && opp.subGroup !== opp.department ? ` · ${opp.subGroup}` : ''}
-                                            </p>
-                                            {priority !== 'normal' && (
-                                                <span className={cn('inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full border mt-1.5', pConf.badgeCls)}>
-                                                    <pConf.icon className="h-2.5 w-2.5" />{pConf.label}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <DrawerClose asChild>
-                                            <button className="shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-muted/50 text-muted-foreground hover:bg-muted transition-colors">
-                                                <X className="h-5 w-5" />
-                                            </button>
-                                        </DrawerClose>
+                                <div className="space-y-6">
+                                    <div className="flex justify-center mb-2">
+                                        <div className="w-12 h-1.5 rounded-full bg-border/40" />
                                     </div>
-
-                                    {/* Detail grid */}
-                                    <div className="grid grid-cols-2 gap-2.5 mt-4">
-                                        {[
-                                            { label: 'Date',     value: format(parseISO(opp.date), 'EEE, d MMM yyyy') },
-                                            { label: 'Time',     value: `${opp.startTime} – ${opp.endTime}`, mono: true },
-                                            { label: 'Duration', value: netStr },
-                                            { label: 'Level',    value: opp.remunerationLevel },
-                                        ].map(({ label, value, mono }) => (
-                                            <div key={label} className="flex flex-col gap-0.5 p-3 rounded-2xl bg-muted/30 border border-border/30">
-                                                <span className="text-[9px] uppercase tracking-widest text-muted-foreground/50 font-black">{label}</span>
-                                                <span className={cn('text-sm font-bold mt-0.5', mono && 'font-mono')}>{value}</span>
-                                            </div>
-                                        ))}
+                                    
+                                    <SharedShiftCard
+                                        variant="timecard"
+                                        organization={opp.organization}
+                                        department={opp.department}
+                                        subGroup={opp.subGroup}
+                                        role={opp.role}
+                                        shiftDate={opp.date}
+                                        startTime={opp.startTime}
+                                        endTime={opp.endTime}
+                                        netLength={opp.netLength}
+                                        paidBreak={opp.paidBreak}
+                                        unpaidBreak={opp.unpaidBreak}
+                                        timerText={isTerminal ? undefined : (isExpired ? 'Bidding Closed' : `Closes in ${timerStr}`)}
+                                        isExpired={isTerminal ? false : isExpired}
+                                        isUrgent={opp.isUrgent}
+                                        lifecycleStatus={opp.lifecycleStatus || 'Published'}
+                                        groupVariant={
+                                            opp.groupType === 'convention_centre' ? 'convention' :
+                                            opp.groupType === 'exhibition_centre' ? 'exhibition' :
+                                            opp.groupType === 'theatre' ? 'theatre' : 'default'
+                                        }
+                                        footerActions={footerActions}
+                                        isFlat={false}
+                                        className="shadow-2xl border-white/10"
+                                    />
+                                    
+                                    <div className="px-2 pb-4">
+                                        <Button 
+                                            variant="ghost" 
+                                            className="w-full h-12 rounded-2xl text-muted-foreground/50 font-black uppercase tracking-widest text-[10px] hover:bg-muted/50 transition-all"
+                                            onClick={() => setDrawerOpp(null)}
+                                        >
+                                            Dismiss Detail
+                                        </Button>
                                     </div>
-
-                                    {/* Bidding timer */}
-                                    {!isExpired && timerStr && (
-                                        <div className="flex items-center gap-2 mt-4 px-4 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-sm font-bold">
-                                            <Clock className="h-5 w-5 shrink-0" />
-                                            <span>Closes in <strong>{timerStr}</strong></span>
-                                        </div>
-                                    )}
-
-                                    {/* Iteration badge */}
-                                    {(opp.bidding_iteration || 1) > 1 && (
-                                        <div className="flex items-center gap-2 mt-2 px-4 py-2.5 rounded-2xl bg-muted/30 border border-border/30 text-xs text-muted-foreground font-mono font-bold uppercase tracking-wider">
-                                            <History className="h-4 w-4" />
-                                            Iteration {opp.bidding_iteration}
-                                        </div>
-                                    )}
-
-                                    {/* Actions */}
-                                    <div className="flex flex-col gap-2 mt-6">
-                                        {participationStatus === 'dropped_this_itr' && (
-                                            <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-black uppercase tracking-wider">
-                                                <XCircle className="h-5 w-5 shrink-0" /> You dropped this shift
-                                            </div>
-                                        )}
-                                        {participationStatus === 'rejected_this_itr' && (
-                                            <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-black uppercase tracking-wider">
-                                                <XCircle className="h-5 w-5 shrink-0" /> You rejected this offer
-                                            </div>
-                                        )}
-                                        {participationStatus === 'not_participated' && opp.isEligible && !isExpired && (
-                                            <Button
-                                                className="w-full h-14 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-base uppercase tracking-widest shadow-xl shadow-indigo-900/30 rounded-2xl transition-all active:scale-[0.98]"
-                                                onClick={() => { handleQuickBid(opp); setDrawerOpp(null); }}
-                                                disabled={placeBidMutation.isPending}
-                                            >
-                                                {placeBidMutation.isPending && placeBidMutation.variables === opp.id
-                                                    ? <Loader2 className="mr-3 h-5 w-5 animate-spin" />
-                                                    : <ThumbsUp className="mr-3 h-5 w-5" />
-                                                }
-                                                {placeBidMutation.isPending && placeBidMutation.variables === opp.id ? 'Placing…' : 'Bid Now'}
-                                            </Button>
-                                        )}
-                                        {participationStatus === 'not_participated' && !opp.isEligible && (
-                                            <div className="w-full flex flex-col items-center justify-center gap-1.5 py-4 px-4 rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400 text-sm font-bold">
-                                                <div className="flex items-center gap-2 font-black uppercase tracking-wider">
-                                                    <Ban className="h-5 w-5 shrink-0" />
-                                                    Ineligible
-                                                </div>
-                                                <span className="text-[11px] opacity-70 text-center">{opp.ineligibilityReason ?? 'You do not meet the qualifications for this shift.'}</span>
-                                            </div>
-                                        )}
-                                        {participationStatus === 'not_participated' && isExpired && (
-                                            <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-muted/30 border border-border/30 text-muted-foreground text-sm font-black uppercase tracking-wider">
-                                                <Ban className="h-5 w-5 shrink-0" /> Bidding Closed
-                                            </div>
-                                        )}
-                                        {participationStatus === 'pending' && (
-                                            <>
-                                                <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm font-black uppercase tracking-wider">
-                                                    <Clock className="h-5 w-5 shrink-0" /> Awaiting Review
-                                                </div>
-                                                {!isExpired && currentBid && (
-                                                    <Button
-                                                        variant="outline"
-                                                        className="w-full h-12 border-border/50 hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl"
-                                                        onClick={() => { handleWithdrawBid(currentBid.id); setDrawerOpp(null); }}
-                                                        disabled={withdrawBidMutation.isPending}
-                                                    >
-                                                        <XCircle className="mr-2 h-4 w-4" /> Withdraw Bid
-                                                    </Button>
-                                                )}
-                                            </>
-                                        )}
-                                        {participationStatus === 'selected' && (
-                                            <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-sm font-black uppercase tracking-wider">
-                                                <CheckCircle className="h-5 w-5 shrink-0" /> Assigned to You
-                                            </div>
-                                        )}
-                                        {participationStatus === 'rejected' && (
-                                            <div className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-2xl bg-muted/30 border border-border/30 text-muted-foreground text-sm font-black uppercase tracking-wider">
-                                                <Ban className="h-5 w-5 shrink-0" /> Not Selected
-                                            </div>
-                                        )}
-                                    </div>
-                                </>
+                                </div>
                             );
                         })()}
                     </div>
+
                 </DrawerContent>
             </Drawer>
-        </motion.div>
+        </div>
     );
 };
 

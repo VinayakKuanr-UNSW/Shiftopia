@@ -95,7 +95,7 @@ const ProfilePage: React.FC = () => {
       variants={pageVariants}
       initial="hidden"
       animate="show"
-      className="h-full flex flex-col w-full text-foreground overflow-hidden"
+      className="h-full flex flex-col w-full text-foreground overflow-hidden space-y-4"
     >
       {/* ── Unified Header ────────────────────────────────────────────── */}
       <div className="sticky top-0 z-30 -mx-4 px-4 md:-mx-8 md:px-8 pt-4 pb-4 lg:pb-6">
@@ -167,7 +167,7 @@ const ProfilePage: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-hidden pt-2 lg:pt-4">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <div className={cn(
             "h-full rounded-[32px] border transition-all overflow-y-auto p-4 lg:p-8 scrollbar-none",
             isDark 
