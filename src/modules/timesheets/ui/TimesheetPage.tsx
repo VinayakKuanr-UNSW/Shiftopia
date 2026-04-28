@@ -18,8 +18,7 @@ import {
 } from '../api/timesheets.supabase.api';
 import { useScopeFilter, ScopeMode } from '@/platform/auth/useScopeFilter';
 import { getStatusDotInfo } from '@/modules/rosters/domain/shift-ui';
-import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
-import { UnifiedModuleFunctionBar } from '@/modules/core/ui/components/UnifiedModuleFunctionBar';
+import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 
 /**
  * TimesheetPage
@@ -102,7 +101,13 @@ export const TimesheetPage: React.FC = () => {
     };
 
     // ── Data transform ─────────────────────────────────────────────────────────
-    const entries = useMemo(() => shifts.map(shift => ({
+    const entries = useMemo(() => shifts
+        .filter(shift => {
+            const isDraft = shift.lifecycleStatus === 'Draft';
+            const isUnassigned = !shift.employeeId || shift.employeeName?.toLowerCase().includes('unassigned');
+            return !isDraft && !isUnassigned;
+        })
+        .map(shift => ({
         id: shift.id,
         shiftId: shift.shiftId,
         timesheetId: shift.timesheetId || undefined,
@@ -152,6 +157,7 @@ export const TimesheetPage: React.FC = () => {
         }),
     })), [shifts]); // eslint-disable-line react-hooks/exhaustive-deps
 
+
     // ── Actions ────────────────────────────────────────────────────────────────
     const handleRefresh = () => loadShifts();
 
@@ -182,51 +188,44 @@ export const TimesheetPage: React.FC = () => {
     // ── Render ─────────────────────────────────────────────────────────────────
     return (
         <div className="h-full flex flex-col overflow-hidden bg-background">
-            {/* ── ROW 1: HEADER ────────────────────────────────────────────── */}
-            <div className="flex-shrink-0 p-4 lg:p-6 pb-0">
-                <PersonalPageHeader
-                    title="Timesheets"
-                    Icon={Clock}
-                    scope={scope}
-                    setScope={setScope}
-                    isGammaLocked={isGammaLocked}
-                    mode={scopeMode}
-                />
-            </div>
-
-            {/* ── ROW 2: FUNCTION BAR ───────────────────────────────────────── */}
-            <div className="flex-shrink-0 px-4 lg:px-6 py-2">
-                <UnifiedModuleFunctionBar
-                    viewMode={viewMode === 'timecard' ? 'table' : (viewMode as 'card' | 'table')}
-                    onViewModeChange={() => {}}
-                    searchQuery={searchQuery}
-                    onSearchChange={setSearchQuery}
-                    onRefresh={handleRefresh}
-                    isLoading={loading}
-                    leftContent={
-                        <UnifiedRosterNavigator
-                            variant="full"
-                            date={selectedDate}
-                            viewType={viewType}
-                            onChange={(date, newRange) => {
-                                setSelectedDate(date);
-                                setRange(newRange);
-                            }}
-                            onViewTypeChange={(view) => {
-                                let newDate = selectedDate;
-                                if (view === 'week') {
-                                    newDate = startOfWeek(selectedDate, { weekStartsOn: 1 });
-                                } else if (view === 'month') {
-                                    newDate = startOfMonth(selectedDate);
-                                }
-                                setSelectedDate(newDate);
-                                setViewType(view);
-                                setRange(computeRange(newDate, view));
-                            }}
-                        />
-                    }
-                />
-            </div>
+            {/* ── GOLD STANDARD HEADER (Title · Scope · Function Bar) ── */}
+            <GoldStandardHeader
+                title="Timesheets"
+                Icon={Clock}
+                scope={scope}
+                setScope={setScope}
+                isGammaLocked={isGammaLocked}
+                mode={scopeMode}
+                // Row 3 Structured Props
+                viewMode={viewMode === 'timecard' ? 'table' : (viewMode as 'card' | 'table')}
+                onViewModeChange={() => {}}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                onRefresh={handleRefresh}
+                isLoading={loading}
+                leftContent={
+                    <UnifiedRosterNavigator
+                        variant="full"
+                        date={selectedDate}
+                        viewType={viewType}
+                        onChange={(date, newRange) => {
+                            setSelectedDate(date);
+                            setRange(newRange);
+                        }}
+                        onViewTypeChange={(view) => {
+                            let newDate = selectedDate;
+                            if (view === 'week') {
+                                newDate = startOfWeek(selectedDate, { weekStartsOn: 1 });
+                            } else if (view === 'month') {
+                                newDate = startOfMonth(selectedDate);
+                            }
+                            setSelectedDate(newDate);
+                            setViewType(view);
+                            setRange(computeRange(newDate, view));
+                        }}
+                    />
+                }
+            />
 
             {/* ── ROW 3: CONTENT AREA ───────────────────────────────────────── */}
             <div className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6">

@@ -40,6 +40,11 @@ export type PerformanceMetrics = {
     // Aggregate Score (0-100)
     reliability_score: number;
 
+    // Bids
+    total_bids: number;
+    bids_accepted: number;
+    bid_success_rate: number;
+
     // Phase 2: Performance Insights (not yet returned by any DB function)
     performance_flag?: PerformanceFlag;
 

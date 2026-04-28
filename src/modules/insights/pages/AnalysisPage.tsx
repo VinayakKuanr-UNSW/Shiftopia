@@ -8,7 +8,8 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarC
 import { useMetricAnalysis } from '../hooks/useMetricAnalysis';
 import { useDateRange } from '../hooks/useDateRange';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
-import { cn } from '@/modules/core/lib/utils';
+import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { LineChart as LineChartIcon } from 'lucide-react';
 import { format } from 'date-fns';
 
 const AnalysisPage: React.FC = () => {
@@ -131,22 +132,24 @@ const AnalysisPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4 animate-fade-in pb-24 md:pb-0">
-      <div className="flex items-center justify-between">
-        <Button asChild variant="ghost" className="text-white/80 hover:bg-white/10 hover:text-white pl-1">
-          <Link to="/insights">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Insights Overview
-          </Link>
-        </Button>
-      </div>
+    <div className="h-full flex flex-col overflow-hidden bg-background">
+      <GoldStandardHeader
+        title={data.title}
+        Icon={LineChartIcon}
+        rightActions={
+          <Button asChild variant="ghost" size="sm" className="text-foreground/80 hover:bg-muted">
+            <Link to="/insights">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Link>
+          </Button>
+        }
+      />
 
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 lg:px-6 pb-24 md:pb-6 space-y-4 animate-fade-in">
       <div className="glass-panel p-4 lg:p-6 border border-white/10 rounded-2xl backdrop-blur-xl bg-white/5 shadow-2xl shadow-black/20">
-        <h1 className="text-3xl lg:text-4xl font-black mb-2 bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent tracking-tight">
-            {data.title}
-        </h1>
         <p className="text-lg text-white/70 mb-6 font-medium">{data.summary}</p>
-        
+
         {data.metrics && Object.keys(data.metrics).length > 0 && (
           <div className="flex flex-wrap gap-3">
             {Object.entries(data.metrics).map(([key, value]) => (
@@ -218,6 +221,7 @@ const AnalysisPage: React.FC = () => {
             </CardContent>
           </Card>
         </div>
+      </div>
       </div>
     </div>
   );

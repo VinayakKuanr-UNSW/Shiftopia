@@ -8,7 +8,7 @@ import { CalendarDays, Info, Loader2, Mail } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
@@ -174,70 +174,51 @@ const MyRosterPage: React.FC = () => {
   }
 
   return (
-    // h-full fills the noPadding main area (overflow-hidden in AppLayout)
-    <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4">
-      
-      {/* ── Unified Header ────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30">
-        <div className={cn(
-            "rounded-[32px] p-4 lg:p-6 transition-all border",
-            isDark 
-                ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
-        )}>
-          {/* Row 1: Identity & Clock */}
-          <PersonalPageHeader
-            title="My Roster"
-            Icon={CalendarDays}
-            scope={scope}
-            setScope={setScope}
-            isGammaLocked={isGammaLocked}
-            className="mb-4 lg:mb-6"
-          />
+    <div className="h-full flex flex-col overflow-hidden bg-background">
+      {/* ── GOLD STANDARD HEADER (Title · Scope · Function Bar) ── */}
+      <GoldStandardHeader
+        title="My Roster"
+        Icon={CalendarDays}
+        scope={scope}
+        setScope={setScope}
+        isGammaLocked={isGammaLocked}
+        functionBar={
+          <div className="flex flex-row items-center gap-2 w-full">
+            <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none">
+              <MyRosterNavigator
+                view={view}
+                onViewChange={setView}
+                selectedDate={selectedDate}
+                onDateChange={setSelectedDate}
+              />
 
-          {/* Row 3: Roster Function Bar (Standardized Row) */}
-          <div className="flex flex-row items-center gap-2 w-full transition-all overflow-hidden mt-1">
-              {/* Scrollable Container for all tools */}
-              <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none py-0.5 pr-8">
-                  <div className="flex-shrink-0">
-                      <MyRosterNavigator
-                          view={view}
-                          onViewChange={setView}
-                          selectedDate={selectedDate}
-                          onDateChange={setSelectedDate}
-                      />
-                  </div>
+              <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
 
-                  <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
-
-                  {/* Offers Button (Desktop Only) */}
-                  <div className="pr-4 md:pr-0">
-                    <button
-                      onClick={() => setShowOffersModal(true)}
-                      className={cn(
-                        'hidden md:flex items-center gap-2 h-10 lg:h-11 px-4 rounded-xl text-[10px] font-black transition-all flex-shrink-0 uppercase tracking-wider shadow-sm',
-                        isDark 
-                          ? "bg-[#111827]/60 text-white/70 hover:text-white" 
-                          : "bg-slate-100 text-slate-700 border border-slate-200/50 hover:bg-slate-200",
-                        pendingOfferCount > 0 && (isDark ? 'text-amber-400 border border-amber-500/30' : 'text-amber-600 border border-amber-500/30'),
-                      )}
-                    >
-                      <Mail className="h-3.5 w-3.5" />
-                      <span>Offers</span>
-                      {pendingOfferCount > 0 && (
-                        <span className="min-w-[18px] h-4.5 bg-amber-500 text-black font-black text-[10px] flex items-center justify-center rounded-full px-1 leading-none">
-                          {pendingOfferCount}
-                        </span>
-                      )}
-                    </button>
-                  </div>
-              </div>
+              <button
+                onClick={() => setShowOffersModal(true)}
+                className={cn(
+                  'hidden md:flex items-center gap-2 h-10 lg:h-11 px-4 rounded-xl text-[10px] font-black transition-all flex-shrink-0 uppercase tracking-wider shadow-sm',
+                  isDark
+                    ? 'bg-[#111827]/60 text-white/70 hover:text-white'
+                    : 'bg-slate-100 text-slate-700 border border-slate-200/50 hover:bg-slate-200',
+                  pendingOfferCount > 0 && (isDark ? 'text-amber-400 border border-amber-500/30' : 'text-amber-600 border border-amber-500/30'),
+                )}
+              >
+                <Mail className="h-3.5 w-3.5" />
+                <span>Offers</span>
+                {pendingOfferCount > 0 && (
+                  <span className="min-w-[18px] h-4.5 bg-amber-500 text-black font-black text-[10px] flex items-center justify-center rounded-full px-1 leading-none">
+                    {pendingOfferCount}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
-        </div>
-      </div>
+        }
+      />
 
-      {/* ── Main Content Area (Calendar View) ─────────────────────────── */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      {/* ── BODY (Calendar) ── */}
+      <div className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6">
         <div className={cn(
             "h-full rounded-[32px] overflow-hidden transition-all border",
             isDark 

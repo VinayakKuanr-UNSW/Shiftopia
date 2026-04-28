@@ -186,10 +186,27 @@ export function useEmployees(
   departmentId?: string,
   subDepartmentId?: string,
   roleId?: string,
+  searchTerm?: string,
+  limit?: number,
 ) {
   return useQuery({
-    queryKey: shiftKeys.lookups.employees(organizationId, departmentId, subDepartmentId, roleId),
-    queryFn: () => shiftsQueries.getEmployees(organizationId, departmentId, subDepartmentId, roleId),
+    queryKey: shiftKeys.lookups.employees(
+      organizationId,
+      departmentId,
+      subDepartmentId,
+      roleId,
+      searchTerm,
+      limit,
+    ),
+    queryFn: () =>
+      shiftsQueries.getEmployees(
+        organizationId,
+        departmentId,
+        subDepartmentId,
+        roleId,
+        searchTerm,
+        limit,
+      ),
     staleTime: 2 * 60_000,
   });
 }

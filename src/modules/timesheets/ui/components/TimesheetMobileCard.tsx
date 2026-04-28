@@ -344,44 +344,42 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                         </div>
                     ) : isManager ? (
                         canAction ? (
-                            <div className="flex flex-col gap-2">
-                                <div className="flex gap-2">
-                                    <Button
-                                        onClick={handleApprove}
-                                        disabled={!isShiftOver}
-                                        className="flex-1 h-11 rounded-xl font-black uppercase text-[10px] tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-30 transition-all active:scale-95"
-                                    >
-                                        Approve
-                                    </Button>
-                                    <Button
-                                        onClick={handleReject}
-                                        disabled={!isShiftOver}
-                                        className="flex-1 h-11 rounded-xl font-black uppercase text-[10px] tracking-widest bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/10 hover:bg-rose-500/20 disabled:opacity-30 transition-all active:scale-95"
-                                    >
-                                        Reject
-                                    </Button>
-                                </div>
-                                <div className="flex gap-2">
-                                    {showNoShowBtn && (
-                                        <Button
-                                            variant="outline"
-                                            onClick={() => onMarkNoShow?.(String(entry.id))}
-                                            disabled={!isShiftOver}
-                                            className="flex-1 h-10 rounded-xl border-rose-500/20 bg-rose-500/5 text-rose-600 dark:text-rose-400 text-[10px] font-black uppercase tracking-widest disabled:opacity-30 transition-all active:scale-95"
-                                        >
-                                            <UserX className="h-3.5 w-3.5 mr-2" /> Mark No Show
-                                        </Button>
-                                    )}
+                            <div className="flex gap-1 w-full">
+                                <Button
+                                    onClick={handleApprove}
+                                    disabled={!isShiftOver}
+                                    className="flex-1 h-9 rounded-xl font-black uppercase text-[9px] tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-30 transition-all active:scale-95 px-0"
+                                >
+                                    Approve
+                                </Button>
+                                <Button
+                                    onClick={handleReject}
+                                    disabled={!isShiftOver}
+                                    className="flex-1 h-9 rounded-xl font-black uppercase text-[9px] tracking-widest bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/10 hover:bg-rose-500/20 disabled:opacity-30 transition-all active:scale-95 px-0"
+                                >
+                                    Reject
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setIsEditing(true)}
+                                    disabled={!isShiftOver}
+                                    className="flex-1 h-9 rounded-xl border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 text-[9px] font-black uppercase tracking-widest disabled:opacity-30 transition-all active:scale-95 px-0"
+                                >
+                                    Edit
+                                </Button>
+                                {showNoShowBtn && (
                                     <Button
                                         variant="outline"
-                                        onClick={() => setIsEditing(true)}
+                                        onClick={() => onMarkNoShow?.(String(entry.id))}
                                         disabled={!isShiftOver}
-                                        className="flex-1 h-10 rounded-xl border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 text-[10px] font-black uppercase tracking-widest disabled:opacity-30 transition-all active:scale-95"
+                                        className="flex-1 h-9 rounded-xl border-rose-500/20 bg-rose-500/5 text-rose-600 dark:text-rose-400 text-[8px] font-black uppercase tracking-widest disabled:opacity-30 transition-all active:scale-95 px-1"
                                     >
-                                        <Edit3 className="h-3.5 w-3.5 mr-2" /> Adjust Times
+                                        <UserX className="h-3 w-3 mr-1" /> No-Show
                                     </Button>
-                                </div>
+                                )}
+
                             </div>
+
                         ) : (
                             <div className="w-full flex items-center justify-center px-4 py-3 bg-foreground/[0.04] border border-foreground/5 rounded-2xl text-foreground/40 text-[10px] font-black uppercase tracking-widest">
                                 Finalized Record

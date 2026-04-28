@@ -516,13 +516,22 @@ export const shiftsQueries = {
         }
     },
 
-    async getEmployees(organizationId?: string, departmentId?: string, subDepartmentId?: string, roleId?: string): Promise<ProfileSummary[]> {
+    async getEmployees(
+        organizationId?: string,
+        departmentId?: string,
+        subDepartmentId?: string,
+        roleId?: string,
+        searchTerm?: string,
+        limit?: number,
+    ): Promise<ProfileSummary[]> {
         const { EligibilityService } = await import('../services/eligibility.service');
         return EligibilityService.getEligibleEmployees({
             organizationId,
             departmentId,
             subDepartmentId,
             roleId,
+            searchTerm,
+            limit,
         });
     },
 

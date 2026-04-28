@@ -258,6 +258,7 @@ export const REPORT_THRESHOLDS = {
     late_cancel_rate: { good: 5,  warn: 15 },
     no_show_rate:     { good: 2,  warn: 5  },
     reliability_score: { good: 90, warn: 75 },
+    bid_success_rate:  { good: 70, warn: 40 },
 } as const;
 
 type ReportThresholdKey = keyof typeof REPORT_THRESHOLDS;

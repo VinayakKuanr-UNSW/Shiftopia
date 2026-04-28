@@ -31,9 +31,7 @@ import {
 } from '@/modules/core/ui/primitives/alert-dialog';
 import { BidComplianceModal } from '../components/BidComplianceModal';
 import { Drawer, DrawerContent, DrawerTitle, DrawerClose } from '@/modules/core/ui/primitives/drawer';
-import { UnifiedModuleFunctionBar } from '@/modules/core/ui/components/UnifiedModuleFunctionBar';
-
-import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import type { ParticipationStatus } from '../../model/bid.types';
@@ -891,87 +889,77 @@ export const EmployeeBidsPage: React.FC = () => {
 
     return (
         <div className="h-full flex flex-col overflow-hidden bg-background">
-            {/* ── ROW 1: HEADER ────────────────────────────────────────────── */}
-            <div className="flex-shrink-0 p-4 lg:p-6 pb-0">
-                <PersonalPageHeader
-                    title="My Bids"
-                    Icon={Gavel}
-                    scope={scope}
-                    setScope={setScope}
-                    isGammaLocked={isGammaLocked}
-                />
-            </div>
-
-            {/* ── ROW 2: FUNCTION BAR ───────────────────────────────────────── */}
-            <div className="flex-shrink-0 px-4 lg:px-6 py-2">
-                <UnifiedModuleFunctionBar
-                    leftContent={
-                        <div className="flex flex-col gap-0.5">
-                            <div className="flex items-center gap-1.5 lg:gap-2">
-                                <Calendar className="h-3.5 w-3.5 lg:h-4 lg:w-4 text-primary" />
-                                <span className="text-[10px] lg:text-sm font-black text-foreground tracking-tight whitespace-nowrap uppercase">
-                                    <span className="hidden sm:inline">Open Shifts</span>
-                                    <span className="sm:hidden">Shifts</span>
-                                </span>
-                                <span className="inline-flex items-center justify-center h-4 lg:h-5 min-w-[16px] lg:min-w-[20px] px-1 lg:px-1.5 rounded-full bg-primary/10 text-primary text-[9px] lg:text-[10px] font-black tabular-nums">
-                                    {filteredBidOpportunities.length}
-                                </span>
-                            </div>
-                        </div>
-                    }
-                    startDate={startDate}
-                    endDate={endDate}
-                    onDateChange={(start, end) => {
-                        setStartDate(start);
-                        setEndDate(end);
-                    }}
-                    viewMode={viewMode}
-                    onViewModeChange={setViewMode}
-                    onRefresh={() => {
-                        queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
-                        queryClient.invalidateQueries({ queryKey: ['myBids'] });
-                    }}
-                    isLoading={eligibilityLoading}
-                    filters={
-                        <div className={cn(
-                            "flex items-center gap-1 p-1 h-9 rounded-lg",
-                            isDark ? "bg-[#111827]/60" : "bg-slate-200/50"
-                        )}>
-                            <button
-                                onClick={() => setPriorityFilter('all')}
-                                className={cn(
-                                    'px-3 h-7 rounded-md text-[10px] font-black uppercase tracking-wider transition-all',
-                                    priorityFilter === 'all' 
-                                        ? (isDark ? 'bg-white/20 text-white' : 'bg-slate-900 text-white shadow-sm') 
-                                        : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-slate-900/5')
-                                )}
-                            >
-                                All
-                            </button>
-                            {(['normal', 'urgent', 'emergent'] as const).map(p => {
-                                const conf = PRIORITY_CONFIG[p];
-                                const active = priorityFilter === p;
-                                return (
-                                    <button
-                                        key={p}
-                                        onClick={() => setPriorityFilter(p)}
-                                        className={cn(
-                                            'flex items-center gap-1.5 px-2 lg:px-2.5 h-7 rounded-md text-[10px] font-black uppercase tracking-wider transition-all',
-                                            active 
-                                                ? (isDark ? 'bg-white/20 text-white' : 'bg-slate-900 text-white shadow-sm') 
-                                                : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-slate-900/5')
-                                        )}
-                                    >
-                                        <conf.icon className="w-3 h-3 lg:hidden" />
-                                        <div className={cn("hidden lg:block w-1.5 h-1.5 rounded-full", conf.color.replace('text-', 'bg-'))} />
-                                        <span className="hidden sm:inline">{conf.label}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    }
-                />
-            </div>
+            {/* ── GOLD STANDARD HEADER (Rows 1 · 2 · 3) ── */}
+            <GoldStandardHeader
+                title="My Bids"
+                Icon={Gavel}
+                scope={scope}
+                setScope={setScope}
+                isGammaLocked={isGammaLocked}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+                startDate={startDate}
+                endDate={endDate}
+                onDateChange={(start: Date, end: Date) => {
+                    setStartDate(start);
+                    setEndDate(end);
+                }}
+                onRefresh={() => {
+                    queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
+                    queryClient.invalidateQueries({ queryKey: ['myBids'] });
+                }}
+                isLoading={eligibilityLoading}
+                leftContent={
+                    <div className="flex items-center gap-1.5 lg:gap-2">
+                        <Calendar className="h-3.5 w-3.5 lg:h-4 lg:w-4 text-primary" />
+                        <span className="text-[10px] lg:text-sm font-black text-foreground tracking-tight whitespace-nowrap uppercase">
+                            <span className="hidden sm:inline">Open Shifts</span>
+                            <span className="sm:hidden">Shifts</span>
+                        </span>
+                        <span className="inline-flex items-center justify-center h-4 lg:h-5 min-w-[16px] lg:min-w-[20px] px-1 lg:px-1.5 rounded-full bg-primary/10 text-primary text-[9px] lg:text-[10px] font-black tabular-nums">
+                            {filteredBidOpportunities.length}
+                        </span>
+                    </div>
+                }
+                filters={
+                    <div className={cn(
+                        "flex items-center gap-1 p-1 h-9 rounded-lg",
+                        isDark ? "bg-[#111827]/60" : "bg-slate-200/50"
+                    )}>
+                        <button
+                            onClick={() => setPriorityFilter('all')}
+                            className={cn(
+                                'px-3 h-7 rounded-md text-[10px] font-black uppercase tracking-wider transition-all',
+                                priorityFilter === 'all'
+                                    ? (isDark ? 'bg-white/20 text-white' : 'bg-slate-900 text-white shadow-sm')
+                                    : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-slate-900/5')
+                            )}
+                        >
+                            All
+                        </button>
+                        {(['normal', 'urgent', 'emergent'] as const).map(p => {
+                            const conf = PRIORITY_CONFIG[p];
+                            const active = priorityFilter === p;
+                            return (
+                                <button
+                                    key={p}
+                                    onClick={() => setPriorityFilter(p)}
+                                    className={cn(
+                                        'flex items-center gap-1.5 px-2 lg:px-2.5 h-7 rounded-md text-[10px] font-black uppercase tracking-wider transition-all',
+                                        active
+                                            ? (isDark ? 'bg-white/20 text-white' : 'bg-slate-900 text-white shadow-sm')
+                                            : (isDark ? 'text-white/40 hover:text-white hover:bg-white/5' : 'text-slate-900/40 hover:text-slate-900 hover:bg-slate-900/5')
+                                    )}
+                                >
+                                    <conf.icon className="w-3 h-3 lg:hidden" />
+                                    <div className={cn("hidden lg:block w-1.5 h-1.5 rounded-full", conf.color.replace('text-', 'bg-'))} />
+                                    <span className="hidden sm:inline">{conf.label}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                }
+            />
 
             {/* ── ROW 3: CONTENT AREA ───────────────────────────────────────── */}
             <div className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6">

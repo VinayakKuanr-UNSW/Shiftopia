@@ -68,7 +68,7 @@ const DataRow: React.FC<{
     emphasis?: boolean;
     accentColor?: string;
 }> = ({ label, value, emphasis, accentColor }) => (
-    <div className="flex items-center justify-between py-1.5 border-b border-foreground/[0.04] last:border-0">
+    <div className="flex items-center justify-between py-1 border-b border-foreground/[0.04] last:border-0">
         <span className="text-[11px] font-black text-muted-foreground/40 uppercase tracking-widest shrink-0">
             {label}
         </span>
@@ -224,25 +224,18 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                     }}
                     className="absolute -top-32 -right-32 w-96 h-96 blur-[120px] opacity-[0.35] dark:opacity-[0.2] pointer-events-none" 
                 />
-                <div 
-                    style={{ 
-                        background: `radial-gradient(circle at center, ${theme.secondary}, ${theme.color}, transparent)`,
-                        mixBlendMode: 'screen'
-                    }}
-                    className="absolute -bottom-48 -right-32 w-80 h-80 blur-[100px] opacity-[0.25] dark:opacity-[0.1] pointer-events-none" 
-                />
 
-                <div className="px-6 py-6 relative z-20 flex flex-col h-full">
+                <div className="px-3 py-3 relative z-20 flex flex-col h-full">
                     {topContent && (
-                        <div className="mb-4">
+                        <div className="mb-1.5">
                             {topContent}
                         </div>
                     )}
-                    <div className="mb-6">
+                    <div className="mb-2">
                         {breadcrumbs}
                         <div className="flex items-center justify-between gap-4 mt-2">
                             <div className="flex-1 min-w-0">
-                                <h1 className="text-[18px] font-black text-foreground tracking-tight leading-tight uppercase font-mono truncate">
+                                <h1 className="text-[16px] font-black text-foreground tracking-tight leading-tight uppercase font-mono truncate">
                                     {role}
                                 </h1>
                                 {employeeName && (
@@ -261,23 +254,34 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                         </div>
                     </div>
 
-                    <div className="space-y-1 mb-8 bg-foreground/[0.02] dark:bg-white/[0.02] p-4 rounded-2xl border border-foreground/[0.03]">
+                    <div className="space-y-0 mb-2 bg-foreground/[0.02] dark:bg-white/[0.02] p-2.5 rounded-2xl border border-foreground/[0.03]">
                         <DataRow label="Shift Date" value={shiftDate} emphasis />
                         <DataRow label="Scheduled" value={`${startTime} – ${endTime}`} emphasis />
                         <DataRow label="Breaks" value={`Paid ${paidBreak}m · Unpaid ${unpaidBreak}m`} />
                         <DataRow label="Net Length" value={`${(netLength / 60).toFixed(1)} Hours`} accentColor={theme.accent} />
                         
-                        {(clockIn || clockOut) && (
-                            <div className="pt-2 mt-2 border-t border-foreground/[0.03] space-y-1">
-                                {clockIn && <DataRow label="Actual In" value={clockIn} />}
-                                {clockOut && <DataRow label="Actual Out" value={clockOut} />}
-                                {adjustedStart && <DataRow label="Billable In" value={adjustedStart} accentColor="text-indigo-500" />}
-                                {adjustedEnd && <DataRow label="Billable Out" value={adjustedEnd} accentColor="text-indigo-500" />}
+                        {(clockIn || clockOut || adjustedStart || adjustedEnd) && (
+                            <div className="pt-1.5 mt-1.5 border-t border-foreground/[0.03] space-y-0">
+                                {(clockIn || clockOut) && (
+                                    <DataRow 
+                                        label="Actual In / Out" 
+                                        value={`${clockIn || '--:--'} – ${clockOut || '--:--'}`} 
+                                    />
+                                )}
+                                {(adjustedStart || adjustedEnd) && (
+                                    <DataRow 
+                                        label="Billable In / Out" 
+                                        value={`${adjustedStart || '--:--'} – ${adjustedEnd || '--:--'}`} 
+                                        accentColor="text-indigo-500"
+                                    />
+                                )}
                             </div>
                         )}
 
                         {statusDot && (
-                            <DataRow label="Live Status" value={statusDot} />
+                            <div className="mt-1 pt-1 border-t border-foreground/[0.01]">
+                                <DataRow label="Live Status" value={statusDot} />
+                            </div>
                         )}
                     </div>
 
@@ -300,7 +304,7 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                     )}
 
                     {statusIcons && (
-                        <div className="grid grid-cols-3 gap-3 mb-8">
+                        <div className="grid grid-cols-3 gap-2 mb-2">
                             {statusIcons}
                         </div>
                     )}

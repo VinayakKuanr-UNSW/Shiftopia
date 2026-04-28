@@ -564,6 +564,17 @@ interface OpenBidsViewProps {
   subDepartmentId?: string | null;
   externalSearchQuery?: string;
   viewMode?: 'card' | 'table';
+  /**
+   * Controlled filter state. When provided, parent owns the toggle and the
+   * view's internal toolbar is hidden — parent must render the filter UI
+   * (e.g. inside GoldStandardHeader).
+   */
+  activeToggle?: BidToggle;
+  onToggleChange?: (toggle: BidToggle) => void;
+  /** Reports filtered counts up so parent can render badges. */
+  onCountsChange?: (counts: ToggleCounts) => void;
+  /** Hands a ready-to-call auto-assign function back to the parent. */
+  onAutoAssignReady?: (fn: { run: () => void; isRunning: boolean }) => void;
 }
 
 export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
@@ -572,6 +583,10 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
   subDepartmentId,
   externalSearchQuery,
   viewMode,
+  activeToggle: controlledToggle,
+  onToggleChange,
+  onCountsChange,
+  onAutoAssignReady,
 }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -580,8 +595,17 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
   // Updates countdown timers every 10 seconds
   useTimeTicker(10000);
 
+  // Parent-controlled when `controlledToggle` is provided; otherwise local.
+  const isControlled = controlledToggle !== undefined;
+  const isToolbarHidden = isControlled || externalSearchQuery !== undefined;
+
   // ── State ──────────────────────────────────────────────────────────────────
-  const [activeToggle, setActiveToggle] = useState<BidToggle>('urgent');
+  const [internalToggle, setInternalToggle] = useState<BidToggle>('urgent');
+  const activeToggle = isControlled ? controlledToggle! : internalToggle;
+  const setActiveToggle = (next: BidToggle) => {
+    if (isControlled) onToggleChange?.(next);
+    else setInternalToggle(next);
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedShiftId, setExpandedShiftId] = useState<string | null>(null);
   const [selectedBid, setSelectedBid] = useState<EmployeeBid | null>(null);
@@ -612,6 +636,11 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     normal:   shifts.filter(s => s.toggle === 'normal').length,
     resolved: shifts.filter(s => s.toggle === 'resolved').length,
   }), [shifts]);
+
+  // Report counts up to controlling parent (GoldStandardHeader filter chips).
+  useEffect(() => {
+    onCountsChange?.(counts);
+  }, [counts, onCountsChange]);
 
   const activeSearchQuery = externalSearchQuery !== undefined ? externalSearchQuery : searchQuery;
 
@@ -859,15 +888,22 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     });
   }, [shifts, toast, queryClient, organizationId]);
 
+  // Expose auto-assign to controlling parent (so the button lives in
+  // GoldStandardHeader, not duplicated inside the view).
+  useEffect(() => {
+    onAutoAssignReady?.({ run: handleAutoAssign, isRunning: isAutoAssigning });
+  }, [handleAutoAssign, isAutoAssigning, onAutoAssignReady]);
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <TooltipProvider delayDuration={0}>
       <div className="flex flex-col h-[calc(100vh-64px)] bg-background select-none text-foreground overflow-hidden">
 
-      {/* ─── FUNCTION BAR (Hidden if external provided) ───────────────── */}
-      {!externalSearchQuery && (
+      {/* Internal toolbar removed — parent (GoldStandardHeader) owns title,
+          scope filter, search, view toggle, status chips, and auto-assign.
+          See onCountsChange / onAutoAssignReady props. */}
+      {!isToolbarHidden && (
         isMobile ? (
-          /* Mobile function bar */
           <div className="shrink-0 border-b border-border/60 flex flex-col gap-2 px-4 py-3 bg-card/40 backdrop-blur-xl">
             <div className="relative group/search">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40 group-focus-within/search:text-primary transition-colors" />
@@ -885,7 +921,6 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
             </div>
           </div>
         ) : (
-          /* Desktop function bar */
           <div className="shrink-0 h-14 border-b border-border/60 flex items-center px-6 gap-4 bg-card/40 backdrop-blur-xl">
             <div className="relative group/search">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40 group-focus-within/search:text-primary transition-colors" />
@@ -927,27 +962,6 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
             </Button>
           </div>
         )
-      )}
-
-      {/* Internal Toggle Bar (if external search is provided, we still need the status chips) */}
-      {externalSearchQuery !== undefined && (
-        <div className="shrink-0 h-12 px-6 flex items-center justify-between border-b border-border/40 bg-card/20 backdrop-blur-md">
-          <div className="flex items-center gap-1 p-0.5 bg-muted/20 rounded-xl border border-border/40">
-            <ToggleChip active={activeToggle === 'urgent'} onClick={() => setActiveToggle('urgent')} icon={<Flame className="h-3 w-3" />} label="Urgent" count={counts.urgent} activeClass="bg-rose-500/10 text-rose-400 border-rose-500/20" />
-            <ToggleChip active={activeToggle === 'normal'} onClick={() => setActiveToggle('normal')} icon={<Clock className="h-3 w-3" />} label="Normal" count={counts.normal} activeClass="bg-amber-500/10 text-amber-400 border-amber-500/20" />
-            <ToggleChip active={activeToggle === 'resolved'} onClick={() => setActiveToggle('resolved')} icon={<CheckCircle className="h-3 w-3" />} label="Resolved" count={counts.resolved} activeClass="bg-emerald-500/10 text-emerald-400 border-emerald-500/20" />
-          </div>
-
-          <Button
-            onClick={handleAutoAssign}
-            disabled={isAutoAssigning}
-            variant="ghost"
-            className="h-8 px-3 text-[9px] font-black uppercase tracking-wider rounded-lg"
-          >
-            {isAutoAssigning ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : <Zap className="h-3 w-3 mr-2" />}
-            Auto-Assign
-          </Button>
-        </div>
       )}
 
       {/* ─── MOBILE LAYOUT ────────────────────────────────────────────── */}

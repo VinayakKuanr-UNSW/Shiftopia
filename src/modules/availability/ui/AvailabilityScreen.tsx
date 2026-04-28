@@ -37,8 +37,6 @@ import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { CalendarDays } from 'lucide-react';
 
-import { useAvailability } from '../state/useAvailability';
-import { useAvailabilityEditing } from '../state/useAvailabilityEditing';
 import { useAssignedShiftsForAvailability } from '../state/useAssignedShiftsForAvailability';
 import { AvailabilityRule, AvailabilityFormPayload } from '../model/availability.types';
 
@@ -50,6 +48,9 @@ import { ConfigurePane } from './panes/ConfigurePane';
 // TYPES
 // ============================================================================
 
+import { UseAvailabilityResult } from '../state/useAvailability';
+import { UseAvailabilityEditingResult } from '../state/useAvailabilityEditing';
+
 export interface AvailabilityScreenProps {
   /**
    * Layout mode for responsive design
@@ -58,6 +59,9 @@ export interface AvailabilityScreenProps {
    * - 'mobile': Single pane with tab navigation
    */
   layout: 'desktop' | 'tablet' | 'mobile';
+  currentMonth: Date;
+  availabilityData: UseAvailabilityResult;
+  editingData: UseAvailabilityEditingResult;
 }
 
 type TabType = 'calendar' | 'logs' | 'configure';
@@ -66,12 +70,16 @@ type TabType = 'calendar' | 'logs' | 'configure';
 // COMPONENT
 // ============================================================================
 
-export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
+export function AvailabilityScreen({ 
+  layout, 
+  currentMonth, 
+  availabilityData, 
+  editingData 
+}: AvailabilityScreenProps) {
   // ========================================
   // STATE
   // ========================================
 
-  const [currentMonth, setCurrentMonth] = useState(new Date());
   const [activeTab, setActiveTab] = useState<TabType>('calendar');
   const [bottomTab, setBottomTab] = useState<'logs' | 'configure'>('logs');
   const { isDark } = useTheme();
@@ -79,7 +87,7 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
   const { toast } = useToast();
 
   // ========================================
-  // DATA HOOKS
+  // DATA DESTRUCTURING
   // ========================================
 
   const {
@@ -90,7 +98,7 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
     deleteRule,
     refreshRules,
     refreshSlots,
-  } = useAvailability({ month: currentMonth });
+  } = availabilityData;
 
   const {
     editState,
@@ -98,7 +106,7 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
     startEdit,
     cancelEdit,
     submitEdit,
-  } = useAvailabilityEditing();
+  } = editingData;
 
   // Fetch assigned shifts for current month (locked intervals shown as purple overlay)
   const { assignedShifts } = useAssignedShiftsForAvailability('current-user', currentMonth);
@@ -107,44 +115,24 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
   // HANDLERS
   // ========================================
 
-  const handlePrevMonth = useCallback(() => {
-    setCurrentMonth((prev) => subMonths(prev, 1));
-  }, []);
-
-  const handleNextMonth = useCallback(() => {
-    setCurrentMonth((prev) => addMonths(prev, 1));
-  }, []);
-
-  const handleRefresh = useCallback(async () => {
-    await Promise.all([refreshRules(), refreshSlots()]);
-    toast({
-      title: 'Refreshed',
-      description: 'Availability data has been refreshed.',
-    });
-  }, [refreshRules, refreshSlots, toast]);
-
-
-  const handleAddAvailability = useCallback(() => {
-    startCreate();
-    // Switch to configure tab/pane
-    if (layout === 'mobile') {
-      setActiveTab('configure');
-    } else if (layout === 'tablet') {
-      setBottomTab('configure');
-    }
-  }, [startCreate, layout, toast]);
-
-  const handleEditRule = useCallback(
-    (rule: AvailabilityRule) => {
-      startEdit(rule);
-      // Switch to configure tab/pane
+  // Handlers for internal state navigation
+  
+  // Auto-switch tabs when entering edit mode (create or edit)
+  React.useEffect(() => {
+    if (editState.mode) {
       if (layout === 'mobile') {
         setActiveTab('configure');
       } else if (layout === 'tablet') {
         setBottomTab('configure');
       }
+    }
+  }, [editState.mode, layout]);
+
+  const handleEditRule = useCallback(
+    (rule: AvailabilityRule) => {
+      startEdit(rule);
     },
-    [startEdit, layout]
+    [startEdit]
   );
 
   const handleDeleteRule = useCallback(
@@ -202,86 +190,7 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
   // RENDER: SUB-COMPONENTS
   // ========================================
 
-  const renderFunctionBar = () => (
-    <div className={cn(
-      "flex flex-row items-center gap-2 w-full transition-all p-1.5 rounded-2xl border overflow-hidden",
-      isDark 
-          ? "bg-[#111827]/60 backdrop-blur-md border-white/5 shadow-inner shadow-black/20" 
-          : "bg-slate-100/50 border-slate-200/50"
-    )}>
-      <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none py-0.5">
-        {/* Month Navigation */}
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handlePrevMonth}
-            className={cn(
-              "h-9 w-9 lg:h-11 lg:w-11 rounded-xl transition-all",
-              isDark ? "bg-[#111827]/60 text-muted-foreground hover:text-white" : "bg-white shadow-sm"
-            )}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
 
-          <div className={cn(
-            "h-9 lg:h-11 px-4 lg:px-6 rounded-xl flex items-center justify-center min-w-[120px] md:min-w-[180px]",
-            isDark ? "bg-[#111827]/60" : "bg-white shadow-sm"
-          )}>
-            <span className="text-[10px] lg:text-[11px] font-black uppercase tracking-[0.2em] text-foreground">
-              {format(currentMonth, 'MMMM yyyy')}
-            </span>
-          </div>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleNextMonth}
-            className={cn(
-              "h-9 w-9 lg:h-11 lg:w-11 rounded-xl transition-all",
-              isDark ? "bg-[#111827]/60 text-muted-foreground hover:text-white" : "bg-white shadow-sm"
-            )}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
-
-        {/* Add Availability Button */}
-        <Button
-          onClick={handleAddAvailability}
-          className={cn(
-            "flex-shrink-0 gap-2 h-9 lg:h-11 px-3 lg:px-6 rounded-xl font-black uppercase text-[9px] lg:text-[10px] tracking-wider transition-all shadow-sm",
-            isDark 
-              ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20" 
-              : "bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100"
-          )}
-        >
-          <Plus className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
-          <span className="hidden sm:inline">Add Availability</span>
-          <span className="sm:hidden text-[8px]">Add</span>
-        </Button>
-
-        <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
-
-        {/* Refresh Button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleRefresh}
-          className={cn(
-              "h-9 w-9 lg:h-11 lg:w-11 rounded-xl flex-shrink-0 transition-all",
-              isDark 
-                  ? "bg-[#111827]/60 text-muted-foreground hover:text-white" 
-                  : "bg-slate-200/50 text-slate-500 hover:text-slate-900 hover:bg-slate-200"
-          )}
-        >
-          <RefreshCw className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
-        </Button>
-      </div>
-    </div>
-  );
 
 
   // ========================================
@@ -296,10 +205,7 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
         variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
         className="flex flex-col h-full w-full overflow-hidden"
       >
-        {/* ── Unified Function Bar (Internal) ── */}
-        <div className="px-6 py-4">
-          {renderFunctionBar()}
-        </div>
+
 
         <div className="flex-1 min-h-0 overflow-hidden px-6 pb-6">
           <div className={cn(
@@ -353,10 +259,7 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
         variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
         className="flex flex-col h-full w-full overflow-hidden bg-background"
       >
-        {/* ── Unified Function Bar (Internal) ── */}
-        <div className="px-4 py-2">
-          {renderFunctionBar()}
-        </div>
+
 
         {/* TOP: Calendar */}
         <motion.div variants={itemVariants} className="h-[45%] border-b border-border overflow-hidden">
@@ -434,28 +337,7 @@ export function AvailabilityScreen({ layout }: AvailabilityScreenProps) {
       variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
       className="flex flex-col h-full w-full overflow-hidden bg-background"
     >
-      {/* ── Unified Header (Internal Nav) ── */}
-      <div className="px-4 py-2">
-        <div className="rounded-[16px] p-3 transition-all border border-border/50 bg-card/30">
-          {/* Simplified Month Nav for Mobile */}
-          <div className="flex items-center justify-between gap-2 px-1">
-             <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" onClick={handlePrevMonth} className="h-8 w-8 rounded-lg">
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-[10px] font-black uppercase tracking-wider">
-                  {format(currentMonth, 'MMM yy')}
-                </span>
-                <Button variant="ghost" size="icon" onClick={handleNextMonth} className="h-8 w-8 rounded-lg">
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-             </div>
-             <Button variant="ghost" size="icon" onClick={handleRefresh} className="h-8 w-8 rounded-lg">
-                <RefreshCw className="h-3.5 w-3.5" />
-             </Button>
-          </div>
-        </div>
-      </div>
+
 
       {/* Sub-navigation Tabs at the Top - Text Only Toggle */}
       <motion.div 

@@ -99,6 +99,10 @@ export default function PerformancePage() {
         { key: 'late_clock_in_rate', label: 'Late In %', group: 'Attendance', isRate: true },
         { key: 'early_clock_out_rate', label: 'Early Out %', group: 'Attendance', isRate: true },
         { key: 'no_show_rate', label: 'No-Show %', group: 'Attendance', isRate: true, thresholdKey: 'no_show_rate' },
+        // Bidding
+        { key: 'total_bids', label: 'Bids', group: 'Bidding' },
+        { key: 'bids_accepted', label: 'Success', group: 'Bidding' },
+        { key: 'bid_success_rate', label: 'Success %', group: 'Bidding', isRate: true, thresholdKey: 'bid_success_rate' },
     ];
 
     const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
@@ -131,6 +135,7 @@ export default function PerformancePage() {
             cancel_rate: avg(r => r.cancel_rate),
             no_show_rate: avg(r => r.no_show_rate),
             reliability_score: avg(r => r.reliability_score),
+            bid_success_rate: avg(r => r.bid_success_rate),
         };
     }, [rows]);
 
@@ -199,6 +204,7 @@ export default function PerformancePage() {
         'Assignment': 'bg-purple-500/5 text-purple-600 dark:text-purple-400',
         'Reliability': 'bg-amber-500/5 text-amber-600 dark:text-amber-400',
         'Attendance': 'bg-emerald-500/5 text-emerald-600 dark:text-emerald-400',
+        'Bidding': 'bg-indigo-500/5 text-indigo-600 dark:text-indigo-400',
     };
 
     return (
@@ -246,6 +252,7 @@ export default function PerformancePage() {
                             { label: 'Avg Cancellation', value: summary.cancel_rate, key: 'cancel_rate' },
                             { label: 'Avg No-Show', value: summary.no_show_rate, key: 'no_show_rate' },
                             { label: 'Avg Reliability', value: summary.reliability_score, key: 'reliability_score' },
+                            { label: 'Avg Bid Success', value: summary.bid_success_rate, key: 'bid_success_rate' },
                         ] as const).map(s => {
                             const st = getReportCellStatus(s.key, s.value);
                             return (

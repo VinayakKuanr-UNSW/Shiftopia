@@ -22,7 +22,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/modules/core/ui/primitives/popover';
-import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
 
@@ -391,29 +391,17 @@ const GridPage: React.FC = () => {
     const compMode = viewMode === 'compliance';
 
     return (
-        <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4">
-            {/* ── Unified Header Block (Rows 1-3) ────────────────────────────── */}
-            <div className="flex-shrink-0">
-                <div className={cn(
-                    "rounded-[32px] p-4 lg:p-6 transition-all border",
-                    isDark 
-                        ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                        : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
-                )}>
-                    {/* Row 1 & 2: Identity & Scope Filter */}
-                    <PersonalPageHeader
-                        title="Annual Shift Grid"
-                        Icon={Activity}
-                        scope={scope}
-                        setScope={setScope}
-                        isGammaLocked={isGammaLocked}
-                        className="mb-4 lg:mb-6"
-                    />
-
-                    {/* Row 3: Module Function Bar */}
-                    <div className="flex flex-wrap items-center justify-between gap-4 mt-1">
+        <div className="h-full flex flex-col overflow-hidden bg-background">
+            <GoldStandardHeader
+                title="Annual Shift Grid"
+                Icon={Activity}
+                mode="managerial"
+                scope={scope}
+                setScope={setScope}
+                isGammaLocked={isGammaLocked}
+                functionBar={
+                    <div className="flex flex-wrap items-center justify-between gap-4 w-full">
                         <div className="flex items-center gap-3 flex-wrap">
-                            {/* Stats Pod */}
                             <div className="flex items-center gap-4 px-4 py-2 bg-muted/30 rounded-2xl border border-border/40">
                                 <div className="flex items-center gap-2">
                                     <Users className="h-3.5 w-3.5 text-muted-foreground" />
@@ -430,7 +418,6 @@ const GridPage: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* View Toggle Pod */}
                             <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-xl border border-border/40">
                                 {(['hours', 'compliance'] as const).map(mode => (
                                     <button
@@ -458,7 +445,6 @@ const GridPage: React.FC = () => {
                                 <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
                             </button>
 
-                            {/* Year Selector Pod */}
                             <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-xl border border-border/40">
                                 {[2024, 2025, 2026].map(y => (
                                     <button
@@ -477,12 +463,12 @@ const GridPage: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
+                }
+            />
 
-            {/* ── Main Content Area ────────────────────────────────────────── */}
+            {/* ── BODY ── */}
             <div className={cn(
-                "flex-1 min-h-0 bg-card border border-border/50 rounded-[32px] shadow-2xl shadow-black/5 overflow-hidden flex flex-col relative",
+                "flex-1 min-h-0 mx-4 lg:mx-6 mb-4 lg:mb-6 bg-card border border-border/50 rounded-[32px] shadow-2xl shadow-black/5 overflow-hidden flex flex-col relative",
                 isDark ? "bg-[#1c2333]/40" : "bg-white/70 backdrop-blur-md"
             )}>
                 {isLoading && (

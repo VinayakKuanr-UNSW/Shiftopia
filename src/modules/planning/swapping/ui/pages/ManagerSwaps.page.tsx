@@ -19,8 +19,7 @@ import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { SharedShiftCard } from '../../../../planning/ui/components/SharedShiftCard';
-import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
-import { UnifiedModuleFunctionBar } from '@/modules/core/ui/components/UnifiedModuleFunctionBar';
+import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 
 /* ============================================================
@@ -624,28 +623,21 @@ export const ManagerSwapsPage: React.FC = () => {
             {/* Ambient glow */}
             <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/[0.05] blur-[150px] rounded-full pointer-events-none" />
 
-            {/* ── ROW 1: HEADER ────────────────────────────────────────────── */}
-            <div className="flex-shrink-0 p-4 lg:p-6 pb-0">
-                <PersonalPageHeader
-                    title="Swap Requests"
-                    Icon={ArrowLeftRight}
-                    mode="managerial"
-                    scope={scope}
-                    setScope={setScope}
-                    isGammaLocked={isGammaLocked}
-                />
-            </div>
-
-            {/* ── ROW 2: FUNCTION BAR ───────────────────────────────────────── */}
-            <div className="flex-shrink-0 px-4 lg:px-6 py-2">
-                <UnifiedModuleFunctionBar
-                    viewMode={viewMode}
-                    onViewModeChange={setViewMode}
-                    searchQuery={searchQuery}
-                    onSearchChange={setSearchQuery}
-                    onRefresh={fetchData}
-                    isLoading={isLoading}
-                >
+            {/* ── GOLD STANDARD HEADER (Rows 1 · 2 · 3) ── */}
+            <GoldStandardHeader
+                title="Swap Requests"
+                Icon={ArrowLeftRight}
+                mode="managerial"
+                scope={scope}
+                setScope={setScope}
+                isGammaLocked={isGammaLocked}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                onRefresh={fetchData}
+                isLoading={isLoading}
+                functionBarChildren={
                     <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/30 border border-border flex-nowrap overflow-x-auto scrollbar-hide">
                         {STATUS_TABS.map(tab => {
                             const isActive = statusFilter === tab.id;
@@ -681,8 +673,8 @@ export const ManagerSwapsPage: React.FC = () => {
                             );
                         })}
                     </div>
-                </UnifiedModuleFunctionBar>
-            </div>
+                }
+            />
 
             {/* ── ROW 3: CONTENT AREA ───────────────────────────────────────── */}
             <div className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6">

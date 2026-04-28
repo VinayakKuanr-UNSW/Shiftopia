@@ -29,6 +29,10 @@ export interface EligibilityContext {
     departmentId?: string;
     subDepartmentId?: string;
     roleId?: string;
+    /** Case-insensitive substring match against first_name OR last_name. */
+    searchTerm?: string;
+    /** Cap result set size. Default: unbounded (caller should set this for grid views). */
+    limit?: number;
 }
 
 export interface EligibleEmployee {
@@ -102,6 +106,24 @@ export const EligibilityService = {
                 query = query.eq('contracts.role_id', context.roleId);
             }
 
+            // Server-side name search (substring, case-insensitive on either name)
+            const trimmedSearch = context.searchTerm?.trim();
+            if (trimmedSearch) {
+                const escaped = trimmedSearch.replace(/[%,()]/g, ' ');
+                query = query.or(
+                    `first_name.ilike.%${escaped}%,last_name.ilike.%${escaped}%`
+                );
+            }
+
+            // Order at the DB level so .limit() returns a deterministic top-N slice
+            query = query.order('last_name', { ascending: true });
+
+            if (typeof context.limit === 'number' && context.limit > 0) {
+                // Over-fetch slightly because dedup-by-user happens client-side
+                // (a single profile may have multiple matching contract rows).
+                query = query.limit(context.limit * 2);
+            }
+
             const { data, error } = await query;
 
             if (error) {
@@ -127,8 +149,11 @@ export const EligibilityService = {
                 } as EligibleEmployee);
             });
 
-            return Array.from(profilesMap.values())
+            const result = Array.from(profilesMap.values())
                 .sort((a, b) => a.last_name.localeCompare(b.last_name));
+            return typeof context.limit === 'number' && context.limit > 0
+                ? result.slice(0, context.limit)
+                : result;
         } catch (error) {
             console.error('[EligibilityService] Exception:', error);
             return [];

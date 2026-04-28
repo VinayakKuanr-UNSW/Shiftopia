@@ -31,7 +31,7 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
-import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
+import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { pageVariants, itemVariants, listItemSpring } from '@/modules/core/ui/motion/presets';
 
 /* ── Badge color helper ─────────────────────────────────────── */
@@ -137,36 +137,24 @@ const MyNotificationsPage: React.FC = () => {
   const { isDark } = useTheme();
 
   return (
-    <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4">
-      {/* ── Unified Header ────────────────────────────────────────────── */}
-      <div className="flex-shrink-0">
-        <div className={cn(
-          "rounded-[32px] p-4 lg:p-6 transition-all border space-y-4",
-          isDark 
-            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
-        )}>
-          {/* Row 1 & 2: Identity & Scope Filter */}
-          <PersonalPageHeader
-            title="My Notifications"
-            Icon={Bell}
-            rightActions={
-              unreadCount > 0 && (
-                <Button
-                  onClick={markAllRead}
-                  variant="link"
-                  size="sm"
-                  className="text-primary font-semibold hover:no-underline px-0 text-[10px] uppercase tracking-widest"
-                >
-                  Mark all as read
-                </Button>
-              )
-            }
-          />
-
-          {/* Row 3: Notifications Function Bar */}
+    <div className="h-full flex flex-col overflow-hidden bg-background">
+      <GoldStandardHeader
+        title="My Notifications"
+        Icon={Bell}
+        rightActions={
+          unreadCount > 0 && (
+            <Button
+              onClick={markAllRead}
+              variant="link"
+              size="sm"
+              className="text-primary font-semibold hover:no-underline px-0 text-[10px] uppercase tracking-widest"
+            >
+              Mark all as read
+            </Button>
+          )
+        }
+        functionBar={
           <div className="flex flex-col lg:flex-row items-center gap-4 w-full">
-            {/* Tabs Pod */}
             <div className={cn(
               "flex p-1 rounded-xl w-full lg:w-auto",
               isDark ? "bg-black/20" : "bg-white/60 border border-slate-200/50 shadow-inner"
@@ -195,7 +183,6 @@ const MyNotificationsPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Search Pod */}
             <div className={cn(
               "flex-1 flex items-center gap-2 w-full lg:w-auto p-1 rounded-xl",
               isDark ? "bg-black/20" : "bg-white/60 border border-slate-200/50 shadow-inner"
@@ -211,9 +198,8 @@ const MyNotificationsPage: React.FC = () => {
               />
             </div>
 
-            {/* Action Pods */}
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className={cn(
                 "h-10 lg:h-11 px-4 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border-0",
                 isDark ? "bg-white/5 text-white/40 hover:bg-white/10 hover:text-white" : "bg-white/60 text-slate-900/40 hover:bg-white hover:text-slate-900 border border-slate-200/50"
@@ -223,14 +209,14 @@ const MyNotificationsPage: React.FC = () => {
               FILTERS
             </Button>
           </div>
-        </div>
-      </div>
+        }
+      />
 
-      {/* ── Main Content Area ─────────────────────────────────────────── */}
+      {/* ── BODY ── */}
       <div className={cn(
-          "flex-1 min-h-0 overflow-auto rounded-[32px] transition-all border p-4 lg:p-6 scrollbar-none",
-          isDark 
-            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+          "flex-1 min-h-0 overflow-auto mx-4 lg:mx-6 mb-4 lg:mb-6 rounded-[32px] transition-all border p-4 lg:p-6 scrollbar-none",
+          isDark
+            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20"
             : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
         )}>
           {loading ? (
@@ -362,7 +348,7 @@ const MyNotificationsPage: React.FC = () => {
       </div>
 
       {/* Footer Info */}
-      <div className="hidden md:flex items-center justify-between text-muted-foreground/30 text-[9px] font-black uppercase tracking-widest px-4">
+      <div className="hidden md:flex items-center justify-between text-muted-foreground/30 text-[9px] font-black uppercase tracking-widest px-4 lg:px-6 pb-4">
         <p>Notifications are archived after 7 days</p>
         <div className="flex items-center gap-4">
           {(['Shifts', 'Bids', 'Swaps', 'Messages'] as const).map(kind => (

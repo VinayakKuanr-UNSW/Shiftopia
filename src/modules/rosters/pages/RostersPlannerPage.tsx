@@ -74,7 +74,8 @@ import {
   preflightUnassign,
 } from '@/modules/rosters/domain/bulk-action-engine';
 import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
-import { LayoutGrid } from 'lucide-react';
+import { LayoutGrid, Search } from 'lucide-react';
+import { Input } from '@/modules/core/ui/primitives/input';
 import type { ToolbarPreflightData } from '@/modules/rosters/ui/components/BulkActionsToolbar';
 import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import { executeAssignShift } from '@/modules/rosters/domain/commands/assignShift.command';
@@ -282,12 +283,28 @@ const NewRostersPage: React.FC = () => {
   const updateShiftMutation = useUpdateShift();
 
 
+  // Employee search + pagination cap (server-side).
+  // Grid is bounded to EMPLOYEE_PAGE_SIZE rows; managers must search to find
+  // someone outside the top slice. Sized to keep DOM well under the
+  // virtualization threshold even on large orgs (10k+ users).
+  const EMPLOYEE_PAGE_SIZE = 200;
+  const [employeeSearchInput, setEmployeeSearchInput] = useState('');
+  const [employeeSearchTerm, setEmployeeSearchTerm] = useState('');
+  React.useEffect(() => {
+    const t = setTimeout(() => setEmployeeSearchTerm(employeeSearchInput.trim()), 250);
+    return () => clearTimeout(t);
+  }, [employeeSearchInput]);
+
   // Employees lookup
   const { data: employees = [] } = useEmployees(
     selectedOrganizationId || undefined,
     selectedDepartmentIds[0] || undefined,
     selectedSubDepartmentIds[0] || undefined,
+    undefined,
+    employeeSearchTerm || undefined,
+    EMPLOYEE_PAGE_SIZE,
   );
+  const employeesTruncated = employees.length >= EMPLOYEE_PAGE_SIZE;
 
   // Escape key exits bulk selection mode
   React.useEffect(() => {
@@ -1007,8 +1024,33 @@ const NewRostersPage: React.FC = () => {
           )}
         >
           {activeMode === 'people' && (
-            <PeopleModeGrid
-              employees={employeesWithShifts}
+            <>
+              <div className="flex items-center justify-between gap-3 px-6 pt-4 pb-2">
+                <div className="relative max-w-sm flex-1">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={employeeSearchInput}
+                    onChange={(e) => setEmployeeSearchInput(e.target.value)}
+                    placeholder="Search employees by name…"
+                    className="pl-8 h-9"
+                  />
+                </div>
+                <div className="text-xs font-mono tabular-nums text-muted-foreground">
+                  {employeesTruncated ? (
+                    <>
+                      Showing first <span className="text-foreground font-medium">{EMPLOYEE_PAGE_SIZE}</span>
+                      {employeeSearchTerm ? ' matches' : ' employees'} — refine search to see more
+                    </>
+                  ) : (
+                    <>
+                      Showing <span className="text-foreground font-medium">{employees.length}</span>
+                      {employeeSearchTerm ? ` match${employees.length === 1 ? '' : 'es'}` : ' employees'}
+                    </>
+                  )}
+                </div>
+              </div>
+              <PeopleModeGrid
+                employees={employeesWithShifts}
               onAssignShift={handleDndAssign}
               onMoveShift={(shiftId, targetEmployeeId, targetDate) =>
                 handleDndMove(shiftId, { employeeId: targetEmployeeId, shiftDate: targetDate })
@@ -1040,7 +1082,8 @@ const NewRostersPage: React.FC = () => {
               onCancelShift={handleCancelSingleShift}
               onUnpublishShift={handleUnpublishShift}
 
-            />
+              />
+            </>
           )}
 
           {activeMode === 'group' && (
