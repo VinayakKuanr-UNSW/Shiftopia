@@ -68,7 +68,7 @@ const DataRow: React.FC<{
     emphasis?: boolean;
     accentColor?: string;
 }> = ({ label, value, emphasis, accentColor }) => (
-    <div className="flex items-center justify-between py-1 border-b border-foreground/[0.04] last:border-0">
+    <div className="flex items-center justify-between py-1.5 border-b border-foreground/[0.04] last:border-0">
         <span className="text-[11px] font-black text-muted-foreground/40 uppercase tracking-widest shrink-0">
             {label}
         </span>
@@ -225,7 +225,7 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                     className="absolute -top-32 -right-32 w-96 h-96 blur-[120px] opacity-[0.35] dark:opacity-[0.2] pointer-events-none" 
                 />
 
-                <div className="px-3 py-3 relative z-20 flex flex-col h-full">
+                <div className="px-6 py-6 relative z-20 flex flex-col h-full">
                     {topContent && (
                         <div className="mb-1.5">
                             {topContent}
@@ -254,7 +254,7 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                         </div>
                     </div>
 
-                    <div className="space-y-0 mb-2 bg-foreground/[0.02] dark:bg-white/[0.02] p-2.5 rounded-2xl border border-foreground/[0.03]">
+                    <div className="space-y-0 mb-4 bg-foreground/[0.02] dark:bg-white/[0.02] p-4 rounded-2xl border border-foreground/[0.03]">
                         <DataRow label="Shift Date" value={shiftDate} emphasis />
                         <DataRow label="Scheduled" value={`${startTime} – ${endTime}`} emphasis />
                         <DataRow label="Breaks" value={`Paid ${paidBreak}m · Unpaid ${unpaidBreak}m`} />

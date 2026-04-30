@@ -55,6 +55,17 @@ class ShiftInput:
 
 
 @dataclass
+class ExistingShiftInput:
+    """A shift already committed to an employee (cannot be reassigned by the
+    optimizer). Used as a fixed constraint when proposing new assignments."""
+    id: str
+    shift_date: str
+    start_time: str
+    end_time: str
+    duration_minutes: int
+
+
+@dataclass
 class EmployeeInput:
     id: str
     name: str
@@ -64,6 +75,11 @@ class EmployeeInput:
     license_ids: list[str] = field(default_factory=list)
     preferred_shift_ids: list[str] = field(default_factory=list)
     unavailable_dates: list[str] = field(default_factory=list)
+    # Pinned/already-committed shifts for this employee. The optimizer treats
+    # these as immutable: it will not propose any shift that overlaps or
+    # violates the rest gap against them, and it counts their minutes
+    # against max_weekly_minutes.
+    existing_shifts: list[ExistingShiftInput] = field(default_factory=list)
 
 
 @dataclass
@@ -137,8 +153,12 @@ def _time_to_abs_minutes(date: str, time_str: str) -> int:
     return day_num * 1440 + h * 60 + mi
 
 
-def shift_window(s: ShiftInput) -> tuple[int, int]:
-    """Return (start_min, end_min) — handles overnight shifts correctly."""
+def shift_window(s) -> tuple[int, int]:
+    """Return (start_min, end_min) — handles overnight shifts correctly.
+
+    Accepts any object with shift_date/start_time/end_time string attributes
+    (ShiftInput or ExistingShiftInput).
+    """
     parts = s.start_time.split(':')
     sh, sm = int(parts[0]), int(parts[1])
     parts_e = s.end_time.split(':')
@@ -151,13 +171,13 @@ def shift_window(s: ShiftInput) -> tuple[int, int]:
     return start_abs, end_abs
 
 
-def shifts_overlap(a: ShiftInput, b: ShiftInput) -> bool:
+def shifts_overlap(a, b) -> bool:
     a0, a1 = shift_window(a)
     b0, b1 = shift_window(b)
     return a0 < b1 and b0 < a1
 
 
-def rest_gap_violated(a: ShiftInput, b: ShiftInput, min_rest: int) -> bool:
+def rest_gap_violated(a, b, min_rest: int) -> bool:
     """True if placing a and b in the same schedule violates the rest gap."""
     if shifts_overlap(a, b):
         return True
@@ -169,11 +189,30 @@ def rest_gap_violated(a: ShiftInput, b: ShiftInput, min_rest: int) -> bool:
         return (a0 - b1) < min_rest
 
 
+def existing_blocks_proposal(
+    proposed: ShiftInput,
+    existing_list: list,
+    min_rest: int,
+) -> bool:
+    """True if any of the employee's existing (pinned) shifts overlaps or
+    violates rest-gap against the proposed shift. Used as an eligibility
+    filter so the solver never proposes shifts that conflict with the
+    employee's already-committed roster."""
+    for ex in existing_list:
+        if rest_gap_violated(proposed, ex, min_rest):
+            return True
+    return False
+
+
 # =============================================================================
 # ELIGIBILITY CHECK (HC-5)
 # =============================================================================
 
-def employee_eligible(emp: EmployeeInput, shift: ShiftInput, c: OptimizerConstraints) -> bool:
+def employee_eligible(
+    emp: EmployeeInput,
+    shift: ShiftInput,
+    c: OptimizerConstraints,
+) -> bool:
     if shift.shift_date in emp.unavailable_dates:
         return False
     if c.enforce_role_match and shift.role_id and emp.role_id and emp.role_id != shift.role_id:
@@ -184,6 +223,15 @@ def employee_eligible(emp: EmployeeInput, shift: ShiftInput, c: OptimizerConstra
     if c.enforce_skill_match and shift.required_license_ids:
         if not set(shift.required_license_ids).issubset(set(emp.license_ids)):
             return False
+    # Reject if the proposed shift conflicts with any of the employee's
+    # already-committed shifts. Without this filter the optimizer is "blind"
+    # to the existing roster and will happily propose conflicting work,
+    # which then gets rejected by the TS compliance layer — making
+    # re-optimization runs collapse from many passing proposals to almost none.
+    if emp.existing_shifts and existing_blocks_proposal(
+        shift, emp.existing_shifts, c.min_rest_minutes,
+    ):
+        return False
     return True
 
 
@@ -442,8 +490,15 @@ class ScheduleModelBuilder:
                 for s in self.data.shifts
                 if (emp.id, s.id) in self._x
             ]
-            if terms:
-                self.model.Add(cp_model.LinearExpr.Sum(terms) <= emp.max_weekly_minutes)
+            if not terms:
+                continue
+            # Existing committed shifts already consume part of the weekly
+            # budget. Subtract them so the solver only allocates against
+            # the remainder. Floor at 0 — a negative budget would make
+            # the constraint trivially infeasible for this employee.
+            existing_minutes = sum(es.duration_minutes for es in emp.existing_shifts)
+            remaining = max(0, emp.max_weekly_minutes - existing_minutes)
+            self.model.Add(cp_model.LinearExpr.Sum(terms) <= remaining)
 
     # ── Objective ─────────────────────────────────────────────────────────────
 

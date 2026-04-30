@@ -284,6 +284,15 @@ export function useRostersLookup(
   });
 }
 
+export function usePlanningPeriods(organizationId?: string, departmentId?: string) {
+  return useQuery({
+    queryKey: ['planning-periods', organizationId, departmentId],
+    queryFn: () => shiftsQueries.getPlanningPeriods(organizationId!, departmentId),
+    enabled: !!organizationId,
+    staleTime: 5 * 60_000,
+  });
+}
+
 export function useRosterStructure(rosterId?: string) {
   return useQuery({
     queryKey: shiftKeys.lookups.rosterStructure(rosterId),

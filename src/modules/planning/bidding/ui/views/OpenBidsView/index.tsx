@@ -1073,18 +1073,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
 
           </AnimatePresence>
 
-          {/* ── Floating Auto-Assign Button (FAB) ── */}
-          <motion.button
-            onClick={handleAutoAssign}
-            disabled={isAutoAssigning}
-            whileTap={{ scale: 0.93 }}
-            className="fixed bottom-28 right-4 z-50 h-14 w-14 rounded-2xl bg-primary shadow-xl shadow-primary/30 flex items-center justify-center text-primary-foreground disabled:opacity-60"
-          >
-            {isAutoAssigning
-              ? <Loader2 className="h-5 w-5 animate-spin" />
-              : <Zap className="h-5 w-5" />
-            }
-          </motion.button>
+
 
           {/* ── Bid Detail Drawer ── */}
           <Drawer

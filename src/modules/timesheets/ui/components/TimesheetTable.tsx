@@ -5,8 +5,10 @@ import { useTheme } from "@/modules/core/contexts/ThemeContext";
 import { useToast } from "@/modules/core/hooks/use-toast";
 import type { TimesheetRow } from "../../model/timesheet.types";
 
+import { cn } from "@/modules/core/lib/utils";
 import { TimesheetMobileView } from "./TimesheetMobileView";
 import { TimesheetTimecardView } from "./TimesheetTimecardView";
+import { TimesheetRow as TimesheetRowComponent } from "./TimesheetRow";
 import { TimesheetFunctionBar } from "./TimesheetHeader";
 import {
     ActiveFilters,
@@ -34,6 +36,7 @@ interface TimesheetTableProps {
     onRefresh?: () => void;
     isRefreshing?: boolean;
     hideTopControls?: boolean;
+    showDate?: boolean;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -53,6 +56,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
     onRefresh,
     isRefreshing,
     hideTopControls = false,
+    showDate = false,
 }) => {
     // ── Filter state (owned here, shared to both mobile + desktop) ─────────────
     const [appliedFilters, setAppliedFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
@@ -105,6 +109,23 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
             return 0;
         });
     }, [filteredEntries, sortField, sortDirection]);
+
+    const SortableHeader = ({ field, label, className }: { field: keyof TimesheetRow, label: string, className?: string }) => (
+        <th
+            className={cn(
+                "p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 cursor-pointer hover:bg-muted/50 border-b border-border/50 text-left group transition-colors",
+                className
+            )}
+            onClick={() => handleSort(field)}
+        >
+            <div className="flex items-center gap-1">
+                {label}
+                <div className={cn("transition-opacity", sortField === field ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
+                    {getSortIndicator(field) || <ArrowDown className="h-3 w-3 text-muted-foreground/30" />}
+                </div>
+            </div>
+        </th>
+    );
 
     // ── Export handlers (operate on the currently filtered + sorted view) ──────
     const handleExportXLSX = () => exportTimesheetXLSX(sortedEntries, selectedDate);
@@ -235,6 +256,119 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                         readOnly={readOnly}
                         onClearFilters={() => setAppliedFilters(EMPTY_FILTERS)}
                     />
+                )}
+
+                {/* Table View */}
+                {viewMode === "table" && (
+                    <div className="rounded-2xl border border-border/50 bg-card/30 backdrop-blur-md overflow-hidden shadow-2xl">
+                        <div className="overflow-x-auto">
+                            <table className="w-full border-collapse min-w-[2200px]">
+                                <thead>
+                                    <tr>
+                                        {/* Multi-header groups */}
+                                        <th className="p-3 border-b-2 border-border/50"></th>
+                                        {showDate && <th className="p-3 border-b-2 border-border/50 border-r border-border/30"></th>}
+                                        <th colSpan={2} className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
+                                            Employee
+                                        </th>
+                                        <th colSpan={4} className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
+                                            Organization & Role
+                                        </th>
+                                        <th colSpan={2} className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
+                                            Scheduled
+                                        </th>
+                                        <th colSpan={2} className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
+                                            Attendance (Actual)
+                                        </th>
+                                        <th colSpan={6} className="p-3 text-[10px] font-black uppercase tracking-widest text-primary text-center border-b-2 border-primary/20 bg-primary/5 border-r border-border/30">
+                                            Adjusted (Inline Edit)
+                                        </th>
+                                        <th colSpan={2} className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
+                                            Payroll & Diff
+                                        </th>
+                                        <th colSpan={3} className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
+                                            Statuses
+                                        </th>
+                                        <th className="p-3 border-b-2 border-border/50"></th>
+                                    </tr>
+                                    <tr className="bg-muted/20">
+                                        {/* Select All */}
+                                        <th className="w-10 p-3 border-b border-border/50 border-r border-border/30">
+                                            <div className="flex justify-center">
+                                                <div className="h-4 w-4 rounded border-border bg-background" />
+                                            </div>
+                                        </th>
+                                        {/* Date */}
+                                        {showDate && (
+                                            <SortableHeader field="date" label="Date" className="border-r border-border/30" />
+                                        )}
+                                        {/* Employee */}
+                                        <SortableHeader field="employeeId" label="ID" />
+                                        <SortableHeader field="employee" label="Name" className="border-r border-border/30" />
+                                        {/* Organization */}
+                                        <SortableHeader field="group" label="Group" />
+                                        <SortableHeader field="subGroup" label="Sub-Group" />
+                                        <SortableHeader field="role" label="Role" />
+                                        <SortableHeader field="remunerationLevel" label="Level" className="border-r border-border/30" />
+                                        {/* Scheduled */}
+                                        <SortableHeader field="scheduledStart" label="Start" />
+                                        <SortableHeader field="scheduledEnd" label="End" className="border-r border-border/30" />
+                                        {/* Actual */}
+                                        <SortableHeader field="clockIn" label="Clock In" />
+                                        <SortableHeader field="clockOut" label="Clock Out" className="border-r border-border/30" />
+                                        {/* Adjusted */}
+                                        <SortableHeader field="adjustedStart" label="Start" className="bg-primary/5" />
+                                        <SortableHeader field="adjustedEnd" label="End" className="bg-primary/5" />
+                                        <SortableHeader field="length" label="Length" className="bg-primary/5 border-r border-border/30" />
+                                        <th className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 border-b border-border/50 text-left bg-primary/5">Paid</th>
+                                        <th className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 border-b border-border/50 text-left bg-primary/5">Unpaid</th>
+                                        <SortableHeader field="netLength" label="Net" className="bg-primary/5 border-r border-border/30" />
+                                        {/* Payroll */}
+                                        <SortableHeader field="approximatePay" label="Pay" />
+                                        <SortableHeader field="differential" label="Diff" className="border-r border-border/30" />
+                                        {/* Statuses */}
+                                        <th className="p-3 text-center border-b border-border/50">Dot</th>
+                                        <SortableHeader field="liveStatus" label="Lifecycle" />
+                                        <SortableHeader field="timesheetStatus" label="Timesheet" className="border-r border-border/30" />
+                                        {/* Actions */}
+                                        <th className="p-3 text-[10px] font-black uppercase tracking-widest text-foreground/70 text-center border-b border-border/50">
+                                            Actions
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sortedEntries.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={showDate ? 25 : 24} className="p-20 text-center text-muted-foreground">
+                                                <div className="flex flex-col items-center gap-4">
+                                                    <div className="h-16 w-16 rounded-full bg-muted/20 flex items-center justify-center">
+                                                        <XCircle className="h-8 w-8 text-muted-foreground/40" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-lg font-black text-foreground">No records found</p>
+                                                        <p className="text-sm">Try adjusting your filters or search query.</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        sortedEntries.map((entry) => (
+                                            <TimesheetRowComponent
+                                                key={entry.id}
+                                                entry={entry}
+                                                readOnly={readOnly}
+                                                isSelected={selectedIds.includes(String(entry.id))}
+                                                onToggleSelect={() => handleToggleSelect(String(entry.id))}
+                                                onSave={onSaveEntry}
+                                                onMarkNoShow={onMarkNoShow}
+                                                showDate={showDate}
+                                            />
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 )}
             </div>
         </div>

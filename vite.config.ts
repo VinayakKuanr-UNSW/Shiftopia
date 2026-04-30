@@ -5,6 +5,7 @@ import { componentTagger } from 'lovable-tagger';
 import { visualizer } from 'rollup-plugin-visualizer';
 import viteCompression from 'vite-plugin-compression';
 import webfontDl from 'vite-plugin-webfont-dl';
+import { sentryVitePlugin } from '@sentry/vite-plugin';
 
 export default defineConfig(({ mode }) => ({
   server: {
@@ -32,6 +33,16 @@ export default defineConfig(({ mode }) => ({
       ext: '.br',
     }),
     webfontDl(),
+    // Source-map upload runs only when SENTRY_AUTH_TOKEN is present (i.e. in CI
+    // for prod builds). Local prod builds without the token still produce
+    // source maps but skip the upload, so they never fail the build.
+    mode === 'production' && process.env.SENTRY_AUTH_TOKEN && sentryVitePlugin({
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      release: { name: process.env.VITE_SENTRY_RELEASE },
+      sourcemaps: { filesToDeleteAfterUpload: ['./dist/**/*.map'] },
+    }),
   ].filter(Boolean),
   resolve: {
     alias: {
@@ -50,6 +61,7 @@ export default defineConfig(({ mode }) => ({
     },
   }),
   build: {
+    sourcemap: true,
     rollupOptions: {
       output: {
         manualChunks: {

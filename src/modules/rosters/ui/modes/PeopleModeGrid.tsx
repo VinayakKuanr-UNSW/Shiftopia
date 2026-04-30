@@ -54,7 +54,7 @@ interface PeopleModeGridProps {
   dates: Date[];
   canEdit: boolean;
   showAvailabilities: boolean;
-  bulkModeActive?: boolean;
+  isBulkMode?: boolean;
   selectedShifts?: string[];
   onToggleShiftSelection?: (shiftId: string) => void;
   onAddShift: (employee: PeopleModeEmployee, date: Date) => void;
@@ -139,7 +139,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   dates,
   canEdit,
   showAvailabilities,
-  bulkModeActive = false,
+  isBulkMode: propIsBulkMode = false,
   selectedShifts: propsSelectedShifts = [],
   onToggleShiftSelection,
   onAddShift,
@@ -162,6 +162,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
     toggleShiftSelection: globalToggleShiftSelection
   } = useRosterStore();
 
+  const isBulkMode = propIsBulkMode || globalBulkModeActive;
   const { toggleShiftSelection: uiToggleShiftSelection } = useRosterUI();
 
   const currentSelectedShifts = propsSelectedShifts;

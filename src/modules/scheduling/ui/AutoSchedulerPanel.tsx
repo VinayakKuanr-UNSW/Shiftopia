@@ -35,12 +35,19 @@ import {
     Users,
     AlertCircle,
     WifiOff,
+    FileText,
+    Download,
+    Calendar,
+    ArrowRight,
 } from 'lucide-react';
+import { Input } from '@/modules/core/ui/primitives/input';
+import { Label } from '@/modules/core/ui/primitives/label';
+import { format, isWithinInterval, parseISO } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
-import { autoSchedulerController } from '@/modules/scheduling';
+import { autoSchedulerController, AutoSchedulerInputTooLargeError } from '@/modules/scheduling';
 import { OptimizerError } from '@/modules/scheduling';
 import type {
     AutoSchedulerResult,
@@ -286,6 +293,40 @@ export function AutoSchedulerPanel({
     const [phase, setPhase] = useState<PipelinePhase>('idle');
     const [result, setResult] = useState<AutoSchedulerResult | null>(null);
     const [isCommitting, setIsCommitting] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
+    // Tracks the AbortController for the current run so Cancel actually
+    // aborts the in-flight optimizer fetch instead of just resetting UI state
+    // while the request keeps going and re-fires setResult on completion.
+    const runAbortRef = React.useRef<AbortController | null>(null);
+
+    // Date Range Filtering
+    const defaultStart = shifts.length > 0 ? shifts.sort((a, b) => a.shift_date.localeCompare(b.shift_date))[0].shift_date : '';
+    const defaultEnd = shifts.length > 0 ? shifts.sort((a, b) => b.shift_date.localeCompare(a.shift_date))[0].shift_date : '';
+
+    const [startDate, setStartDate] = useState(defaultStart);
+    const [endDate, setEndDate] = useState(defaultEnd);
+
+    // Filtered shifts based on date range
+    const filteredShifts = React.useMemo(() => {
+        if (!startDate || !endDate) return shifts;
+        return shifts.filter(s => {
+            return s.shift_date >= startDate && s.shift_date <= endDate;
+        });
+    }, [shifts, startDate, endDate]);
+
+    // Pre-run demand/supply check — delegate to the controller so the panel
+    // and the run share one source of truth (was a parallel re-implementation
+    // that drifted from the controller's per-employee daily-cap logic).
+    const preRunCapacity = React.useMemo(() => {
+        if (filteredShifts.length === 0 || employees.length === 0) return null;
+        const cc = autoSchedulerController.capacityCheck(filteredShifts, employees);
+        const deficits = cc.deficitDays.map(d => ({
+            date: d.date,
+            shiftCount: d.shiftCount,
+            deficitMinutes: d.deficitMinutes,
+        }));
+        return { deficits, supplyPerDay: cc.perDay[0]?.supplyMinutes ?? 0, dayCount: cc.perDay.length };
+    }, [filteredShifts, employees]);
 
     // Health check on open
     useEffect(() => {
@@ -313,17 +354,38 @@ export function AutoSchedulerPanel({
 
     // ── Run optimizer ─────────────────────────────────────────────────────────
     const handleRun = useCallback(async () => {
+        if (filteredShifts.length === 0) return;
+
+        // Cancel any prior in-flight run before starting a new one (Re-optimise).
+        runAbortRef.current?.abort();
+        const ac = new AbortController();
+        runAbortRef.current = ac;
+
         setResult(null);
         setPhase('optimizing');
 
         try {
-            const schedResult = await autoSchedulerController.run({ shifts, employees });
-            // After optimizer + compliance, advance to Manager Review
+            const schedResult = await autoSchedulerController.run({
+                shifts: filteredShifts,
+                employees,
+                signal: ac.signal,
+            });
+            if (ac.signal.aborted) return;
             setPhase('reviewing');
             setResult(schedResult);
         } catch (err: any) {
+            if (ac.signal.aborted || err?.name === 'AbortError') {
+                // User cancelled — leave the panel in idle state silently.
+                return;
+            }
             setPhase('idle');
-            if (err instanceof OptimizerError && err.code === 'CONNECTION_REFUSED') {
+            if (err instanceof AutoSchedulerInputTooLargeError) {
+                toast({
+                    title: 'Too much to optimize at once',
+                    description: err.message,
+                    variant: 'destructive',
+                });
+            } else if (err instanceof OptimizerError && err.code === 'CONNECTION_REFUSED') {
                 toast({
                     title: 'Optimizer Offline',
                     description: 'Start the Python service: docker compose up optimizer  (or: cd optimizer-service && python ortools_runner.py)',
@@ -336,8 +398,10 @@ export function AutoSchedulerPanel({
                     variant: 'destructive',
                 });
             }
+        } finally {
+            if (runAbortRef.current === ac) runAbortRef.current = null;
         }
-    }, [shifts, employees, toast]);
+    }, [filteredShifts, employees, toast]);
 
     // ── Commit ────────────────────────────────────────────────────────────────
     const handleCommit = useCallback(async () => {
@@ -346,7 +410,8 @@ export function AutoSchedulerPanel({
 
         try {
             const commitResult = await autoSchedulerController.commit(result);
-            if (commitResult.success || commitResult.totalCommitted > 0) {
+            const conflictCount = commitResult.concurrencyConflicts.length;
+            if (commitResult.success) {
                 setPhase('done');
                 toast({
                     title: 'Shifts Assigned',
@@ -355,10 +420,26 @@ export function AutoSchedulerPanel({
                 queryClient.invalidateQueries({ queryKey: [shiftKeys.all[0]] });
                 onComplete();
                 handleClose();
+            } else if (commitResult.totalCommitted > 0) {
+                // Partial success: some shifts were taken by other users between
+                // preview and commit, or some employees failed outright.
+                setPhase('done');
+                toast({
+                    title: 'Partial Success',
+                    description: conflictCount > 0
+                        ? `Assigned ${commitResult.totalCommitted} shift(s). ${conflictCount} were skipped — they were claimed by another user or no longer eligible since preview. Re-optimise to retry.`
+                        : `Assigned ${commitResult.totalCommitted} shift(s). ${commitResult.failedEmployees.length} employee(s) could not be committed.`,
+                    variant: 'destructive',
+                });
+                queryClient.invalidateQueries({ queryKey: [shiftKeys.all[0]] });
+                onComplete();
+                handleClose();
             } else {
                 toast({
                     title: 'Commit Failed',
-                    description: 'No shifts were committed. Check compliance results.',
+                    description: conflictCount > 0
+                        ? `All ${conflictCount} shift(s) were claimed by other users since preview. Re-optimise to refresh.`
+                        : 'No shifts were committed. Check compliance results.',
                     variant: 'destructive',
                 });
             }
@@ -373,15 +454,119 @@ export function AutoSchedulerPanel({
         }
     }, [result, queryClient, toast, onComplete]);
 
+    // ── Download Audit Report ────────────────────────────────────────────────
+    const handleDownloadAudit = useCallback(() => {
+        if (!result || !result.uncoveredAudit) return;
+        setIsDownloading(true);
+
+        try {
+            const csvEscape = (v: string | number) => {
+                const s = String(v ?? '');
+                return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+            };
+
+            const totalUncovered = result.uncoveredShiftIds.length;
+            const audited = result.uncoveredAudit.length;
+
+            const lines = [
+                'AUTOSCHEDULER AUDIT REPORT',
+                `Generated: ${new Date().toLocaleString()}`,
+                `Status: ${result.optimizerStatus}`,
+                `Total Passing: ${result.passing}`,
+                `Total Failing: ${result.failing}`,
+                `Uncovered: ${totalUncovered}`,
+                `Audited: ${audited}${audited < totalUncovered ? ` (capped — ${totalUncovered - audited} not detailed below)` : ''}`,
+                '',
+            ];
+
+            // Capacity pre-check section
+            if (result.capacityCheck) {
+                const cc = result.capacityCheck;
+                lines.push('--- CAPACITY PRE-CHECK ---');
+                lines.push(`Status: ${cc.sufficient ? 'SUFFICIENT' : 'INSUFFICIENT'}`);
+                lines.push(`Total Demand (min): ${cc.totalDemandMinutes}`);
+                lines.push(`Total Supply (min): ${cc.totalSupplyMinutes}`);
+                lines.push('Date,Shifts,Employees,Demand (min),Supply (min),Deficit (min),Sufficient');
+                for (const day of cc.perDay) {
+                    lines.push([
+                        day.date,
+                        day.shiftCount,
+                        day.employeeCount,
+                        day.demandMinutes,
+                        day.supplyMinutes,
+                        day.deficitMinutes,
+                        day.sufficient ? 'YES' : 'NO',
+                    ].map(csvEscape).join(','));
+                }
+                lines.push('');
+            }
+
+            lines.push('--- UNCOVERED SHIFT ANALYSIS ---');
+            lines.push('Shift Date,Time,Rejection Summary');
+
+            for (const audit of result.uncoveredAudit) {
+                const summary = Object.entries(audit.rejectionSummary)
+                    .map(([type, count]) => `${type}: ${count}`)
+                    .join(' | ');
+                lines.push([
+                    audit.shiftDate,
+                    `${audit.startTime}-${audit.endTime}`,
+                    summary || 'No reasons recorded',
+                ].map(csvEscape).join(','));
+            }
+
+            if (audited < totalUncovered) {
+                lines.push(`# ${totalUncovered - audited} additional uncovered shift(s) not audited (audit cap reached).`);
+            }
+
+            lines.push('', '--- EMPLOYEE REJECTION DETAILS ---');
+            lines.push('Shift Date,Time,Employee,Status,Violations');
+
+            for (const audit of result.uncoveredAudit) {
+                for (const detail of audit.employeeDetails) {
+                    const violations = detail.violations.map(v => v.description).join('; ');
+                    lines.push([
+                        audit.shiftDate,
+                        `${audit.startTime}-${audit.endTime}`,
+                        detail.employeeName,
+                        detail.status,
+                        violations,
+                    ].map(csvEscape).join(','));
+                }
+            }
+
+            // Lead with a UTF-8 BOM so Excel/Numbers don't mojibake non-ASCII
+            // characters (employee names with accents, en-dashes in time ranges).
+            const blob = new Blob(['﻿', lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `Autoscheduler_Audit_Report_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Failed to generate report', err);
+        } finally {
+            setIsDownloading(false);
+        }
+    }, [result]);
+
     const handleClose = () => {
+        // Abort any in-flight optimizer run so its eventual result doesn't
+        // race with the user's close action and re-populate the panel.
+        runAbortRef.current?.abort();
+        runAbortRef.current = null;
         setResult(null);
         setPhase('idle');
         onClose();
     };
 
     const unfilledCount = shifts.length;
+    const filteredCount = filteredShifts.length;
     // Can always run (greedy fallback fires when optimizer is offline)
-    const canRun = unfilledCount > 0 && employees.length > 0;
+    const canRun = filteredCount > 0 && employees.length > 0;
 
     return (
         <Sheet open={open} onOpenChange={o => !o && handleClose()}>
@@ -396,7 +581,7 @@ export function AutoSchedulerPanel({
                         <HealthBadge health={health} />
                     </div>
                     <SheetDescription>
-                        OR-Tools CP-SAT finds the optimal assignment for {unfilledCount} unfilled shift{unfilledCount !== 1 ? 's' : ''} across {employees.length} employee{employees.length !== 1 ? 's' : ''}.
+                        OR-Tools CP-SAT finds the optimal assignment for {filteredCount} shift{filteredCount !== 1 ? 's' : ''} in the selected range.
                     </SheetDescription>
 
                     {/* Pipeline indicator */}
@@ -405,7 +590,67 @@ export function AutoSchedulerPanel({
 
                 {/* Body */}
                 <ScrollArea className="flex-1 min-h-0">
-                    <div className="px-6 py-4 space-y-4">
+                    <div className="px-6 py-4 space-y-6">
+
+                        {/* Date Range Selection */}
+                        {phase === 'idle' && !result && (
+                            <div className="p-4 bg-muted/40 rounded-xl border border-border/50 space-y-4">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                                    <Calendar className="h-4 w-4 text-primary" />
+                                    Optimization Range
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="start-date" className="text-[11px] uppercase tracking-wider text-muted-foreground font-bold">Start Date</Label>
+                                        <Input
+                                            id="start-date"
+                                            type="date"
+                                            value={startDate}
+                                            onChange={(e) => setStartDate(e.target.value)}
+                                            className="h-9 text-sm bg-background/50"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="end-date" className="text-[11px] uppercase tracking-wider text-muted-foreground font-bold">End Date</Label>
+                                        <Input
+                                            id="end-date"
+                                            type="date"
+                                            value={endDate}
+                                            onChange={(e) => setEndDate(e.target.value)}
+                                            className="h-9 text-sm bg-background/50"
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground italic">
+                                    {filteredCount} out of {unfilledCount} shifts match this range.
+                                </p>
+
+                                {/* Demand-vs-supply pre-check banner */}
+                                {preRunCapacity && preRunCapacity.deficits.length > 0 && (
+                                    <div className="flex items-start gap-2 p-2.5 bg-amber-500/10 rounded-md border border-amber-500/30">
+                                        <AlertTriangle className="h-3.5 w-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
+                                        <div className="text-[11px] leading-relaxed">
+                                            <p className="font-medium text-amber-700 dark:text-amber-400">
+                                                Capacity deficit on {preRunCapacity.deficits.length} day{preRunCapacity.deficits.length !== 1 ? 's' : ''}
+                                            </p>
+                                            <p className="text-muted-foreground mt-0.5">
+                                                More shift-hours than worker-hours available. Some shifts will be uncovered no matter how the solver assigns people.
+                                            </p>
+                                            <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                                                {preRunCapacity.deficits.slice(0, 3).map(d => (
+                                                    <li key={d.date} className="font-mono text-[10px]">
+                                                        {d.date}: {d.shiftCount} shifts, ~{Math.round(d.deficitMinutes / 60)}h short
+                                                    </li>
+                                                ))}
+                                                {preRunCapacity.deficits.length > 3 && (
+                                                    <li className="text-[10px] italic">+ {preRunCapacity.deficits.length - 3} more day(s)</li>
+                                                )}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Offline warning */}
                         {health && !health.available && (
@@ -470,16 +715,54 @@ export function AutoSchedulerPanel({
                             </div>
                         )}
 
-                        {/* Uncovered shifts */}
+                        {/* Uncovered shifts with "Why" audit */}
                         {result && result.uncoveredShiftIds.length > 0 && (
-                            <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
-                                <p className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                                    <AlertTriangle className="h-4 w-4" />
-                                    {result.uncoveredShiftIds.length} shift{result.uncoveredShiftIds.length !== 1 ? 's' : ''} could not be filled
-                                </p>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    No eligible employee was available for these shifts. Consider adjusting staffing or constraints.
-                                </p>
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                                        <AlertTriangle className="h-4 w-4" />
+                                        {result.uncoveredShiftIds.length} Unfilled Shift{result.uncoveredShiftIds.length !== 1 ? 's' : ''}
+                                    </h3>
+                                    {result.uncoveredAudit && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 text-[11px] gap-1.5 border-amber-500/30 text-amber-600 hover:bg-amber-500/10"
+                                            onClick={handleDownloadAudit}
+                                            disabled={isDownloading}
+                                        >
+                                            <FileText className="h-3 w-3" />
+                                            Audit Report
+                                        </Button>
+                                    )}
+                                </div>
+
+                                <div className="space-y-2">
+                                    {result.uncoveredAudit?.map(audit => (
+                                        <div key={audit.shiftId} className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
+                                            <div className="flex items-center justify-between mb-1.5">
+                                                <span className="text-xs font-bold text-foreground">{audit.shiftDate}</span>
+                                                <span className="text-[10px] text-muted-foreground">{audit.startTime}–{audit.endTime}</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {Object.entries(audit.rejectionSummary).length > 0 ? (
+                                                    Object.entries(audit.rejectionSummary).map(([type, count]) => (
+                                                        <Badge key={type} variant="secondary" className="text-[9px] h-4 px-1 bg-amber-500/20 text-amber-700 border-none">
+                                                            {type}: {count}
+                                                        </Badge>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-[10px] text-muted-foreground italic">No eligible employees found</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {result.uncoveredShiftIds.length > (result.uncoveredAudit?.length ?? 0) && (
+                                        <p className="text-[10px] text-muted-foreground text-center italic">
+                                            + {result.uncoveredShiftIds.length - (result.uncoveredAudit?.length ?? 0)} more unfilled shifts (download report for full details)
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -525,7 +808,7 @@ export function AutoSchedulerPanel({
                             ) : (
                                 <>
                                     <Zap className="h-4 w-4" />
-                                    Optimise {unfilledCount} Shift{unfilledCount !== 1 ? 's' : ''}
+                                    Optimise {filteredCount} Shift{filteredCount !== 1 ? 's' : ''}
                                 </>
                             )}
                         </Button>

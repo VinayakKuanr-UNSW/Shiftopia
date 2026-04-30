@@ -179,10 +179,10 @@ describe('getShiftFSMState — edge cases', () => {
         expect(result).not.toBe('S4');
     });
 
-    it('invalid combination (empty lifecycle_status) → throws', () => {
-        expect(() =>
-            getShiftFSMState(fsmInput({ lifecycle_status: '' }))
-        ).toThrow();
+    it('invalid combination (empty lifecycle_status) → returns UNKNOWN', () => {
+        // FSM no longer throws; it warns and returns the neutral 'UNKNOWN' fallback
+        // so the UI can render a placeholder card instead of crashing the boundary.
+        expect(getShiftFSMState(fsmInput({ lifecycle_status: '' }))).toBe('UNKNOWN');
     });
 });
 
@@ -249,8 +249,8 @@ describe('getLockState', () => {
         expect(getLockState('S10')).toEqual({ fullyLocked: false, partialLock: true });
     });
 
-    it('S3  → { fullyLocked: true, partialLock: false }', () => {
-        expect(getLockState('S3')).toEqual({ fullyLocked: true, partialLock: false });
+    it('S3  → { fullyLocked: false, partialLock: true } (published, schedule-locked but notes editable)', () => {
+        expect(getLockState('S3')).toEqual({ fullyLocked: false, partialLock: true });
     });
 
     it('S11 → { fullyLocked: true, partialLock: false }', () => {
@@ -332,14 +332,16 @@ function ctx(overrides: Partial<ShiftUIContext> & { state: ShiftStateID }): Shif
         isUrgent:       false,
         isEmergency:    false,
         emergencyLabel: null,
+        urgency:        'normal',
+        ringColor:      'none',
         ...overrides,
-    };
+    } as ShiftUIContext;
 }
 
 describe('getBadges', () => {
 
-    it('S5 + isUrgent=true + no emergencyLabel → includes badge with label "Urgent"', () => {
-        const badges = getBadges(ctx({ state: 'S5', isUrgent: true, emergencyLabel: null }));
+    it('S5 + urgency=urgent + no emergencyLabel → includes badge with label "Urgent"', () => {
+        const badges = getBadges(ctx({ state: 'S5', isUrgent: true, urgency: 'urgent', emergencyLabel: null }));
         const labels = badges.map(b => b.label);
         expect(labels).toContain('Urgent');
     });

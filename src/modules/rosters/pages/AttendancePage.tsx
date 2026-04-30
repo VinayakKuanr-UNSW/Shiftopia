@@ -15,7 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Fingerprint, MapPin, Loader2, UserX, LogIn, LogOut,
   CheckCircle, Timer,
-  BarChart3, Filter,
+  BarChart3, Filter, ArrowUp, ArrowDown, XCircle, AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { CustomDateRangePicker } from '@/modules/core/ui/components/CustomDateRangePicker';
@@ -53,6 +53,8 @@ import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHea
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { UnifiedModuleFunctionBar } from '@/modules/core/ui/components/UnifiedModuleFunctionBar';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
+import { TimesheetRow as TimesheetRowComponent } from '@/modules/timesheets/ui/components/TimesheetRow';
+import { TimesheetTable } from '@/modules/timesheets/ui/components/TimesheetTable';
 
 // ── Motion variants ────────────────────────────────────────────────────────────
 
@@ -501,6 +503,9 @@ const AttendancePage: React.FC = () => {
   const [startDate, setStartDate] = useState<Date>(() => new Date());
   const [endDate, setEndDate]     = useState<Date>(() => new Date());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
+  const [sortField, setSortField] = useState<keyof TimesheetRow | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const { isDark } = useTheme();
   const { orgBranding } = useSettings();
@@ -553,6 +558,33 @@ const AttendancePage: React.FC = () => {
       return d !== 0 ? d : a.start_time.localeCompare(b.start_time);
     });
 
+    // ── Apply Client-Side Sorting if set ───────────────────────────────────────
+    if (sortField) {
+        sorted.sort((a, b) => {
+            // Map Shift back to TimesheetRow-like access for sorting
+            const getVal = (s: Shift, field: keyof TimesheetRow) => {
+                if (field === 'date') return s.shift_date;
+                if (field === 'employee') return `${s.assigned_profiles?.first_name || ''} ${s.assigned_profiles?.last_name || ''}`;
+                if (field === 'role') return s.roles?.name || '';
+                if (field === 'scheduledStart') return s.start_time;
+                if (field === 'scheduledEnd') return s.end_time;
+                if (field === 'clockIn') return s.actual_start || '';
+                if (field === 'clockOut') return s.actual_end || '';
+                // Add more as needed or just fallback
+                return (s as any)[field] || '';
+            };
+
+            const av = getVal(a, sortField);
+            const bv = getVal(b, sortField);
+
+            if (typeof av === "string" && typeof bv === "string")
+                return sortDirection === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+            if (typeof av === "number" && typeof bv === "number")
+                return sortDirection === "asc" ? av - bv : bv - av;
+            return 0;
+        });
+    }
+
     // 1. Apply Scope Filters (Organization, Department, Sub-Department)
     if (scope && sorted.length > 0) {
       if (scope.org_ids?.length > 0) {
@@ -584,6 +616,44 @@ const AttendancePage: React.FC = () => {
     }
     return groups;
   }, [filteredLogs]);
+
+  // Map to TimesheetRow structure for the table view
+  const timesheetEntries: TimesheetRow[] = useMemo(() => {
+    return filteredLogs.map(shift => ({
+      id: shift.id,
+      date: shift.shift_date,
+      employeeId: shift.assigned_employee_id || '',
+      employee: shift.assigned_profiles ? `${shift.assigned_profiles.first_name || ''} ${shift.assigned_profiles.last_name || ''}`.trim() : 'Unknown',
+      organization: shift.organizations?.name || '',
+      department: shift.departments?.name || '',
+      subDepartment: shift.sub_departments?.name || '',
+      group: shift.roster_subgroup?.roster_group?.name || shift.group_type || '',
+      subGroup: shift.sub_group_name || '',
+      role: shift.roles?.name || '',
+      remunerationLevel: shift.remuneration_levels?.level_name || '',
+      scheduledStart: shift.start_time,
+      scheduledEnd: shift.end_time,
+      clockIn: shift.actual_start || '',
+      clockOut: shift.actual_end || '',
+      adjustedStart: shift.timesheet_start_time || snapToQuarterHour(shift.actual_start),
+      adjustedEnd: shift.timesheet_end_time || snapToQuarterHour(shift.actual_end),
+      isAdjustedManual: !!shift.timesheet_start_time,
+      length: String(shift.scheduled_length_minutes || 0),
+      paidBreak: String(shift.paid_break_minutes || 0),
+      unpaidBreak: String(shift.unpaid_break_minutes || 0),
+      netLength: String(shift.net_length_minutes || 0),
+      approximatePay: '',
+      differential: '0', 
+      liveStatus: shift.lifecycle_status || '',
+      timesheetStatus: shift.timesheet_status || 'draft',
+      attendanceStatus: shift.attendance_status,
+      notes: shift.timesheet_notes,
+      rejectedReason: shift.timesheet_rejected_reason,
+      groupType: shift.group_type,
+    }));
+  }, [filteredLogs]);
+
+
   return (
     <motion.div
       variants={pageVariants}
@@ -618,8 +688,8 @@ const AttendancePage: React.FC = () => {
               setStartDate(start);
               setEndDate(end);
             }}
-            viewMode="card"
-            onViewModeChange={() => {}} // Not used yet
+            viewMode={viewMode}
+            onViewModeChange={(v) => setViewMode(v as 'card' | 'table')}
             onRefresh={() => refetch()}
             isLoading={logsLoading}
             className="mt-1"
@@ -674,38 +744,52 @@ const AttendancePage: React.FC = () => {
               {logShifts.length > 0 && <TotalsBar shifts={logShifts} />}
 
 
-              {groupedLogs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-                  <BarChart3 className="h-10 w-10 text-muted-foreground/40" />
-                  <p className="text-base font-bold text-foreground">No attendance records</p>
-                  <p className="text-sm text-muted-foreground">
-                    {statusFilter !== 'all' ? 'Try removing the filter' : 'No shifts found for this period'}
-                  </p>
-                </div>
-              ) : (
-                groupedLogs.map(({ date, shifts }) => {
-                  const d = parseISO(date);
-                  const isTodayDate = isToday(d);
-                  return (
-                    <div key={date}>
-                      {/* Day header */}
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className={cn(
-                          'text-xs font-black uppercase tracking-widest font-mono',
-                          isTodayDate ? 'text-emerald-500' : 'text-muted-foreground',
-                        )}>
-                          {isTodayDate ? 'Today' : format(d, 'EEEE')}
+              {viewMode === 'card' ? (
+                groupedLogs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                    <BarChart3 className="h-10 w-10 text-muted-foreground/40" />
+                    <p className="text-base font-bold text-foreground">No attendance records</p>
+                    <p className="text-sm text-muted-foreground">
+                      {statusFilter !== 'all' ? 'Try removing the filter' : 'No shifts found for this period'}
+                    </p>
+                  </div>
+                ) : (
+                  groupedLogs.map(({ date, shifts }) => {
+                    const d = parseISO(date);
+                    const isTodayDate = isToday(d);
+                    return (
+                      <div key={date}>
+                        {/* Day header */}
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className={cn(
+                            'text-xs font-black uppercase tracking-widest font-mono',
+                            isTodayDate ? 'text-emerald-500' : 'text-muted-foreground',
+                          )}>
+                            {isTodayDate ? 'Today' : format(d, 'EEEE')}
+                          </div>
+                          <div className="text-xs text-muted-foreground font-mono">{format(d, 'd MMMM yyyy')}</div>
+                          <div className="flex-1 h-px bg-border" />
+                          <div className="text-[10px] text-muted-foreground/60 font-mono">{shifts.length} shift{shifts.length > 1 ? 's' : ''}</div>
                         </div>
-                        <div className="text-xs text-muted-foreground font-mono">{format(d, 'd MMMM yyyy')}</div>
-                        <div className="flex-1 h-px bg-border" />
-                        <div className="text-[10px] text-muted-foreground/60 font-mono">{shifts.length} shift{shifts.length > 1 ? 's' : ''}</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5 mb-4">
+                          {shifts.map(s => <AttendanceCard key={s.id} shift={s} now={now} useGroupColoring={useGroupColoring} />)}
+                        </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5 mb-4">
-                        {shifts.map(s => <AttendanceCard key={s.id} shift={s} now={now} useGroupColoring={useGroupColoring} />)}
-                      </div>
-                    </div>
-                  );
-                })
+                    );
+                  })
+                )
+              ) : (
+                <div className="flex-1 min-h-0">
+                  <TimesheetTable
+                    entries={timesheetEntries}
+                    selectedDate={startDate}
+                    readOnly={true}
+                    viewMode="table"
+                    onViewChange={() => {}}
+                    hideTopControls={true}
+                    showDate={true}
+                  />
+                </div>
               )}
             </div>
           )}

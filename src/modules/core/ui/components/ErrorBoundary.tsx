@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { logger } from '@/modules/core/lib/logger';
+import { captureException } from '@/platform/observability/sentry';
 
 /* ============================================================
    TYPES
@@ -223,6 +224,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             operation:      'render',
             componentStack: errorInfo.componentStack || 'unavailable',
         }, error);
+
+        captureException(error, {
+            module:         mod,
+            componentStack: errorInfo.componentStack || 'unavailable',
+        });
 
         onError?.(error, errorInfo);
     }

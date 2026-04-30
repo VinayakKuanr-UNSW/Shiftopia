@@ -2,6 +2,7 @@ import React, { useContext, useMemo } from 'react';
 import { AuthContext } from '@/platform/auth/AuthProvider';
 import { GlobalScopeFilter, LockConfig } from './GlobalScopeFilter';
 import { ScopeSelection } from '@/platform/auth/types';
+import { useGlobalScopeContext } from '@/platform/auth/ScopeFilterContext';
 
 /**
  * ManagerialScopeFilter
@@ -24,6 +25,7 @@ export const ManagerialScopeFilter: React.FC<ManagerialScopeFilterProps> = ({
     className,
 }) => {
     const context = useContext(AuthContext);
+    const { managerialScope } = useGlobalScopeContext();
     const { permissionObject } = context || {};
 
     const typeY = permissionObject?.typeY;
@@ -49,8 +51,8 @@ export const ManagerialScopeFilter: React.FC<ManagerialScopeFilterProps> = ({
         }
     }, [typeY]);
 
-    // Default selection from the scope tree
-    const defaultSelection: ScopeSelection = useMemo(() => {
+    // Fallback selection from the scope tree (if nothing persisted)
+    const treeDefaultSelection: ScopeSelection = useMemo(() => {
         if (!scopeTree?.organizations?.length) {
             return { org_ids: [], dept_ids: [], subdept_ids: [] };
         }
@@ -74,7 +76,7 @@ export const ManagerialScopeFilter: React.FC<ManagerialScopeFilterProps> = ({
         <GlobalScopeFilter
             allowedScopeTree={scopeTree}
             lockConfig={lockConfig}
-            defaultSelection={defaultSelection}
+            defaultSelection={managerialScope || treeDefaultSelection}
             onScopeChange={onScopeChange}
             hidden={isFullyLocked}
             mode="managerial"

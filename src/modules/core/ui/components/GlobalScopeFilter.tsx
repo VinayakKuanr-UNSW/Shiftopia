@@ -343,6 +343,25 @@ export const GlobalScopeFilter: React.FC<GlobalScopeFilterProps> = ({
         return [];
     });
 
+    // Sync state if defaultSelection changes (handles async permission loading)
+    useEffect(() => {
+        if (defaultSelection?.org_ids?.length && selectedOrgIds.length === 0) {
+            setSelectedOrgIds(defaultSelection.org_ids);
+        }
+    }, [defaultSelection?.org_ids, selectedOrgIds.length]);
+
+    useEffect(() => {
+        if (defaultSelection?.dept_ids?.length && selectedDeptIds.length === 0) {
+            setSelectedDeptIds(multiSelect ? defaultSelection.dept_ids : [defaultSelection.dept_ids[0]]);
+        }
+    }, [defaultSelection?.dept_ids, selectedDeptIds.length, multiSelect]);
+
+    useEffect(() => {
+        if (defaultSelection?.subdept_ids?.length && selectedSubDeptIds.length === 0) {
+            setSelectedSubDeptIds(multiSelect ? defaultSelection.subdept_ids : [defaultSelection.subdept_ids[0]]);
+        }
+    }, [defaultSelection?.subdept_ids, selectedSubDeptIds.length, multiSelect]);
+
     // Derive available departments based on selected orgs
     const availableDepts = useMemo(() => {
         const depts: { id: string; name: string }[] = [];

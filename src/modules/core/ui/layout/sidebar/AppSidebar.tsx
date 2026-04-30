@@ -229,7 +229,7 @@ const AppSidebar: React.FC = () => {
   // Helper function to check if a route is active
   const isRouteActive = (path: string): boolean => {
     if (path === location.pathname) return true;
-    if (path !== '/dashboard' && location.pathname.startsWith(path))
+    if (path !== '/' && location.pathname.startsWith(path))
       return true;
     return false;
   };
@@ -285,17 +285,6 @@ const AppSidebar: React.FC = () => {
 
       {/* ==================== NAVIGATION ==================== */}
       <div className="flex-1 overflow-y-auto space-y-4 py-4 px-[15px]">
-        {/* ---------- Main Navigation ---------- */}
-        <div className="space-y-1">
-          <NavigationItem
-            to="/dashboard"
-            icon={LayoutDashboard}
-            iconColor={iconColorMap.dashboard}
-            label={t('common.dashboard')}
-            isActive={isRouteActive('/dashboard')}
-            description="Overview & analytics"
-          />
-        </div>
 
         {/* ---------- My Workspace Section ---------- */}
         <CollapsibleSection

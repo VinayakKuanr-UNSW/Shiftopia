@@ -1,8 +1,15 @@
 // src/components/templates/ShiftCard.tsx
 import React from 'react';
-import { Clock, Edit2, Trash2, Coffee, User, Tag, Copy } from 'lucide-react';
+import { Clock, Edit2, Trash2, Coffee, User, Tag, Copy, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/modules/core/ui/primitives/dropdown-menu';
 import {
   Tooltip,
   TooltipContent,
@@ -78,61 +85,62 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
     >
       {/* Actions */}
       {!isReadOnly && (
-        <div className="absolute top-2 right-2 flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
+        <div className="absolute top-2 right-2">
           <TooltipProvider>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEdit();
-                  }}
-                >
-                  <Edit2 className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Edit shift</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+              <DropdownMenu>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-full"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <DropdownMenuContent align="end" className="w-40">
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit();
+                    }}
+                    className="cursor-pointer"
+                  >
+                    <Edit2 className="h-4 w-4 mr-2" />
+                    Edit Shift
+                  </DropdownMenuItem>
 
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onClone?.();
-                  }}
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Clone shift</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+                  {onClone && (
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onClone();
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <Copy className="h-4 w-4 mr-2" />
+                      Clone Shift
+                    </DropdownMenuItem>
+                  )}
 
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-9 w-9 text-destructive/70 hover:text-destructive hover:bg-destructive/10"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete();
-                  }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Delete shift</TooltipContent>
+                  <DropdownMenuSeparator />
+                  
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete();
+                    }}
+                    className="text-destructive focus:text-destructive cursor-pointer"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Shift
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <TooltipContent>More actions</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>

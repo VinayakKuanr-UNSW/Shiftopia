@@ -32,6 +32,7 @@ from model_builder import (
     OptimizerInput,
     ShiftInput,
     EmployeeInput,
+    ExistingShiftInput,
     OptimizerConstraints,
     SolverParameters,
 )
@@ -62,6 +63,16 @@ class ShiftReq(BaseModel):
     priority: int = 1
 
 
+class ExistingShiftReq(BaseModel):
+    """A shift already committed to the employee. Pinned — the optimizer
+    treats it as immutable when proposing new assignments."""
+    id: str
+    shift_date: str
+    start_time: str
+    end_time: str
+    duration_minutes: int
+
+
 class EmployeeReq(BaseModel):
     id: str
     name: str
@@ -71,6 +82,7 @@ class EmployeeReq(BaseModel):
     license_ids: list[str] = Field(default_factory=list)
     preferred_shift_ids: list[str] = Field(default_factory=list)
     unavailable_dates: list[str] = Field(default_factory=list)
+    existing_shifts: list[ExistingShiftReq] = Field(default_factory=list)
 
 
 class ConstraintsReq(BaseModel):
@@ -192,9 +204,23 @@ def optimize(req: OptimizeReq) -> OptimizeRes:
     )
 
     try:
+        def _build_employee(e: EmployeeReq) -> EmployeeInput:
+            payload = e.model_dump()
+            existing = [
+                ExistingShiftInput(**{
+                    k: v for k, v in es.items()
+                    if k in ExistingShiftInput.__dataclass_fields__
+                })
+                for es in payload.pop('existing_shifts', []) or []
+            ]
+            return EmployeeInput(
+                **{k: v for k, v in payload.items() if k in EmployeeInput.__dataclass_fields__ and k != 'existing_shifts'},
+                existing_shifts=existing,
+            )
+
         data = OptimizerInput(
             shifts=[ShiftInput(**{k: v for k, v in s.model_dump().items() if k in ShiftInput.__dataclass_fields__}) for s in req.shifts],
-            employees=[EmployeeInput(**{k: v for k, v in e.model_dump().items() if k in EmployeeInput.__dataclass_fields__}) for e in req.employees],
+            employees=[_build_employee(e) for e in req.employees],
             constraints=OptimizerConstraints(**{k: v for k, v in req.constraints.model_dump().items() if k in OptimizerConstraints.__dataclass_fields__}),
             solver_params=SolverParameters(**{k: v for k, v in req.solver_params.model_dump().items() if k in SolverParameters.__dataclass_fields__}),
         )

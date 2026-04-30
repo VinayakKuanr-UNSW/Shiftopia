@@ -137,7 +137,7 @@ export class SolutionParser {
 
         return {
             groups,
-            uncoveredShiftIds: response.unassigned_shift_ids,
+            uncoveredShiftIds: response.unassigned_shift_ids.filter(id => shiftMap.has(id)),
             rejected,
         };
     }

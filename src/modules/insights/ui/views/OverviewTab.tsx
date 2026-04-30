@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import {
     ChartBar, CheckCircle2, DollarSign, TrendingUp, TrendingDown,
     Minus, AlertTriangle, Zap, Users, Clock,
@@ -31,40 +32,51 @@ interface KpiCardProps {
     trendGoodDir?: 'up' | 'down';   // which direction is "good"
     loading?: boolean;
     accent: string;   // Tailwind bg class for the icon box
+    index: number;
 }
 
-function KpiCard({ title, value, sub, icon, trend, trendGoodDir = 'up', loading, accent }: KpiCardProps) {
+function KpiCard({ title, value, sub, icon, trend, trendGoodDir = 'up', loading, accent, index }: KpiCardProps) {
     const isGood = trend && trend !== 'stable' && trend === trendGoodDir;
     const isBad  = trend && trend !== 'stable' && trend !== trendGoodDir;
 
     return (
-        <Card className="bg-card border-border hover:bg-accent/5 transition-all duration-200">
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-                <div className={`p-2 rounded-lg ${accent}`}>{icon}</div>
-            </CardHeader>
-            <CardContent>
-                {loading ? (
-                    <Skeleton className="h-8 w-28 mb-1" />
-                ) : (
-                    <div className="text-2xl font-bold text-foreground mb-1 flex items-center gap-2">
-                        {value}
-                        {trend && (
-                            <span className={`text-xs flex items-center ${
-                                isGood ? 'text-emerald-500' :
-                                isBad  ? 'text-rose-500' :
-                                         'text-muted-foreground'
-                            }`}>
-                                {trend === 'up'     && <TrendingUp  size={14} />}
-                                {trend === 'down'   && <TrendingDown size={14} />}
-                                {trend === 'stable' && <Minus size={14} />}
-                            </span>
-                        )}
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: index * 0.05 }}
+        >
+            <Card className="modern-card h-full group">
+                <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                    <CardTitle className="text-[10px] font-black uppercase tracking-widest text-muted-foreground group-hover:text-primary transition-colors">
+                        {title}
+                    </CardTitle>
+                    <div className={`p-2 rounded-xl ${accent} shadow-inner group-hover:scale-110 transition-transform duration-300`}>
+                        {icon}
                     </div>
-                )}
-                {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
-            </CardContent>
-        </Card>
+                </CardHeader>
+                <CardContent>
+                    {loading ? (
+                        <Skeleton className="h-8 w-28 mb-1 bg-primary/5" />
+                    ) : (
+                        <div className="text-2xl font-black text-foreground mb-1 flex items-center gap-2 tracking-tight">
+                            {value}
+                            {trend && (
+                                <span className={`text-xs flex items-center p-1 rounded-full ${
+                                    isGood ? 'bg-emerald-500/10 text-emerald-500' :
+                                    isBad  ? 'bg-rose-500/10 text-rose-500' :
+                                             'bg-muted/10 text-muted-foreground'
+                                }`}>
+                                    {trend === 'up'     && <TrendingUp  size={12} />}
+                                    {trend === 'down'   && <TrendingDown size={12} />}
+                                    {trend === 'stable' && <Minus size={12} />}
+                                </span>
+                            )}
+                        </div>
+                    )}
+                    {sub && <p className="text-[10px] font-bold text-muted-foreground/60 leading-tight uppercase tracking-wide">{sub}</p>}
+                </CardContent>
+            </Card>
+        </motion.div>
     );
 }
 
@@ -105,6 +117,7 @@ export default function OverviewTab({ filters }: OverviewTabProps) {
             {/* ── KPI row ─────────────────────────────────────────────── */}
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
                 <KpiCard
+                    index={0}
                     title="Shift Fill Rate"
                     value={loadingSum ? '—' : `${s.shift_fill_rate}%`}
                     sub={`${s.shifts_assigned} / ${s.shifts_published} published`}
@@ -115,6 +128,7 @@ export default function OverviewTab({ filters }: OverviewTabProps) {
                     loading={loadingSum}
                 />
                 <KpiCard
+                    index={1}
                     title="No-Show Rate"
                     value={loadingSum ? '—' : `${s.no_show_rate}%`}
                     sub={`${s.shifts_no_show} shifts missed`}
@@ -125,6 +139,7 @@ export default function OverviewTab({ filters }: OverviewTabProps) {
                     loading={loadingSum}
                 />
                 <KpiCard
+                    index={2}
                     title="Labour Cost"
                     value={loadingSum ? '—' : fmt$(s.estimated_cost)}
                     sub={`${s.scheduled_hours}h scheduled`}
@@ -133,6 +148,7 @@ export default function OverviewTab({ filters }: OverviewTabProps) {
                     loading={loadingSum}
                 />
                 <KpiCard
+                    index={3}
                     title="Compliance Failures"
                     value={loadingSum ? '—' : s.compliance_failures}
                     sub={`${s.compliance_overrides} override(s) approved`}
@@ -143,6 +159,7 @@ export default function OverviewTab({ filters }: OverviewTabProps) {
                     loading={loadingSum}
                 />
                 <KpiCard
+                    index={4}
                     title="Last-Minute Changes"
                     value={loadingSum ? '—' : s.last_minute_changes}
                     sub="Edits/unassigns within 24h"
@@ -155,168 +172,270 @@ export default function OverviewTab({ filters }: OverviewTabProps) {
             </div>
 
             {/* ── Secondary metrics row ───────────────────────────────── */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card className="bg-card border-border">
+            <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                className="grid grid-cols-2 md:grid-cols-4 gap-4"
+            >
+                <Card className="modern-card">
                     <CardContent className="pt-4">
-                        <p className="text-xs text-muted-foreground mb-1">Emergency Assignments</p>
-                        {loadingSum ? <Skeleton className="h-7 w-16" /> :
-                            <p className="text-xl font-bold text-foreground">{s.shifts_emergency}</p>}
+                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Emergency Assignments</p>
+                        {loadingSum ? <Skeleton className="h-7 w-16 bg-primary/5" /> :
+                            <p className="text-xl font-black text-foreground tracking-tight">{s.shifts_emergency}</p>}
                     </CardContent>
                 </Card>
-                <Card className="bg-card border-border">
+                <Card className="modern-card">
                     <CardContent className="pt-4">
-                        <p className="text-xs text-muted-foreground mb-1">Avg Reliability Score</p>
-                        {loadingSum ? <Skeleton className="h-7 w-16" /> :
-                            <p className={`text-xl font-bold ${s.avg_reliability_score >= 85 ? 'text-emerald-600 dark:text-emerald-400' : s.avg_reliability_score >= 70 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Avg Reliability Score</p>
+                        {loadingSum ? <Skeleton className="h-7 w-16 bg-primary/5" /> :
+                            <p className={`text-xl font-black tracking-tight ${s.avg_reliability_score >= 85 ? 'text-emerald-500' : s.avg_reliability_score >= 70 ? 'text-amber-500' : 'text-rose-500'}`}>
                                 {s.avg_reliability_score}%
                             </p>}
                     </CardContent>
                 </Card>
-                <Card className="bg-card border-border">
+                <Card className="modern-card">
                     <CardContent className="pt-4">
-                        <p className="text-xs text-muted-foreground mb-1">Avg Swap Rate</p>
-                        {loadingSum ? <Skeleton className="h-7 w-16" /> :
-                            <p className="text-xl font-bold text-foreground">{s.avg_swap_rate}%</p>}
+                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Avg Swap Rate</p>
+                        {loadingSum ? <Skeleton className="h-7 w-16 bg-primary/5" /> :
+                            <p className="text-xl font-black text-foreground tracking-tight">{s.avg_swap_rate}%</p>}
                     </CardContent>
                 </Card>
-                <Card className="bg-card border-border">
+                <Card className="modern-card">
                     <CardContent className="pt-4">
-                        <p className="text-xs text-muted-foreground mb-1">Shifts Completed</p>
-                        {loadingSum ? <Skeleton className="h-7 w-16" /> :
-                            <p className="text-xl font-bold text-foreground">{s.shifts_completed}</p>}
+                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Shifts Completed</p>
+                        {loadingSum ? <Skeleton className="h-7 w-16 bg-primary/5" /> :
+                            <p className="text-xl font-black text-foreground tracking-tight">{s.shifts_completed}</p>}
                     </CardContent>
                 </Card>
-            </div>
+            </motion.div>
 
             {/* ── Charts row ─────────────────────────────────────────── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Fill Rate Trend by Department */}
-                <Card className="bg-card border-border">
-                    <CardHeader className="pb-2">
-                        <div className="flex items-center gap-2">
-                            <TrendingUp size={16} className="text-blue-500" />
-                            <CardTitle className="text-sm text-foreground">Fill Rate Trend by Department</CardTitle>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        {loadingTrend ? (
-                            <Skeleton className="h-52 w-full" />
-                        ) : chartData.length === 0 ? (
-                            <div className="h-52 flex items-center justify-center text-muted-foreground text-sm">
-                                No shift data in selected range
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5, delay: 0.4 }}
+                >
+                    <Card className="modern-card">
+                        <CardHeader className="pb-2">
+                            <div className="flex items-center gap-2">
+                                <div className="p-2 bg-blue-500/10 rounded-lg">
+                                    <TrendingUp size={16} className="text-blue-500" />
+                                </div>
+                                <CardTitle className="text-[11px] font-black uppercase tracking-widest text-foreground">Fill Rate Trend by Department</CardTitle>
                             </div>
-                        ) : (
-                            <div className="h-52">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-                                        <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} />
-                                        <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} unit="%" />
-                                        <Tooltip
-                                            contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8 }}
-                                            labelStyle={{ color: 'var(--foreground)', fontWeight: 600 }}
-                                            formatter={(v: number) => [`${v}%`, '']}
-                                        />
-                                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                                        {deptNames.map((name, i) => (
-                                            <Line
-                                                key={name}
-                                                type="monotone"
-                                                dataKey={name}
-                                                stroke={DEPT_COLORS[i % DEPT_COLORS.length]}
-                                                strokeWidth={2}
-                                                dot={{ r: 3 }}
-                                                connectNulls
+                        </CardHeader>
+                        <CardContent>
+                            {loadingTrend ? (
+                                <Skeleton className="h-52 w-full bg-primary/5" />
+                            ) : chartData.length === 0 ? (
+                                <div className="h-52 flex items-center justify-center text-muted-foreground text-[10px] font-bold uppercase tracking-widest">
+                                    No shift data in selected range
+                                </div>
+                            ) : (
+                                <div className="h-52">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                                            <XAxis 
+                                                dataKey="date" 
+                                                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))', fontWeight: 500 }} 
+                                                tickLine={false} 
+                                                axisLine={false} 
+                                                dy={10}
                                             />
-                                        ))}
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                                            <YAxis 
+                                                domain={[0, 100]} 
+                                                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))', fontWeight: 500 }} 
+                                                tickLine={false} 
+                                                axisLine={false} 
+                                                unit="%" 
+                                            />
+                                            <Tooltip
+                                                contentStyle={{ 
+                                                    backgroundColor: 'hsl(var(--card))', 
+                                                    border: '1px solid hsl(var(--border) / 0.5)', 
+                                                    borderRadius: '16px', 
+                                                    boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.3), 0 8px 10px -6px rgb(0 0 0 / 0.3)',
+                                                    backdropFilter: 'blur(12px)',
+                                                    padding: '12px'
+                                                }}
+                                                itemStyle={{ fontSize: '12px', fontWeight: 600, padding: '2px 0' }}
+                                                labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 800, fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                                                formatter={(v: number) => [`${v}%`, 'Fill Rate']}
+                                                cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 2, strokeDasharray: '4 4' }}
+                                            />
+                                            <Legend 
+                                                verticalAlign="top" 
+                                                align="right" 
+                                                iconType="circle"
+                                                content={({ payload }) => (
+                                                    <div className="flex gap-4 mb-4 justify-end">
+                                                        {payload?.map((entry: any, index: number) => (
+                                                            <div key={`item-${index}`} className="flex items-center gap-1.5">
+                                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                                                                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{entry.value}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            />
+                                            {deptNames.map((name, i) => (
+                                                <Line
+                                                    key={name}
+                                                    type="monotone"
+                                                    dataKey={name}
+                                                    stroke={DEPT_COLORS[i % DEPT_COLORS.length]}
+                                                    strokeWidth={3}
+                                                    dot={{ r: 3, strokeWidth: 2, fill: 'hsl(var(--card))', stroke: DEPT_COLORS[i % DEPT_COLORS.length] }}
+                                                    activeDot={{ r: 5, strokeWidth: 0, fill: DEPT_COLORS[i % DEPT_COLORS.length] }}
+                                                    connectNulls
+                                                    animationDuration={1500}
+                                                />
+                                            ))}
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </motion.div>
 
                 {/* Labour Cost by Department */}
-                <Card className="bg-card border-border">
-                    <CardHeader className="pb-2">
-                        <div className="flex items-center gap-2">
-                            <DollarSign size={16} className="text-emerald-500" />
-                            <CardTitle className="text-sm text-foreground">Labour Cost by Department</CardTitle>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        {loadingDepts ? (
-                            <Skeleton className="h-52 w-full" />
-                        ) : costChartData.length === 0 ? (
-                            <div className="h-52 flex items-center justify-center text-muted-foreground text-sm">
-                                No cost data available
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5, delay: 0.5 }}
+                >
+                    <Card className="modern-card">
+                        <CardHeader className="pb-2">
+                            <div className="flex items-center gap-2">
+                                <div className="p-2 bg-emerald-500/10 rounded-lg">
+                                    <DollarSign size={16} className="text-emerald-500" />
+                                </div>
+                                <CardTitle className="text-[11px] font-black uppercase tracking-widest text-foreground">Labour Cost by Department</CardTitle>
                             </div>
-                        ) : (
-                            <div className="h-52">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={costChartData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-                                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false} />
-                                        <YAxis tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} tickLine={false} axisLine={false}
-                                            tickFormatter={v => v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`} />
-                                        <Tooltip
-                                            contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8 }}
-                                            labelStyle={{ color: 'var(--foreground)', fontWeight: 600 }}
-                                            formatter={(v: number) => [fmt$(v), 'Cost']}
-                                        />
-                                        <Bar dataKey="cost" radius={[4, 4, 0, 0]}>
-                                            {costChartData.map((_, i) => (
-                                                <Cell key={i} fill={DEPT_COLORS[i % DEPT_COLORS.length]} />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                        </CardHeader>
+                        <CardContent>
+                            {loadingDepts ? (
+                                <Skeleton className="h-52 w-full bg-primary/5" />
+                            ) : costChartData.length === 0 ? (
+                                <div className="h-52 flex items-center justify-center text-muted-foreground text-[10px] font-bold uppercase tracking-widest">
+                                    No cost data available
+                                </div>
+                            ) : (
+                                <div className="h-52">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={costChartData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }} barSize={32}>
+                                            <XAxis 
+                                                dataKey="name" 
+                                                tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))', fontWeight: 600 }} 
+                                                tickLine={false} 
+                                                axisLine={false} 
+                                                dy={10}
+                                            />
+                                            <YAxis 
+                                                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))', fontWeight: 500 }} 
+                                                tickLine={false} 
+                                                axisLine={false}
+                                                tickFormatter={v => v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`} 
+                                            />
+                                            <Tooltip
+                                                contentStyle={{ 
+                                                    backgroundColor: 'hsl(var(--card))', 
+                                                    border: '1px solid hsl(var(--border) / 0.5)', 
+                                                    borderRadius: '16px', 
+                                                    boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.3), 0 8px 10px -6px rgb(0 0 0 / 0.3)',
+                                                    backdropFilter: 'blur(12px)',
+                                                    padding: '12px'
+                                                }}
+                                                itemStyle={{ fontSize: '12px', fontWeight: 600, color: 'hsl(var(--primary))' }}
+                                                labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 800, fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                                                formatter={(v: number) => [fmt$(v), 'Estimated Cost']}
+                                                cursor={{ fill: 'hsl(var(--primary) / 0.05)', radius: 8 }}
+                                            />
+                                            <Bar dataKey="cost" radius={[8, 8, 0, 0]} animationDuration={1500}>
+                                                {costChartData.map((_, i) => (
+                                                    <Cell 
+                                                        key={i} 
+                                                        fill={DEPT_COLORS[i % DEPT_COLORS.length]} 
+                                                        fillOpacity={0.8}
+                                                    />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </motion.div>
             </div>
 
             {/* ── Shift Status Distribution ───────────────────────────── */}
             {!loadingSum && s.shifts_total > 0 && (
-                <Card className="bg-card border-border">
-                    <CardHeader className="pb-3">
-                        <div className="flex items-center gap-2">
-                            <Zap size={16} className="text-violet-500" />
-                            <CardTitle className="text-sm text-foreground">Shift Status Breakdown</CardTitle>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-                            {[
-                                { label: 'Total',      value: s.shifts_total,     color: 'text-foreground' },
-                                { label: 'Published',  value: s.shifts_published,  color: 'text-blue-600 dark:text-blue-400' },
-                                { label: 'Assigned',   value: s.shifts_assigned,   color: 'text-emerald-600 dark:text-emerald-400' },
-                                { label: 'Unassigned', value: s.shifts_unassigned, color: 'text-amber-600 dark:text-amber-400' },
-                                { label: 'Cancelled',  value: s.shifts_cancelled,  color: 'text-rose-600 dark:text-rose-400' },
-                                { label: 'Completed',  value: s.shifts_completed,  color: 'text-violet-600 dark:text-violet-400' },
-                            ].map(({ label, value, color }) => (
-                                <div key={label} className="text-center p-3 rounded-lg bg-muted/40">
-                                    <p className={`text-xl font-bold ${color}`}>{value}</p>
-                                    <p className="text-xs text-muted-foreground mt-1">{label}</p>
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.6 }}
+                >
+                    <Card className="modern-card">
+                        <CardHeader className="pb-3">
+                            <div className="flex items-center gap-2">
+                                <div className="p-2 bg-violet-500/10 rounded-lg">
+                                    <Zap size={16} className="text-violet-500" />
                                 </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
+                                <CardTitle className="text-[11px] font-black uppercase tracking-widest text-foreground">Shift Status Breakdown</CardTitle>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                                {[
+                                    { label: 'Total',      value: s.shifts_total,     color: 'text-foreground' },
+                                    { label: 'Published',  value: s.shifts_published,  color: 'text-blue-500' },
+                                    { label: 'Assigned',   value: s.shifts_assigned,   color: 'text-emerald-500' },
+                                    { label: 'Unassigned', value: s.shifts_unassigned, color: 'text-amber-500' },
+                                    { label: 'Cancelled',  value: s.shifts_cancelled,  color: 'text-rose-500' },
+                                    { label: 'Completed',  value: s.shifts_completed,  color: 'text-violet-500' },
+                                ].map(({ label, value, color }, i) => (
+                                    <motion.div 
+                                        key={label}
+                                        initial={{ opacity: 0, scale: 0.9 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        transition={{ duration: 0.3, delay: 0.7 + (i * 0.05) }}
+                                        className="text-center p-3 rounded-2xl bg-muted/20 border border-border/10 hover:bg-muted/40 transition-colors group/stat"
+                                    >
+                                        <p className={`text-xl font-black ${color} group-hover:scale-110 transition-transform`}>{value}</p>
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mt-1">{label}</p>
+                                    </motion.div>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </motion.div>
             )}
 
             {/* ── Compliance flag banner ──────────────────────────────── */}
             {!loadingSum && s.compliance_overrides > 0 && (
-                <div className="flex items-start gap-3 p-4 rounded-lg border border-amber-500/30 bg-amber-500/5">
-                    <AlertTriangle size={18} className="text-amber-500 mt-0.5 shrink-0" />
+                <motion.div 
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.5, delay: 0.8 }}
+                    className="flex items-start gap-4 p-5 rounded-[24px] border border-amber-500/20 bg-amber-500/5 backdrop-blur-md shadow-lg shadow-amber-500/5"
+                >
+                    <div className="p-2 bg-amber-500/20 rounded-xl">
+                        <AlertTriangle size={18} className="text-amber-500 shrink-0" />
+                    </div>
                     <div>
-                        <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                        <p className="text-sm font-black uppercase tracking-tight text-amber-600 dark:text-amber-400">
                             {s.compliance_overrides} compliance override{s.compliance_overrides > 1 ? 's' : ''} in this period
                         </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                            Shifts were scheduled despite rule violations. Review the Compliance tab for details.
+                        <p className="text-[11px] font-bold text-muted-foreground/80 mt-1 leading-relaxed">
+                            Shifts were scheduled despite rule violations. Review the Compliance tab for detailed logs and impact analysis.
                         </p>
                     </div>
-                </div>
+                </motion.div>
             )}
         </div>
     );

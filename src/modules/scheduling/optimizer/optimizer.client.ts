@@ -64,7 +64,7 @@ export class OptimizerClient {
      * @returns        - Proposed assignments (NEVER written to DB by this function)
      * @throws         - OptimizerError if the service is unreachable or returns error
      */
-    async optimize(request: OptimizeRequest): Promise<OptimizeResponse> {
+    async optimize(request: OptimizeRequest, externalSignal?: AbortSignal): Promise<OptimizeResponse> {
         const url = `${this.baseUrl}/optimize`;
 
         console.debug('[OptimizerClient] POST', url, {
@@ -73,13 +73,20 @@ export class OptimizerClient {
             time_limit: request.time_limit_seconds ?? 30,
         });
 
+        // Combine the time-limit timeout with any caller-supplied abort signal
+        // so the in-flight request actually cancels when the user hits Cancel.
+        const timeoutSignal = AbortSignal.timeout((request.time_limit_seconds ?? 30) * 1000 + 5000);
+        const signal = externalSignal
+            ? AbortSignal.any([timeoutSignal, externalSignal])
+            : timeoutSignal;
+
         let response: Response;
         try {
             response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(request),
-                signal: AbortSignal.timeout((request.time_limit_seconds ?? 30) * 1000 + 5000),
+                signal,
             });
         } catch (err: any) {
             throw new OptimizerError(

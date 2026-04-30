@@ -209,7 +209,13 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
 
     return (
         <motion.div
-            style={{ rotateX, rotateY, transformStyle: "preserve-3d", perspective: "1000px" }}
+            style={{ 
+                rotateX, 
+                rotateY, 
+                transformStyle: "preserve-3d", 
+                perspective: "1000px",
+                zoom: 1.5 // 150% scale as requested
+            }}
             onMouseMove={onMouseMove}
             onMouseLeave={onMouseLeave}
             className={cn(
@@ -218,10 +224,10 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                 isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background border-primary/50 bg-primary/5 dark:bg-primary/20',
                 isDragging && 'opacity-50 scale-95',
                 isDragOver && 'ring-2 ring-blue-400 ring-offset-1',
-                // No dot + past = fully expired draft → greyscale whole card
-                dot === null && isPast && 'grayscale opacity-30 cursor-not-allowed',
-                dot === null && isFullyLocked && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
-                isDraft && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'border-dashed opacity-[0.98]',
+                // Balanced visibility for inactive states
+                dot === null && isPast && 'grayscale opacity-60 cursor-not-allowed',
+                dot === null && isFullyLocked && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-80 grayscale-[0.1] cursor-not-allowed border-dashed',
+                isDraft && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'border-dashed',
                 !isDraft && !isFullyLocked && !isPast && 'border-solid',
                 className
             )}
@@ -235,7 +241,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                     isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-40 backdrop-blur-[2px]',
                     !isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-100',
                     shift.bidding_status !== 'bidding_closed_no_winner' && colors.text,
-                    isFullyLocked && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-muted dark:bg-slate-700 text-muted-foreground')}>
+                    isFullyLocked && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100')}>
                     <div className="flex items-center gap-1.5 min-w-0">
                         <Tooltip>
                             <TooltipTrigger asChild>
@@ -243,7 +249,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                                     {dot && (
                                         <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 ring-1 ring-black/10" style={{ backgroundColor: dot.color }} />
                                     )}
-                                    <span className={cn("text-[9px] font-mono font-bold px-1.5 py-0.5 rounded", isFullyLocked ? "bg-black/20 dark:bg-black/50 opacity-70" : colors.badge)}>
+                                    <span className={cn("text-[9px] font-mono font-bold px-1 py-0.5 rounded", isFullyLocked ? "bg-black/20 dark:bg-black/50 opacity-70" : colors.badge)}>
                                         {ctx.state === 'S3' && ctx.urgency === 'emergent' ? 'S3*'
                                         : ctx.state === 'S5' && ctx.urgency === 'emergent' ? 'S5*'
                                         : stateId}
@@ -256,7 +262,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                                 </TooltipContent>
                             )}
                         </Tooltip>
-                        <span className="text-[11px] font-bold uppercase tracking-widest truncate opacity-80">
+                        <span className="text-[10px] font-bold uppercase tracking-widest truncate opacity-80">
                             {shift.roster_subgroup?.name || shift.sub_group_name || roleName}
                         </span>
                     </div>
@@ -275,7 +281,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
 
                         {headerAction || (!isFullyLocked && (
                           <button className="min-h-[44px] min-w-[44px] flex items-center justify-center -mr-1">
-                            <MoreHorizontal className="h-3.5 w-3.5 opacity-40" />
+                            <MoreHorizontal className="h-3 w-3 opacity-40" />
                           </button>
                         ))}
 
@@ -296,14 +302,15 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
 
                 {/* Body — greyscaled for past shifts while header/dot stays crisp */}
                 <div className={cn("px-3 py-1.5 flex flex-col gap-1 flex-1 relative z-[20]",
-                    isPast && dot !== null && "grayscale opacity-30")}>
-                    <div className="flex flex-col items-center justify-center min-h-[20px] gap-0.5">
-                        <div className="text-sm font-semibold text-foreground truncate text-center">{employeeName || 'Unassigned'}</div>
+                    isPast && dot !== null && "grayscale opacity-80")}>
+                    <div className="flex flex-col items-center justify-center min-h-[24px] gap-0.5">
+                        <div className="text-[11px] font-bold text-foreground truncate text-center leading-none">{employeeName || 'Unassigned'}</div>
+                        <div className="text-[9px] text-foreground/60 font-medium uppercase tracking-tight truncate">{roleName}</div>
                     </div>
                     <div className="flex justify-center mb-1">
-                        <div className="bg-muted/50 rounded-md px-2 py-0.5 flex items-center gap-1.5 text-[10px]">
+                        <div className="bg-muted/50 rounded-md px-2 py-0.5 flex items-center gap-1.5 text-xs">
                             <Clock className="h-3 w-3 text-muted-foreground" />
-                            <span className="font-mono font-medium text-foreground">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
+                            <span className="font-mono font-medium text-foreground text-[9px]">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
                         </div>
                     </div>
                 </div>
@@ -394,7 +401,13 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
 
     return (
         <motion.div
-            style={{ rotateX, rotateY, transformStyle: "preserve-3d", perspective: "1000px" }}
+            style={{ 
+                rotateX, 
+                rotateY, 
+                transformStyle: "preserve-3d", 
+                perspective: "1000px",
+                zoom: 1.5 // 150% scale as requested
+            }}
             onMouseMove={onMouseMove}
             onMouseLeave={onMouseLeave}
             className={cn(
@@ -403,9 +416,9 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                 isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background border-primary/50 bg-primary/5 dark:bg-primary/20',
                 isDragging && 'opacity-50 scale-95',
                 isDragOver && 'ring-2 ring-blue-400 ring-offset-2',
-                dot === null && isPast && 'grayscale opacity-30 cursor-not-allowed',
-                dot === null && isFullyLocked && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-70 grayscale-[0.5] cursor-not-allowed border-dashed',
-                isDraft && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'border-dashed opacity-[0.98]',
+                dot === null && isPast && 'grayscale opacity-70 cursor-not-allowed',
+                dot === null && isFullyLocked && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'opacity-85 grayscale-[0.2] cursor-not-allowed border-dashed',
+                isDraft && !isPast && shift.bidding_status !== 'bidding_closed_no_winner' && 'border-dashed opacity-100',
                 !isDraft && !isFullyLocked && !isPast && 'border-solid',
                 className
             )}
@@ -440,7 +453,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                                 </TooltipContent>
                             )}
                         </Tooltip>
-                        <span className="text-xs font-bold uppercase tracking-widest truncate opacity-90">
+                        <span className="text-[11px] font-bold uppercase tracking-widest truncate opacity-80">
                             {shift.roster_subgroup?.name || shift.sub_group_name || 'Shift'}
                         </span>
                     </div>
@@ -471,7 +484,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
 
                 {/* Body — greyscaled for past shifts while header (dot) stays crisp */}
                 <div className={cn("p-4 space-y-3 relative z-[20]",
-                    isPast && dot !== null && "grayscale opacity-30")}>
+                    isPast && dot !== null && "grayscale opacity-80")}>
                     <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9 border border-border">
                             <AvatarFallback className={cn('text-xs font-bold', employeeName ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground')}>
@@ -479,7 +492,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                             </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-foreground truncate">{employeeName || 'Unassigned'}</p>
+                            <p className="text-sm font-bold text-foreground truncate">{employeeName || 'Unassigned'}</p>
                             <p className="text-xs text-muted-foreground truncate">{roleName}</p>
                         </div>
                     </div>
@@ -487,7 +500,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     <div className="flex items-center justify-between">
                         <div className="bg-muted/50 rounded-lg px-3 py-1.5 flex items-center gap-2">
                             <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="text-sm font-mono font-medium text-foreground">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
+                            <span className="text-xs font-mono font-bold text-foreground">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
                         </div>
                         {totalHours && <Badge variant="secondary" className="text-xs">{totalHours}h net</Badge>}
                     </div>

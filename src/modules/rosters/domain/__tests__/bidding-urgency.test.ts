@@ -5,7 +5,7 @@
  * Three urgency windows:
  *   TTS > 24h         → 'normal'
  *   4h < TTS ≤ 24h    → 'urgent'
- *   TTS ≤ 4h          → 'locked'  (all exchange ops blocked)
+ *   TTS ≤ 4h          → 'emergent'  (all exchange ops blocked)
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -83,17 +83,17 @@ describe('computeShiftUrgency — TTS boundary', () => {
 
   it('returns locked at exactly 4h (NOT ALLOWED boundary)', () => {
     mockNowBefore(SHIFT_DATE, START_TIME, 4 * 60 * 60 * 1000);
-    expect(computeShiftUrgency(SHIFT_DATE, START_TIME)).toBe('locked');
+    expect(computeShiftUrgency(SHIFT_DATE, START_TIME)).toBe('emergent');
   });
 
   it('returns locked at 2h', () => {
     mockNowBefore(SHIFT_DATE, START_TIME, 2 * 60 * 60 * 1000);
-    expect(computeShiftUrgency(SHIFT_DATE, START_TIME)).toBe('locked');
+    expect(computeShiftUrgency(SHIFT_DATE, START_TIME)).toBe('emergent');
   });
 
   it('returns locked when shift has already started', () => {
     mockNowBefore(SHIFT_DATE, START_TIME, -30 * 60 * 1000); // 30 min after start
-    expect(computeShiftUrgency(SHIFT_DATE, START_TIME)).toBe('locked');
+    expect(computeShiftUrgency(SHIFT_DATE, START_TIME)).toBe('emergent');
   });
 });
 
@@ -112,7 +112,7 @@ describe('computeShiftUrgency — startAtIso overload', () => {
 
   it('uses startAtIso when provided (locked)', () => {
     const startAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
-    expect(computeShiftUrgency('', '', startAt)).toBe('locked');
+    expect(computeShiftUrgency('', '', startAt)).toBe('emergent');
   });
 });
 

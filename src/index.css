@@ -31,6 +31,10 @@ body,
    BASE LAYER - CSS Variables
    ============================================================ */
 @layer base {
+  html {
+    font-size: 75%;
+  }
+
   :root {
     /* Metropolis Modern Theme Variables */
 

@@ -2,6 +2,7 @@ import React, { useContext, useMemo } from 'react';
 import { AuthContext } from '@/platform/auth/AuthProvider';
 import { GlobalScopeFilter, LockConfig } from './GlobalScopeFilter';
 import { ScopeSelection, ScopeTree } from '@/platform/auth/types';
+import { useGlobalScopeContext } from '@/platform/auth/ScopeFilterContext';
 
 /**
  * PersonalScopeFilter
@@ -22,6 +23,7 @@ export const PersonalScopeFilter: React.FC<PersonalScopeFilterProps> = ({
     className,
 }) => {
     const context = useContext(AuthContext);
+    const { personalScope } = useGlobalScopeContext();
     const { permissionObject } = context || {};
 
     // Build a minimal scope tree from Type X certificates
@@ -81,8 +83,8 @@ export const PersonalScopeFilter: React.FC<PersonalScopeFilterProps> = ({
         subDeptLocked: false,
     };
 
-    // Default selection: all personal scopes
-    const defaultSelection: ScopeSelection = useMemo(() => ({
+    // Fallback selection: all personal scopes
+    const treeDefaultSelection: ScopeSelection = useMemo(() => ({
         org_ids: scopeTree.organizations.map(o => o.id),
         dept_ids: scopeTree.organizations.flatMap(o => o.departments.map(d => d.id)),
         subdept_ids: scopeTree.organizations.flatMap(o =>
@@ -96,7 +98,7 @@ export const PersonalScopeFilter: React.FC<PersonalScopeFilterProps> = ({
         <GlobalScopeFilter
             allowedScopeTree={scopeTree}
             lockConfig={lockConfig}
-            defaultSelection={defaultSelection}
+            defaultSelection={personalScope || treeDefaultSelection}
             onScopeChange={onScopeChange}
             mode="personal"
             multiSelect={multiSelect}

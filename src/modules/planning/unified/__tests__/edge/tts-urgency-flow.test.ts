@@ -6,7 +6,7 @@
  *
  *   TTS > 24h         → NORMAL   — all exchange operations allowed
  *   4h < TTS ≤ 24h    → URGENT   — allowed but flagged
- *   TTS ≤ 4h          → LOCKED   — all exchange operations blocked (NOT ALLOWED)
+ *   TTS ≤ 4h          → EMERGENT   — all exchange operations blocked (NOT ALLOWED)
  *
  * These tests exercise the shared urgency utility (computeShiftUrgency) and
  * verify the gating logic used across all three flows.
@@ -38,10 +38,10 @@ describe('TTS zone classification — precise boundaries', () => {
     ['24h exact   → urgent',        24 * 3600_000,  'urgent'],
     ['12h before  → urgent',        12 * 3600_000,  'urgent'],
     [' 4h + 1ms   → urgent',  4 * 3600_000 + 1,  'urgent'],
-    [' 4h exact   → locked',         4 * 3600_000,  'locked'],
-    [' 2h before  → locked',         2 * 3600_000,  'locked'],
-    [' 0h (start) → locked',                  0,  'locked'],
-    ['-1h (past)  → locked',        -1 * 3600_000,  'locked'],
+    [' 4h exact   → emergent',         4 * 3600_000,  'emergent'],
+    [' 2h before  → emergent',         2 * 3600_000,  'emergent'],
+    [' 0h (start) → emergent',                  0,  'emergent'],
+    ['-1h (past)  → emergent',        -1 * 3600_000,  'emergent'],
   ];
 
   it.each(cases)('%s', (_, msBeforeStart, expected) => {
@@ -60,9 +60,9 @@ describe('Bidding flow — TTS gate logic', () => {
   it('denies bid acceptance when shift is locked (TTS ≤ 4h)', () => {
     setNow(2 * 3600_000); // 2h before
     const urgency = computeShiftUrgency(FIXED_DATE, FIXED_TIME);
-    expect(urgency).toBe('locked');
+    expect(urgency).toBe('emergent');
     // Simulate the gate check
-    const gateBlocked = urgency === 'locked';
+    const gateBlocked = urgency === 'emergent';
     expect(gateBlocked).toBe(true);
   });
 
@@ -70,7 +70,7 @@ describe('Bidding flow — TTS gate logic', () => {
     setNow(12 * 3600_000);
     const urgency = computeShiftUrgency(FIXED_DATE, FIXED_TIME);
     expect(urgency).toBe('urgent');
-    const gateBlocked = urgency === 'locked';
+    const gateBlocked = urgency === 'emergent';
     expect(gateBlocked).toBe(false);
   });
 
@@ -78,7 +78,7 @@ describe('Bidding flow — TTS gate logic', () => {
     setNow(25 * 3600_000);
     const urgency = computeShiftUrgency(FIXED_DATE, FIXED_TIME);
     expect(urgency).toBe('normal');
-    const gateBlocked = urgency === 'locked';
+    const gateBlocked = urgency === 'emergent';
     expect(gateBlocked).toBe(false);
   });
 });
@@ -95,7 +95,7 @@ describe('Assignment Offer flow — reject routing', () => {
    */
   function rejectRoute(shiftDate: string, shiftTime: string): 'bidding' | 'draft' {
     const urgency = computeShiftUrgency(shiftDate, shiftTime);
-    return urgency === 'locked' ? 'draft' : 'bidding';
+    return urgency === 'emergent' ? 'draft' : 'bidding';
   }
 
   it('routes reject to bidding when TTS > 4h (normal window)', () => {
@@ -137,7 +137,7 @@ describe('Swap flow — TTS gate logic', () => {
   ): boolean {
     const u1 = computeShiftUrgency(requesterDate, requesterTime);
     const u2 = computeShiftUrgency(offeredDate, offeredTime);
-    return u1 === 'locked' || u2 === 'locked';
+    return u1 === 'emergent' || u2 === 'emergent';
   }
 
   it('allows swap when both shifts are 25h away', () => {
@@ -154,13 +154,13 @@ describe('Swap flow — TTS gate logic', () => {
   it('blocks swap when offered shift is locked even if requester shift is normal', () => {
     // Real date.now is used for offered shift — mock to 2h before FIXED_DATE
     setNow(2 * 3600_000);
-    // offered shift is ALSO at FIXED_DATE, FIXED_TIME → locked
+    // offered shift is ALSO at FIXED_DATE, FIXED_TIME → emergent
     // requester shift is far future → normal
     const u1 = computeShiftUrgency('2030-12-31', '23:00'); // far future → normal
-    const u2 = computeShiftUrgency(FIXED_DATE, FIXED_TIME); // 2h away → locked
+    const u2 = computeShiftUrgency(FIXED_DATE, FIXED_TIME); // 2h away → emergent
     expect(u1).toBe('normal');
-    expect(u2).toBe('locked');
-    expect(u1 === 'locked' || u2 === 'locked').toBe(true);
+    expect(u2).toBe('emergent');
+    expect(u1 === 'emergent' || u2 === 'emergent').toBe(true);
   });
 });
 
@@ -175,14 +175,14 @@ describe('Emergency Assignment — TTS < 4h bypass', () => {
   it('identifies emergency window correctly', () => {
     setNow(2 * 3600_000);
     const urgency = computeShiftUrgency(FIXED_DATE, FIXED_TIME);
-    const isEmergencyWindow = urgency === 'locked';
+    const isEmergencyWindow = urgency === 'emergent';
     expect(isEmergencyWindow).toBe(true);
   });
 
   it('confirms non-emergency at 5h', () => {
     setNow(5 * 3600_000);
     const urgency = computeShiftUrgency(FIXED_DATE, FIXED_TIME);
-    const isEmergencyWindow = urgency === 'locked';
+    const isEmergencyWindow = urgency === 'emergent';
     expect(isEmergencyWindow).toBe(false);
   });
 });

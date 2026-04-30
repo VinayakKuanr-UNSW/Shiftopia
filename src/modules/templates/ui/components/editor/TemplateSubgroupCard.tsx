@@ -7,7 +7,7 @@ import {
     ChevronRight,
     Copy,
     Edit2,
-    MoreVertical,
+    MoreHorizontal,
     Plus,
     Trash2,
 } from 'lucide-react';
@@ -142,7 +142,7 @@ export function TemplateSubgroupCard({
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                                    <MoreVertical className="h-4 w-4" />
+                                    <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">

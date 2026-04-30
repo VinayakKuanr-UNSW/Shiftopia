@@ -673,6 +673,41 @@ export const shiftsQueries = {
         }
     },
 
+    async getPlanningPeriods(organizationId: string, departmentId?: string): Promise<{
+        id: string;
+        department_id: string;
+        sub_department_ids: string[];
+        start_date: string;
+        end_date: string;
+        status: string;
+    }[]> {
+        try {
+            if (!isValidUuid(organizationId)) return [];
+
+            let query = supabase
+                .from('planning_periods')
+                .select('id, department_id, sub_department_ids, start_date, end_date, status')
+                .eq('organization_id', organizationId)
+                .order('start_date', { ascending: false });
+
+            if (departmentId && isValidUuid(departmentId)) {
+                query = query.eq('department_id', departmentId);
+            }
+
+            const { data, error } = await query;
+
+            if (error) {
+                console.error('[getPlanningPeriods] Error:', error);
+                return [];
+            }
+
+            return data || [];
+        } catch (error) {
+            console.error('[getPlanningPeriods] Exception:', error);
+            return [];
+        }
+    },
+
     /**
      * Get the full structure for a specific roster (groups and subgroups)
      */

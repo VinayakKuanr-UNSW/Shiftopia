@@ -43,6 +43,7 @@ import {
     useOrganizations,
     useDepartments,
     useRostersLookup,
+    usePlanningPeriods,
 } from '@/modules/rosters/state/useRosterShifts';
 import { useCreatePlanningPeriod } from '@/modules/rosters/state/useRosterMutations';
 
@@ -183,8 +184,34 @@ export const PlanRosterPeriodDialog: React.FC<PlanRosterPeriodDialogProps> = ({
 
     const firstDayOffset = (allDates[0]?.getDay() + 6) % 7; // Mon-start
 
+    // ── Duplicate Check ────────────────────────────────────────────────────────
+    const { data: planningPeriods = [] } = usePlanningPeriods(organizationId, departmentId);
+
+    const isDuplicate = useMemo(() => {
+        const startStr = format(dateRange.start, 'yyyy-MM-dd');
+        const endStr   = format(dateRange.end,   'yyyy-MM-dd');
+        
+        return (planningPeriods as any[]).some(p => 
+            p.start_date === startStr && 
+            p.end_date === endStr && 
+            p.department_id === departmentId &&
+            p.sub_department_ids.length === scopedSubDeptIds.length &&
+            p.sub_department_ids.every((id: string) => scopedSubDeptIds.includes(id)) &&
+            p.status !== 'archived'
+        );
+    }, [planningPeriods, dateRange, departmentId, scopedSubDeptIds]);
+
+    // A "hard" duplicate is one where rosters already exist.
+    // If a period record exists but rosters are missing, it's a "ghost" that we can overwrite.
+    const hasRostersInRange = useMemo(() => {
+        return allDates.some(d => activeDates.has(format(d, 'yyyy-MM-dd')));
+    }, [allDates, activeDates]);
+
+    const isHardDuplicate = isDuplicate && hasRostersInRange;
+
+
     // ── Submit ─────────────────────────────────────────────────────────────────
-    const canSubmit = scopedSubDeptIds.length > 0 && dayCount > 0 && !createPeriod.isPending;
+    const canSubmit = scopedSubDeptIds.length > 0 && dayCount > 0 && !createPeriod.isPending && !isHardDuplicate;
 
     const handleSubmit = async () => {
         if (!canSubmit) return;
@@ -289,6 +316,24 @@ export const PlanRosterPeriodDialog: React.FC<PlanRosterPeriodDialogProps> = ({
                                 <ChevronRight className="h-3 w-3 opacity-40" />
                                 <span>{format(dateRange.end, 'MMM d, yyyy')}</span>
                             </div>
+
+                            {isHardDuplicate && (
+                                <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400">
+                                    <Zap className="h-4 w-4 fill-current flex-shrink-0" />
+                                    <div className="text-[11px] font-bold leading-tight">
+                                        Period already exists. A planning period for this exact scope and date range has already been created and has active rosters.
+                                    </div>
+                                </div>
+                            )}
+
+                            {isDuplicate && !hasRostersInRange && (
+                                <div className="flex items-center gap-2 p-3 rounded-xl bg-primary/10 border border-primary/20 text-primary">
+                                    <Sparkles className="h-4 w-4 flex-shrink-0" />
+                                    <div className="text-[11px] font-bold leading-tight">
+                                        An empty planning record was found for this range. Creating this period will repair the existing record.
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Calendar — only for ranges ≤ 42 days */}
                             {allDates.length <= 42 && (

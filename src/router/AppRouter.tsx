@@ -20,8 +20,6 @@ const PendingAccessPage = lazy(() => import('@/modules/auth/pages/PendingAccessP
 const SignUpPage = lazy(() => import('@/modules/auth/pages/SignUpPage.tsx'));
 const NotFound = lazy(() => import('@/modules/core/pages/NotFound.tsx'));
 
-// Dashboard
-const DashboardPage = lazy(() => import('@/modules/dashboard/pages/DashboardPage'));
 
 // My Workspace
 const ProfilePage = lazy(() => import('@/modules/users/pages/ProfilePage.tsx'));
@@ -148,8 +146,6 @@ const AppRouter: React.FC = () => {
                 {/* MobileAccessGuard: blocks non-workspace paths on mobile viewports */}
                 <Route element={<MobileAccessGuard />}>
 
-                    {/* ── Dashboard ── */}
-                    <Route path="/dashboard" element={<DashboardPage />} />
 
                     {/* ── My Workspace ── */}
                     <Route path="/profile" element={<ProfilePage />} />

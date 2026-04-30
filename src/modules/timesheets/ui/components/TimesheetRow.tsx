@@ -44,6 +44,7 @@ interface TimesheetRowProps {
     onToggleSelect?: () => void;
     onSave?: (id: string, updates: Partial<TimesheetRowType>) => void;
     onMarkNoShow?: (id: string) => void;
+    showDate?: boolean;
 }
 
 export const TimesheetRow: React.FC<TimesheetRowProps> = ({
@@ -53,6 +54,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     onToggleSelect,
     onSave,
     onMarkNoShow,
+    showDate = false,
 }) => {
     /* -- state -------------------------------------------------- */
     const [isEditingAdjusted, setIsEditingAdjusted] = useState(false);
@@ -323,6 +325,13 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                         }
                     />
                 </td>
+ 
+                {/* Date column (Optional) */}
+                {showDate && (
+                    <td className={`${cellClass} font-black text-xs text-primary border-r border-border/30`}>
+                        {entry.date}
+                    </td>
+                )}
 
                 {/* Employee Info */}
                 <td className={`${cellClass} font-black text-[11px] text-muted-foreground/60 uppercase tracking-tighter`}>{entry.employeeId}</td>

@@ -917,7 +917,10 @@ const NewRostersPage: React.FC = () => {
 
   // ==================== RENDER ====================
   return (
-    <div className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4">
+    <div 
+      className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4"
+      style={{ zoom: 0.67 }}
+    >
       {/* ── Unified Header ────────────────────────────────────────────── */}
       <div className="sticky top-0 z-30">
         <div className={cn(
@@ -1058,7 +1061,7 @@ const NewRostersPage: React.FC = () => {
               canEdit={canEdit}
               dates={dates}
               showAvailabilities={showAvailabilities}
-              bulkModeActive={bulkModeActive}
+              isBulkMode={bulkModeActive}
               selectedShifts={Array.from(selectedShiftIds)}
               onToggleShiftSelection={handleToggleShiftSelection}
               onAddShift={(employee, date) => {

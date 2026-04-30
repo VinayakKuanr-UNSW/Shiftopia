@@ -50,7 +50,7 @@ const LoginPage: React.FC = () => {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated && !isLoading) {
-      const from = (location.state as any)?.from?.pathname || '/dashboard';
+      const from = (location.state as any)?.from?.pathname || '/my-roster';
       console.log('[Login] Already authenticated, redirecting to:', from);
       navigate(from, { replace: true });
     }
@@ -77,7 +77,7 @@ const LoginPage: React.FC = () => {
         description: 'Login successful.',
       });
 
-      const from = (location.state as any)?.from?.pathname || '/dashboard';
+      const from = (location.state as any)?.from?.pathname || '/my-roster';
       navigate(from, { replace: true });
     } catch (err: any) {
       console.error('[Login] Login failed:', err);

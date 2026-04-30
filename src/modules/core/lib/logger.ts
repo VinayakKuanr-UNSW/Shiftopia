@@ -81,6 +81,15 @@ export const logger = {
         if (shouldLog('error')) {
             console.error(formatLogEntry(createLogEntry('error', message, context, error)));
         }
+        // Forward every error to Sentry (no-op if not initialized).
+        // Lazy import keeps logger usable in early-bootstrap code paths.
+        void import('@/platform/observability/sentry').then(({ captureException, captureMessage }) => {
+            if (error) {
+                captureException(error, { ...context, message });
+            } else {
+                captureMessage(message, 'error', context);
+            }
+        });
     },
 };
 

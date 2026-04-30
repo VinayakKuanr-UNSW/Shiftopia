@@ -586,28 +586,12 @@ const GridPage: React.FC = () => {
                                                                             <Popover>
                                                                                 <PopoverTrigger asChild>
                                                                                     <div role="button" className="w-full h-full flex flex-col items-center justify-center gap-[2px] cursor-pointer hover:bg-background/20 rounded-sm transition-colors overflow-hidden">
-                                                                                        <TooltipProvider delayDuration={200}>
-                                                                                            <Tooltip>
-                                                                                                <TooltipTrigger asChild>
-                                                                                                    <div className="flex items-center justify-center px-1 py-[2px] w-full max-w-[95%] rounded-[3px] bg-background/60 hover:bg-background/95 shadow-sm transition-colors text-[9px] font-extrabold tracking-tight border border-foreground/10 text-current truncate leading-none">
-                                                                                                        {shifts[0].netHours % 1 === 0 ? shifts[0].netHours : shifts[0].netHours.toFixed(1)}{shifts[0].isDraft ? ' d' : ''}
-                                                                                                    </div>
-                                                                                                </TooltipTrigger>
-                                                                                                <TooltipContent side="top" className="flex flex-col gap-1 px-2.5 py-1.5 z-[200]">
-                                                                                                    <div className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
-                                                                                                        <span className="truncate max-w-[80px]">{shifts[0].deptName || 'N/A'}</span>
-                                                                                                        <span className="opacity-50 text-[8px]">▶</span>
-                                                                                                        <span className="truncate max-w-[80px]">{shifts[0].subDeptName || 'N/A'}</span>
-                                                                                                    </div>
-                                                                                                </TooltipContent>
-                                                                                            </Tooltip>
-                                                                                        </TooltipProvider>
-
-                                                                                        {shifts.length > 1 && (
-                                                                                            <div className="text-[7.5px] font-bold text-current/80 leading-none">
-                                                                                                +{shifts.length - 1} more
-                                                                                            </div>
-                                                                                        )}
+                                                                                        <div className="flex items-center justify-center px-1 py-[2px] w-full max-w-[95%] rounded-[3px] bg-background/60 hover:bg-background/95 shadow-sm transition-colors text-[9px] font-extrabold tracking-tight border border-foreground/10 text-current truncate leading-none">
+                                                                                            {shifts.map(s => {
+                                                                                                const h = s.netHours % 1 === 0 ? s.netHours : s.netHours.toFixed(1);
+                                                                                                return `${h}${s.isDraft ? 'd' : ''}`;
+                                                                                            }).join('+')}
+                                                                                        </div>
                                                                                     </div>
                                                                                 </PopoverTrigger>
                                                                                 <PopoverContent side="right" align="start" className="w-64 p-0 z-[200] shadow-xl border-border/40 overflow-hidden">

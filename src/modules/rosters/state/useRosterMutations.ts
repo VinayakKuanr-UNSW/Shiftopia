@@ -201,7 +201,31 @@ export function useCreatePlanningPeriod() {
       return data;
     },
 
-    onSuccess: (data) => {
+    onMutate: async (vars) => {
+      // Optimistic update for planning periods cache
+      await queryClient.cancelQueries({ queryKey: ['planning-periods', vars.organizationId, vars.departmentId] });
+      const previousPeriods = queryClient.getQueryData(['planning-periods', vars.organizationId, vars.departmentId]);
+
+      if (previousPeriods) {
+        queryClient.setQueryData(['planning-periods', vars.organizationId, vars.departmentId], (old: any) => [
+          {
+            id: 'optimistic-' + Math.random(),
+            department_id: vars.departmentId,
+            sub_department_ids: vars.subDeptIds,
+            start_date: vars.startDate,
+            end_date: vars.endDate,
+            status: 'draft',
+            is_optimistic: true,
+          },
+          ...(old || []),
+        ]);
+      }
+
+      return { previousPeriods };
+    },
+
+    onSuccess: (data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['planning-periods', vars.organizationId, vars.departmentId] });
       queryClient.invalidateQueries({ queryKey: [ROSTER_STRUCTURE_KEY] });
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
       queryClient.invalidateQueries({ queryKey: rosterKeys.all });
@@ -213,13 +237,20 @@ export function useCreatePlanningPeriod() {
       });
     },
 
-    onError: (err) => {
+    onError: (err, vars, context) => {
+      if (context?.previousPeriods) {
+        queryClient.setQueryData(['planning-periods', vars.organizationId, vars.departmentId], context.previousPeriods);
+      }
       console.error('[useCreatePlanningPeriod]', err);
       toast({
         title: 'Error',
         description: errorMessage(err, 'Failed to create planning period'),
         variant: 'destructive',
       });
+    },
+
+    onSettled: (_data, _err, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['planning-periods', vars.organizationId, vars.departmentId] });
     },
   });
 }

@@ -99,7 +99,7 @@ export const ManagerBidsPage: React.FC = () => {
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
                 filters={toggleChips}
-                rightActions={autoAssignButton}
+                functionBarChildren={autoAssignButton}
             />
 
             {/* ── BODY ── */}

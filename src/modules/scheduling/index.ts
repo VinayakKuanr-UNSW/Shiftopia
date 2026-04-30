@@ -20,7 +20,13 @@ export type {
     OptimizerHealth,
 } from './types';
 
-export { AutoSchedulerController, autoSchedulerController } from './auto-scheduler.controller';
+export {
+    AutoSchedulerController,
+    autoSchedulerController,
+    AutoSchedulerInputTooLargeError,
+    MAX_OPTIMIZER_SHIFTS,
+    MAX_OPTIMIZER_EMPLOYEES,
+} from './auto-scheduler.controller';
 export type { AutoSchedulerInput, CommitResult } from './auto-scheduler.controller';
 
 export { OptimizerClient, OptimizerError, optimizerClient } from './optimizer/optimizer.client';

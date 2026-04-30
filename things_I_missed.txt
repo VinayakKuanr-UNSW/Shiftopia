@@ -1,0 +1,243 @@
+================================================================================
+  THINGS I MISSED — production readiness backlog
+================================================================================
+
+  Items that came up during the production-readiness pass but were either
+  parked, partially done, or blocked. Loosely ordered by impact within
+  each section.
+
+  Status legend:
+    [DONE]     — completed in this hardening pass (date noted)
+    [BLOCKED]  — needs external action (paid plan, vendor account, etc.)
+    [PARTIAL]  — code/config exists but the loop isn't closed
+    [DEFERRED] — examined and deliberately postponed (reason given)
+    [TODO]     — not started, in scope for a later pass
+
+
+================================================================================
+  1. SECURITY (Supabase RLS / advisors)
+================================================================================
+
+[DONE 2026-04-29] All 11 ERROR-level advisor findings resolved
+  - 5 unprotected `public` tables → RLS enabled.
+    Migration: 20260429_enable_rls_on_5_unprotected_tables.sql
+  - 6 SECURITY DEFINER views → SECURITY INVOKER.
+    Migration: 20260429_convert_views_to_security_invoker.sql
+
+[DONE 2026-04-29] 187 SECURITY DEFINER functions callable by `anon`
+  - Root cause was the implicit PUBLIC grant, not a direct anon grant.
+    REVOKE EXECUTE ... FROM PUBLIC closes it; authenticated/service_role
+    keep their explicit grants and continue working.
+  - Migration: 20260429_revoke_anon_execute_on_definer_funcs.sql
+
+[DONE 2026-04-29] 271 functions without SET search_path
+  - All SET to `pg_catalog, public`. Preserves existing unqualified
+    references while pinning resolution order (closes injection vector).
+  - Migration: 20260429_harden_function_search_paths.sql
+
+[DONE 2026-04-29] Materialized view `employee_daily_metrics` exposed via API
+  - REVOKED SELECT from anon, authenticated. service_role keeps access
+    so refresh RPCs continue to work. App had zero direct queries
+    against the view (only schema-graph reference in TS types).
+  - Migration: 20260429_lockdown_employee_daily_metrics_matview.sql
+
+[DONE 2026-04-29] `broadcast-attachments` storage bucket lockdown
+  - Dropped overly broad authenticated SELECT policy. Public bucket
+    URLs (getPublicUrl) still work; only bucket-wide enumeration via
+    storage.list() is closed.
+  - Migration: 20260428_lockdown_broadcast_attachments_bucket.sql
+
+[PARTIAL] Schema drift between live DB and supabase/migrations/
+  - Live DB has 400+ legacy migrations recorded in history that aren't
+    in the repo. The 8 migrations added during this hardening pass ARE
+    in both places (repo + live history table) and are reviewable in
+    PR diffs.
+  - Real fix to close the legacy gap: run `migration repair --status
+    reverted` for all 400 historic entries, then `db pull` to squash
+    into a single baseline. ~1h focused work.
+  - Until done: continue Option A workflow — apply new DDL via MCP
+    (or Studio), commit the matching .sql file.
+
+[TODO] 74 RLS policies with USING (true) / WITH CHECK (true)
+  - 46 distinct tables affected, including timesheets, swap_requests,
+    organizations, departments, pay_periods, work_rules, system_config.
+  - Each requires a BUSINESS-RULE decision (employee-owns-row?
+    manager-owns-dept? org-scoped?). Cannot be done as a bulk pass.
+  - Highest-effort and highest-impact item remaining. This is the
+    actual multi-tenant data-leak surface.
+  - Recommended approach: one PR per table, starting with `timesheets`
+    and `swap_requests` (most sensitive). Use existing helper functions
+    (is_admin, has_permission, user_has_action_in_scope) as building
+    blocks. Many policies in `events` (now done) follow a reusable
+    pattern: `is_admin() OR <fk> IN (SELECT ... WHERE user_id = auth)`.
+
+[TODO] 187 `authenticated_security_definer_function_executable` warnings
+  - These are the same 187 functions, now flagged because authenticated
+    users CAN call them. By design — that's what business RPCs are for.
+  - Clearing this lint requires rewriting each function as SECURITY
+    INVOKER plus matching RLS policies on every table they touch. A
+    multi-week project with dubious ROI vs. the USING(true) work above.
+  - Recommend treating this lint as ACCEPTED INTENT and marking it
+    suppressed in advisor config (when Supabase exposes that config).
+
+[BLOCKED] HaveIBeenPwned password check
+  - Supabase Auth feature — only available on Pro plan and above.
+  - Re-evaluate when upgrading. Until then, document in user-facing
+    password help ("don't reuse passwords from other sites").
+
+
+================================================================================
+  2. PERFORMANCE (Supabase advisors + 10k user scaling)
+================================================================================
+
+[DONE 2026-04-29] 73 RLS policies trigger `auth_rls_initplan`
+  - All public policies now use (SELECT auth.uid()) / (SELECT auth.role()).
+  - Migration: 20260429_wrap_auth_calls_in_rls_policies.sql
+
+[DONE 2026-04-29] Index hygiene — additive part
+  - 66 unindexed FK columns: indexes created.
+  - 4 duplicate indexes dropped (kept the longer / more descriptive names).
+  - 1 duplicate unique constraint dropped on roster_shift_assignments.
+  - Migration: 20260429_index_hygiene_safe.sql
+
+[DEFERRED] Drop 91 advisor-reported "unused" indexes
+  - Currently 183 indexes have idx_scan=0 in pg_stat_user_indexes.
+  - 74 of those are on EMPTY tables — idx_scan=0 is meaningless there.
+  - 66 of them are the FK indexes just added (haven't been queried yet).
+  - Total droppable size is only 3 MB. Not urgent.
+  - Right time to revisit: after 2-4 weeks of real query traffic. Reset
+    pg_stat_user_indexes counters first, then re-evaluate.
+
+[PARTIAL] 10k-user UI bounding — only People grid is done
+  - Server-side search + 200-row cap added to RostersPlannerPage.
+  - Same pattern still needed on:
+      - src/modules/planning/bidding/ui/pages/EmployeeBids.page.tsx
+      - src/modules/planning/swapping/ui/pages/EmployeeSwaps.page.tsx
+      - src/modules/broadcasts/ui/screens/MyBroadcastsScreen.tsx
+      - src/modules/insights/pages/GridPage.tsx
+  - Each is ~2h: add search input, cap fetch, update count UI.
+
+[TODO] Realtime subscription scoping
+  - useShiftDeltaSync still all-or-nothing per the existing design.
+  - At 10k concurrent viewers, channel fan-out is the bottleneck before DB.
+  - Filter Supabase Realtime channels by sub_department_id.
+
+[TODO] Performance budget + bundle audit
+  - Build is fast (~5s) but no runtime budget set.
+  - Add rollup-plugin-visualizer, set main-chunk budget (~300KB gzipped),
+    lazy-load insights/compliance modals/icon set.
+
+
+================================================================================
+  3. OBSERVABILITY (logging, error tracking)
+================================================================================
+
+[PARTIAL] Sentry integration — DSN not yet set in production
+  - Code wired in src/platform/observability/sentry.ts, ErrorBoundary,
+    and logger.error().
+  - Source-map upload conditional on SENTRY_AUTH_TOKEN in CI.
+  - To activate: set repo secrets SENTRY_AUTH_TOKEN/ORG/PROJECT and
+    VITE_SENTRY_DSN in hosting env. Then trigger a test error to confirm.
+
+[PARTIAL] Sentry user tagging never wired
+  - setSentryUser() helper exists but is never called.
+  - Should be invoked from the auth context the moment a user is known
+    (and again with null on logout).
+  - One-line change in the auth provider.
+
+[TODO] 276+ raw console.* calls in src/
+  - Replace with logger.debug/info/warn/error so prod noise goes through
+    one funnel. Vite already drops console.* in production via esbuild,
+    but the dev experience is also worth taming.
+
+[PARTIAL] logger.warn does not forward to Sentry
+  - Only logger.error forwards via lazy-imported captureException.
+  - logger.warn writes to console only. Decide: forward warnings as
+    breadcrumbs, or upgrade some warns to errors.
+
+
+================================================================================
+  4. TESTING / CI
+================================================================================
+
+[BLOCKED] ESLint disabled in CI
+  - Lint step commented out in .github/workflows/ci.yml.
+  - Cause: ESLint 9 / @typescript-eslint plugin version mismatch
+    (TypeError: Cannot read properties of undefined (reading
+    'allowShortCircuit')).
+  - Fix: bump @typescript-eslint/eslint-plugin and parser to v8.x
+    (compatible with ESLint 9). Verify all rules still load. Re-enable.
+
+[TODO] E2E smoke tests
+  - No Playwright/Cypress suite. CI catches type/unit regressions, not
+    "the build is broken" UX regressions.
+  - Suggested first 5 tests: login, publish-shift, employee-bid,
+    manager-approve-bid, swap-request-and-approve.
+
+[TODO] Visual regression tests
+  - With Tailwind + theme system, CSS regressions are easy. Consider
+    Chromatic or Playwright screenshot tests for the 5 most-used pages.
+
+
+================================================================================
+  5. UI / UX
+================================================================================
+
+[TODO] Loading / error / empty-state standardization
+  - Most pages have ad-hoc spinners and silent failures.
+  - Build a <PageState loading | error | empty /> primitive and roll out.
+
+[TODO] Accessibility (a11y) pass
+  - axe-core against the 5 most-used pages.
+  - Workforce / compliance tools get screen-reader scrutiny in audits.
+
+[TODO] Keyboard navigation in PeopleModeGrid
+  - Virtualization removed; the 200-row cap helps but tab order through
+    cells/dialogs has not been verified.
+
+
+================================================================================
+  6. INFRASTRUCTURE / OPS
+================================================================================
+
+[TODO] Confirm Supabase point-in-time recovery (PITR) is enabled
+  - On free tier this is limited; verify retention window matches your
+    "RPO" expectation (i.e., how much data loss is acceptable in a
+    disaster).
+
+[TODO] Disaster recovery runbook
+  - One-page doc: who has access, where the access tokens live, how to
+    restore, who decides to invoke restore. Living doc.
+
+[TODO] Production env var inventory
+  - .env.example documents the shape; the actual production set lives in
+    Vercel/Netlify/wherever. List secrets that exist there but aren't in
+    .env.example so nothing gets lost during a host migration.
+
+[TODO] Token rotation policy
+  - SUPABASE_ACCESS_TOKEN was just rotated manually. Establish: which
+    tokens auto-rotate, which need calendar reminders, where they're
+    stored.
+
+
+================================================================================
+  7. CODE HYGIENE / TECH DEBT
+================================================================================
+
+[TODO] Console.* cleanup (see Observability)
+
+[TODO] Decide: keep custom ErrorBoundary or swap for Sentry.ErrorBoundary
+  - Current bespoke one is well-styled and feeds Sentry the same data.
+  - Sentry's wrapper has built-in Profiler integration. Trade-off: visual
+    polish vs. instrumentation depth. Defer until Sentry is live.
+
+[TODO] Memory: bidding-urgency 'emergent' vs 'locked' naming
+  - Source code says 'emergent' (ShiftUrgency type, ~20 callsites).
+  - Memory and a few comments say 'locked'.
+  - Decide canonical name, do a single rename pass. Tests already aligned
+    to 'emergent'.
+
+
+================================================================================
+  END
+================================================================================

@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { format, startOfWeek, startOfMonth } from 'date-fns';
-import { Clock, RefreshCw } from 'lucide-react';
+import { Clock, RefreshCw, ListFilter } from 'lucide-react';
+import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
 
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';
@@ -42,8 +43,9 @@ export const TimesheetPage: React.FC = () => {
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
     const [viewType, setViewType] = useState<ViewType>('day');
     const [range, setRange] = useState<DateRange>(computeRange(new Date(), 'day'));
-    const [viewMode] = useState<'timecard'>('timecard');
+    const [viewMode, setViewMode] = useState<'table' | 'timecard'>('timecard');
     const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'no_show'>('all');
 
     const [shifts, setShifts] = useState<TimesheetShiftRow[]>([]);
     const [loading, setLoading] = useState(false);
@@ -105,7 +107,17 @@ export const TimesheetPage: React.FC = () => {
         .filter(shift => {
             const isDraft = shift.lifecycleStatus === 'Draft';
             const isUnassigned = !shift.employeeId || shift.employeeName?.toLowerCase().includes('unassigned');
-            return !isDraft && !isUnassigned;
+            if (isDraft || isUnassigned) return false;
+
+            const tsStatus = shift.timesheetStatus?.toLowerCase() || 'draft';
+            const attStatus = shift.attendanceStatus?.toLowerCase() || null;
+
+            if (statusFilter === 'pending') return tsStatus === 'draft' || tsStatus === 'submitted';
+            if (statusFilter === 'approved') return tsStatus === 'approved';
+            if (statusFilter === 'rejected') return tsStatus === 'rejected';
+            if (statusFilter === 'no_show') return attStatus === 'no_show' || tsStatus === 'no_show';
+            
+            return true;
         })
         .map(shift => ({
         id: shift.id,
@@ -155,7 +167,7 @@ export const TimesheetPage: React.FC = () => {
             start_time: shift.scheduledStart,
             end_time: shift.scheduledEnd,
         }),
-    })), [shifts]); // eslint-disable-line react-hooks/exhaustive-deps
+    })), [shifts, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
     // ── Actions ────────────────────────────────────────────────────────────────
@@ -197,8 +209,8 @@ export const TimesheetPage: React.FC = () => {
                 isGammaLocked={isGammaLocked}
                 mode={scopeMode}
                 // Row 3 Structured Props
-                viewMode={viewMode === 'timecard' ? 'table' : (viewMode as 'card' | 'table')}
-                onViewModeChange={() => {}}
+                viewMode={viewMode === 'timecard' ? 'card' : 'table'}
+                onViewModeChange={(mode) => setViewMode(mode === 'card' ? 'timecard' : 'table')}
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
                 onRefresh={handleRefresh}
@@ -225,6 +237,27 @@ export const TimesheetPage: React.FC = () => {
                         }}
                     />
                 }
+                functionBarChildren={
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-foreground/[0.03] border border-foreground/[0.05]">
+                            <ListFilter className="h-3 w-3 text-muted-foreground/40" />
+                            <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40 mr-1">Status</span>
+                            
+                            <ToggleGroup 
+                                type="single" 
+                                value={statusFilter} 
+                                onValueChange={(val) => val && setStatusFilter(val as any)}
+                                className="bg-transparent"
+                            >
+                                <ToggleGroupItem value="all" className="h-7 px-3 text-[9px] font-black uppercase tracking-widest rounded-lg">All</ToggleGroupItem>
+                                <ToggleGroupItem value="pending" className="h-7 px-3 text-[9px] font-black uppercase tracking-widest rounded-lg data-[state=on]:bg-amber-500/10 data-[state=on]:text-amber-500">Pending</ToggleGroupItem>
+                                <ToggleGroupItem value="approved" className="h-7 px-3 text-[9px] font-black uppercase tracking-widest rounded-lg data-[state=on]:bg-emerald-500/10 data-[state=on]:text-emerald-500">Approved</ToggleGroupItem>
+                                <ToggleGroupItem value="rejected" className="h-7 px-3 text-[9px] font-black uppercase tracking-widest rounded-lg data-[state=on]:bg-rose-500/10 data-[state=on]:text-rose-500">Rejected</ToggleGroupItem>
+                                <ToggleGroupItem value="no_show" className="h-7 px-3 text-[9px] font-black uppercase tracking-widest rounded-lg data-[state=on]:bg-slate-500/20">No-Show</ToggleGroupItem>
+                            </ToggleGroup>
+                        </div>
+                    </div>
+                }
             />
 
             {/* ── ROW 3: CONTENT AREA ───────────────────────────────────────── */}
@@ -241,8 +274,8 @@ export const TimesheetPage: React.FC = () => {
                             selectedDate={selectedDate}
                             onDateChange={setSelectedDate}
                             readOnly={!canEdit}
-                            viewMode="timecard"
-                            onViewChange={() => {}}
+                            viewMode={viewMode}
+                            onViewChange={setViewMode}
                             searchQuery={searchQuery}
                             setSearchQuery={setSearchQuery}
                             onSaveEntry={handleSaveEntry}
