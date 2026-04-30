@@ -19,6 +19,7 @@ import {
   ClipboardList,
   Fingerprint,
   Radio,
+  Activity,
 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/platform/auth/useAuth';
@@ -41,19 +42,12 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
 
   const isRouteActive = (path: string) => {
     if (path === location.pathname) return true;
-    if (path !== '/dashboard' && location.pathname.startsWith(path)) return true;
+    if (path !== '/' && location.pathname.startsWith(path)) return true;
     return false;
   };
 
   return (
     <div className="flex-1 overflow-y-auto py-4 px-3">
-      <NavItem
-        icon={<LayoutDashboard className="h-5 w-5" />}
-        label={t('common.dashboard')}
-        path="/dashboard"
-        active={isRouteActive('/dashboard')}
-        sectionColor="primary"
-      />
 
       <NavSection
         title={t('nav.overview')}
@@ -154,6 +148,16 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
               label={t('nav.timesheet')}
               path="/timesheet"
               active={isRouteActive('/timesheet')}
+              indent
+              sectionColor="blue"
+            />
+          )}
+          {hasPermission('rosters') && (
+            <NavItem
+              icon={<Activity className="h-5 w-5" />}
+              label={t('nav.labor_demand', 'Labor Demand')}
+              path="/labor-demand"
+              active={isRouteActive('/labor-demand')}
               indent
               sectionColor="blue"
             />

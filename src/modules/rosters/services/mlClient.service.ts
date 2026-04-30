@@ -1,0 +1,160 @@
+import {} from './shiftSynthesiser.service';
+import {
+  DemandSlot,
+  DemandTensor,
+} from '@/modules/rosters/domain/shiftSynthesizer.policy';
+import type { TemplateGroupType } from '../domain/shift.entity';
+
+const ML_URL = (import.meta.env.VITE_ML_URL as string | undefined) || 'http://localhost:8000';
+type EventType =
+  | 'Concert'
+  | 'Conference'
+  | 'Corporate'
+  | 'Exhibition'
+  | 'Festival'
+  | 'Gala Dinner'
+  | 'Sporting Event'
+  | 'Trade Show';
+type FunctionType =
+  | 'Breakout'
+  | 'Ceremony'
+  | 'Dinner'
+  | 'Meeting'
+  | 'Performance'
+  | 'Reception'
+  | 'Workshop';
+
+export interface EventInput {
+  eventType: EventType;
+  expectedAttendance: number;
+  dayOfWeek: number;
+  month: number;
+  functionType: FunctionType;
+  roomCount: number;
+  totalSqm: number;
+  roomCapacity: number;
+  simultaneousEventCount: number;
+  totalVenueAttendanceSameTime: number;
+  entryPeakFlag: boolean;
+  exitPeakFlag: boolean;
+  mealWindowFlag: boolean;
+  timeSliceIndex: number;
+  timeSliceCount: number;
+  buildingType: TemplateGroupType;
+  eventId?: string;
+}
+
+interface RoleResult {
+  predicted: number;
+  corrected: number;
+}
+
+/**
+ * Roles the FastAPI ML service actually has trained models for.
+ * Must match ROLES in ml/predict.py. Any other role passed to buildDemandAnalysis
+ * will throw — callers should filter to this set first.
+ */
+export const ML_KNOWN_ROLES = ['Usher', 'Security', 'Food Staff', 'Supervisor'] as const;
+export type MLKnownRole = typeof ML_KNOWN_ROLES[number];
+
+export function isMLKnownRole(role: string): role is MLKnownRole {
+  return (ML_KNOWN_ROLES as readonly string[]).includes(role);
+}
+
+/**
+ * DB-backed lookup: returns the ML class for a role by its id, or null if unmapped.
+ * Caller fetches the map once via `fetchRoleMLClassMap()` and reuses it across roles.
+ */
+export function resolveMLRoleById(
+  roleId: string,
+  map: ReadonlyMap<string, MLKnownRole>,
+): MLKnownRole | null {
+  return map.get(roleId) ?? null;
+}
+
+/**
+ * @deprecated Fallback only. Prefer `resolveMLRoleById` with the DB-backed
+ * `role_ml_class_map` table. Kept to handle roles that exist but were
+ * created after the last regen of the mapping table.
+ *
+ * Precedence (first match wins):
+ *   1. Supervisory titles → Supervisor
+ *   2. Usher-style titles → Usher
+ *   3. F&B / kitchen / beverage → Food Staff
+ *   4. Security / guard / risk → Security
+ *   5. Everything else → null
+ */
+export function resolveMLRoleByNameFallback(roleName: string): MLKnownRole | null {
+  const n = roleName.toLowerCase();
+  if (/supervisor|\bmanager\b|team\s*lead|coordinator|director|\bhead\b|\bchief\b|\bceo\b|duty/.test(n)) return 'Supervisor';
+  if (/usher|greeter|ticketing/.test(n)) return 'Usher';
+  if (/food|catering|f&b|beverage|\bbar\b|chef|cook|\bcafe\b|kitchen|waiter|waitress|\bserver\b/.test(n)) return 'Food Staff';
+  if (/security|guard|\brisk\b|safety/.test(n)) return 'Security';
+  return null;
+}
+
+export async function predictSlice(request: EventInput): Promise<RoleResult[]> {
+  const response = await fetch(`${ML_URL}/predict/demand`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      event_type: request.eventType,
+      function_type: request.functionType,
+      expected_attendance: request.expectedAttendance,
+      day_of_week: request.dayOfWeek,
+      month: request.month,
+      room_count: request.roomCount,
+      total_sqm: request.totalSqm,
+      room_capacity: request.roomCapacity,
+      simultaneous_event_count: request.simultaneousEventCount,
+      total_venue_attendance_same_time: request.totalVenueAttendanceSameTime,
+      entry_peak_flag: request.entryPeakFlag,
+      exit_peak_flag: request.exitPeakFlag,
+      meal_window_flag: request.mealWindowFlag,
+      event_id: request.eventId,
+      time_slice_index: request.timeSliceIndex,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`ML prediction failed: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function buildDemandAnalysis(
+  event: EventInput,
+  role: string,
+): Promise<DemandTensor> {
+  // For each time slice, call the ML model to get predicted demand for that slice
+  const slices = await Promise.all(
+    Array.from({ length: event.timeSliceCount }, (_, i) =>
+      predictSlice({ ...event, timeSliceIndex: i }),
+    ),
+  );
+
+  // Transform the raw ML predictions into the format needed for shift synthesis.
+  // If the role isn't in the ML response, bail clearly rather than crashing on undefined.
+  if (!slices[0] || !(role in slices[0])) {
+    throw new Error(
+      `ML service did not return predictions for role '${role}'. Known roles: ${ML_KNOWN_ROLES.join(', ')}`,
+    );
+  }
+  const packingSlots: DemandSlot[] = slices.map((slice, i) => {
+    const corrected = (slice as unknown as Record<string, RoleResult>)[role].corrected;
+    return {
+      slotStart: i,
+      slotEnd: i + 1,
+      requiredHeadcount: corrected,
+      residualHeadcount: corrected,
+      residualHeadcountInt: Math.round(corrected),
+    };
+  });
+
+  return {
+    roleId: role,
+    subDepartmentId: event.eventId ?? '',
+    buildingType: event.buildingType,
+    slots: packingSlots,
+  };
+}

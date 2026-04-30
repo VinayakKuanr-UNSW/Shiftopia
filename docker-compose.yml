@@ -26,6 +26,23 @@ services:
       timeout: 10s
       retries: 3
 
+  ml:
+    build:
+      context: ./ml
+      dockerfile: Dockerfile
+    container_name: superman-ml
+    ports:
+      - '8000:8000'
+    environment:
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8000/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Uncomment to run the web-app in Docker too
   # web-app:
   #   build:

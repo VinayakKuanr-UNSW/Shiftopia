@@ -1,0 +1,93 @@
+import os
+import pickle
+import pandas as pd
+from dotenv import load_dotenv
+from supabase import create_client
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import mean_absolute_error, r2_score
+from xgboost import XGBRegressor
+
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+
+SUPABASE_URL = os.getenv('VITE_SUPABASE_URL')
+SUPABASE_KEY = os.getenv('VITE_SUPABASE_ANON_KEY')
+
+FEATURE_COLS = [
+    'event_type', 'expected_attendance', 'day_of_week', 'month',
+    'function_type', 'room_count', 'total_sqm', 'room_capacity',
+    'simultaneous_event_count', 'total_venue_attendance_same_time',
+    'entry_peak_flag', 'exit_peak_flag', 'meal_window_flag',
+    'time_slice_index'
+]
+
+CATEGORICAL_COLS = ['event_type', 'function_type']
+ROLES = ['Usher', 'Security', 'Food Staff', 'Supervisor']
+
+
+def fetch_training_data():
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    all_rows = []
+    page_size = 1000
+    offset = 0
+    while True:
+        response = supabase.table('venueops_ml_features').select('*').range(offset, offset + page_size - 1).execute()
+        rows = response.data
+        if not rows:
+            break
+        all_rows.extend(rows)
+        if len(rows) < page_size:
+            break
+        offset += page_size
+    print(f"Fetched {len(all_rows)} rows from venueops_ml_features")
+    return pd.DataFrame(all_rows)
+
+
+def train_all_models():
+    df = fetch_training_data()
+
+    df['entry_peak_flag'] = df['entry_peak_flag'].astype(int)
+    df['exit_peak_flag'] = df['exit_peak_flag'].astype(int)
+    df['meal_window_flag'] = df['meal_window_flag'].astype(int)
+
+    encoders = {}
+    for col in CATEGORICAL_COLS:
+        le = LabelEncoder()
+        df[col] = le.fit_transform(df[col].astype(str))
+        encoders[col] = le
+
+    models_dir = os.path.join(os.path.dirname(__file__), 'models')
+    os.makedirs(models_dir, exist_ok=True)
+
+    with open(os.path.join(models_dir, 'encoders.pkl'), 'wb') as f:
+        pickle.dump(encoders, f)
+    print("Saved label encoders")
+
+    for role in ROLES:
+        role_df = df[df['target_role'] == role]
+        if role_df.empty:
+            print(f"No data for role: {role}, skipping")
+            continue
+
+        X = role_df[FEATURE_COLS]
+        y = role_df['target_staff_count']
+
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        model = XGBRegressor(n_estimators=100, max_depth=6, learning_rate=0.1, random_state=42)
+        model.fit(X_train, y_train)
+
+        y_pred = model.predict(X_test)
+        mae = mean_absolute_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
+        print(f"{role}: MAE={mae:.2f}, R²={r2:.4f} ({len(role_df)} rows)")
+
+        model_path = os.path.join(models_dir, f'{role}.pkl')
+        with open(model_path, 'wb') as f:
+            pickle.dump(model, f)
+
+    print("Training complete")
+
+
+if __name__ == '__main__':
+    train_all_models()
