@@ -33,6 +33,8 @@ interface AutoSchedulerShift {
     end_time: string;
     role_id: string | null;
     unpaid_break_minutes: number;
+    demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
+    target_employment_type?: 'FT' | 'PT' | 'Casual' | null;
 }
 
 interface RosterModalsProps {
@@ -43,7 +45,7 @@ interface RosterModalsProps {
     /** Unassigned shifts for AutoSchedulerPanel. */
     autoSchedulerShifts: AutoSchedulerShift[];
     /** Employee summary for AutoSchedulerPanel. */
-    autoSchedulerEmployees: Array<{ id: string; name: string }>;
+    autoSchedulerEmployees: Array<{ id: string; name: string; contract_type?: 'FT' | 'PT' | 'CASUAL' | null }>;
     /** Called when a shift is created or saved successfully. */
     onShiftSaved: () => void;
     /** Called after bulk assignment completes (clears selection). */

@@ -1,26 +1,35 @@
 """
-CP-SAT Model Builder — Production Grade (v2)
+CP-SAT Model Builder — Production Grade (v3)
 
-Key improvements over v1:
+Key improvements over v2:
   A) Candidate Filtering      — only create x[e,s] for eligible pairs
                                  reduces variable count from O(E×S) to O(6×S)
   B) Pre-Sequence Elimination — remove pairs violating rest-gap before building model
   C) Greedy Hint              — fast heuristic warm-starts the solver (−80% solve time)
   D) Shift Density Reduction  — identical-shift pools use capacity constraints
   E) Debug Metrics            — variables, constraints, coverage_rate, eligible_pairs
+  F) Time-Coupled Capacity    — global pool caps across overlapping time slots
+  G) Contract Utilization     — FT/PT minimum-hour guarantees + overtime penalty
+  H) Shift Continuity         — reward keeping same employees across adjacent slots
 
 Hard Constraints (HC):
   HC-1  Coverage        — every shift assigned exactly once (or marked uncovered)
-  HC-2  No Overlap      — one employee cannot work two overlapping shifts
-  HC-3  Rest Gap        — minimum rest between consecutive shifts (default 10h)
   HC-4  Weekly Hours    — employee total minutes ≤ contracted max
   HC-5  Eligibility     — role + skill + license match (filtered at variable creation)
+  HC-6  Time Capacity   — across overlapping shifts, type-pool usage ≤ pool size
+  HC-7  Min Contract    — FT/PT employees must hit minimum contracted hours
+
+Note: HC-2 (overlap) and HC-3 (rest gap) are enforced by the Autoscheduler
+assignment layer, NOT by this planning optimizer. This separation allows the
+optimizer to focus on macro mix decisions while the autoscheduler handles
+micro compliance.
 
 Soft Constraints (objective):
-  SC-1  Preference matching   (+10 per preferred slot)
-  SC-2  Coverage reward       (+1 per filled shift)
-  SC-3  Uncovered penalty     (−100 × priority per uncovered shift)
-  SC-4  Fairness              (−1 × workload imbalance)
+  SC-1  Preference matching   (−$5 discount per preferred slot)
+  SC-3  Uncovered penalty     (+$10,000 × priority per uncovered shift)
+  SC-4  Fairness              (+$0.10 × workload imbalance minutes)
+  SC-5  Overtime penalty      (+150% rate for hours beyond contract)
+  SC-6  Shift Continuity      (−$2.00 bonus for same employee on adjacent shifts)
 
 Preprocessing pipeline:
   load → compute_eligibility → pre_eliminate_rest_sequences → build_variables
@@ -70,7 +79,13 @@ class EmployeeInput:
     id: str
     name: str
     role_id: Optional[str] = None
+    employment_type: str = 'Casual'
+    hourly_rate: float = 25.0
     max_weekly_minutes: int = 2400
+    # Minimum contracted weekly minutes. FT employees MUST be assigned at
+    # least this many minutes. Solver will pay overtime penalty above this.
+    # Set to 0 for Casuals (no contract obligation).
+    min_contract_minutes: int = 0
     skill_ids: list[str] = field(default_factory=list)
     license_ids: list[str] = field(default_factory=list)
     preferred_shift_ids: list[str] = field(default_factory=list)
@@ -110,7 +125,8 @@ class OptimizerInput:
 class AssignmentProposal:
     shift_id: str
     employee_id: str
-    score: float = 0.0
+    employment_type: str
+    cost: float
 
 
 @dataclass
@@ -321,9 +337,11 @@ class ScheduleModelBuilder:
 
         # D: Add hard constraints
         self._add_coverage()
-        self._add_overlap()
-        self._add_rest_gap()
+        # HC-2 (overlap) and HC-3 (rest gap) are enforced by the
+        # Autoscheduler assignment layer, not by this planning optimizer.
         self._add_weekly_hours()
+        self._add_time_capacity()       # HC-6: Global pool caps
+        self._add_min_contract_hours()  # HC-7: FT/PT minimum utilization
         self._add_objective()
 
         self._metrics.num_constraints = len(self.model.proto.constraints)
@@ -500,44 +518,184 @@ class ScheduleModelBuilder:
             remaining = max(0, emp.max_weekly_minutes - existing_minutes)
             self.model.Add(cp_model.LinearExpr.Sum(terms) <= remaining)
 
+    # ── HC-6: Time-Coupled Capacity ────────────────────────────────────────────
+
+    def _add_time_capacity(self):
+        """Ensure that across any set of overlapping shifts, the number of
+        employees assigned from each employment-type pool does not exceed the
+        total number of employees in that pool.
+
+        Without this, the solver can assign all 12 FTs to the 12pm block AND
+        all 12 FTs to the 2pm block — impossible in the real world.
+
+        Implementation: for every maximal clique of overlapping shifts, add
+        one constraint per employment type:
+            Σ x[e, s] ≤ pool_size   ∀ e in type, ∀ s in clique
+        """
+        # Count available pool sizes by employment type
+        pool_by_type: dict[str, list[EmployeeInput]] = {}
+        for emp in self.data.employees:
+            pool_by_type.setdefault(emp.employment_type, []).append(emp)
+
+        if not pool_by_type:
+            return
+
+        # Find overlapping shift clusters using a sweep-line algorithm
+        shifts_sorted = sorted(self.data.shifts, key=lambda s: shift_window(s)[0])
+        clusters: list[list[ShiftInput]] = []
+        current_cluster: list[ShiftInput] = []
+        cluster_end = -1
+
+        for shift in shifts_sorted:
+            s_start, s_end = shift_window(shift)
+            if current_cluster and s_start < cluster_end:
+                # Overlaps with current cluster
+                current_cluster.append(shift)
+                cluster_end = max(cluster_end, s_end)
+            else:
+                # Start new cluster
+                if len(current_cluster) > 1:
+                    clusters.append(current_cluster)
+                current_cluster = [shift]
+                cluster_end = s_end
+
+        if len(current_cluster) > 1:
+            clusters.append(current_cluster)
+
+        # For each cluster, constrain each pool
+        for cluster in clusters:
+            for emp_type, emps in pool_by_type.items():
+                pool_size = len(emps)
+                # Gather all x[e, s] where e is in this pool and s is in cluster
+                cluster_vars = []
+                for shift in cluster:
+                    for emp in emps:
+                        var = self._x.get((emp.id, shift.id))
+                        if var is not None:
+                            cluster_vars.append(var)
+                if cluster_vars:
+                    self.model.Add(
+                        cp_model.LinearExpr.Sum(cluster_vars) <= pool_size
+                    )
+
+        logger.info('[ModelBuilder] HC-6: %d overlapping clusters constrained, pools=%s',
+                    len(clusters), {k: len(v) for k, v in pool_by_type.items()})
+
+    # ── HC-7: Minimum Contract Hours ──────────────────────────────────────────
+
+    def _add_min_contract_hours(self):
+        """FT/PT employees must be assigned at least their contracted minimum
+        hours. This prevents the solver from ignoring expensive-but-obligated
+        staff in favor of cheaper casuals.
+
+        Only applied when min_contract_minutes > 0 (Casuals default to 0).
+        Existing committed shifts count toward the minimum.
+        """
+        for emp in self.data.employees:
+            if emp.min_contract_minutes <= 0:
+                continue
+            terms = [
+                s.duration_minutes * self._x[emp.id, s.id]
+                for s in self.data.shifts
+                if (emp.id, s.id) in self._x
+            ]
+            if not terms:
+                continue
+            existing_minutes = sum(es.duration_minutes for es in emp.existing_shifts)
+            remaining_min = max(0, emp.min_contract_minutes - existing_minutes)
+            if remaining_min > 0:
+                self.model.Add(
+                    cp_model.LinearExpr.Sum(terms) >= remaining_min
+                )
+
+        contract_count = sum(1 for e in self.data.employees if e.min_contract_minutes > 0)
+        logger.info('[ModelBuilder] HC-7: %d employees with contract minimums', contract_count)
+
     # ── Objective ─────────────────────────────────────────────────────────────
 
     def _add_objective(self):
         terms = []
+
+        # ── SC-1: Base cost + preference discount ─────────────────────────────
+        # Workload tracking vars for overtime (SC-5) and fairness (SC-4)
+        emp_workload_vars: dict[str, cp_model.IntVar] = {}
+
         for emp in self.data.employees:
             pref = set(emp.preferred_shift_ids)
+            wterms = []
             for shift in self.data.shifts:
                 var = self._x.get((emp.id, shift.id))
                 if var is not None:
-                    bonus = 10 if shift.id in pref else 1
-                    terms.append(bonus * var)
+                    # Cost in cents to keep integer math
+                    cost_cents = int(round((shift.duration_minutes / 60.0) * emp.hourly_rate * 100))
+                    # Preference gives a small discount to cost (e.g. $5.00)
+                    discount = 500 if shift.id in pref else 0
+                    terms.append((cost_cents - discount) * var)
+                    wterms.append(shift.duration_minutes * var)
 
+            # Build workload var for this employee
+            if wterms:
+                w = self.model.NewIntVar(0, emp.max_weekly_minutes, f'w_{emp.id[:6]}')
+                self.model.Add(w == cp_model.LinearExpr.Sum(wterms))
+                emp_workload_vars[emp.id] = w
+
+        # ── SC-3: Uncovered penalty ───────────────────────────────────────────
         for shift in self.data.shifts:
-            terms.append(-100 * shift.priority * self._uncovered[shift.id])
+            terms.append(1_000_000 * shift.priority * self._uncovered[shift.id])
 
-        # Fairness: penalise workload imbalance
-        if len(self.data.employees) > 1:
-            workloads = []
-            for emp in self.data.employees:
-                wterms = [
-                    s.duration_minutes * self._x[emp.id, s.id]
-                    for s in self.data.shifts
-                    if (emp.id, s.id) in self._x
-                ]
-                if wterms:
-                    w = self.model.NewIntVar(0, emp.max_weekly_minutes, f'w_{emp.id[:6]}')
-                    self.model.Add(w == cp_model.LinearExpr.Sum(wterms))
-                    workloads.append(w)
-            if len(workloads) > 1:
-                max_w = self.model.NewIntVar(0, 100_000, 'max_w')
-                min_w = self.model.NewIntVar(0, 100_000, 'min_w')
-                self.model.AddMaxEquality(max_w, workloads)
-                self.model.AddMinEquality(min_w, workloads)
-                imbalance = self.model.NewIntVar(0, 100_000, 'imbalance')
-                self.model.Add(imbalance == max_w - min_w)
-                terms.append(-1 * imbalance)
+        # ── SC-4: Fairness — penalise workload imbalance ──────────────────────
+        workloads = list(emp_workload_vars.values())
+        if len(workloads) > 1:
+            max_w = self.model.NewIntVar(0, 100_000, 'max_w')
+            min_w = self.model.NewIntVar(0, 100_000, 'min_w')
+            self.model.AddMaxEquality(max_w, workloads)
+            self.model.AddMinEquality(min_w, workloads)
+            imbalance = self.model.NewIntVar(0, 100_000, 'imbalance')
+            self.model.Add(imbalance == max_w - min_w)
+            terms.append(10 * imbalance)
 
-        self.model.Maximize(cp_model.LinearExpr.Sum(terms))
+        # ── SC-5: Overtime penalty (150% rate beyond contract) ────────────────
+        # For employees with min_contract_minutes, any minutes above that
+        # threshold incur a 50% surcharge on top of their hourly rate.
+        for emp in self.data.employees:
+            if emp.min_contract_minutes <= 0:
+                continue
+            w_var = emp_workload_vars.get(emp.id)
+            if w_var is None:
+                continue
+            existing_minutes = sum(es.duration_minutes for es in emp.existing_shifts)
+            contract_remaining = max(0, emp.min_contract_minutes - existing_minutes)
+            # overtime_var = max(0, workload - contract_remaining)
+            overtime = self.model.NewIntVar(0, emp.max_weekly_minutes, f'ot_{emp.id[:6]}')
+            self.model.AddMaxEquality(overtime, [w_var - contract_remaining, 0])
+            # Penalty: 50% surcharge in cents per minute of overtime
+            ot_rate_cents_per_min = int(round(emp.hourly_rate * 0.5 / 60.0 * 100))
+            if ot_rate_cents_per_min > 0:
+                terms.append(ot_rate_cents_per_min * overtime)
+
+        # ── SC-6: Shift Continuity — reward keeping same employee on adjacent ─
+        # For each pair of adjacent (contiguous, non-overlapping) shifts,
+        # give a $2.00 (200 cents) bonus if the same employee works both.
+        shifts_sorted = sorted(self.data.shifts, key=lambda s: shift_window(s)[0])
+        continuity_bonus = 200  # cents
+        for i in range(len(shifts_sorted) - 1):
+            s1 = shifts_sorted[i]
+            s2 = shifts_sorted[i + 1]
+            _, s1_end = shift_window(s1)
+            s2_start, _ = shift_window(s2)
+            # Adjacent = s2 starts within 30 min of s1 ending (no gap or tiny gap)
+            if 0 <= (s2_start - s1_end) <= 30:
+                for emp in self.data.employees:
+                    v1 = self._x.get((emp.id, s1.id))
+                    v2 = self._x.get((emp.id, s2.id))
+                    if v1 is not None and v2 is not None:
+                        # both = min(v1, v2) — 1 if employee works both
+                        both = self.model.NewBoolVar(f'cont_{emp.id[:4]}_{i}')
+                        self.model.AddMinEquality(both, [v1, v2])
+                        # Negative cost = reward (reduces total objective)
+                        terms.append(-continuity_bonus * both)
+
+        self.model.Minimize(cp_model.LinearExpr.Sum(terms))
 
     # ── E: Greedy warm-start ──────────────────────────────────────────────────
 
@@ -584,11 +742,19 @@ class ScheduleModelBuilder:
         unassigned: list[str] = []
 
         if status_code in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-            emp_prefs = {e.id: set(e.preferred_shift_ids) for e in self.data.employees}
+            emp_map = {e.id: e for e in self.data.employees}
+            shift_map = {s.id: s for s in self.data.shifts}
             for (emp_id, shift_id), var in self._x.items():
                 if solver.value(var) == 1:
-                    score = 1.0 + (0.5 if shift_id in emp_prefs.get(emp_id, set()) else 0.0)
-                    assignments.append(AssignmentProposal(shift_id, emp_id, score))
+                    emp = emp_map[emp_id]
+                    shift = shift_map[shift_id]
+                    cost = (shift.duration_minutes / 60.0) * emp.hourly_rate
+                    assignments.append(AssignmentProposal(
+                        shift_id=shift_id, 
+                        employee_id=emp_id, 
+                        employment_type=emp.employment_type,
+                        cost=round(cost, 2)
+                    ))
             for shift in self.data.shifts:
                 if solver.value(self._uncovered[shift.id]) == 1:
                     unassigned.append(shift.id)

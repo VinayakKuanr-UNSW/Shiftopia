@@ -124,7 +124,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                             value={formData.role_id}
                             onValueChange={(val) => {
                                 const role = roles.find(r => r.id === val);
-                                updateRole(val, role?.remuneration_level_id);
+                                updateRole(val, role?.remuneration_level_id, role?.employment_type);
                             }}
                             disabled={!formData.sub_department_id}
                         >
@@ -139,51 +139,75 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                         </Select>
                     </div>
 
-                    {/* Remuneration Level */}
-                    <div className="space-y-2">
-                        <Label className="text-muted-foreground flex items-center gap-2">
-                            <DollarSign className="w-4 h-4" /> Remuneration Level
-                        </Label>
-                        <Select
-                            value={formData.rem_level_id}
-                            onValueChange={(val) => updateField('rem_level_id', val)}
-                        >
-                            <SelectTrigger className="bg-muted/30 border-border">
-                                <SelectValue placeholder="Select level" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {remLevels.map(rl => (
-                                    <SelectItem key={rl.id} value={rl.id}>
-                                        L{rl.level_number} - {rl.level_name} (${rl.hourly_rate_min}/hr)
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                    {(() => {
+                        const selectedRole = roles.find(r => r.id === formData.role_id);
+                        const roleEmploymentType = selectedRole?.employment_type;
 
-                    {/* Employment Status */}
-                    <div className="space-y-2">
-                        <Label className="text-muted-foreground flex items-center gap-2">
-                            <Briefcase className="w-4 h-4" /> Employment Status
-                        </Label>
-                        <Select
-                            value={formData.employment_status}
-                            onValueChange={(val) => updateField('employment_status', val)}
-                        >
-                            <SelectTrigger className="bg-muted/30 border-border">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {['Full-Time', 'Part-Time', 'Casual', 'Flexible Part-Time'].map(status => (
-                                    <SelectItem key={status} value={status}>
-                                        {status}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                        const allowedStatuses = (() => {
+                            if (!roleEmploymentType) return ['Full-Time', 'Part-Time', 'Casual', 'Flexible Part-Time'];
+                            const lower = roleEmploymentType.toLowerCase();
+                            const statuses: string[] = [];
+                            if (lower.includes('full time')) statuses.push('Full-Time');
+                            if (lower.includes('part time')) statuses.push('Part-Time');
+                            if (lower.includes('casual')) statuses.push('Casual');
+                            if (lower.includes('flexible')) statuses.push('Flexible Part-Time');
+                            return statuses.length > 0 ? statuses : ['Full-Time', 'Part-Time', 'Casual', 'Flexible Part-Time'];
+                        })();
+
+                        const isRemLocked = !!formData.role_id && !!selectedRole?.remuneration_level_id;
+                        const isEmpLocked = !!formData.role_id && allowedStatuses.length === 1;
+
+                        return (
+                            <>
+                                {/* Remuneration Level */}
+                                <div className="space-y-2">
+                                    <Label className="text-muted-foreground flex items-center gap-2">
+                                        <DollarSign className="w-4 h-4" /> Remuneration Level
+                                    </Label>
+                                    <Select
+                                        value={formData.rem_level_id}
+                                        onValueChange={(val) => updateField('rem_level_id', val)}
+                                        disabled={isRemLocked}
+                                    >
+                                        <SelectTrigger className="bg-muted/30 border-border">
+                                            <SelectValue placeholder="Select level" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {remLevels.map(rl => (
+                                                <SelectItem key={rl.id} value={rl.id}>
+                                                    L{rl.level_number} - {rl.level_name} (${rl.hourly_rate_min}/hr)
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* Employment Status */}
+                                <div className="space-y-2">
+                                    <Label className="text-muted-foreground flex items-center gap-2">
+                                        <Briefcase className="w-4 h-4" /> Employment Status
+                                    </Label>
+                                    <Select
+                                        value={formData.employment_status}
+                                        onValueChange={(val) => updateField('employment_status', val)}
+                                        disabled={isEmpLocked}
+                                    >
+                                        <SelectTrigger className="bg-muted/30 border-border">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {allowedStatuses.map(status => (
+                                                <SelectItem key={status} value={status}>
+                                                    {status}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </>
+                        );
+                    })()}
                 </div>
-
                 <DialogFooter>
                     <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
                     <Button onClick={handleSubmit} disabled={isSubmitting || isLoadingRefs}>

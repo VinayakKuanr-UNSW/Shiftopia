@@ -68,6 +68,9 @@ export interface Shift {
     unpaidBreakDuration: number;
     length: number;
     netLength: number;
+    scheduledLength: number;
+    remunerationRate: number;
+    complianceOverride: boolean;
     remunerationLevelId: string;
     assigned_employee_id?: string;
     lifecycleStatus: LifecycleStatus;

@@ -42,6 +42,7 @@ export async function fetchSupervisoryRatios(
         subDepartmentId: v.sub_department_id as string,
         ratio: v.ratio as number,
         supervisorRoleId: v.supervisor_role_id as string,
+        supervisedRoleIds: v.supervised_role_ids as string[] | undefined,
       };
     })
     .filter((rule) => subDeptSet.has(rule.subDepartmentId));
@@ -78,4 +79,41 @@ export async function fetchMinimumStaffRules(
       };
     })
     .filter((rule) => subDeptSet.has(rule.subDepartmentId));
+}
+
+/**
+ * Fetch L6 local and global floor constraints for the demand engine.
+ */
+export async function fetchL6Constraints() {
+  const { data, error } = await supabase
+    .from('work_rules')
+    .select('rule_name, rule_value')
+    .in('rule_name', ['demand_l6_local_floor', 'demand_l6_global_floor'])
+    .eq('is_active', true);
+
+  if (error) throw new Error(`Failed to fetch L6 constraints: ${error.message}`);
+
+  const localFloors: any[] = [];
+  const globalFloors: any[] = [];
+
+  for (const row of data || []) {
+    const v = row.rule_value as any;
+    if (row.rule_name === 'demand_l6_local_floor') {
+      localFloors.push({
+        function_code: v.function_code,
+        level: v.level,
+        floor: v.floor,
+        rule_code: v.rule_code,
+      });
+    } else {
+      globalFloors.push({
+        functions: v.functions,
+        levels: v.levels,
+        floor: v.floor,
+        rule_code: v.rule_code,
+      });
+    }
+  }
+
+  return { localFloors, globalFloors };
 }

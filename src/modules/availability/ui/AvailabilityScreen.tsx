@@ -421,7 +421,7 @@ export function AvailabilityScreen({
         className="fixed bottom-24 right-6 z-50 md:hidden"
       >
         <Button
-          onClick={handleAddAvailability}
+          onClick={startCreate}
           size="icon"
           className="h-16 w-16 rounded-full shadow-2xl bg-primary text-primary-foreground hover:scale-110 active:scale-95 transition-all duration-300"
         >

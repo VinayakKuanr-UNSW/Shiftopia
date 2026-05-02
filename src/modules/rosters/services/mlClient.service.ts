@@ -42,6 +42,8 @@ export interface EventInput {
   timeSliceCount: number;
   buildingType: TemplateGroupType;
   eventId?: string;
+  synthesisRunId?: string;
+  scenarioId?: string;
 }
 
 interface RoleResult {
@@ -113,11 +115,15 @@ export async function predictSlice(request: EventInput): Promise<RoleResult[]> {
       meal_window_flag: request.mealWindowFlag,
       event_id: request.eventId,
       time_slice_index: request.timeSliceIndex,
+      synthesis_run_id: request.synthesisRunId,
+      scenario_id: request.scenarioId,
     }),
   });
 
   if (!response.ok) {
-    throw new Error(`ML prediction failed: ${response.statusText}`);
+    throw new Error(
+      `ML prediction failed for event ${request.eventId ?? 'unknown'} slice ${request.timeSliceIndex}: HTTP ${response.status} ${response.statusText}`,
+    );
   }
   return response.json();
 }
@@ -125,12 +131,20 @@ export async function predictSlice(request: EventInput): Promise<RoleResult[]> {
 export async function buildDemandAnalysis(
   event: EventInput,
   role: string,
+  derivePerSliceFlags?: (sliceIndex: number) => {
+    entryPeakFlag: boolean;
+    exitPeakFlag: boolean;
+    mealWindowFlag: boolean;
+  },
 ): Promise<DemandTensor> {
-  // For each time slice, call the ML model to get predicted demand for that slice
+  // For each time slice, call the ML model to get predicted demand for that slice.
+  // Per-slice flags (entry/exit peak, meal window) are computed by the demand builder
+  // via the optional derivePerSliceFlags callback so the policy lives in one place.
   const slices = await Promise.all(
-    Array.from({ length: event.timeSliceCount }, (_, i) =>
-      predictSlice({ ...event, timeSliceIndex: i }),
-    ),
+    Array.from({ length: event.timeSliceCount }, (_, i) => {
+      const flagOverrides = derivePerSliceFlags ? derivePerSliceFlags(i) : {};
+      return predictSlice({ ...event, timeSliceIndex: i, ...flagOverrides });
+    }),
   );
 
   // Transform the raw ML predictions into the format needed for shift synthesis.

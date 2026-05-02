@@ -14,10 +14,10 @@ export const SHIFT_POLICY = {
   microPeakMinutes: 60, // spikes under 1 hr get merged into nearby shifts (PRD section 7)
 } as const;
 
-// 07:00–20:00 in 30 min slots
+// 06:00 → 02:00 next-day (covers late concerts), 30-min slots, 40 total.
 export const SLOT_MINUTES = Array.from(
-  { length: 27 },
-  (_, i) => 7 * 60 + i * 30,
+  { length: 40 },
+  (_, i) => 6 * 60 + i * 30,
 );
 
 export interface DemandSlot {
@@ -26,6 +26,8 @@ export interface DemandSlot {
   requiredHeadcount: number; // how many staff are needed
   residualHeadcount: number; // how many are still needed after existing shifts (float for deletion logic)
   residualHeadcountInt: number; // how many are still needed after existing shifts (int for creation logic)
+  contributingEvents?: string[]; // Events that drove this demand slice
+  reasons?: string[]; // Explanations for rule-based demand (e.g., L3 rules, L5 multipliers)
 }
 
 // Role mapping
@@ -34,6 +36,7 @@ export interface DemandTensor {
   subDepartmentId: string;
   buildingType: TemplateGroupType; // used to set group_type on generated shifts
   slots: DemandSlot[];
+  demandSource?: 'ml_predicted' | 'derived' | 'baseline' | null;
 }
 // Output of the packing algorithm
 export interface SynthesizedShift {
@@ -44,6 +47,12 @@ export interface SynthesizedShift {
   endMinutes: number; //eg 720 = 12:00
   type: ShiftType;
   headcount: number; ///how many shifts to create at this time
+  reasons?: string[]; // Explainable AI reasoning badge text
+
+  // Labor Forecasting Metadata
+  demand_source?: "baseline" | "ml_predicted" | "derived" | null;
+  target_employment_type?: "FT" | "PT" | "Casual" | null;
+  demand_group_id?: string | null;
 }
 
 export interface PeakWindow {
@@ -290,6 +299,7 @@ export interface SupervisoryRatioRule {
   subDepartmentId: string;
   ratio: number; // 1 supervisor per N staff
   supervisorRoleId: string;
+  supervisedRoleIds?: string[]; // Optional: specific roles this supervisor manages. If empty, manages all non-supervisor roles.
 }
 
 // For each sub-department with a ratio rule, generates supervisor shifts proportional
@@ -300,48 +310,83 @@ export function applySupervisorRatios(
 ): SynthesizedShift[] {
   if (ratios.length === 0) return shifts;
 
-  const ratioMap = new Map<string, SupervisoryRatioRule>();
-  for (const rule of ratios) {
-    ratioMap.set(rule.subDepartmentId, rule);
-  }
+  let currentShifts = [...shifts];
+  let addedInThisPass = true;
+  const maxPasses = 5; // Prevent infinite loops
+  let passCount = 0;
 
-  const supervisorShifts: SynthesizedShift[] = [];
+  while (addedInThisPass && passCount < maxPasses) {
+    addedInThisPass = false;
+    passCount++;
 
-  // Group shifts by sub-department
-  const bySubDept = new Map<string, SynthesizedShift[]>();
-  for (const shift of shifts) {
-    const group = bySubDept.get(shift.subDepartmentId) ?? [];
-    group.push(shift);
-    bySubDept.set(shift.subDepartmentId, group);
-  }
+    const newSupervisors: SynthesizedShift[] = [];
 
-  bySubDept.forEach((deptShifts, subDeptId) => {
-    const rule = ratioMap.get(subDeptId);
-    if (!rule) return;
+    // Process each ratio rule
+    for (const rule of ratios) {
+      // Find shifts that this rule supervises
+      const staffShifts = currentShifts.filter((s) => {
+        if (s.subDepartmentId !== rule.subDepartmentId) return false;
+        if (s.roleId === rule.supervisorRoleId) return false;
 
-    // Skip shifts that are already supervisor shifts (avoid compounding)
-    const staffShifts = deptShifts.filter(
-      (s) => s.roleId !== rule.supervisorRoleId,
-    );
-
-    // For each unique time window, compute supervisor need
-    for (const shift of staffShifts) {
-      const supervisorsNeeded = Math.ceil(shift.headcount / rule.ratio);
-      if (supervisorsNeeded <= 0) continue;
-
-      supervisorShifts.push({
-        roleId: rule.supervisorRoleId,
-        subDepartmentId: subDeptId,
-        buildingType: shift.buildingType,
-        startMinutes: shift.startMinutes,
-        endMinutes: shift.endMinutes,
-        type: "core",
-        headcount: supervisorsNeeded,
+        if (rule.supervisedRoleIds && rule.supervisedRoleIds.length > 0) {
+          return rule.supervisedRoleIds.includes(s.roleId);
+        }
+        return true; // Default: supervises everything in the sub-dept
       });
-    }
-  });
 
-  return [...shifts, ...supervisorShifts];
+      if (staffShifts.length === 0) continue;
+
+      // Group staff shifts by time window (startMinutes, endMinutes)
+      // This ensures we have enough supervisors for every time slice
+      const windows = new Map<string, { start: number; end: number; headcount: number; buildingType: TemplateGroupType; demand_source: any }>();
+      for (const s of staffShifts) {
+        const key = `${s.startMinutes}-${s.endMinutes}`;
+        const existing = windows.get(key) ?? { 
+          start: s.startMinutes, 
+          end: s.endMinutes, 
+          headcount: 0, 
+          buildingType: s.buildingType,
+          demand_source: s.demand_source
+        };
+        existing.headcount += s.headcount;
+        windows.set(key, existing);
+      }
+
+      // Check if we already have supervisor shifts for these windows in THIS sub-dept
+      const existingSupervisors = currentShifts.filter(
+        (s) => s.subDepartmentId === rule.subDepartmentId && s.roleId === rule.supervisorRoleId
+      );
+
+      for (const [key, win] of windows) {
+        const supervisorsNeeded = Math.ceil(win.headcount / rule.ratio);
+        const alreadyHave = existingSupervisors
+          .filter((s) => s.startMinutes === win.start && s.endMinutes === win.end)
+          .reduce((sum, s) => sum + s.headcount, 0);
+
+        if (supervisorsNeeded > alreadyHave) {
+          const gap = supervisorsNeeded - alreadyHave;
+          newSupervisors.push({
+            roleId: rule.supervisorRoleId,
+            subDepartmentId: rule.subDepartmentId,
+            buildingType: win.buildingType,
+            startMinutes: win.start,
+            endMinutes: win.end,
+            type: "core",
+            headcount: gap,
+            demand_source: win.demand_source,
+            reasons: [`Supervisory Ratio ${rule.ratio}:1 for ${win.headcount} staff`],
+          });
+          addedInThisPass = true;
+        }
+      }
+    }
+
+    if (addedInThisPass) {
+      currentShifts = [...currentShifts, ...newSupervisors];
+    }
+  }
+
+  return currentShifts;
 }
 
 // --- Step 7: Minimum Staff Enforcement ---
@@ -386,6 +431,7 @@ export function applyMinimumStaff(
         endMinutes: coverageWindow.end,
         type: "core",
         headcount: rule.minimumHeadcount,
+        target_employment_type: undefined,
       });
       continue;
     }

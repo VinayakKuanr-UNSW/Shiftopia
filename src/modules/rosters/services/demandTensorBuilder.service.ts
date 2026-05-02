@@ -2,11 +2,16 @@
  * demandTensorBuilder — turn a (date, scope) + existing shift list into the
  * DemandTensor[] the shift synthesizer consumes.
  *
- * Pipeline:
+ * Pipeline (ML path, default):
  *   1. Fetch venueops_events overlapping the date.
  *   2. For each (event × role) call mlClient.buildDemandAnalysis → raw tensor.
  *   3. Merge raw tensors with the same roleId + subDepartmentId by summing per slot.
  *   4. Subtract existing-shift coverage per slot → residualHeadcount.
+ *
+ * Rule-engine path (VITE_DEMAND_ENGINE_MODE=rules_shadow|rules_primary):
+ *   Runs the L3 rule engine + L7 finalization alongside or instead of ML.
+ *   - rules_shadow:  writes demand_tensor rows but ML still drives the synthesizer.
+ *   - rules_primary: rules drive the synthesizer; ML gated by VITE_ML_RUNTIME_MODE.
  */
 
 import { supabase } from '@/platform/realtime/client';
@@ -17,6 +22,7 @@ const ICC_TIMEZONE = 'Australia/Sydney';
 import {
   DemandSlot,
   DemandTensor,
+  SynthesizedShift,
   SLOT_DURATION_MINUTES,
   SLOT_MINUTES,
   timeToMinutes,
@@ -32,8 +38,28 @@ import {
 } from './mlClient.service';
 import { fetchRoleMLClassMap } from '../api/roleMlClass.queries';
 import { createModuleLogger } from '@/modules/core/lib/logger';
+// ── Rule-engine imports ────────────────────────────────────────────────────
+import { buildEventFeature } from './eventFeatureBuilder.service';
+import { demandRulesQueries } from '../api/demandRules.queries';
+import { compileRules, runBaseline } from './ruleBaseline.service';
+import { supervisorFeedbackQueries } from '../api/supervisorFeedback.queries';
+import { finalizeDemand, finalizedRowsToSynthGrid } from './demandFinalization.service';
+import { demandTensorDbQueries } from '../api/demandTensor.queries';
+import { fetchL6Constraints } from '../api/workRules.queries';
+import type { SupervisorFeedbackRow, FunctionCode } from '../api/supervisorFeedback.dto';
 
 const log = createModuleLogger('demandTensorBuilder');
+
+// ── Demand engine mode flag ────────────────────────────────────────────────
+export type DemandEngineMode = 'ml_only' | 'rules_shadow' | 'rules_primary';
+
+export function getDemandEngineMode(): DemandEngineMode {
+  const raw = (import.meta.env.VITE_DEMAND_ENGINE_MODE as string | undefined)?.toLowerCase();
+  if (raw === 'rules_shadow' || raw === 'rules_primary') return raw;
+  return 'ml_only'; // safe default — no behavior change
+}
+
+const FUNCTION_CODES: FunctionCode[] = ['F&B', 'Logistics', 'AV', 'FOH', 'Security'];
 
 export interface BuildScopeDemandParams {
   organizationId: string;
@@ -41,18 +67,35 @@ export interface BuildScopeDemandParams {
   departmentId?: string;
   subDepartmentId?: string | null;
   /** Roles to generate tensors for (ML service returns per-role values keyed by name). */
-  roles: Array<{ id: string; name: string; subDepartmentId: string | null }>;
+  roles: Array<{
+    id: string;
+    name: string;
+    subDepartmentId: string | null;
+    forecasting_bucket?: 'static' | 'semi_dynamic' | 'dynamic' | null;
+    supervision_ratio_min?: number | null;
+    supervision_ratio_max?: number | null;
+    is_baseline_eligible?: boolean;
+  }>;
   /** Existing shifts for the scope/date, used to compute residuals. */
   existingShifts: Shift[];
   /** 'convention_centre' | 'exhibition_centre' | 'theatre' — feeds buildingType. */
   buildingType: TemplateGroupType;
+  /** Forwarded to the ML service so it can tag demand_forecasts rows for rollback. */
+  synthesisRunId?: string;
+  /** Optional scenario context forwarded to ML service. */
+  scenarioId?: string;
 }
 
 export interface ScopeDemandResult {
   tensors: DemandTensor[];
+  baselineShifts: SynthesizedShift[];
   eventCount: number;
   /** Diagnostic: true if any ML call failed. Caller can show a warning. */
   hasMlError: boolean;
+  /** Per-failure details. Non-empty whenever hasMlError is true. */
+  mlErrors: Array<{ eventId: string; role: string; message: string }>;
+  /** L7 finalized demand tensor rows (Phase 2 output) */
+  demandTensorRows?: import('../api/demandTensor.queries').DemandTensorInsertRow[];
 }
 
 interface VenueopsEventRow {
@@ -63,6 +106,49 @@ interface VenueopsEventRow {
   estimated_total_attendance: number;
   event_type_name: string | null;
   venue_names: string | null;
+  // L1 columns (Phase 1-D); nullable for legacy rows
+  service_type: 'buffet' | 'plated' | 'cocktail' | 'none' | null;
+  alcohol: boolean | null;
+  bump_in_min: number | null;
+  bump_out_min: number | null;
+  layout_complexity: 'simple' | 'standard' | 'complex' | null;
+}
+
+import { getDay, parseISO } from 'date-fns';
+
+async function fetchBaselineShifts(
+  date: string,
+  departmentId?: string,
+  subDepartmentId?: string | null,
+): Promise<any[]> {
+  const dayOfWeek = getDay(parseISO(date));
+
+  // 1. Find active base template
+  let query = supabase
+    .from('roster_templates')
+    .select('id')
+    .eq('is_active', true)
+    .eq('is_base_template', true);
+  
+  if (departmentId) query = query.eq('department_id', departmentId);
+  if (subDepartmentId) query = query.eq('sub_department_id', subDepartmentId);
+
+  const { data: template, error: tError } = await query.maybeSingle();
+  if (tError || !template) return [];
+
+  // 2. Fetch shifts for this day
+  const { data: shifts, error: sError } = await supabase
+    .from('template_shifts')
+    .select('*')
+    .eq('template_id', template.id)
+    .eq('day_of_week', dayOfWeek);
+
+  if (sError) return [];
+  return (shifts ?? []).map((ts) => ({
+    ...ts,
+    lifecycle_status: 'Published', // Treat template shifts as active for coverage
+    group_type: 'convention_centre', // Default
+  }));
 }
 
 async function fetchEventsForDate(date: string): Promise<VenueopsEventRow[]> {
@@ -71,7 +157,7 @@ async function fetchEventsForDate(date: string): Promise<VenueopsEventRow[]> {
   const { data, error } = await supabase
     .from('venueops_events')
     .select(
-      'event_id, name, start_date_time, end_date_time, estimated_total_attendance, event_type_name, venue_names',
+      'event_id, name, start_date_time, end_date_time, estimated_total_attendance, event_type_name, venue_names, service_type, alcohol, bump_in_min, bump_out_min, layout_complexity',
     )
     .lte('start_date_time', dayEnd)
     .gte('end_date_time', dayStart)
@@ -88,12 +174,105 @@ async function fetchEventsForDate(date: string): Promise<VenueopsEventRow[]> {
 }
 
 /**
+ * Derive a FunctionType from the event_type_name string.
+ * Covers the most common ICC Sydney event categories.
+ */
+function deriveFunctionType(eventTypeName: string | null): EventInput['functionType'] {
+  if (!eventTypeName) return 'Reception';
+  const n = eventTypeName.toLowerCase();
+  if (/concert|festival|show|performance/.test(n)) return 'Performance';
+  if (/conference|corporate|seminar|summit|forum/.test(n)) return 'Meeting';
+  if (/gala|dinner|banquet/.test(n)) return 'Dinner';
+  if (/trade\s*show|exhibition|expo/.test(n)) return 'Workshop';
+  if (/ceremony|award/.test(n)) return 'Ceremony';
+  if (/breakout/.test(n)) return 'Breakout';
+  return 'Reception';
+}
+
+// deriveRoomCount lives in eventFeatureBuilder.service.ts — single source.
+import { deriveRoomCount } from './eventFeatureBuilder.service';
+
+/**
+ * Convert a UTC epoch ms timestamp to minutes-since-midnight in the
+ * Sydney-local wall-clock frame. AEDT is UTC+11, AEST is UTC+10 — this
+ * uses Intl to handle the DST boundary correctly.
+ */
+function sydneyMinutesSinceMidnight(utcMs: number): number {
+  const parts = new Intl.DateTimeFormat('en-AU', {
+    timeZone: ICC_TIMEZONE,
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(new Date(utcMs));
+  let h = 0;
+  let m = 0;
+  for (const p of parts) {
+    if (p.type === 'hour') h = parseInt(p.value, 10);
+    else if (p.type === 'minute') m = parseInt(p.value, 10);
+  }
+  // 24:00 surfaces in some locales as the hour boundary; normalize to 0.
+  if (h === 24) h = 0;
+  return h * 60 + m;
+}
+
+/**
+ * Per-slot flag calculator. Returns entryPeakFlag, exitPeakFlag and mealWindowFlag
+ * for a given slot index within the SLOT_MINUTES array.
+ *
+ * @param sliceIndex  Index into SLOT_MINUTES (0-based).
+ * @param eventStartMs  Event start time in epoch ms.
+ * @param eventEndMs    Event end time in epoch ms.
+ */
+export function derivePerSliceFlags(
+  sliceIndex: number,
+  eventStartMs: number,
+  eventEndMs: number,
+): { entryPeakFlag: boolean; exitPeakFlag: boolean; mealWindowFlag: boolean } {
+  const slotStartMinutes = SLOT_MINUTES[sliceIndex];
+  if (slotStartMinutes === undefined) {
+    return { entryPeakFlag: false, exitPeakFlag: false, mealWindowFlag: false };
+  }
+  const slotEndMinutes = slotStartMinutes + SLOT_DURATION_MINUTES;
+
+  // Slot start/end and event start/end must be compared in the SAME wall-clock
+  // frame. SLOT_MINUTES is Sydney-local (06:00 = 360). The previous version
+  // used getUTCHours/Minutes — for AEDT (UTC+11) a 09:00 local event resolved
+  // to 22:00 in the comparison frame, firing peak flags at the wrong slots.
+  const eventStartMinutes = sydneyMinutesSinceMidnight(eventStartMs);
+  const eventEndMinutes = sydneyMinutesSinceMidnight(eventEndMs);
+
+  const PEAK_WINDOW_MINUTES = 60;
+
+  // Slot overlaps the ±60-min window around event start
+  const entryPeakFlag =
+    slotStartMinutes < eventStartMinutes + PEAK_WINDOW_MINUTES &&
+    slotEndMinutes > eventStartMinutes - PEAK_WINDOW_MINUTES;
+
+  // Slot overlaps the ±60-min window around event end
+  const exitPeakFlag =
+    slotStartMinutes < eventEndMinutes + PEAK_WINDOW_MINUTES &&
+    slotEndMinutes > eventEndMinutes - PEAK_WINDOW_MINUTES;
+
+  // Meal windows: 12:00–13:30 (720–810) or 18:00–19:30 (1080–1170)
+  const LUNCH_START = 720; const LUNCH_END = 810;
+  const DINNER_START = 1080; const DINNER_END = 1170;
+  const mealWindowFlag =
+    (slotStartMinutes < LUNCH_END && slotEndMinutes > LUNCH_START) ||
+    (slotStartMinutes < DINNER_END && slotEndMinutes > DINNER_START);
+
+  return { entryPeakFlag, exitPeakFlag, mealWindowFlag };
+}
+
+/**
  * Build an EventInput suitable for the ML service from a VenueOps row.
- * Conservative defaults are used when fields are missing.
+ * Per-slice flags (entryPeak/exitPeak/mealWindow) must be overridden per slice —
+ * call derivePerSliceFlags(sliceIndex, ...) and merge into the returned base object.
  */
 function toEventInput(
   row: VenueopsEventRow,
   buildingType: TemplateGroupType,
+  synthesisRunId?: string,
+  scenarioId?: string,
 ): EventInput {
   const start = new Date(row.start_date_time);
   return {
@@ -101,12 +280,14 @@ function toEventInput(
     expectedAttendance: row.estimated_total_attendance ?? 0,
     dayOfWeek: start.getUTCDay(),
     month: start.getUTCMonth() + 1,
-    functionType: 'Reception',
-    roomCount: 1,
+    functionType: deriveFunctionType(row.event_type_name),
+    roomCount: deriveRoomCount(row.venue_names),
+    // TODO: totalSqm has no source field in venueops_events — awaiting data-audit (see audit-doc issue #42)
     totalSqm: 0,
     roomCapacity: row.estimated_total_attendance ?? 0,
     simultaneousEventCount: 1,
     totalVenueAttendanceSameTime: row.estimated_total_attendance ?? 0,
+    // These are per-slice values — overridden inside the buildDemandAnalysis call below.
     entryPeakFlag: false,
     exitPeakFlag: false,
     mealWindowFlag: false,
@@ -114,6 +295,8 @@ function toEventInput(
     timeSliceCount: SLOT_MINUTES.length,
     buildingType,
     eventId: row.event_id,
+    synthesisRunId,
+    scenarioId,
   };
 }
 
@@ -125,6 +308,7 @@ function emptySlots(): DemandSlot[] {
     requiredHeadcount: 0,
     residualHeadcount: 0,
     residualHeadcountInt: 0,
+    contributingEvents: [],
   }));
 }
 
@@ -140,13 +324,18 @@ function emptySlots(): DemandSlot[] {
 function mergeTensorInto(
   accumulator: DemandSlot[],
   raw: DemandTensor,
+  eventName: string,
   divisor = 1,
 ): void {
   raw.slots.forEach((rawSlot, i) => {
     if (i >= accumulator.length) return;
-    accumulator[i].requiredHeadcount += Math.round(
-      rawSlot.requiredHeadcount / divisor,
-    );
+    const addedHeadcount = Math.round(rawSlot.requiredHeadcount / divisor);
+    accumulator[i].requiredHeadcount += addedHeadcount;
+    if (addedHeadcount > 0 && accumulator[i].contributingEvents) {
+      if (!accumulator[i].contributingEvents!.includes(eventName)) {
+        accumulator[i].contributingEvents!.push(eventName);
+      }
+    }
   });
 }
 
@@ -191,27 +380,29 @@ export function computeExistingCoverage(
 export async function buildScopeDemand(
   params: BuildScopeDemandParams,
 ): Promise<ScopeDemandResult> {
-  // Map each scope role to one of the 4 ML classes via the DB-backed
-  // role_ml_class_map table. Falls back to the name-based regex for roles
-  // missing from the table (e.g. roles created since last regen).
-  // Roles with no match are skipped with a warn — no predictions available.
+  const engineMode = getDemandEngineMode();
+
+  // 1. Fetch baseline coverage from active templates
+  const baselineShifts = await fetchBaselineShifts(
+    params.date,
+    params.departmentId,
+    params.subDepartmentId,
+  );
+  const allCoverageShifts = [...params.existingShifts, ...baselineShifts];
+
+  // 2. Map roles and filter those requiring ML
   const roleMlMap = await fetchRoleMLClassMap();
   const mappedRoles = params.roles.map((r) => ({
     ...r,
     mlRole: resolveMLRoleById(r.id, roleMlMap) ?? resolveMLRoleByNameFallback(r.name),
   }));
-  const knownRoles = mappedRoles.filter(
-    (r): r is typeof r & { mlRole: MLKnownRole } => r.mlRole !== null,
-  );
-  const skippedRoles = mappedRoles
-    .filter((r) => r.mlRole === null)
-    .map((r) => r.name);
-  const roleMapping = knownRoles.map((r) => ({
-    dbName: r.name,
-    mlClass: r.mlRole,
-  }));
 
-  // Count how many peer DB roles share each ML class.
+  // Roles that are 'static' don't use ML predictions — they rely solely on baseline/manual shifts.
+  const knownRoles = mappedRoles.filter(
+    (r): r is typeof r & { mlRole: MLKnownRole } =>
+      r.mlRole !== null && r.forecasting_bucket !== 'static'
+  );
+
   const peerCountByClass = new Map<MLKnownRole, number>();
   for (const r of knownRoles) {
     peerCountByClass.set(r.mlRole, (peerCountByClass.get(r.mlRole) ?? 0) + 1);
@@ -220,49 +411,123 @@ export async function buildScopeDemand(
   log.info('building scope demand', {
     operation: 'buildScopeDemand',
     date: params.date,
-    organizationId: params.organizationId,
-    departmentId: params.departmentId,
-    subDepartmentId: params.subDepartmentId,
-    roleCount: params.roles.length,
-    mlMappedRoleCount: knownRoles.length,
-    roleMapping,
-    peerCountByClass: Object.fromEntries(peerCountByClass),
-    existingShiftCount: params.existingShifts.length,
+    engineMode,
+    baselineCount: baselineShifts.length,
+    predictionRoleCount: knownRoles.length,
   });
-
-  if (skippedRoles.length > 0) {
-    log.warn('skipping roles without ML mapping', {
-      operation: 'buildScopeDemand',
-      skippedRoles,
-      mlKnownRoles: [...ML_KNOWN_ROLES],
-    });
-  }
 
   const events = await fetchEventsForDate(params.date);
-  log.info('events fetched', {
-    operation: 'buildScopeDemand',
-    date: params.date,
-    eventCount: events.length,
-  });
 
-  if (events.length === 0 || knownRoles.length === 0) {
-    log.warn('no events or ML-mapped roles for scope', {
-      operation: 'buildScopeDemand',
-      eventCount: events.length,
-      roleCount: params.roles.length,
-      mlMappedRoleCount: knownRoles.length,
-    });
-    return { tensors: [], eventCount: events.length, hasMlError: false };
+  // ── Rule-engine path (L3 → L7) ────────────────────────────────────────
+  // Runs when engineMode is 'rules_shadow' or 'rules_primary'.
+  // In shadow mode: writes demand_tensor rows but doesn't change synthesizer input.
+  // In primary mode: also builds synthGrid that replaces ML accumulators below.
+  let rulesSynthGrid: Map<string, Float32Array> | null = null;
+  // Hoisted: referenced by the return statement below regardless of engineMode.
+  // In ml_only mode this stays empty; in shadow/primary it is populated inside
+  // the try block and read both for DB persistence and the return payload.
+  let allFinalizedRows: import('../api/demandTensor.queries').DemandTensorInsertRow[] = [];
+
+  if (engineMode !== 'ml_only' && events.length > 0) {
+    try {
+      // Compile active rules once for all events
+      const activeRules = await demandRulesQueries.listActive();
+      const { compiled, errors: compileErrors } = compileRules(activeRules);
+      if (compileErrors.length > 0) {
+        log.warn('rule compile errors', { operation: 'compileRules', errors: compileErrors });
+      }
+
+      // Fetch feedback rows for all (function, level) buckets in a single bulk call (Phase 2 optimization)
+      const buckets = FUNCTION_CODES.flatMap(fc =>
+        Array.from({ length: 8 }, (_, lvl) => ({ function_code: fc, level: lvl }))
+      );
+      const batchFeedback = await supervisorFeedbackQueries.listBatchForBuckets(buckets, 10);
+
+      const feedbackByBucket = new Map<string, SupervisorFeedbackRow[]>();
+      for (const row of batchFeedback) {
+        const key = `${row.function_code}|${row.level}`;
+        const existing = feedbackByBucket.get(key) ?? [];
+        existing.push(row);
+        feedbackByBucket.set(key, existing);
+      }
+
+      // L4 Timecard Adjustment — Phase 1 placeholder.
+      // Pinned to 1.0 (no-op) until the timecard ingestion + bucket aggregation
+      // service exists. The previous implementation referenced an unimported
+      // `shiftsQueries` and properties (.roleId, .functionCode) that don't exist
+      // on the role row type, which would have thrown ReferenceError at runtime
+      // and been silently swallowed by the outer catch — masking L4 entirely.
+      // See L4 build-out task; finalizeDemand defaults timecardMultByBucket
+      // values to 1.0 if absent, so passing an empty map is safe.
+      const timecardMultByBucket = new Map<string, number>();
+
+      // Fetch L6 Operational Constraints (Phase 2 Hardening)
+      const { localFloors, globalFloors } = await fetchL6Constraints();
+
+      // Run L3 + L7 per event
+      for (const event of events) {
+        const feature = buildEventFeature(event, params.date);
+        if (feature.first_slice_idx > feature.last_slice_idx) continue; // empty window
+
+        const baselineResult = runBaseline(feature, compiled);
+        if (baselineResult.runtimeErrors.length > 0) {
+          log.warn('rule runtime errors', {
+            operation: 'runBaseline',
+            eventId: event.event_id,
+            errors: baselineResult.runtimeErrors,
+          });
+        }
+
+        const finResult = finalizeDemand({
+          synthesis_run_id: params.synthesisRunId ?? null,
+          event_id: event.event_id,
+          baselineCells: baselineResult.cells,
+          feedbackByBucket,
+          timecardMultByBucket,
+          constraintFloors: localFloors,
+          globalFloors,
+        });
+
+        allFinalizedRows.push(...finResult.rows);
+      }
+
+      // Persist to demand_tensor (shadow or primary — always write provenance)
+      if (allFinalizedRows.length > 0) {
+        if (params.synthesisRunId) {
+          await demandTensorDbQueries.deleteForRun(params.synthesisRunId);
+        }
+        await demandTensorDbQueries.insertBatch(allFinalizedRows);
+        log.info('demand_tensor rows written', {
+          operation: 'demandTensorWrite',
+          rowCount: allFinalizedRows.length,
+          engineMode,
+        });
+      }
+
+      // In primary mode, build a synth grid from finalized rows
+      if (engineMode === 'rules_primary') {
+        rulesSynthGrid = finalizedRowsToSynthGrid(allFinalizedRows);
+      }
+    } catch (err) {
+      log.error(
+        'rule-engine path failed — falling back to ML',
+        { operation: 'ruleEnginePath', engineMode },
+        err as Error,
+      );
+      // Fallback: rulesSynthGrid stays null, ML path runs normally below
+    }
   }
 
   let hasMlError = false;
+  const mlErrors: Array<{ eventId: string; role: string; message: string }> = [];
   let mlCallCount = 0;
-  // One accumulator per role — slots aligned to SLOT_MINUTES.
   const accumulators = new Map<
     string,
     { roleName: string; subDepartmentId: string; slots: DemandSlot[] }
   >();
-  for (const role of knownRoles) {
+
+  // Initialise accumulators for ALL roles in scope (including static ones for coverage calc)
+  for (const role of params.roles) {
     accumulators.set(role.id, {
       roleName: role.name,
       subDepartmentId: role.subDepartmentId ?? params.subDepartmentId ?? '',
@@ -270,57 +535,116 @@ export async function buildScopeDemand(
     });
   }
 
-  // Call ML once per unique (event × mlRole) and share the result across all DB
-  // roles that map to the same ML class.
-  for (const event of events) {
-    const eventInput = toEventInput(event, params.buildingType);
-    const mlCache = new Map<string, DemandTensor>();
+  // 3a. Bridge approximation removed in Phase 2.
+  // The L7 rows (allFinalizedRows) are returned directly via ScopeDemandResult.
+  // synthesizeAndInsertShifts now natively maps (function, level) to roles.
 
-    for (const role of knownRoles) {
-      try {
-        let raw = mlCache.get(role.mlRole);
-        if (!raw) {
-          raw = await buildDemandAnalysis(eventInput, role.mlRole);
-          mlCache.set(role.mlRole, raw);
-          mlCallCount++;
+  // 3. Call ML for predictive roles (skipped in rules_primary when grid is available)
+  if (rulesSynthGrid === null && events.length > 0 && knownRoles.length > 0) {
+    for (const event of events) {
+      const eventInput = toEventInput(
+        event,
+        params.buildingType,
+        params.synthesisRunId,
+        params.scenarioId,
+      );
+      const eventStartMs = new Date(event.start_date_time).getTime();
+      const eventEndMs = new Date(event.end_date_time).getTime();
+      const mlCache = new Map<string, DemandTensor>();
+
+      for (const role of knownRoles) {
+        try {
+          let raw = mlCache.get(role.mlRole);
+          if (!raw) {
+            // First, try to fetch from demand_forecasts table.
+            // NOTE: time_slot column stores a slot INDEX (0-based), not minutes.
+            // slotStart/slotEnd below are index-valued placeholders; mergeTensorInto
+            // re-aligns by array index, so the merge is still correct.
+            const { data: cachedDemand, error } = await (supabase as any)
+              .from('demand_forecasts')
+              .select('*')
+              .eq('event_id', event.event_id)
+              .eq('role', role.mlRole)
+              .order('time_slot', { ascending: true });
+
+            if (!error && cachedDemand && cachedDemand.length > 0) {
+              const packingSlots: DemandSlot[] = cachedDemand.map((row: any) => ({
+                // slotStart/slotEnd are index-based placeholders; mergeTensorInto uses array index.
+                slotStart: row.time_slot,
+                slotEnd: row.time_slot + 1,
+                requiredHeadcount: row.corrected_count,
+                residualHeadcount: row.corrected_count,
+                residualHeadcountInt: Math.round(row.corrected_count),
+              }));
+              raw = {
+                roleId: role.mlRole,
+                subDepartmentId: event.event_id,
+                buildingType: params.buildingType,
+                slots: packingSlots,
+              };
+            } else {
+              // Fallback to calling the ML service live with per-slice flag derivation.
+              raw = await buildDemandAnalysis(
+                eventInput,
+                role.mlRole,
+                (sliceIndex) => derivePerSliceFlags(sliceIndex, eventStartMs, eventEndMs),
+              );
+            }
+            mlCache.set(role.mlRole, raw);
+            mlCallCount++;
+          }
+          const acc = accumulators.get(role.id);
+          const divisor = peerCountByClass.get(role.mlRole) ?? 1;
+          if (acc) mergeTensorInto(acc.slots, raw, event.name, divisor);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          log.warn('ML call failed', { operation: 'buildDemandAnalysis', eventId: event.event_id, dbRole: role.name }, err as Error);
+          hasMlError = true;
+          mlErrors.push({ eventId: event.event_id, role: role.mlRole, message });
         }
-        const acc = accumulators.get(role.id);
-        const divisor = peerCountByClass.get(role.mlRole) ?? 1;
-        if (acc) mergeTensorInto(acc.slots, raw, divisor);
-        log.debug('ML predict ok', {
-          operation: 'buildDemandAnalysis',
-          eventId: event.event_id,
-          dbRole: role.name,
-          mlClass: role.mlRole,
-          peerDivisor: divisor,
-          cached: mlCache.has(role.mlRole),
-        });
-      } catch (err) {
-        log.warn(
-          'ML call failed',
-          {
-            operation: 'buildDemandAnalysis',
-            eventId: event.event_id,
-            dbRole: role.name,
-            mlClass: role.mlRole,
-          },
-          err as Error,
-        );
-        hasMlError = true;
       }
     }
   }
 
-  // Subtract existing coverage → residualHeadcount.
+  // 4. Derive Supervision for Semi-Dynamic roles
+  const supervisionRoles = params.roles.filter(
+    r => r.forecasting_bucket === 'semi_dynamic' && r.supervision_ratio_min
+  );
+
+  if (supervisionRoles.length > 0) {
+    // Total predicted headcount across all slots (excluding the supervisors themselves)
+    const totalPredictedPerSlot = emptySlots().map((_, i) => {
+      let sum = 0;
+      for (const [roleId, acc] of accumulators) {
+        if (!supervisionRoles.some(sr => sr.id === roleId)) {
+          sum += acc.slots[i].requiredHeadcount;
+        }
+      }
+      return sum;
+    });
+
+    for (const sRole of supervisionRoles) {
+      const acc = accumulators.get(sRole.id);
+      if (!acc) continue;
+      const ratio = sRole.supervision_ratio_min!;
+      acc.slots.forEach((slot, i) => {
+        const derived = Math.ceil(totalPredictedPerSlot[i] / ratio);
+        slot.requiredHeadcount = Math.max(slot.requiredHeadcount, derived);
+      });
+    }
+  }
+
+  // 5. Subtract coverage (Baseline + Existing) → residualHeadcount
   const tensors: DemandTensor[] = [];
   for (const [roleId, acc] of accumulators) {
     const existing = computeExistingCoverage(
       acc.slots,
-      params.existingShifts,
+      allCoverageShifts, // Includes both baseline and real DB shifts
       roleId,
       acc.subDepartmentId,
       params.buildingType,
     );
+
     const slots = acc.slots.map((s, i) => {
       const residual = s.requiredHeadcount - existing[i];
       return {
@@ -329,34 +653,38 @@ export async function buildScopeDemand(
         residualHeadcountInt: Math.round(Math.max(0, residual)),
       };
     });
-    if (
-      slots.every((s) => s.requiredHeadcount === 0 && s.residualHeadcount === 0)
-    )
-      continue;
+
+    if (slots.every((s) => s.requiredHeadcount === 0 && s.residualHeadcount === 0)) continue;
+
+    const isSupervision = supervisionRoles.some(sr => sr.id === roleId);
+
     tensors.push({
       roleId,
       subDepartmentId: acc.subDepartmentId,
       buildingType: params.buildingType,
       slots,
+      demandSource: isSupervision ? 'derived' : 'ml_predicted',
     });
   }
 
-  const totalRequired = tensors.reduce(
-    (s, t) => s + t.slots.reduce((a, b) => a + b.requiredHeadcount, 0),
-    0,
-  );
-  const totalResidual = tensors.reduce(
-    (s, t) => s + t.slots.reduce((a, b) => a + b.residualHeadcount, 0),
-    0,
-  );
-  log.info('demand built', {
-    operation: 'buildScopeDemand',
-    tensorCount: tensors.length,
-    totalRequired,
-    totalResidual,
-    mlCallCount,
-    hasMlError,
-  });
+  const baselineSynthesized: SynthesizedShift[] = baselineShifts.map(s => ({
+    roleId: s.role_id,
+    subDepartmentId: s.subgroup_id,
+    buildingType: params.buildingType,
+    startMinutes: timeToMinutes(s.start_time),
+    endMinutes: timeToMinutes(s.end_time),
+    type: 'core',
+    headcount: 1,
+    demand_source: 'baseline',
+    target_employment_type: 'FT', // Default preference for baseline
+  }));
 
-  return { tensors, eventCount: events.length, hasMlError };
+  return {
+    tensors,
+    baselineShifts: baselineSynthesized,
+    eventCount: events.length,
+    hasMlError,
+    mlErrors,
+    demandTensorRows: allFinalizedRows,
+  };
 }

@@ -50,16 +50,36 @@ export const useContractForm = (employeeId: string, onSuccess?: () => void) => {
     };
 
     // Auto-select rem level when role changes
-    const updateRole = (roleId: string, linkedRemLevelId?: string) => {
-        setFormData(prev => ({
-            ...prev,
-            role_id: roleId,
-            rem_level_id: linkedRemLevelId || prev.rem_level_id
-        }));
+    const updateRole = (roleId: string, linkedRemLevelId?: string, employmentType?: string) => {
+        setFormData(prev => {
+            let nextStatus = prev.employment_status;
+            if (employmentType) {
+                const lower = employmentType.toLowerCase();
+                const statuses: string[] = [];
+                if (lower.includes('full time')) statuses.push('Full-Time');
+                if (lower.includes('part time')) statuses.push('Part-Time');
+                if (lower.includes('casual')) statuses.push('Casual');
+                if (lower.includes('flexible')) statuses.push('Flexible Part-Time');
+                
+                if (statuses.length > 0) {
+                    // Default to the first allowed status
+                    if (!statuses.includes(nextStatus)) {
+                        nextStatus = statuses[0];
+                    }
+                }
+            }
+
+            return {
+                ...prev,
+                role_id: roleId,
+                rem_level_id: linkedRemLevelId || prev.rem_level_id,
+                employment_status: nextStatus
+            };
+        });
     };
 
     const validate = (): string[] => {
-        const missing = [];
+        const missing: string[] = [];
         if (!formData.organization_id) missing.push('Organization');
         if (!formData.department_id) missing.push('Department');
         if (!formData.sub_department_id) missing.push('Sub-Department');

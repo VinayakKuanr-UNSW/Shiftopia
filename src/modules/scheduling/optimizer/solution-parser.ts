@@ -24,11 +24,14 @@ export interface ShiftMeta {
     end_time: string;
     role_id?: string | null;
     unpaid_break_minutes?: number;
+    demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
+    target_employment_type?: 'FT' | 'PT' | 'Casual' | null;
 }
 
 export interface EmployeeMeta {
     id: string;
     name: string;
+    contract_type?: 'FT' | 'PT' | 'CASUAL' | null;
 }
 
 // =============================================================================
@@ -42,7 +45,8 @@ export interface EnrichedProposal {
     shiftDate: string;
     startTime: string;
     endTime: string;
-    score: number;
+    cost: number;
+    employmentType: string;
 }
 
 // =============================================================================
@@ -98,7 +102,8 @@ export class SolutionParser {
                 shiftDate: shift.shift_date,
                 startTime: shift.start_time,
                 endTime: shift.end_time,
-                score: proposal.score,
+                cost: proposal.cost,
+                employmentType: proposal.employment_type,
             });
         }
 

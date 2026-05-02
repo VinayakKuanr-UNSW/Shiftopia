@@ -66,9 +66,9 @@ export const broadcastGroupQueries = {
         employeeId: string,
         scope?: { organizationId?: string; departmentId?: string; subDepartmentId?: string }
     ): Promise<EmployeeBroadcastGroup[]> {
-        // 1. Resolve group membership
+        // 1. Resolve group membership (including hierarchy-based)
         const { data: participantGroups, error: pgError } = await supabase
-            .from('group_participants')
+            .from('v_group_all_participants')
             .select('group_id')
             .eq('employee_id', employeeId);
 
@@ -454,15 +454,12 @@ export const groupParticipantQueries = {
         groupId: string,
         employeeId: string
     ): Promise<BroadcastParticipantRole | null> {
+        // Use the RPC for hierarchy-aware role resolution
         const { data, error } = await supabase
-            .from('group_participants')
-            .select('role')
-            .eq('group_id', groupId)
-            .eq('employee_id', employeeId)
-            .maybeSingle();
+            .rpc('get_broadcast_group_role', { p_group_id: groupId });
 
         if (error) throw error;
-        return data?.role || null;
+        return data as BroadcastParticipantRole | null;
     },
 };
 

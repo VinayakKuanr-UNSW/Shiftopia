@@ -39,6 +39,10 @@ export interface CreateShiftData {
     /** null = normal assignment, manual = forced, auto = assigned when TTS < 4h */
     emergency_source?: 'manual' | 'auto' | null;
     is_training?: boolean;
+    synthesis_run_id?: string | null;
+    demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
+    target_employment_type?: 'FT' | 'PT' | 'Casual' | null;
+    demand_group_id?: string | null;
 }
 
 export interface UpdateShiftData extends Partial<CreateShiftData> {

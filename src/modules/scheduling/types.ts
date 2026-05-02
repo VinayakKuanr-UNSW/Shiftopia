@@ -19,6 +19,8 @@ export interface OptimizerShift {
     required_skill_ids?: string[];
     required_license_ids?: string[];
     priority?: number;            // 1 (default) → higher = more important
+    demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
+    target_employment_type?: 'FT' | 'PT' | 'Casual' | null;
 }
 
 export interface ExistingShiftRef {
@@ -33,6 +35,10 @@ export interface OptimizerEmployee {
     id: string;
     name: string;
     role_id?: string | null;
+    contract_type?: 'FT' | 'PT' | 'CASUAL' | null;
+    employment_type?: string;
+    hourly_rate?: number;
+    min_contract_minutes?: number;   // FT/PT contract minimum (0 for Casuals)
     max_weekly_minutes?: number;  // Default 2400 (40h)
     skill_ids?: string[];
     license_ids?: string[];
@@ -72,7 +78,8 @@ export type OptimizerStatus = 'OPTIMAL' | 'FEASIBLE' | 'INFEASIBLE' | 'UNKNOWN' 
 export interface AssignmentProposal {
     shift_id: string;
     employee_id: string;
-    score: number;   // Confidence / preference score (higher = better)
+    employment_type: string;
+    cost: number;
 }
 
 export interface OptimizeResponse {
@@ -99,7 +106,8 @@ export interface ValidatedProposal {
     shiftDate: string;
     startTime: string;
     endTime: string;
-    optimizerScore: number;
+    optimizerCost: number;
+    employmentType: string;
     complianceStatus: ProposalValidationStatus;
     violations: Array<{
         type: string;

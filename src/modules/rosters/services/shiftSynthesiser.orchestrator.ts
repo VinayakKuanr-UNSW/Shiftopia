@@ -9,6 +9,8 @@ import {
   synthesizeShifts,
   getCoverageWindow,
 } from './shiftSynthesiser.service';
+import { SLOT_MINUTES, type DemandSlot } from '../domain/shiftSynthesizer.policy';
+import type { DemandTensorInsertRow } from '../api/demandTensor.queries';
 import { shiftsCommands } from '../api/shifts.commands';
 import { synthesisRunsQueries } from '../api/synthesisRuns.queries';
 import { processInChunks } from '../domain/bulk-action-engine';
@@ -36,7 +38,8 @@ import type { ComplianceInputV2, ShiftV2 } from '@/modules/compliance/v2/index';
 const logger = createModuleLogger('shiftSynthesiser.orchestrator');
 
 export interface SynthesizeAndInsertParams {
-  demandTensors: DemandTensor[];
+  demandTensors?: DemandTensor[];
+  demandTensorRows?: DemandTensorInsertRow[];
   rosterId: string;
   departmentId: string;
   shiftDate: string; // YYYY-MM-DD
@@ -44,6 +47,8 @@ export interface SynthesizeAndInsertParams {
   timezone?: string;
   /** When provided, stamped onto every created shift so the run can be rolled back. */
   synthesisRunId?: string;
+  /** Pre-synthesized shifts from templates (Step 1). */
+  baselineShifts?: SynthesizedShift[];
   /** Pass the array of unassigned shift IDs computed from dry run for immediate deletion. */
   suggestedDeletions?: string[];
   /** Gate supervisor-ratio expansion (Step 6). Default true. */
@@ -202,6 +207,10 @@ function expandToCreatePayloads(
       creation_source: 'synthesizer',
       synthesis_run_id: params.synthesisRunId ?? null,
       shift_subgroup_id: rosterSubgroupId,
+      notes: shift.reason,
+      demand_source: shift.demand_source,
+      target_employment_type: shift.target_employment_type,
+      demand_group_id: shift.demand_group_id,
     };
 
     for (let i = 0; i < shift.headcount; i++) {
@@ -210,6 +219,86 @@ function expandToCreatePayloads(
   }
 
   return payloads;
+}
+
+/**
+ * Phase 2 Refactor: Maps native `demand_tensor` (L7) rows to `DemandTensor` objects.
+ * Performs a lookup in `function_map` and `roles` to resolve the exact `role_id`
+ * and `sub_department_id` for each (function, level) bucket.
+ */
+async function mapRowsToTensors(rows: DemandTensorInsertRow[]): Promise<DemandTensor[]> {
+  if (rows.length === 0) return [];
+
+  // 1. Fetch the taxonomy mappings
+  const { data: fmap, error: fErr } = await supabase.from('function_map').select('*');
+  const { data: roles, error: rErr } = await supabase.from('roles').select('id, level, sub_department_id');
+
+  if (fErr || rErr) {
+    logger.error('Failed to fetch taxonomy for demand mapping', { fErr, rErr });
+    return [];
+  }
+
+  // 2. Group headcounts by resolved role_id
+  const roleTensors = new Map<string, DemandTensor>();
+
+  for (const row of rows) {
+    // A single function_code can map to multiple sub-departments (e.g., F&B -> Culinary & Service)
+    const matches = (fmap ?? []).filter(f => f.function_code === row.function_code);
+    
+    for (const m of matches) {
+      // Find the specific role matching this sub-department and level
+      const targetRole = (roles ?? []).find(r => 
+        r.sub_department_id === m.sub_department_id && 
+        r.level === row.level
+      );
+
+      if (!targetRole) {
+        // This is expected for roles outside the current department scope
+        continue;
+      }
+
+      const roleId = targetRole.id;
+      if (!roleTensors.has(roleId)) {
+        roleTensors.set(roleId, {
+          roleId,
+          subDepartmentId: m.sub_department_id,
+          buildingType: 'convention_centre', // Default
+          demandSource: 'derived',
+          slots: SLOT_MINUTES.map(start => ({
+            slotStart: start,
+            slotEnd: start + 30,
+            requiredHeadcount: 0,
+            residualHeadcount: 0,
+            residualHeadcountInt: 0,
+          })),
+        });
+      }
+
+      const tensor = roleTensors.get(roleId)!;
+      const weightedHeadcount = Math.round(row.headcount * (m.weight ?? 1.0));
+
+      if (row.slice_idx >= 0 && row.slice_idx < tensor.slots.length) {
+        const slot = tensor.slots[row.slice_idx];
+        slot.requiredHeadcount += weightedHeadcount;
+        slot.residualHeadcount += weightedHeadcount;
+        slot.residualHeadcountInt += weightedHeadcount;
+        
+        // Append explanations from the L7 row to the slot
+        if (row.explanation && Array.isArray(row.explanation)) {
+          const reasons = slot.reasons ?? [];
+          // Deduplicate and append
+          for (const exp of row.explanation) {
+            if (typeof exp === 'string' && !reasons.includes(exp)) {
+              reasons.push(exp);
+            }
+          }
+          slot.reasons = reasons;
+        }
+      }
+    }
+  }
+
+  return Array.from(roleTensors.values());
 }
 
 /**
@@ -228,6 +317,14 @@ function expandToCreatePayloads(
 export async function synthesizeAndInsertShifts(
   params: SynthesizeAndInsertParams,
 ): Promise<SynthesizeAndInsertResult> {
+  // Resolve demand tensors: either passed directly (ML fallback) or mapped from L7 rows (Rules)
+  let demandTensors = params.demandTensors || [];
+  if (params.demandTensorRows && params.demandTensorRows.length > 0) {
+    const mapped = await mapRowsToTensors(params.demandTensorRows);
+    // If we have both, prefer the mapped rows (rule-engine primary)
+    demandTensors = mapped.length > 0 ? mapped : demandTensors;
+  }
+
   let deletedCount = 0;
   if (params.suggestedDeletions && params.suggestedDeletions.length > 0) {
     try {
@@ -256,7 +353,7 @@ export async function synthesizeAndInsertShifts(
   const allShifts: SynthesizedShift[] = [];
   let globalCoverageWindow: { start: number; end: number } | null = null;
 
-  for (const tensor of params.demandTensors) {
+  for (const tensor of demandTensors) {
     const shifts = synthesizeShifts(tensor, synthesizeOptions);
     allShifts.push(...shifts);
 
@@ -298,6 +395,12 @@ export async function synthesizeAndInsertShifts(
   let finalShifts = enforceSupervisorRatios
     ? applySupervisorRatios(allShifts, ratios)
     : allShifts;
+
+  // Add pre-synthesized baseline shifts
+  if (params.baselineShifts) {
+    finalShifts = [...finalShifts, ...params.baselineShifts];
+  }
+
   if (globalCoverageWindow && enforceMinimumStaff) {
     finalShifts = applyMinimumStaff(
       finalShifts,

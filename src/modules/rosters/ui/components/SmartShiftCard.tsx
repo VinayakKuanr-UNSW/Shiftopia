@@ -23,6 +23,7 @@ import {
     Lock,
     CopyPlus,
     Shield,
+    Sparkles,
 } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
@@ -268,6 +269,16 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                     </div>
                     <div className="flex items-center gap-1">
                         {shift.is_from_template && <div className="mr-1" title="From Template"><CopyPlus className="h-3 w-3 opacity-60" /></div>}
+                        {shift.notes?.startsWith('Generated') && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <div className="mr-1 cursor-help"><Sparkles className="h-3 w-3 text-indigo-400 dark:text-indigo-300 opacity-90" /></div>
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-indigo-950 text-indigo-50 border-indigo-800 py-1.5 px-3 text-[11px] max-w-[220px] text-center font-medium shadow-lg" sideOffset={4}>
+                                    {shift.notes}
+                                </TooltipContent>
+                            </Tooltip>
+                        )}
                         {ctx.emergencyLabel && (
                             <Tooltip>
                                 <TooltipTrigger asChild>
@@ -515,7 +526,14 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         </div>
                     )}
 
-                    {shift.notes && <p className="text-xs text-muted-foreground italic truncate">{shift.notes}</p>}
+                    {shift.notes?.startsWith('Generated') ? (
+                        <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-2.5 flex items-start gap-2 text-indigo-700 dark:text-indigo-300">
+                            <Sparkles className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                            <p className="text-[11px] leading-relaxed font-medium">{shift.notes}</p>
+                        </div>
+                    ) : shift.notes ? (
+                        <p className="text-xs text-muted-foreground italic truncate">{shift.notes}</p>
+                    ) : null}
                 </div>
             </div>
 

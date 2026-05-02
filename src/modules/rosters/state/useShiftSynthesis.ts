@@ -14,7 +14,7 @@ import { computeExistingCoverage } from '../services/demandTensorBuilder.service
 import { synthesisRunsQueries } from '../api/synthesisRuns.queries';
 import { shiftKeys } from '../api/queryKeys';
 import { createModuleLogger } from '@/modules/core/lib/logger';
-import type { DemandTensor } from '../domain/shiftSynthesizer.policy';
+import type { DemandTensor, SynthesizedShift } from '../domain/shiftSynthesizer.policy';
 import type { Shift } from '../domain/shift.entity';
 
 const log = createModuleLogger('shiftSynthesis');
@@ -25,6 +25,7 @@ export interface GenerateShiftsInput extends Omit<
 > {
   organizationId: string;
   subDepartmentId: string | null;
+  baselineShifts?: SynthesizedShift[];
   /** Persisted verbatim on the synthesis_runs audit row. */
   options: Record<string, unknown>;
   snapshotHash?: string;
@@ -69,8 +70,18 @@ export function useGenerateShifts() {
         runId: run.id,
       });
 
+      // P1 follow-up: re-call buildScopeDemand here with synthesisRunId so
+      // demand_forecasts rows get stamped for rollback. The page currently
+      // builds tensors at preview-time without a run id, so the ML service
+      // skips its DB write (see ml/api.py gate). To make rollback fully
+      // revert predictions, plumb roles+existingShifts+buildingType from the
+      // page into GenerateShiftsInput and fire one more buildScopeDemand call
+      // here. Skipped in Phase-1 to keep surface area small.
+
       const result = await synthesizeAndInsertShifts({
         demandTensors: input.demandTensors,
+        demandTensorRows: input.demandTensorRows,
+        baselineShifts: input.baselineShifts,
         rosterId: input.rosterId,
         departmentId: input.departmentId,
         shiftDate: input.shiftDate,
@@ -190,6 +201,7 @@ export function useRollbackSynthesisRun() {
  */
 export function useShiftSynthesisPreview(
   demandTensors: DemandTensor[] | undefined,
+  baselineShifts: SynthesizedShift[] | undefined,
   existingShifts: Shift[] | undefined,
   enabled: boolean,
 ) {
@@ -243,6 +255,7 @@ export function useShiftSynthesisPreview(
 
       return {
         ...preview,
+        addedShifts: [...preview.addedShifts, ...(baselineShifts || [])],
         appliedTensors: updatedTensors,
       };
     },

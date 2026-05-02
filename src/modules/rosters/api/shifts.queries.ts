@@ -781,6 +781,56 @@ export const shiftsQueries = {
     },
 
     /**
+     * L4 — Labor Demand Timecard Adjustment.
+     * Calculates the historical attendance ratio (actual_minutes / scheduled_minutes)
+     * for completed shifts in the last 14 days.
+     */
+    async getTimecardMultipliers(organizationId: string, daysBack: number = 14): Promise<Map<string, number>> {
+        if (!isValidUuid(organizationId)) return new Map<string, number>();
+
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - daysBack);
+        const startDateStr = startDate.toISOString().split('T')[0];
+
+        const { data, error } = await supabase
+            .from('shifts')
+            .select('role_id, scheduled_length_minutes, actual_net_minutes')
+            .eq('organization_id', organizationId)
+            .eq('lifecycle_status', 'Completed')
+            .gte('shift_date', startDateStr)
+            .not('actual_net_minutes', 'is', null)
+            .not('role_id', 'is', null);
+
+        if (error) {
+            console.error('Error fetching timecard multipliers:', error);
+            return new Map<string, number>();
+        }
+
+        const totals = new Map<string, { actual: number; scheduled: number }>();
+        for (const row of data || []) {
+            const roleId = row.role_id as string;
+            const actual = row.actual_net_minutes || 0;
+            const scheduled = row.scheduled_length_minutes || 0;
+            if (scheduled === 0) continue;
+
+            const existing = totals.get(roleId) ?? { actual: 0, scheduled: 0 };
+            totals.set(roleId, {
+                actual: existing.actual + actual,
+                scheduled: existing.scheduled + scheduled,
+            });
+        }
+
+        const result = new Map<string, number>();
+        totals.forEach((v, roleId) => {
+            const ratio = v.actual / v.scheduled;
+            // Clamp to sensible range [0.5, 1.5] to prevent data outliers from wrecking the engine
+            result.set(roleId, Math.max(0.5, Math.min(1.5, ratio)));
+        });
+
+        return result;
+    },
+
+    /**
      * Get shift offers for an employee (S3 - Published + Offered status)
      */
     async getMyOffers(employeeId: string, filters?: { organizationId?: string; departmentId?: string }) {

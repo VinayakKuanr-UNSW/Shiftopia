@@ -80,6 +80,8 @@ export const synthesisRunsQueries = {
 
     /**
      * Rollback deletes unassigned shifts from the run, then stamps rolled_back_at.
+     * Also hard-deletes demand_forecasts rows tagged with the run id so the next
+     * synthesis for the same events gets fresh predictions rather than stale cache.
      * Assigned shifts are preserved. Returns counters plus an `orphaned` flag.
      */
     async rollbackRun(runId: string): Promise<{
@@ -87,6 +89,7 @@ export const synthesisRunsQueries = {
         skippedAssigned: number;
         failedDeletes: Array<{ id: string; reason: string }>;
         orphaned: boolean;
+        forecastsDeleted: number;
     }> {
         const user = await requireUser();
 
@@ -104,7 +107,7 @@ export const synthesisRunsQueries = {
 
         // Orphan case — bail before stamping rolled_back_at.
         if (matched.length === 0) {
-            return { deletedCount: 0, skippedAssigned: 0, failedDeletes: [], orphaned: true };
+            return { deletedCount: 0, skippedAssigned: 0, failedDeletes: [], orphaned: true, forecastsDeleted: 0 };
         }
 
         // 2. Soft-delete via a direct UPDATE.
@@ -123,7 +126,25 @@ export const synthesisRunsQueries = {
             }
         }
 
-        // 3. Stamp the run as rolled back.
+        // 3. Hard-delete demand_forecasts rows for this run so stale predictions
+        //    don't serve on the next synthesis run for the same events.
+        let forecastsDeleted = 0;
+        try {
+            const { error: fcErr, count: fcCount } = await supabase
+                .from('demand_forecasts')
+                .delete({ count: 'exact' })
+                .eq('synthesis_run_id', runId);
+            if (fcErr) {
+                // Non-fatal: log but don't abort the rollback.
+                console.warn(`rollbackRun: failed to delete demand_forecasts for run ${runId}: ${fcErr.message}`);
+            } else {
+                forecastsDeleted = fcCount ?? 0;
+            }
+        } catch (fcException) {
+            console.warn(`rollbackRun: unexpected error deleting demand_forecasts for run ${runId}`, fcException);
+        }
+
+        // 4. Stamp the run as rolled back.
         await supabase
             .from('synthesis_runs')
             .update({
@@ -133,6 +154,6 @@ export const synthesisRunsQueries = {
             })
             .eq('id', runId);
 
-        return { deletedCount, skippedAssigned, failedDeletes, orphaned: false };
+        return { deletedCount, skippedAssigned, failedDeletes, orphaned: false, forecastsDeleted };
     },
 };

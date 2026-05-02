@@ -40,7 +40,11 @@ import { useShiftsByDate } from "../state/useRosterShifts";
 import type { Shift } from "../domain/shift.entity";
 
 // Scope
-import { useOrgSelection } from "@/modules/core/contexts/OrgSelectionContext";
+import { useScopeFilter } from "@/platform/auth/useScopeFilter";
+
+// Layout
+import { PageLayout } from "@/modules/core/ui/layout/PageLayout";
+import { PersonalPageHeader } from "@/modules/core/ui/components/PersonalPageHeader";
 
 // UI Primitives
 import { Badge } from "@/modules/core/ui/primitives/badge";
@@ -59,6 +63,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/modules/core/ui/primitives/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/modules/core/ui/primitives/tooltip";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/modules/core/ui/primitives/sheet";
 import { cn } from "@/modules/core/lib/utils";
 
 // Icons
@@ -79,6 +96,7 @@ import {
   Info,
   Layers,
   Lock,
+  Layout,
   Minus,
   Plus,
   RefreshCw,
@@ -90,7 +108,9 @@ import {
   Calendar,
   CalendarX,
   Clock,
-  MapPin
+  MapPin,
+  Sparkles,
+  BarChart3,
 } from "lucide-react";
 
 // Phase 5: shift synthesis wiring
@@ -118,6 +138,20 @@ import type { SynthesizedShift } from "../domain/shiftSynthesizer.policy";
 import { createModuleLogger } from "@/modules/core/lib/logger";
 
 const log = createModuleLogger("LaborDemandPage");
+
+const BucketBadge = ({ bucket }: { bucket?: string }) => {
+  const styles = {
+    static: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    semi_dynamic: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+    dynamic: "bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20",
+  }[bucket || "static"] || "bg-muted/10 text-muted-foreground border-border/20";
+  
+  return (
+    <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-tight", styles)}>
+      {bucket?.replace("_", "-") || "static"}
+    </span>
+  );
+};
 
 /* =============================================================
    CONSTANTS & UTILITIES
@@ -169,6 +203,7 @@ interface RoleCoverageRow {
   existing: number;
   gap: number;
   status: "under" | "at-risk" | "optimized";
+  bucket?: string;
 }
 
 interface ProposedInjectionGroup {
@@ -177,166 +212,10 @@ interface ProposedInjectionGroup {
   avgHours: number;
   totalHours: number;
   description: string;
+  reasons?: string[];
 }
 
-/* =============================================================
-   SCOPE HEADER — Org → Dept → SubDept + Date picker
-   ============================================================= */
-interface ScopeHeaderProps {
-  selectedDate: string;
-  onDateChange: (d: string) => void;
-  isFetching: boolean;
-  events: EventSummary[];
-  isLoadingEvents: boolean;
-}
 
-const ScopeHeader: React.FC<ScopeHeaderProps> = ({
-  selectedDate,
-  onDateChange,
-  isFetching,
-  events,
-  isLoadingEvents,
-}) => {
-  const {
-    organizationName,
-    departmentName,
-    subDepartmentName,
-    isDeptLocked,
-    isSubDeptLocked,
-    availableDepartments,
-    availableSubDepartments,
-    departmentId,
-    subDepartmentId,
-    selectDepartment,
-    selectSubDepartment,
-    isLoadingDepartments,
-    isLoadingSubDepartments,
-  } = useOrgSelection();
-
-  return (
-    <div className="bg-card border border-border/60 rounded-xl px-5 py-3">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        {/* Hierarchy breadcrumb */}
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
-          {/* Organization — always locked */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/40 border border-border/30 shrink-0">
-            <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            <span className="text-sm font-medium text-foreground truncate max-w-[140px]">
-              {organizationName || "—"}
-            </span>
-            <Lock className="h-3 w-3 text-muted-foreground/40 shrink-0" />
-          </div>
-
-          <ChevronRight className="h-4 w-4 text-muted-foreground/30 shrink-0" />
-
-          {/* Department — locked or selectable */}
-          {isDeptLocked ? (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/40 border border-border/30 shrink-0">
-              <Layers className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <span className="text-sm font-medium text-foreground truncate max-w-[140px]">
-                {departmentName || "—"}
-              </span>
-              <Lock className="h-3 w-3 text-muted-foreground/40 shrink-0" />
-            </div>
-          ) : (
-            <Select
-              value={departmentId ?? ""}
-              onValueChange={(v) => selectDepartment(v || null)}
-              disabled={isLoadingDepartments}
-            >
-              <SelectTrigger className="h-8 text-sm w-auto min-w-[160px] max-w-[200px]">
-                <Layers className="h-3.5 w-3.5 text-muted-foreground mr-1.5 shrink-0" />
-                <SelectValue placeholder="Select Department" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableDepartments.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
-          <ChevronRight className="h-4 w-4 text-muted-foreground/30 shrink-0" />
-
-          {/* SubDepartment — locked or selectable */}
-          {isSubDeptLocked ? (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/25 shrink-0">
-              <GitBranch className="h-3.5 w-3.5 text-primary shrink-0" />
-              <span className="text-sm font-semibold text-primary truncate max-w-[140px]">
-                {subDepartmentName || "—"}
-              </span>
-              <Lock className="h-3 w-3 text-primary/40 shrink-0" />
-            </div>
-          ) : (
-            <Select
-              value={subDepartmentId ?? ""}
-              onValueChange={(v) => selectSubDepartment(v || null)}
-              disabled={isLoadingSubDepartments || !departmentId}
-            >
-              <SelectTrigger className="h-8 text-sm w-auto min-w-[160px] max-w-[200px] border-primary/30 text-primary">
-                <GitBranch className="h-3.5 w-3.5 text-primary mr-1.5 shrink-0" />
-                <SelectValue placeholder="Select Sub-Department" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableSubDepartments.map((sd) => (
-                  <SelectItem key={sd.id} value={sd.id}>
-                    {sd.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-
-        {/* Date picker + live indicator */}
-        <div className="flex items-center gap-3 shrink-0">
-          {isFetching && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <RefreshCw className="h-3 w-3 animate-spin" />
-              <span>Refreshing…</span>
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => onDateChange(e.target.value)}
-              className="h-8 px-3 text-sm rounded-lg border border-border/60 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-            {/* Soft indicator: event count on the selected date. Amber when 0. */}
-            {!isLoadingEvents && (
-              <span
-                title={
-                  events.length === 0
-                    ? "No events scheduled — shift generation will produce no demand."
-                    : events.map((e) => `• ${e.name}`).join("\n")
-                }
-                className={cn(
-                  "inline-flex items-center gap-1.5 h-8 px-2.5 text-xs rounded-lg border cursor-help select-none",
-                  events.length === 0
-                    ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
-                    : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
-                )}
-              >
-                {events.length === 0 ? (
-                  <AlertTriangle className="h-3 w-3" />
-                ) : (
-                  <Activity className="h-3 w-3" />
-                )}
-                {events.length === 0
-                  ? "No events"
-                  : `${events.length} event${events.length === 1 ? "" : "s"}`}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 
   // EVENTS ON THIS DATE PANEL
@@ -722,18 +601,7 @@ const OptSlider: React.FC<{
   );
 };
 
-/* =============================================================
-   Y-CERTIFICATE BADGE
-   ============================================================= */
-const YCertBadge: React.FC = () => (
-  <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-1.5">
-    <Award className="h-4 w-4 text-amber-400 shrink-0" />
-    <span className="text-sm font-black text-amber-400 tracking-tight">Y</span>
-    <span className="text-[10px] font-bold text-amber-500/80 uppercase tracking-widest">
-      Certified
-    </span>
-  </div>
-);
+
 
 /* =============================================================
    EMPTY STATE
@@ -941,13 +809,24 @@ const LaborDemandForecastingPage: React.FC = () => {
 
   // ── Scope ───────────────────────────────────────────────────
   const {
-    organizationId,
-    departmentId,
-    subDepartmentId,
-    departmentName,
-    subDepartmentName,
-    hasCompleteSelection,
-  } = useOrgSelection();
+    scope,
+    setScope,
+    scopeKey,
+    isGammaLocked,
+    isLoading: isScopeLoading,
+  } = useScopeFilter("managerial");
+
+  // Multi-department derived IDs
+  const organizationId = scope.org_ids[0] || null;
+  const departmentId = scope.dept_ids[0] || null; // For legacy single-ID calls
+  const subDepartmentId = scope.subdept_ids[0] || null; // For legacy single-ID calls
+  const departmentIds = scope.dept_ids;
+  const subDepartmentIds = scope.subdept_ids;
+
+  // Use the first selected dept name if available (simple fallback)
+  const departmentName = departmentId ? "Selected Department" : null; 
+  const subDepartmentName = subDepartmentId ? "Selected Sub-Department" : null;
+  const hasCompleteSelection = scope.org_ids.length > 0 && scope.dept_ids.length > 0;
 
   // ── Local state ─────────────────────────────────────────────
   const [selectedDate, setSelectedDate] = useState(() =>
@@ -991,10 +870,10 @@ const LaborDemandForecastingPage: React.FC = () => {
   // ── Data: Shifts ────────────────────────────────────────────
   const shiftFilters = useMemo(
     () => ({
-      departmentId: departmentId ?? undefined,
-      subDepartmentId: subDepartmentId ?? undefined,
+      departmentIds: departmentIds.length > 0 ? departmentIds : undefined,
+      subDepartmentIds: subDepartmentIds.length > 0 ? subDepartmentIds : undefined,
     }),
-    [departmentId, subDepartmentId],
+    [departmentIds, subDepartmentIds],
   );
 
   const {
@@ -1009,16 +888,20 @@ const LaborDemandForecastingPage: React.FC = () => {
     queryFn: async () => {
       let q = supabase
         .from("roles")
-        .select("id, name, sub_department_id")
+        .select("id, name, sub_department_id, forecasting_bucket, supervision_ratio_min, supervision_ratio_max, is_baseline_eligible")
         .eq("department_id", departmentId ?? "")
         .limit(50);
       if (subDepartmentId) q = q.eq("sub_department_id", subDepartmentId);
       const { data, error } = await q;
       if (error) return [];
-      return (data ?? []).map((r) => ({
+      return ((data as any) ?? []).map((r: any) => ({
         id: r.id,
         name: r.name,
         subDepartmentId: r.sub_department_id,
+        forecasting_bucket: r.forecasting_bucket as any,
+        supervision_ratio_min: r.supervision_ratio_min,
+        supervision_ratio_max: r.supervision_ratio_max,
+        is_baseline_eligible: r.is_baseline_eligible,
       }));
     },
     enabled: !!departmentId,
@@ -1039,7 +922,7 @@ const LaborDemandForecastingPage: React.FC = () => {
   const [requestedPreviewKey, setRequestedPreviewKey] = useState<string | null>(
     null,
   );
-  const currentScopeKey = `${selectedDate}-${departmentId}-${subDepartmentId}`;
+  const currentScopeKey = `${selectedDate}-${scopeKey}`;
   const isRequested = requestedPreviewKey === currentScopeKey;
 
   // ── Data: ML Scope Demand (gated on isRequested) ────────
@@ -1079,6 +962,7 @@ const LaborDemandForecastingPage: React.FC = () => {
   const { data: previewResponse, isFetching: isPreviewFetching } =
     useShiftSynthesisPreview(
       scopeDemand?.tensors,
+      scopeDemand?.baselineShifts,
       shifts,
       isRequested && !!scopeDemand && !shiftsLoading,
     );
@@ -1163,6 +1047,14 @@ const LaborDemandForecastingPage: React.FC = () => {
       .reduce((s, sh) => s + shiftNetMinutes(sh), 0);
     const residualMin = totalReqMin - existingMin;
 
+    const baselineHours = (scopeDemand?.baselineShifts ?? []).reduce((s, sh) => s + (sh.endMinutes - sh.startMinutes), 0) / 60;
+    const surgeHours = (scopeDemand?.tensors ?? [])
+      .filter(t => t.demandSource === 'ml_predicted')
+      .reduce((s, t) => s + t.slots.reduce((ss, slot) => ss + slot.requiredHeadcount, 0) * 0.5, 0);
+    const derivedHours = (scopeDemand?.tensors ?? [])
+      .filter(t => t.demandSource === 'derived')
+      .reduce((s, t) => s + t.slots.reduce((ss, slot) => ss + slot.requiredHeadcount, 0) * 0.5, 0);
+
     return {
       peakRequired,
       peakExisting,
@@ -1171,8 +1063,11 @@ const LaborDemandForecastingPage: React.FC = () => {
       totalReqHours: Math.round(totalReqMin / 60),
       existingSchedHours: Math.round(existingMin / 60),
       residualHours: Math.round(residualMin / 60),
+      baselineHours,
+      surgeHours,
+      derivedHours,
     };
-  }, [timelineData, shifts]);
+  }, [timelineData, shifts, scopeDemand]);
 
   // ── Computation: Role Coverage ───────────────────────────────
   // Phase 5 semantic:
@@ -1226,6 +1121,7 @@ const LaborDemandForecastingPage: React.FC = () => {
         const gapH = +(exH - reqH).toFixed(1);
         const status: RoleCoverageRow["status"] =
           gapH >= 0 ? "optimized" : gapH > -4 ? "at-risk" : "under";
+        const bucket = rolesInScope.find(r => r.id === roleId)?.forecasting_bucket || 'static';
         return {
           roleId,
           role: nameByRole.get(roleId) ?? "Unknown",
@@ -1233,6 +1129,7 @@ const LaborDemandForecastingPage: React.FC = () => {
           existing: exH,
           gap: gapH,
           status,
+          bucket,
         };
       })
       .sort((a, b) => a.gap - b.gap);
@@ -1250,7 +1147,7 @@ const LaborDemandForecastingPage: React.FC = () => {
     const shiftIdsToDelete = new Set(previewResponse?.suggestedDeletions || []);
     const additionsByRole = new Map<
       string,
-      { count: number; totalMin: number }
+      { count: number; totalMin: number; reasons: Set<string> }
     >();
     const deletionsByRole = new Map<
       string,
@@ -1260,10 +1157,17 @@ const LaborDemandForecastingPage: React.FC = () => {
     // Process additions
     for (const s of previewShifts) {
       const durMin = s.endMinutes - s.startMinutes;
-      const cur = additionsByRole.get(s.roleId) ?? { count: 0, totalMin: 0 };
+      const cur = additionsByRole.get(s.roleId) ?? { count: 0, totalMin: 0, reasons: new Set<string>() };
+      
+      // Collect all reasons from this shift
+      if (s.reasons && s.reasons.length > 0) {
+        s.reasons.forEach(r => cur.reasons.add(r));
+      }
+      
       additionsByRole.set(s.roleId, {
         count: cur.count + s.headcount,
         totalMin: cur.totalMin + durMin * s.headcount,
+        reasons: cur.reasons,
       });
     }
 
@@ -1299,7 +1203,7 @@ const LaborDemandForecastingPage: React.FC = () => {
     }
 
     const formatGroup = (
-      byRole: Map<string, { count: number; totalMin: number }>,
+      byRole: Map<string, { count: number; totalMin: number; reasons?: Set<string> }>,
       type: "add" | "delete",
     ): ProposedInjectionGroup[] => {
       return Array.from(byRole.entries())
@@ -1318,6 +1222,7 @@ const LaborDemandForecastingPage: React.FC = () => {
               : d.count === 1
                 ? "Safe deletion"
                 : "Batch deletion",
+          reasons: d.reasons ? Array.from(d.reasons) : [],
         }))
         .sort((a, b) => b.count - a.count);
     };
@@ -1425,6 +1330,8 @@ const LaborDemandForecastingPage: React.FC = () => {
         rosterId: active.id,
         shiftDate: selectedDate,
         demandTensors: previewResponse?.appliedTensors ?? scopeDemand?.tensors ?? [],
+        demandTensorRows: scopeDemand?.demandTensorRows ?? [],
+        baselineShifts: scopeDemand?.baselineShifts ?? [],
         snapshotHash: previewResponse?.snapshotHash,
         suggestedDeletions: previewResponse?.suggestedDeletions,
         enforceSupervisorRatios: options.enforceSupervisorRatios,
@@ -1567,57 +1474,54 @@ const LaborDemandForecastingPage: React.FC = () => {
      RENDER
      ============================================================= */
   return (
-    <div className="min-h-full bg-background">
-      <div className="max-w-[1280px] mx-auto px-6 py-6 space-y-5">
-        {/* ===================== SCOPE HEADER ===================== */}
-        <motion.div
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25 }}
-        >
-          <ScopeHeader
-            selectedDate={selectedDate}
-            onDateChange={setSelectedDate}
-            isFetching={isFetching && !isLoading}
-            events={eventsOnDate}
-            isLoadingEvents={eventsLoading}
-          />
-        </motion.div>
+    <PageLayout>
+      <PageLayout.Header>
+        <PersonalPageHeader
+          title="Labor Demand Forecasting"
+          Icon={Activity}
+          scope={scope}
+          setScope={setScope}
+          isGammaLocked={isGammaLocked}
+          mode="managerial"
+        />
 
-        {/* ===================== EVENTS ON THIS DATE ===================== */}
-        <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, delay: 0.03 }}>
-          <EventsOnDatePanel events={eventsOnDate} isLoading={eventsLoading} />
-        </motion.div>
-
-        {/* ===================== PAGE TITLE ===================== */}
-        <motion.div
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, delay: 0.05 }}
-        >
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                Labor Demand Forecasting
-              </h1>
-              <YCertBadge />
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span
-                  className={cn(
-                    "h-1.5 w-1.5 rounded-full",
-                    isFetching
-                      ? "bg-amber-400 animate-pulse"
-                      : "bg-emerald-400",
-                  )}
-                />
-                {isFetching
-                  ? "Updating…"
-                  : `Last refreshed: ${format(new Date(), "HH:mm")}`}
-              </div>
+        {/* ── Function Bar ────────────────────────────────────────────── */}
+        <div className="mt-4 lg:mt-6 flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            {/* Date Picker */}
+            <div className="flex items-center gap-2 bg-background/50 px-3 py-1.5 rounded-xl border border-border/60">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="bg-transparent text-sm font-medium focus:outline-none"
+              />
+              {!eventsLoading && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      className={cn(
+                        "ml-1 h-2 w-2 rounded-full cursor-help",
+                        eventsOnDate.length === 0
+                          ? "bg-amber-400"
+                          : "bg-emerald-400",
+                      )}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {eventsOnDate.length === 0
+                      ? "No events scheduled for this date"
+                      : `${eventsOnDate.length} events scheduled`}
+                  </TooltipContent>
+                </Tooltip>
+              )}
             </div>
 
+            <div className="h-6 w-px bg-border/40 mx-1" />
+
             {/* View Mode Toggle */}
-            <div className="flex items-center border border-border/60 rounded-xl overflow-hidden bg-card">
+            <div className="flex items-center border border-border/60 rounded-xl overflow-hidden bg-background/50">
               {(["preview", "raw"] as ViewMode[]).map((mode) => (
                 <button
                   key={mode}
@@ -1639,9 +1543,38 @@ const LaborDemandForecastingPage: React.FC = () => {
               ))}
             </div>
           </div>
+
+          <div className="flex items-center gap-2">
+            {isFetching && !isLoading && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                <span>Syncing shifts...</span>
+              </div>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => queryClient.invalidateQueries({ queryKey: shiftKeys.lists })}
+              className="h-9 gap-2"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
+              Refresh
+            </Button>
+          </div>
+        </div>
+      </PageLayout.Header>
+
+      <PageLayout.Body bare className="space-y-5 scrollbar-none">
+        {/* ===================== EVENTS ON THIS DATE ===================== */}
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, delay: 0.03 }}
+        >
+          <EventsOnDatePanel events={eventsOnDate} isLoading={eventsLoading} />
         </motion.div>
 
-        {/* ===================== RAW DATA MODE ===================== */}
+        {/* ===================== VIEW MODE SWITCHER ===================== */}
         <AnimatePresence mode="wait">
           {viewMode === "raw" ? (
             <RawDataPanel
@@ -1711,6 +1644,39 @@ const LaborDemandForecastingPage: React.FC = () => {
                   skeleton={isLoading}
                 />
               </div>
+              
+              {/* ===================== FORECAST BREAKDOWN ===================== */}
+              {!isLoading && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="bg-card border border-border/60 rounded-xl p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Baseline Requirement</p>
+                      <p className="text-xl font-bold text-blue-400">{Math.round(metrics.baselineHours)}h</p>
+                    </div>
+                    <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                      <Layout className="h-5 w-5 text-blue-400" />
+                    </div>
+                  </div>
+                  <div className="bg-card border border-border/60 rounded-xl p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">ML Surge Demand</p>
+                      <p className="text-xl font-bold text-fuchsia-400">+{Math.round(metrics.surgeHours)}h</p>
+                    </div>
+                    <div className="h-10 w-10 rounded-lg bg-fuchsia-500/10 flex items-center justify-center">
+                      <Zap className="h-5 w-5 text-fuchsia-400" />
+                    </div>
+                  </div>
+                  <div className="bg-card border border-border/60 rounded-xl p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Derived Supervision</p>
+                      <p className="text-xl font-bold text-amber-400">+{Math.round(metrics.derivedHours)}h</p>
+                    </div>
+                    <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                      <ShieldCheck className="h-5 w-5 text-amber-400" />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* ===================== CHART ===================== */}
               <div className="bg-card border border-border/60 rounded-xl p-5">
@@ -1966,6 +1932,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                         <tr className="border-b border-border/40">
                           {[
                             "Role",
+                            "Bucket",
                             "Req. Hours",
                             "Existing",
                             "Gap",
@@ -1987,7 +1954,7 @@ const LaborDemandForecastingPage: React.FC = () => {
                         {roleCoverageData.length === 0 ? (
                           <tr>
                             <td
-                              colSpan={5}
+                              colSpan={6}
                               className="py-4 text-center text-sm text-muted-foreground"
                             >
                               No role data
@@ -2001,6 +1968,9 @@ const LaborDemandForecastingPage: React.FC = () => {
                             >
                               <td className="py-3 text-sm font-medium">
                                 {row.role}
+                              </td>
+                              <td className="py-3">
+                                <BucketBadge bucket={row.bucket} />
                               </td>
                               <td className="py-3 text-sm text-right text-muted-foreground">
                                 {row.reqHours}h
@@ -2084,9 +2054,128 @@ const LaborDemandForecastingPage: React.FC = () => {
                               <p className="text-sm font-semibold text-emerald-400 flex items-center gap-1.5">
                                 <Plus className="h-3 w-3" /> {g.roleName}
                               </p>
-                              <p className="text-[11px] text-muted-foreground mt-0.5">
+                              <p className="text-[11px] text-muted-foreground mt-0.5 mb-1.5">
                                 {g.description}
                               </p>
+                              {g.reasons && g.reasons.length > 0 && (
+                                <div className="flex gap-2">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Badge className="bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 border border-indigo-500/30 text-[9px] cursor-help transition-colors">
+                                        <Sparkles className="h-2.5 w-2.5 mr-1" />
+                                        Why?
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="right" className="bg-indigo-950 text-indigo-50 border-indigo-800 p-2 max-w-[250px] space-y-1 z-[100]">
+                                      <p className="font-semibold text-xs mb-1.5 text-indigo-300">Generated Requirements</p>
+                                      {g.reasons.map((r, idx) => (
+                                        <p key={idx} className="text-[10px] leading-tight opacity-90">• {r}</p>
+                                      ))}
+                                    </TooltipContent>
+                                  </Tooltip>
+
+                                  <Sheet>
+                                    <SheetTrigger asChild>
+                                      <Badge className="bg-muted text-muted-foreground hover:bg-muted/80 border border-border text-[9px] cursor-pointer transition-colors">
+                                        <BarChart3 className="h-2.5 w-2.5 mr-1" />
+                                        Full Audit
+                                      </Badge>
+                                    </SheetTrigger>
+                                    <SheetContent className="w-[400px] sm:w-[540px] bg-card border-l border-border/60">
+                                      <SheetHeader className="mb-6">
+                                        <SheetTitle className="flex items-center gap-2">
+                                          <ShieldCheck className="h-5 w-5 text-indigo-400" />
+                                          Demand Engine Audit
+                                        </SheetTitle>
+                                        <SheetDescription className="text-xs">
+                                          Layer-by-layer breakdown for <strong>{g.roleName}</strong> on {selectedDate}
+                                        </SheetDescription>
+                                      </SheetHeader>
+                                      
+                                      <div className="space-y-6 overflow-y-auto max-h-[calc(100vh-180px)] pr-2 custom-scrollbar">
+                                        {/* Audit Content Implementation */}
+                                        <div className="space-y-4">
+                                          <div className="p-4 rounded-xl bg-muted/30 border border-border/40">
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">L3 - Baseline Demand</h4>
+                                            <div className="space-y-2">
+                                              {g.reasons.filter(r => r.startsWith('rule:')).map((r, i) => (
+                                                <div key={i} className="flex justify-between text-xs">
+                                                  <span className="text-muted-foreground">{r.split(' ')[0]}</span>
+                                                  <span className="font-mono text-indigo-400">{r.split(' ')[1]}</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+
+                                          <div className="p-4 rounded-xl bg-muted/30 border border-border/40">
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">L4 - Timecard Adjustment</h4>
+                                            <div className="space-y-2">
+                                              {g.reasons.filter(r => r.startsWith('timecard_mult:')).map((r, i) => (
+                                                <div key={i} className="flex justify-between text-xs">
+                                                  <span className="text-muted-foreground">Historical Attendance Ratio</span>
+                                                  <span className="font-mono text-blue-400">{r.replace('timecard_mult:', '')}x</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+
+                                          <div className="p-4 rounded-xl bg-muted/30 border border-border/40">
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">L5 - Supervisor Feedback</h4>
+                                            <div className="space-y-2">
+                                              {g.reasons.filter(r => r.startsWith('feedback_mult:')).map((r, i) => (
+                                                <div key={i} className="flex justify-between text-xs">
+                                                  <span className="text-muted-foreground">Feedback Multiplier</span>
+                                                  <span className="font-mono text-emerald-400">{r.replace('feedback_mult:', '')}</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+
+                                          <div className="p-4 rounded-xl bg-muted/30 border border-border/40">
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">L6 - Operational Constraints</h4>
+                                            <div className="space-y-2">
+                                              {g.reasons.filter(r => r.startsWith('constraint_floor:') || r.startsWith('global_floor:')).map((r, i) => (
+                                                <div key={i} className="flex justify-between text-xs">
+                                                  <span className="text-muted-foreground">Binding Floor</span>
+                                                  <span className="font-mono text-amber-400">{r.split(' ')[0].split(':')[1]}</span>
+                                                </div>
+                                              ))}
+                                              {g.reasons.filter(r => r.startsWith('constraint_floor:') || r.startsWith('global_floor:')).length === 0 && (
+                                                <p className="text-[10px] text-muted-foreground italic">No L6 floors binding for this role.</p>
+                                              )}
+                                            </div>
+                                          </div>
+
+                                          <div className="p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/20">
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-3">L7 - Final Finalization</h4>
+                                            <div className="flex justify-between items-end">
+                                              <div>
+                                                <p className="text-[10px] text-muted-foreground">Final Staff Count</p>
+                                                <p className="text-2xl font-bold text-white">{g.count} <span className="text-xs font-normal text-muted-foreground">Shifts</span></p>
+                                              </div>
+                                              <div className="text-right">
+                                                <p className="text-[10px] text-muted-foreground">Total Labor</p>
+                                                <p className="text-lg font-semibold text-indigo-300">{g.totalHours}h</p>
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          <div className="pt-4 border-t border-border/40 mt-6">
+                                            <div className="flex items-center gap-2 mb-2">
+                                              <Database className="h-3 w-3 text-muted-foreground" />
+                                              <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Determinism Snapshot</h4>
+                                            </div>
+                                            <p className="text-[9px] text-muted-foreground leading-relaxed">
+                                              This demand record is historically frozen. The ratios and multipliers shown above were snapshotted into the 
+                                              <code className="text-indigo-300 mx-1">demand_tensor</code> at the moment of generation to ensure 100% audit-grade reproducibility.
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </SheetContent>
+                                  </Sheet>
+                                </div>
+                              )}
                             </div>
                             <div className="text-right shrink-0">
                               <p className="text-sm font-bold text-emerald-400">
@@ -2502,7 +2591,7 @@ const LaborDemandForecastingPage: React.FC = () => {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+      </PageLayout.Body>
 
       {/* ===================== MODALS ===================== */}
       <AnimatePresence>
@@ -2540,7 +2629,7 @@ const LaborDemandForecastingPage: React.FC = () => {
           />
         )}
       </AnimatePresence>
-    </div>
+    </PageLayout>
   );
 };
 

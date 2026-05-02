@@ -77,7 +77,10 @@ class EmployeeReq(BaseModel):
     id: str
     name: str
     role_id: Optional[str] = None
+    employment_type: str = 'Casual'
+    hourly_rate: float = 25.0
     max_weekly_minutes: int = 2400
+    min_contract_minutes: int = 0
     skill_ids: list[str] = Field(default_factory=list)
     license_ids: list[str] = Field(default_factory=list)
     preferred_shift_ids: list[str] = Field(default_factory=list)
@@ -120,7 +123,8 @@ class DebugMetricsRes(BaseModel):
 class AssignmentRes(BaseModel):
     shift_id: str
     employee_id: str
-    score: float
+    employment_type: str
+    cost: float
 
 
 class OptimizeRes(BaseModel):
@@ -245,7 +249,7 @@ def optimize(req: OptimizeReq) -> OptimizeRes:
     return OptimizeRes(
         status=output.status,
         assignments=[
-            AssignmentRes(shift_id=a.shift_id, employee_id=a.employee_id, score=a.score)
+            AssignmentRes(shift_id=a.shift_id, employee_id=a.employee_id, employment_type=a.employment_type, cost=a.cost)
             for a in output.assignments
         ],
         unassigned_shift_ids=output.unassigned_shift_ids,

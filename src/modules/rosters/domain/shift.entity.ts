@@ -171,6 +171,11 @@ export interface Shift {
             external_id: string | null;
         } | null;
     } | null;
+
+    // Labor Forecasting Metadata
+    demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
+    target_employment_type?: 'FT' | 'PT' | 'Casual' | 'Unassigned' | null;
+    demand_group_id?: string | null;
 }
 
 /* ============================================================

@@ -406,27 +406,7 @@ export function useTemplates(): UseTemplatesReturn {
 
         log('success', `✅ Template created: ${templateData.id}`);
 
-        log('db', '2️⃣ Seeding default groups manually...');
-        const { error: groupsErr } = await supabase
-          .from('template_groups')
-          .insert(
-            DEFAULT_GROUPS.map((g, i) => ({
-              template_id: templateData.id,
-              name: g.name,
-              color: g.color,
-              icon: g.icon,
-              sort_order: i + 1,
-            }))
-          );
-
-        if (groupsErr) {
-          log('error', 'Failed to seed default groups', groupsErr);
-          // Non-fatal, but template will be empty
-        } else {
-          log('success', '✅ Default groups seeded');
-        }
-
-        // Fetch complete template
+        // Fetch complete template (now auto-seeded by DB trigger)
         const fullTemplate = await fetchTemplate(templateData.id);
 
         if (fullTemplate) {

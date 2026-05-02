@@ -30,6 +30,7 @@ export interface DemandAnalysisResult {
   smoothedSlots: DemandSlot[];
   primaryPeak: PeakWindow | null;
   microPeaks: MicroPeak[];
+  demandSource?: 'ml_predicted' | 'derived' | 'baseline' | null;
 }
 
 // Smooths headcount values by replacing each slot's headcount with the average of itself and its neighbors
@@ -52,11 +53,17 @@ export function smoothDemand(
     const averageResidual =
       windowSlots.reduce((sum, s) => sum + s.residualHeadcount, 0) /
       windowSlots.length;
+    const allEvents = windowSlots.flatMap(s => s.contributingEvents || []);
+    const uniqueEvents = [...new Set(allEvents)];
+    const allReasons = windowSlots.flatMap(s => s.reasons || []);
+    const uniqueReasons = [...new Set(allReasons)];
     return {
       ...slot,
       requiredHeadcount: Math.round(averageRequired),
       residualHeadcount: Math.max(0, averageResidual),
       residualHeadcountInt: Math.max(0, Math.round(averageResidual)),
+      contributingEvents: uniqueEvents,
+      reasons: uniqueReasons,
     };
   });
 
@@ -168,8 +175,21 @@ export function packShifts(demand: DemandAnalysisResult): SynthesizedShift[] {
     const coverageWindow = residualSlots.slice(shiftStart, shiftEnd + 1);
     const minHeadcount = getLowestResidualHeadcount(coverageWindow);
 
+    const uniqueEvents = new Set<string>();
+    const uniqueReasons = new Set<string>();
     for (let i = shiftStart; i <= shiftEnd; i++) {
       residualSlots[i].residualHeadcountInt -= minHeadcount;
+      const events = residualSlots[i].contributingEvents;
+      if (events) events.forEach((e) => uniqueEvents.add(e));
+      const rsn = residualSlots[i].reasons;
+      if (rsn) rsn.forEach((r) => uniqueReasons.add(r));
+    }
+
+    const eventsList = Array.from(uniqueEvents);
+    let reason: string | undefined = undefined;
+    if (eventsList.length > 0) {
+      const joined = eventsList.slice(0, 2).join(', ');
+      reason = `Generated to meet demand for: ${joined}${eventsList.length > 2 ? ` and ${eventsList.length - 2} more` : ''}`;
     }
 
     shifts.push({
@@ -185,6 +205,9 @@ export function packShifts(demand: DemandAnalysisResult): SynthesizedShift[] {
           ? 'peak_buffer'
           : 'core',
       headcount: minHeadcount,
+      reasons: Array.from(uniqueReasons),
+      demand_source: demand.demandSource,
+      target_employment_type: undefined,
     });
   }
   return shifts;
@@ -226,6 +249,7 @@ export function synthesizeShifts(
     smoothedSlots: toleratedSmoothedSlots,
     primaryPeak,
     microPeaks,
+    demandSource: demandTensor.demandSource,
   };
   let shifts = packShifts(demandAnalysisResult);
 

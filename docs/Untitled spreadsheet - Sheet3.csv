@@ -1,0 +1,221 @@
+"Department,SubDepartment,Role,Level,Employment_Type",Department,SubDepartment,Role,Level,Employment_Type
+,,,,,
+"Executive,Leadership,Executive Trainee,L0,Part Time",Executive,Leadership,Executive Trainee,L0,Part Time
+"Executive,Leadership,Executive Assistant,L1,Casual",Executive,Leadership,Executive Assistant,L1,Casual
+"Executive,Leadership,Executive Support Officer,L2,Casual",Executive,Leadership,Executive Support Officer,L2,Casual
+"Executive,Leadership,Senior Executive Officer,L3,Casual",Executive,Leadership,Senior Executive Officer,L3,Casual
+"Executive,Leadership,Executive Coordinator,L4,Casual",Executive,Leadership,Executive Coordinator,L4,Casual
+"Executive,Leadership,Executive Manager,L5,Full Time / Casual",Executive,Leadership,Executive Manager,L5,Full Time / Casual
+"Executive,Leadership,General Manager,L6,Full Time",Executive,Leadership,General Manager,L6,Full Time
+"Executive,Leadership,Chief Executive Officer,L7,Full Time",Executive,Leadership,Chief Executive Officer,L7,Full Time
+,,,,,
+"Finance,Accounts,Finance Trainee,L0,Part Time",Finance,Accounts,Finance Trainee,L0,Part Time
+"Finance,Accounts,Accounts Assistant,L1,Casual",Finance,Accounts,Accounts Assistant,L1,Casual
+"Finance,Accounts,Accounts Officer,L2,Casual",Finance,Accounts,Accounts Officer,L2,Casual
+"Finance,Accounts,Senior Accounts Officer,L3,Casual",Finance,Accounts,Senior Accounts Officer,L3,Casual
+"Finance,Accounts,Finance Coordinator,L4,Casual",Finance,Accounts,Finance Coordinator,L4,Casual
+"Finance,Accounts,Finance Manager,L5,Full Time / Casual",Finance,Accounts,Finance Manager,L5,Full Time / Casual
+"Finance,Accounts,Senior Finance Manager,L6,Full Time",Finance,Accounts,Senior Finance Manager,L6,Full Time
+"Finance,Accounts,Director Finance,L7,Full Time",Finance,Accounts,Director Finance,L7,Full Time
+,,,,,
+"Finance,Payroll,Payroll Trainee,L0,Part Time",Finance,Payroll,Payroll Trainee,L0,Part Time
+"Finance,Payroll,Payroll Assistant,L1,Casual",Finance,Payroll,Payroll Assistant,L1,Casual
+"Finance,Payroll,Payroll Officer,L2,Casual",Finance,Payroll,Payroll Officer,L2,Casual
+"Finance,Payroll,Senior Payroll Officer,L3,Casual",Finance,Payroll,Senior Payroll Officer,L3,Casual
+"Finance,Payroll,Payroll Coordinator,L4,Casual",Finance,Payroll,Payroll Coordinator,L4,Casual
+"Finance,Payroll,Payroll Manager,L5,Full Time / Casual",Finance,Payroll,Payroll Manager,L5,Full Time / Casual
+"Finance,Payroll,Senior Payroll Manager,L6,Full Time",Finance,Payroll,Senior Payroll Manager,L6,Full Time
+"Finance,Payroll,Head of Payroll,L7,Full Time",Finance,Payroll,Head of Payroll,L7,Full Time
+,,,,,
+"People & Culture,HR Operations,HR Trainee,L0,Part Time",People & Culture,HR Operations,HR Trainee,L0,Part Time
+"People & Culture,HR Operations,HR Assistant,L1,Casual",People & Culture,HR Operations,HR Assistant,L1,Casual
+"People & Culture,HR Operations,HR Officer,L2,Casual",People & Culture,HR Operations,HR Officer,L2,Casual
+"People & Culture,HR Operations,Senior HR Officer,L3,Casual",People & Culture,HR Operations,Senior HR Officer,L3,Casual
+"People & Culture,HR Operations,HR Coordinator,L4,Casual",People & Culture,HR Operations,HR Coordinator,L4,Casual
+"People & Culture,HR Operations,HR Manager,L5,Full Time / Casual",People & Culture,HR Operations,HR Manager,L5,Full Time / Casual
+"People & Culture,HR Operations,Senior HR Manager,L6,Full Time",People & Culture,HR Operations,Senior HR Manager,L6,Full Time
+"People & Culture,HR Operations,Head of HR,L7,Full Time",People & Culture,HR Operations,Head of HR,L7,Full Time
+,,,,,
+"People & Culture,Partnering,People Trainee,L0,Part Time",People & Culture,Partnering,People Trainee,L0,Part Time
+"People & Culture,Partnering,People Assistant,L1,Casual",People & Culture,Partnering,People Assistant,L1,Casual
+"People & Culture,Partnering,People Officer,L2,Casual",People & Culture,Partnering,People Officer,L2,Casual
+"People & Culture,Partnering,Senior People Officer,L3,Casual",People & Culture,Partnering,Senior People Officer,L3,Casual
+"People & Culture,Partnering,People Partner,L4,Casual",People & Culture,Partnering,People Partner,L4,Casual
+"People & Culture,Partnering,People Manager,L5,Full Time / Casual",People & Culture,Partnering,People Manager,L5,Full Time / Casual
+"People & Culture,Partnering,Senior People Manager,L6,Full Time",People & Culture,Partnering,Senior People Manager,L6,Full Time
+"People & Culture,Partnering,Director People & Culture,L7,Full Time",People & Culture,Partnering,Director People & Culture,L7,Full Time
+,,,,,
+"ICT Services,Support,ICT Trainee,L0,Part Time",ICT Services,Support,ICT Trainee,L0,Part Time
+"ICT Services,Support,ICT Assistant,L1,Casual",ICT Services,Support,ICT Assistant,L1,Casual
+"ICT Services,Support,ICT Technician,L2,Casual",ICT Services,Support,ICT Technician,L2,Casual
+"ICT Services,Support,Senior ICT Technician,L3,Casual",ICT Services,Support,Senior ICT Technician,L3,Casual
+"ICT Services,Support,ICT Supervisor,L4,Casual",ICT Services,Support,ICT Supervisor,L4,Casual
+"ICT Services,Support,ICT Manager,L5,Full Time / Casual",ICT Services,Support,ICT Manager,L5,Full Time / Casual
+"ICT Services,Support,Senior ICT Manager,L6,Full Time",ICT Services,Support,Senior ICT Manager,L6,Full Time
+"ICT Services,Support,Director ICT,L7,Full Time",ICT Services,Support,Director ICT,L7,Full Time
+,,,,,
+"ICT Services,Infrastructure,Infrastructure Trainee,L0,Part Time",ICT Services,Infrastructure,Infrastructure Trainee,L0,Part Time
+"ICT Services,Infrastructure,Infrastructure Assistant,L1,Casual",ICT Services,Infrastructure,Infrastructure Assistant,L1,Casual
+"ICT Services,Infrastructure,Infrastructure Engineer,L2,Casual",ICT Services,Infrastructure,Infrastructure Engineer,L2,Casual
+"ICT Services,Infrastructure,Senior Infrastructure Engineer,L3,Casual",ICT Services,Infrastructure,Senior Infrastructure Engineer,L3,Casual
+"ICT Services,Infrastructure,Infrastructure Supervisor,L4,Casual",ICT Services,Infrastructure,Infrastructure Supervisor,L4,Casual
+"ICT Services,Infrastructure,Infrastructure Manager,L5,Full Time / Casual",ICT Services,Infrastructure,Infrastructure Manager,L5,Full Time / Casual
+"ICT Services,Infrastructure,Senior Infrastructure Manager,L6,Full Time",ICT Services,Infrastructure,Senior Infrastructure Manager,L6,Full Time
+"ICT Services,Infrastructure,Head of Infrastructure,L7,Full Time",ICT Services,Infrastructure,Head of Infrastructure,L7,Full Time
+,,,,,
+"AV,Technical,AV Trainee,L0,Part Time",AV,Technical,AV Trainee,L0,Part Time
+"AV,Technical,AV Assistant,L1,Casual",AV,Technical,AV Assistant,L1,Casual
+"AV,Technical,AV Technician,L2,Casual",AV,Technical,AV Technician,L2,Casual
+"AV,Technical,Senior AV Technician,L3,Casual",AV,Technical,Senior AV Technician,L3,Casual
+"AV,Technical,AV Supervisor,L4,Casual",AV,Technical,AV Supervisor,L4,Casual
+"AV,Technical,AV Manager,L5,Full Time / Casual",AV,Technical,AV Manager,L5,Full Time / Casual
+"AV,Technical,Senior AV Manager,L6,Full Time",AV,Technical,Senior AV Manager,L6,Full Time
+"AV,Technical,Director AV,L7,Full Time",AV,Technical,Director AV,L7,Full Time
+,,,,,
+"Event Delivery,Operations,Event Ops Trainee,L0,Part Time",Event Delivery,Operations,Event Ops Trainee,L0,Part Time
+"Event Delivery,Operations,Event Ops Assistant,L1,Casual",Event Delivery,Operations,Event Ops Assistant,L1,Casual
+"Event Delivery,Operations,Event Crew,L2,Casual",Event Delivery,Operations,Event Crew,L2,Casual
+"Event Delivery,Operations,Senior Event Crew,L3,Casual",Event Delivery,Operations,Senior Event Crew,L3,Casual
+"Event Delivery,Operations,Event Supervisor,L4,Casual",Event Delivery,Operations,Event Supervisor,L4,Casual
+"Event Delivery,Operations,Event Manager,L5,Full Time / Casual",Event Delivery,Operations,Event Manager,L5,Full Time / Casual
+"Event Delivery,Operations,Senior Event Manager,L6,Full Time",Event Delivery,Operations,Senior Event Manager,L6,Full Time
+"Event Delivery,Operations,Director Event Delivery,L7,Full Time",Event Delivery,Operations,Director Event Delivery,L7,Full Time
+,,,,,
+"Event Delivery,F&B,F&B Trainee,L0,Part Time",Event Delivery,F&B,F&B Trainee,L0,Part Time
+"Event Delivery,F&B,F&B Attendant,L1,Casual",Event Delivery,F&B,F&B Attendant,L1,Casual
+"Event Delivery,F&B,F&B Team Member,L2,Casual",Event Delivery,F&B,F&B Team Member,L2,Casual
+"Event Delivery,F&B,Senior F&B Attendant,L3,Casual",Event Delivery,F&B,Senior F&B Attendant,L3,Casual
+"Event Delivery,F&B,F&B Supervisor,L4,Casual",Event Delivery,F&B,F&B Supervisor,L4,Casual
+"Event Delivery,F&B,F&B Manager,L5,Full Time / Casual",Event Delivery,F&B,F&B Manager,L5,Full Time / Casual
+"Event Delivery,F&B,Senior F&B Manager,L6,Full Time",Event Delivery,F&B,Senior F&B Manager,L6,Full Time
+"Event Delivery,F&B,Director F&B,L7,Full Time",Event Delivery,F&B,Director F&B,L7,Full Time
+,,,,,
+"Event Delivery,Kitchen,Kitchen Trainee,L0,Part Time",Event Delivery,Kitchen,Kitchen Trainee,L0,Part Time
+"Event Delivery,Kitchen,Kitchen Assistant,L1,Casual",Event Delivery,Kitchen,Kitchen Assistant,L1,Casual
+"Event Delivery,Kitchen,Cook,L2,Casual",Event Delivery,Kitchen,Cook,L2,Casual
+"Event Delivery,Kitchen,Senior Cook,L3,Casual",Event Delivery,Kitchen,Senior Cook,L3,Casual
+"Event Delivery,Kitchen,Chef de Partie,L4,Casual",Event Delivery,Kitchen,Chef de Partie,L4,Casual
+"Event Delivery,Kitchen,Sous Chef,L5,Full Time / Casual",Event Delivery,Kitchen,Sous Chef,L5,Full Time / Casual
+"Event Delivery,Kitchen,Executive Chef,L6,Full Time",Event Delivery,Kitchen,Executive Chef,L6,Full Time
+"Event Delivery,Kitchen,Director Culinary,L7,Full Time",Event Delivery,Kitchen,Director Culinary,L7,Full Time
+,,,,,
+"Event Delivery,Logistics,Logistics Trainee,L0,Part Time",Event Delivery,Logistics,Logistics Trainee,L0,Part Time
+"Event Delivery,Logistics,Logistics Assistant,L1,Casual",Event Delivery,Logistics,Logistics Assistant,L1,Casual
+"Event Delivery,Logistics,Logistics Crew,L2,Casual",Event Delivery,Logistics,Logistics Crew,L2,Casual
+"Event Delivery,Logistics,Senior Logistics Crew,L3,Casual",Event Delivery,Logistics,Senior Logistics Crew,L3,Casual
+"Event Delivery,Logistics,Logistics Supervisor,L4,Casual",Event Delivery,Logistics,Logistics Supervisor,L4,Casual
+"Event Delivery,Logistics,Logistics Manager,L5,Full Time / Casual",Event Delivery,Logistics,Logistics Manager,L5,Full Time / Casual
+"Event Delivery,Logistics,Senior Logistics Manager,L6,Full Time",Event Delivery,Logistics,Senior Logistics Manager,L6,Full Time
+"Event Delivery,Logistics,Director Logistics,L7,Full Time",Event Delivery,Logistics,Director Logistics,L7,Full Time
+,,,,,
+"Event Delivery,Set-up,Setup Trainee,L0,Part Time",Event Delivery,Set-up,Setup Trainee,L0,Part Time
+"Event Delivery,Set-up,Setup Assistant,L1,Casual",Event Delivery,Set-up,Setup Assistant,L1,Casual
+"Event Delivery,Set-up,Setup Crew,L2,Casual",Event Delivery,Set-up,Setup Crew,L2,Casual
+"Event Delivery,Set-up,Senior Setup Crew,L3,Casual",Event Delivery,Set-up,Senior Setup Crew,L3,Casual
+"Event Delivery,Set-up,Setup Supervisor,L4,Casual",Event Delivery,Set-up,Setup Supervisor,L4,Casual
+"Event Delivery,Set-up,Setup Manager,L5,Full Time / Casual",Event Delivery,Set-up,Setup Manager,L5,Full Time / Casual
+"Event Delivery,Set-up,Senior Setup Manager,L6,Full Time",Event Delivery,Set-up,Senior Setup Manager,L6,Full Time
+"Event Delivery,Set-up,Director Setup,L7,Full Time",Event Delivery,Set-up,Director Setup,L7,Full Time
+,,,,,
+"Event Delivery,Security,Security Trainee,L0,Part Time",Event Delivery,Security,Security Trainee,L0,Part Time
+"Event Delivery,Security,Security Assistant,L1,Casual",Event Delivery,Security,Security Assistant,L1,Casual
+"Event Delivery,Security,Security Officer,L2,Casual",Event Delivery,Security,Security Officer,L2,Casual
+"Event Delivery,Security,Senior Security Officer,L3,Casual",Event Delivery,Security,Senior Security Officer,L3,Casual
+"Event Delivery,Security,Security Supervisor,L4,Casual",Event Delivery,Security,Security Supervisor,L4,Casual
+"Event Delivery,Security,Security Manager,L5,Full Time / Casual",Event Delivery,Security,Security Manager,L5,Full Time / Casual
+"Event Delivery,Security,Senior Security Manager,L6,Full Time",Event Delivery,Security,Senior Security Manager,L6,Full Time
+"Event Delivery,Security,Director Security,L7,Full Time",Event Delivery,Security,Director Security,L7,Full Time
+,,,,,
+"Customer Services,Frontline,Customer Trainee,L0,Part Time",Customer Services,Frontline,Customer Trainee,L0,Part Time
+"Customer Services,Frontline,Customer Assistant,L1,Casual",Customer Services,Frontline,Customer Assistant,L1,Casual
+"Customer Services,Frontline,Customer Agent,L2,Casual",Customer Services,Frontline,Customer Agent,L2,Casual
+"Customer Services,Frontline,Senior Customer Agent,L3,Casual",Customer Services,Frontline,Senior Customer Agent,L3,Casual
+"Customer Services,Frontline,Customer Supervisor,L4,Casual",Customer Services,Frontline,Customer Supervisor,L4,Casual
+"Customer Services,Frontline,Customer Manager,L5,Full Time / Casual",Customer Services,Frontline,Customer Manager,L5,Full Time / Casual
+"Customer Services,Frontline,Senior Customer Manager,L6,Full Time",Customer Services,Frontline,Senior Customer Manager,L6,Full Time
+"Customer Services,Frontline,Director Customer Experience,L7,Full Time",Customer Services,Frontline,Director Customer Experience,L7,Full Time
+,,,,,
+"Security,Operations,Security Trainee,L0,Part Time",Security,Operations,Security Trainee,L0,Part Time
+"Security,Operations,Security Assistant,L1,Casual",Security,Operations,Security Assistant,L1,Casual
+"Security,Operations,Security Officer,L2,Casual",Security,Operations,Security Officer,L2,Casual
+"Security,Operations,Senior Security Officer,L3,Casual",Security,Operations,Senior Security Officer,L3,Casual
+"Security,Operations,Security Supervisor,L4,Casual",Security,Operations,Security Supervisor,L4,Casual
+"Security,Operations,Security Manager,L5,Full Time / Casual",Security,Operations,Security Manager,L5,Full Time / Casual
+"Security,Operations,Senior Security Manager,L6,Full Time",Security,Operations,Senior Security Manager,L6,Full Time
+"Security,Operations,Director Security,L7,Full Time",Security,Operations,Director Security,L7,Full Time
+,,,,,
+"Logistics,Operations,Logistics Trainee,L0,Part Time",Logistics,Operations,Logistics Trainee,L0,Part Time
+"Logistics,Operations,Logistics Assistant,L1,Casual",Logistics,Operations,Logistics Assistant,L1,Casual
+"Logistics,Operations,Storeperson,L2,Casual",Logistics,Operations,Storeperson,L2,Casual
+"Logistics,Operations,Senior Storeperson,L3,Casual",Logistics,Operations,Senior Storeperson,L3,Casual
+"Logistics,Operations,Logistics Supervisor,L4,Casual",Logistics,Operations,Logistics Supervisor,L4,Casual
+"Logistics,Operations,Logistics Manager,L5,Full Time / Casual",Logistics,Operations,Logistics Manager,L5,Full Time / Casual
+"Logistics,Operations,Senior Logistics Manager,L6,Full Time",Logistics,Operations,Senior Logistics Manager,L6,Full Time
+"Logistics,Operations,Director Logistics,L7,Full Time",Logistics,Operations,Director Logistics,L7,Full Time
+,,,,,
+"Department,SubDepartment,Role,Level,Employment_Type",Department,SubDepartment,Role,Level,Employment_Type
+,,,,,
+"Live Events,Operations,Live Events Trainee,L0,Part Time",Live Events,Operations,Live Events Trainee,L0,Part Time
+"Live Events,Operations,Live Events Assistant,L1,Casual",Live Events,Operations,Live Events Assistant,L1,Casual
+"Live Events,Operations,Live Events Crew,L2,Casual",Live Events,Operations,Live Events Crew,L2,Casual
+"Live Events,Operations,Senior Live Events Crew,L3,Casual",Live Events,Operations,Senior Live Events Crew,L3,Casual
+"Live Events,Operations,Live Events Supervisor,L4,Casual",Live Events,Operations,Live Events Supervisor,L4,Casual
+"Live Events,Operations,Live Events Manager,L5,Full Time / Casual",Live Events,Operations,Live Events Manager,L5,Full Time / Casual
+"Live Events,Operations,Senior Live Events Manager,L6,Full Time",Live Events,Operations,Senior Live Events Manager,L6,Full Time
+"Live Events,Operations,Director Live Events,L7,Full Time",Live Events,Operations,Director Live Events,L7,Full Time
+,,,,,
+"Live Events,Front of House,FOH Trainee,L0,Part Time",Live Events,Front of House,FOH Trainee,L0,Part Time
+"Live Events,Front of House,Usher,L1,Casual",Live Events,Front of House,Usher,L1,Casual
+"Live Events,Front of House,Senior Usher,L2,Casual",Live Events,Front of House,Senior Usher,L2,Casual
+"Live Events,Front of House,FOH Specialist,L3,Casual",Live Events,Front of House,FOH Specialist,L3,Casual
+"Live Events,Front of House,FOH Supervisor,L4,Casual",Live Events,Front of House,FOH Supervisor,L4,Casual
+"Live Events,Front of House,FOH Manager,L5,Full Time / Casual",Live Events,Front of House,FOH Manager,L5,Full Time / Casual
+"Live Events,Front of House,Senior FOH Manager,L6,Full Time",Live Events,Front of House,Senior FOH Manager,L6,Full Time
+"Live Events,Front of House,Director Front of House,L7,Full Time",Live Events,Front of House,Director Front of House,L7,Full Time
+,,,,,
+"Live Events,Technical,Technical Trainee,L0,Part Time",Live Events,Technical,Technical Trainee,L0,Part Time
+"Live Events,Technical,Stage Assistant,L1,Casual",Live Events,Technical,Stage Assistant,L1,Casual
+"Live Events,Technical,Stage Technician,L2,Casual",Live Events,Technical,Stage Technician,L2,Casual
+"Live Events,Technical,Senior Stage Technician,L3,Casual",Live Events,Technical,Senior Stage Technician,L3,Casual
+"Live Events,Technical,Technical Supervisor,L4,Casual",Live Events,Technical,Technical Supervisor,L4,Casual
+"Live Events,Technical,Technical Manager,L5,Full Time / Casual",Live Events,Technical,Technical Manager,L5,Full Time / Casual
+"Live Events,Technical,Senior Technical Manager,L6,Full Time",Live Events,Technical,Senior Technical Manager,L6,Full Time
+"Live Events,Technical,Director Technical Production,L7,Full Time",Live Events,Technical,Director Technical Production,L7,Full Time
+,,,,,
+"Department,SubDepartment,Role,Level,Employment_Type",Department,SubDepartment,Role,Level,Employment_Type
+,,,,,
+"Assets and Trades,Maintenance,Maintenance Trainee,L0,Part Time",Assets and Trades,Maintenance,Maintenance Trainee,L0,Part Time
+"Assets and Trades,Maintenance,Maintenance Assistant,L1,Casual",Assets and Trades,Maintenance,Maintenance Assistant,L1,Casual
+"Assets and Trades,Maintenance,Handyperson,L2,Casual",Assets and Trades,Maintenance,Handyperson,L2,Casual
+"Assets and Trades,Maintenance,Senior Handyperson,L3,Casual",Assets and Trades,Maintenance,Senior Handyperson,L3,Casual
+"Assets and Trades,Maintenance,Maintenance Supervisor,L4,Casual",Assets and Trades,Maintenance,Maintenance Supervisor,L4,Casual
+"Assets and Trades,Maintenance,Maintenance Manager,L5,Full Time / Casual",Assets and Trades,Maintenance,Maintenance Manager,L5,Full Time / Casual
+"Assets and Trades,Maintenance,Senior Maintenance Manager,L6,Full Time",Assets and Trades,Maintenance,Senior Maintenance Manager,L6,Full Time
+"Assets and Trades,Maintenance,Director Maintenance,L7,Full Time",Assets and Trades,Maintenance,Director Maintenance,L7,Full Time
+,,,,,
+"Assets and Trades,Electrical,Electrical Trainee,L0,Part Time",Assets and Trades,Electrical,Electrical Trainee,L0,Part Time
+"Assets and Trades,Electrical,Electrical Assistant,L1,Casual",Assets and Trades,Electrical,Electrical Assistant,L1,Casual
+"Assets and Trades,Electrical,Electrician,L2,Casual",Assets and Trades,Electrical,Electrician,L2,Casual
+"Assets and Trades,Electrical,Senior Electrician,L3,Casual",Assets and Trades,Electrical,Senior Electrician,L3,Casual
+"Assets and Trades,Electrical,Electrical Supervisor,L4,Casual",Assets and Trades,Electrical,Electrical Supervisor,L4,Casual
+"Assets and Trades,Electrical,Electrical Manager,L5,Full Time / Casual",Assets and Trades,Electrical,Electrical Manager,L5,Full Time / Casual
+"Assets and Trades,Electrical,Senior Electrical Manager,L6,Full Time",Assets and Trades,Electrical,Senior Electrical Manager,L6,Full Time
+"Assets and Trades,Electrical,Director Electrical Services,L7,Full Time",Assets and Trades,Electrical,Director Electrical Services,L7,Full Time
+,,,,,
+"Assets and Trades,Mechanical,Mechanical Trainee,L0,Part Time",Assets and Trades,Mechanical,Mechanical Trainee,L0,Part Time
+"Assets and Trades,Mechanical,Mechanical Assistant,L1,Casual",Assets and Trades,Mechanical,Mechanical Assistant,L1,Casual
+"Assets and Trades,Mechanical,Mechanical Technician,L2,Casual",Assets and Trades,Mechanical,Mechanical Technician,L2,Casual
+"Assets and Trades,Mechanical,Senior Mechanical Technician,L3,Casual",Assets and Trades,Mechanical,Senior Mechanical Technician,L3,Casual
+"Assets and Trades,Mechanical,Mechanical Supervisor,L4,Casual",Assets and Trades,Mechanical,Mechanical Supervisor,L4,Casual
+"Assets and Trades,Mechanical,Mechanical Manager,L5,Full Time / Casual",Assets and Trades,Mechanical,Mechanical Manager,L5,Full Time / Casual
+"Assets and Trades,Mechanical,Senior Mechanical Manager,L6,Full Time",Assets and Trades,Mechanical,Senior Mechanical Manager,L6,Full Time
+"Assets and Trades,Mechanical,Director Mechanical Services,L7,Full Time",Assets and Trades,Mechanical,Director Mechanical Services,L7,Full Time
+,,,,,
+"Assets and Trades,Facilities,Facilities Trainee,L0,Part Time",Assets and Trades,Facilities,Facilities Trainee,L0,Part Time
+"Assets and Trades,Facilities,Facilities Assistant,L1,Casual",Assets and Trades,Facilities,Facilities Assistant,L1,Casual
+"Assets and Trades,Facilities,Facilities Officer,L2,Casual",Assets and Trades,Facilities,Facilities Officer,L2,Casual
+"Assets and Trades,Facilities,Senior Facilities Officer,L3,Casual",Assets and Trades,Facilities,Senior Facilities Officer,L3,Casual
+"Assets and Trades,Facilities,Facilities Supervisor,L4,Casual",Assets and Trades,Facilities,Facilities Supervisor,L4,Casual
+"Assets and Trades,Facilities,Facilities Manager,L5,Full Time / Casual",Assets and Trades,Facilities,Facilities Manager,L5,Full Time / Casual
+"Assets and Trades,Facilities,Senior Facilities Manager,L6,Full Time",Assets and Trades,Facilities,Senior Facilities Manager,L6,Full Time
+"Assets and Trades,Facilities,Director Facilities,L7,Full Time",Assets and Trades,Facilities,Director Facilities,L7,Full Time

@@ -136,7 +136,8 @@ async function greedyFallback(
                         shiftDate: shift.shift_date,
                         startTime: shift.start_time,
                         endTime: shift.end_time,
-                        optimizerScore: 0.5,
+                        optimizerCost: 0,
+                        employmentType: emp.contract_type ?? 'Casual',
                         complianceStatus: 'PASS',
                         violations: [],
                         passing: true,
@@ -158,7 +159,8 @@ async function greedyFallback(
                 shiftDate: shift.shift_date,
                 startTime: shift.start_time,
                 endTime: shift.end_time,
-                optimizerScore: 0,
+                optimizerCost: 0,
+                employmentType: 'Casual',
                 complianceStatus: 'FAIL',
                 violations: [{ type: 'NO_ELIGIBLE_EMPLOYEE', description: 'No available employee passed compliance for this shift.', blocking: true }],
                 passing: false,
@@ -243,12 +245,19 @@ export class AutoSchedulerController {
             end_time: s.end_time,
             duration_minutes: this._durationMinutes(s.start_time, s.end_time),
             role_id: s.role_id,
-            priority: 1,
+            priority: s.demand_source === 'baseline' ? 10 : 1, // Prioritize baseline shifts
+            demand_source: s.demand_source,
+            target_employment_type: s.target_employment_type,
         }));
 
         const optimizerEmployees: OptimizerEmployee[] = input.employees.map(e => ({
             id: e.id,
             name: e.name,
+            contract_type: e.contract_type,
+            employment_type: e.contract_type ?? 'Casual',
+            hourly_rate: e.contract_type === 'FT' ? 15.0 : e.contract_type === 'PT' ? 20.0 : 25.0, // FT is not free
+            // Contract minimums: FT=38h/wk, PT=20h/wk, Casual=0
+            min_contract_minutes: e.contract_type === 'FT' ? 2280 : e.contract_type === 'PT' ? 1200 : 0,
             max_weekly_minutes: 2400,
             ...(input.employeeDetails?.get(e.id) ?? {}),
             existing_shifts: existingRoster.get(e.id) ?? [],
@@ -725,7 +734,7 @@ export class AutoSchedulerController {
                     all.push({
                         shiftId: p.shiftId, employeeId: p.employeeId, employeeName: p.employeeName,
                         shiftDate: p.shiftDate, startTime: p.startTime, endTime: p.endTime,
-                        optimizerScore: p.score, complianceStatus: 'FAIL',
+                        optimizerCost: p.cost, employmentType: p.employmentType, complianceStatus: 'FAIL',
                         violations: [{ type: 'SYSTEM', description: 'Compliance check error', blocking: true }],
                         passing: false,
                     });
@@ -739,7 +748,8 @@ export class AutoSchedulerController {
                 all.push({
                     shiftId: p.shiftId, employeeId: p.employeeId, employeeName: p.employeeName,
                     shiftDate: p.shiftDate, startTime: p.startTime, endTime: p.endTime,
-                    optimizerScore: p.score,
+                    optimizerCost: p.cost,
+                    employmentType: p.employmentType,
                     complianceStatus: cr?.status === 'PASS' ? 'PASS' : cr?.status === 'WARN' ? 'WARN' : 'FAIL',
                     violations: (cr?.violations ?? []).map(v => ({
                         type: v.violation_type, description: v.description, blocking: v.blocking,

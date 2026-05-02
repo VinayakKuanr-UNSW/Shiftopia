@@ -220,6 +220,10 @@ export interface RoleRecord {
   name:                   string;
   code?:                  string | null;
   remuneration_level_id?: string | null;
+  forecasting_bucket?:    'static' | 'semi_dynamic' | 'dynamic' | null;
+  supervision_ratio_min?: number | null;
+  supervision_ratio_max?: number | null;
+  is_baseline_eligible?:  boolean;
 }
 
 export interface LevelRecord {

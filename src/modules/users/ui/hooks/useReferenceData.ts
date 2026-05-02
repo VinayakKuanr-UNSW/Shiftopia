@@ -31,7 +31,7 @@ export const useReferenceData = (shouldLoad: boolean = false) => {
                 supabase.from('organizations').select('id, name').order('name'),
                 supabase.from('departments').select('id, name, organization_id').order('name'),
                 supabase.from('sub_departments').select('id, name, department_id').order('name'),
-                supabase.from('roles').select('id, name, level, sub_department_id, remuneration_level_id').order('name'),
+                supabase.from('roles').select('id, name, level, sub_department_id, remuneration_level_id, employment_type').order('name'),
                 supabase.from('remuneration_levels').select('id, level_number, level_name, hourly_rate_min').order('level_number'),
             ]);
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutGrid,
@@ -25,6 +25,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useEmployeeBroadcastGroups, useBroadcastNotifications } from '@/modules/broadcasts/state/useBroadcasts';
+import { useAuth } from '@/platform/auth/useAuth';
 
 const BottomNavbar: React.FC = () => {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -47,14 +49,30 @@ const BottomNavbar: React.FC = () => {
     }
   }, [location.pathname]);
 
+  // UNREAD COUNTS INTEGRATION
+  const { user } = useAuth();
+  const { groups: broadcastGroups } = useEmployeeBroadcastGroups();
+  const { unreadCount: notificationsUnread } = useBroadcastNotifications();
+
+  const broadcastsUnread = useMemo(() => 
+    broadcastGroups.reduce((acc, g) => acc + (g.unreadCount || 0), 0),
+    [broadcastGroups]
+  );
+
+  const getBadgeCount = (key?: string) => {
+    if (key === 'broadcasts') return broadcastsUnread;
+    if (key === 'notifications') return notificationsUnread;
+    return 0;
+  };
+
   const middleItems = [
     { label: 'Roster', icon: Calendar, path: '/my-roster' },
     { label: 'Atten', icon: Fingerprint, path: '/my-attendance' },
     { label: 'Avail', icon: CalendarDays, path: '/my-availabilities' },
     { label: 'Bids', icon: BadgeCheck, path: '/my-bids' },
     { label: 'Swaps', icon: RefreshCw, path: '/my-swaps' },
-    { label: 'Radio', icon: Radio, path: '/my-broadcasts' },
-    { label: 'Notif', icon: BellRing, path: '/my-notifications' },
+    { label: 'Radio', icon: Radio, path: '/my-broadcasts', badgeKey: 'broadcasts' },
+    { label: 'Notif', icon: BellRing, path: '/my-notifications', badgeKey: 'notifications' },
   ];
 
   const moreItems = [
@@ -86,20 +104,36 @@ const BottomNavbar: React.FC = () => {
         )
       }
     >
-      {({ isActive }) => (
-        <div className="flex items-center gap-2">
-          <item.icon className={cn("h-5 w-5 flex-shrink-0 transition-colors", isActive ? "text-background" : "text-muted-foreground")} strokeWidth={isActive ? 2.5 : 2} />
-          
-          <div className={cn(
-             "overflow-hidden transition-all duration-300 ease-out flex items-center",
-             isActive ? "max-w-[100px] opacity-100" : "max-w-0 opacity-0"
-          )}>
-            <span className="text-[11px] font-black uppercase tracking-[0.15em] whitespace-nowrap pt-[1px] block">
-              {item.label}
-            </span>
+      {({ isActive }) => {
+        const badgeCount = getBadgeCount(item.badgeKey);
+        
+        return (
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <item.icon className={cn("h-5 w-5 flex-shrink-0 transition-colors", isActive ? "text-background" : "text-muted-foreground")} strokeWidth={isActive ? 2.5 : 2} />
+              {badgeCount > 0 && (
+                <span className={cn(
+                  "absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[8px] font-black border-2",
+                  isActive 
+                    ? "bg-red-500 text-white border-foreground" 
+                    : "bg-red-500 text-white border-card"
+                )}>
+                  {badgeCount > 99 ? '99+' : badgeCount}
+                </span>
+              )}
+            </div>
+            
+            <div className={cn(
+               "overflow-hidden transition-all duration-300 ease-out flex items-center",
+               isActive ? "max-w-[100px] opacity-100" : "max-w-0 opacity-0"
+            )}>
+              <span className="text-[11px] font-black uppercase tracking-[0.15em] whitespace-nowrap pt-[1px] block">
+                {item.label}
+              </span>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      }}
     </NavLink>
   );
 
@@ -126,7 +160,10 @@ const BottomNavbar: React.FC = () => {
             initial={{ opacity: 0, y: 30, scale: 0.95, filter: "blur(10px)" }}
             animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
             exit={{ opacity: 0, y: 20, scale: 0.95, filter: "blur(10px)" }}
-            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+            transition={{ 
+              default: { type: 'spring', damping: 25, stiffness: 350 },
+              filter: { type: 'tween', duration: 0.2, ease: 'easeOut' }
+            }}
             className="fixed bottom-[110px] left-4 right-4 z-[59] rounded-[32px] bg-card/80 backdrop-blur-3xl border border-white/20 dark:border-white/10 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.3)] overflow-hidden"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-white/0 dark:from-white/10 dark:to-white/0 pointer-events-none" />
