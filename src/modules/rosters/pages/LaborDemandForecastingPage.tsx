@@ -111,6 +111,7 @@ import {
   MapPin,
   Sparkles,
   BarChart3,
+  MessageSquare,
 } from "lucide-react";
 
 // Phase 5: shift synthesis wiring
@@ -124,6 +125,7 @@ import {
   ConfirmGenerationModal,
   type GenerationOptions,
 } from "./components/ConfirmGenerationModal";
+import { SupervisorFeedbackPromptModal } from "../ui/components/SupervisorFeedbackPromptModal";
 import {
   useGenerateShifts,
   useRollbackSynthesisRun,
@@ -835,6 +837,7 @@ const LaborDemandForecastingPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>("preview");
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   // Chart toggles
   const [showNewInjection, setShowNewInjection] = useState(true);
@@ -1474,6 +1477,7 @@ const LaborDemandForecastingPage: React.FC = () => {
      RENDER
      ============================================================= */
   return (
+    <>
     <PageLayout>
       <PageLayout.Header>
         <PersonalPageHeader
@@ -1551,6 +1555,20 @@ const LaborDemandForecastingPage: React.FC = () => {
                 <span>Syncing shifts...</span>
               </div>
             )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowFeedbackModal(true)}
+                  className="h-9 gap-2 text-muted-foreground hover:text-foreground"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  Give feedback
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Tell us how staffing went for a past event</TooltipContent>
+            </Tooltip>
             <Button
               variant="outline"
               size="sm"
@@ -2630,6 +2648,14 @@ const LaborDemandForecastingPage: React.FC = () => {
         )}
       </AnimatePresence>
     </PageLayout>
+
+    <SupervisorFeedbackPromptModal
+      open={showFeedbackModal}
+      onOpenChange={setShowFeedbackModal}
+      eventId={null}
+      onSubmitted={() => toast.success("Feedback submitted — thank you.")}
+    />
+    </>
   );
 };
 

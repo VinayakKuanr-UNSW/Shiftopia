@@ -22,6 +22,8 @@ import type { CreateShiftData } from '../api/shifts.dto';
 import type { TemplateGroupType } from '../domain/shift.entity';
 import { supabase } from '@/platform/realtime/client';
 import { createModuleLogger } from '@/modules/core/lib/logger';
+import { tryAutoBuildTemplate, buildClusterKey } from './templateBuilder.service';
+import { deriveRoomCount } from './eventFeatureBuilder.service';
 
 // ── Compliance Engine v2 ──────────────────────────────────────────────────────
 // Rewired from capstone's compliance.service to the parent's unified engine.
@@ -59,6 +61,12 @@ export interface SynthesizeAndInsertParams {
   enforceMinMax?: boolean;
   /** Merge sub-1h spikes into adjacent shifts. Default false. */
   mergeMicroPeaks?: boolean;
+  /**
+   * When true (default), attempt to auto-build or refresh an L9 demand template
+   * for each unique event_id found in demandTensorRows after a successful insert.
+   * Set to false in tests or callers that want to skip the post-synthesis step.
+   */
+  enableTemplateBuilder?: boolean;
 }
 
 export interface SynthesizeAndInsertResult {
@@ -133,13 +141,13 @@ async function ensureDefaultRosterSubgroup(
 }
 
 /**
- * Run Compliance Engine v2 against a synthesized shift (skeleton mode — no employee).
+ * Run Compliance Engine v2 against a synthesized shift (skeleton mode -- no employee).
  *
  * Uses `employee_id: 'skeleton'` so only structural rules fire (R01 overlap,
  * R02 min length, R08 meal break). Employee-centric rules are skipped.
  *
  * Returns the compliance status string. 'BLOCKING' shifts are still inserted
- * as Draft so managers can review — they are never silently dropped.
+ * as Draft so managers can review -- they are never silently dropped.
  */
 function runSkeletonCompliance(
   shift: SynthesizedShift,
@@ -231,7 +239,7 @@ async function mapRowsToTensors(rows: DemandTensorInsertRow[]): Promise<DemandTe
 
   // 1. Fetch the taxonomy mappings
   const { data: fmap, error: fErr } = await supabase.from('function_map').select('*');
-  const { data: roles, error: rErr } = await supabase.from('roles').select('id, level, sub_department_id');
+  const { data: roles, error: rErr } = await supabase.from('roles').select('id, level, sub_department_id, employment_type');
 
   if (fErr || rErr) {
     logger.error('Failed to fetch taxonomy for demand mapping', { fErr, rErr });
@@ -244,11 +252,11 @@ async function mapRowsToTensors(rows: DemandTensorInsertRow[]): Promise<DemandTe
   for (const row of rows) {
     // A single function_code can map to multiple sub-departments (e.g., F&B -> Culinary & Service)
     const matches = (fmap ?? []).filter(f => f.function_code === row.function_code);
-    
+
     for (const m of matches) {
       // Find the specific role matching this sub-department and level
-      const targetRole = (roles ?? []).find(r => 
-        r.sub_department_id === m.sub_department_id && 
+      const targetRole = (roles ?? []).find(r =>
+        r.sub_department_id === m.sub_department_id &&
         r.level === row.level
       );
 
@@ -282,7 +290,7 @@ async function mapRowsToTensors(rows: DemandTensorInsertRow[]): Promise<DemandTe
         slot.requiredHeadcount += weightedHeadcount;
         slot.residualHeadcount += weightedHeadcount;
         slot.residualHeadcountInt += weightedHeadcount;
-        
+
         // Append explanations from the L7 row to the slot
         if (row.explanation && Array.isArray(row.explanation)) {
           const reasons = slot.reasons ?? [];
@@ -302,6 +310,69 @@ async function mapRowsToTensors(rows: DemandTensorInsertRow[]): Promise<DemandTe
 }
 
 /**
+ * Fire-and-forget post-synthesis hook: attempt to auto-build (or refresh) an
+ * L9 demand template for each unique event_id present in demandTensorRows.
+ *
+ * Each event is processed independently -- one bad event does not abort the rest.
+ * This function must never be awaited before the orchestrator returns its result.
+ */
+async function runTemplateBuilderForEvents(
+  demandTensorRows: DemandTensorInsertRow[],
+): Promise<void> {
+  // Collect unique non-null event_ids from this run's tensor rows.
+  const eventIds = [
+    ...new Set(
+      demandTensorRows
+        .map((r) => r.event_id)
+        .filter((id): id is string => id != null && id !== ''),
+    ),
+  ];
+
+  if (eventIds.length === 0) return;
+
+  await Promise.allSettled(
+    eventIds.map(async (eventId) => {
+      try {
+        const { data: ev, error: evErr } = await supabase
+          .from('venueops_events')
+          .select('event_type_name, estimated_total_attendance, service_type, alcohol, venue_names')
+          .eq('event_id', eventId)
+          .single();
+
+        if (evErr || !ev) {
+          logger.warn('templateBuilder: could not fetch event row', { eventId, error: evErr?.message });
+          return;
+        }
+
+        const clusterKey = buildClusterKey({
+          event_type:   ev.event_type_name ?? null,
+          pax:          ev.estimated_total_attendance ?? 0,
+          service_type: ev.service_type ?? null,
+          alcohol:      ev.alcohol ?? null,
+          room_count:   deriveRoomCount(ev.venue_names ?? null),
+        });
+
+        const template = await tryAutoBuildTemplate(clusterKey);
+        if (template) {
+          logger.info('templateBuilder: template upserted', {
+            eventId,
+            templateCode: template.template_code,
+            clusterKey,
+          });
+        } else {
+          logger.info('templateBuilder: insufficient sample size, skipped', { eventId, clusterKey });
+        }
+      } catch (err) {
+        logger.warn('templateBuilder: error processing event', {
+          eventId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }),
+  );
+}
+
+/**
  * Full pipeline: synthesize shifts from demand tensors, apply business rules
  * (supervisor ratios + minimum staff), run compliance check per shift,
  * then insert all as draft shifts for manager review.
@@ -311,7 +382,7 @@ async function mapRowsToTensors(rows: DemandTensorInsertRow[]): Promise<DemandTe
  *     from the parent's Compliance Engine v2.
  *   - Skeleton mode (employee_id = 'skeleton') evaluates structural rules only.
  *   - Option (b): all synthesized shifts land as Draft regardless of compliance
- *     status — hard-blocked shifts are flagged in logs for manager review.
+ *     status -- hard-blocked shifts are flagged in logs for manager review.
  *   - TODO: stamp compliance_status column on shift row once schema supports it.
  */
 export async function synthesizeAndInsertShifts(
@@ -379,7 +450,7 @@ export async function synthesizeAndInsertShifts(
   const subDeptIds = [
     ...new Set([
       ...allShifts.map((s) => s.subDepartmentId),
-      ...params.demandTensors.map((t) => t.subDepartmentId),
+      ...(params.demandTensors ?? []).map((t) => t.subDepartmentId),
     ]),
   ];
   const [ratios, minimums] = await Promise.all([
@@ -409,7 +480,7 @@ export async function synthesizeAndInsertShifts(
     );
   }
 
-  // 4. Run Compliance Engine v2 per synthesized shift (skeleton — no employee).
+  // 4. Run Compliance Engine v2 per synthesized shift (skeleton -- no employee).
   //    All shifts proceed to Draft regardless of compliance status (option b).
   //    Blocked shifts are logged so managers can review them in the Draft queue.
   let complianceBlockedCount = 0;
@@ -417,7 +488,7 @@ export async function synthesizeAndInsertShifts(
     const { status, blocked } = runSkeletonCompliance(shift, params.shiftDate);
     if (blocked) {
       complianceBlockedCount++;
-      logger.warn('synthesized shift has structural compliance violation — inserting as Draft for manager review', {
+      logger.warn('synthesized shift has structural compliance violation -- inserting as Draft for manager review', {
         operation: 'synthesizeAndInsertShifts',
         roleId: shift.roleId,
         subDepartmentId: shift.subDepartmentId,
@@ -431,14 +502,14 @@ export async function synthesizeAndInsertShifts(
   }
 
   if (complianceBlockedCount > 0) {
-    logger.info('compliance check complete — blocked shifts still inserted as Draft', {
+    logger.info('compliance check complete -- blocked shifts still inserted as Draft', {
       operation: 'synthesizeAndInsertShifts',
       totalShifts: finalShifts.length,
       complianceBlockedCount,
     });
   }
 
-  // 5. Every shift needs a roster_subgroup_id — use or create a default on this roster.
+  // 5. Every shift needs a roster_subgroup_id -- use or create a default on this roster.
   const buildingType = finalShifts[0]?.buildingType ?? 'convention_centre';
   const defaultSubgroupId = await ensureDefaultRosterSubgroup(
     params.rosterId,
@@ -504,12 +575,28 @@ export async function synthesizeAndInsertShifts(
     }
   }
 
+  // 9. Fire-and-forget: attempt to auto-build / refresh L9 demand templates for
+  //    each unique event_id present in this run's tensor rows.
+  //    Guard: only when enableTemplateBuilder is not explicitly false, tensor rows
+  //    exist, and at least one row carries a non-null event_id.
+  const enableTemplateBuilder = params.enableTemplateBuilder !== false;
+  const tensorRows = params.demandTensorRows;
+  if (
+    enableTemplateBuilder &&
+    tensorRows &&
+    tensorRows.length > 0 &&
+    tensorRows.some((r) => r.event_id != null && r.event_id !== '')
+  ) {
+    // Intentionally not awaited -- must not block the return value.
+    void runTemplateBuilderForEvents(tensorRows);
+  }
+
   return { createdCount, deletedCount, failed, synthesizedShifts: finalShifts };
 }
 
 /**
  * Rollback a synthesis run. Deletes shifts that match the run id AND are still unassigned.
- * Assigned shifts are kept — someone has already committed.
+ * Assigned shifts are kept -- someone has already committed.
  */
 export async function rollbackSynthesisRun(runId: string): Promise<{
   deletedCount: number;

@@ -31,6 +31,7 @@ export interface DemandAnalysisResult {
   primaryPeak: PeakWindow | null;
   microPeaks: MicroPeak[];
   demandSource?: 'ml_predicted' | 'derived' | 'baseline' | null;
+  targetEmploymentType?: 'FT' | 'PT' | 'Casual' | null;
 }
 
 // Smooths headcount values by replacing each slot's headcount with the average of itself and its neighbors
@@ -207,7 +208,7 @@ export function packShifts(demand: DemandAnalysisResult): SynthesizedShift[] {
       headcount: minHeadcount,
       reasons: Array.from(uniqueReasons),
       demand_source: demand.demandSource,
-      target_employment_type: undefined,
+      target_employment_type: demand.targetEmploymentType ?? undefined,
     });
   }
   return shifts;
@@ -250,6 +251,7 @@ export function synthesizeShifts(
     primaryPeak,
     microPeaks,
     demandSource: demandTensor.demandSource,
+    targetEmploymentType: demandTensor.targetEmploymentType,
   };
   let shifts = packShifts(demandAnalysisResult);
 

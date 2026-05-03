@@ -102,7 +102,7 @@ interface EventRow {
     event_type_name: string | null;
     estimated_total_attendance: number | null;
     service_type: string | null;
-    alcohol_served: boolean | null;
+    alcohol: boolean | null;
     room_count: number | null;
 }
 
@@ -134,7 +134,7 @@ export async function tryAutoBuildTemplate(
     // 1. Fetch candidate events (filter on columns that exist as DB columns).
     let eventQuery = supabase
         .from('venueops_events')
-        .select('event_id, event_type_name, estimated_total_attendance, service_type, alcohol_served, room_count')
+        .select('event_id, event_type_name, estimated_total_attendance, service_type, alcohol, room_count')
         .eq('is_canceled', false);
 
     if (clusterKey.event_type !== null) {
@@ -144,7 +144,7 @@ export async function tryAutoBuildTemplate(
         eventQuery = eventQuery.eq('service_type', clusterKey.service_type);
     }
     if (clusterKey.alcohol !== null) {
-        eventQuery = eventQuery.eq('alcohol_served', clusterKey.alcohol);
+        eventQuery = eventQuery.eq('alcohol', clusterKey.alcohol);
     }
 
     const { data: rawEvents, error: evErr } = await eventQuery;

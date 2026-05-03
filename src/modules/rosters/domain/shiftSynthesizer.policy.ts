@@ -37,6 +37,7 @@ export interface DemandTensor {
   buildingType: TemplateGroupType; // used to set group_type on generated shifts
   slots: DemandSlot[];
   demandSource?: 'ml_predicted' | 'derived' | 'baseline' | null;
+  targetEmploymentType?: 'FT' | 'PT' | 'Casual' | null;
 }
 // Output of the packing algorithm
 export interface SynthesizedShift {
