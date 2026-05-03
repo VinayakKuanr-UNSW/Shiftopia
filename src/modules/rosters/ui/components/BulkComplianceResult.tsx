@@ -38,7 +38,7 @@ interface RuleGroup {
     blocking: boolean;
     status: 'FAIL' | 'WARNING' | 'PASS';
     explanation: string;
-    affectedShiftIds: Set<string>;
+    affectedV8ShiftIds: Set<string>;
     data?: any; // Data from the first violation for viz
     // Aggregated daily data for MAX_DAILY_HOURS
     dailyData?: Map<string, { existing: number; candidate: number; limit: number }>;
@@ -76,7 +76,7 @@ export const BulkComplianceResult: React.FC<BulkComplianceResultProps> = ({
                     blocking: detail.blocking,
                     status: detail.status === 'FAIL' ? 'FAIL' : detail.status === 'WARNING' ? 'WARNING' : 'PASS',
                     explanation: detail.explanation,
-                    affectedShiftIds: new Set(),
+                    affectedV8ShiftIds: new Set(),
                     data: detail.data,
                     dailyData: new Map(),
                     shiftLengthData: [],
@@ -92,7 +92,7 @@ export const BulkComplianceResult: React.FC<BulkComplianceResultProps> = ({
                 if (detail.blocking && detail.status === 'FAIL') existing.blocking = true;
 
                 // Track ALL affected shifts (not just failures) so user can see what was checked
-                existing.affectedShiftIds.add(result.shiftId);
+                existing.affectedV8ShiftIds.add(result.shiftId);
 
                 // For MAX_DAILY_HOURS: aggregate per-day data
                 if (detail.ruleId === 'MAX_DAILY_HOURS' && detail.data) {
@@ -147,7 +147,7 @@ export const BulkComplianceResult: React.FC<BulkComplianceResultProps> = ({
     // FIXED: Only count rules that are blocking AND actually failed
     const blockingCount = ruleGroups.filter(g => g.blocking && g.status === 'FAIL').length;
     const warningCount = ruleGroups.filter(g => g.status === 'WARNING').length;
-    const affectedShiftTotal = new Set(ruleGroups.flatMap(g => Array.from(g.affectedShiftIds))).size;
+    const affectedShiftTotal = new Set(ruleGroups.flatMap(g => Array.from(g.affectedV8ShiftIds))).size;
 
     return (
         <div className="space-y-6">
@@ -212,7 +212,7 @@ const RuleGroupCard: React.FC<{ group: RuleGroup, allShifts: any[] }> = ({ group
     const [expanded, setExpanded] = useState(group.blocking && group.status === 'FAIL');
 
     // Find affected shifts details
-    const affectedShifts = allShifts.filter(s => group.affectedShiftIds.has(s.id));
+    const affectedShifts = allShifts.filter(s => group.affectedV8ShiftIds.has(s.id));
 
     // Determine colors based on status
     const getStatusColors = () => {

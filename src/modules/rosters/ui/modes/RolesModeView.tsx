@@ -72,7 +72,7 @@ interface RolesModeViewProps {
   onEditShift?: (shift: any) => void;
   onMoveShift?: (shiftId: string, targetContext: any) => void;
   onAssignShift?: (shiftId: string, employeeId: string, employeeName: string) => void;
-  selectedShiftIds?: string[];
+  selectedV8ShiftIds?: string[];
   isBulkMode?: boolean;
   onToggleShiftSelection?: (shiftId: string) => void;
 }
@@ -266,7 +266,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   onEditShift,
   onMoveShift,
   onAssignShift,
-  selectedShiftIds: propsSelectedShiftIds,
+  selectedV8ShiftIds: propsSelectedV8ShiftIds,
   isBulkMode,
   onToggleShiftSelection,
 }) => {
@@ -277,7 +277,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
 
   const { isDnDModeActive } = useRosterStore();
 
-  const selectedShiftIds = propsSelectedShiftIds ?? [];
+  const selectedV8ShiftIds = propsSelectedV8ShiftIds ?? [];
 
   const { data: levels = [], isLoading: isLoadingLevels } = useRemunerationLevels();
   const { data: roles = [], isLoading: isLoadingRoles } = useRoles(organizationId, activeDeptId, activeSubDeptId);
@@ -307,7 +307,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalContext, setModalContext] = useState<ShiftContext | null>(null);
-  const [confirmShiftId, setConfirmShiftId] = useState<string | null>(null);
+  const [confirmV8ShiftId, setConfirmV8ShiftId] = useState<string | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [collapsedLevels, setCollapsedLevels] = useState<Set<number>>(new Set());
 
@@ -384,7 +384,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
             <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem
               onClick={() => {
-                setConfirmShiftId(shift.id);
+                setConfirmV8ShiftId(shift.id);
                 setIsConfirmOpen(true);
               }}
               className="text-amber-400 hover:bg-amber-500/10 cursor-pointer"
@@ -453,9 +453,9 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   };
 
   const handleConfirmUnpublish = async () => {
-    if (!confirmShiftId) return;
-    try { await unpublishMutation.mutateAsync({ shiftId: confirmShiftId, reason: 'Unpublished via Roles view' }); } 
-    catch {} finally { setIsConfirmOpen(false); setConfirmShiftId(null); }
+    if (!confirmV8ShiftId) return;
+    try { await unpublishMutation.mutateAsync({ shiftId: confirmV8ShiftId, reason: 'Unpublished via Roles view' }); } 
+    catch {} finally { setIsConfirmOpen(false); setConfirmV8ShiftId(null); }
   };
 
   const handleCellClick = (roleId: string, date: Date) => {
@@ -598,7 +598,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                                 shift={s} 
                                 isDnDModeActive={isDnDModeActive} 
                                 onEdit={sh => onEditShift?.(sh)} 
-                                isSelected={selectedShiftIds.includes(s.id)}
+                                isSelected={selectedV8ShiftIds.includes(s.id)}
                                 onToggleSelection={onToggleShiftSelection || (() => {})}
                                 isBulkMode={isBulkMode}
                                 onAssignEmployee={onAssignShift || (() => {})}

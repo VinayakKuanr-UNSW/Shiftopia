@@ -118,7 +118,7 @@ export const AddSubGroupDialog: React.FC<AddSubGroupDialogProps> = ({
             <Label htmlFor="subgroupName">Sub-Group Name *</Label>
             <Input
               id="subgroupName"
-              placeholder="e.g., Loading Dock, Stage Left, Kitchen"
+              placeholder="e.g., Loading Dock, V8Stage Left, Kitchen"
               value={name}
               onChange={(e) => {
                 setName(e.target.value);

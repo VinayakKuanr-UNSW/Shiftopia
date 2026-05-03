@@ -130,23 +130,23 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
 
   // ── Unpublish ────────────────────────────────────────────────────────────────
   const unpublishMutation = useUnpublishShift();
-  const [confirmShiftId, setConfirmShiftId] = useState<string | null>(null);
+  const [confirmV8ShiftId, setConfirmV8ShiftId] = useState<string | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   const handleRequestUnpublish = (shiftId: string) => {
-    setConfirmShiftId(shiftId);
+    setConfirmV8ShiftId(shiftId);
     setIsConfirmOpen(true);
   };
 
   const handleConfirmUnpublish = async () => {
-    if (!confirmShiftId) return;
+    if (!confirmV8ShiftId) return;
     try {
-      await unpublishMutation.mutateAsync({ shiftId: confirmShiftId, reason: 'Unpublished via Events view' });
+      await unpublishMutation.mutateAsync({ shiftId: confirmV8ShiftId, reason: 'Unpublished via Events view' });
     } catch {
       // mutation onError handles rollback; toast not needed here
     } finally {
       setIsConfirmOpen(false);
-      setConfirmShiftId(null);
+      setConfirmV8ShiftId(null);
     }
   };
 

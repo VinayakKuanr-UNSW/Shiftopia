@@ -18,7 +18,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitive
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { supabase } from '@/platform/realtime/client';
 import {
-  checkComplianceNow,
+  runV8LegacyBridgeNow,
   buildComplianceInput,
   ShiftTimeRange
 } from '@/modules/compliance';
@@ -183,7 +183,7 @@ export const AssignShiftDialog: React.FC<AssignShiftDialogProps> = ({
           shiftId: assignment.shiftId
         });
 
-        const checkResult = checkComplianceNow(input);
+        const checkResult = runV8LegacyBridgeNow(input);
 
 
         if (!checkResult.passed) {

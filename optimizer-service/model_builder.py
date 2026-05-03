@@ -61,6 +61,7 @@ class ShiftInput:
     required_skill_ids: list[str] = field(default_factory=list)
     required_license_ids: list[str] = field(default_factory=list)
     priority: int = 1
+    unpaid_break_minutes: int = 0
 
 
 @dataclass
@@ -90,6 +91,7 @@ class EmployeeInput:
     license_ids: list[str] = field(default_factory=list)
     preferred_shift_ids: list[str] = field(default_factory=list)
     unavailable_dates: list[str] = field(default_factory=list)
+    initial_fatigue_score: float = 0.0
     # Pinned/already-committed shifts for this employee. The optimizer treats
     # these as immutable: it will not propose any shift that overlaps or
     # violates the rest gap against them, and it counts their minutes
@@ -211,13 +213,62 @@ def existing_blocks_proposal(
     min_rest: int,
 ) -> bool:
     """True if any of the employee's existing (pinned) shifts overlaps or
-    violates rest-gap against the proposed shift. Used as an eligibility
-    filter so the solver never proposes shifts that conflict with the
-    employee's already-committed roster."""
+    violates rest-gap against the proposed shift."""
     for ex in existing_list:
         if rest_gap_violated(proposed, ex, min_rest):
             return True
     return False
+
+
+def _calculate_effective_minutes(s) -> int:
+    """Calculates effective duration (weighted by circadian penalties).
+    
+    Weights (per Award MA000080 fatigue principles):
+    - 12am-2am: +25%
+    - 2am-6am:  +50% (Danger Zone)
+    - 6am-8am:  +25%
+    - 10am-4pm: -25% (Daylight Reward)
+    - Others:   Standard (1.0)
+    """
+    start_abs, end_abs = shift_window(s)
+    total_mins = end_abs - start_abs
+    if total_mins <= 0: return 0
+    
+    # Define penalty intervals (relative to day start)
+    # 0=12am, 120=2am, 360=6am, 480=8am, 600=10am, 960=4pm, 1320=10pm, 1440=12am
+    intervals = [
+        (0, 120, 1.25),      # 12am-2am
+        (120, 360, 1.50),    # 2am-6am
+        (360, 480, 1.25),    # 6am-8am
+        (480, 600, 1.00),    # 8am-10am
+        (600, 960, 0.75),    # 10am-4pm
+        (960, 1320, 1.00),   # 4pm-10pm
+        (1320, 1440, 1.25),  # 10pm-12am
+    ]
+    
+    # Support overnight by adding next day intervals
+    extended_intervals = intervals + [(s + 1440, e + 1440, w) for s, e, w in intervals]
+    
+    weighted_mins = 0
+    day_start = (start_abs // 1440) * 1440
+    
+    for i_start, i_end, weight in extended_intervals:
+        abs_i_start = day_start + i_start
+        abs_i_end = day_start + i_end
+        
+        overlap_start = max(start_abs, abs_i_start)
+        overlap_end = min(end_abs, abs_i_end)
+        
+        if overlap_end > overlap_start:
+            weighted_mins += (overlap_end - overlap_start) * weight
+            
+    # Subtract unpaid break (pro-rated)
+    unpaid = getattr(s, 'unpaid_break_minutes', 0)
+    if unpaid > 0:
+        ratio = weighted_mins / total_mins
+        weighted_mins -= unpaid * ratio
+        
+    return int(round(weighted_mins))
 
 
 # =============================================================================
@@ -673,6 +724,48 @@ class ScheduleModelBuilder:
             if ot_rate_cents_per_min > 0:
                 terms.append(ot_rate_cents_per_min * overtime)
 
+        # ── SC-7: Safety Penalty (Non-linear Fatigue) ─────────────────────────
+        # Uses piecewise linear approximation to simulate the exponential drain
+        # of high effective working hours (weighted by circadian factors).
+        for emp in self.data.employees:
+            # We already have emp_workload_vars[emp.id] which is duration_minutes.
+            # We need a new var for effective_minutes.
+            eff_terms = [
+                _calculate_effective_minutes(s) * self._x[emp.id, s.id]
+                for s in self.data.shifts
+                if (emp.id, s.id) in self._x
+            ]
+            if not eff_terms:
+                continue
+            
+            # Initial fatigue (from previous week) converted to "effective minutes"
+            # 1 fatigue unit ~= 60 effective minutes in the simplified linear band
+            init_eff_mins = int(emp.initial_fatigue_score * 60)
+            
+            eff_total = self.model.NewIntVar(0, 5000, f'eff_{emp.id[:6]}')
+            self.model.Add(eff_total == cp_model.LinearExpr.Sum(eff_terms) + init_eff_mins)
+            
+            # Non-linear penalty bands (in cents):
+            # 0-1200 mins (20h): $0/min
+            # 1200-1800 mins (30h): $5/min surcharge (Amber)
+            # 1800+ mins (30h+): $50/min surcharge (Critical/Red)
+            # This simulates the -76*log curve's rapid ascent.
+            
+            # Helper: AddPiecewiseLinearConstraint is available in newer OR-Tools.
+            # If not, we can use 3 linear variables and max constraints.
+            
+            amber_mins = self.model.NewIntVar(0, 5000, f'amber_{emp.id[:6]}')
+            critical_mins = self.model.NewIntVar(0, 5000, f'crit_{emp.id[:6]}')
+            
+            # amber_mins = max(0, eff_total - 1200)
+            self.model.AddMaxEquality(amber_mins, [eff_total - 1200, 0])
+            # critical_mins = max(0, eff_total - 1800)
+            self.model.AddMaxEquality(critical_mins, [eff_total - 1800, 0])
+            
+            # Penalties:
+            terms.append(500 * amber_mins)       # $5.00 per minute
+            terms.append(4500 * critical_mins)   # Extra $45.00 per minute (Total $50.00)
+            
         # ── SC-6: Shift Continuity — reward keeping same employee on adjacent ─
         # For each pair of adjacent (contiguous, non-overlapping) shifts,
         # give a $2.00 (200 cents) bonus if the same employee works both.

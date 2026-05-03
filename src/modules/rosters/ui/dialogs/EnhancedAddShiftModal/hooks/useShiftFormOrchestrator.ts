@@ -30,11 +30,11 @@ import { formSchema, FormValues, EnhancedAddShiftModalProps, ShiftContext } from
 import { useShiftFormData } from './useShiftFormData';
 import { useHardValidation } from './useHardValidation';
 import { useComplianceRunner } from './useComplianceRunner';
-import { evaluateCompliance } from '@/modules/compliance/v2';
-import type { ComplianceInputV2, ComplianceResultV2 } from '@/modules/compliance/v2/types';
+import { runV8Orchestrator } from '@/modules/compliance/v8';
+import type { V8OrchestratorInput, V8OrchestratorResult } from '@/modules/compliance/v8/types';
 import { useCompliancePanel } from '@/modules/compliance/ui/useCompliancePanel';
 import type { UseCompliancePanelReturn } from '@/modules/compliance/ui/useCompliancePanel';
-import { fetchEmployeeContextV2 } from '@/modules/compliance/employee-context';
+import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
 import { getAvailabilityView } from '@/modules/availability/api/availability-view.api';
 
 const SYDNEY_TZ = 'Australia/Sydney';
@@ -100,7 +100,7 @@ export function useShiftFormOrchestrator({
     const watchStart = form.watch('start_time');
     const watchEnd = form.watch('end_time');
     const watchUnpaidBreak = form.watch('unpaid_break_minutes');
-    const watchRoleId = form.watch('role_id');
+    const watchV8RoleId = form.watch('role_id');
     const watchSkills = form.watch('required_skills');
     const watchLicenses = form.watch('required_licenses');
     const watchEmployeeId = form.watch('assigned_employee_id');
@@ -130,7 +130,7 @@ export function useShiftFormOrchestrator({
         existingShift,
         selectedRosterId,
         setSelectedRosterId,
-        selectedRoleId: watchRoleId,
+        selectedV8RoleId: watchV8RoleId,
     });
 
     // ── Context resolution ───────────────────────────────────────────────────
@@ -216,7 +216,7 @@ export function useShiftFormOrchestrator({
         watchShiftDate,
         watchEmployeeId,
         isTemplateMode,
-        existingShiftId: existingShift?.id,
+        existingV8ShiftId: existingShift?.id,
         timezone: watchTimezone,
     });
 
@@ -311,7 +311,7 @@ export function useShiftFormOrchestrator({
 
     // Assignment is disabled for templates (always unassigned) and in read-only modes.
     // In Group/Role modes, we allow selection even if times aren't set yet (though compliance will be pending).
-    const isScheduleDefined = !!watchRoleId && (!!watchShiftDate || isTemplateMode) && !!watchStart && !!watchEnd;
+    const isScheduleDefined = !!watchV8RoleId && (!!watchShiftDate || isTemplateMode) && !!watchStart && !!watchEnd;
     const isAssignmentEnabled = !isReadOnly && !isTemplateMode;
 
     // ── Effects ──────────────────────────────────────────────────────────────
@@ -325,7 +325,7 @@ export function useShiftFormOrchestrator({
     }, [
         watchStart, watchEnd,
         watchShiftDate?.toISOString(),
-        watchRoleId, watchEmployeeId,
+        watchV8RoleId, watchEmployeeId,
         watchUnpaidBreak,
         watchIsTraining,
         // stringify to avoid object identity issues
@@ -335,17 +335,17 @@ export function useShiftFormOrchestrator({
 
     // Auto-select remuneration level when the chosen role has a default
     useEffect(() => {
-        if (watchRoleId && roles.length > 0) {
-            const role = roles.find(r => r.id === watchRoleId);
+        if (watchV8RoleId && roles.length > 0) {
+            const role = roles.find(r => r.id === watchV8RoleId);
             if (role?.remuneration_level_id) {
                 form.setValue('remuneration_level_id', role.remuneration_level_id);
             }
         }
-    }, [watchRoleId, roles, form]);
+    }, [watchV8RoleId, roles, form]);
 
     // Late-sync: role data may arrive after context propagates defaultValues
     useEffect(() => {
-        if (isOpen && !editMode && safeContext.roleId && !watchRoleId && roles.length > 0) {
+        if (isOpen && !editMode && safeContext.roleId && !watchV8RoleId && roles.length > 0) {
             const match = roles.find(r => r.id === safeContext.roleId);
             if (match) {
                 form.setValue('role_id', match.id);
@@ -354,7 +354,7 @@ export function useShiftFormOrchestrator({
                 }
             }
         }
-    }, [isOpen, editMode, safeContext.roleId, watchRoleId, roles, form]);
+    }, [isOpen, editMode, safeContext.roleId, watchV8RoleId, roles, form]);
 
     // Reset on open / mode change
     useEffect(() => {
@@ -418,12 +418,12 @@ export function useShiftFormOrchestrator({
         },
         existing_shifts: employeeExistingShifts,
         exclude_shift_id: existingShift?.id || undefined,
-        overrideRoleId: watchRoleId || undefined,
+        overrideV8RoleId: watchV8RoleId || undefined,
         overrideSkillIds: watchSkills?.length ? watchSkills : undefined,
         overrideLicenseIds: watchLicenses?.length ? watchLicenses : undefined,
         candidate_is_training: watchIsTraining || false,
         student_visa_enforcement: studentVisaEnforcement,
-    }), [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchUnpaidBreak, isTemplateMode, employeeExistingShifts, watchTimezone, existingShift?.id, watchRoleId, watchSkills, watchLicenses, watchIsTraining, studentVisaEnforcement]);
+    }), [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchUnpaidBreak, isTemplateMode, employeeExistingShifts, watchTimezone, existingShift?.id, watchV8RoleId, watchSkills, watchLicenses, watchIsTraining, studentVisaEnforcement]);
 
     const {
         runChecks,
@@ -441,11 +441,11 @@ export function useShiftFormOrchestrator({
 
     // ── Compliance v2 engine integration ─────────────────────────────────────
 
-    // Build the v2 ComplianceInputV2 from current form state.
+    // Build the v2 V8OrchestratorInput from current form state.
     // Returns null if required fields are missing.
-    const buildV2ComplianceInput = useCallback((): ComplianceInputV2 | null => {
+    const buildV2ComplianceInput = useCallback((): V8OrchestratorInput | null => {
         // Base requirements for any check: times and role.
-        if (!watchStart || !watchEnd || !watchRoleId) {
+        if (!watchStart || !watchEnd || !watchV8RoleId) {
             return null;
         }
 
@@ -462,7 +462,7 @@ export function useShiftFormOrchestrator({
         return {
             employee_id: watchEmployeeId,
             // employee_context is a placeholder — buildInputs replaces it with
-            // the real context fetched from fetchEmployeeContextV2()
+            // the real context fetched from fetchV8EmployeeContext()
             employee_context: {
                 employee_id:             watchEmployeeId || 'unassigned',
                 contract_type:           'CASUAL',
@@ -482,7 +482,7 @@ export function useShiftFormOrchestrator({
                     shift_date: s.shift_date,
                     start_time: (s.start_time || '').slice(0, 5),
                     end_time: (s.end_time || '').slice(0, 5),
-                    role_id: s.role_id || watchRoleId || '',
+                    role_id: s.role_id || watchV8RoleId || '',
                     required_qualifications: [],
                     is_ordinary_hours: s.is_ordinary_hours ?? true,
                     break_minutes: s.unpaid_break_minutes || 0,
@@ -495,7 +495,7 @@ export function useShiftFormOrchestrator({
                     shift_date:        shiftDateStr,
                     start_time:        (watchStart || '').slice(0, 5),
                     end_time:          (watchEnd || '').slice(0, 5),
-                    role_id:           watchRoleId,
+                    role_id:           watchV8RoleId,
                     // Org/dept hierarchy for R10 contract matching
                     organization_id:   resolvedContext.organizationId ?? undefined,
                     department_id:     resolvedContext.departmentId ?? undefined,
@@ -514,7 +514,7 @@ export function useShiftFormOrchestrator({
             // Pass training-aware minimum so the engine uses the correct threshold
             config: { min_shift_hours: minShiftHours },
         };
-    }, [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchRoleId, watchUnpaidBreak, employeeExistingShifts, existingShift, resolvedContext, minShiftHours]);
+    }, [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchV8RoleId, watchUnpaidBreak, employeeExistingShifts, existingShift, resolvedContext, minShiftHours]);
 
     const compliancePanel = useCompliancePanel({
         buildInputs: useCallback(async () => {
@@ -542,7 +542,7 @@ export function useShiftFormOrchestrator({
                             shift_date: mockDateStr,
                             start_time: watchStart || '09:00',
                             end_time: watchEnd || '17:00',
-                            role_id: watchRoleId || 'unassigned',
+                            role_id: watchV8RoleId || 'unassigned',
                             is_ordinary_hours: true,
                             is_training: watchIsTraining || false,
                             break_minutes: 0,
@@ -553,13 +553,13 @@ export function useShiftFormOrchestrator({
                     mode: 'SIMULATED',
                     operation_type: 'ASSIGN',
                     stage: 'DRAFT',
-                }] as [ComplianceInputV2];
+                }] as [V8OrchestratorInput];
             }
             // Fetch real employee context (contracts, qualifications, visa flag) from DB
-            const employeeCtx = await fetchEmployeeContextV2(input.employee_id);
+            const employeeCtx = await fetchV8EmployeeContext(input.employee_id);
 
             // Fetch declared availability + assigned shifts so R_AVAILABILITY_MATCH can run
-            let availabilityData: ComplianceInputV2['availability_data'] | undefined;
+            let availabilityData: V8OrchestratorInput['availability_data'] | undefined;
             if (input.employee_id && watchShiftDate) {
                 try {
                     const shiftDateStr = format(watchShiftDate, 'yyyy-MM-dd');
@@ -585,8 +585,8 @@ export function useShiftFormOrchestrator({
                 }
             }
 
-            return [{ ...input, employee_context: employeeCtx, availability_data: availabilityData }] as [ComplianceInputV2];
-        }, [buildV2ComplianceInput, watchStart, watchEnd, watchShiftDate, watchRoleId, watchUnpaidBreak, existingShift?.id, minShiftHours, isLoadingShifts]),
+            return [{ ...input, employee_context: employeeCtx, availability_data: availabilityData }] as [V8OrchestratorInput];
+        }, [buildV2ComplianceInput, watchStart, watchEnd, watchShiftDate, watchV8RoleId, watchUnpaidBreak, existingShift?.id, minShiftHours, isLoadingShifts]),
         stage: 'DRAFT',
     });
 
@@ -599,7 +599,7 @@ export function useShiftFormOrchestrator({
     const canSave = useMemo(() => {
         if (isReadOnly) return false;
         // Required fields check
-        const hasBaseFields = !!watchRoleId && (!!watchShiftDate || isTemplateMode) && !!watchStart && !!watchEnd && hasDepartment && (hasRoster || isTemplateMode);
+        const hasBaseFields = !!watchV8RoleId && (!!watchShiftDate || isTemplateMode) && !!watchStart && !!watchEnd && hasDepartment && (hasRoster || isTemplateMode);
         if (!hasBaseFields) return false;
 
         // Hard validation check
@@ -613,16 +613,16 @@ export function useShiftFormOrchestrator({
         // If employee assigned, must pass all checks (including employee-specific)
         // If no employee, must pass shift-level checks (which are the only ones that run)
         return compliancePanel.canProceed;
-    }, [watchRoleId, watchShiftDate, watchStart, watchEnd, hasDepartment, hasRoster, isTemplateMode, hardValidation.passed, compliancePanel.status, compliancePanel.canProceed]);
+    }, [watchV8RoleId, watchShiftDate, watchStart, watchEnd, hasDepartment, hasRoster, isTemplateMode, hardValidation.passed, compliancePanel.status, compliancePanel.canProceed]);
 
     // v2-powered "Run All" — replaces v1 rule runners in ComplianceTabContent.
-    // Maps v2 RuleHitV2[] results back to the v1 ComplianceResult format so
+    // Maps v2 V8Hit[] results back to the v1 ComplianceResult format so
     // existing rule card visualizations continue to work unchanged.
     const runV2Compliance = useCallback(async (): Promise<void> => {
         const v2Input = buildV2ComplianceInput();
         if (!v2Input) return;
 
-        const v2Result = evaluateCompliance(v2Input, { stage: 'DRAFT' }) as ComplianceResultV2;
+        const v2Result = runV8Orchestrator(v2Input, { stage: 'DRAFT' }) as V8OrchestratorResult;
         const hits = v2Result.rule_hits;
         const hitMap = new Map(hits.map(h => [h.rule_id.toUpperCase(), h]));
 
@@ -760,7 +760,7 @@ export function useShiftFormOrchestrator({
             } else {
                 toast({
                     title: 'Validation Error',
-                    description: `Please check: ${!hasDepartment ? 'Department ' : ''}${!hasRoster ? 'Roster ' : ''}${!watchRoleId ? 'Role' : ''}`.trim(),
+                    description: `Please check: ${!hasDepartment ? 'Department ' : ''}${!hasRoster ? 'Roster ' : ''}${!watchV8RoleId ? 'Role' : ''}`.trim(),
                     variant: 'destructive',
                 });
             }
@@ -931,7 +931,7 @@ export function useShiftFormOrchestrator({
             }
         }
     }, [
-        canSave, hardValidation, hasDepartment, hasRoster, watchRoleId,
+        canSave, hardValidation, hasDepartment, hasRoster, watchV8RoleId,
         resolvedContext, selectedRosterId, isTemplateMode, editMode, watchTimezone,
         onShiftCreated, roles, remunerationLevels, employees, netLength,
         onSuccess, form, onClose, createShiftMutation, updateShiftMutation,

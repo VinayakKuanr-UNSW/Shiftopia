@@ -5,7 +5,7 @@ import { supabase } from '@/platform/realtime/client';
 export interface SupervisoryRatioRule {
   subDepartmentId: string;
   ratio: number;              // 1 supervisor per N staff
-  supervisorRoleId: string;
+  supervisorV8RoleId: string;
 }
 
 export interface MinimumStaffRule {
@@ -41,8 +41,8 @@ export async function fetchSupervisoryRatios(
       return {
         subDepartmentId: v.sub_department_id as string,
         ratio: v.ratio as number,
-        supervisorRoleId: v.supervisor_role_id as string,
-        supervisedRoleIds: v.supervised_role_ids as string[] | undefined,
+        supervisorV8RoleId: v.supervisor_role_id as string,
+        supervisedV8RoleIds: v.supervised_role_ids as string[] | undefined,
       };
     })
     .filter((rule) => subDeptSet.has(rule.subDepartmentId));

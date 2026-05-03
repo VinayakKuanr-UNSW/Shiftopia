@@ -76,7 +76,7 @@ export const useSwaps = (scopeOverrides?: {
     // Mutation: Create a swap request
     const createSwapMutation = useMutation({
         mutationFn: (data: CreateSwapData) => swapsApi.createSwapRequest(
-            data.requesterShiftId,
+            data.requesterV8ShiftId,
             data.requestedByEmployeeId,
             data.swapWithEmployeeId ?? null,
             data.reason ?? null
@@ -108,9 +108,9 @@ export const useSwaps = (scopeOverrides?: {
 
     // Mutation: Make an offer on a swap
     const makeOfferMutation = useMutation({
-        mutationFn: ({ swapId, targetShiftId }: { swapId: string; targetShiftId?: string }) => {
+        mutationFn: ({ swapId, targetV8ShiftId }: { swapId: string; targetV8ShiftId?: string }) => {
             if (!userId) throw new Error("User ID required to make an offer");
-            return swapsApi.makeOffer(swapId, targetShiftId, userId);
+            return swapsApi.makeOffer(swapId, targetV8ShiftId, userId);
         },
         onSuccess: async (_, variables) => {
             await Promise.all([
@@ -138,8 +138,8 @@ export const useSwaps = (scopeOverrides?: {
 
     // Mutation: Accept an offer
     const acceptOfferMutation = useMutation({
-        mutationFn: ({ swapId, offerId, offererId, offeredShiftId }: { swapId: string; offerId: string; offererId: string; offeredShiftId?: string }) =>
-            swapsApi.acceptTrade(swapId, offerId, offererId, offeredShiftId),
+        mutationFn: ({ swapId, offerId, offererId, offeredV8ShiftId }: { swapId: string; offerId: string; offererId: string; offeredV8ShiftId?: string }) =>
+            swapsApi.acceptTrade(swapId, offerId, offererId, offeredV8ShiftId),
         onSuccess: async (_, variables) => {
             await Promise.all([
                 queryClient.invalidateQueries({ queryKey: ['mySwapRequests'] }),

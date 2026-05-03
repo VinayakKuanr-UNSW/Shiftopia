@@ -6,13 +6,13 @@
  * performing any state mutation.
  *
  * BID scenario:
- *   Evaluates whether `requesterId` can safely take on `candidateShiftId`.
+ *   Evaluates whether `requesterId` can safely take on `candidateV8ShiftId`.
  *   Only partyA result is populated; partyB is null.
  *
  * SWAP scenario:
  *   Evaluates both swap parties simultaneously:
- *     - partyA = requester: gives up `myShiftId`, gains `targetShiftId`
- *     - partyB = target:    gives up `targetShiftId`, gains `myShiftId`
+ *     - partyA = requester: gives up `myV8ShiftId`, gains `targetV8ShiftId`
+ *     - partyB = target:    gives up `targetV8ShiftId`, gains `myV8ShiftId`
  *   Both partyA and partyB results are populated.
  *
  * Debounce:
@@ -21,20 +21,20 @@
  *
  * Caching:
  *   The compliance engine maintains an internal LRU cache keyed on the full
- *   ComplianceInputV2 payload. Identical inputs return cached results with
+ *   V8OrchestratorInput payload. Identical inputs return cached results with
  *   near-zero overhead.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/platform/realtime/client';
-import { evaluateCompliance } from '@/modules/compliance/v2';
+import { runV8Orchestrator } from '@/modules/compliance/v8';
 import {
-  fetchEmployeeContextV2,
+  fetchV8EmployeeContext,
   fetchEmployeeShiftsV2,
 } from '@/modules/compliance/employee-context';
-import { buildBidInput, buildSwapInputs, deriveStage } from '../compliance/input-builder';
+import { buildBidInput, buildSwapInputs, deriveV8Stage } from '../compliance/input-builder';
 import { combinedStatus } from '../compliance/snapshot-builder';
-import type { ComplianceResultV2, FinalStatus } from '@/modules/compliance/v2/types';
+import type { V8OrchestratorResult, V8Status } from '@/modules/compliance/v8/types';
 
 // =============================================================================
 // TYPES
@@ -44,9 +44,9 @@ export interface PlanningComplianceAdvisory {
   /** The worst of both parties' statuses (or partyA-only for BID) */
   combinedStatus: 'PASS' | 'WARNING' | 'BLOCKING' | null;
   /** Compliance result for the requester / party A */
-  partyA: ComplianceResultV2 | null;
+  partyA: V8OrchestratorResult | null;
   /** Compliance result for the swap target / party B — null for BID */
-  partyB: ComplianceResultV2 | null;
+  partyB: V8OrchestratorResult | null;
   /** True when the student visa 48-hour rule (R05) produced any hit */
   isStudentVisaHit: boolean;
 }
@@ -56,13 +56,13 @@ export interface UseBulkPlanningComplianceParams {
   /** The employee requesting the compliance advisory */
   requesterId: string;
   /** The shift being added to the requester's schedule */
-  candidateShiftId: string;
+  candidateV8ShiftId: string;
   /** SWAP only: the shift the requester is giving up */
-  myShiftId?: string;
+  myV8ShiftId?: string;
   /** SWAP only: the other party */
   targetEmployeeId?: string;
   /** SWAP only: the shift the target is giving up */
-  targetShiftId?: string;
+  targetV8ShiftId?: string;
   /** Set to false to suspend evaluation without resetting results */
   enabled?: boolean;
 }
@@ -84,7 +84,7 @@ const SHIFT_WINDOW_DAYS = 35;
 // HELPERS
 // =============================================================================
 
-/** Map a raw Supabase shift row to ShiftV2 — mirrors the service's mapShiftToV2 */
+/** Map a raw Supabase shift row to V8OrchestratorShift — mirrors the service's mapShiftToV2 */
 function mapShiftRowToV2(row: Record<string, unknown>) {
   return {
     shift_id:                row.id as string,
@@ -99,7 +99,7 @@ function mapShiftRowToV2(row: Record<string, unknown>) {
   };
 }
 
-function hasVisaHit(result: ComplianceResultV2 | null): boolean {
+function hasVisaHit(result: V8OrchestratorResult | null): boolean {
   if (!result) return false;
   return result.rule_hits.some(h => h.rule_id === 'R05');
 }
@@ -114,10 +114,10 @@ async function runEvaluation(
   const {
     requestType,
     requesterId,
-    candidateShiftId,
-    myShiftId,
+    candidateV8ShiftId,
+    myV8ShiftId,
     targetEmployeeId,
-    targetShiftId,
+    targetV8ShiftId,
   } = params;
 
   const db = supabase as any;
@@ -126,15 +126,15 @@ async function runEvaluation(
   const { data: candidateRow, error: candidateErr } = await db
     .from('shifts')
     .select('*')
-    .eq('id', candidateShiftId)
+    .eq('id', candidateV8ShiftId)
     .single();
 
   if (candidateErr || !candidateRow) {
-    throw new Error(`Candidate shift ${candidateShiftId} not found`);
+    throw new Error(`Candidate shift ${candidateV8ShiftId} not found`);
   }
 
-  const candidateShiftV2 = mapShiftRowToV2(candidateRow as Record<string, unknown>);
-  const stage = deriveStage({
+  const candidateV8OrchestratorShift = mapShiftRowToV2(candidateRow as Record<string, unknown>);
+  const stage = deriveV8Stage({
     lifecycle_status: (candidateRow as any).lifecycle_status as string | null,
     is_published:     (candidateRow as any).is_published     as boolean | null,
   });
@@ -142,10 +142,10 @@ async function runEvaluation(
   // ── BID ─────────────────────────────────────────────────────────────────────
   if (requestType === 'BID') {
     const [requesterContext, requesterShifts] = await Promise.all([
-      fetchEmployeeContextV2(requesterId),
+      fetchV8EmployeeContext(requesterId),
       fetchEmployeeShiftsV2(
         requesterId,
-        candidateShiftV2.shift_date,
+        candidateV8OrchestratorShift.shift_date,
         SHIFT_WINDOW_DAYS,
         null,
       ),
@@ -155,11 +155,11 @@ async function runEvaluation(
       employeeId:      requesterId,
       employeeContext: requesterContext,
       existingShifts:  requesterShifts,
-      candidateShift:  candidateShiftV2,
+      candidateShift:  candidateV8OrchestratorShift,
       stage,
     });
 
-    const resultA = evaluateCompliance(bidInput) as ComplianceResultV2;
+    const resultA = runV8Orchestrator(bidInput) as V8OrchestratorResult;
 
     return {
       combinedStatus: resultA.status as 'PASS' | 'WARNING' | 'BLOCKING',
@@ -170,9 +170,9 @@ async function runEvaluation(
   }
 
   // ── SWAP ─────────────────────────────────────────────────────────────────────
-  if (!myShiftId || !targetEmployeeId || !targetShiftId) {
+  if (!myV8ShiftId || !targetEmployeeId || !targetV8ShiftId) {
     throw new Error(
-      'SWAP compliance requires myShiftId, targetEmployeeId, and targetShiftId',
+      'SWAP compliance requires myV8ShiftId, targetEmployeeId, and targetV8ShiftId',
     );
   }
 
@@ -180,14 +180,14 @@ async function runEvaluation(
   const { data: myShiftRow, error: myShiftErr } = await db
     .from('shifts')
     .select('*')
-    .eq('id', myShiftId)
+    .eq('id', myV8ShiftId)
     .single();
 
   if (myShiftErr || !myShiftRow) {
-    throw new Error(`Requester shift ${myShiftId} not found`);
+    throw new Error(`Requester shift ${myV8ShiftId} not found`);
   }
 
-  const myShiftV2 = mapShiftRowToV2(myShiftRow as Record<string, unknown>);
+  const myV8OrchestratorShift = mapShiftRowToV2(myShiftRow as Record<string, unknown>);
 
   // Fetch all parallel data
   const [
@@ -196,41 +196,41 @@ async function runEvaluation(
     requesterShifts,
     targetShifts,
   ] = await Promise.all([
-    fetchEmployeeContextV2(requesterId),
-    fetchEmployeeContextV2(targetEmployeeId),
+    fetchV8EmployeeContext(requesterId),
+    fetchV8EmployeeContext(targetEmployeeId),
     fetchEmployeeShiftsV2(
       requesterId,
-      candidateShiftV2.shift_date,
+      candidateV8OrchestratorShift.shift_date,
       SHIFT_WINDOW_DAYS,
-      myShiftId,           // exclude the shift being given away
+      myV8ShiftId,           // exclude the shift being given away
     ),
     fetchEmployeeShiftsV2(
       targetEmployeeId,
-      myShiftV2.shift_date,
+      myV8OrchestratorShift.shift_date,
       SHIFT_WINDOW_DAYS,
-      targetShiftId,       // exclude the shift being given away
+      targetV8ShiftId,       // exclude the shift being given away
     ),
   ]);
 
   // In the swap input builder convention:
-  //   partyA (requester) gives up myShiftV2, gains candidateShiftV2 (target's shift)
-  //   partyB (target)    gives up candidateShiftV2, gains myShiftV2
+  //   partyA (requester) gives up myV8OrchestratorShift, gains candidateV8OrchestratorShift (target's shift)
+  //   partyB (target)    gives up candidateV8OrchestratorShift, gains myV8OrchestratorShift
   const { inputA, inputB } = buildSwapInputs({
     partyAEmployeeId:      requesterId,
     partyAContext:         requesterContext,
     partyAExistingShifts:  requesterShifts,
-    partyAShift:           myShiftV2,            // shift requester is giving up
+    partyAShift:           myV8OrchestratorShift,            // shift requester is giving up
     partyBEmployeeId:      targetEmployeeId,
     partyBContext:         targetContext,
     partyBExistingShifts:  targetShifts,
-    partyBShift:           candidateShiftV2,      // shift target is giving up
+    partyBShift:           candidateV8OrchestratorShift,      // shift target is giving up
     stage,
   });
 
-  const resultA = evaluateCompliance(inputA) as ComplianceResultV2;
-  const resultB = evaluateCompliance(inputB) as ComplianceResultV2;
+  const resultA = runV8Orchestrator(inputA) as V8OrchestratorResult;
+  const resultB = runV8Orchestrator(inputB) as V8OrchestratorResult;
 
-  const combined = combinedStatus(resultA.status, resultB.status) as FinalStatus;
+  const combined = combinedStatus(resultA.status, resultB.status) as V8Status;
 
   return {
     combinedStatus: combined as 'PASS' | 'WARNING' | 'BLOCKING',
@@ -250,10 +250,10 @@ export function useBulkPlanningCompliance(
   const {
     requestType,
     requesterId,
-    candidateShiftId,
-    myShiftId,
+    candidateV8ShiftId,
+    myV8ShiftId,
     targetEmployeeId,
-    targetShiftId,
+    targetV8ShiftId,
     enabled = true,
   } = params;
 
@@ -287,9 +287,9 @@ export function useBulkPlanningCompliance(
   useEffect(() => {
     // Guard: skip when disabled or missing required params
     const isSwap = requestType === 'SWAP';
-    const hasSwapParams = !isSwap || (!!myShiftId && !!targetEmployeeId && !!targetShiftId);
+    const hasSwapParams = !isSwap || (!!myV8ShiftId && !!targetEmployeeId && !!targetV8ShiftId);
 
-    if (!enabled || !requesterId || !candidateShiftId || !hasSwapParams) {
+    if (!enabled || !requesterId || !candidateV8ShiftId || !hasSwapParams) {
       cancelPending();
       return;
     }
@@ -309,10 +309,10 @@ export function useBulkPlanningCompliance(
         const result = await runEvaluation({
           requestType,
           requesterId,
-          candidateShiftId,
-          myShiftId,
+          candidateV8ShiftId,
+          myV8ShiftId,
           targetEmployeeId,
-          targetShiftId,
+          targetV8ShiftId,
           enabled,
         });
 
@@ -344,10 +344,10 @@ export function useBulkPlanningCompliance(
     enabled,
     requestType,
     requesterId,
-    candidateShiftId,
-    myShiftId,
+    candidateV8ShiftId,
+    myV8ShiftId,
     targetEmployeeId,
-    targetShiftId,
+    targetV8ShiftId,
     cancelPending,
   ]);
 

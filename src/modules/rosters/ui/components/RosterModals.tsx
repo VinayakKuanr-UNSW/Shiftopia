@@ -39,7 +39,7 @@ interface AutoSchedulerShift {
 
 interface RosterModalsProps {
     /** Shift IDs currently selected (forwarded to BulkAssignmentPanel). */
-    selectedShiftIds: string[];
+    selectedV8ShiftIds: string[];
     /** Employee list for BulkAssignmentPanel. */
     employees: BulkAssignmentEmployee[];
     /** Unassigned shifts for AutoSchedulerPanel. */
@@ -69,7 +69,7 @@ export interface RosterModalsHandle {
 
 export const RosterModals = forwardRef<RosterModalsHandle, RosterModalsProps>((
     {
-        selectedShiftIds,
+        selectedV8ShiftIds,
         employees,
         autoSchedulerShifts,
         autoSchedulerEmployees,
@@ -140,7 +140,7 @@ export const RosterModals = forwardRef<RosterModalsHandle, RosterModalsProps>((
             <BulkAssignmentPanel
                 open={isBulkAssignOpen}
                 onClose={() => setIsBulkAssignOpen(false)}
-                selectedShiftIds={selectedShiftIds}
+                selectedV8ShiftIds={selectedV8ShiftIds}
                 employees={employees}
                 onAssignComplete={onAssignComplete}
             />

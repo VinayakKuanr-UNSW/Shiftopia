@@ -11,7 +11,7 @@
  *
  *   Solver flow:
  *     1. ScenarioBuilder  — applies the swap to both rosters hypothetically
- *     2. ConstraintEngine — evaluates ALL constraints simultaneously
+ *     2. V8SwapEngine — evaluates ALL constraints simultaneously
  *     3. SolverResult     — feasible / infeasible + per-party violations
  *     4. Adapter          — converts to ComplianceResult map for the UI
  */
@@ -228,7 +228,7 @@ export function SwapComplianceModal({
                     endTime: offeredShift.end_time,
                     netLengthMinutes: calcNetMinutes(offeredShift),
                     shiftId: offeredShift.id,
-                    excludeShiftId: requesterShift.id,
+                    excludeV8ShiftId: requesterShift.id,
                 }),
                 // Offerer takes requesterShift
                 validateCompliance({
@@ -238,7 +238,7 @@ export function SwapComplianceModal({
                     endTime: requesterShift.end_time,
                     netLengthMinutes: calcNetMinutes(requesterShift),
                     shiftId: requesterShift.id,
-                    excludeShiftId: offeredShift.id,
+                    excludeV8ShiftId: offeredShift.id,
                 }),
             ]);
 

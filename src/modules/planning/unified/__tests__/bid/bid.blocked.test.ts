@@ -1,7 +1,7 @@
 /**
  * BID — Blocked Compliance Tests
  *
- * When evaluateCompliance returns BLOCKING:
+ * When runV8Orchestrator returns BLOCKING:
  *   • Request transitions to BLOCKED
  *   • The offer's status must remain SUBMITTED (never changed)
  *   • blocking_hits array is populated
@@ -29,12 +29,12 @@ const { ctx, supabaseProxy } = vi.hoisted(() => {
 
 vi.mock('@/platform/realtime/client', () => ({ supabase: supabaseProxy }));
 
-vi.mock('@/modules/compliance/v2', () => ({
-  evaluateCompliance: vi.fn().mockReturnValue(blockingComplianceResult),
+vi.mock('@/modules/compliance/v8', () => ({
+  runV8Orchestrator: vi.fn().mockReturnValue(blockingComplianceResult),
 }));
 
 vi.mock('@/modules/compliance/employee-context', () => ({
-  fetchEmployeeContextV2: vi.fn().mockResolvedValue(empContextA),
+  fetchV8EmployeeContext: vi.fn().mockResolvedValue(empContextA),
   fetchEmployeeShiftsV2:  vi.fn().mockResolvedValue([]),
 }));
 

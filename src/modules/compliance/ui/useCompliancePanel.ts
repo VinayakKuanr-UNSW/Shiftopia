@@ -1,27 +1,10 @@
 /**
- * useCompliancePanel — Shared hook for manual compliance evaluation.
- *
- * Wraps the v2 compliance engine with:
- *   - Manual trigger only (NO auto-run ever)
- *   - Stale detection (call markStale() when inputs change after a run)
- *   - Warning acknowledgment
- *   - Unified status machine: idle → running → results | error | stale
- *   - canProceed gating: no blockers + no system fails + warnings ack'd
- *
- * Usage:
- *   const panel = useCompliancePanel({ buildInputs: async () => [myInput] });
- *   <CompliancePanel hook={panel} />
- *   // Gate action button on panel.canProceed
+ * useCompliancePanel — Shared hook for V8 compliance evaluation.
  */
 
 import { useState, useCallback, useRef } from 'react';
-import { evaluateCompliance } from '@/modules/compliance/v2';
-import type {
-    ComplianceInputV2,
-    ComplianceResultV2,
-    RuleHitV2,
-} from '@/modules/compliance/v2/types';
-import { classifyBuckets, getBucketSummary } from './bucket-map';
+import { runV8Orchestrator, V8Result, V8Hit } from '@/modules/compliance/v8';
+import { classifyBuckets, getV8BucketSummary } from './bucket-map';
 import type { BucketMap, BucketSummary } from './bucket-map';
 
 export type PanelStatus = 'idle' | 'running' | 'results' | 'error' | 'stale';
@@ -30,24 +13,19 @@ export interface PanelResult {
     buckets:      BucketMap;
     summary:      BucketSummary;
     evaluatedAt:  Date;
-    /** Raw v2 results */
-    rawResult:    ComplianceResultV2;
-    /** For swaps, we also have party B buckets/summary */
+    rawResult:    V8Result;
     partyB?: {
         buckets: BucketMap;
         summary: BucketSummary;
-        rawResult: ComplianceResultV2;
+        rawResult: V8Result;
     };
 }
 
 export interface UseCompliancePanelOptions {
     /**
-     * Async function that returns the compliance input(s).
-     * - Single party (add_shift, bid): return [ComplianceInputV2]
-     * - Two parties (swap): return [inputA, inputB]
-     * May perform DB fetches; called only on manual run.
+     * Async function that returns the V8 compliance input(s).
      */
-    buildInputs: () => Promise<[ComplianceInputV2] | [ComplianceInputV2, ComplianceInputV2]>;
+    buildInputs: () => Promise<[any] | [any, any]>;
     stage?: 'DRAFT' | 'PUBLISH';
 }
 
@@ -56,17 +34,9 @@ export interface UseCompliancePanelReturn {
     result:               PanelResult | null;
     error:                string | null;
     warningsAcknowledged: boolean;
-    /**
-     * True when:
-     *   - status === 'results'
-     *   - No blockers (A.length === 0)
-     *   - No system fails (D BLOCKING hits === 0)
-     *   - No warnings OR warnings acknowledged
-     */
     canProceed:           boolean;
     run:                  () => Promise<void>;
     acknowledgeWarnings:  (ack: boolean) => void;
-    /** Call when inputs change after a run — marks result stale, disables action */
     markStale:            () => void;
     reset:                () => void;
 }
@@ -89,30 +59,23 @@ export function useCompliancePanel(opts: UseCompliancePanelOptions): UseComplian
         try {
             const inputs = await opts.buildInputs();
 
-            let allHits:   RuleHitV2[];
-            let rawResult: ComplianceResultV2;
-            let rawResultB: ComplianceResultV2 | undefined;
-
             if (inputs.length === 2) {
-                // Swap: evaluate both parties independently
-                const rawResult  = evaluateCompliance(inputs[0], { stage }) as ComplianceResultV2;
-                const rawResultB = evaluateCompliance(inputs[1], { stage }) as ComplianceResultV2;
+                const rawResult  = runV8Orchestrator(inputs[0], { stage }) as V8Result;
+                const rawResultB = runV8Orchestrator(inputs[1], { stage }) as V8Result;
                 
-                const bucketsA = classifyBuckets(rawResult.rule_hits);
-                const summaryA = getBucketSummary(bucketsA);
-                const bucketsB = classifyBuckets(rawResultB.rule_hits);
-                const summaryB = getBucketSummary(bucketsB);
+                const bucketsA = classifyBuckets(rawResult.hits);
+                const summaryA = getV8BucketSummary(bucketsA);
+                const bucketsB = classifyBuckets(rawResultB.hits);
+                const summaryB = getV8BucketSummary(bucketsB);
 
-                // For the main "canProceed" logic, we combine the summaries
                 const combinedSummary: BucketSummary = {
                     blockers:    summaryA.blockers + summaryB.blockers,
                     warnings:    summaryA.warnings + summaryB.warnings,
-                    passed:      0, // Will be recalculated from combined rules
+                    passed:      0,
                     systemFails: summaryA.systemFails + summaryB.systemFails,
                 };
 
-                // Combined buckets for the flat view fallback (though UI will now use dual columns)
-                const mergedBuckets = classifyBuckets([...rawResult.rule_hits, ...rawResultB.rule_hits]);
+                const mergedBuckets = classifyBuckets([...rawResult.hits, ...rawResultB.hits]);
                 combinedSummary.passed = mergedBuckets.C.length;
 
                 setResult({ 
@@ -127,15 +90,15 @@ export function useCompliancePanel(opts: UseCompliancePanelOptions): UseComplian
                     }
                 });
             } else {
-                const rawResult = evaluateCompliance(inputs[0], { stage }) as ComplianceResultV2;
-                const buckets = classifyBuckets(rawResult.rule_hits);
-                const summary = getBucketSummary(buckets);
+                const rawResult = runV8Orchestrator(inputs[0], { stage }) as V8Result;
+                const buckets = classifyBuckets(rawResult.hits);
+                const summary = getV8BucketSummary(buckets);
 
                 setResult({ buckets, summary, evaluatedAt: new Date(), rawResult });
             }
             setStatus('results');
         } catch (e: unknown) {
-            const msg = e instanceof Error ? e.message : 'Compliance check failed';
+            const msg = e instanceof Error ? e.message : 'V8 compliance check failed';
             setError(msg);
             setStatus('error');
         } finally {

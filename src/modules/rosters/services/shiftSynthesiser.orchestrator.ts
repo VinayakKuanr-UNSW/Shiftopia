@@ -34,8 +34,8 @@ import { deriveRoomCount } from './eventFeatureBuilder.service';
 // TODO: The `shifts` table may not yet have a `compliance_status` column.
 //       When it is added (planned for a later phase), stamp it here on insert.
 //       For now we log the compliance result and proceed with Draft insertion.
-import { evaluateCompliance } from '@/modules/compliance/v2/index';
-import type { ComplianceInputV2, ShiftV2 } from '@/modules/compliance/v2/index';
+import { runV8Orchestrator } from '@/modules/compliance/v8/index';
+import type { V8OrchestratorInput, V8OrchestratorShift } from '@/modules/compliance/v8/index';
 
 const logger = createModuleLogger('shiftSynthesiser.orchestrator');
 
@@ -153,7 +153,7 @@ function runSkeletonCompliance(
   shift: SynthesizedShift,
   shiftDate: string,
 ): { status: string; blocked: boolean } {
-  const candidateShift: ShiftV2 = {
+  const candidateShift: V8OrchestratorShift = {
     shift_id: `synth-${shift.roleId}-${shift.startMinutes}-${shift.endMinutes}`,
     shift_date: shiftDate,
     start_time: minutesToTime(shift.startMinutes),
@@ -164,7 +164,7 @@ function runSkeletonCompliance(
     break_minutes: 0,
   };
 
-  const input: ComplianceInputV2 = {
+  const input: V8OrchestratorInput = {
     employee_id: 'skeleton',
     employee_context: {
       employee_id: 'skeleton',
@@ -184,7 +184,7 @@ function runSkeletonCompliance(
     stage: 'DRAFT',
   };
 
-  const result = evaluateCompliance(input);
+  const result = runV8Orchestrator(input);
   const blocked = result.status === 'BLOCKING';
   return { status: result.status, blocked };
 }
@@ -378,7 +378,7 @@ async function runTemplateBuilderForEvents(
  * then insert all as draft shifts for manager review.
  *
  * Compliance rewiring (Phase 2c):
- *   - Capstone's compliance.service calls are replaced by evaluateCompliance()
+ *   - Capstone's compliance.service calls are replaced by runV8Orchestrator()
  *     from the parent's Compliance Engine v2.
  *   - Skeleton mode (employee_id = 'skeleton') evaluates structural rules only.
  *   - Option (b): all synthesized shifts land as Draft regardless of compliance
@@ -542,13 +542,13 @@ export async function synthesizeAndInsertShifts(
 
   const failed: Array<{ index: number; reason: string }> = [];
   let createdCount = 0;
-  const createdShiftIds: string[] = [];
+  const createdV8ShiftIds: string[] = [];
 
   for (const r of results) {
     if (r.ok) {
       createdCount++;
       const shift = (r as { value: { id?: string } }).value;
-      if (shift?.id) createdShiftIds.push(shift.id);
+      if (shift?.id) createdV8ShiftIds.push(shift.id);
     } else {
       failed.push({
         index: Number(r.id),
@@ -560,15 +560,15 @@ export async function synthesizeAndInsertShifts(
   // 8. Stamp synthesis_run_id onto the new rows directly.
   //    The sm_create_shift RPC has a hardcoded field allow-list that predates
   //    this column, so it silently drops synthesis_run_id from the payload.
-  if (params.synthesisRunId && createdShiftIds.length > 0) {
+  if (params.synthesisRunId && createdV8ShiftIds.length > 0) {
     const { error: stampErr } = await supabase
       .from('shifts')
       .update({ synthesis_run_id: params.synthesisRunId })
-      .in('id', createdShiftIds);
+      .in('id', createdV8ShiftIds);
     if (stampErr) {
       logger.error('failed to stamp synthesis_run_id', {
         runId: params.synthesisRunId,
-        shiftIdCount: createdShiftIds.length,
+        shiftIdCount: createdV8ShiftIds.length,
         supabaseError: stampErr.message,
         operation: '',
       });

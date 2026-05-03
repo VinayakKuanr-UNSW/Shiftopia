@@ -24,16 +24,16 @@ import { cn } from '@/modules/core/lib/utils';
 import { useCompliancePanel } from '@/modules/compliance/ui/useCompliancePanel';
 import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
 import {
-  fetchEmployeeContextV2,
+  fetchV8EmployeeContext,
   fetchEmployeeShiftsV2,
 } from '@/modules/compliance/employee-context';
 import { getAvailabilitySlots } from '@/modules/availability/api/availability.api';
 import { getAssignedShiftsForAvailability } from '@/modules/availability/api/availability-view.api';
 import type {
-  AvailabilityDataV2,
-  ShiftV2,
-  ComplianceInputV2,
-} from '@/modules/compliance/v2/types';
+  V8AvailabilityData,
+  V8OrchestratorShift,
+  V8OrchestratorInput,
+} from '@/modules/compliance/v8/types';
 import { supabase } from '@/platform/realtime/client';
 
 // =============================================================================
@@ -77,8 +77,8 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
   const autoRanRef = useRef(false);
 
   // Stable buildInputs — mirrors runFullCompliancePreCheck from assignShift.command.ts
-  const buildInputs = useCallback(async (): Promise<[ComplianceInputV2]> => {
-    // 1. Fetch shift details (role, quals) for candidate ShiftV2
+  const buildInputs = useCallback(async (): Promise<[V8OrchestratorInput]> => {
+    // 1. Fetch shift details (role, quals) for candidate V8OrchestratorShift
     const { data: shift } = await supabase
       .from('shifts')
       .select(`
@@ -96,14 +96,14 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
 
     // 2. Fetch employee context + shift history + availability in parallel
     const [employeeCtx, existingShifts, availSlots, assignedShifts] = await Promise.all([
-      fetchEmployeeContextV2(employeeId),
+      fetchV8EmployeeContext(employeeId),
       fetchEmployeeShiftsV2(employeeId, shift?.shift_date ?? shiftDate, 35, shiftId),
       getAvailabilitySlots(employeeId, shift?.shift_date ?? shiftDate, shift?.shift_date ?? shiftDate),
       getAssignedShiftsForAvailability(employeeId, shift?.shift_date ?? shiftDate, shift?.shift_date ?? shiftDate),
     ]);
 
-    // 3. Build candidate ShiftV2
-    const candidateShift: ShiftV2 = {
+    // 3. Build candidate V8OrchestratorShift
+    const candidateShift: V8OrchestratorShift = {
       shift_id:                shift?.id ?? shiftId,
       shift_date:              shift?.shift_date ?? shiftDate,
       start_time:              shift?.start_time ?? shiftStartTime,
@@ -119,7 +119,7 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
     };
 
     // 4. Build availability data
-    const availabilityData: AvailabilityDataV2 = {
+    const availabilityData: V8AvailabilityData = {
       declared_slots: availSlots.map(s => ({
         slot_date:  s.slot_date,
         start_time: s.start_time,
@@ -135,8 +135,8 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
         })),
     };
 
-    // 5. Assemble ComplianceInputV2
-    const input: ComplianceInputV2 = {
+    // 5. Assemble V8OrchestratorInput
+    const input: V8OrchestratorInput = {
       employee_id:       employeeId,
       employee_context:  employeeCtx,
       existing_shifts:   existingShifts,

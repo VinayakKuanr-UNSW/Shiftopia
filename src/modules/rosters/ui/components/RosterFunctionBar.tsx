@@ -224,6 +224,8 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
     isDnDModeActive,
     setIsDnDModeActive,
     setShowUnfilledPanel,
+    showFatigueHeatmap,
+    setShowFatigueHeatmap,
   } = useRosterStore();
 
   const queryClient = useQueryClient();
@@ -401,11 +403,11 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
             <IconButton
               icon={<Activity className="h-4 w-4" />}
               tooltip={activeMode === 'people'
-                ? "Fatigue Score"
-                : "Fatigue Score — switch to People mode to enable"}
-              onClick={() => { }}
-              isActive={false}
-              variant="success"
+                ? (showFatigueHeatmap ? "Deactivate Heatmap" : "Fatigue Heatmap")
+                : "Fatigue Heatmap — switch to People mode to enable"}
+              onClick={() => setShowFatigueHeatmap(!showFatigueHeatmap)}
+              isActive={showFatigueHeatmap}
+              variant={showFatigueHeatmap ? "warning" : "success"}
               disabled={activeMode !== 'people'}
             />
 

@@ -41,11 +41,11 @@ export const usePeopleModeData = ({ employees, shifts }: UsePeopleModeDataProps)
             // Skip if cancelled (unless we want to show cancelled shifts, but effectively they don't count towards hours)
             if (shift.is_cancelled && !shift.assigned_employee_id) return;
 
-            const targetEmpId = shift.assigned_employee_id || UNASSIGNED_BUCKET_ID;
-            let emp = empMap.get(targetEmpId);
+            const targetV8EmpId = shift.assigned_employee_id || UNASSIGNED_BUCKET_ID;
+            let emp = empMap.get(targetV8EmpId);
 
             if (!emp) {
-                if (targetEmpId === UNASSIGNED_BUCKET_ID) {
+                if (targetV8EmpId === UNASSIGNED_BUCKET_ID) {
                     emp = {
                         id: UNASSIGNED_BUCKET_ID,
                         name: 'Open Shifts',

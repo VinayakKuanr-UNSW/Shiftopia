@@ -36,12 +36,12 @@ const { ctx, supabaseProxy } = vi.hoisted(() => {
 
 vi.mock('@/platform/realtime/client', () => ({ supabase: supabaseProxy }));
 
-vi.mock('@/modules/compliance/v2', () => ({
-  evaluateCompliance: vi.fn().mockReturnValue(passComplianceResult),
+vi.mock('@/modules/compliance/v8', () => ({
+  runV8Orchestrator: vi.fn().mockReturnValue(passComplianceResult),
 }));
 
 vi.mock('@/modules/compliance/employee-context', () => ({
-  fetchEmployeeContextV2: vi.fn().mockImplementation((id: string) =>
+  fetchV8EmployeeContext: vi.fn().mockImplementation((id: string) =>
     Promise.resolve(id === EMP_A_ID ? empContextA : empContextB),
   ),
   fetchEmployeeShiftsV2: vi.fn().mockResolvedValue([]),

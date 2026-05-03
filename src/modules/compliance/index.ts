@@ -19,8 +19,8 @@ export type {
 // Engine functions
 export * from './hard-validation';
 export {
-    runComplianceChecks,
-    checkCompliance,
+    runV8LegacyBridge,
+    runV8LegacyBridge,
     getRegisteredRules,
     runRule,
     isActionAllowed,
@@ -54,7 +54,7 @@ export {
 export {
     useCompliance,
     buildComplianceInput,
-    checkComplianceNow  // Immediate check without debounce
+    runV8LegacyBridgeNow  // Immediate check without debounce
 } from './hooks/useCompliance';
 
 // UI Components

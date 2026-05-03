@@ -2,7 +2,7 @@
  * Unified Planning Request Service
  *
  * Single service for all BID and SWAP planning request operations.
- * All compliance evaluation flows through the ONE shared engine (evaluateCompliance).
+ * All compliance evaluation flows through the ONE shared engine (runV8Orchestrator).
  * No rule logic is duplicated here — this layer only orchestrates data fetching,
  * input construction, and state transitions.
  *
@@ -19,16 +19,16 @@
 
 import { supabase } from '@/platform/realtime/client';
 import {
-  fetchEmployeeContextV2,
+  fetchV8EmployeeContext,
   fetchEmployeeShiftsV2,
 } from '@/modules/compliance/employee-context';
-import { evaluateCompliance } from '@/modules/compliance/v2';
-import type { ComplianceResultV2 } from '@/modules/compliance/v2/types';
+import { runV8Orchestrator } from '@/modules/compliance/v8';
+import type { V8OrchestratorResult } from '@/modules/compliance/v8/types';
 
 import {
   buildBidInput,
   buildSwapInputs,
-  deriveStage,
+  deriveV8Stage,
 } from '../compliance/input-builder';
 import {
   buildBidSnapshot,
@@ -55,7 +55,7 @@ import type {
   RejectRequestParams,
 } from '../types';
 
-import type { ShiftV2 } from '@/modules/compliance/v2/types';
+import type { V8OrchestratorShift } from '@/modules/compliance/v8/types';
 
 // Use "any" cast for tables not in the generated Supabase type definitions
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -107,10 +107,10 @@ function createError(code: string, message: string): Error {
 }
 
 /**
- * Map a raw DB shift row to the ShiftV2 shape the compliance engine expects.
+ * Map a raw DB shift row to the V8OrchestratorShift shape the compliance engine expects.
  * Only the fields the engine needs are mapped — extended UI fields are ignored.
  */
-function mapShiftToV2(row: Record<string, unknown>): ShiftV2 {
+function mapShiftToV2(row: Record<string, unknown>): V8OrchestratorShift {
   return {
     shift_id: row.id as string,
     shift_date: row.shift_date as string,
@@ -456,8 +456,8 @@ async function selectOffer(params: SelectOfferParams): Promise<SelectOfferResult
   const shiftUpdatedAt = mainShift.updated_at as string;
 
   // ── Compliance evaluation ───────────────────────────────────────────────────
-  const mainShiftV2 = mapShiftToV2(mainShift);
-  const stage = deriveStage({
+  const mainV8OrchestratorShift = mapShiftToV2(mainShift);
+  const stage = deriveV8Stage({
     lifecycle_status: mainShift.lifecycle_status as string | null,
     is_published: mainShift.is_published as boolean | null,
   });
@@ -470,7 +470,7 @@ async function selectOffer(params: SelectOfferParams): Promise<SelectOfferResult
     const bidderId = offer.offered_by;
 
     const [bidderContext, bidderShifts] = await Promise.all([
-      fetchEmployeeContextV2(bidderId),
+      fetchV8EmployeeContext(bidderId),
       fetchEmployeeShiftsV2(
         bidderId,
         mainShift.shift_date as string,
@@ -483,11 +483,11 @@ async function selectOffer(params: SelectOfferParams): Promise<SelectOfferResult
       employeeId: bidderId,
       employeeContext: bidderContext,
       existingShifts: bidderShifts,
-      candidateShift: mainShiftV2,
+      candidateShift: mainV8OrchestratorShift,
       stage,
     });
 
-    const bidResult = evaluateCompliance(bidInput) as ComplianceResultV2;
+    const bidResult = runV8Orchestrator(bidInput) as V8OrchestratorResult;
 
     complianceSnapshot = buildBidSnapshot({
       result: bidResult,
@@ -520,7 +520,7 @@ async function selectOffer(params: SelectOfferParams): Promise<SelectOfferResult
 
     const offeredShift = offeredShiftRow as Record<string, unknown>;
     const targetShiftUpdatedAt = offeredShift.updated_at as string;
-    const offeredShiftV2 = mapShiftToV2(offeredShift);
+    const offeredV8OrchestratorShift = mapShiftToV2(offeredShift);
 
     // Party A = the request initiator (gives up request.shift_id, gains offered shift)
     // Party B = the offer submitter (gives up their shift, gains request.shift_id)
@@ -528,8 +528,8 @@ async function selectOffer(params: SelectOfferParams): Promise<SelectOfferResult
     const partyBId = offer.offered_by;
 
     const [partyAContext, partyBContext, partyAShifts, partyBShifts] = await Promise.all([
-      fetchEmployeeContextV2(partyAId),
-      fetchEmployeeContextV2(partyBId),
+      fetchV8EmployeeContext(partyAId),
+      fetchV8EmployeeContext(partyBId),
       fetchEmployeeShiftsV2(
         partyAId,
         mainShift.shift_date as string,
@@ -548,17 +548,17 @@ async function selectOffer(params: SelectOfferParams): Promise<SelectOfferResult
       partyAEmployeeId: partyAId,
       partyAContext,
       partyAExistingShifts: partyAShifts,
-      partyAShift: mainShiftV2,
+      partyAShift: mainV8OrchestratorShift,
       partyBEmployeeId: partyBId,
       partyBContext,
       partyBExistingShifts: partyBShifts,
-      partyBShift: offeredShiftV2,
+      partyBShift: offeredV8OrchestratorShift,
       stage,
     });
 
     const [resultA, resultB] = [
-      evaluateCompliance(inputA) as ComplianceResultV2,
-      evaluateCompliance(inputB) as ComplianceResultV2,
+      runV8Orchestrator(inputA) as V8OrchestratorResult,
+      runV8Orchestrator(inputB) as V8OrchestratorResult,
     ];
 
     complianceSnapshot = buildSwapSnapshot({
@@ -949,8 +949,8 @@ async function approveRequest(params: ApproveRequestParams): Promise<PlanningReq
     }
 
     const mainShift = mainShiftRow as Record<string, unknown>;
-    const mainShiftV2 = mapShiftToV2(mainShift);
-    const stage = deriveStage({
+    const mainV8OrchestratorShift = mapShiftToV2(mainShift);
+    const stage = deriveV8Stage({
       lifecycle_status: mainShift.lifecycle_status as string | null,
       is_published: mainShift.is_published as boolean | null,
     });
@@ -962,7 +962,7 @@ async function approveRequest(params: ApproveRequestParams): Promise<PlanningReq
       const bidderId = offer.offered_by;
 
       const [bidderContext, bidderShifts] = await Promise.all([
-        fetchEmployeeContextV2(bidderId),
+        fetchV8EmployeeContext(bidderId),
         fetchEmployeeShiftsV2(
           bidderId,
           mainShift.shift_date as string,
@@ -975,11 +975,11 @@ async function approveRequest(params: ApproveRequestParams): Promise<PlanningReq
         employeeId: bidderId,
         employeeContext: bidderContext,
         existingShifts: bidderShifts,
-        candidateShift: mainShiftV2,
+        candidateShift: mainV8OrchestratorShift,
         stage,
       });
 
-      const bidResult = evaluateCompliance(bidInput) as ComplianceResultV2;
+      const bidResult = runV8Orchestrator(bidInput) as V8OrchestratorResult;
 
       freshSnapshot = buildBidSnapshot({
         result: bidResult,
@@ -1003,14 +1003,14 @@ async function approveRequest(params: ApproveRequestParams): Promise<PlanningReq
       }
 
       const offeredShift = offeredShiftRow as Record<string, unknown>;
-      const offeredShiftV2 = mapShiftToV2(offeredShift);
+      const offeredV8OrchestratorShift = mapShiftToV2(offeredShift);
 
       const partyAId = request.initiated_by;
       const partyBId = offer.offered_by;
 
       const [partyAContext, partyBContext, partyAShifts, partyBShifts] = await Promise.all([
-        fetchEmployeeContextV2(partyAId),
-        fetchEmployeeContextV2(partyBId),
+        fetchV8EmployeeContext(partyAId),
+        fetchV8EmployeeContext(partyBId),
         fetchEmployeeShiftsV2(partyAId, mainShift.shift_date as string, SHIFT_WINDOW_DAYS, request.shift_id),
         fetchEmployeeShiftsV2(partyBId, offeredShift.shift_date as string, SHIFT_WINDOW_DAYS, offer.offered_shift_id),
       ]);
@@ -1019,17 +1019,17 @@ async function approveRequest(params: ApproveRequestParams): Promise<PlanningReq
         partyAEmployeeId: partyAId,
         partyAContext,
         partyAExistingShifts: partyAShifts,
-        partyAShift: mainShiftV2,
+        partyAShift: mainV8OrchestratorShift,
         partyBEmployeeId: partyBId,
         partyBContext,
         partyBExistingShifts: partyBShifts,
-        partyBShift: offeredShiftV2,
+        partyBShift: offeredV8OrchestratorShift,
         stage,
       });
 
       const [resultA, resultB] = [
-        evaluateCompliance(inputA) as ComplianceResultV2,
-        evaluateCompliance(inputB) as ComplianceResultV2,
+        runV8Orchestrator(inputA) as V8OrchestratorResult,
+        runV8Orchestrator(inputB) as V8OrchestratorResult,
       ];
 
       freshSnapshot = buildSwapSnapshot({

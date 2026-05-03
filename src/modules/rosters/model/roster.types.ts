@@ -237,7 +237,7 @@ export interface RosterAssignment {
 
 export interface RosterShift {
     id: string;
-    templateShiftId: string | null;
+    templateV8ShiftId: string | null;
     name: string | null;
     roleId: string | null;
     roleName: string | null;
@@ -383,7 +383,7 @@ export interface GroupModeShift {
     requiredSkills?: string[];
     requiredCertifications?: string[];
     // Link back to roster data
-    rosterShiftId?: string;
+    rosterV8ShiftId?: string;
     isManual?: boolean;
     isUrgent?: boolean;
     assignmentOutcome?: 'confirmed' | 'no_show' | null;
@@ -463,7 +463,7 @@ export function dbRosterDayToFrontend(db: any): RosterDay {
                 sortOrder: sg.sortOrder,
                 shifts: (sg.shifts || []).map((sh: any) => ({
                     id: sh.id,
-                    templateShiftId: sh.templateShiftId,
+                    templateV8ShiftId: sh.templateV8ShiftId,
                     name: sh.name,
                     roleId: sh.roleId,
                     roleName: sh.roleName,
@@ -554,7 +554,7 @@ export function rosterDayToGroupMode(
                         [],
                     requiredSkills: shift.skills || [],
                     requiredCertifications: shift.licenses || [],
-                    rosterShiftId: shift.id,
+                    rosterV8ShiftId: shift.id,
                     isManual: shift.isManual,
                     isUrgent: shift.isUrgent,
                 })),
@@ -601,7 +601,7 @@ export function mergeRosterDaysToGroupMode(
                             })) || [],
                         requiredSkills: shift.skills || [],
                         requiredCertifications: shift.licenses || [],
-                        rosterShiftId: shift.id,
+                        rosterV8ShiftId: shift.id,
                         isManual: shift.isManual,
                     }));
                 } else {
@@ -690,7 +690,7 @@ export function flatRosterShiftsToRosterDay(
         // Map Shift to Frontend Format
         subgroup.shifts.push({
             id: item.id,
-            templateShiftId: item.template_shift_id,
+            templateV8ShiftId: item.template_shift_id,
             name: item.name,
             roleId: item.role_id,
             roleName: item.role_name,

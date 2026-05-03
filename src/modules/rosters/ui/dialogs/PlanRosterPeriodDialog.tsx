@@ -121,7 +121,7 @@ export const PlanRosterPeriodDialog: React.FC<PlanRosterPeriodDialogProps> = ({
     const { data: organizations = [] } = useOrganizations();
     const { data: departments   = [] } = useDepartments(organizationId);
     const { data: subDepts      = [] } = useSubDepartments(departmentId);
-    const { data: templates     = [] } = useTemplates(undefined, departmentId);
+    const { data: templates     = [] } = useTemplates(preSelectedSubDeptId || undefined, departmentId);
 
     const orgName   = (organizations as { id: string; name: string }[]).find(o => o.id === organizationId)?.name ?? '...';
     const deptName  = (departments   as { id: string; name: string }[]).find(d => d.id === departmentId)?.name  ?? '...';

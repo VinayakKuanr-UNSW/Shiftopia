@@ -5,7 +5,7 @@
  * RolesProjection structured as:
  *
  *   Level (e.g. "Level 3 – Technician")
- *     └─ Role (e.g. "Stage Hand")
+ *     └─ Role (e.g. "V8Stage Hand")
  *          └─ shiftsByDate: { '2025-03-15': [ProjectedShift, …], … }
  *
  * Design:

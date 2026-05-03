@@ -2,7 +2,19 @@ import React, { useState, useMemo, useEffect } from 'react';
 
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
-import { Plus, MoreHorizontal, Undo2, Edit2, Zap } from 'lucide-react';
+import { 
+  Activity, 
+  Heart, 
+  Scale, 
+  Plus, 
+  MoreHorizontal, 
+  Undo2, 
+  Edit2, 
+  Zap,
+  Info,
+  Scale as ScaleIcon,
+  Flame,
+} from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 import { format } from 'date-fns';
@@ -36,6 +48,7 @@ import {
   DropdownMenuTrigger,
 } from '@/modules/core/ui/primitives/dropdown-menu';
 import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
+import { getUtilizationStatus } from '@/modules/rosters/domain/projections/utils/fairness';
 import {
   Tooltip,
   TooltipContent,
@@ -165,7 +178,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
   const createShiftMutation = useCreateShift();
   const { 
     bulkModeActive: globalBulkModeActive, 
-    selectedShiftIds: globalSelectedShiftIds,
+    selectedV8ShiftIds: globalSelectedV8ShiftIds,
     toggleShiftSelection: globalToggleShiftSelection
   } = useRosterStore();
 
@@ -275,8 +288,31 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
     showAvailabilities // Only fetch when availabilities are shown
   );
 
+  const showFatigueHeatmap = useRosterStore(s => s.showFatigueHeatmap);
+
   return (
     <>
+      {showFatigueHeatmap && (
+        <div className="absolute top-4 right-4 z-[60] flex items-center gap-4 animate-in fade-in slide-in-from-right-4 duration-500">
+          <Badge className="px-4 py-2 bg-amber-500/90 text-white backdrop-blur-md border border-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.2)] flex items-center gap-2 text-xs font-bold rounded-full">
+            <Flame className="h-3.5 w-3.5 animate-pulse" />
+            HEALTH MODE
+          </Badge>
+          
+          <div className="hidden md:flex items-center gap-3 px-4 py-1.5 bg-black/40 backdrop-blur-md rounded-full border border-white/10">
+            {[
+              { color: 'bg-emerald-500', label: 'Optimal' },
+              { color: 'bg-amber-500', label: 'Risk' },
+              { color: 'bg-red-500', label: 'Critical' },
+            ].map((l) => (
+              <div key={l.label} className="flex items-center gap-1.5">
+                <div className={cn("h-1.5 w-1.5 rounded-full", l.color)} />
+                <span className="text-[8px] font-black uppercase tracking-wider text-white/60">{l.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {/* DnD Mode Indicator */}
       {isDnDModeActive && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-500 pointer-events-none">
@@ -329,12 +365,26 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                     <tr
                       key={employee.id}
                       className={cn(
-                        'group transition-colors',
-                        'hover:bg-accent/30',
+                        'group transition-all duration-500 relative',
                         empIdx % 2 === 0 ? "bg-card" : "bg-muted/30",
-                        empIdx < employees.length - 1 && 'border-b border-border'
+                        empIdx < employees.length - 1 && 'border-b border-border',
+                        showFatigueHeatmap && (
+                          employee.fatigueScore < 10 ? "hover:bg-emerald-500/[0.04]" :
+                          employee.fatigueScore < 20 ? "hover:bg-amber-500/[0.06]" :
+                          "hover:bg-red-500/[0.1] bg-red-500/[0.03]"
+                        )
                       )}
                     >
+                      {showFatigueHeatmap && (
+                        <div 
+                          className={cn(
+                            "absolute inset-0 pointer-events-none opacity-20 transition-opacity duration-700",
+                            employee.fatigueScore < 10 ? "bg-emerald-500/5" :
+                            employee.fatigueScore < 20 ? "bg-amber-500/10" :
+                            "bg-red-500/15"
+                          )} 
+                        />
+                      )}
                       {/* ========== EMPLOYEE INFO CELL ========== */}
                       <td className="sticky left-0 z-10 bg-card group-hover:bg-accent/50 transition-colors border-r border-border px-4 py-3 align-top">
                         <div className="flex items-center gap-3">
@@ -415,6 +465,112 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
+                                {/* Premium Health & Fairness Indicators */}
+                                <div className="flex items-center gap-1.5 mt-1.5">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className={cn(
+                                          "flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider cursor-help transition-all border backdrop-blur-sm",
+                                          employee.fatigueScore < 10 ? "text-emerald-400 border-emerald-400/20 bg-emerald-400/5 shadow-[0_0_10px_rgba(52,211,153,0.1)]" :
+                                          employee.fatigueScore < 20 ? "text-amber-400 border-amber-400/20 bg-amber-400/5 shadow-[0_0_10px_rgba(251,191,36,0.1)]" :
+                                          "text-red-400 border-red-400/30 bg-red-400/10 shadow-[0_0_15px_rgba(248,113,113,0.2)] animate-pulse"
+                                        )}>
+                                          <Activity className="h-2.5 w-2.5" />
+                                          FTG {employee.fatigueScore.toFixed(0)}
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="w-60 p-4 bg-zinc-900/98 backdrop-blur-md border-white/10 shadow-2xl rounded-xl" side="right">
+                                        <div className="space-y-3">
+                                          <div className="flex items-center gap-3">
+                                            <div className={cn(
+                                              "p-2 rounded-lg",
+                                              employee.fatigueScore < 10 ? "bg-emerald-400/20" : 
+                                              employee.fatigueScore < 20 ? "bg-amber-400/20" : "bg-red-400/20"
+                                            )}>
+                                              <Activity className={cn(
+                                                "h-4 w-4",
+                                                employee.fatigueScore < 10 ? "text-emerald-400" : 
+                                                employee.fatigueScore < 20 ? "text-amber-400" : "text-red-400"
+                                              )} />
+                                            </div>
+                                            <div>
+                                              <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Fatigue Health</p>
+                                              <p className="text-xs font-bold text-white">Projected: {employee.fatigueScore.toFixed(1)}</p>
+                                            </div>
+                                          </div>
+                                          <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                            <div 
+                                              className={cn(
+                                                "h-full transition-all duration-1000",
+                                                employee.fatigueScore < 10 ? "bg-emerald-400" : 
+                                                employee.fatigueScore < 20 ? "bg-amber-400" : "bg-red-400"
+                                              )}
+                                              style={{ width: `${Math.min((employee.fatigueScore / 25) * 100, 100)}%` }}
+                                            />
+                                          </div>
+                                          <p className="text-[10px] text-white/70 leading-relaxed italic">
+                                            {employee.fatigueScore < 10 ? "Optimal recovery state. Ready for high-intensity shifts." :
+                                             employee.fatigueScore < 20 ? "Moderate accumulation. Monitor for cognitive decline." :
+                                             "Critical fatigue detected. Mandatory rest recommended per MA000080."}
+                                          </p>
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className={cn(
+                                          "flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider cursor-help transition-all border backdrop-blur-sm",
+                                          employee.utilization < 80 ? "text-blue-400 border-blue-400/20 bg-blue-400/5 shadow-[0_0_8px_rgba(96,165,250,0.1)]" :
+                                          employee.utilization <= 105 ? "text-emerald-400 border-emerald-400/20 bg-emerald-400/5 shadow-[0_0_8px_rgba(52,211,153,0.1)]" :
+                                          "text-amber-400 border-amber-400/20 bg-amber-400/5 shadow-[0_0_10px_rgba(251,191,36,0.1)]"
+                                        )}>
+                                          <Scale className="h-2.5 w-2.5" />
+                                          UTL {employee.utilization.toFixed(0)}%
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="w-60 p-4 bg-zinc-900/98 backdrop-blur-md border-white/10 shadow-2xl rounded-xl" side="right">
+                                        <div className="space-y-3">
+                                          <div className="flex items-center gap-3">
+                                            <div className={cn(
+                                              "p-2 rounded-lg",
+                                              employee.utilization < 80 ? "bg-blue-400/20" : 
+                                              employee.utilization <= 105 ? "bg-emerald-400/20" : "bg-amber-400/20"
+                                            )}>
+                                              <Scale className={cn(
+                                                "h-4 w-4",
+                                                employee.utilization < 80 ? "text-blue-400" : 
+                                                employee.utilization <= 105 ? "text-emerald-400" : "text-amber-400"
+                                              )} />
+                                            </div>
+                                            <div>
+                                              <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Fairness / Utilization</p>
+                                              <p className="text-xs font-bold text-white">{employee.utilization.toFixed(0)}% of Contract</p>
+                                            </div>
+                                          </div>
+                                          <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                            <div 
+                                              className={cn(
+                                                "h-full transition-all duration-1000",
+                                                employee.utilization < 80 ? "bg-blue-400" : 
+                                                employee.utilization <= 105 ? "bg-emerald-400" : "bg-amber-400"
+                                              )}
+                                              style={{ width: `${Math.min(employee.utilization, 120)}%` }}
+                                            />
+                                          </div>
+                                          <p className="text-[10px] text-white/70 leading-relaxed italic">
+                                            {employee.utilization < 80 ? "Under-utilized. Priority candidate for additional shifts." :
+                                             employee.utilization <= 105 ? "Perfect balance. Meeting contractual obligations." :
+                                             "Over-utilized. High risk of overtime penalties and burnout."}
+                                          </p>
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </div>
                                 {employee.overHoursWarning && (
                                   <span className="text-[9px] font-mono tracking-wider text-amber-400 uppercase">
                                     OT

@@ -310,8 +310,8 @@ interface SwapRequestManagement {
     // Raw IDs needed for manager compliance re-check
     requesterEmployeeId: string;
     offererEmployeeId: string | null;
-    requesterShiftId: string;
-    offererShiftId: string | null;
+    requesterV8ShiftId: string;
+    offererV8ShiftId: string | null;
     // Compliance snapshot saved at acceptance time (from swap_offers)
     complianceSnapshot: any | null;
 }
@@ -446,8 +446,8 @@ const mapToUIModel = (apiData: SwapRequestWithDetails): SwapRequestManagement =>
         ...deriveStateIds(apiData.status),
         requesterEmployeeId: apiData.requested_by_employee_id,
         offererEmployeeId: apiData.swap_with_employee_id || activeOffer?.offerer_id || null,
-        requesterShiftId: apiData.original_shift_id,
-        offererShiftId: apiData.offered_shift_id || activeOffer?.offered_shift_id || null,
+        requesterV8ShiftId: apiData.original_shift_id,
+        offererV8ShiftId: apiData.offered_shift_id || activeOffer?.offered_shift_id || null,
         complianceSnapshot: activeOffer?.compliance_snapshot ?? null,
     };
 };
@@ -928,10 +928,10 @@ export const ManagerSwapsPage: React.FC = () => {
                         swapId={complianceApprovalTarget.id}
                         requesterEmployeeId={complianceApprovalTarget.requesterEmployeeId}
                         requesterName={complianceApprovalTarget.requestor.employeeName}
-                        requesterShiftId={complianceApprovalTarget.requesterShiftId}
+                        requesterV8ShiftId={complianceApprovalTarget.requesterV8ShiftId}
                         offererEmployeeId={complianceApprovalTarget.offererEmployeeId}
                         offererName={complianceApprovalTarget.recipient?.employeeName ?? 'Offerer'}
-                        offererShiftId={complianceApprovalTarget.offererShiftId}
+                        offererV8ShiftId={complianceApprovalTarget.offererV8ShiftId}
                         storedSnapshot={complianceApprovalTarget.complianceSnapshot}
                     />
                 )}

@@ -72,12 +72,13 @@ interface RosterState {
   advancedFilters: AdvancedFilters;
   isBucketView: boolean;
   bulkModeActive: boolean;
-  selectedShiftIds: Set<string>;
+  selectedV8ShiftIds: Set<string>;
   // ── Session state (not persisted — resets each tab/reload) ────────────────
   /** ISO date string 'YYYY-MM-DD', restored as Date in getters */
   _selectedDateISO: string;
   isDnDModeActive: boolean;
   showUnfilledPanel: boolean;
+  showFatigueHeatmap: boolean;
   lastShiftMove: {
     shiftId: string;
     prevData: {
@@ -103,12 +104,13 @@ interface RosterState {
   resetAdvancedFilters: () => void;
   setIsBucketView: (value: boolean) => void;
   setBulkModeActive: (active: boolean) => void;
-  setSelectedShiftIds: (ids: Set<string>) => void;
+  setSelectedV8ShiftIds: (ids: Set<string>) => void;
   toggleShiftSelection: (id: string) => void;
   selectMultiple: (ids: string[]) => void;
   clearSelection: () => void;
   setIsDnDModeActive: (active: boolean) => void;
   setShowUnfilledPanel: (show: boolean) => void;
+  setShowFatigueHeatmap: (show: boolean) => void;
   setLastShiftMove: (move: RosterState['lastShiftMove']) => void;
   clearLastShiftMove: () => void;
 
@@ -139,55 +141,57 @@ export const useRosterStore = create<RosterState>()(
       advancedFilters: DEFAULT_ADVANCED_FILTERS,
       isBucketView: false,
       bulkModeActive: false,
-      selectedShiftIds: new Set(),
+      selectedV8ShiftIds: new Set(),
 
       // ── Session-only (today, not persisted) ────────────────────────────────
       _selectedDateISO: format(new Date(), 'yyyy-MM-dd'),
       isDnDModeActive: false,
       showUnfilledPanel: false,
+      showFatigueHeatmap: false,
       lastShiftMove: null,
 
       // ── Actions ────────────────────────────────────────────────────────────
       setViewType: (view) => set({ viewType: view }),
-      setActiveMode: (mode) => set({ activeMode: mode, selectedShiftIds: new Set(), bulkModeActive: false }),
+      setActiveMode: (mode) => set({ activeMode: mode, selectedV8ShiftIds: new Set(), bulkModeActive: false }),
       setIsBucketView: (v) => set({ 
         isBucketView: v,
-        ...(v ? { bulkModeActive: false, isDnDModeActive: false, selectedShiftIds: new Set() } : {})
+        ...(v ? { bulkModeActive: false, isDnDModeActive: false, selectedV8ShiftIds: new Set() } : {})
       }),
 
       setBulkModeActive: (active) => set((s) => ({
         bulkModeActive: active,
-        selectedShiftIds: active ? s.selectedShiftIds : new Set(),
+        selectedV8ShiftIds: active ? s.selectedV8ShiftIds : new Set(),
         ...(active ? { isBucketView: false, isDnDModeActive: false } : {})
       })),
 
-      setSelectedShiftIds: (ids) => set({ selectedShiftIds: ids }),
+      setSelectedV8ShiftIds: (ids) => set({ selectedV8ShiftIds: ids }),
 
       toggleShiftSelection: (id) => set((s) => {
-        const current = new Set(s.selectedShiftIds);
+        const current = new Set(s.selectedV8ShiftIds);
         if (current.has(id)) current.delete(id);
         else current.add(id);
-        return { selectedShiftIds: current };
+        return { selectedV8ShiftIds: current };
       }),
 
       selectMultiple: (ids) => set((s) => {
-        const current = new Set(s.selectedShiftIds);
+        const current = new Set(s.selectedV8ShiftIds);
         ids.forEach((id) => current.add(id));
-        return { selectedShiftIds: current };
+        return { selectedV8ShiftIds: current };
       }),
 
-      clearSelection: () => set({ selectedShiftIds: new Set() }),
+      clearSelection: () => set({ selectedV8ShiftIds: new Set() }),
 
       setIsDnDModeActive: (active) => set((s) => ({
         isDnDModeActive: active,
         showUnfilledPanel: active ? true : s.showUnfilledPanel,
-        ...(active ? { isBucketView: false, bulkModeActive: false, selectedShiftIds: new Set() } : {})
+        ...(active ? { isBucketView: false, bulkModeActive: false, selectedV8ShiftIds: new Set() } : {})
       })),
       setShowUnfilledPanel: (show) => set((s) => ({
         showUnfilledPanel: show,
         // Option C: Closing panel automatically disables DnD
         isDnDModeActive: show ? s.isDnDModeActive : false,
       })),
+      setShowFatigueHeatmap: (show) => set({ showFatigueHeatmap: show }),
       setLastShiftMove: (move) => set({ lastShiftMove: move }),
       clearLastShiftMove: () => set({ lastShiftMove: null }),
 

@@ -106,7 +106,7 @@ const CreateSwapRequestModal: React.FC<CreateSwapRequestModalProps> = ({
 
     try {
       createSwap({
-        requesterShiftId: shift.id,
+        requesterV8ShiftId: shift.id,
         requestedByEmployeeId: user.id || shift.assigned_employee_id!,
         swapWithEmployeeId: null, // Always open for now
         reason: reason.trim(),

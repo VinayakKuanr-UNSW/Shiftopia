@@ -11,7 +11,7 @@
  *   3. Atomically committing passing shifts via Supabase RPC
  */
 
-import type { ContractRecordV2 } from '@/modules/compliance/v2/types';
+import type { ContractRecordV2 } from '@/modules/compliance/v8/types';
 export type { ContractRecordV2 };
 
 // =============================================================================
@@ -148,9 +148,9 @@ export interface BulkAssignmentResult {
     /** Per-shift results in the original input order. */
     results: ShiftAssignmentResult[];
     /** Shift IDs that passed all validation. */
-    passedShiftIds: string[];
+    passedV8ShiftIds: string[];
     /** Shift IDs that have blocking violations. */
-    failedShiftIds: string[];
+    failedV8ShiftIds: string[];
     /** True when it is safe to call commit(). */
     canCommit: boolean;
     /** Milliseconds taken to validate (excludes commit time). */

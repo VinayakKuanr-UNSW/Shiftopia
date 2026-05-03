@@ -35,7 +35,7 @@ import {
     ComplianceResult,
     ShiftTimeRange
 } from './types';
-import { checkCompliance } from './engine';
+import { runV8LegacyBridge } from './engine';
 import { checkBulkRestGaps, ShiftForRestGap, BulkRestGapResult } from './bulk-rest-gap';
 import { checkBulkStudentVisa, ShiftForVisa, BulkStudentVisaResult } from './bulk-student-visa';
 import { parseISO, format, addDays, subDays, min, max } from 'date-fns';
@@ -335,7 +335,7 @@ function evaluateShiftForEmployee(
         excludeRules
     };
 
-    const complianceResult = checkCompliance(input);
+    const complianceResult = runV8LegacyBridge(input);
 
     // Convert to bulk result format
     const details: BulkRuleDetail[] = complianceResult.results.map(r => ({

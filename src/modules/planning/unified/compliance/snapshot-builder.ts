@@ -11,7 +11,7 @@
  * All functions are pure — no DB calls, no side effects.
  */
 
-import type { ComplianceResultV2, FinalStatus, RuleHitV2 } from '@/modules/compliance/v2/types';
+import type { V8OrchestratorResult, V8Status, V8Hit } from '@/modules/compliance/v8/types';
 import type { BidComplianceSnapshot, SwapComplianceSnapshot, BlockingHit } from '../types';
 
 // =============================================================================
@@ -19,12 +19,12 @@ import type { BidComplianceSnapshot, SwapComplianceSnapshot, BlockingHit } from 
 // =============================================================================
 
 /**
- * Derives the combined FinalStatus from two individual FinalStatus values.
+ * Derives the combined V8Status from two individual V8Status values.
  * Precedence: BLOCKING > WARNING > PASS
  * The stricter of the two always wins.
  */
-export function combinedStatus(a: FinalStatus, b: FinalStatus): FinalStatus {
-  const rank = (s: FinalStatus): number => {
+export function combinedStatus(a: V8Status, b: V8Status): V8Status {
+  const rank = (s: V8Status): number => {
     if (s === 'BLOCKING') return 2;
     if (s === 'WARNING')  return 1;
     return 0;
@@ -40,7 +40,7 @@ export function combinedStatus(a: FinalStatus, b: FinalStatus): FinalStatus {
 /**
  * Build a BidComplianceSnapshot from a single compliance result.
  *
- * The snapshot extends ComplianceResultV2 with two extra fields:
+ * The snapshot extends V8OrchestratorResult with two extra fields:
  *   shift_updated_at — the shifts.updated_at value captured just before
  *                      the compliance run (used for optimistic locking on approve)
  *   evaluated_at     — ISO timestamp of when the compliance engine was called
@@ -50,7 +50,7 @@ export function combinedStatus(a: FinalStatus, b: FinalStatus): FinalStatus {
  *   b) Whether the compliance result is stale (> 15 min since evaluated_at)
  */
 export function buildBidSnapshot(params: {
-  result: ComplianceResultV2;
+  result: V8OrchestratorResult;
   shiftUpdatedAt: string;
 }): BidComplianceSnapshot {
   const { result, shiftUpdatedAt } = params;
@@ -77,8 +77,8 @@ export function buildBidSnapshot(params: {
  *   target_shift_updated_at — offerer's shift (offer.offered_shift_id)
  */
 export function buildSwapSnapshot(params: {
-  resultA: ComplianceResultV2;
-  resultB: ComplianceResultV2;
+  resultA: V8OrchestratorResult;
+  resultB: V8OrchestratorResult;
   shiftUpdatedAt: string;
   targetShiftUpdatedAt: string;
 }): SwapComplianceSnapshot {
@@ -168,7 +168,7 @@ export function extractBlockingHits(
 // PRIVATE HELPERS
 // =============================================================================
 
-function buildSwapHitSummary(hit: RuleHitV2, party: 'A' | 'B' | 'BOTH'): string {
+function buildSwapHitSummary(hit: V8Hit, party: 'A' | 'B' | 'BOTH'): string {
   if (party === 'BOTH') {
     return `[Both parties] ${hit.message}`;
   }

@@ -43,7 +43,7 @@ import type {
   BidComplianceSnapshot,
 } from '@/modules/planning/unified/types';
 import { isSwapSnapshot, isBidSnapshot } from '@/modules/planning/unified/types';
-import type { FinalStatus } from '@/modules/compliance/v2/types';
+import type { V8Status } from '@/modules/compliance/v8/types';
 
 // =============================================================================
 // TYPES
@@ -93,7 +93,7 @@ function isSnapshotStale(evaluatedAt?: string): boolean {
 
 function getOverallStatus(
   snapshot: BidComplianceSnapshot | SwapComplianceSnapshot | null,
-): FinalStatus | null {
+): V8Status | null {
   if (!snapshot) return null;
   if (isSwapSnapshot(snapshot)) return snapshot.combined_status;
   if (isBidSnapshot(snapshot)) return snapshot.status;

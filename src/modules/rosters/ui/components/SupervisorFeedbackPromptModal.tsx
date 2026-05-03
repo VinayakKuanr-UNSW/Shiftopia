@@ -87,7 +87,7 @@ export function SupervisorFeedbackPromptModal({
     const [level, setLevel] = useState<number>(defaultLevel ?? 1);
     const [sliceStart, setSliceStart] = useState<number>(defaultSliceStart ?? 0);
     const [sliceEnd, setSliceEnd] = useState<number>(defaultSliceEnd ?? 47);
-    const [severity, setSeverity] = useState<number>(3);
+    const [severity, setV8Severity] = useState<number>(3);
     const [reasonCode, setReasonCode] = useState<ReasonCode>('peak_underestimated');
     const [reasonNote, setReasonNote] = useState<string>('');
 
@@ -132,7 +132,7 @@ export function SupervisorFeedbackPromptModal({
 
     const resetForm = () => {
         setVerdict('OK');
-        setSeverity(3);
+        setV8Severity(3);
         setReasonCode('peak_underestimated');
         setReasonNote('');
     };
@@ -247,11 +247,11 @@ export function SupervisorFeedbackPromptModal({
                         </div>
                     </div>
 
-                    {/* Severity (UNDER/OVER only) */}
+                    {/* V8Severity (UNDER/OVER only) */}
                     {verdictNeedsReason && (
                         <div>
                             <div className="mb-2 flex items-center justify-between">
-                                <Label htmlFor="severity">Severity</Label>
+                                <Label htmlFor="severity">V8Severity</Label>
                                 <span className="text-xs text-muted-foreground">{severity} / 5</span>
                             </div>
                             <Slider
@@ -260,7 +260,7 @@ export function SupervisorFeedbackPromptModal({
                                 max={5}
                                 step={1}
                                 value={[severity]}
-                                onValueChange={(v) => setSeverity(v[0] ?? 3)}
+                                onValueChange={(v) => setV8Severity(v[0] ?? 3)}
                             />
                             <div className="mt-1 flex justify-between text-xs text-muted-foreground">
                                 <span>Mild</span><span>Significant</span><span>Critical</span>

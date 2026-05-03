@@ -114,7 +114,7 @@ export interface ShiftSwap {
 
 // Type for creating swap requests
 export interface CreateSwapData {
-    requesterShiftId: string;
+    requesterV8ShiftId: string;
     requestedByEmployeeId: string;
     swapWithEmployeeId?: string | null;
     reason?: string | null;
@@ -150,16 +150,16 @@ export const swapsApi = {
      * Create a new swap request.
      */
     async createSwapRequest(
-        requesterShiftId: string,
+        requesterV8ShiftId: string,
         requestedByEmployeeId: string,
         swapWithEmployeeId: string | null = null,
         reason: string | null = null
     ): Promise<ShiftSwap> {
-        console.log('[API] Creating swap request:', { requesterShiftId, requestedByEmployeeId, swapWithEmployeeId });
+        console.log('[API] Creating swap request:', { requesterV8ShiftId, requestedByEmployeeId, swapWithEmployeeId });
 
         // §9 Time Lock Check: Fetch shift to verify time lock
         const { data: shift, error: shiftErr } = await supabase
-            .from('shifts').select('shift_date, start_time').eq('id', requesterShiftId).single();
+            .from('shifts').select('shift_date, start_time').eq('id', requesterV8ShiftId).single();
         if (shiftErr || !shift) throw shiftErr || new Error('Shift not found');
         const shiftStart = assertNotTimeLocked(shift.shift_date, shift.start_time);
         const expiresAt = new Date(shiftStart.getTime() - TIME_LOCK_HOURS * 60 * 60 * 1000);
@@ -167,7 +167,7 @@ export const swapsApi = {
         const { data, error } = await db
             .from('shift_swaps')
             .insert({
-                requester_shift_id: requesterShiftId,
+                requester_shift_id: requesterV8ShiftId,
                 requester_id: requestedByEmployeeId,
                 target_id: swapWithEmployeeId,
                 reason: reason,
@@ -190,7 +190,7 @@ export const swapsApi = {
                     trading_status: 'TradeRequested',
                     trade_requested_at: new Date().toISOString()
                 })
-                .eq('id', requesterShiftId);
+                .eq('id', requesterV8ShiftId);
 
             if (shiftUpdateError) {
                 console.error('[API] Failed to update shift trading status:', shiftUpdateError);
@@ -426,8 +426,8 @@ export const swapsApi = {
      * Make an offer on a swap request (1-to-many model).
      * Inserts a new row into swap_offers.
      */
-    async makeOffer(swapId: string, targetShiftId: string | undefined, targetId: string): Promise<void> {
-        console.log('[API] Making offer on swap:', { swapId, targetShiftId, targetId });
+    async makeOffer(swapId: string, targetV8ShiftId: string | undefined, targetId: string): Promise<void> {
+        console.log('[API] Making offer on swap:', { swapId, targetV8ShiftId, targetId });
 
         // Self-offer guard: prevent a user from offering on their own swap request
         const { data: swapMeta, error: swapMetaErr } = await db
@@ -444,13 +444,13 @@ export const swapsApi = {
         };
 
         // §9 Time Lock Check: Prevent offering a shift that starts within 4 hours
-        if (targetShiftId) {
+        if (targetV8ShiftId) {
             const { data: shift, error: shiftErr } = await supabase
-                .from('shifts').select('shift_date, start_time').eq('id', targetShiftId).single();
+                .from('shifts').select('shift_date, start_time').eq('id', targetV8ShiftId).single();
             if (shiftErr || !shift) throw shiftErr || new Error('Shift not found');
             assertNotTimeLocked(shift.shift_date, shift.start_time);
             
-            offerData.offered_shift_id = targetShiftId;
+            offerData.offered_shift_id = targetV8ShiftId;
         }
 
         const { error } = await db
@@ -651,7 +651,7 @@ export const swapsApi = {
         }
 
         // 3. Resolve offered shift — shift_swaps.target_shift_id is authoritative, offer is fallback
-        let offeredShiftId = swap.offered_shift_id;
+        let offeredV8ShiftId = swap.offered_shift_id;
         let offeredShiftData: any = null;
 
         // Best-effort: try to find the offer for compliance snapshot
@@ -666,12 +666,12 @@ export const swapsApi = {
 
         if (offerData) {
             offeredShiftData = offerData.offered_shift;
-            if (!offeredShiftId) offeredShiftId = offerData.offered_shift_id;
+            if (!offeredV8ShiftId) offeredV8ShiftId = offerData.offered_shift_id;
         }
 
         // If still no offered shift data, fetch directly from shifts table
-        if (!offeredShiftData && offeredShiftId) {
-            const { data: shiftRow } = await db.from('shifts').select('*').eq('id', offeredShiftId).single();
+        if (!offeredShiftData && offeredV8ShiftId) {
+            const { data: shiftRow } = await db.from('shifts').select('*').eq('id', offeredV8ShiftId).single();
             offeredShiftData = shiftRow;
         }
 
@@ -690,7 +690,7 @@ export const swapsApi = {
                 end_time: swap.originalShift.end_time ?? swap.originalShift.endTime,
             },
             offeredShiftData && {
-                id: offeredShiftId,
+                id: offeredV8ShiftId,
                 shift_date: offeredShiftData.shift_date,
                 start_time: offeredShiftData.start_time,
                 end_time: offeredShiftData.end_time,
@@ -716,7 +716,7 @@ export const swapsApi = {
         // 5. Execute Trade via SM (Atomic 2-way swap) — §4 T5
         const { error: smError } = await db.rpc('sm_approve_peer_swap', {
             p_requester_shift_id: swap.original_shift_id,
-            p_offered_shift_id: offeredShiftId || null,
+            p_offered_shift_id: offeredV8ShiftId || null,
             p_requester_id: swap.requested_by_employee_id,
             p_offerer_id: effectiveTargetId
         });
@@ -805,8 +805,8 @@ export const swapsApi = {
         }
     },
 
-    async acceptTrade(swapId: string, offerId: string, offererId: string, offerShiftId?: string): Promise<void> {
-        console.log('[API] Accepting trade:', { swapId, offerId, offererId, offerShiftId });
+    async acceptTrade(swapId: string, offerId: string, offererId: string, offerV8ShiftId?: string): Promise<void> {
+        console.log('[API] Accepting trade:', { swapId, offerId, offererId, offerV8ShiftId });
 
         // 1. Fetch Swap Request to check status (Optimistic Locking)
         const { data: swapRequest, error: fetchError } = await db
@@ -829,8 +829,8 @@ export const swapsApi = {
         );
 
         let offeredShift: any = null;
-        if (offerShiftId) {
-            const { data: shift } = await supabase.from('shifts').select('*').eq('id', offerShiftId).single();
+        if (offerV8ShiftId) {
+            const { data: shift } = await supabase.from('shifts').select('*').eq('id', offerV8ShiftId).single();
             offeredShift = shift;
         }
 
@@ -856,7 +856,7 @@ export const swapsApi = {
             p_swap_id:              swapId,
             p_offer_id:             offerId,
             p_offerer_id:           offererId,
-            p_offer_shift_id:       offerShiftId ?? null,
+            p_offer_shift_id:       offerV8ShiftId ?? null,
             p_compliance_snapshot:  complianceSnapshot as any,
         });
 

@@ -13,6 +13,7 @@
  */
 
 import React, { useMemo } from 'react';
+import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Clock, DollarSign, Users, BarChart3 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import type { Shift } from '../../domain/shift.entity';

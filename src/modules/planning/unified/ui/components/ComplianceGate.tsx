@@ -32,7 +32,7 @@ import {
   isBidSnapshot,
   isStudentVisaEnforced,
 } from '@/modules/planning/unified/types';
-import type { ComplianceResultV2, RuleHitV2, FinalStatus } from '@/modules/compliance/v2/types';
+import type { V8OrchestratorResult, V8Hit, V8Status } from '@/modules/compliance/v8/types';
 
 // =============================================================================
 // TYPES
@@ -50,7 +50,7 @@ interface ComplianceGateProps {
 // HELPERS
 // =============================================================================
 
-function formatFinalStatus(status: FinalStatus): {
+function formatV8Status(status: V8Status): {
   label: string;
   icon: React.ElementType;
   containerCls: string;
@@ -96,7 +96,7 @@ function severityBadgeCls(severity: 'BLOCKING' | 'WARNING'): string {
 // =============================================================================
 
 interface RuleHitRowProps {
-  hit: RuleHitV2;
+  hit: V8Hit;
   isBlocking: boolean;
   compact: boolean;
 }
@@ -117,7 +117,7 @@ function RuleHitRow({ hit, isBlocking, compact }: RuleHitRowProps) {
         onClick={() => setExpanded((e) => !e)}
         className="flex w-full items-start gap-3 px-3 py-2.5 text-left"
       >
-        {/* Severity icon */}
+        {/* V8Severity icon */}
         {isBlocking ? (
           <XCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-rose-500" />
         ) : (
@@ -179,7 +179,7 @@ function RuleHitRow({ hit, isBlocking, compact }: RuleHitRowProps) {
 
 interface PartyColumnProps {
   label: string;
-  result: ComplianceResultV2;
+  result: V8OrchestratorResult;
   compact: boolean;
 }
 
@@ -267,34 +267,34 @@ export function ComplianceGate({
   compact = false,
 }: ComplianceGateProps) {
   // Resolve overall status and per-party data
-  const overallStatus: FinalStatus = isSwapSnapshot(snapshot)
+  const overallStatus: V8Status = isSwapSnapshot(snapshot)
     ? snapshot.combined_status
     : snapshot.status;
 
-  const statusDisplay = formatFinalStatus(overallStatus);
+  const statusDisplay = formatV8Status(overallStatus);
   const StatusIcon = statusDisplay.icon;
 
   // Determine if student visa enforcement is flagged
   const studentVisa = isSwapSnapshot(snapshot)
     ? isStudentVisaEnforced(snapshot.party_a, snapshot.party_b)
-    : isStudentVisaEnforced(snapshot as ComplianceResultV2);
+    : isStudentVisaEnforced(snapshot as V8OrchestratorResult);
 
   // Count blocking hits across all parties
-  const allBlockingHits: RuleHitV2[] = isSwapSnapshot(snapshot)
+  const allBlockingHits: V8Hit[] = isSwapSnapshot(snapshot)
     ? [
         ...snapshot.party_a.rule_hits.filter((h) => h.severity === 'BLOCKING'),
         ...snapshot.party_b.rule_hits.filter((h) => h.severity === 'BLOCKING'),
       ]
-    : (snapshot as ComplianceResultV2).rule_hits.filter(
+    : (snapshot as V8OrchestratorResult).rule_hits.filter(
         (h) => h.severity === 'BLOCKING',
       );
 
-  const allWarningHits: RuleHitV2[] = isSwapSnapshot(snapshot)
+  const allWarningHits: V8Hit[] = isSwapSnapshot(snapshot)
     ? [
         ...snapshot.party_a.rule_hits.filter((h) => h.severity === 'WARNING'),
         ...snapshot.party_b.rule_hits.filter((h) => h.severity === 'WARNING'),
       ]
-    : (snapshot as ComplianceResultV2).rule_hits.filter(
+    : (snapshot as V8OrchestratorResult).rule_hits.filter(
         (h) => h.severity === 'WARNING',
       );
 

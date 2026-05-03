@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { shiftsApi } from '@/modules/rosters';
 import { addDays, subDays, format, parseISO } from 'date-fns';
 import {
-    checkCompliance,
+    runV8LegacyBridge,
     ComplianceCheckInput,
     ComplianceCheckResult,
     ShiftTimeRange,
@@ -17,13 +17,13 @@ export interface UseSwapComplianceProps {
         end_time: string;
         unpaid_break_minutes?: number;
     } | undefined;
-    targetShiftId: string | undefined; // The shift the requester is swapping OUT
+    targetV8ShiftId: string | undefined; // The shift the requester is swapping OUT
 }
 
 export function useSwapCompliance({
     requesterId,
     candidateShift,
-    targetShiftId
+    targetV8ShiftId
 }: UseSwapComplianceProps) {
 
     // 1. Calculate date range for roster fetch (surrounding the candidate shift)
@@ -54,7 +54,7 @@ export function useSwapCompliance({
 
         // Map roster to engine format AND exclude the target shift
         const existingShifts: ShiftTimeRange[] = requesterRoster
-            .filter(s => s.id !== targetShiftId)
+            .filter(s => s.id !== targetV8ShiftId)
             .map(s => ({
                 shift_date: s.shift_date,
                 start_time: s.start_time,
@@ -74,8 +74,8 @@ export function useSwapCompliance({
             existing_shifts: existingShifts,
         };
 
-        return checkCompliance(input);
-    }, [candidateShift, requesterId, isLoading, requesterRoster, targetShiftId]);
+        return runV8LegacyBridge(input);
+    }, [candidateShift, requesterId, isLoading, requesterRoster, targetV8ShiftId]);
 
     return {
         result,

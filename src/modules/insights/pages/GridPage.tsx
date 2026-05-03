@@ -40,23 +40,23 @@ interface ShiftPillData {
 
 // ── Compliance types ──────────────────────────────────────────────────────────
 
-type CompSeverity = 'violation' | 'warning' | 'ok';
+type CompV8Severity = 'violation' | 'warning' | 'ok';
 
 interface WindowViolation {
     weeks: 2 | 3 | 4;
     hours: number;
     limit: number;
-    severity: CompSeverity;
+    severity: CompV8Severity;
 }
 
 interface WeekComp {
     weekHours: number;
     windows: WindowViolation[];
-    worstSeverity: CompSeverity;
+    worstV8Severity: CompV8Severity;
 }
 
 interface EmpComp {
-    overallSeverity: CompSeverity;
+    overallV8Severity: CompV8Severity;
     worstDesc: string;
     weeks: Record<number, WeekComp>;
     dailyViolations: Set<string>;
@@ -95,18 +95,18 @@ function computeEmpComp(
     // 2. Per-week entries
     const weekComps: Record<number, WeekComp> = {};
     for (const wn of sortedWeekNums) {
-        weekComps[wn] = { weekHours: byWeek[wn] || 0, windows: [], worstSeverity: 'ok' };
+        weekComps[wn] = { weekHours: byWeek[wn] || 0, windows: [], worstV8Severity: 'ok' };
     }
 
     // 3. Bubble daily cap severity into week
     for (const date of dailyViolations) {
         const wn = getISOWeek(new Date(date));
-        if (weekComps[wn]) weekComps[wn].worstSeverity = 'violation';
+        if (weekComps[wn]) weekComps[wn].worstV8Severity = 'violation';
     }
     for (const date of dailyWarnings) {
         const wn = getISOWeek(new Date(date));
-        if (weekComps[wn] && weekComps[wn].worstSeverity === 'ok')
-            weekComps[wn].worstSeverity = 'warning';
+        if (weekComps[wn] && weekComps[wn].worstV8Severity === 'ok')
+            weekComps[wn].worstV8Severity = 'warning';
     }
 
     // 4. Rolling-window checks (prefix-sum sweep over sorted week indices)
@@ -121,7 +121,7 @@ function computeEmpComp(
             }
             if (sum <= warnLimit) continue;
 
-            const severity: CompSeverity = sum > limit ? 'violation' : 'warning';
+            const severity: CompV8Severity = sum > limit ? 'violation' : 'warning';
             const endWn = sortedWeekNums[endIdx];
             if (!weekComps[endWn]) continue;
 
@@ -141,37 +141,37 @@ function computeEmpComp(
             }
 
             if (severity === 'violation') {
-                weekComps[endWn].worstSeverity = 'violation';
-            } else if (severity === 'warning' && weekComps[endWn].worstSeverity === 'ok') {
-                weekComps[endWn].worstSeverity = 'warning';
+                weekComps[endWn].worstV8Severity = 'violation';
+            } else if (severity === 'warning' && weekComps[endWn].worstV8Severity === 'ok') {
+                weekComps[endWn].worstV8Severity = 'warning';
             }
         }
     }
 
     // 5. Derive overall severity + description
-    let overallSeverity: CompSeverity = 'ok';
+    let overallV8Severity: CompV8Severity = 'ok';
     let worstDesc = 'All checks passed';
 
     for (const comp of Object.values(weekComps)) {
         for (const win of comp.windows) {
-            if (win.severity === 'violation' && overallSeverity !== 'violation') {
-                overallSeverity = 'violation';
+            if (win.severity === 'violation' && overallV8Severity !== 'violation') {
+                overallV8Severity = 'violation';
                 worstDesc = `${win.hours}h in ${win.weeks}w window (limit ${win.limit}h)`;
-            } else if (win.severity === 'warning' && overallSeverity === 'ok') {
-                overallSeverity = 'warning';
+            } else if (win.severity === 'warning' && overallV8Severity === 'ok') {
+                overallV8Severity = 'warning';
                 worstDesc = `Near limit: ${win.hours}h in ${win.weeks}w window`;
             }
         }
     }
-    if (dailyViolations.size > 0 && overallSeverity !== 'violation') {
-        overallSeverity = 'violation';
+    if (dailyViolations.size > 0 && overallV8Severity !== 'violation') {
+        overallV8Severity = 'violation';
         worstDesc = `Daily cap exceeded on ${dailyViolations.size} day(s) (>${DAILY_CAP_HARD}h)`;
-    } else if (dailyWarnings.size > 0 && overallSeverity === 'ok') {
-        overallSeverity = 'warning';
+    } else if (dailyWarnings.size > 0 && overallV8Severity === 'ok') {
+        overallV8Severity = 'warning';
         worstDesc = `Near daily cap on ${dailyWarnings.size} day(s) (>${DAILY_CAP_SOFT}h)`;
     }
 
-    return { overallSeverity, worstDesc, weeks: weekComps, dailyViolations, dailyWarnings };
+    return { overallV8Severity, worstDesc, weeks: weekComps, dailyViolations, dailyWarnings };
 }
 
 // ── Cell class helpers ────────────────────────────────────────────────────────
@@ -197,22 +197,22 @@ function getDailyCellClass(hours: number, isViol: boolean, isWarn: boolean, isDr
     return `bg-emerald-500/60 text-white border border-emerald-500/40 shadow-[0_0_15px_-2px_rgba(16,185,129,0.4)] ${draftBase}`;
 }
 
-const weeklyBg = (s: CompSeverity) =>
+const weeklyBg = (s: CompV8Severity) =>
     s === 'violation' ? 'bg-red-500/15 border-l border-red-500/30'
     : s === 'warning'  ? 'bg-amber-500/10 border-l border-amber-500/20'
     : 'bg-primary/[0.02] border-l border-border/30';
 
-const weeklyTextCls = (s: CompSeverity) =>
+const weeklyTextCls = (s: CompV8Severity) =>
     s === 'violation' ? 'text-red-600 dark:text-red-400'
     : s === 'warning'  ? 'text-amber-600 dark:text-amber-400'
     : 'text-primary/80';
 
-const winBadgeCls = (s: CompSeverity) =>
+const winBadgeCls = (s: CompV8Severity) =>
     s === 'violation'
         ? 'bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30'
         : 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30';
 
-const avatarCls = (s: CompSeverity) =>
+const avatarCls = (s: CompV8Severity) =>
     s === 'violation'
         ? 'bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30'
         : s === 'warning'
@@ -527,7 +527,7 @@ const GridPage: React.FC = () => {
                         <tbody>
                             {finalEmployees.map(emp => {
                                 const empComp = complianceMap[emp.id];
-                                const ovSev   = empComp?.overallSeverity ?? 'ok';
+                                const ovSev   = empComp?.overallV8Severity ?? 'ok';
 
                                 return (
                                     <tr key={emp.id} className="group hover:bg-muted/30 transition-colors border-b border-border/20 last:border-0 text-center">
@@ -557,7 +557,7 @@ const GridPage: React.FC = () => {
                                         {/* Week columns */}
                                         {weeks.map(week => {
                                             const weekComp = empComp?.weeks[week.weekNum];
-                                            const wkSev    = weekComp?.worstSeverity ?? 'ok';
+                                            const wkSev    = weekComp?.worstV8Severity ?? 'ok';
                                             const wkHours  = weekComp?.weekHours ?? (aggregatedData[emp.id]?.byWeek[week.weekNum] || 0);
                                             const wkDisplay = wkHours > 0
                                                 ? parseFloat(wkHours.toFixed(1)).toString()

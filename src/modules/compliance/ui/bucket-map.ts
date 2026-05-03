@@ -1,22 +1,22 @@
 /**
- * Compliance Bucket Mapper
+ * V8 Compliance Bucket Mapper
  *
- * Maps v2 RuleHitV2[] + RULE_METADATA to display buckets A/B/C/D.
+ * Maps V8Hit[] + V8_RULE_METADATA to display buckets A/B/C/D.
  *
- * A = Blockers (BLOCKING severity hits, excluding SKILL category)
- * B = Warnings (WARNING severity hits, excluding SKILL category)
- * C = Passed (rules in RULE_METADATA that produced NO hits)
+ * A = Blockers (BLOCKING status hits, excluding SKILL category)
+ * B = Warnings (WARNING status hits, excluding SKILL category)
+ * C = Passed (rules in V8_RULE_METADATA that produced NO hits)
  * D = System/Quals (SKILL category hits — role contract, qualifications, expiry)
  */
 
-import type { RuleHitV2 } from '@/modules/compliance/v2/types';
-import { RULE_METADATA } from '@/modules/compliance/v2/rules/registry';
+import type { V8Hit } from '@/modules/compliance/v8';
+import { V8_RULE_METADATA } from '@/modules/compliance/v8';
 
 export interface BucketMap {
-    A: RuleHitV2[];    // blockers
-    B: RuleHitV2[];    // warnings
+    A: V8Hit[];    // blockers
+    B: V8Hit[];    // warnings
     C: PassedRule[];   // passed
-    D: RuleHitV2[];    // system / qualifications
+    D: V8Hit[];    // system / qualifications
 }
 
 export interface PassedRule {
@@ -38,36 +38,33 @@ const SYSTEM_CATEGORIES = new Set(['SKILL']);
 /**
  * Rules whose feedback is surfaced directly in the form UI (Timings section).
  * These are excluded from the compliance panel to avoid duplicate / confusing messaging
- * AND to ensure they don't block the panel's canProceed logic if they are warnings.
  */
-export const UI_VALIDATED_RULES = new Set(['R08_MEAL_BREAK']);
+export const UI_VALIDATED_RULES = new Set(['V8_MEAL_BREAK']);
 
-export function classifyBuckets(hits: RuleHitV2[]): BucketMap {
-    const A: RuleHitV2[] = [];
-    const B: RuleHitV2[] = [];
-    const D: RuleHitV2[] = [];
+export function classifyBuckets(hits: V8Hit[]): BucketMap {
+    const A: V8Hit[] = [];
+    const B: V8Hit[] = [];
+    const D: V8Hit[] = [];
 
-    // Filter hits and tracks IDs for Passed logic
     const filteredHits = hits.filter(h => !UI_VALIDATED_RULES.has(h.rule_id));
     const hitRuleIds = new Set(filteredHits.map(h => h.rule_id.toUpperCase()));
 
     for (const hit of filteredHits) {
         const ruleIdUpper = hit.rule_id.toUpperCase();
-        const meta = RULE_METADATA[ruleIdUpper] ?? RULE_METADATA[hit.rule_id];
+        const meta = V8_RULE_METADATA[ruleIdUpper] ?? V8_RULE_METADATA[hit.rule_id];
         if (meta && SYSTEM_CATEGORIES.has(meta.category)) {
             D.push(hit);
-        } else if (hit.severity === 'BLOCKING') {
+        } else if (hit.status === 'BLOCKING') {
             A.push(hit);
         } else {
             B.push(hit);
         }
     }
 
-    // Passed = all known rules that produced no hits AND aren't UI-validated
-    const C: PassedRule[] = Object.values(RULE_METADATA)
-        .filter(meta => !hitRuleIds.has(meta.rule_id.toUpperCase()) && !UI_VALIDATED_RULES.has(meta.rule_id))
+    const C: PassedRule[] = Object.values(V8_RULE_METADATA)
+        .filter(meta => !hitRuleIds.has(meta.id.toUpperCase()) && !UI_VALIDATED_RULES.has(meta.id))
         .map(meta => ({
-            rule_id:     meta.rule_id,
+            rule_id:     meta.id,
             description: meta.description,
             category:    meta.category,
         }));
@@ -75,11 +72,11 @@ export function classifyBuckets(hits: RuleHitV2[]): BucketMap {
     return { A, B, C, D };
 }
 
-export function getBucketSummary(buckets: BucketMap): BucketSummary {
+export function getV8BucketSummary(buckets: BucketMap): BucketSummary {
     return {
         blockers:    buckets.A.length,
         warnings:    buckets.B.length,
         passed:      buckets.C.length,
-        systemFails: buckets.D.filter(h => h.severity === 'BLOCKING').length,
+        systemFails: buckets.D.filter(h => h.status === 'BLOCKING').length,
     };
 }

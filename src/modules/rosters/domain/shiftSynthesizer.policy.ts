@@ -299,8 +299,8 @@ export function enforceMaxDuration(
 export interface SupervisoryRatioRule {
   subDepartmentId: string;
   ratio: number; // 1 supervisor per N staff
-  supervisorRoleId: string;
-  supervisedRoleIds?: string[]; // Optional: specific roles this supervisor manages. If empty, manages all non-supervisor roles.
+  supervisorV8RoleId: string;
+  supervisedV8RoleIds?: string[]; // Optional: specific roles this supervisor manages. If empty, manages all non-supervisor roles.
 }
 
 // For each sub-department with a ratio rule, generates supervisor shifts proportional
@@ -327,10 +327,10 @@ export function applySupervisorRatios(
       // Find shifts that this rule supervises
       const staffShifts = currentShifts.filter((s) => {
         if (s.subDepartmentId !== rule.subDepartmentId) return false;
-        if (s.roleId === rule.supervisorRoleId) return false;
+        if (s.roleId === rule.supervisorV8RoleId) return false;
 
-        if (rule.supervisedRoleIds && rule.supervisedRoleIds.length > 0) {
-          return rule.supervisedRoleIds.includes(s.roleId);
+        if (rule.supervisedV8RoleIds && rule.supervisedV8RoleIds.length > 0) {
+          return rule.supervisedV8RoleIds.includes(s.roleId);
         }
         return true; // Default: supervises everything in the sub-dept
       });
@@ -355,7 +355,7 @@ export function applySupervisorRatios(
 
       // Check if we already have supervisor shifts for these windows in THIS sub-dept
       const existingSupervisors = currentShifts.filter(
-        (s) => s.subDepartmentId === rule.subDepartmentId && s.roleId === rule.supervisorRoleId
+        (s) => s.subDepartmentId === rule.subDepartmentId && s.roleId === rule.supervisorV8RoleId
       );
 
       for (const [key, win] of windows) {
@@ -367,7 +367,7 @@ export function applySupervisorRatios(
         if (supervisorsNeeded > alreadyHave) {
           const gap = supervisorsNeeded - alreadyHave;
           newSupervisors.push({
-            roleId: rule.supervisorRoleId,
+            roleId: rule.supervisorV8RoleId,
             subDepartmentId: rule.subDepartmentId,
             buildingType: win.buildingType,
             startMinutes: win.start,

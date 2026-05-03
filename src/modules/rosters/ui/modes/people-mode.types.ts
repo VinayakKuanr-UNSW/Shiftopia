@@ -34,6 +34,8 @@ export interface PeopleModeEmployee {
     /** True when scheduledHours > contractedHours */
     overHoursWarning?: boolean;
     estimatedPay: number;
+    fatigueScore: number;
+    utilization: number;
     payBreakdown: {
       base: number;
       penalty: number;

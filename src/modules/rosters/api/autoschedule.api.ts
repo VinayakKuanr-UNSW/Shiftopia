@@ -1,5 +1,5 @@
 import { supabase } from '@/platform/realtime/client';
-import { checkCompliance } from '@/modules/compliance/engine';
+import { runV8LegacyBridge } from '@/modules/compliance/v8';
 import { ShiftTimeRange } from '@/modules/compliance/types';
 import { EligibilityService } from '../services/eligibility.service';
 
@@ -49,7 +49,7 @@ export interface SoftConstraints {
 
 export interface SimulationConfig {
     scope: SimulationScope;
-    selectedShiftIds?: string[];
+    selectedV8ShiftIds?: string[];
     strategy: SimulationStrategy;
     softConstraints: SoftConstraints;
     snapshotVersion: string;
@@ -158,7 +158,7 @@ async function buildSnapshotHash(
 //
 // After the greedy solver in the edge function proposes assignments, this gate
 // runs every proposed assignment through the existing Compliance Engine
-// (checkCompliance / NoOverlapRule, MinRestGapRule, MaxDailyHoursRule, …).
+// (runV8LegacyBridge / NoOverlapRule, MinRestGapRule, MaxDailyHoursRule, …).
 //
 // This is the authoritative compliance check — the edge function's overlap
 // detection is a performance optimisation; the Compliance Engine is the
@@ -166,7 +166,7 @@ async function buildSnapshotHash(
 //
 // Process:
 //   1. Fetch each proposed employee's existing committed shifts from DB
-//   2. For each assignment (in greedy-solver order), run checkCompliance()
+//   2. For each assignment (in greedy-solver order), run runV8LegacyBridge()
 //      against DB-committed shifts PLUS any earlier session assignments for
 //      that employee (so within-session double-bookings are also caught)
 //   3. Assignments that pass → validAssignments
@@ -239,7 +239,7 @@ async function runComplianceGate(
             ...(sessionByEmp.get(assignment.employeeId) ?? []),
         ];
 
-        const result = checkCompliance({
+        const result = runV8LegacyBridge({
             employee_id: assignment.employeeId,
             action_type: 'assign',
             candidate_shift: candidateShift,
@@ -349,9 +349,9 @@ export async function fetchBaseline(context: AutoScheduleContext): Promise<Basel
     let potentialConflicts = 0;
 
     for (const shift of unassignedShifts) {
-        const shiftRoleId = (shift as Record<string, unknown>).role_id as string | null;
+        const shiftV8RoleId = (shift as Record<string, unknown>).role_id as string | null;
         const eligibleForShift = activeContracts.filter(c =>
-            !shiftRoleId || c.role_id === shiftRoleId
+            !shiftV8RoleId || c.role_id === shiftV8RoleId
         );
         if (eligibleForShift.length === 0) {
             potentialConflicts++;
@@ -408,7 +408,7 @@ export async function runSimulation(
         dateStart: context.dateStart,
         dateEnd: context.dateEnd,
         scope: config.scope,
-        selectedShiftIds: config.selectedShiftIds ?? [],
+        selectedV8ShiftIds: config.selectedV8ShiftIds ?? [],
         strategy: config.strategy,
         softConstraints: config.softConstraints,
         snapshotVersion: config.snapshotVersion,

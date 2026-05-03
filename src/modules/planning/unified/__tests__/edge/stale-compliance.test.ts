@@ -5,7 +5,7 @@
  * must re-run the compliance engine before calling the RPC.
  *
  * Verifies (Bug #5 fix):
- *   • evaluateCompliance is called during approval for stale snapshots
+ *   • runV8Orchestrator is called during approval for stale snapshots
  *   • DB snapshot write errors are caught and thrown (not silently ignored)
  *   • COMPLIANCE_NOW_BLOCKING is thrown if re-eval is BLOCKING
  *   • Non-stale snapshots skip re-evaluation
@@ -36,12 +36,12 @@ const { ctx, supabaseProxy, mockEvaluate } = vi.hoisted(() => {
 
 vi.mock('@/platform/realtime/client', () => ({ supabase: supabaseProxy }));
 
-vi.mock('@/modules/compliance/v2', () => ({
-  evaluateCompliance: mockEvaluate,
+vi.mock('@/modules/compliance/v8', () => ({
+  runV8Orchestrator: mockEvaluate,
 }));
 
 vi.mock('@/modules/compliance/employee-context', () => ({
-  fetchEmployeeContextV2: vi.fn().mockImplementation((id: string) =>
+  fetchV8EmployeeContext: vi.fn().mockImplementation((id: string) =>
     Promise.resolve(id === EMP_A_ID ? empContextA : empContextB),
   ),
   fetchEmployeeShiftsV2: vi.fn().mockResolvedValue([]),

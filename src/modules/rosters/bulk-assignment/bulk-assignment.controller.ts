@@ -135,33 +135,33 @@ export class BulkAssignmentController {
             };
         });
 
-        const passedShiftIds = results.filter(r => r.passing).map(r => r.shiftId);
-        const failedShiftIds = results.filter(r => !r.passing).map(r => r.shiftId);
+        const passedV8ShiftIds = results.filter(r => r.passing).map(r => r.shiftId);
+        const failedV8ShiftIds = results.filter(r => !r.passing).map(r => r.shiftId);
 
         let canCommit: boolean;
         if (options.mode === 'ALL_OR_NOTHING') {
-            canCommit = failedShiftIds.length === 0;
+            canCommit = failedV8ShiftIds.length === 0;
         } else {
-            canCommit = passedShiftIds.length > 0;
+            canCommit = passedV8ShiftIds.length > 0;
         }
 
         const validationMs = Math.round(performance.now() - t0);
 
         console.debug('[BulkAssignmentController] Simulation complete:', {
             total: shiftIds.length,
-            passing: passedShiftIds.length,
-            failing: failedShiftIds.length,
+            passing: passedV8ShiftIds.length,
+            failing: failedV8ShiftIds.length,
             validationMs,
         });
 
         return {
             mode: options.mode,
             total: shiftIds.length,
-            passing: passedShiftIds.length,
-            failing: failedShiftIds.length,
+            passing: passedV8ShiftIds.length,
+            failing: failedV8ShiftIds.length,
             results,
-            passedShiftIds,
-            failedShiftIds,
+            passedV8ShiftIds,
+            failedV8ShiftIds,
             canCommit,
             validationMs,
         };
@@ -189,7 +189,7 @@ export class BulkAssignmentController {
             return {
                 success: false,
                 committed: [],
-                failed: simulationResult.failedShiftIds,
+                failed: simulationResult.failedV8ShiftIds,
                 message: 'Cannot commit: blocking violations exist.',
             };
         }
@@ -197,8 +197,8 @@ export class BulkAssignmentController {
         // Re-simulate with fresh DB data to catch any schedule changes since
         // the original simulation (another manager, another assignment flow, etc.)
         const allCandidateIds = [
-            ...simulationResult.passedShiftIds,
-            ...simulationResult.failedShiftIds,
+            ...simulationResult.passedV8ShiftIds,
+            ...simulationResult.failedV8ShiftIds,
         ];
 
         console.debug('[BulkAssignmentController] Re-simulating before commit (TOCTOU guard)');
@@ -222,12 +222,12 @@ export class BulkAssignmentController {
             return {
                 success:   false,
                 committed: [],
-                failed:    freshResult.failedShiftIds,
+                failed:    freshResult.failedV8ShiftIds,
                 message:   `${freshResult.failing} shift(s) have blocking violations — all-or-nothing mode requires all shifts to pass.`,
             };
         }
 
-        return assignmentCommitter.commit(freshResult.passedShiftIds, employeeId);
+        return assignmentCommitter.commit(freshResult.passedV8ShiftIds, employeeId);
     }
 }
 

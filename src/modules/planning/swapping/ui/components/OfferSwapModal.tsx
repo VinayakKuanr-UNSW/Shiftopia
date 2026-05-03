@@ -108,7 +108,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
     const isMobile = useIsMobile();
     const { user } = useAuth();
     const now = useMinuteTick();
-    const [selectedShiftId, setSelectedShiftId] = useState<string | null>(null);
+    const [selectedV8ShiftId, setSelectedV8ShiftId] = useState<string | null>(null);
     const [showComplianceModal, setShowComplianceModal] = useState(false);
 
     // Fetch the swap request details
@@ -164,7 +164,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
         enabled: isOpen && !!user?.id,
     });
 
-    const selectedShift = myShifts?.find(s => s.id === selectedShiftId);
+    const selectedShift = myShifts?.find(s => s.id === selectedV8ShiftId);
     const selectedShiftIsLocked = selectedShift ? (() => {
         const start = parseZonedDateTime(selectedShift.shift_date, (selectedShift as any).start_time);
         const hours = differenceInHours(start, now);
@@ -183,7 +183,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
 
     // Lifecycle Timeline Logic
     const getTimeline = () => {
-        const hasSelection = !!selectedShiftId;
+        const hasSelection = !!selectedV8ShiftId;
         return {
             created: true,
             selection: hasSelection,
@@ -194,17 +194,17 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
     const timeline = getTimeline();
 
     const handleOpenComplianceCheck = () => {
-        if (selectedShiftId) setShowComplianceModal(true);
+        if (selectedV8ShiftId) setShowComplianceModal(true);
     };
 
     const handleConfirmFromComplianceModal = () => {
-        onConfirmOffer(selectedShiftId || undefined);
+        onConfirmOffer(selectedV8ShiftId || undefined);
         setShowComplianceModal(false);
-        setSelectedShiftId(null);
+        setSelectedV8ShiftId(null);
     };
 
     const handleClose = () => {
-        setSelectedShiftId(null);
+        setSelectedV8ShiftId(null);
         setShowComplianceModal(false);
         onClose();
     };
@@ -259,13 +259,13 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                         const isPast = hoursUntilStart < 0;
                                         
                                         const isUnavailable = isOfferedHere || isOfferedElsewhere || isLocked || isPast;
-                                        const isSelected = selectedShiftId === shift.id;
+                                        const isSelected = selectedV8ShiftId === shift.id;
 
                                         return (
                                             <button
                                                 key={shift.id}
                                                 disabled={isUnavailable}
-                                                onClick={() => setSelectedShiftId(shift.id)}
+                                                onClick={() => setSelectedV8ShiftId(shift.id)}
                                                 className={cn(
                                                     "w-full text-left p-3.5 rounded-xl border transition-all flex flex-col gap-2 relative overflow-hidden group active:scale-[0.98]",
                                                     isUnavailable ? "opacity-30 grayscale cursor-not-allowed border-white/5" :
@@ -430,7 +430,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                                     <div className="flex flex-col gap-3 mt-auto mb-4">
                                         <Button
                                             onClick={handleOpenComplianceCheck}
-                                            disabled={isSubmitting || !selectedShiftId || isExpired || selectedShiftIsLocked}
+                                            disabled={isSubmitting || !selectedV8ShiftId || isExpired || selectedShiftIsLocked}
                                             className="h-14 rounded-2xl font-black text-sm uppercase tracking-[0.2em] bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_10px_30px_-10px_rgba(79,70,229,0.3)] border-b-4 border-indigo-800 active:scale-[0.98] active:border-b-0 transition-all disabled:opacity-50 disabled:grayscale"
                                         >
                                             {isSubmitting ? (

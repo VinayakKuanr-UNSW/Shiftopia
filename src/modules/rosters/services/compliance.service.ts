@@ -63,11 +63,11 @@ export interface ComplianceInput {
   startTime: string;
   endTime: string;
   netLengthMinutes: number;
-  excludeShiftId?: string;
+  excludeV8ShiftId?: string;
   /** The shift ID (UUID) — required for qualification compliance check */
   shiftId?: string;
   /** Optional override for required role */
-  overrideRoleId?: string;
+  overrideV8RoleId?: string;
   /** Optional override for required skills */
   overrideSkillIds?: string[];
   /** Optional override for required licenses */
@@ -107,9 +107,9 @@ export async function validateCompliance(input: ComplianceInput): Promise<Compli
       start_time:           input.startTime,
       end_time:             input.endTime,
       net_length_minutes:   input.netLengthMinutes,
-      exclude_shift_id:     input.excludeShiftId ?? null,
+      exclude_shift_id:     input.excludeV8ShiftId ?? null,
       shift_id:             input.shiftId ?? null,
-      override_role_id:     input.overrideRoleId ?? null,
+      override_role_id:     input.overrideV8RoleId ?? null,
       override_skill_ids:   input.overrideSkillIds ?? null,
       override_license_ids: input.overrideLicenseIds ?? null,
     },
@@ -143,10 +143,10 @@ export const complianceService = {
     startTime: string,
     endTime: string,
     netLengthMinutes: number,
-    excludeShiftId?: string,
+    excludeV8ShiftId?: string,
   ) {
     const result = await validateCompliance({
-      employeeId, shiftDate, startTime, endTime, netLengthMinutes, excludeShiftId,
+      employeeId, shiftDate, startTime, endTime, netLengthMinutes, excludeV8ShiftId,
     });
     // F5: 'unavailable' must NOT be treated as valid. Only 'passed' and 'warned'
     // mean the check ran and found no blocking violation. Any other status

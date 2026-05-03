@@ -33,9 +33,9 @@ import {
   ComplianceCheckInput,
   ShiftTimeRange,
 } from '@/modules/compliance';
-import { evaluateCompliance } from '@/modules/compliance/v2';
-import type { ComplianceInputV2, RuleHitV2 } from '@/modules/compliance/v2/types';
-import { fetchEmployeeContextV2 } from '@/modules/compliance/employee-context';
+import { runV8Orchestrator } from '@/modules/compliance/v8';
+import type { V8OrchestratorInput, V8Hit } from '@/modules/compliance/v8/types';
+import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
 import { validateCompliance } from '@/modules/rosters/services/compliance.service';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import type { ShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
@@ -45,7 +45,7 @@ import { useManagerBidShifts } from './useOpenShifts';
 import { useShiftBids } from './useShiftBids';
 import { useTimeTicker } from './useTimeTicker';
 import { getAvailabilitySlots } from '@/modules/availability/api/availability.api';
-import { checkAvailabilityOnly } from '@/modules/compliance/v2/eligibility';
+import { checkAvailabilityOnly } from '@/modules/compliance/v8/eligibility';
 import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
 import { classifyBuckets, getBucketSummary } from '@/modules/compliance/ui/bucket-map';
 import type { UseCompliancePanelReturn, PanelStatus, PanelResult } from '@/modules/compliance/ui/useCompliancePanel';
@@ -194,10 +194,10 @@ function useBidsCompliancePanel(
         }));
 
       // Fetch real employee context (contracted role_ids, qualifications, visa flag)
-      const employeeCtx = await fetchEmployeeContextV2(selectedBid.employeeId);
+      const employeeCtx = await fetchV8EmployeeContext(selectedBid.employeeId);
 
       // Build v2 input
-      const v2Input: ComplianceInputV2 = {
+      const v2Input: V8OrchestratorInput = {
         employee_id: selectedBid.employeeId,
         employee_context: employeeCtx,
         existing_shifts: existingShifts,
@@ -224,10 +224,10 @@ function useBidsCompliancePanel(
       };
 
       // Run v2 engine
-      const v2Result = evaluateCompliance(v2Input);
-      const allHits: RuleHitV2[] = [...v2Result.rule_hits];
+      const v2Result = runV8Orchestrator(v2Input);
+      const allHits: V8Hit[] = [...v2Result.rule_hits];
 
-      // Server-side qual/eligibility check → convert to RuleHitV2
+      // Server-side qual/eligibility check → convert to V8Hit
       try {
         const _toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
         const _sMin = _toMin(expandedShift.startTime);
@@ -242,7 +242,7 @@ function useBidsCompliancePanel(
           endTime:          expandedShift.endTime   + ':00',
           netLengthMinutes: _net,
           shiftId:          expandedShift.id,
-          excludeShiftId:   expandedShift.id,
+          excludeV8ShiftId:   expandedShift.id,
         });
 
         (bucketAResult.qualificationViolations ?? []).forEach((v: any) => {
@@ -252,7 +252,7 @@ function useBidsCompliancePanel(
             message:          v.message || 'Missing required qualification.',
             resolution_hint:  'Employee must hold all required qualifications.',
             affected_shifts:  [expandedShift.id],
-          } as RuleHitV2);
+          } as V8Hit);
         });
 
         (bucketAResult.violations || []).filter((v: string) =>
@@ -264,7 +264,7 @@ function useBidsCompliancePanel(
             message:         v,
             resolution_hint: 'Ensure employee is contracted for the required role.',
             affected_shifts: [expandedShift.id],
-          } as RuleHitV2);
+          } as V8Hit);
         });
 
         (bucketAResult.warnings || []).filter((w: string) =>
@@ -276,7 +276,7 @@ function useBidsCompliancePanel(
             message:         w,
             resolution_hint: '',
             affected_shifts: [expandedShift.id],
-          } as RuleHitV2);
+          } as V8Hit);
         });
       } catch { /* server check optional */ }
 
@@ -303,7 +303,7 @@ function useBidsCompliancePanel(
               message:         msg,
               resolution_hint: '',
               affected_shifts: [expandedShift.id],
-            } as RuleHitV2);
+            } as V8Hit);
           }
         } catch { /* availability check optional */ }
       }
@@ -607,7 +607,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     else setInternalToggle(next);
   };
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedShiftId, setExpandedShiftId] = useState<string | null>(null);
+  const [expandedV8ShiftId, setExpandedV8ShiftId] = useState<string | null>(null);
   const [selectedBid, setSelectedBid] = useState<EmployeeBid | null>(null);
   const [isAssigning, setIsAssigning] = useState(false);
   const [isAutoAssigning, setIsAutoAssigning] = useState(false);
@@ -623,12 +623,12 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     subDepartmentId: subDepartmentId ?? undefined,
   });
 
-  const { bids, isLoading: isLoadingBids } = useShiftBids(expandedShiftId);
+  const { bids, isLoading: isLoadingBids } = useShiftBids(expandedV8ShiftId);
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const expandedShift = useMemo(
-    () => shifts.find(s => s.id === expandedShiftId) ?? null,
-    [shifts, expandedShiftId],
+    () => shifts.find(s => s.id === expandedV8ShiftId) ?? null,
+    [shifts, expandedV8ShiftId],
   );
 
   const counts: ToggleCounts = useMemo(() => ({
@@ -667,7 +667,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   const handleExpand = useCallback((shiftId: string) => {
-    setExpandedShiftId(prev => {
+    setExpandedV8ShiftId(prev => {
       const next = prev === shiftId ? null : shiftId;
       if (next !== prev) {
         setSelectedBid(null);
@@ -687,14 +687,14 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
 
   const handleAssign = useCallback(async () => {
     if (
-      !selectedBid || !expandedShiftId ||
+      !selectedBid || !expandedV8ShiftId ||
       !bidsPanel.canProceed || isAssigning
     ) return;
 
     setIsAssigning(true);
     try {
       const { error } = await (supabase as any).rpc('sm_select_bid_winner', {
-        p_shift_id:  expandedShiftId,
+        p_shift_id:  expandedV8ShiftId,
         p_winner_id: selectedBid.employeeId,
         p_user_id:   (await supabase.auth.getUser()).data.user?.id,
       });
@@ -702,7 +702,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
 
       toast({ title: 'Shift Assigned', description: `Assigned to ${selectedBid.employeeName}.` });
       queryClient.invalidateQueries({ queryKey: shiftKeys.managerBidShifts(organizationId || '') });
-      queryClient.invalidateQueries({ queryKey: shiftKeys.bids(expandedShiftId) });
+      queryClient.invalidateQueries({ queryKey: shiftKeys.bids(expandedV8ShiftId) });
       setSelectedBid(null);
       bidsPanel.reset();
     } catch (err: any) {
@@ -710,7 +710,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     } finally {
       setIsAssigning(false);
     }
-  }, [selectedBid, expandedShiftId, bidsPanel, isAssigning, toast, queryClient, organizationId]);
+  }, [selectedBid, expandedV8ShiftId, bidsPanel, isAssigning, toast, queryClient, organizationId]);
 
 
   const handleAutoAssign = useCallback(async () => {
@@ -819,8 +819,8 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
 
           let hasBlocker = !hv.passed;
           if (!hasBlocker) {
-            const autoEmployeeCtx = await fetchEmployeeContextV2(input.employee_id);
-            const v2AutoInput: ComplianceInputV2 = {
+            const autoEmployeeCtx = await fetchV8EmployeeContext(input.employee_id);
+            const v2AutoInput: V8OrchestratorInput = {
               employee_id: input.employee_id,
               employee_context: autoEmployeeCtx,
               existing_shifts: existingShifts.map((s, idx) => ({
@@ -855,7 +855,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
               operation_type: 'BID',
               stage:          'DRAFT',
             };
-            const v2AutoResult = evaluateCompliance(v2AutoInput);
+            const v2AutoResult = runV8Orchestrator(v2AutoInput);
             hasBlocker = v2AutoResult.rule_hits.some(h => h.severity === 'BLOCKING');
           }
 
@@ -999,7 +999,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                             <RoleCard
                               key={s.id}
                               shift={s}
-                              isSelected={expandedShiftId === s.id}
+                              isSelected={expandedV8ShiftId === s.id}
                               onSelect={() => handleExpand(s.id)}
                             />
                           ))}
@@ -1025,7 +1025,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                 <button
                   onClick={() => {
                     setMobileStep('roles');
-                    setExpandedShiftId(null);
+                    setExpandedV8ShiftId(null);
                     setSelectedBid(null);
                   }}
                   className="shrink-0 flex items-center gap-2 px-4 py-3 text-sm font-black border-b border-border/40 bg-card/20 text-foreground/70 hover:text-foreground transition-colors min-h-[44px]"
@@ -1236,7 +1236,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                       <RoleCard
                         key={s.id}
                         shift={s}
-                        isSelected={expandedShiftId === s.id}
+                        isSelected={expandedV8ShiftId === s.id}
                         onSelect={() => handleExpand(s.id)}
                       />
                     ))}

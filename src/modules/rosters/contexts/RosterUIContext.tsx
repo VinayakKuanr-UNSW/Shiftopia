@@ -64,8 +64,8 @@ interface RosterUIContextValue {
   setIsBucketView:             (value: boolean) => void;
   bulkModeActive:              boolean;
   setBulkModeActive:           (active: boolean) => void;
-  selectedShiftIds:            Set<string>;
-  setSelectedShiftIds:         (ids: Set<string>) => void;
+  selectedV8ShiftIds:            Set<string>;
+  setSelectedV8ShiftIds:         (ids: Set<string>) => void;
   toggleShiftSelection:        (id: string) => void;
   selectMultiple:              (ids: string[]) => void;
   clearSelection:              () => void;
@@ -137,7 +137,7 @@ export const useRosterUI = (): RosterUIContextValue => {
   const advancedFilters        = useRosterStore(s => s.advancedFilters);
   const isBucketView           = useRosterStore(s => s.isBucketView);
   const bulkModeActive         = useRosterStore(s => s.bulkModeActive);
-  const selectedShiftIds       = useRosterStore(s => s.selectedShiftIds);
+  const selectedV8ShiftIds       = useRosterStore(s => s.selectedV8ShiftIds);
 
   // Derived selectors (computed, not stored)
   // NOTE: selectSelectedDate returns `new Date(...)` — always a new object reference.
@@ -162,7 +162,7 @@ export const useRosterUI = (): RosterUIContextValue => {
   const resetAdvancedFilters        = useRosterStore(s => s.resetAdvancedFilters);
   const setIsBucketView             = useRosterStore(s => s.setIsBucketView);
   const setBulkModeActive           = useRosterStore(s => s.setBulkModeActive);
-  const setSelectedShiftIds         = useRosterStore(s => s.setSelectedShiftIds);
+  const setSelectedV8ShiftIds         = useRosterStore(s => s.setSelectedV8ShiftIds);
   const toggleShiftSelection        = useRosterStore(s => s.toggleShiftSelection);
   const selectMultiple              = useRosterStore(s => s.selectMultiple);
   const clearSelection              = useRosterStore(s => s.clearSelection);
@@ -208,8 +208,8 @@ export const useRosterUI = (): RosterUIContextValue => {
     setIsBucketView,
     bulkModeActive,
     setBulkModeActive,
-    selectedShiftIds,
-    setSelectedShiftIds,
+    selectedV8ShiftIds,
+    setSelectedV8ShiftIds,
     toggleShiftSelection,
     selectMultiple,
     clearSelection,
@@ -232,7 +232,7 @@ export const useRosterUI = (): RosterUIContextValue => {
     hasActiveFilters,
     isBucketView, setIsBucketView,
     bulkModeActive, setBulkModeActive,
-    selectedShiftIds, setSelectedShiftIds,
+    selectedV8ShiftIds, setSelectedV8ShiftIds,
     toggleShiftSelection, selectMultiple, clearSelection,
     navigatePrevious, navigateNext, navigateToToday,
     getDateRange, getDaysInRange,

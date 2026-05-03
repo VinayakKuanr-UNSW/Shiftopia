@@ -829,7 +829,7 @@ export function SwapComplianceReviewModal({
                         endTime: offeredShift.end_time,
                         netLengthMinutes: calcNetMinutes(offeredShift),
                         shiftId: offeredShift.id,
-                        excludeShiftId: requesterShift.id,
+                        excludeV8ShiftId: requesterShift.id,
                     }),
                     validateCompliance({
                         employeeId: offererId,
@@ -838,7 +838,7 @@ export function SwapComplianceReviewModal({
                         endTime: requesterShift.end_time,
                         netLengthMinutes: calcNetMinutes(requesterShift),
                         shiftId: requesterShift.id,
-                        excludeShiftId: offeredShift.id,
+                        excludeV8ShiftId: offeredShift.id,
                     }),
                 ]);
 

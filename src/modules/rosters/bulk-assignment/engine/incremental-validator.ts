@@ -127,11 +127,11 @@ function checkQualificationMatch(
 ): ShiftViolation | null {
     if (skipQualChecks || shiftRequiredQuals.length === 0) return null;
 
-    const empQualIds = new Set(
+    const empV8QualIds = new Set(
         (employee.qualifications ?? []).map(q => q.qualification_id),
     );
 
-    const missing = shiftRequiredQuals.filter(qId => !empQualIds.has(qId));
+    const missing = shiftRequiredQuals.filter(qId => !empV8QualIds.has(qId));
     if (missing.length === 0) return null;
 
     return {

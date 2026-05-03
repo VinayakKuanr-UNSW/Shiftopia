@@ -995,7 +995,7 @@ export function useComplianceValidation() {
       startTime: string;
       endTime: string;
       netLengthMinutes: number;
-      excludeShiftId?: string;
+      excludeV8ShiftId?: string;
     }) =>
       complianceService.validateShiftCompliance(
         params.employeeId,
@@ -1003,7 +1003,7 @@ export function useComplianceValidation() {
         params.startTime,
         params.endTime,
         params.netLengthMinutes,
-        params.excludeShiftId,
+        params.excludeV8ShiftId,
       ),
   });
 }

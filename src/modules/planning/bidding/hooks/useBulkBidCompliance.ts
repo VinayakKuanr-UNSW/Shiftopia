@@ -11,7 +11,7 @@ import { useAuth } from '@/platform/auth/useAuth';
 import { supabase } from '@/platform/realtime/client';
 import { format, parseISO, subDays, addDays, min, max } from 'date-fns';
 import {
-    checkCompliance,
+    runV8LegacyBridge,
     ComplianceCheckInput,
     ComplianceCheckResult,
     ShiftTimeRange,
@@ -127,7 +127,7 @@ export function useBulkBidCompliance(
                 existing_shifts: existingShifts,
             };
 
-            const checkResult = checkCompliance(input);
+            const checkResult = runV8LegacyBridge(input);
 
             // Count passed rules
             const passedCount = checkResult.results.filter(r => r.status === 'pass').length;

@@ -121,7 +121,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
     const watchShiftDate = form.watch('shift_date');
     const watchGroupType = form.watch('group_type');
     const watchSubGroup = form.watch('sub_group_name');
-    const watchRoleId = form.watch('role_id');
+    const watchV8RoleId = form.watch('role_id');
     const watchSkills = form.watch('required_skills') || [];
     const watchLicenses = form.watch('required_licenses') || [];
     const watchEvents = form.watch('event_ids') || [];
@@ -184,7 +184,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
     const isShiftTooLong  = !isTemplateMode && netLength > 12;
 
     // Resolve names for badge display
-    const selectedRole = roles.find(r => r.id === watchRoleId);
+    const selectedRole = roles.find(r => r.id === watchV8RoleId);
     const selectedSkillNames = skills.filter(s => watchSkills.includes(s.id)).map(s => s.name);
     const selectedLicenseNames = licenses.filter(l => watchLicenses.includes(l.id)).map(l => l.name);
     const selectedEventNames = events.filter(e => watchEvents.includes(e.id)).map(e => e.name);
@@ -262,7 +262,7 @@ export const ScheduleStep: React.FC<ScheduleStepProps> = ({
         };
     }, [watchShiftDate, watchIsTraining]);
 
-    const isRoleMissing = !watchRoleId;
+    const isRoleMissing = !watchV8RoleId;
 
     const applyBreakSuggestions = () => {
         form.setValue('unpaid_break_minutes', breakRecs.unpaid, { shouldDirty: true });

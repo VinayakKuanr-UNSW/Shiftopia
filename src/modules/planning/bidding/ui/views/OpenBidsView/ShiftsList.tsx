@@ -10,19 +10,19 @@ import type { OpenShift } from './types';
 interface ShiftsListProps {
   shifts: OpenShift[];
   isLoading: boolean;
-  selectedShiftId: string | null;
+  selectedV8ShiftId: string | null;
   onSelectShift: (shiftId: string) => void;
   isBulkMode?: boolean;
-  selectedShiftIds?: Set<string>;
+  selectedV8ShiftIds?: Set<string>;
 }
 
 export const ShiftsList: React.FC<ShiftsListProps> = ({
   shifts,
   isLoading,
-  selectedShiftId,
+  selectedV8ShiftId,
   onSelectShift,
   isBulkMode = false,
-  selectedShiftIds = new Set(),
+  selectedV8ShiftIds = new Set(),
 }) => {
   return (
     <div className="w-[420px] border-r border-white/[0.04] flex flex-col bg-[#0a0e18]">
@@ -53,11 +53,11 @@ export const ShiftsList: React.FC<ShiftsListProps> = ({
             <ShiftCard
               key={shift.id}
               shift={shift}
-              isSelected={selectedShiftId === shift.id}
+              isSelected={selectedV8ShiftId === shift.id}
               onClick={() => onSelectShift(shift.id)}
               timeRemaining={calculateTimeRemaining(shift.biddingDeadline)}
               isBulkMode={isBulkMode}
-              isBulkSelected={selectedShiftIds.has(shift.id)}
+              isBulkSelected={selectedV8ShiftIds.has(shift.id)}
             />
           ))
         )}

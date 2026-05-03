@@ -184,7 +184,7 @@ export function ComplianceTabContent({
                         startTime: input.candidate_shift.start_time,
                         endTime: input.candidate_shift.end_time,
                         netLengthMinutes: calcNetMinutes(input.candidate_shift),
-                        excludeShiftId: input.exclude_shift_id,
+                        excludeV8ShiftId: input.exclude_shift_id,
                         shiftId
                     });
 

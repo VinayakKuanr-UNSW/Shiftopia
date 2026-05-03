@@ -90,7 +90,7 @@ function makeShift(overrides: Partial<Shift> = {}): Shift {
     is_recurring: false,
     recurrence_rule: null,
     confirmed_at: null,
-    roles: { id: 'role-1', name: 'Stage Hand' },
+    roles: { id: 'role-1', name: 'V8Stage Hand' },
     remuneration_levels: {
       id: 'level-1',
       level_name: 'Level 3 – Tech',
@@ -102,7 +102,7 @@ function makeShift(overrides: Partial<Shift> = {}): Shift {
 }
 
 const ROLES: RoleRecord[] = [
-  { id: 'role-1', name: 'Stage Hand',  code: 'SH',  remuneration_level_id: 'level-1' },
+  { id: 'role-1', name: 'V8Stage Hand',  code: 'SH',  remuneration_level_id: 'level-1' },
   { id: 'role-2', name: 'AV Tech',     code: 'AVT', remuneration_level_id: 'level-1' },
   { id: 'role-3', name: 'Usher',       code: 'USH', remuneration_level_id: 'level-2' },
 ];

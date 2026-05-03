@@ -18,9 +18,9 @@ import {
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { cn } from '@/modules/core/lib/utils';
-import { RULE_METADATA } from '@/modules/compliance/v2/rules/registry';
+import { RULE_METADATA } from '@/modules/compliance/v8/rules/registry';
 import type { UseCompliancePanelReturn } from './useCompliancePanel';
-import type { RuleHitV2 } from '@/modules/compliance/v2/types';
+import type { V8Hit } from '@/modules/compliance/v8/types';
 import { type PassedRule, UI_VALIDATED_RULES } from './bucket-map';
 
 // =============================================================================
@@ -513,7 +513,7 @@ function BucketSection({
     bucket, hits, isSwap, result 
 }: { 
     bucket: 'A' | 'B' | 'D'; 
-    hits: RuleHitV2[]; 
+    hits: V8Hit[]; 
     isSwap: boolean;
     result: NonNullable<UseCompliancePanelReturn['result']>;
 }) {
@@ -550,7 +550,7 @@ function BucketSection({
 function HitRow({ 
     hit, bucket, isSwap, result 
 }: { 
-    hit: RuleHitV2; 
+    hit: V8Hit; 
     bucket: 'A' | 'B' | 'D'; 
     isSwap: boolean;
     result: NonNullable<UseCompliancePanelReturn['result']>;

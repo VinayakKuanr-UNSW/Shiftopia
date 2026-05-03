@@ -26,9 +26,9 @@ const { ctx, supabaseProxy } = vi.hoisted(() => {
 
 vi.mock('@/platform/realtime/client', () => ({ supabase: supabaseProxy }));
 
-vi.mock('@/modules/compliance/v2', () => ({ evaluateCompliance: vi.fn() }));
+vi.mock('@/modules/compliance/v8', () => ({ runV8Orchestrator: vi.fn() }));
 vi.mock('@/modules/compliance/employee-context', () => ({
-  fetchEmployeeContextV2: vi.fn(),
+  fetchV8EmployeeContext: vi.fn(),
   fetchEmployeeShiftsV2:  vi.fn(),
 }));
 

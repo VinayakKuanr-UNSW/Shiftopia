@@ -1,24 +1,24 @@
 /**
  * Unified Planning — Compliance Input Builder
  *
- * Constructs ComplianceInputV2 objects for the compliance engine.
+ * Constructs V8OrchestratorInput objects for the compliance engine.
  * This module contains ONLY input construction — no rule evaluation,
  * no DB calls, no side effects. It is a pure data-transformation layer.
  *
  * Architecture:
  *   buildBidInput()   — builds input for a single employee bidding on a shift
  *   buildSwapInputs() — builds inputs for BOTH swap parties simultaneously
- *   deriveStage()     — maps shift lifecycle state to the engine's Stage type
- *   resolveCandidateShiftId() — extracts the correct shift ID per request type
+ *   deriveV8Stage()     — maps shift lifecycle state to the engine's V8Stage type
+ *   resolveCandidateV8ShiftId() — extracts the correct shift ID per request type
  */
 
 import type {
-  ComplianceInputV2,
-  ShiftV2,
-  OperationType,
-  Stage,
-  EmployeeContextV2,
-} from '@/modules/compliance/v2/types';
+  V8OrchestratorInput,
+  V8OrchestratorShift,
+  V8OperationType,
+  V8Stage,
+  V8EmployeeContext,
+} from '@/modules/compliance/v8/types';
 
 import type { PlanningRequest, PlanningOffer } from '../types';
 
@@ -27,19 +27,19 @@ import type { PlanningRequest, PlanningOffer } from '../types';
 // =============================================================================
 
 /**
- * Maps a shift's lifecycle/published state to the compliance engine's Stage type.
+ * Maps a shift's lifecycle/published state to the compliance engine's V8Stage type.
  *
- * Stage semantics:
+ * V8Stage semantics:
  *   DRAFT   — shift is unpublished; softer severity thresholds apply
  *   LIVE    — shift is assigned and published; strictest enforcement
  *   PUBLISH — shift is published but not yet assigned (intermediate state)
  *
  * This controls the severity normalization matrix inside the engine.
  */
-export function deriveStage(shift: {
+export function deriveV8Stage(shift: {
   lifecycle_status?: string | null;
   is_published?: boolean | null;
-}): Stage {
+}): V8Stage {
   const lifecycle = shift.lifecycle_status?.toLowerCase() ?? '';
 
   // Explicitly unpublished drafts get DRAFT stage
@@ -61,7 +61,7 @@ export function deriveStage(shift: {
 // =============================================================================
 
 /**
- * Build the ComplianceInputV2 for a single employee bidding on an open shift.
+ * Build the V8OrchestratorInput for a single employee bidding on an open shift.
  *
  * The candidate shift is the open shift being bid on (request.shift_id).
  * The bidder's existing shifts are passed as-is — no shifts are removed
@@ -72,11 +72,11 @@ export function deriveStage(shift: {
  */
 export function buildBidInput(params: {
   employeeId: string;
-  employeeContext: EmployeeContextV2;
-  existingShifts: ShiftV2[];
-  candidateShift: ShiftV2;
-  stage: Stage;
-}): ComplianceInputV2 {
+  employeeContext: V8EmployeeContext;
+  existingShifts: V8OrchestratorShift[];
+  candidateShift: V8OrchestratorShift;
+  stage: V8Stage;
+}): V8OrchestratorInput {
   const { employeeId, employeeContext, existingShifts, candidateShift, stage } = params;
 
   return {
@@ -99,7 +99,7 @@ export function buildBidInput(params: {
 // =============================================================================
 
 /**
- * Build ComplianceInputV2 objects for BOTH parties in a swap.
+ * Build V8OrchestratorInput objects for BOTH parties in a swap.
  *
  * Party A (initiator / requester):
  *   - Gains partyBShift (the shift being offered by the other party)
@@ -117,15 +117,15 @@ export function buildBidInput(params: {
  */
 export function buildSwapInputs(params: {
   partyAEmployeeId: string;
-  partyAContext: EmployeeContextV2;
-  partyAExistingShifts: ShiftV2[];
-  partyAShift: ShiftV2;       // The shift party A is giving up
+  partyAContext: V8EmployeeContext;
+  partyAExistingShifts: V8OrchestratorShift[];
+  partyAShift: V8OrchestratorShift;       // The shift party A is giving up
   partyBEmployeeId: string;
-  partyBContext: EmployeeContextV2;
-  partyBExistingShifts: ShiftV2[];
-  partyBShift: ShiftV2;       // The shift party B is giving up
-  stage: Stage;
-}): { inputA: ComplianceInputV2; inputB: ComplianceInputV2 } {
+  partyBContext: V8EmployeeContext;
+  partyBExistingShifts: V8OrchestratorShift[];
+  partyBShift: V8OrchestratorShift;       // The shift party B is giving up
+  stage: V8Stage;
+}): { inputA: V8OrchestratorInput; inputB: V8OrchestratorInput } {
   const {
     partyAEmployeeId, partyAContext, partyAExistingShifts, partyAShift,
     partyBEmployeeId, partyBContext, partyBExistingShifts, partyBShift,
@@ -133,7 +133,7 @@ export function buildSwapInputs(params: {
   } = params;
 
   // Party A: removes their own shift, gains party B's shift
-  const inputA: ComplianceInputV2 = {
+  const inputA: V8OrchestratorInput = {
     employee_id: partyAEmployeeId,
     employee_context: partyAContext,
     existing_shifts: partyAExistingShifts,
@@ -148,7 +148,7 @@ export function buildSwapInputs(params: {
   };
 
   // Party B: removes their own shift, gains party A's shift
-  const inputB: ComplianceInputV2 = {
+  const inputB: V8OrchestratorInput = {
     employee_id: partyBEmployeeId,
     employee_context: partyBContext,
     existing_shifts: partyBExistingShifts,
@@ -173,17 +173,17 @@ export function buildSwapInputs(params: {
  * Determine which shift ID is the "candidate" (the shift being added to
  * the evaluating employee's schedule) based on request type.
  *
- * BID:  candidateShiftId = request.shift_id
+ * BID:  candidateV8ShiftId = request.shift_id
  *       (the open shift the bidder wants to acquire)
  *
- * SWAP: candidateShiftId = offer.offered_shift_id
+ * SWAP: candidateV8ShiftId = offer.offered_shift_id
  *       (the shift the offerer is proposing to trade away — which the
  *        initiator will gain — or the initiator's shift for party B's check)
  *
  * The service layer calls this to decide which shift to fetch and pass
  * to the input builders.
  */
-export function resolveCandidateShiftId(
+export function resolveCandidateV8ShiftId(
   request: PlanningRequest,
   offer: PlanningOffer,
 ): string {

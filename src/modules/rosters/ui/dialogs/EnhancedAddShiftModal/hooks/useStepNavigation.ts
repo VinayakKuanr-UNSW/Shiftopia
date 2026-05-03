@@ -13,7 +13,7 @@ interface UseStepNavigationProps {
     };
     isNetLengthValid: boolean;
     isMinLengthValid: boolean;
-    watchRoleId: string;
+    watchV8RoleId: string;
     complianceHasRun: boolean;
     hardValidation: HardValidationResult;
     complianceResults: Record<string, ComplianceResult | null>;
@@ -25,7 +25,7 @@ export function useStepNavigation({
     tabCompletion,
     isNetLengthValid,
     isMinLengthValid,
-    watchRoleId,
+    watchV8RoleId,
     complianceHasRun,
     hardValidation,
     complianceResults,

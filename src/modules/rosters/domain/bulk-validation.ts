@@ -14,7 +14,7 @@ import { differenceInMinutes } from 'date-fns';
 
 export interface BulkValidationResult {
     canProceed: boolean;
-    blockedShiftIds: string[];
+    blockedV8ShiftIds: string[];
     blockedCount: number;
     errorMessage: string | null;
 }
@@ -35,36 +35,36 @@ export function validateAssignAll(
     shifts: Shift[],
     targetEmployeeId?: string
 ): BulkValidationResult {
-    const blockedShiftIds: string[] = [];
-    const alreadyAssignedShiftIds: string[] = [];
+    const blockedV8ShiftIds: string[] = [];
+    const alreadyAssignedV8ShiftIds: string[] = [];
 
     for (const shift of shifts) {
         // Block if in bidding
         if (shift.bidding_status !== 'not_on_bidding') {
-            blockedShiftIds.push(shift.id);
+            blockedV8ShiftIds.push(shift.id);
             continue;
         }
 
         // Block if cancelled
         if (shift.is_cancelled) {
-            blockedShiftIds.push(shift.id);
+            blockedV8ShiftIds.push(shift.id);
             continue;
         }
 
         // NEW: Block if already assigned (to anyone)
         if (shift.assigned_employee_id) {
-            alreadyAssignedShiftIds.push(shift.id);
+            alreadyAssignedV8ShiftIds.push(shift.id);
             continue;
         }
     }
 
     // Combine both types of blocked shifts
-    const allBlockedIds = [...blockedShiftIds, ...alreadyAssignedShiftIds];
+    const allBlockedIds = [...blockedV8ShiftIds, ...alreadyAssignedV8ShiftIds];
 
     if (allBlockedIds.length > 0) {
-        const biddingCount = shifts.filter(s => s.bidding_status !== 'not_on_bidding' && blockedShiftIds.includes(s.id)).length;
-        const cancelledCount = shifts.filter(s => s.is_cancelled && blockedShiftIds.includes(s.id)).length;
-        const assignedCount = alreadyAssignedShiftIds.length;
+        const biddingCount = shifts.filter(s => s.bidding_status !== 'not_on_bidding' && blockedV8ShiftIds.includes(s.id)).length;
+        const cancelledCount = shifts.filter(s => s.is_cancelled && blockedV8ShiftIds.includes(s.id)).length;
+        const assignedCount = alreadyAssignedV8ShiftIds.length;
 
         let message = '';
 
@@ -83,7 +83,7 @@ export function validateAssignAll(
 
         return {
             canProceed: false,
-            blockedShiftIds: allBlockedIds,
+            blockedV8ShiftIds: allBlockedIds,
             blockedCount: allBlockedIds.length,
             errorMessage: message,
         };
@@ -91,7 +91,7 @@ export function validateAssignAll(
 
     return {
         canProceed: true,
-        blockedShiftIds: [],
+        blockedV8ShiftIds: [],
         blockedCount: 0,
         errorMessage: null,
     };
@@ -106,36 +106,36 @@ export function validateAssignAll(
  * - Shifts already unassigned are ignored (not blocked)
  */
 export function validateUnassignAll(shifts: Shift[]): BulkValidationResult {
-    const blockedShiftIds: string[] = [];
+    const blockedV8ShiftIds: string[] = [];
 
     for (const shift of shifts) {
         // Block if in bidding
         if (shift.bidding_status !== 'not_on_bidding') {
-            blockedShiftIds.push(shift.id);
+            blockedV8ShiftIds.push(shift.id);
             continue;
         }
 
         // Block if cancelled
         if (shift.is_cancelled) {
-            blockedShiftIds.push(shift.id);
+            blockedV8ShiftIds.push(shift.id);
             continue;
         }
 
         // Already unassigned is ignored at execution time
     }
 
-    if (blockedShiftIds.length > 0) {
+    if (blockedV8ShiftIds.length > 0) {
         return {
             canProceed: false,
-            blockedShiftIds,
-            blockedCount: blockedShiftIds.length,
-            errorMessage: `${blockedShiftIds.length} selected shift(s) are in bidding or cancelled and cannot be unassigned.`,
+            blockedV8ShiftIds,
+            blockedCount: blockedV8ShiftIds.length,
+            errorMessage: `${blockedV8ShiftIds.length} selected shift(s) are in bidding or cancelled and cannot be unassigned.`,
         };
     }
 
     return {
         canProceed: true,
-        blockedShiftIds: [],
+        blockedV8ShiftIds: [],
         blockedCount: 0,
         errorMessage: null,
     };

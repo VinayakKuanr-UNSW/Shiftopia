@@ -119,12 +119,12 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
     const now = useMinuteTick();
 
     // ── UI state
-    const [selectedShiftId, setSelectedShiftId] = useState<string | null>(null);
+    const [selectedV8ShiftId, setSelectedV8ShiftId] = useState<string | null>(null);
 
     // ── Reset on open/close
     useEffect(() => {
         if (!isOpen) {
-            setSelectedShiftId(null);
+            setSelectedV8ShiftId(null);
         }
     }, [isOpen]);
 
@@ -176,7 +176,7 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
         enabled: isOpen && !!user?.id,
     });
 
-    const selectedShift = myShifts?.find(s => s.id === selectedShiftId) as any;
+    const selectedShift = myShifts?.find(s => s.id === selectedV8ShiftId) as any;
 
     // ── Timer / expiry
     const timerText = getSwapTimer(
@@ -213,7 +213,7 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                     endTime: (theirShift.end_time || '00:00').slice(0, 5) + ':00',
                     netLengthMinutes: calcNetMinutes(theirShift),
                     shiftId: theirShift.id,
-                    excludeShiftId: s.id, // Exclude the shift I'm giving away
+                    excludeV8ShiftId: s.id, // Exclude the shift I'm giving away
                 }))
             );
 
@@ -261,25 +261,25 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
     });
 
     // ── Selected shift eligibility
-    const selectedEligibility = selectedShiftId ? eligibilityMap.get(selectedShiftId) : undefined;
-    const canSendOffer = !!selectedShiftId && (selectedEligibility?.eligible ?? true) && !isExpired;
+    const selectedEligibility = selectedV8ShiftId ? eligibilityMap.get(selectedV8ShiftId) : undefined;
+    const canSendOffer = !!selectedV8ShiftId && (selectedEligibility?.eligible ?? true) && !isExpired;
 
     // ── Event handlers
     const handleConfirmOffer = () => {
-        onConfirmOffer(selectedShiftId || undefined);
+        onConfirmOffer(selectedV8ShiftId || undefined);
         handleClose();
     };
 
     const handleClose = () => {
-        setSelectedShiftId(null);
+        setSelectedV8ShiftId(null);
         onClose();
     };
 
     // ── Timeline
     const timeline = {
         created: true,
-        selection: !!selectedShiftId,
-        eligible: selectedShiftId ? (selectedEligibility?.eligible ?? null) : null,
+        selection: !!selectedV8ShiftId,
+        eligible: selectedV8ShiftId ? (selectedEligibility?.eligible ?? null) : null,
         sent: false,
     };
 
@@ -336,7 +336,7 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                     const hasWarnings = (elig?.warnings?.length || 0) > 0;
 
                                     const isUnavailable = isOfferedHere || isOfferedElsewhere || isLocked || isPendingOffer || isIneligible;
-                                    const isSelected = selectedShiftId === shift.id;
+                                    const isSelected = selectedV8ShiftId === shift.id;
 
                                     const groupVariant = resolveGroupVariant(s.group_type || s.roles?.groupType, s.departments?.name);
 
@@ -375,7 +375,7 @@ export const UnifiedSwapModal: React.FC<UnifiedSwapModalProps> = ({
                                                 unpaidBreak={s.unpaid_break_minutes || 0}
                                                 urgency={urgency}
                                                 groupVariant={groupVariant}
-                                                onClick={isUnavailable ? undefined : () => setSelectedShiftId(shift.id)}
+                                                onClick={isUnavailable ? undefined : () => setSelectedV8ShiftId(shift.id)}
                                                 className={cn(
                                                     isUnavailable && 'opacity-30 grayscale cursor-not-allowed pointer-events-none',
                                                     isSelected && 'ring-2 ring-indigo-500/50',

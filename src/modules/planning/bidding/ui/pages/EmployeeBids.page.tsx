@@ -249,10 +249,10 @@ export const EmployeeBidsPage: React.FC = () => {
     }, [todayStr]);
 
     // Selection (for bulk bid on not_participated eligible shifts)
-    const [selectedShiftIds, setSelectedShiftIds] = useState<any[]>([]);
+    const [selectedV8ShiftIds, setSelectedV8ShiftIds] = useState<any[]>([]);
 
     // Compliance Check State
-    const [checkingShiftId, setCheckingShiftId] = useState<string | null>(null);
+    const [checkingV8ShiftId, setCheckingV8ShiftId] = useState<string | null>(null);
     const [complianceResult, setComplianceResult] = useState<ComplianceResult | null>(null);
     const [showComplianceDialog, setShowComplianceDialog] = useState(false);
     const [pendingBidShift, setPendingBidShift] = useState<ShiftData | null>(null);
@@ -346,7 +346,7 @@ export const EmployeeBidsPage: React.FC = () => {
             toast({ title: 'Bid Submitted', description: 'Your bid has been placed successfully.' });
             queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
             queryClient.invalidateQueries({ queryKey: ['myBids'] });
-            setSelectedShiftIds([]);
+            setSelectedV8ShiftIds([]);
         },
         onError: (error: any) => {
             toast({ title: 'Bid Failed', description: error.message || 'Failed to place bid.', variant: 'destructive' });
@@ -358,7 +358,7 @@ export const EmployeeBidsPage: React.FC = () => {
         onSuccess: () => {
             toast({ title: 'Bid Withdrawn', description: 'You have withdrawn from the bid.' });
             queryClient.invalidateQueries({ queryKey: ['myBids'] });
-            setSelectedShiftIds([]);
+            setSelectedV8ShiftIds([]);
         },
         onError: () => {
             toast({ title: 'Withdraw Failed', description: 'Failed to withdraw bid.', variant: 'destructive' });
@@ -524,11 +524,11 @@ export const EmployeeBidsPage: React.FC = () => {
         const eligible = filteredBidOpportunities
             .filter(o => o.participationStatus === 'not_participated' && o.isEligible)
             .map(o => o.id);
-        setSelectedShiftIds(isChecked ? eligible : []);
+        setSelectedV8ShiftIds(isChecked ? eligible : []);
     };
 
     const handleSelectShift = (id: any) => {
-        setSelectedShiftIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+        setSelectedV8ShiftIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
     };
 
 
@@ -536,9 +536,9 @@ export const EmployeeBidsPage: React.FC = () => {
     // ========================================================================
     // COMPLIANCE HANDLERS
     // ========================================================================
-    const checkComplianceAndBid = async (shift: ShiftData) => {
+    const runV8LegacyBridgeAndBid = async (shift: ShiftData) => {
         if (!user) return;
-        setCheckingShiftId(shift.id);
+        setCheckingV8ShiftId(shift.id);
         try {
             const result = await validateCompliance({
                 employeeId: user.id,
@@ -548,7 +548,7 @@ export const EmployeeBidsPage: React.FC = () => {
                 netLengthMinutes: shift.netLength,
                 shiftId: shift.id,
             });
-            setCheckingShiftId(null);
+            setCheckingV8ShiftId(null);
 
             if (result.status === 'violated' || result.status === 'warned') {
                 setComplianceResult(result);
@@ -558,7 +558,7 @@ export const EmployeeBidsPage: React.FC = () => {
                 placeBidMutation.mutate(shift.id);
             }
         } catch {
-            setCheckingShiftId(null);
+            setCheckingV8ShiftId(null);
             toast({ title: 'Compliance Check Unavailable', description: 'Proceeding with bid.', variant: 'default' });
             placeBidMutation.mutate(shift.id);
         }
@@ -614,7 +614,7 @@ export const EmployeeBidsPage: React.FC = () => {
     const handleBulkBid = async () => {
         if (!user) return;
 
-        const validIds = selectedShiftIds.filter(id => {
+        const validIds = selectedV8ShiftIds.filter(id => {
             const opp = bidOpportunities.find(o => o.id === id);
             return opp?.participationStatus === 'not_participated' && opp?.isEligible !== false;
         });
@@ -636,7 +636,7 @@ export const EmployeeBidsPage: React.FC = () => {
             description: failed > 0 ? `${failed} failed` : undefined,
         });
 
-        setSelectedShiftIds([]);
+        setSelectedV8ShiftIds([]);
         queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
         queryClient.invalidateQueries({ queryKey: ['myBids'] });
     };
@@ -756,7 +756,7 @@ export const EmployeeBidsPage: React.FC = () => {
             <div className="flex items-center gap-2">
                 <input
                     type="checkbox"
-                    checked={selectedShiftIds.includes(opp.id)}
+                    checked={selectedV8ShiftIds.includes(opp.id)}
                     onChange={() => handleSelectShift(opp.id)}
                     disabled={!canSelect}
                     className="h-4 w-4 rounded border-border/50 text-primary focus:ring-primary/30 accent-primary"
@@ -843,7 +843,7 @@ export const EmployeeBidsPage: React.FC = () => {
                     <input
                         type="checkbox"
                         readOnly
-                        checked={selectedShiftIds.includes(opp.id)}
+                        checked={selectedV8ShiftIds.includes(opp.id)}
                         disabled={!canSelect}
                         className="h-4 w-4 rounded border-border/50 accent-primary"
                     />
@@ -1034,7 +1034,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                                     filteredBidOpportunities.some(o => o.participationStatus === 'not_participated' && o.isEligible) &&
                                                     filteredBidOpportunities
                                                         .filter(o => o.participationStatus === 'not_participated' && o.isEligible)
-                                                        .every(o => selectedShiftIds.includes(o.id))
+                                                        .every(o => selectedV8ShiftIds.includes(o.id))
                                                 }
                                                 onChange={(e) => handleSelectAll(e.target.checked)}
                                                 className="h-4 w-4 rounded border-border/50 accent-primary"
@@ -1064,7 +1064,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                                 <td className="p-3">
                                                     <input
                                                         type="checkbox"
-                                                        checked={selectedShiftIds.includes(opp.id)}
+                                                        checked={selectedV8ShiftIds.includes(opp.id)}
                                                         onChange={() => handleSelectShift(opp.id)}
                                                         disabled={!canSelect}
                                                         className="h-4 w-4 rounded border-border/50 accent-primary"
@@ -1155,7 +1155,7 @@ export const EmployeeBidsPage: React.FC = () => {
 
             {/* ── FLOATING BULK ACTION BAR ── */}
             <AnimatePresence>
-                {selectedShiftIds.length > 0 && (
+                {selectedV8ShiftIds.length > 0 && (
                     <motion.div
                         initial={{ opacity: 0, y: 50, x: '-50%' }}
                         animate={{ opacity: 1, y: 0, x: '-50%' }}
@@ -1164,7 +1164,7 @@ export const EmployeeBidsPage: React.FC = () => {
                     >
                         <div className="flex items-center gap-2">
                             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500 text-[12px] font-bold text-white shadow-sm">
-                                {selectedShiftIds.length}
+                                {selectedV8ShiftIds.length}
                             </span>
                             <span className="text-sm font-semibold uppercase tracking-wider">Selected</span>
                         </div>
@@ -1185,7 +1185,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                 size="sm"
                                 variant="ghost"
                                 className="h-8 text-white/70 dark:text-slate-500 hover:text-white dark:hover:text-slate-900 text-[10px] font-black uppercase tracking-widest rounded-full px-3"
-                                onClick={() => setSelectedShiftIds([])}
+                                onClick={() => setSelectedV8ShiftIds([])}
                             >
                                 Clear
                             </Button>

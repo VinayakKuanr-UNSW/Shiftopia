@@ -231,9 +231,13 @@ export function useCreatePlanningPeriod() {
       queryClient.invalidateQueries({ queryKey: rosterKeys.all });
 
       const days = (data?.days_created as number | undefined) ?? 0;
+      const seedResults = (data?.seed_results as any[]) ?? [];
+      const totalSkipped = seedResults.reduce((acc, r) => acc + (r.result?.shifts_skipped || 0), 0);
+      const totalCreated = seedResults.reduce((acc, r) => acc + (r.result?.shifts_created || 0), 0);
+
       toast({
         title: 'Planning Period Created',
-        description: `${days} roster day${days !== 1 ? 's' : ''} created across ${(data?.seed_results as unknown[])?.length ?? 0} sub-department(s).`,
+        description: `${days} roster day${days !== 1 ? 's' : ''} created. ${totalCreated} shifts seeded${totalSkipped > 0 ? ` (${totalSkipped} past shifts skipped)` : ''}.`,
       });
     },
 
@@ -397,9 +401,10 @@ export function useApplyTemplate() {
       queryClient.invalidateQueries({ queryKey: templateKeys.history(vars.templateId) });
 
       const shiftsCreated = (data?.shifts_created as number | undefined) ?? 0;
+      const shiftsSkipped = (data?.shifts_skipped as number | undefined) ?? 0;
       toast({
         title:       'Template Applied',
-        description: `Created ${shiftsCreated} shift${shiftsCreated !== 1 ? 's' : ''} from template.`,
+        description: `Created ${shiftsCreated} shift${shiftsCreated !== 1 ? 's' : ''}${shiftsSkipped > 0 ? ` (${shiftsSkipped} past shifts skipped)` : ''}.`,
       });
     },
 

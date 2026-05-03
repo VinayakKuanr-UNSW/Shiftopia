@@ -389,9 +389,9 @@ export const EmployeeSwapsPage: React.FC = () => {
     const mySwapsSort = useTableSorting(mySwapRequests.filter(s => s.requester_id === userId), { key: 'created_at', direction: 'desc' });
 
     // Handle Make Offer Confirmation
-    const handleMakeOffer = (targetShiftId: string | undefined) => {
+    const handleMakeOffer = (targetV8ShiftId: string | undefined) => {
         if (offerSwapTarget) {
-            makeOffer({ swapId: offerSwapTarget.id, targetShiftId });
+            makeOffer({ swapId: offerSwapTarget.id, targetV8ShiftId });
             setOfferSwapTarget(null);
         }
     };
@@ -1113,7 +1113,7 @@ export const EmployeeSwapsPage: React.FC = () => {
                         swapId: offer.swap_request_id,
                         offerId: offer.id,
                         offererId: offer.offerer_id,
-                        offeredShiftId: offer.offered_shift_id
+                        offeredV8ShiftId: offer.offered_shift_id
                     });
                     setViewOffersSwapId(null);
                 }}

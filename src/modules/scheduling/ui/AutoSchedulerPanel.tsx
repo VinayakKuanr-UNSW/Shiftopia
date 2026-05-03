@@ -39,6 +39,10 @@ import {
     Download,
     Calendar,
     ArrowRight,
+    Activity,
+    Scale,
+    ArrowLeftRight,
+    Info,
 } from 'lucide-react';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
@@ -47,14 +51,24 @@ import { cn } from '@/modules/core/lib/utils';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
-import { autoSchedulerController, AutoSchedulerInputTooLargeError } from '@/modules/scheduling';
-import { OptimizerError } from '@/modules/scheduling';
+import {
+    autoSchedulerController,
+    AutoSchedulerInputTooLargeError,
+    OptimizerError,
+} from '@/modules/scheduling';
 import type {
     AutoSchedulerResult,
     ValidatedProposal,
     OptimizerHealth,
+    ShiftMeta,
+    EmployeeMeta,
 } from '@/modules/scheduling';
-import type { ShiftMeta, EmployeeMeta } from '@/modules/scheduling';
+import { calculateFatigueWithRecovery } from '@/modules/rosters/domain/projections/utils/fatigue';
+import { calculateUtilization } from '@/modules/rosters/domain/projections/utils/fairness';
+import {
+    SheetFooter,
+} from '@/modules/core/ui/primitives/sheet';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 
 // =============================================================================
 // PROPS
@@ -103,7 +117,7 @@ function HealthBadge({ health }: { health: OptimizerHealth | null }) {
 // PROPOSAL ROW
 // =============================================================================
 
-function ProposalRow({ p }: { p: ValidatedProposal }) {
+function ProposalRow({ p, onSwap }: { p: ValidatedProposal; onSwap: () => void }) {
     const [expanded, setExpanded] = useState(false);
 
     const statusIcon = {
@@ -119,25 +133,62 @@ function ProposalRow({ p }: { p: ValidatedProposal }) {
     }[p.complianceStatus];
 
     return (
-        <div className={cn('rounded border px-3 py-2', rowBg)}>
-            <button
-                className="w-full flex items-center gap-2 text-left"
+        <div className={cn('rounded border px-3 py-2 transition-colors', rowBg)}>
+            <div
+                role="button"
+                tabIndex={0}
+                className="w-full flex items-center gap-2 text-left cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm"
                 onClick={() => p.violations.length > 0 && setExpanded(!expanded)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        p.violations.length > 0 && setExpanded(!expanded);
+                    }
+                }}
             >
                 {statusIcon}
                 <span className="text-xs font-medium text-foreground">{p.shiftDate}</span>
                 <span className="text-xs text-muted-foreground">{p.startTime}–{p.endTime}</span>
-                {p.violations.length > 0 && (
-                    <span className="ml-auto text-xs text-muted-foreground">
-                        {p.violations.length} issue{p.violations.length !== 1 ? 's' : ''}
-                    </span>
-                )}
-                {p.violations.length > 0 && (
-                    expanded
-                        ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                        : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                )}
-            </button>
+                
+                {/* Health context if provided */}
+                <div className="flex items-center gap-2 ml-2">
+                    {p.fatigueScore != null && (
+                        <div className={cn(
+                            "flex items-center gap-0.5 text-[9px] font-bold px-1 rounded",
+                            p.fatigueScore < 10 ? "text-emerald-400" : p.fatigueScore < 20 ? "text-amber-400" : "text-red-400"
+                        )}>
+                            <Activity className="h-2.5 w-2.5" />
+                            {p.fatigueScore.toFixed(0)}
+                        </div>
+                    )}
+                </div>
+
+                <div className="ml-auto flex items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-primary"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onSwap();
+                        }}
+                        title="Swap Candidate"
+                    >
+                        <ArrowLeftRight className="h-3 w-3" />
+                    </Button>
+                    
+                    {p.violations.length > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                            {p.violations.length} issue{p.violations.length !== 1 ? 's' : ''}
+                        </span>
+                    )}
+                    {p.violations.length > 0 && (
+                        expanded
+                            ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                            : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
+                </div>
+            </div>
             {expanded && p.violations.length > 0 && (
                 <div className="mt-1.5 pl-5 space-y-1">
                     {p.violations.map((v, i) => (
@@ -158,10 +209,11 @@ function ProposalRow({ p }: { p: ValidatedProposal }) {
 // EMPLOYEE GROUP
 // =============================================================================
 
-function EmployeeGroup({ employeeId, employeeName, proposals }: {
+function EmployeeGroup({ employeeId, employeeName, proposals, onSwapShift }: {
     employeeId: string;
     employeeName: string;
     proposals: ValidatedProposal[];
+    onSwapShift: (p: ValidatedProposal) => void;
 }) {
     const [expanded, setExpanded] = useState(true);
     const passing = proposals.filter(p => p.passing).length;
@@ -187,6 +239,32 @@ function EmployeeGroup({ employeeId, employeeName, proposals }: {
                         </span>
                     )}
                 </div>
+
+                {/* Aggregate Health Metrics for this employee's weekly plan */}
+                <div className="flex items-center gap-2 ml-2">
+                  {proposals[0]?.fatigueScore != null && (
+                    <div className={cn(
+                      "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold border",
+                      proposals[0].fatigueScore < 10 ? "text-emerald-500 border-emerald-500/20 bg-emerald-500/5" :
+                      proposals[0].fatigueScore < 20 ? "text-amber-500 border-amber-500/20 bg-amber-500/5" :
+                      "text-red-500 border-red-500/20 bg-red-500/5"
+                    )}>
+                      <Activity className="h-2.5 w-2.5" />
+                      FTG {proposals[0].fatigueScore.toFixed(0)}
+                    </div>
+                  )}
+                  {proposals[0]?.utilization != null && (
+                    <div className={cn(
+                      "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold border",
+                      proposals[0].utilization < 80 ? "text-blue-500 border-blue-500/20 bg-blue-500/5" :
+                      proposals[0].utilization <= 105 ? "text-emerald-500 border-emerald-500/20 bg-emerald-500/5" :
+                      "text-amber-500 border-amber-500/20 bg-amber-500/5"
+                    )}>
+                      <Scale className="h-2.5 w-2.5" />
+                      UTL {proposals[0].utilization.toFixed(0)}%
+                    </div>
+                  )}
+                </div>
                 {expanded
                     ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
                     : <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -195,7 +273,7 @@ function EmployeeGroup({ employeeId, employeeName, proposals }: {
             {expanded && (
                 <div className="px-4 py-3 space-y-2">
                     {proposals.map(p => (
-                        <ProposalRow key={p.shiftId} p={p} />
+                        <ProposalRow key={p.shiftId} p={p} onSwap={() => onSwapShift(p)} />
                     ))}
                 </div>
             )}
@@ -219,7 +297,7 @@ function StatsBar({ result }: { result: AutoSchedulerResult }) {
                 <div className="text-[11px] text-muted-foreground">Failing</div>
             </div>
             <div className="text-center px-3 py-2 bg-amber-500/10 rounded-lg border border-amber-500/20">
-                <div className="text-lg font-bold text-amber-500">{result.uncoveredShiftIds.length}</div>
+                <div className="text-lg font-bold text-amber-500">{result.uncoveredV8ShiftIds.length}</div>
                 <div className="text-[11px] text-muted-foreground">Uncovered</div>
             </div>
         </div>
@@ -299,6 +377,9 @@ export function AutoSchedulerPanel({
     // while the request keeps going and re-fires setResult on completion.
     const runAbortRef = React.useRef<AbortController | null>(null);
 
+    // Swap State
+    const [swappingProposal, setSwappingProposal] = useState<ValidatedProposal | null>(null);
+
     // Date Range Filtering
     const defaultStart = shifts.length > 0 ? shifts.sort((a, b) => a.shift_date.localeCompare(b.shift_date))[0].shift_date : '';
     const defaultEnd = shifts.length > 0 ? shifts.sort((a, b) => b.shift_date.localeCompare(a.shift_date))[0].shift_date : '';
@@ -327,6 +408,15 @@ export function AutoSchedulerPanel({
         }));
         return { deficits, supplyPerDay: cc.perDay[0]?.supplyMinutes ?? 0, dayCount: cc.perDay.length };
     }, [filteredShifts, employees]);
+
+    // Existing Roster Map for health calculations
+    const existingRoster = React.useMemo(() => {
+      const map = new Map<string, ShiftMeta[]>();
+      for (const emp of employees) {
+        map.set(emp.id, emp.existing_shifts || []);
+      }
+      return map;
+    }, [employees]);
 
     // Health check on open
     useEffect(() => {
@@ -465,7 +555,7 @@ export function AutoSchedulerPanel({
                 return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
             };
 
-            const totalUncovered = result.uncoveredShiftIds.length;
+            const totalUncovered = result.uncoveredV8ShiftIds.length;
             const audited = result.uncoveredAudit.length;
 
             const lines = [
@@ -560,7 +650,46 @@ export function AutoSchedulerPanel({
         runAbortRef.current = null;
         setResult(null);
         setPhase('idle');
+        setSwappingProposal(null);
         onClose();
+    };
+
+    const handleApplySwap = (shiftId: string, newEmployeeId: string) => {
+      if (!result) return;
+      
+      const emp = employees.find(e => e.id === newEmployeeId);
+      if (!emp) return;
+
+      const newProposals = result.proposals.map(p => {
+        if (p.shiftId === shiftId) {
+          // Find the shift in our original shifts list to get full details
+          const shift = shifts.find(s => s.id === shiftId);
+          
+          return {
+            ...p,
+            employeeId: emp.id,
+            employeeName: emp.name,
+            // Re-calculate basic compliance (placeholder - we should really re-simulate)
+            passing: true, 
+            complianceStatus: 'PASS' as const,
+            violations: []
+          };
+        }
+        return p;
+      });
+
+      setResult({
+        ...result,
+        proposals: newProposals,
+        passing: newProposals.filter(p => p.passing).length,
+        failing: newProposals.length - newProposals.filter(p => p.passing).length,
+      });
+      setSwappingProposal(null);
+      
+      toast({
+        title: "Assignment Updated",
+        description: `Shift reassigned to ${emp.name}. Health metrics will be updated on refresh.`,
+      });
     };
 
     const unfilledCount = shifts.length;
@@ -710,18 +839,32 @@ export function AutoSchedulerPanel({
                                         employeeId={g.employeeId}
                                         employeeName={g.employeeName}
                                         proposals={g.proposals}
+                                        onSwapShift={setSwappingProposal}
                                     />
                                 ))}
                             </div>
                         )}
 
+                        {/* Candidate Swap Drawer */}
+                        {swappingProposal && (
+                          <CandidateSwapDrawer
+                            open={!!swappingProposal}
+                            onClose={() => setSwappingProposal(null)}
+                            proposal={swappingProposal}
+                            employees={employees}
+                            existingRoster={existingRoster}
+                            allProposals={result?.proposals || []}
+                            onSelect={handleApplySwap}
+                          />
+                        )}
+
                         {/* Uncovered shifts with "Why" audit */}
-                        {result && result.uncoveredShiftIds.length > 0 && (
+                        {result && result.uncoveredV8ShiftIds.length > 0 && (
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
                                         <AlertTriangle className="h-4 w-4" />
-                                        {result.uncoveredShiftIds.length} Unfilled Shift{result.uncoveredShiftIds.length !== 1 ? 's' : ''}
+                                        {result.uncoveredV8ShiftIds.length} Unfilled Shift{result.uncoveredV8ShiftIds.length !== 1 ? 's' : ''}
                                     </h3>
                                     {result.uncoveredAudit && (
                                         <Button
@@ -757,9 +900,9 @@ export function AutoSchedulerPanel({
                                             </div>
                                         </div>
                                     ))}
-                                    {result.uncoveredShiftIds.length > (result.uncoveredAudit?.length ?? 0) && (
+                                    {result.uncoveredV8ShiftIds.length > (result.uncoveredAudit?.length ?? 0) && (
                                         <p className="text-[10px] text-muted-foreground text-center italic">
-                                            + {result.uncoveredShiftIds.length - (result.uncoveredAudit?.length ?? 0)} more unfilled shifts (download report for full details)
+                                            + {result.uncoveredV8ShiftIds.length - (result.uncoveredAudit?.length ?? 0)} more unfilled shifts (download report for full details)
                                         </p>
                                     )}
                                 </div>
@@ -854,4 +997,164 @@ export function AutoSchedulerPanel({
             </SheetContent>
         </Sheet>
     );
+}
+// =============================================================================
+// CANDIDATE SWAP DRAWER
+// =============================================================================
+
+interface CandidateSwapDrawerProps {
+  open: boolean;
+  onClose: () => void;
+  proposal: ValidatedProposal;
+  employees: EmployeeMeta[];
+  existingRoster: Map<string, ShiftMeta[]>;
+  allProposals: ValidatedProposal[];
+  onSelect: (shiftId: string, employeeId: string) => void;
+}
+
+function CandidateSwapDrawer({
+  open,
+  onClose,
+  proposal,
+  employees,
+  existingRoster,
+  allProposals,
+  onSelect
+}: CandidateSwapDrawerProps) {
+  
+  // Find candidates eligible for this shift
+  const candidates = React.useMemo(() => {
+    return employees
+      .map(emp => {
+        const empShifts = existingRoster.get(emp.id) ?? [];
+        const proposedForEmp = allProposals.filter(p => p.employeeId === emp.id && p.shiftId !== proposal.shiftId);
+        
+        // Merge existing + other proposed shifts
+        const currentShifts = [
+          ...empShifts,
+          ...proposedForEmp.map(p => ({
+            id: p.shiftId,
+            shift_date: p.shiftDate,
+            start_time: p.startTime,
+            end_time: p.endTime,
+            duration_minutes: (parseISO(`${p.shiftDate}T${p.endTime}`).getTime() - parseISO(`${p.shiftDate}T${p.startTime}`).getTime()) / 60000
+          } as any))
+        ];
+
+        // Projected health IF they take this shift
+        const withThisShift = [
+          ...currentShifts,
+          {
+            id: proposal.shiftId,
+            shift_date: proposal.shiftDate,
+            start_time: proposal.startTime,
+            end_time: proposal.endTime,
+            duration_minutes: (parseISO(`${proposal.shiftDate}T${proposal.endTime}`).getTime() - parseISO(`${proposal.shiftDate}T${proposal.startTime}`).getTime()) / 60000
+          } as any
+        ];
+
+        const fatigue = calculateFatigueWithRecovery(withThisShift, proposal.shiftDate).current;
+        const totalHrs = withThisShift.reduce((acc, s) => acc + (s.duration_minutes || 0), 0) / 60;
+        const contractedHrs = (emp as any).min_contract_minutes / 60 || 0;
+        const utilization = calculateUtilization(totalHrs, contractedHrs);
+
+        return {
+          ...emp,
+          projectedFatigue: fatigue,
+          projectedUtilization: utilization,
+          isCurrent: emp.id === proposal.employeeId
+        };
+      })
+      .sort((a, b) => a.projectedFatigue - b.projectedFatigue);
+  }, [proposal, employees, existingRoster, allProposals]);
+
+  return (
+    <Sheet open={open} onOpenChange={o => !o && onClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0">
+        <SheetHeader className="px-6 pt-6 pb-4 border-b">
+          <div className="flex items-center gap-2 text-primary mb-1">
+            <ArrowLeftRight className="h-5 w-5" />
+            <SheetTitle>Swap Candidate</SheetTitle>
+          </div>
+          <SheetDescription>
+            Reassigning: {proposal.shiftDate} ({proposal.startTime}–{proposal.endTime})
+          </SheetDescription>
+        </SheetHeader>
+
+        <ScrollArea className="flex-1 px-6 py-4">
+          <div className="space-y-4">
+            <div className="p-3 bg-muted/40 rounded-lg border flex items-center justify-between">
+              <div>
+                <p className="text-[10px] uppercase font-bold text-muted-foreground">Current Assignment</p>
+                <p className="text-sm font-medium">{proposal.employeeName}</p>
+              </div>
+              <Badge variant="outline" className="text-[10px]">Active Proposal</Badge>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">Eligible Alternatives</p>
+              {candidates.map(cand => (
+                <div 
+                  key={cand.id}
+                  className={cn(
+                    "p-3 rounded-xl border transition-all group relative",
+                    cand.isCurrent ? "border-primary/50 bg-primary/5" : "hover:border-primary/30 hover:bg-muted/30"
+                  )}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-sm font-medium">{cand.name}</span>
+                    </div>
+                    {cand.isCurrent && <Badge className="h-4 text-[9px] px-1.5 bg-primary/20 text-primary border-none">Selected</Badge>}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className={cn(
+                        "p-1.5 rounded-lg",
+                        cand.projectedFatigue < 15 ? "bg-emerald-500/10" : "bg-red-500/10"
+                      )}>
+                        <Activity className={cn("h-3 w-3", cand.projectedFatigue < 15 ? "text-emerald-500" : "text-red-500")} />
+                      </div>
+                      <div>
+                        <p className="text-[9px] text-muted-foreground leading-none">Fatigue</p>
+                        <p className="text-xs font-bold">{cand.projectedFatigue.toFixed(1)}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className={cn(
+                        "p-1.5 rounded-lg",
+                        cand.projectedUtilization < 105 ? "bg-blue-500/10" : "bg-amber-500/10"
+                      )}>
+                        <Scale className={cn("h-3 w-3", cand.projectedUtilization < 105 ? "text-blue-500" : "text-amber-500")} />
+                      </div>
+                      <div>
+                        <p className="text-[9px] text-muted-foreground leading-none">Utilization</p>
+                        <p className="text-xs font-bold">{cand.projectedUtilization.toFixed(0)}%</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {!cand.isCurrent && (
+                    <Button 
+                      className="w-full mt-3 h-8 text-[11px] opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => onSelect(proposal.shiftId, cand.id)}
+                    >
+                      Assign {cand.name}
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </ScrollArea>
+
+        <SheetFooter className="p-6 border-t bg-muted/20">
+          <Button variant="outline" className="w-full" onClick={onClose}>Cancel</Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
 }

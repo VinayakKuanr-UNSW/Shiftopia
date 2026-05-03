@@ -373,7 +373,7 @@ interface GroupModeViewProps {
   showLegend?: boolean;
   /** Zoom level for Day Timeline View (1h fixed) */
   dayZoom?: 60;
-  selectedShiftIds?: string[];
+  selectedV8ShiftIds?: string[];
   onToggleShiftSelection?: (shiftId: string) => void;
   /** Centralized employee-to-shift assignment handler (from RostersPlannerPage) */
   onAssignShift?: (shiftId: string, employeeId: string, employeeName: string) => void;
@@ -564,7 +564,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   showLegend = false,
   dayZoom = 60,
   projection,
-  selectedShiftIds: propsSelectedShiftIds, // Destructure the prop and rename it
+  selectedV8ShiftIds: propsSelectedV8ShiftIds, // Destructure the prop and rename it
   onToggleShiftSelection,
   onAssignShift,
 }) => {
@@ -583,7 +583,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
   const clearLastShiftMove = useRosterStore(s => s.clearLastShiftMove);
 
   // Use props if provided, otherwise fallback to context
-  const selectedShiftIds = propsSelectedShiftIds ?? [];
+  const selectedV8ShiftIds = propsSelectedV8ShiftIds ?? [];
 
   // Collapsible group state (persisted to localStorage)
   const [collapsedGroups, toggleGroupCollapse] = useCollapsedGroups();
@@ -1769,7 +1769,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           groupColor={accentColor}
           compliance={complianceMap?.[shift.id]}
           headerAction={canEdit && !isBulkMode ? menu : undefined}
-          isSelected={isBulkMode && selectedShiftIds.includes(shift.id)}
+          isSelected={isBulkMode && selectedV8ShiftIds.includes(shift.id)}
           isLocked={isLocked || (isDnDModeActive && !shift.isDraft)}
           isPast={isPastDate}
           isDnDActive={isDnDModeActive}
@@ -1814,7 +1814,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
             isShiftsLoading={isShiftsLoading}
             isBulkMode={isBulkMode}
             isDnDModeActive={isDnDModeActive}
-            selectedShiftIds={new Set(selectedShiftIds)}
+            selectedV8ShiftIds={new Set(selectedV8ShiftIds)}
             onBulkToggle={handleToggleShiftSelection}
             complianceMap={complianceMap}
             isBucketView={false} // Bucket mode explicitly disabled for Day View

@@ -49,7 +49,7 @@ interface ShiftSegment {
 
 export interface RestGapViolation {
     shiftId: string;
-    otherShiftId: string;
+    otherV8ShiftId: string;
     gapHours: number;
     requiredHours: number;
     violationType: 'before' | 'after';
@@ -181,7 +181,7 @@ export function checkBulkRestGaps(
                 // Create violation for the "after" side (previous shift)
                 const afterViolation: RestGapViolation = {
                     shiftId: prevSegment.shiftId,
-                    otherShiftId: segment.shiftId,
+                    otherV8ShiftId: segment.shiftId,
                     gapHours: effectiveGap,
                     requiredHours: MIN_REST_HOURS,
                     violationType: 'after',
@@ -192,7 +192,7 @@ export function checkBulkRestGaps(
                 // Create violation for the "before" side (current shift)
                 const beforeViolation: RestGapViolation = {
                     shiftId: segment.shiftId,
-                    otherShiftId: prevSegment.shiftId,
+                    otherV8ShiftId: prevSegment.shiftId,
                     gapHours: effectiveGap,
                     requiredHours: MIN_REST_HOURS,
                     violationType: 'before',

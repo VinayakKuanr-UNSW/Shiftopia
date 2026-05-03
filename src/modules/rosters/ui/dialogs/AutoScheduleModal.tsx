@@ -159,7 +159,7 @@ export const AutoScheduleModal: React.FC<AutoScheduleModalProps> = ({
         try {
             const result = await runSimulation(context, {
                 scope,
-                selectedShiftIds: scope === 'SELECTED' ? baselineData.eligible_shifts : [],
+                selectedV8ShiftIds: scope === 'SELECTED' ? baselineData.eligible_shifts : [],
                 strategy,
                 softConstraints,
                 snapshotVersion,

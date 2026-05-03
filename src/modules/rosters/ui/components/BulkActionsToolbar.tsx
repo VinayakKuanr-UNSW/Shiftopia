@@ -104,7 +104,7 @@ const IDLE: ActionState = { type: 'idle' };
 
 interface BulkActionsToolbarProps {
   selectedCount: number;
-  selectedShiftIds: string[];
+  selectedV8ShiftIds: string[];
   onClearSelection: () => void;
   onDelete: () => Promise<BulkActionResult>;
   onSelectAll?: () => void;
@@ -153,7 +153,7 @@ function eligibleSuffix(eligible: number, total: number): string {
 
 export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
   selectedCount,
-  selectedShiftIds,
+  selectedV8ShiftIds,
   onClearSelection,
   onSelectAll,
   onDelete,
@@ -211,7 +211,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
       // ── ASYNC PATH: real VALIDATING state ──────────────────────────────
       setActionState({ type: 'validating', action: 'publish' });
       try {
-        const validation = await onValidatePublish(selectedShiftIds);
+        const validation = await onValidatePublish(selectedV8ShiftIds);
         setActionState({
           type: 'confirming',
           action: 'publish',
@@ -297,7 +297,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
     const idsToPublish =
       actionState.type === 'confirming' && actionState.validatedIds
         ? actionState.validatedIds
-        : selectedShiftIds;
+        : selectedV8ShiftIds;
 
     setActionState({ type: 'processing', action: 'publish' });
     try {
@@ -313,7 +313,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
     if (!onUnpublish) return;
     setActionState({ type: 'processing', action: 'unpublish' });
     try {
-      const result = await onUnpublish(selectedShiftIds);
+      const result = await onUnpublish(selectedV8ShiftIds);
       if (result.failedCount === 0) {
         toast({
           title: 'Unpublished',
@@ -322,7 +322,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
         setActionState(IDLE);
         onClearSelection();
       } else {
-        setActionState({ type: 'result', action: 'unpublish', result, attemptedIds: selectedShiftIds });
+        setActionState({ type: 'result', action: 'unpublish', result, attemptedIds: selectedV8ShiftIds });
       }
     } catch {
       toast({ title: 'Error', description: 'Failed to unpublish shifts.', variant: 'destructive' });

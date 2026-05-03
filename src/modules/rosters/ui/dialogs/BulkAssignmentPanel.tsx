@@ -47,7 +47,7 @@ export interface BulkAssignmentEmployee {
 interface BulkAssignmentPanelProps {
     open: boolean;
     onClose: () => void;
-    selectedShiftIds: string[];
+    selectedV8ShiftIds: string[];
     employees: BulkAssignmentEmployee[];
     onAssignComplete: () => void;
 }
@@ -193,7 +193,7 @@ function SummaryBar({ result }: { result: BulkAssignmentResult }) {
 export function BulkAssignmentPanel({
     open,
     onClose,
-    selectedShiftIds,
+    selectedV8ShiftIds,
     employees,
     onAssignComplete,
 }: BulkAssignmentPanelProps) {
@@ -217,7 +217,7 @@ export function BulkAssignmentPanel({
 
         try {
             const result = await bulkAssignmentController.simulate(
-                selectedShiftIds,
+                selectedV8ShiftIds,
                 selectedEmployeeId,
                 { mode: 'PARTIAL_APPLY' },
             );
@@ -232,12 +232,12 @@ export function BulkAssignmentPanel({
         } finally {
             setIsValidating(false);
         }
-    }, [selectedEmployeeId, selectedShiftIds, toast]);
+    }, [selectedEmployeeId, selectedV8ShiftIds, toast]);
 
     // Auto-validate whenever the selected employee changes.
     // The cleanup flag prevents stale results if the employee changes mid-flight.
     useEffect(() => {
-        if (!selectedEmployeeId || selectedShiftIds.length === 0) {
+        if (!selectedEmployeeId || selectedV8ShiftIds.length === 0) {
             setValidationResult(null);
             return;
         }
@@ -307,7 +307,7 @@ export function BulkAssignmentPanel({
                         <SheetTitle>Bulk Assign Shifts</SheetTitle>
                     </div>
                     <SheetDescription>
-                        Assign {selectedShiftIds.length} selected shift{selectedShiftIds.length !== 1 ? 's' : ''} to an employee after compliance validation.
+                        Assign {selectedV8ShiftIds.length} selected shift{selectedV8ShiftIds.length !== 1 ? 's' : ''} to an employee after compliance validation.
                     </SheetDescription>
                 </SheetHeader>
 
@@ -350,7 +350,7 @@ export function BulkAssignmentPanel({
                                 {isValidating ? (
                                     <>
                                         <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                                        <span>Checking {selectedShiftIds.length} shift{selectedShiftIds.length !== 1 ? 's' : ''}…</span>
+                                        <span>Checking {selectedV8ShiftIds.length} shift{selectedV8ShiftIds.length !== 1 ? 's' : ''}…</span>
                                     </>
                                 ) : validationResult ? (
                                     <>

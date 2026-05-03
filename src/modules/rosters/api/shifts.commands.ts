@@ -164,12 +164,12 @@ export const shiftsCommands = {
             is_training: shiftData.is_training ?? false,
         };
 
-        const newShiftId = await callRpc('sm_create_shift', {
+        const newV8ShiftId = await callRpc('sm_create_shift', {
             p_shift_data: payload,
             p_user_id: user.id,
         }, CreateShiftResponseSchema);
 
-        const newShift = await shiftsQueries.getShiftById(newShiftId);
+        const newShift = await shiftsQueries.getShiftById(newV8ShiftId);
         if (!newShift) {
             throw new Error('Shift created but could not be retrieved');
         }

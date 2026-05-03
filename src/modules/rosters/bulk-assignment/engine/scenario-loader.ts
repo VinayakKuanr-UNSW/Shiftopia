@@ -14,7 +14,7 @@
 
 import { supabase } from '@/platform/realtime/client';
 import { getScenarioWindow } from '@/modules/compliance';
-import { fetchEmployeeContextV2 } from '@/modules/compliance/employee-context';
+import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
 import type { CandidateShift, EmployeeInfo } from '../types';
 
 export interface LoadedScenario {
@@ -121,14 +121,14 @@ export class ScenarioLoader {
 
     private async _fetchEmployee(employeeId: string): Promise<EmployeeInfo> {
         // Fetch profile (name + employment end date) in parallel with v2 context
-        // (contracts, qualifications, visa status via fetchEmployeeContextV2).
+        // (contracts, qualifications, visa status via fetchV8EmployeeContext).
         const [profileRes, ctx] = await Promise.all([
             (supabase as any)
                 .from('profiles')
                 .select('id, full_name, termination_date')
                 .eq('id', employeeId)
                 .single(),
-            fetchEmployeeContextV2(employeeId),
+            fetchV8EmployeeContext(employeeId),
         ]);
 
         if (profileRes.error) {

@@ -24,7 +24,7 @@ interface UseHardValidationProps {
     watchShiftDate: Date | undefined;
     watchEmployeeId: string | null | undefined;
     isTemplateMode: boolean;
-    existingShiftId?: string;
+    existingV8ShiftId?: string;
     timezone?: string;
 }
 
@@ -41,7 +41,7 @@ export function useHardValidation({
     watchShiftDate,
     watchEmployeeId,
     isTemplateMode,
-    existingShiftId,
+    existingV8ShiftId,
     timezone = SYDNEY_TZ,
 }: UseHardValidationProps): UseHardValidationReturn {
     const [hardValidation, setHardValidation] = useState<HardValidationResult>({ passed: true, errors: [] });
@@ -72,7 +72,7 @@ export function useHardValidation({
                 p_employee_id: watchEmployeeId!,
                 p_start_date: startDate,
                 p_end_date: endDate,
-                p_exclude_id: existingShiftId ?? null,
+                p_exclude_id: existingV8ShiftId ?? null,
             });
             if (error) throw error;
             return (data ?? []) as Array<{

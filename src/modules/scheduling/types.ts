@@ -114,6 +114,8 @@ export interface ValidatedProposal {
         description: string;
         blocking: boolean;
     }>;
+    fatigueScore?: number;
+    utilization?: number;
     passing: boolean;
 }
 
@@ -161,7 +163,7 @@ export interface AutoSchedulerResult {
     totalProposals: number;
     passing: number;
     failing: number;
-    uncoveredShiftIds: string[];
+    uncoveredV8ShiftIds: string[];
     uncoveredAudit?: UncoveredAudit[];
     /** Number of uncovered shifts actually audited (audit may be capped for performance). */
     auditedUncoveredCount?: number;

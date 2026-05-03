@@ -1112,12 +1112,12 @@ const LaborDemandForecastingPage: React.FC = () => {
       if (!nameByRole.has(r.id)) nameByRole.set(r.id, r.name);
     });
 
-    const allRoleIds = new Set([
+    const allV8RoleIds = new Set([
       ...reqHoursByRole.keys(),
       ...existingHoursByRole.keys(),
     ]);
 
-    return Array.from(allRoleIds)
+    return Array.from(allV8RoleIds)
       .map((roleId) => {
         const reqH = +(reqHoursByRole.get(roleId) ?? 0).toFixed(1);
         const exH = +(existingHoursByRole.get(roleId) ?? 0).toFixed(1);

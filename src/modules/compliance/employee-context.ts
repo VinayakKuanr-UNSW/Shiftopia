@@ -1,7 +1,7 @@
 /**
  * Employee Context Loader
  *
- * Builds EmployeeContextV2 and fetches a full shift history for any employee,
+ * Builds V8EmployeeContext and fetches a full shift history for any employee,
  * using a SECURITY DEFINER RPC so cross-department shifts are always visible
  * regardless of the calling manager's RLS scope.
  *
@@ -11,10 +11,10 @@
 import { supabase } from '@/platform/realtime/client';
 import { format, addDays, subDays, parseISO } from 'date-fns';
 import type {
-    EmployeeContextV2,
+    V8EmployeeContext,
     ContractRecordV2,
     QualificationV2,
-    ShiftV2,
+    V8OrchestratorShift,
     ContractType,
 } from './v2/types';
 
@@ -24,7 +24,7 @@ import type {
 // =============================================================================
 
 interface CacheEntry {
-    ctx:       EmployeeContextV2;
+    ctx:       V8EmployeeContext;
     expiresAt: number;   // Date.now() ms
 }
 
@@ -46,7 +46,7 @@ export function clearEmployeeContextCache(): void {
 // =============================================================================
 
 /**
- * Fetch the EmployeeContextV2 needed by the V2 compliance engine.
+ * Fetch the V8EmployeeContext needed by the V2 compliance engine.
  *
  * Data sources (all parallel):
  *   - profiles           → contract_type, contracted_weekly_hours
@@ -63,9 +63,9 @@ export function clearEmployeeContextCache(): void {
  * Results are cached for 5 minutes per employee to prevent N+1 queries
  * when compliance is run across many bids in the same session.
  */
-export async function fetchEmployeeContextV2(
+export async function fetchV8EmployeeContext(
     employeeId: string,
-): Promise<EmployeeContextV2> {
+): Promise<V8EmployeeContext> {
     // --- Cache check ---
     const cached = _contextCache.get(employeeId);
     if (cached && cached.expiresAt > Date.now()) {
@@ -142,7 +142,7 @@ export async function fetchEmployeeContextV2(
     // Derive assigned_role_ids from contracts for backward compat.
     const assigned_role_ids = [...new Set(contracts.map(c => c.role_id))];
 
-    const ctx: EmployeeContextV2 = {
+    const ctx: V8EmployeeContext = {
         employee_id:             employeeId,
         contract_type,
         contracted_weekly_hours: 0,
@@ -171,14 +171,14 @@ export async function fetchEmployeeContextV2(
  * @param employeeId   Target employee
  * @param centerDate   YYYY-MM-DD date to centre the window on
  * @param windowDays   Days either side of centerDate (default 35)
- * @param excludeShiftId  Optional: shift ID to exclude (for edit scenarios)
+ * @param excludeV8ShiftId  Optional: shift ID to exclude (for edit scenarios)
  */
 export async function fetchEmployeeShiftsV2(
     employeeId: string,
     centerDate: string,
     windowDays = 35,
-    excludeShiftId: string | null = null,
-): Promise<ShiftV2[]> {
+    excludeV8ShiftId: string | null = null,
+): Promise<V8OrchestratorShift[]> {
     const center   = parseISO(centerDate);
     const startDate = format(subDays(center, windowDays), 'yyyy-MM-dd');
     const endDate   = format(addDays(center, windowDays), 'yyyy-MM-dd');
@@ -188,7 +188,7 @@ export async function fetchEmployeeShiftsV2(
         p_employee_id: employeeId,
         p_start_date:  startDate,
         p_end_date:    endDate,
-        p_exclude_id:  excludeShiftId,
+        p_exclude_id:  excludeV8ShiftId,
     });
 
     if (error || !data) return [];

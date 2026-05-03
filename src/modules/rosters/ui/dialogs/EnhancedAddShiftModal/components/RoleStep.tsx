@@ -34,7 +34,7 @@ export const RoleStep: React.FC<RoleStepProps> = ({
     isRoleLocked,
     isEmployeeLocked
 }) => {
-    const watchRoleId = form.watch('role_id');
+    const watchV8RoleId = form.watch('role_id');
     const watchStartTime = form.watch('start_time');
     const watchEndTime = form.watch('end_time');
     const watchShiftDate = form.watch('shift_date');
@@ -122,7 +122,7 @@ export const RoleStep: React.FC<RoleStepProps> = ({
                                 <Select onValueChange={field.onChange} value={field.value || ''} disabled>
                                     <FormControl>
                                         <SelectTrigger className="bg-muted/50 border-border text-foreground h-11 opacity-70 cursor-not-allowed">
-                                            <SelectValue placeholder={watchRoleId ? 'Loading...' : 'Select a role first'} />
+                                            <SelectValue placeholder={watchV8RoleId ? 'Loading...' : 'Select a role first'} />
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent className="bg-popover border-border">

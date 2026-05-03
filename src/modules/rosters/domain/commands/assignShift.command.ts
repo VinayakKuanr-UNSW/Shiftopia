@@ -21,19 +21,19 @@
  */
 
 import { supabase }                      from '@/platform/realtime/client';
-import { evaluateCompliance }            from '@/modules/compliance/v2/index';
+import { runV8Orchestrator }            from '@/modules/compliance/v8/index';
 import {
-    fetchEmployeeContextV2,
+    fetchV8EmployeeContext,
     fetchEmployeeShiftsV2,
 }                                        from '@/modules/compliance/employee-context';
 import { getAvailabilitySlots }          from '@/modules/availability/api/availability.api';
 import { getAssignedShiftsForAvailability }
                                          from '@/modules/availability/api/availability-view.api';
 import type {
-    AvailabilityDataV2,
-    ShiftV2,
-    ComplianceResultV2,
-} from '@/modules/compliance/v2/types';
+    V8AvailabilityData,
+    V8OrchestratorShift,
+    V8OrchestratorResult,
+} from '@/modules/compliance/v8/types';
 
 export type AssignmentContext = 'MANUAL' | 'AUTO' | 'BID' | 'TRADE';
 
@@ -90,14 +90,14 @@ async function runFullCompliancePreCheck(
     // Fetch all required data in parallel.
     // Any thrown exception propagates — no catch here (fail-closed).
     const [employeeCtx, existingShifts, availSlots, assignedShifts] = await Promise.all([
-        fetchEmployeeContextV2(employeeId),
+        fetchV8EmployeeContext(employeeId),
         fetchEmployeeShiftsV2(employeeId, shift.shift_date, 35, shift.id),
         getAvailabilitySlots(employeeId, shift.shift_date, shift.shift_date),
         getAssignedShiftsForAvailability(employeeId, shift.shift_date, shift.shift_date),
     ]);
 
-    // Build candidate ShiftV2 for the V2 engine
-    const candidateShift: ShiftV2 = {
+    // Build candidate V8OrchestratorShift for the V2 engine
+    const candidateShift: V8OrchestratorShift = {
         shift_id:                shift.id,
         shift_date:              shift.shift_date,
         start_time:              shift.start_time,
@@ -114,7 +114,7 @@ async function runFullCompliancePreCheck(
     };
 
     // Build availability data for R_AVAILABILITY_MATCH
-    const availabilityData: AvailabilityDataV2 = {
+    const availabilityData: V8AvailabilityData = {
         declared_slots: availSlots.map(s => ({
             slot_date:  s.slot_date,
             start_time: s.start_time,
@@ -132,7 +132,7 @@ async function runFullCompliancePreCheck(
     };
 
     // Run V2 engine — all 12 rules evaluated at PUBLISH stage
-    const result = evaluateCompliance(
+    const result = runV8Orchestrator(
         {
             employee_id:       employeeId,
             employee_context:  employeeCtx,
@@ -146,7 +146,7 @@ async function runFullCompliancePreCheck(
             stage:             'PUBLISH',
             availability_data: availabilityData,
         },
-    ) as ComplianceResultV2;
+    ) as V8OrchestratorResult;
 
     // BLOCKING hits — reject regardless of context
     const blockingHits = result.rule_hits.filter(h => h.severity === 'BLOCKING');
@@ -201,7 +201,7 @@ function runSkeletonComplianceCheck(
         is_training?:         boolean;
     },
 ): { error: string | null; advisories: string[] } {
-    const candidateShift: ShiftV2 = {
+    const candidateShift: V8OrchestratorShift = {
         shift_id:                shift.id,
         shift_date:              shift.shift_date,
         start_time:              shift.start_time,
@@ -216,7 +216,7 @@ function runSkeletonComplianceCheck(
 
     // Skeleton mode: employee_id = 'skeleton' triggers the engine to
     // only run R01 (overlap), R02 (min duration), R08 (meal break).
-    const result = evaluateCompliance(
+    const result = runV8Orchestrator(
         {
             employee_id: 'skeleton',
             employee_context: {
@@ -236,7 +236,7 @@ function runSkeletonComplianceCheck(
             operation_type: 'ASSIGN',
             stage:          'DRAFT',
         },
-    ) as ComplianceResultV2;
+    ) as V8OrchestratorResult;
 
     const blockingHits = result.rule_hits.filter(h => h.severity === 'BLOCKING');
     if (blockingHits.length > 0) {

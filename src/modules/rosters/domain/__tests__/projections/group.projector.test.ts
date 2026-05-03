@@ -89,7 +89,7 @@ function makeShift(overrides: Partial<Shift> = {}): Shift {
     is_recurring: false,
     recurrence_rule: null,
     confirmed_at: null,
-    roles: { id: 'role-1', name: 'Stage Hand' },
+    roles: { id: 'role-1', name: 'V8Stage Hand' },
     ...overrides,
   };
 }
@@ -164,8 +164,8 @@ describe('projectGroup — stats', () => {
 
   it('group stats roll up from subgroup shifts', () => {
     const shifts = [
-      makeShift({ group_type: 'theatre', sub_group_name: 'Stage', net_length_minutes: 480, remuneration_rate: 30 }),
-      makeShift({ group_type: 'theatre', sub_group_name: 'Stage', net_length_minutes: 240, remuneration_rate: 30 }),
+      makeShift({ group_type: 'theatre', sub_group_name: 'V8Stage', net_length_minutes: 480, remuneration_rate: 30 }),
+      makeShift({ group_type: 'theatre', sub_group_name: 'V8Stage', net_length_minutes: 240, remuneration_rate: 30 }),
     ];
     const result = projectGroup(shifts);
     const theatre = result.groups.find(g => g.type === 'theatre')!;

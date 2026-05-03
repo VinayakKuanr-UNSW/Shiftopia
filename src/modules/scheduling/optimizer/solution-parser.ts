@@ -79,7 +79,7 @@ export class SolutionParser {
         employeeMap: Map<string, EmployeeMeta>,
     ): {
         groups: EmployeeProposalGroup[];
-        uncoveredShiftIds: string[];
+        uncoveredV8ShiftIds: string[];
         rejected: AssignmentProposal[];
     } {
         const rejected: AssignmentProposal[] = [];
@@ -142,7 +142,7 @@ export class SolutionParser {
 
         return {
             groups,
-            uncoveredShiftIds: response.unassigned_shift_ids.filter(id => shiftMap.has(id)),
+            uncoveredV8ShiftIds: response.unassigned_shift_ids.filter(id => shiftMap.has(id)),
             rejected,
         };
     }

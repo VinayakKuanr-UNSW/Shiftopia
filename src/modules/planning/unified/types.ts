@@ -6,10 +6,10 @@
  * service function's parameter and return shapes.
  */
 
-import type { ComplianceResultV2, FinalStatus, ShiftV2 } from '@/modules/compliance/v2/types';
+import type { V8OrchestratorResult, V8Status, V8OrchestratorShift } from '@/modules/compliance/v8/types';
 
 // Re-export for consumers who import from this module
-export type { ComplianceResultV2, FinalStatus, ShiftV2 };
+export type { V8OrchestratorResult, V8Status, V8OrchestratorShift };
 
 // =============================================================================
 // ENUMERATIONS
@@ -85,13 +85,13 @@ export interface PlanningOffer {
 
 /**
  * Compliance snapshot stored when a BID offer is selected.
- * Extends ComplianceResultV2 with two timestamp fields used for
+ * Extends V8OrchestratorResult with two timestamp fields used for
  * optimistic locking during approval.
  */
-export interface BidComplianceSnapshot extends ComplianceResultV2 {
+export interface BidComplianceSnapshot extends V8OrchestratorResult {
   /** ISO timestamp of shifts.updated_at captured just before compliance run */
   shift_updated_at: string;
-  /** ISO timestamp of when evaluateCompliance() was called */
+  /** ISO timestamp of when runV8Orchestrator() was called */
   evaluated_at: string;
 }
 
@@ -101,14 +101,14 @@ export interface BidComplianceSnapshot extends ComplianceResultV2 {
  * locking during manager approval.
  */
 export interface SwapComplianceSnapshot {
-  combined_status: FinalStatus;
-  party_a: ComplianceResultV2;
-  party_b: ComplianceResultV2;
+  combined_status: V8Status;
+  party_a: V8OrchestratorResult;
+  party_b: V8OrchestratorResult;
   /** shifts.updated_at for the requester's shift (shift_id on the request) */
   shift_updated_at: string;
   /** shifts.updated_at for the offerer's shift (offered_shift_id on the offer) */
   target_shift_updated_at: string;
-  /** ISO timestamp of when evaluateCompliance() was called for both parties */
+  /** ISO timestamp of when runV8Orchestrator() was called for both parties */
   evaluated_at: string;
 }
 
@@ -128,7 +128,7 @@ export interface BlockingHit {
 export interface SelectOfferResult {
   request: PlanningRequest;
   new_status: 'MANAGER_PENDING' | 'BLOCKED';
-  compliance_status: FinalStatus;
+  compliance_status: V8Status;
   blocking_hits?: BlockingHit[];
 }
 
@@ -201,10 +201,10 @@ export function isBidSnapshot(s: PlanningComplianceSnapshot): s is BidCompliance
  * falls back to checking whether R05_student_visa produced any hits.
  */
 export function isStudentVisaEnforced(
-  partyA?: ComplianceResultV2,
-  partyB?: ComplianceResultV2,
+  partyA?: V8OrchestratorResult,
+  partyB?: V8OrchestratorResult,
 ): boolean {
-  const hasVisaHit = (result?: ComplianceResultV2): boolean => {
+  const hasVisaHit = (result?: V8OrchestratorResult): boolean => {
     if (!result) return false;
     return result.rule_hits.some(h => h.rule_id === 'R05');
   };

@@ -23,8 +23,8 @@ import { format, parseISO } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
 import { supabase } from '@/platform/realtime/client';
 import { getScenarioWindow } from '@/modules/compliance';
-import { fetchEmployeeContextV2 } from '@/modules/compliance/employee-context';
-import type { ComplianceInputV2, ShiftV2 } from '@/modules/compliance/v2/types';
+import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
+import type { V8OrchestratorInput, V8OrchestratorShift } from '@/modules/compliance/v8/types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Drawer, DrawerContent } from '@/modules/core/ui/primitives/drawer';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
@@ -70,10 +70,10 @@ export interface ManagerComplianceApprovalModalProps {
     swapId: string;
     requesterEmployeeId: string;
     requesterName: string;
-    requesterShiftId: string;
+    requesterV8ShiftId: string;
     offererEmployeeId: string | null;
     offererName: string;
-    offererShiftId: string | null;
+    offererV8ShiftId: string | null;
     /** Compliance snapshot saved at acceptance time (from swap_offers.compliance_snapshot) */
     storedSnapshot?: any | null;
 }
@@ -219,8 +219,8 @@ function normalizeTime(t: string): string {
     return (t || '00:00').replace(/:\d{2}$/, '');
 }
 
-/** Map a RosterShiftInput to the ShiftV2 structure the v2 engine expects */
-function buildShiftV2(s: RosterShiftInput, fallbackId?: string): ShiftV2 {
+/** Map a RosterShiftInput to the V8OrchestratorShift structure the v2 engine expects */
+function buildV8OrchestratorShift(s: RosterShiftInput, fallbackId?: string): V8OrchestratorShift {
     return {
         shift_id:             (s as any).id || fallbackId || String(Math.random()),
         shift_date:           s.shift_date,
@@ -248,10 +248,10 @@ export function ManagerComplianceApprovalModal({
     onReject,
     requesterEmployeeId,
     requesterName,
-    requesterShiftId,
+    requesterV8ShiftId,
     offererEmployeeId,
     offererName,
-    offererShiftId,
+    offererV8ShiftId,
     storedSnapshot,
 }: ManagerComplianceApprovalModalProps) {
     const [isApproving, setIsApproving] = useState(false);
@@ -262,13 +262,13 @@ export function ManagerComplianceApprovalModal({
     // -------------------------------------------------------------------------
     // Build inputs for useCompliancePanel
     // -------------------------------------------------------------------------
-    const buildInputs = useCallback(async (): Promise<[ComplianceInputV2, ComplianceInputV2]> => {
-        if (!requesterEmployeeId || !requesterShiftId) {
+    const buildInputs = useCallback(async (): Promise<[V8OrchestratorInput, V8OrchestratorInput]> => {
+        if (!requesterEmployeeId || !requesterV8ShiftId) {
             throw new Error('Missing requester employee or shift ID.');
         }
 
         // 1. Fetch both shifts
-        const shiftIds = [requesterShiftId, offererShiftId].filter(Boolean) as string[];
+        const shiftIds = [requesterV8ShiftId, offererV8ShiftId].filter(Boolean) as string[];
         const { data: shiftRows, error: shiftErr } = await supabase
             .from('shifts')
             .select('id, shift_date, start_time, end_time, unpaid_break_minutes, role_id, organization_id, department_id, sub_department_id')
@@ -276,9 +276,9 @@ export function ManagerComplianceApprovalModal({
 
         if (shiftErr) throw shiftErr;
 
-        const requesterShiftData = (shiftRows || []).find((s: ShiftRow) => s.id === requesterShiftId);
-        const offererShiftData   = offererShiftId
-            ? (shiftRows || []).find((s: ShiftRow) => s.id === offererShiftId)
+        const requesterShiftData = (shiftRows || []).find((s: ShiftRow) => s.id === requesterV8ShiftId);
+        const offererShiftData   = offererV8ShiftId
+            ? (shiftRows || []).find((s: ShiftRow) => s.id === offererV8ShiftId)
             : null;
 
         if (!requesterShiftData) throw new Error('Requester shift not found.');
@@ -306,21 +306,21 @@ export function ManagerComplianceApprovalModal({
 
         // 3. Fetch real employee contexts (contracts, qualifications, visa status)
         const [requesterCtx, offererCtx] = await Promise.all([
-            fetchEmployeeContextV2(requesterEmployeeId),
+            fetchV8EmployeeContext(requesterEmployeeId),
             offererEmployeeId
-                ? fetchEmployeeContextV2(offererEmployeeId)
+                ? fetchV8EmployeeContext(offererEmployeeId)
                 : Promise.resolve(null),
         ]);
 
         // 4. Build v2 inputs for each party
         //    Requester: remove their shift, add the offerer's shift (they receive it)
-        const inputA: ComplianceInputV2 = {
+        const inputA: V8OrchestratorInput = {
             employee_id:      requesterEmployeeId,
             employee_context: requesterCtx,
-            existing_shifts:  requesterRoster.map(s => buildShiftV2(s)),
+            existing_shifts:  requesterRoster.map(s => buildV8OrchestratorShift(s)),
             candidate_changes: {
-                add_shifts:    offererShiftData ? [buildShiftV2(offererShiftData)] : [],
-                remove_shifts: [requesterShiftId],
+                add_shifts:    offererShiftData ? [buildV8OrchestratorShift(offererShiftData)] : [],
+                remove_shifts: [requesterV8ShiftId],
             },
             mode:           'SIMULATED',
             operation_type: 'SWAP',
@@ -328,7 +328,7 @@ export function ManagerComplianceApprovalModal({
         };
 
         //    Offerer: remove their shift, add the requester's shift (they receive it)
-        const inputB: ComplianceInputV2 = {
+        const inputB: V8OrchestratorInput = {
             employee_id:      offererEmployeeId || '',
             employee_context: offererCtx ?? {
                 employee_id:             '',
@@ -338,10 +338,10 @@ export function ManagerComplianceApprovalModal({
                 contracts:               [],
                 qualifications:          [],
             },
-            existing_shifts:  offererRoster.map(s => buildShiftV2(s)),
+            existing_shifts:  offererRoster.map(s => buildV8OrchestratorShift(s)),
             candidate_changes: {
-                add_shifts:    requesterShiftData ? [buildShiftV2(requesterShiftData)] : [],
-                remove_shifts: offererShiftId ? [offererShiftId] : [],
+                add_shifts:    requesterShiftData ? [buildV8OrchestratorShift(requesterShiftData)] : [],
+                remove_shifts: offererV8ShiftId ? [offererV8ShiftId] : [],
             },
             mode:           'SIMULATED',
             operation_type: 'SWAP',
@@ -351,9 +351,9 @@ export function ManagerComplianceApprovalModal({
         return [inputA, inputB];
     }, [
         requesterEmployeeId,
-        requesterShiftId,
+        requesterV8ShiftId,
         offererEmployeeId,
-        offererShiftId,
+        offererV8ShiftId,
     ]);
 
     // -------------------------------------------------------------------------

@@ -58,7 +58,7 @@ import {
 interface BulkAssignShiftsModalProps {
     isOpen: boolean;
     onClose: () => void;
-    selectedShiftIds: string[];
+    selectedV8ShiftIds: string[];
     onAssignAll: (employeeId: string, shiftIds: string[]) => Promise<void>;
 }
 
@@ -149,7 +149,7 @@ const summarizeShifts = (shifts: ShiftData[]): ShiftSummary => {
 export const BulkAssignShiftsModal: React.FC<BulkAssignShiftsModalProps> = ({
     isOpen,
     onClose,
-    selectedShiftIds,
+    selectedV8ShiftIds,
     onAssignAll,
 }) => {
     // State for Partial Apply
@@ -195,7 +195,7 @@ export const BulkAssignShiftsModal: React.FC<BulkAssignShiftsModalProps> = ({
     // Fetch shifts when modal opens
     useEffect(() => {
         const fetchShifts = async () => {
-            if (!isOpen || selectedShiftIds.length === 0) {
+            if (!isOpen || selectedV8ShiftIds.length === 0) {
                 setShifts([]);
                 return;
             }
@@ -215,7 +215,7 @@ export const BulkAssignShiftsModal: React.FC<BulkAssignShiftsModalProps> = ({
                         assigned_employee_id,
                         roles (name)
                     `)
-                    .in('id', selectedShiftIds)
+                    .in('id', selectedV8ShiftIds)
                     .is('deleted_at', null);
 
                 if (error) {
@@ -249,7 +249,7 @@ export const BulkAssignShiftsModal: React.FC<BulkAssignShiftsModalProps> = ({
         };
 
         fetchShifts();
-    }, [isOpen, selectedShiftIds, toast]);
+    }, [isOpen, selectedV8ShiftIds, toast]);
 
     // Reset state when modal closes
     useEffect(() => {
@@ -289,14 +289,14 @@ export const BulkAssignShiftsModal: React.FC<BulkAssignShiftsModalProps> = ({
 
     // Explicit Compliance Run
     const handleRunCompliance = async () => {
-        if (!selectedEmployeeId || selectedShiftIds.length === 0) return;
+        if (!selectedEmployeeId || selectedV8ShiftIds.length === 0) return;
 
         setIsCheckingCompliance(true);
         try {
             const response = await checkBulkCompliance({
                 actionType: 'BULK_ASSIGN',
                 mode: 'ALL_OR_NOTHING', // The check is always all-or-nothing check first, then we filter results
-                assignments: selectedShiftIds.map(shiftId => ({
+                assignments: selectedV8ShiftIds.map(shiftId => ({
                     shiftId,
                     employeeId: selectedEmployeeId
                 }))
@@ -359,7 +359,7 @@ export const BulkAssignShiftsModal: React.FC<BulkAssignShiftsModalProps> = ({
         try {
             await onAssignAll(selectedEmployeeId, shiftsToAssign);
 
-            const totalRequested = selectedShiftIds.length;
+            const totalRequested = selectedV8ShiftIds.length;
             const assignedCount = shiftsToAssign.length;
             const skippedCount = totalRequested - assignedCount;
 
@@ -386,7 +386,7 @@ export const BulkAssignShiftsModal: React.FC<BulkAssignShiftsModalProps> = ({
                     <DialogTitle className="text-xl font-semibold flex items-center justify-between">
                         <span>Bulk Assign – Compliance Review</span>
                         <Badge variant="outline" className="ml-2 font-mono">
-                            {selectedShiftIds.length} shifts selected
+                            {selectedV8ShiftIds.length} shifts selected
                         </Badge>
                     </DialogTitle>
                     <p className="text-sm text-muted-foreground mt-1">
@@ -467,7 +467,7 @@ export const BulkAssignShiftsModal: React.FC<BulkAssignShiftsModalProps> = ({
                                                     </div>
                                                     <div>
                                                         <div className="text-xs text-white/40 uppercase tracking-wider mb-1">Shifts</div>
-                                                        <div className="font-medium text-white">{selectedShiftIds.length} shifts to assign</div>
+                                                        <div className="font-medium text-white">{selectedV8ShiftIds.length} shifts to assign</div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -479,7 +479,7 @@ export const BulkAssignShiftsModal: React.FC<BulkAssignShiftsModalProps> = ({
                                                 <Clock className="h-10 w-10 text-purple-400 mb-4" />
                                                 <h3 className="text-lg font-medium text-white mb-2">Ready to Simulate</h3>
                                                 <p className="text-white/50 max-w-md text-center mb-6">
-                                                    Run a compliance simulation to check how these {selectedShiftIds.length} shifts will affect {employees.find(e => e.id === selectedEmployeeId)?.name}'s schedule.
+                                                    Run a compliance simulation to check how these {selectedV8ShiftIds.length} shifts will affect {employees.find(e => e.id === selectedEmployeeId)?.name}'s schedule.
                                                 </p>
                                                 <Button
                                                     onClick={handleRunCompliance}

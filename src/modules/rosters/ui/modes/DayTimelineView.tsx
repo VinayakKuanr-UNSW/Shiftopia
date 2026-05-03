@@ -224,7 +224,7 @@ export interface DayTimelineViewProps {
   isShiftsLoading?: boolean;
   isBulkMode?: boolean;
   isDnDModeActive?: boolean;
-  selectedShiftIds?: Set<string>;
+  selectedV8ShiftIds?: Set<string>;
   onBulkToggle?: (id: string) => void;
   complianceMap?: Record<string, any>;
   isBucketView?: boolean;
@@ -280,7 +280,7 @@ const DroppableShiftAssign: React.FC<DroppableShiftAssignProps> = ({
 // ─── DayTimelineView ─────────────────────────────────────────────────────
 const DayTimelineView: React.FC<DayTimelineViewProps> = ({
   visualGroups, selectedDate, canEdit, isShiftsLoading,
-  isBulkMode, isDnDModeActive, selectedShiftIds, onBulkToggle,
+  isBulkMode, isDnDModeActive, selectedV8ShiftIds, onBulkToggle,
   isBucketView,
   zoom,
   onSlotClick, onShiftEdit, onShiftDelete, onShiftPublish, onShiftUnpublish, onShiftClone,
@@ -408,7 +408,7 @@ const DayTimelineView: React.FC<DayTimelineViewProps> = ({
     type: 'move' | 'resize' | 'resize-top';
     shiftId?: string;
     bucketKey?: string;
-    targetShiftIds?: string[];
+    targetV8ShiftIds?: string[];
     pointerY: number;
     origS: number; origE: number;
     previewS: number; previewE: number;
@@ -856,7 +856,7 @@ const DayTimelineView: React.FC<DayTimelineViewProps> = ({
                               canEdit={canEdit}
                               isBulkMode={!!isBulkMode}
                               isDnDModeActive={!!isDnDModeActive}
-                              isSelected={!!selectedShiftIds?.has(sh.id)}
+                              isSelected={!!selectedV8ShiftIds?.has(sh.id)}
                               isDragging={isDragging}
                               onBulkToggle={onBulkToggle}
                               onEdit={onShiftEdit}
