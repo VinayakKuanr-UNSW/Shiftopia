@@ -17,7 +17,7 @@ export type { UserContract, AccessCertificate, PermissionObject } from './types'
  * can view/edit across the application.
  */
 export interface AccessScope {
-  organizationId: string;
+  organizationId: string | null;
   organizationName: string;
   departmentId: string | null;
   departmentName: string | null;
@@ -84,7 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       if (permissions) {
         setPermissionObject(permissions);
         console.log('[Auth] Permissions loaded:', {
-          typeX: permissions.typeX.length,
+          typeX: permissions.typeX?.length || 0,
           typeY: permissions.typeY?.level || 'none',
           orgs: permissions.allowed_scope_tree?.organizations?.length || 0,
         });
@@ -266,7 +266,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     // 2. Secondary source: Fallback to first organization in permission tree (for administrative global access)
     // Only if the user has Zeta/Epsilon permissions (Type Y equivalents)
     const firstOrg = permissionObject?.allowed_scope_tree?.organizations?.[0];
-    if (firstOrg && (permissionObject?.typeY || permissionObject?.typeX.length > 0)) {
+    if (firstOrg && (permissionObject?.typeY || (permissionObject?.typeX?.length ?? 0) > 0)) {
       return {
         organizationId: firstOrg.id,
         organizationName: firstOrg.name,

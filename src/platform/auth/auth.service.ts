@@ -89,17 +89,21 @@ export const authService = {
                 subDepartmentName: c.sub_department_id ? (c.sub_departments ? (c.sub_departments as any).name : null) : null,
             }));
 
-            // 4. Calculate Highest Access Level (Using Certificates)
+            // 4. Calculate Highest Access Level (Using Certificates and Contracts)
             const levels: AccessLevel[] = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'];
             let highest: AccessLevel = 'alpha' as AccessLevel;
 
-            if (certificates.length > 0) {
-                certificates.forEach(cert => {
-                    const currentIdx = levels.indexOf(highest);
-                    const newIdx = levels.indexOf(cert.accessLevel);
-                    if (newIdx > currentIdx) highest = cert.accessLevel;
-                });
-            }
+            // Gather all candidate levels
+            const candidateLevels: AccessLevel[] = [
+                ...certificates.map(c => c.accessLevel),
+                ...contracts.map(c => c.accessLevel)
+            ];
+
+            candidateLevels.forEach(level => {
+                const currentIdx = levels.indexOf(highest);
+                const newIdx = levels.indexOf(level);
+                if (newIdx > currentIdx) highest = level;
+            });
 
             let derivedRole: Role = 'member';
             if (highest === 'zeta' || highest === 'epsilon') derivedRole = 'admin';
@@ -125,7 +129,7 @@ export const authService = {
                 contracts: contracts,
                 certificates: certificates,
                 highestAccessLevel: highest,
-                preferences: profile.preferences,
+                preferences: profile.preferences as User['preferences'],
             };
         } catch (e: any) {
             console.error('[AuthService] getUserProfile EXCEPTION:', e.message);
@@ -149,7 +153,7 @@ export const authService = {
                 return null;
             }
 
-            return data as PermissionObject;
+            return (data as unknown) as PermissionObject;
         } catch (e: any) {
             console.error('[AuthService] fetchPermissions EXCEPTION:', e.message);
             return null;

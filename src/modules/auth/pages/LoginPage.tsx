@@ -1,44 +1,16 @@
-// src/pages/LoginPage.tsx
-// FIXED VERSION - Better error handling and loading states
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';
-import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
-import { cn } from '@/modules/core/lib/utils';
+import { Mail, Lock, Loader2, AlertCircle, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 
-/* ============================================================
-   SHIFTOPIA LOGO COMPONENT
-   ============================================================ */
-const ShiftopiaLogo: React.FC<{ className?: string }> = ({ className }) => (
-  <svg
-    width="48"
-    height="48"
-    viewBox="0 0 24 24"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-  >
-    <path
-      d="M12.381 3.99998C12.381 3.99998 12.381 12.023 12.381 12.023C12.381 12.023 20.355 12.023 20.355 12.023C20.355 12.023 12.381 20.046 12.381 20.046C12.381 20.046 12.381 12.023 12.381 12.023C12.381 12.023 4.40698 12.023 4.40698 12.023C4.40698 12.023 12.381 3.99998 12.381 3.99998Z"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-/* ============================================================
-   LOGIN PAGE COMPONENT
-   ============================================================ */
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
@@ -47,16 +19,13 @@ const LoginPage: React.FC = () => {
   const { toast } = useToast();
   const { login, isAuthenticated, isLoading, error: authError } = useAuth();
 
-  // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated && !isLoading) {
       const from = (location.state as any)?.from?.pathname || '/my-roster';
-      console.log('[Login] Already authenticated, redirecting to:', from);
       navigate(from, { replace: true });
     }
   }, [isAuthenticated, isLoading, navigate, location]);
 
-  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -69,160 +38,193 @@ const LoginPage: React.FC = () => {
     setLoginError(null);
 
     try {
-      console.log('[Login] Submitting login for:', email);
       await login(email.trim(), password);
 
       toast({
         title: 'Welcome back!',
-        description: 'Login successful.',
+        description: 'You have successfully signed in.',
       });
 
       const from = (location.state as any)?.from?.pathname || '/my-roster';
       navigate(from, { replace: true });
     } catch (err: any) {
-      console.error('[Login] Login failed:', err);
-
-      const errorMessage = err.message || 'Login failed. Please try again.';
-      setLoginError(errorMessage);
-
-      toast({
-        title: 'Login Failed',
-        description: errorMessage,
-        variant: 'destructive',
-      });
+      setLoginError(err.message || 'Invalid email or password');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Show loading while checking auth state
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-10 w-10 text-primary animate-spin" />
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-[#0f1113]">
+        <Loader2 className="h-10 w-10 text-purple-500 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden bg-background">
-      {/* Background Ambience */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-primary/20 via-background to-background pointer-events-none" />
-      <div className="absolute top-0 left-0 w-full h-full bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjAwIj48ZmlsdGVyIGlkPSJuIj48ZmVUdXJidWxlbmNlIHR5cGU9ImZyYWN0YWxOb2lzZSIgYmFzZUZyZXF1ZW5jeT0iMC42NSIgbnVtT2N0YXZlcz0iMyIgc3RpdGNoVGlsZXM9InN0aXRjaCIvPjwvZmlsdGVyPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbHRlcj0idXJsKCNuKSIvPjwvc3ZnPg==')] opacity-20 pointer-events-none mix-blend-soft-light" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/20 rounded-full blur-[100px] pointer-events-none" />
+    <div className="min-h-screen w-full flex flex-col md:flex-row bg-[#0f1113] font-sans">
 
+      {/* LEFT SIDE */}
       <motion.div
-        initial={{ opacity: 0, y: 20, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.5, ease: 'easeOut' }}
-        className="w-full max-w-sm relative z-10"
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.8 }}
+        className="hidden md:flex md:w-1/2 relative overflow-hidden md:rounded-l-2xl"
       >
-        <div
-          className={cn(
-            'rounded-2xl p-8 md:p-10 shadow-2xl',
-            'bg-card/40 backdrop-blur-xl',
-            'border border-white/10'
-          )}
-        >
-          {/* Header */}
-          <header className="text-center mb-8">
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="flex justify-center items-center gap-3 mb-6"
-            >
-              <div className="p-3 rounded-xl bg-primary/20 ring-1 ring-primary/50 shadow-glow">
-                <ShiftopiaLogo className="text-primary-foreground" />
-              </div>
-            </motion.div>
+        {/* Image */}
+        <img
+          src="/auth-bg.jpeg"
+          alt="Background"
+          className="absolute inset-0 w-full h-full object-cover scale-105"
+        />
 
-            <h1 className="text-3xl font-bold text-foreground mb-2 tracking-tight">Welcome Back</h1>
-            <p className="text-muted-foreground text-sm">
-              Enter your credentials to access the platform.
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0f1113]/80 via-transparent to-transparent" />
+
+        {/* Inner shadow (premium depth) */}
+        <div className="absolute inset-0 shadow-[inset_0_0_120px_rgba(0,0,0,0.6)]" />
+
+        {/* Content */}
+        <div className="absolute bottom-12 left-12 z-10">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-8 h-8 rounded-lg bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+              <ShieldCheck className="w-5 h-5 text-purple-400" />
+            </div>
+            <span className="text-white/80 text-xs uppercase tracking-wider">
+              Enterprise Grade Security
+            </span>
+          </div>
+
+          <h2 className="text-4xl font-bold text-white mb-2 leading-tight">
+            Manage your workforce <br /> with intelligence.
+          </h2>
+
+          <p className="text-white/60 text-lg max-w-md">
+            The ultimate platform for shift scheduling and labor optimization.
+          </p>
+        </div>
+
+        {/* Glass divider edge */}
+        <div className="absolute right-0 top-0 h-full w-[2px] bg-white/10 backdrop-blur-md" />
+      </motion.div>
+
+      {/* RIGHT SIDE */}
+      <motion.div
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.8 }}
+        className="flex-1 flex items-center justify-center p-6 md:p-12 bg-[#1a1c1e]"
+      >
+        <div className="w-full max-w-md">
+
+          {/* Header */}
+          <header className="mb-10">
+            <h1 className="text-4xl font-bold text-white mb-3">Sign In</h1>
+            <p className="text-gray-400">
+              Already have an account?{' '}
+              <Link
+                to="/signup"
+                className="text-purple-400 hover:text-purple-300 underline underline-offset-4"
+              >
+                Create one
+              </Link>
             </p>
           </header>
 
-          {/* Error Display */}
-          {(loginError || authError) && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              className="mb-6 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2"
-            >
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <p>{loginError || authError}</p>
-            </motion.div>
-          )}
+          {/* Error */}
+          <AnimatePresence>
+            {(loginError || authError) && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-3 text-red-400 text-sm"
+              >
+                <AlertCircle className="w-5 h-5" />
+                <p>{loginError || authError}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          {/* Login Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
+
+            {/* Email */}
+            <div>
+              <label className="text-sm text-gray-300">Email Address</label>
+              <div className="relative mt-2">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <Input
                   type="email"
-                  placeholder="Email Address"
+                  placeholder="name@company.com"
                   value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setLoginError(null);
-                  }}
-                  className="pl-9 h-11 bg-black/20 border-white/10 focus:bg-black/40 transition-colors"
-                  required
-                  disabled={isSubmitting}
-                  autoFocus
-                />
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="password"
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setLoginError(null);
-                  }}
-                  className="pl-9 h-11 bg-black/20 border-white/10 focus:bg-black/40 transition-colors"
-                  required
-                  disabled={isSubmitting}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-14 pl-12 bg-[#25282c] text-white rounded-xl"
                 />
               </div>
             </div>
 
+            {/* Password */}
+            <div>
+              <label className="text-sm text-gray-300">Password</label>
+              <div className="relative mt-2">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <Input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="h-14 pl-12 pr-12 bg-[#25282c] text-white rounded-xl"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500"
+                >
+                  {showPassword ? <EyeOff /> : <Eye />}
+                </button>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-between text-sm">
+              <label className="flex items-center gap-2 text-gray-400">
+                <input type="checkbox" className="w-4 h-4" />
+                Remember me
+              </label>
+
+              <Link to="/forgot-password" className="text-purple-400">
+                Forgot password?
+              </Link>
+            </div>
+
+            {/* Button */}
             <Button
               type="submit"
-              disabled={isSubmitting || !email.trim() || !password}
-              className="w-full h-11 text-base shadow-glow hover:shadow-glow/50 transition-all duration-300"
-              size="lg"
+              disabled={isSubmitting}
+              className="w-full h-14 bg-purple-600 hover:bg-purple-500 rounded-xl"
             >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing In...
-                </>
-              ) : (
-                'Sign In'
-              )}
+              {isSubmitting ? <Loader2 className="animate-spin" /> : 'Sign In'}
             </Button>
           </form>
 
-          {/* Footer */}
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>
-              Don't have an account?{' '}
-              <Link to="/signup" className="text-primary hover:underline font-medium">
-                Sign Up
-              </Link>
-            </p>
+          {/* Divider */}
+          <div className="mt-8 text-center text-gray-500 text-xs">
+            Or continue with
           </div>
-          <div className="mt-4 text-center text-xs text-muted-foreground/60">
-            <p>Protected by enterprise-grade security.</p>
-          </div>
+
+          {/* OneLogin */}
+          <Button
+            variant="outline"
+            className="w-full h-14 mt-4 border-gray-700 text-white rounded-xl"
+          >
+            Login with OneLogin
+          </Button>
+
+          <footer className="mt-12 text-center text-xs text-gray-600">
+            © 2026 Shiftopia Labor Management
+          </footer>
         </div>
       </motion.div>
     </div>

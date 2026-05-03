@@ -1,48 +1,25 @@
 // src/modules/auth/pages/SignUpPage.tsx
-// Registration Page for new users
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';
 import { supabase } from '@/platform/realtime/client';
-import { Mail, Lock, User, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { cn } from '@/modules/core/lib/utils';
+import {
+    Mail, Lock, User, Loader2, AlertCircle,
+    CheckCircle2, ShieldCheck, Eye, EyeOff
+} from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 
-/* ============================================================
-   SHIFTOPIA LOGO COMPONENT
-   ============================================================ */
-const ShiftopiaLogo: React.FC<{ className?: string }> = ({ className }) => (
-    <svg
-        width="48"
-        height="48"
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className={className}
-    >
-        <path
-            d="M12.381 3.99998C12.381 3.99998 12.381 12.023 12.381 12.023C12.381 12.023 20.355 12.023 20.355 12.023C20.355 12.023 12.381 20.046 12.381 20.046C12.381 20.046 12.381 12.023 12.381 12.023C12.381 12.023 4.40698 12.023 4.40698 12.023C4.40698 12.023 12.381 3.99998 12.381 3.99998Z"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-        />
-    </svg>
-);
-
-/* ============================================================
-   SIGN UP PAGE COMPONENT
-   ============================================================ */
 const SignUpPage: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [signUpError, setSignUpError] = useState<string | null>(null);
     const [isSuccess, setIsSuccess] = useState(false);
@@ -51,20 +28,17 @@ const SignUpPage: React.FC = () => {
     const { toast } = useToast();
     const { isAuthenticated, isLoading } = useAuth();
 
-    // Redirect if already authenticated
     useEffect(() => {
         if (isAuthenticated && !isLoading) {
             navigate('/dashboard', { replace: true });
         }
     }, [isAuthenticated, isLoading, navigate]);
 
-    // Handle form submission
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Validation
         if (!email.trim() || !password || !confirmPassword || !firstName.trim() || !lastName.trim()) {
-            setSignUpError('Please fill in all required fields (Name, Email, Password)');
+            setSignUpError('Please fill in all required fields');
             return;
         }
 
@@ -82,22 +56,18 @@ const SignUpPage: React.FC = () => {
         setSignUpError(null);
 
         try {
-            console.log('[SignUp] Submitting registration for:', email);
-
             const { data, error } = await supabase.auth.signUp({
                 email: email.trim(),
                 password,
                 options: {
                     data: {
-                        first_name: firstName.trim() || 'User',
-                        last_name: lastName.trim() || '',
+                        first_name: firstName.trim(),
+                        last_name: lastName.trim(),
                     },
                 },
             });
 
-            if (error) {
-                throw error;
-            }
+            if (error) throw error;
 
             if (data.user) {
                 setIsSuccess(true);
@@ -105,227 +75,145 @@ const SignUpPage: React.FC = () => {
                     title: 'Account Created!',
                     description: 'Please check your email to verify your account.',
                 });
-
-                // If email confirmation is disabled, redirect to pending-access
-                if (data.session) {
-                    navigate('/pending-access', { replace: true });
-                }
+                if (data.session) navigate('/pending-access', { replace: true });
             }
         } catch (err: any) {
-            console.error('[SignUp] Registration failed:', err);
-
-            const errorMessage = err.message || 'Registration failed. Please try again.';
-            setSignUpError(errorMessage);
-
-            toast({
-                title: 'Registration Failed',
-                description: errorMessage,
-                variant: 'destructive',
-            });
+            setSignUpError(err.message || 'Registration failed');
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    // Show loading while checking auth state
     if (isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-background">
-                <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="h-10 w-10 text-primary animate-spin" />
-                    <p className="text-muted-foreground">Loading...</p>
-                </div>
+            <div className="min-h-screen flex items-center justify-center bg-[#0f1113]">
+                <Loader2 className="h-10 w-10 text-purple-500 animate-spin" />
             </div>
         );
     }
 
-    // Success state
     if (isSuccess) {
         return (
-            <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden bg-background">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-primary/20 via-background to-background pointer-events-none" />
-
+            <div className="min-h-screen w-full flex items-center justify-center p-6 bg-[#0f1113]">
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="w-full max-w-sm relative z-10"
+                    className="w-full max-w-md p-10 rounded-2xl bg-[#1a1c1e] border border-white/5 shadow-2xl text-center"
                 >
-                    <div className="rounded-2xl p-8 md:p-10 shadow-2xl bg-card/40 backdrop-blur-xl border border-white/10 text-center">
-                        <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ delay: 0.2, type: 'spring' }}
-                            className="mx-auto mb-6 w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center"
-                        >
-                            <CheckCircle2 className="w-8 h-8 text-emerald-400" />
-                        </motion.div>
-
-                        <h2 className="text-2xl font-bold text-foreground mb-2">Check Your Email</h2>
-                        <p className="text-muted-foreground text-sm mb-6">
-                            We've sent a verification link to <strong>{email}</strong>.
-                            Click the link to activate your account.
-                        </p>
-
-                        <Link to="/login">
-                            <Button variant="outline" className="w-full">
-                                Back to Login
-                            </Button>
-                        </Link>
+                    <div className="mx-auto mb-6 w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                        <CheckCircle2 className="w-10 h-10 text-emerald-400" />
                     </div>
+                    <h2 className="text-3xl font-bold text-white mb-4">Verification Sent</h2>
+                    <p className="text-gray-400 mb-8">
+                        We've sent a link to <strong>{email}</strong>.
+                    </p>
+                    <Link to="/login">
+                        <Button className="w-full h-14 bg-purple-600 hover:bg-purple-500 text-white rounded-xl">
+                            Return to Sign In
+                        </Button>
+                    </Link>
                 </motion.div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden bg-background">
-            {/* Background Ambience */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-primary/20 via-background to-background pointer-events-none" />
-            <div className="absolute top-0 left-0 w-full h-full bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjAwIj48ZmlsdGVyIGlkPSJuIj48ZmVUdXJidWxlbmNlIHR5cGU9ImZyYWN0YWxOb2lzZSIgYmFzZUZyZXF1ZW5jeT0iMC42NSIgbnVtT2N0YXZlcz0iMyIgc3RpdGNoVGlsZXM9InN0aXRjaCIvPjwvZmlsdGVyPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbHRlcj0idXJsKCNuKSIvPjwvc3ZnPg==')] opacity-20 pointer-events-none mix-blend-soft-light" />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/20 rounded-full blur-[100px] pointer-events-none" />
+        <div className="min-h-screen w-full flex flex-col md:flex-row bg-[#0f1113] font-sans">
 
+            {/* LEFT SIDE */}
             <motion.div
-                initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.5, ease: 'easeOut' }}
-                className="w-full max-w-sm relative z-10"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.8 }}
+                className="hidden md:flex md:w-1/2 relative overflow-hidden md:rounded-l-2xl"
             >
-                <div
-                    className={cn(
-                        'rounded-2xl p-8 md:p-10 shadow-2xl',
-                        'bg-card/40 backdrop-blur-xl',
-                        'border border-white/10'
-                    )}
-                >
-                    {/* Header */}
-                    <header className="text-center mb-8">
-                        <motion.div
-                            initial={{ scale: 0.8, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            transition={{ delay: 0.2 }}
-                            className="flex justify-center items-center gap-3 mb-6"
-                        >
-                            <div className="p-3 rounded-xl bg-primary/20 ring-1 ring-primary/50 shadow-glow">
-                                <ShiftopiaLogo className="text-primary-foreground" />
-                            </div>
-                        </motion.div>
+                <img
+                    src="/auth-bg.jpeg"
+                    alt="Background"
+                    className="absolute inset-0 w-full h-full object-cover scale-105"
+                />
 
-                        <h1 className="text-3xl font-bold text-foreground mb-2 tracking-tight">Create Account</h1>
-                        <p className="text-muted-foreground text-sm">
-                            Join your team and start managing shifts.
-                        </p>
-                    </header>
+                {/* gradient */}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0f1113]/80 via-transparent to-transparent" />
 
-                    {/* Error Display */}
-                    {signUpError && (
-                        <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            className="mb-6 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2"
-                        >
-                            <AlertCircle className="h-4 w-4 shrink-0" />
-                            <p>{signUpError}</p>
-                        </motion.div>
-                    )}
+                {/* inner shadow */}
+                <div className="absolute inset-0 shadow-[inset_0_0_120px_rgba(0,0,0,0.6)]" />
 
-                    {/* Registration Form */}
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="relative">
-                                <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    type="text"
-                                    placeholder="First Name"
-                                    value={firstName}
-                                    onChange={(e) => setFirstName(e.target.value)}
-                                    className="pl-9 h-11 bg-black/20 border-white/10 focus:bg-black/40 transition-colors"
-                                    disabled={isSubmitting}
-                                />
-                            </div>
-                            <Input
-                                type="text"
-                                placeholder="Last Name"
-                                value={lastName}
-                                onChange={(e) => setLastName(e.target.value)}
-                                className="h-11 bg-black/20 border-white/10 focus:bg-black/40 transition-colors"
-                                disabled={isSubmitting}
-                            />
+                {/* content */}
+                <div className="absolute bottom-12 left-12 z-10">
+                    <div className="flex items-center gap-2 mb-4">
+                        <div className="w-8 h-8 rounded-lg bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+                            <ShieldCheck className="w-5 h-5 text-purple-400" />
                         </div>
-
-                        <div className="relative">
-                            <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                type="email"
-                                placeholder="Email Address"
-                                value={email}
-                                onChange={(e) => {
-                                    setEmail(e.target.value);
-                                    setSignUpError(null);
-                                }}
-                                className="pl-9 h-11 bg-black/20 border-white/10 focus:bg-black/40 transition-colors"
-                                required
-                                disabled={isSubmitting}
-                            />
-                        </div>
-
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                type="password"
-                                placeholder="Password"
-                                value={password}
-                                onChange={(e) => {
-                                    setPassword(e.target.value);
-                                    setSignUpError(null);
-                                }}
-                                className="pl-9 h-11 bg-black/20 border-white/10 focus:bg-black/40 transition-colors"
-                                required
-                                disabled={isSubmitting}
-                            />
-                        </div>
-
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                type="password"
-                                placeholder="Confirm Password"
-                                value={confirmPassword}
-                                onChange={(e) => {
-                                    setConfirmPassword(e.target.value);
-                                    setSignUpError(null);
-                                }}
-                                className="pl-9 h-11 bg-black/20 border-white/10 focus:bg-black/40 transition-colors"
-                                required
-                                disabled={isSubmitting}
-                            />
-                        </div>
-
-                        <Button
-                            type="submit"
-                            disabled={isSubmitting || !email.trim() || !password || !confirmPassword}
-                            className="w-full h-11 text-base shadow-glow hover:shadow-glow/50 transition-all duration-300"
-                            size="lg"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Creating Account...
-                                </>
-                            ) : (
-                                'Sign Up'
-                            )}
-                        </Button>
-                    </form>
-
-                    {/* Footer */}
-                    <div className="mt-6 text-center text-sm text-muted-foreground">
-                        <p>
-                            Already have an account?{' '}
-                            <Link to="/login" className="text-primary hover:underline font-medium">
-                                Sign In
-                            </Link>
-                        </p>
+                        <span className="text-white/80 text-xs uppercase">Premium Experience</span>
                     </div>
+
+                    <h2 className="text-4xl font-bold text-white mb-2">
+                        Elevate your team <br /> management game.
+                    </h2>
+
+                    <p className="text-white/60 text-lg max-w-md">
+                        Join organizations optimizing their workforce.
+                    </p>
+                </div>
+
+                {/* glass divider */}
+                <div className="absolute right-0 top-0 h-full w-[2px] bg-white/10 backdrop-blur-md" />
+            </motion.div>
+
+            {/* RIGHT SIDE */}
+            <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.8 }}
+                className="flex-1 flex items-center justify-center p-6 md:p-12 bg-[#1a1c1e]"
+            >
+                <div className="w-full max-w-md">
+
+                    <h1 className="text-4xl font-bold text-white mb-3">Create an account</h1>
+
+                    <p className="text-gray-400 mb-6">
+                        Already have an account?{' '}
+                        <Link to="/login" className="text-purple-400">Log in</Link>
+                    </p>
+
+                    <AnimatePresence>
+                        {signUpError && (
+                            <motion.div className="mb-4 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex gap-2">
+                                <AlertCircle className="w-5 h-5" />
+                                {signUpError}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    <form onSubmit={handleSubmit} className="space-y-4">
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <Input placeholder="First Name" value={firstName} onChange={e => setFirstName(e.target.value)} />
+                            <Input placeholder="Last Name" value={lastName} onChange={e => setLastName(e.target.value)} />
+                        </div>
+
+                        <Input placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
+
+                        <Input
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Password"
+                            value={password}
+                            onChange={e => setPassword(e.target.value)}
+                        />
+
+                        <Input
+                            type="password"
+                            placeholder="Confirm Password"
+                            value={confirmPassword}
+                            onChange={e => setConfirmPassword(e.target.value)}
+                        />
+
+                        <Button className="w-full h-14 bg-purple-600">
+                            {isSubmitting ? <Loader2 className="animate-spin" /> : 'Create account'}
+                        </Button>
+
+                    </form>
                 </div>
             </motion.div>
         </div>

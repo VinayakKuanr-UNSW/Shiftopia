@@ -28,7 +28,7 @@ interface Profile {
 const UsersPage: React.FC = () => {
     const { user: currentUser } = useAuth();
     const { isDark } = useTheme();
-    const isZeta = currentUser?.highestAccessLevel === 'zeta';
+    const isAuthorizedAdmin = ['epsilon', 'zeta'].includes(currentUser?.highestAccessLevel || '');
 
     // State
     const [selectedUserId, setSelectedUserId] = useState<string>('');
@@ -87,7 +87,7 @@ const UsersPage: React.FC = () => {
                         profiles={profiles}
                         selectedUserId={selectedUserId}
                         onUserSelect={setSelectedUserId}
-                        isZeta={isZeta}
+                        isZeta={isAuthorizedAdmin}
                         transparent
                     />
                 </div>
@@ -133,7 +133,7 @@ const UsersPage: React.FC = () => {
                                     <p className="text-muted-foreground text-sm font-medium">{selectedUser?.email}</p>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    {isZeta && selectedUser && (
+                                    {isAuthorizedAdmin && selectedUser && (
                                         <DeleteUserDialog 
                                             userId={selectedUserId}
                                             userName={selectedUser.full_name}

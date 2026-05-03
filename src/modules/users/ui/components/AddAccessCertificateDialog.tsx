@@ -3,7 +3,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/modules/core/ui/primitives/select';
 import { Label } from '@/modules/core/ui/primitives/label';
-import { Plus, Building2, Users, ChevronRight, Shield, Loader2, AlertTriangle, User, UserCheck, Crown, Globe, Pencil, Lock, Zap } from 'lucide-react';
+import { Plus, Building2, Users, ChevronRight, Shield, Loader2, AlertTriangle, User, UserCheck, Crown, Globe, Pencil, Lock, Zap, Sparkles } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/modules/core/lib/utils';
+import { CommandSelector } from './CommandSelector';
 import { AccessLevel, CertificateType } from '@/platform/auth/types';
 import { useReferenceData } from '../hooks/useReferenceData';
 import { supabase } from '@/platform/realtime/client';
@@ -15,10 +18,10 @@ interface AccessCertificateDialogProps {
     certificateToEdit?: {
         id: string;
         access_level: string;
-        certificate_type?: string;
-        organization_id?: string;
-        department_id?: string;
-        sub_department_id?: string;
+        certificate_type?: string | null;
+        organization_id?: string | null;
+        department_id?: string | null;
+        sub_department_id?: string | null;
     } | null;
     trigger?: React.ReactNode;
     onSuccess?: () => void;
@@ -250,225 +253,273 @@ export const AccessCertificateDialog: React.FC<AccessCertificateDialogProps> = (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 {trigger || (
-                    <Button variant="outline" size="sm" onClick={() => loadReferenceData()} className="border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300">
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => loadReferenceData()} 
+                        className="bg-emerald-500/5 hover:bg-emerald-500/10 border-emerald-500/20 text-emerald-500 transition-all duration-300"
+                    >
                         <Shield className="w-4 h-4 mr-2" />
                         Add Certificate
                     </Button>
                 )}
             </DialogTrigger>
-            <DialogContent className="max-w-xl bg-card border-border text-foreground shadow-2xl shadow-black/5 dark:shadow-black/20">
-                <DialogHeader>
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                            {isEditMode ? <Pencil className="w-5 h-5 text-emerald-400" /> : <Shield className="w-5 h-5 text-emerald-400" />}
+            <DialogContent className="w-[calc(100vw-2rem)] max-w-xl bg-[#0b0e14]/95 border-border/40 text-foreground shadow-2xl backdrop-blur-2xl rounded-[2rem] overflow-hidden p-0">
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent pointer-events-none" />
+                
+                <div className="p-8 pb-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
+                    <DialogHeader className="mb-6">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500 shadow-inner">
+                                <Sparkles className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <DialogTitle className="text-2xl font-bold tracking-tight">
+                                    {isEditMode ? 'Edit Access Certificate' : 'Add Access Certificate'}
+                                </DialogTitle>
+                                <DialogDescription className="text-muted-foreground/60">
+                                    {isEditMode ? 'Update' : 'Grant'} system permissions for {employeeName}
+                                </DialogDescription>
+                            </div>
                         </div>
-                        <div>
-                            <DialogTitle>{isEditMode ? 'Edit Access Certificate' : 'Add Access Certificate'}</DialogTitle>
-                            <DialogDescription>
-                                {isEditMode ? 'Update' : 'Grant'} system permissions for {employeeName}
-                            </DialogDescription>
-                        </div>
-                    </div>
-                </DialogHeader>
+                    </DialogHeader>
 
-                <div className="grid grid-cols-1 gap-6 py-4">
-                    {/* Certificate Type Selection */}
-                    <div className="space-y-2">
-                        <Label className="text-muted-foreground flex items-center gap-2">
-                            <Shield className="w-4 h-4" /> Certificate Type
-                        </Label>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setCertificateType('X')}
-                                className={`p-3 rounded-lg border text-left transition-all ${certificateType === 'X'
-                                    ? 'border-blue-500/40 bg-blue-500/10'
-                                    : 'border-border/50 bg-muted/30 hover:bg-muted/50'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-2 mb-1">
-                                    <User className="w-4 h-4 text-blue-400" />
-                                    <span className="font-semibold text-sm">Type X — Personal</span>
-                                </div>
-                                <p className="text-xs text-muted-foreground">Individual access to own data</p>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (!hasExistingTypeY || isEditMode) {
-                                        setCertificateType('Y');
-                                    }
-                                }}
-                                disabled={hasExistingTypeY && !isEditMode}
-                                className={`p-3 rounded-lg border text-left transition-all ${certificateType === 'Y'
-                                    ? 'border-purple-500/40 bg-purple-500/10'
-                                    : hasExistingTypeY && !isEditMode
-                                        ? 'border-border/20 bg-muted/10 opacity-50 cursor-not-allowed'
-                                        : 'border-border/50 bg-muted/30 hover:bg-muted/50'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-2 mb-1">
-                                    <Crown className="w-4 h-4 text-purple-400" />
-                                    <span className="font-semibold text-sm">Type Y — Managerial</span>
-                                    {hasExistingTypeY && !isEditMode && (
-                                        <Lock className="w-3 h-3 text-amber-400/60 ml-auto" />
-                                    )}
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                    {hasExistingTypeY && !isEditMode
-                                        ? 'Already assigned (max 1)'
-                                        : 'Administrative data scope'
-                                    }
-                                </p>
-                            </button>
-                        </div>
-                    </div>
+                    <div className="flex flex-col gap-6 py-2 relative">
+                        {/* Progress Line */}
+                        <div className="absolute left-6 top-8 bottom-8 w-[1px] bg-gradient-to-b from-emerald-500/50 via-emerald-500/20 to-transparent opacity-20 pointer-events-none" />
 
-                    <div className="h-px bg-border" />
-
-                    {/* Access Level */}
-                    <div className="space-y-2">
-                        <Label className="text-muted-foreground flex items-center gap-2">
-                            <Shield className="w-4 h-4" /> Access Level
-                        </Label>
-                        <Select
-                            value={accessLevel}
-                            onValueChange={(val) => setAccessLevel(val as AccessLevel)}
+                        {/* 1. Certificate Type */}
+                        <motion.div 
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="space-y-3"
                         >
-                            <SelectTrigger className="bg-emerald-500/5 border-emerald-500/20 text-foreground h-12">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="bg-popover border-border">
-                                {availableLevels.map(({ level, label, description, icon }) => (
-                                    <SelectItem key={level} value={level} className="focus:bg-muted">
-                                        <div className="flex items-center gap-3 py-1">
-                                            {icon}
+                            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-bold ml-1">
+                                Certificate Type
+                            </Label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setCertificateType('X')}
+                                    className={cn(
+                                        "group p-4 rounded-2xl border text-left transition-all duration-300 relative overflow-hidden",
+                                        certificateType === 'X'
+                                            ? "border-blue-500/40 bg-blue-500/10 shadow-[0_0_20px_-5px_rgba(59,130,246,0.3)]"
+                                            : "border-border/40 bg-muted/5 hover:bg-muted/10 hover:border-border/60"
+                                    )}
+                                >
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className={cn(
+                                            "p-1.5 rounded-lg transition-colors",
+                                            certificateType === 'X' ? "bg-blue-500/20 text-blue-400" : "bg-muted/50 text-muted-foreground"
+                                        )}>
+                                            <User className="w-4 h-4" />
+                                        </div>
+                                        <span className="font-bold text-sm">Type X</span>
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground/60 font-medium">Individual access to own data</p>
+                                    {certificateType === 'X' && (
+                                        <motion.div layoutId="cert-glow" className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
+                                    )}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => (!hasExistingTypeY || isEditMode) && setCertificateType('Y')}
+                                    disabled={hasExistingTypeY && !isEditMode}
+                                    className={cn(
+                                        "group p-4 rounded-2xl border text-left transition-all duration-300 relative overflow-hidden",
+                                        certificateType === 'Y'
+                                            ? "border-purple-500/40 bg-purple-500/10 shadow-[0_0_20px_-5px_rgba(168,85,247,0.3)]"
+                                            : hasExistingTypeY && !isEditMode
+                                                ? "opacity-40 cursor-not-allowed border-dashed grayscale"
+                                                : "border-border/40 bg-muted/5 hover:bg-muted/10 hover:border-border/60"
+                                    )}
+                                >
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className={cn(
+                                            "p-1.5 rounded-lg transition-colors",
+                                            certificateType === 'Y' ? "bg-purple-500/20 text-purple-400" : "bg-muted/50 text-muted-foreground"
+                                        )}>
+                                            <Crown className="w-4 h-4" />
+                                        </div>
+                                        <span className="font-bold text-sm">Type Y</span>
+                                        {hasExistingTypeY && !isEditMode && <Lock className="w-3 h-3 text-amber-500/60 ml-auto" />}
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground/60 font-medium">
+                                        {hasExistingTypeY && !isEditMode ? 'Already assigned' : 'Administrative data scope'}
+                                    </p>
+                                    {certificateType === 'Y' && (
+                                        <motion.div layoutId="cert-glow" className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent pointer-events-none" />
+                                    )}
+                                </button>
+                            </div>
+                        </motion.div>
+
+                        {/* 2. Access Level */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.1 }}
+                        >
+                            <div className="space-y-2">
+                                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-bold ml-1">
+                                    Access Level
+                                </Label>
+                                <Select value={accessLevel} onValueChange={(val) => setAccessLevel(val as AccessLevel)}>
+                                    <SelectTrigger className="h-14 bg-muted/10 border-border/40 rounded-2xl hover:bg-muted/20 hover:border-emerald-500/30 transition-all duration-300">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500">
+                                                {ACCESS_LEVEL_CONFIG[accessLevel]?.icon}
+                                            </div>
                                             <div className="flex flex-col text-left">
-                                                <span className="font-semibold capitalize text-base">{label}</span>
-                                                <span className="text-xs text-muted-foreground">{description}</span>
+                                                <span className="font-bold text-sm">{ACCESS_LEVEL_CONFIG[accessLevel]?.label}</span>
+                                                <span className="text-[10px] text-muted-foreground/60">{ACCESS_LEVEL_CONFIG[accessLevel]?.description}</span>
                                             </div>
                                         </div>
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-[#0b0e14] border-border/40 rounded-2xl p-1 backdrop-blur-xl">
+                                        {availableLevels.map(({ level, label, description, icon }) => (
+                                            <SelectItem 
+                                                key={level} 
+                                                value={level} 
+                                                className="rounded-xl py-3 focus:bg-emerald-500/10 focus:text-emerald-400 transition-all cursor-pointer"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-1.5 rounded-lg bg-muted/50">{icon}</div>
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold text-sm">{label}</span>
+                                                        <span className="text-[10px] opacity-60">{description}</span>
+                                                    </div>
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </motion.div>
 
-                    <div className="h-px bg-border" />
-
-                    {/* Scope Selection */}
-                    <div className="space-y-4">
-                        {/* Organization */}
-                        <div className="space-y-2">
-                            <Label className={`flex items-center gap-2 ${needsOrganization ? 'text-muted-foreground' : 'text-muted-foreground/50'}`}>
-                                <Building2 className="w-4 h-4" /> Organization
-                                {needsOrganization && <span className="text-rose-400">*</span>}
-                            </Label>
+                        {/* 3. Organization */}
+                        <AnimatePresence mode="wait">
                             {needsOrganization ? (
-                                <Select
-                                    value={organizationId}
-                                    onValueChange={updateOrganization}
+                                <motion.div
+                                    initial={{ opacity: 0, height: 0, y: 10 }}
+                                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                                    exit={{ opacity: 0, height: 0, y: 10 }}
+                                    transition={{ duration: 0.4 }}
                                 >
-                                    <SelectTrigger className="bg-muted/30 border-border">
-                                        <SelectValue placeholder="Select organization" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-popover border-border">
-                                        {organizations.map(org => (
-                                            <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                    <CommandSelector
+                                        label="Organization"
+                                        placeholder="Select organization"
+                                        value={organizationId}
+                                        options={organizations}
+                                        onValueChange={updateOrganization}
+                                        icon={<Building2 className="w-5 h-5" />}
+                                    />
+                                </motion.div>
                             ) : (
-                                <div className="px-3 py-2 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-sm text-emerald-400 flex items-center gap-2">
-                                    <Lock className="w-4 h-4" />
-                                    Global Access (All Organizations)
-                                </div>
+                                <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 flex items-center gap-3"
+                                >
+                                    <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400">
+                                        <Globe className="w-4 h-4" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] uppercase font-black tracking-widest text-emerald-500/60">Global Scope</span>
+                                        <span className="text-sm font-bold text-emerald-400">Unrestricted Access (All Organizations)</span>
+                                    </div>
+                                </motion.div>
                             )}
-                        </div>
+                        </AnimatePresence>
 
-                        {/* Department */}
-                        <div className="space-y-2">
-                            <Label className={`flex items-center gap-2 ${needsDepartment ? 'text-muted-foreground' : 'text-muted-foreground/50'}`}>
-                                <Users className="w-4 h-4" /> Department
-                                {needsDepartment && <span className="text-rose-400">*</span>}
-                            </Label>
-                            {needsDepartment ? (
-                                <Select
-                                    value={departmentId}
-                                    onValueChange={updateDepartment}
-                                    disabled={!organizationId}
+                        {/* 4. Department */}
+                        <AnimatePresence>
+                            {needsDepartment && organizationId && (
+                                <motion.div
+                                    initial={{ opacity: 0, height: 0, y: 10 }}
+                                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                                    exit={{ opacity: 0, height: 0, y: 10 }}
+                                    transition={{ duration: 0.4 }}
                                 >
-                                    <SelectTrigger className="bg-muted/30 border-border">
-                                        <SelectValue placeholder="Select department" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-popover border-border">
-                                        {filteredDepartments.map(dept => (
-                                            <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            ) : (
-                                <div className="px-3 py-2 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-sm text-emerald-400 flex items-center gap-2">
-                                    <Lock className="w-4 h-4" />
-                                    Global Access (All Departments)
-                                </div>
+                                    <CommandSelector
+                                        label="Department"
+                                        placeholder="Select department"
+                                        value={departmentId}
+                                        options={filteredDepartments}
+                                        onValueChange={updateDepartment}
+                                        icon={<Users className="w-5 h-5" />}
+                                    />
+                                </motion.div>
                             )}
-                        </div>
+                        </AnimatePresence>
 
-                        {/* Sub-Department */}
-                        <div className="space-y-2">
-                            <Label className={`flex items-center gap-2 ${needsSubDepartment ? 'text-muted-foreground' : 'text-muted-foreground/50'}`}>
-                                <ChevronRight className="w-4 h-4" /> Sub-Department
-                                {needsSubDepartment && <span className="text-rose-400">*</span>}
-                            </Label>
-                            {needsSubDepartment ? (
-                                <Select
-                                    value={subDepartmentId}
-                                    onValueChange={setSubDepartmentId}
-                                    disabled={!departmentId}
+                        {/* 5. Sub-Department */}
+                        <AnimatePresence>
+                            {needsSubDepartment && departmentId && (
+                                <motion.div
+                                    initial={{ opacity: 0, height: 0, y: 10 }}
+                                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                                    exit={{ opacity: 0, height: 0, y: 10 }}
+                                    transition={{ duration: 0.4 }}
                                 >
-                                    <SelectTrigger className="bg-muted/30 border-border">
-                                        <SelectValue placeholder="Select sub-department" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-popover border-border">
-                                        {filteredSubDepartments.map(sd => (
-                                            <SelectItem key={sd.id} value={sd.id}>{sd.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            ) : (
-                                <div className="px-3 py-2 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-sm text-emerald-400 flex items-center gap-2">
-                                    <Lock className="w-4 h-4" />
-                                    {accessLevel === 'zeta'
-                                        ? 'Global Access (All Sub-Departments)'
-                                        : accessLevel === 'epsilon'
-                                            ? 'Global Access (All Sub-Departments)'
-                                            : 'Global Access (All Sub-Departments in Department)'}
-                                </div>
+                                    <CommandSelector
+                                        label="Sub-Department"
+                                        placeholder="Select sub-department"
+                                        value={subDepartmentId}
+                                        options={filteredSubDepartments}
+                                        onValueChange={setSubDepartmentId}
+                                        icon={<ChevronRight className="w-5 h-5" />}
+                                    />
+                                </motion.div>
                             )}
-                        </div>
+                        </AnimatePresence>
+
+                        {error && (
+                            <motion.div 
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-center gap-3 text-rose-400 text-sm font-medium"
+                            >
+                                <AlertTriangle className="w-5 h-5 shrink-0" />
+                                {error}
+                            </motion.div>
+                        )}
                     </div>
-
-                    {error && (
-                        <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-md flex items-center gap-2 text-rose-400 text-sm">
-                            <AlertTriangle className="w-4 h-4" /> {error}
-                        </div>
-                    )}
                 </div>
 
-                <DialogFooter>
-                    <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSubmit} disabled={isSubmitting || isLoadingRefs} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                        {isSubmitting ? (
-                            <>
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                {isEditMode ? 'Updating...' : 'Granting...'}
-                            </>
-                        ) : (
-                            isEditMode ? 'Update Access' : 'Grant Access'
-                        )}
-                    </Button>
-                </DialogFooter>
+                <div className="p-8 pt-4 bg-muted/20 border-t border-border/20">
+                    <DialogFooter className="gap-3 sm:gap-0">
+                        <Button 
+                            variant="ghost" 
+                            onClick={() => setOpen(false)}
+                            className="rounded-xl hover:bg-muted/50 transition-all duration-300"
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            onClick={handleSubmit} 
+                            disabled={isSubmitting || isLoadingRefs}
+                            className={cn(
+                                "rounded-xl px-8 transition-all duration-500 font-bold shadow-lg shadow-emerald-500/20",
+                                isSubmitting ? "bg-muted-foreground/20" : "bg-emerald-600 hover:bg-emerald-500 active:scale-95"
+                            )}
+                        >
+                            {isSubmitting ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Synchronizing...
+                                </>
+                            ) : (
+                                <span className="flex items-center gap-2">
+                                    {isEditMode ? <Pencil className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
+                                    {isEditMode ? 'Update Access' : 'Grant Access'}
+                                </span>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </div>
             </DialogContent>
         </Dialog>
     );

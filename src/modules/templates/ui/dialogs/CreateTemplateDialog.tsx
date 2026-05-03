@@ -274,7 +274,7 @@ const CreateTemplateDialog: React.FC<CreateTemplateDialogProps> = ({
 
     // Verify IDs are present (double check)
     if (!selectedOrgId || !selectedDeptId || !selectedSubDeptId) {
-      const missing = [];
+      const missing: string[] = [];
       if (!selectedOrgId) missing.push('Organization');
       if (!selectedDeptId) missing.push('Department');
       if (!selectedSubDeptId) missing.push('Sub-Department');

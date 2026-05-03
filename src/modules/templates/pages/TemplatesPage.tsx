@@ -161,7 +161,7 @@ const TemplatesPage: React.FC = () => {
     if (versionCheck && !versionCheck.version_match) {
       setVersionConflictInfo({
         currentVersion: currentTemplate?.version || 0,
-        serverVersion: versionCheck.current_version,
+        serverVersion: versionCheck.current_version ?? 0,
       });
       setVersionConflictDialog(true);
       return false;

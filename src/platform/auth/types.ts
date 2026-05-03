@@ -6,12 +6,12 @@ export interface UserContract {
     id: string;
     userId: string;
     organizationId: string;
-    departmentId: string;
-    subDepartmentId: string;
+    departmentId: string | null;
+    subDepartmentId: string | null;
     roleId: string;
     remLevelId: string;
     accessLevel: AccessLevel; // DEPRECATED - Use certificates
-    employmentStatus?: string;
+    employmentStatus?: string | null;
     status: string;
     organizationName?: string;
     departmentName?: string;
@@ -24,7 +24,7 @@ export interface AccessCertificate {
     userId: string;
     certificateType: CertificateType;
     accessLevel: AccessLevel;
-    organizationId: string;
+    organizationId: string | null;
     departmentId: string | null;
     subDepartmentId: string | null;
     isActive: boolean;

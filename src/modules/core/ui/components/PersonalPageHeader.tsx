@@ -31,7 +31,7 @@ export const PersonalPageHeader: React.FC<PersonalPageHeaderProps> = ({
     Icon,
     scope,
     setScope,
-    isGammaLocked = true,
+    isGammaLocked = false,
     mode = 'personal',
     multiSelect,
     rightActions,

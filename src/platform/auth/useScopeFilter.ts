@@ -130,12 +130,17 @@ export function useScopeFilter(
         if (!permissionObject) return null;
 
         if (mode === 'personal') {
-            return buildPersonalScopeTree(permissionObject.typeX);
+            const tree = buildPersonalScopeTree(permissionObject.typeX);
+            // If admin has no Type X certs, they might still want to see everything
+            if (tree.organizations.length === 0 && context?.user?.highestAccessLevel === 'zeta') {
+                return permissionObject.allowed_scope_tree ?? null;
+            }
+            return tree;
         }
 
         // Managerial: use the allowed_scope_tree from the RPC
         return permissionObject.allowed_scope_tree ?? null;
-    }, [permissionObject, mode]);
+    }, [permissionObject, mode, context?.user?.highestAccessLevel]);
 
     // Compute default selection
     const defaultScope = useMemo(() => defaultSelectionFromTree(scopeTree), [scopeTree]);
@@ -151,6 +156,8 @@ export function useScopeFilter(
     // Is gamma locked? Only relevant for managerial mode
     const isGammaLocked = useMemo(() => {
         if (mode !== 'managerial') return false;
+        // Only lock if explicitly at gamma level. 
+        // If no typeY exists, it's either loading or unauthorized, but not "locked".
         return permissionObject?.typeY?.level === 'gamma';
     }, [mode, permissionObject]);
 
