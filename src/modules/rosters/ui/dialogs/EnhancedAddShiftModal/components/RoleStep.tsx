@@ -17,6 +17,7 @@ import {
 import { Separator } from '@/modules/core/ui/primitives/separator';
 import { Lock, Gavel, AlertTriangle } from 'lucide-react';
 import { RoleStepProps } from '../types';
+import { estimateShiftCost } from '@/modules/rosters/domain/projections/utils/cost';
 
 export const RoleStep: React.FC<RoleStepProps> = ({
     form,
@@ -34,7 +35,29 @@ export const RoleStep: React.FC<RoleStepProps> = ({
     isEmployeeLocked
 }) => {
     const watchRoleId = form.watch('role_id');
-    const estimatedCost = netLength * (selectedRemLevel?.hourly_rate_min || 0);
+    const watchStartTime = form.watch('start_time');
+    const watchEndTime = form.watch('end_time');
+    const watchShiftDate = form.watch('shift_date');
+    const watchIsOvernight = form.watch('is_overnight');
+    const watchAllowances = form.watch('allowances');
+    const watchIsAnnualLeave = form.watch('isAnnualLeave');
+    const watchIsPersonalLeave = form.watch('isPersonalLeave');
+    const watchIsCarerLeave = form.watch('isCarerLeave');
+
+    const estimatedCost = estimateShiftCost(
+        netLength,
+        watchStartTime,
+        watchEndTime,
+        selectedRemLevel?.hourly_rate_min || 0,
+        netLength, // Using netLength as scheduled_length placeholder
+        watchIsOvernight || false,
+        false, // is_cancelled
+        watchShiftDate,
+        watchAllowances,
+        watchIsAnnualLeave,
+        watchIsPersonalLeave,
+        watchIsCarerLeave
+    );
 
     return (
         <div className="space-y-6">

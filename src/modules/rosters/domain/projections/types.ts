@@ -51,6 +51,13 @@ export interface ProjectedShift {
   // Timing & cost (derived from net_length_minutes / remuneration_rate)
   netMinutes:      number;
   estimatedCost:   number;
+  costBreakdown: {
+    base: number;
+    penalty: number;
+    overtime: number;
+    allowance: number;
+    leave: number;
+  };
 
   // Domain classification
   stateId:         ShiftStateID;
@@ -100,6 +107,13 @@ export interface ProjectionStats {
   totalNetMinutes:  number;
   /** Estimated labour cost at remuneration_rate */
   estimatedCost:    number;
+  costBreakdown: {
+    base: number;
+    penalty: number;
+    overtime: number;
+    allowance: number;
+    leave: number;
+  };
 }
 
 // ── Group mode ─────────────────────────────────────────────────────────────────
@@ -109,6 +123,13 @@ export interface SubGroupStats {
   assignedShifts: number;
   totalHours:     number;
   estimatedCost:  number;
+  costBreakdown: {
+    base: number;
+    penalty: number;
+    overtime: number;
+    allowance: number;
+    leave: number;
+  };
 }
 
 export interface GroupStats extends SubGroupStats {

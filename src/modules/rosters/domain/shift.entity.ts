@@ -176,6 +176,28 @@ export interface Shift {
     demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
     target_employment_type?: 'FT' | 'PT' | 'Casual' | 'Unassigned' | null;
     demand_group_id?: string | null;
+
+    // Allowances
+    allowances?: {
+        meal?: boolean;
+        firstAid?: boolean;
+        proteinSpill?: boolean;
+        splitShift?: boolean;
+    };
+
+    // Leave Entitlements
+    isAnnualLeave?: boolean;
+    isPersonalLeave?: boolean;
+    isCarerLeave?: boolean;
+
+    // Apprentice Information
+    apprenticeInfo?: {
+        year: number;
+        completedYear12: boolean;
+        isAdultApprentice: boolean;
+    }
+
+    previousWage?: number
 }
 
 /* ============================================================

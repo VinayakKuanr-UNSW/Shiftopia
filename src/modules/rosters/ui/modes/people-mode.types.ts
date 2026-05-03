@@ -33,6 +33,14 @@ export interface PeopleModeEmployee {
     currentHours: number;
     /** True when scheduledHours > contractedHours */
     overHoursWarning?: boolean;
+    estimatedPay: number;
+    payBreakdown: {
+      base: number;
+      penalty: number;
+      overtime: number;
+      allowance: number;
+      leave: number;
+    };
     shifts: Record<string, PeopleModeShift[]>;
 }
 

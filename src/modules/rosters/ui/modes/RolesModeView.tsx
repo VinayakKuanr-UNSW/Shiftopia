@@ -15,6 +15,13 @@ import {
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { isSydneyPast } from '@/modules/core/lib/date.utils';
+import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/modules/core/ui/primitives/tooltip';
 import { EnhancedAddShiftModal, ShiftContext } from '@/modules/rosters/ui/dialogs/EnhancedAddShiftModal';
 import { SmartShiftCard } from '@/modules/rosters/ui/components/SmartShiftCard';
 import { useShiftsByDateRange, useRemunerationLevels, useRoles, useUnpublishShift, useCreateShift } from '@/modules/rosters/state/useRosterShifts';
@@ -491,7 +498,50 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
             <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono tracking-[0.12em] mt-0.5">
               <span>Coverage per Role</span>
               {(activeSubDeptId || activeDeptId) && <span className="text-indigo-400/80 font-semibold">Filtered</span>}
-              <span className="text-emerald-400/60">{totalHours}h · ${estCost.toFixed(0)}</span>
+              <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <span className="text-emerald-400/60 cursor-help hover:text-emerald-300 transition-colors">
+                            {totalHours}h · ${estCost.toFixed(0)}
+                        </span>
+                    </TooltipTrigger>
+                    <TooltipContent className="w-56 p-3 bg-zinc-900 border-white/10 shadow-xl" side="bottom">
+                        <div className="space-y-2">
+                            <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Role Mode Estimate</p>
+                            <div className="space-y-1.5">
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-white/60">Base Pay</span>
+                                    <span className="text-white font-medium">{formatCost(projection?.stats.costBreakdown.base || 0)}</span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-white/60">Penalties</span>
+                                    <span className="text-emerald-400 font-medium">+{formatCost(projection?.stats.costBreakdown.penalty || 0)}</span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-white/60">Overtime</span>
+                                    <span className="text-amber-400 font-medium">+{formatCost(projection?.stats.costBreakdown.overtime || 0)}</span>
+                                </div>
+                                {(projection?.stats.costBreakdown.allowance || 0) > 0 && (
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-white/60">Allowances</span>
+                                        <span className="text-blue-400 font-medium">+{formatCost(projection?.stats.costBreakdown.allowance || 0)}</span>
+                                    </div>
+                                )}
+                                {(projection?.stats.costBreakdown.leave || 0) > 0 && (
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-white/60">Leave Loading</span>
+                                        <span className="text-purple-400 font-medium">+{formatCost(projection?.stats.costBreakdown.leave || 0)}</span>
+                                    </div>
+                                )}
+                                <div className="pt-2 border-t border-white/10 flex justify-between text-sm font-bold">
+                                    <span className="text-white">Total</span>
+                                    <span className="text-white">{formatCost(estCost)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
         </div>

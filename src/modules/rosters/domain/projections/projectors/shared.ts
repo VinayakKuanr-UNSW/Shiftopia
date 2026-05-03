@@ -8,7 +8,7 @@
 import type { Shift } from '../../shift.entity';
 import type { ProjectionStats } from '../types';
 import { netMinutesFromShift } from '../utils/duration';
-import { estimateCostFromShift } from '../utils/cost';
+import { estimateDetailedCostFromShift } from '../utils/cost';
 
 /**
  * Compute the top-level ProjectionStats bag from a flat Shift array.
@@ -20,11 +20,25 @@ export function buildStats(shifts: Shift[]): ProjectionStats {
 
   let totalNetMinutes = 0;
   let estimatedCost   = 0;
+  const costBreakdown = {
+    base: 0,
+    penalty: 0,
+    overtime: 0,
+    allowance: 0,
+    leave: 0,
+  };
 
   for (const shift of nonCancelled) {
     const mins = netMinutesFromShift(shift);
     totalNetMinutes += mins;
-    estimatedCost   += estimateCostFromShift(shift, mins);
+    
+    const detail = estimateDetailedCostFromShift(shift, mins);
+    estimatedCost += detail.totalCost;
+    costBreakdown.base += detail.baseCost;
+    costBreakdown.penalty += detail.penaltyCost;
+    costBreakdown.overtime += detail.overtimeCost;
+    costBreakdown.allowance += detail.allowanceCost;
+    costBreakdown.leave += detail.leaveLoadingCost;
   }
 
   return {
@@ -34,5 +48,6 @@ export function buildStats(shifts: Shift[]): ProjectionStats {
     publishedShifts: nonCancelled.filter(s => s.lifecycle_status === 'Published').length,
     totalNetMinutes,
     estimatedCost:  Math.round(estimatedCost * 100) / 100,
+    costBreakdown,
   };
 }

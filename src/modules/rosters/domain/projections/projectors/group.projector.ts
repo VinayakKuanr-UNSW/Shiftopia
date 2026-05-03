@@ -29,7 +29,7 @@ import type {
 } from '../types';
 import { GROUP_COLORS, UNASSIGNED_COLORS, GROUP_DISPLAY_NAMES, ALL_GROUP_TYPES } from '../constants';
 import { netMinutesFromShift, minutesToHours }   from '../utils/duration';
-import { estimateCostFromShift }                 from '../utils/cost';
+import { estimateCostFromShift, estimateDetailedCostFromShift } from '../utils/cost';
 import { coverageHealth }                        from '../utils/coverage';
 import { determineShiftState }                   from '../../shift-state.utils';
 import { buildStats }                            from './shared';
@@ -48,6 +48,7 @@ function resolveEmployeeName(shift: Shift): string | null {
 function toProjectedShift(shift: Shift): ProjectedShift {
   const netMinutes     = netMinutesFromShift(shift);
   const estimatedCost  = estimateCostFromShift(shift, netMinutes);
+  const detail         = estimateDetailedCostFromShift(shift, netMinutes);
   const groupType      = shift.group_type ?? null;
   const colors         = groupType ? (GROUP_COLORS[groupType] ?? UNASSIGNED_COLORS) : UNASSIGNED_COLORS;
   const assignmentOutcome = (shift as any).assignment_outcome ??
@@ -67,6 +68,7 @@ function toProjectedShift(shift: Shift): ProjectedShift {
     endTime:        shift.end_time,
     netMinutes,
     estimatedCost,
+    costBreakdown:  detail,
     stateId:        determineShiftState(shift),
     roleName:       shift.roles?.name ?? 'Shift',
     roleId:         shift.role_id,
@@ -93,11 +95,29 @@ function subGroupStats(shifts: ProjectedShift[]): SubGroupStats {
   const assigned  = shifts.filter(s => !!s.employeeId).length;
   const netMins   = shifts.reduce((acc, s) => acc + s.netMinutes, 0);
   const cost      = shifts.reduce((acc, s) => acc + s.estimatedCost, 0);
+
+  const breakdown = {
+    base: 0,
+    penalty: 0,
+    overtime: 0,
+    allowance: 0,
+    leave: 0,
+  };
+
+  shifts.forEach(s => {
+    breakdown.base += s.costBreakdown.base;
+    breakdown.penalty += s.costBreakdown.penalty;
+    breakdown.overtime += s.costBreakdown.overtime;
+    breakdown.allowance += s.costBreakdown.allowance;
+    breakdown.leave += s.costBreakdown.leave;
+  });
+
   return {
     totalShifts:    shifts.length,
     assignedShifts: assigned,
     totalHours:     minutesToHours(netMins),
     estimatedCost:  Math.round(cost * 100) / 100,
+    costBreakdown: breakdown,
   };
 }
 
@@ -108,12 +128,30 @@ function groupStatsFrom(subGroups: ProjectedSubGroup[]): GroupStats {
   const assigned  = allShifts.filter(s => !!s.employeeId).length;
   const netMins   = allShifts.reduce((acc, s) => acc + s.netMinutes, 0);
   const cost      = allShifts.reduce((acc, s) => acc + s.estimatedCost, 0);
+
+  const breakdown = {
+    base: 0,
+    penalty: 0,
+    overtime: 0,
+    allowance: 0,
+    leave: 0,
+  };
+
+  allShifts.forEach(s => {
+    breakdown.base += s.costBreakdown.base;
+    breakdown.penalty += s.costBreakdown.penalty;
+    breakdown.overtime += s.costBreakdown.overtime;
+    breakdown.allowance += s.costBreakdown.allowance;
+    breakdown.leave += s.costBreakdown.leave;
+  });
+
   return {
     totalShifts:    allShifts.length,
     assignedShifts: assigned,
     subGroupCount:  subGroups.length,
     totalHours:     minutesToHours(netMins),
     estimatedCost:  Math.round(cost * 100) / 100,
+    costBreakdown: breakdown,
   };
 }
 

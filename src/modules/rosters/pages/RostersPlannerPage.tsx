@@ -80,6 +80,13 @@ import type { ToolbarPreflightData } from '@/modules/rosters/ui/components/BulkA
 import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import { executeAssignShift } from '@/modules/rosters/domain/commands/assignShift.command';
 import { resolveGroupType } from '@/modules/rosters/utils/roster-utils';
+import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/modules/core/ui/primitives/tooltip';
 
 /* ============================================================
    MAIN COMPONENT
@@ -624,40 +631,64 @@ const NewRostersPage: React.FC = () => {
   };
   const employeesWithShifts = useMemo((): PeopleModeEmployee[] => {
     if (projection.people) {
-      return projection.people.employees.map((pe): PeopleModeEmployee => ({
-        id: pe.id,
-        name: pe.name,
-        employeeId: pe.id.slice(0, 8),
-        avatar: pe.avatarUrl,
-        contractedHours: pe.contractedHours,
-        currentHours: pe.scheduledHours,
-        overHoursWarning: pe.overHoursWarning,
-        shifts: Object.fromEntries(
+      return projection.people.employees.map((pe): PeopleModeEmployee => {
+        const breakdown = {
+          base: 0,
+          penalty: 0,
+          overtime: 0,
+          allowance: 0,
+          leave: 0,
+        };
+
+        const shiftsMap = Object.fromEntries(
           Object.entries(pe.shiftsByDate).map(([date, pShifts]) => [
             date,
-            pShifts.map((ps): PeopleModeShift => ({
-              id: ps.id,
-              role: ps.roleName,
-              remunerationLevel: ps.raw.remuneration_levels?.level_name ?? 'L1',
-              startTime: ps.startTime,
-              endTime: ps.endTime,
-              department: ps.raw.group_type ?? 'General',
-              subGroup: ps.subGroupName ?? '',
-              group: ps.groupType ?? 'convention_centre',
-              groupColor: resolveGroupType(ps.raw),
-              hours: ps.netMinutes / 60,
-              pay: (ps.netMinutes / 60) * (ps.raw.remuneration_rate ?? 25),
-              status: ps.employeeId ? (ps.isDraft ? 'Draft' : 'Assigned') : 'Open',
-              lifecycleStatus: ps.isPublished ? 'published' : 'draft',
-              assignmentStatus: ps.employeeId ? 'assigned' : 'unassigned',
-              fulfillmentStatus: ps.raw.fulfillment_status,
-              isTradeRequested: ps.isTrading,
-              isCancelled: ps.isCancelled,
-              rawShift: ps.raw,
-            })),
+            pShifts.map((ps): PeopleModeShift => {
+              breakdown.base += ps.costBreakdown.base;
+              breakdown.penalty += ps.costBreakdown.penalty;
+              breakdown.overtime += ps.costBreakdown.overtime;
+              breakdown.allowance += ps.costBreakdown.allowance;
+              breakdown.leave += ps.costBreakdown.leave;
+
+              return {
+                id: ps.id,
+                role: ps.roleName,
+                remunerationLevel: ps.raw.remuneration_levels?.level_name ?? 'L1',
+                startTime: ps.startTime,
+                endTime: ps.endTime,
+                department: ps.raw.group_type ?? 'General',
+                subGroup: ps.subGroupName ?? '',
+                group: ps.groupType ?? 'convention_centre',
+                groupColor: resolveGroupType(ps.raw),
+                hours: ps.netMinutes / 60,
+                pay: ps.costBreakdown.totalCost,
+                status: ps.employeeId ? (ps.isDraft ? 'Draft' : 'Assigned') : 'Open',
+                lifecycleStatus: ps.isPublished ? 'published' : 'draft',
+                assignmentStatus: ps.employeeId ? 'assigned' : 'unassigned',
+                fulfillmentStatus: ps.raw.fulfillment_status,
+                isTradeRequested: ps.isTrading,
+                isCancelled: ps.isCancelled,
+                rawShift: ps.raw,
+              };
+            }),
           ])
-        ),
-      }));
+        );
+
+        return {
+          id: pe.id,
+          name: pe.name,
+          employeeId: pe.id.slice(0, 8),
+          avatar: pe.avatarUrl,
+          contractedHours: pe.contractedHours,
+          currentHours: pe.scheduledHours,
+          overHoursWarning: pe.overHoursWarning,
+          estimatedPay: pe.scheduledHours > 0 ? (
+            Object.values(shiftsMap).flat().reduce((acc, s) => acc + s.pay, 0)
+          ) : 0,
+          payBreakdown: breakdown,
+          shifts: shiftsMap,
+        };
+      });
     }
     return legacyEmployeesWithShifts;
   }, [projection.people, legacyEmployeesWithShifts]);
@@ -1275,7 +1306,65 @@ const NewRostersPage: React.FC = () => {
             {/* Redundant Auto-Schedule button removed (now in Function Bar) */}
             <div>
               <span className="text-muted-foreground/60">Est. Cost:</span>
-              <span className="ml-2 font-medium text-foreground">${estimatedCost.toFixed(2)}</span>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="ml-2 font-medium text-foreground cursor-help hover:text-primary transition-colors underline decoration-dotted decoration-muted-foreground/30 underline-offset-4">
+                      ${estimatedCost.toFixed(2)}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent className="w-64 p-4 bg-zinc-900 border-white/10 shadow-2xl" side="top" sideOffset={10}>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                        <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Global Labour Estimate</p>
+                        <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Award Compliant</Badge>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-white/50">Ordinary Base Pay</span>
+                          <span className="text-white font-mono">{formatCost(projection.stats.costBreakdown.base)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-white/50">Weekend & Night Penalties</span>
+                          <span className="text-emerald-400 font-mono">+{formatCost(projection.stats.costBreakdown.penalty)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-white/50">Overtime Loadings</span>
+                          <span className="text-amber-400 font-mono">+{formatCost(projection.stats.costBreakdown.overtime)}</span>
+                        </div>
+                        {projection.stats.costBreakdown.allowance > 0 && (
+                          <div className="flex justify-between text-xs">
+                            <span className="text-white/50">Meal & Industry Allowances</span>
+                            <span className="text-blue-400 font-mono">+{formatCost(projection.stats.costBreakdown.allowance)}</span>
+                          </div>
+                        )}
+                        {projection.stats.costBreakdown.leave > 0 && (
+                          <div className="flex justify-between text-xs">
+                            <span className="text-white/50">Annual Leave Loading (17.5%)</span>
+                            <span className="text-purple-400 font-mono">+{formatCost(projection.stats.costBreakdown.leave)}</span>
+                          </div>
+                        )}
+                        <div className="pt-2 border-t border-white/10 flex justify-between text-sm font-bold">
+                          <span className="text-white">Total Roster Cost</span>
+                          <span className="text-white font-mono">{formatCost(estimatedCost)}</span>
+                        </div>
+                      </div>
+                      <div className="pt-1">
+                        <div className="flex justify-between text-[10px]">
+                          <span className="text-white/30 italic">Target Budget</span>
+                          <span className="text-white/40 font-mono">{formatCost(budget)}</span>
+                        </div>
+                        <div className="flex justify-between text-[10px] mt-0.5">
+                          <span className="text-white/30 italic">Variance</span>
+                          <span className={cn("font-mono", remainingBudget >= 0 ? "text-emerald-500/60" : "text-red-500/60")}>
+                            {remainingBudget >= 0 ? '-' : '+'}{formatCost(Math.abs(remainingBudget))}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
             <Separator orientation="vertical" className="h-4 hidden md:block bg-slate-200 dark:bg-white/10" />
             <div>
