@@ -70,7 +70,7 @@ export class OptimizerClient {
         console.debug('[OptimizerClient] POST', url, {
             shifts: request.shifts.length,
             employees: request.employees.length,
-            time_limit: request.time_limit_seconds ?? 30,
+            time_limit: request.solver_params?.max_time_seconds ?? 30,
         });
 
         // Combine the time-limit timeout with any caller-supplied abort signal
@@ -98,6 +98,7 @@ export class OptimizerClient {
 
         if (!response.ok) {
             const body = await response.text().catch(() => '');
+            console.error('[OptimizerClient] Error Body:', body);
             throw new OptimizerError(
                 `Optimizer returned HTTP ${response.status}: ${body}`,
                 'HTTP_ERROR',

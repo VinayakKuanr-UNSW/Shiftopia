@@ -11,8 +11,9 @@ export const mealBreakRule: V8RuleEvaluator = (ctx) => {
     const violations: V8Hit[] = [];
 
     for (const s of shifts) {
-        const start = parseISO(`${s.date}T${s.start_time}`);
-        const end = parseISO(`${s.date}T${s.end_time}`);
+        const date = s.date || s.shift_date || '';
+        const start = parseISO(`${date}T${s.start_time}`);
+        const end = parseISO(`${date}T${s.end_time}`);
         let mins = differenceInMinutes(end, start);
         if (mins < 0) mins += 1440;
 

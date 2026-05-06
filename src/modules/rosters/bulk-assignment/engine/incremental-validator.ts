@@ -37,6 +37,33 @@ function shiftsOverlap(a: CandidateShift, b: CandidateShift): boolean {
 // RULE IMPLEMENTATIONS
 // =============================================================================
 
+function checkPastShift(shift: CandidateShift): ShiftViolation | null {
+    // If the shift has already started, it cannot be modified in the roster
+    // (enforced by DB trigger sm_bulk_assign_guard).
+    
+    // We use a small 1-minute buffer to avoid race conditions with "just started" shifts
+    const now = Date.now();
+    
+    let startTime: number;
+    if (shift.start_at) {
+        startTime = new Date(shift.start_at).getTime();
+    } else {
+        // Fallback to shift_date + start_time. 
+        // IMPORTANT: We must parse this in the same way the browser/user expects.
+        // ${date}T${time} without Z is parsed as local time.
+        startTime = new Date(`${shift.shift_date}T${shift.start_time}`).getTime();
+    }
+
+    if (!isNaN(startTime) && startTime <= now) {
+        return {
+            violation_type: 'PAST_SHIFT',
+            description: `Shift on ${shift.shift_date} (${shift.start_time}) has already started and cannot be assigned.`,
+            blocking: true,
+        };
+    }
+    return null;
+}
+
 function checkDraftState(shift: CandidateShift): ShiftViolation | null {
     // Allow: null, 'Draft', 'draft', undefined (unset = draft)
     const status = (shift.lifecycle_status ?? '').toLowerCase();
@@ -189,6 +216,13 @@ export class IncrementalValidator {
         skipQualChecks = false,
     ): ShiftViolation[] {
         const violations: ShiftViolation[] = [];
+
+        // Rule 0: Past shift
+        const pastViolation = checkPastShift(shift);
+        if (pastViolation) {
+            violations.push(pastViolation);
+            return violations; // Short-circuit — database will block this anyway
+        }
 
         // Rule 1: Draft state
         const draftViolation = checkDraftState(shift);

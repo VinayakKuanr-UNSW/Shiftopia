@@ -59,7 +59,7 @@ export class BulkAssignmentController {
         console.debug('[BulkAssignmentController] Simulating', shiftIds.length, 'shifts for', employeeId);
 
         // ── Step 1: Load scenario ────────────────────────────────────────────
-        const scenario = await scenarioLoader.load(shiftIds, employeeId);
+        const scenario = await scenarioLoader.load(shiftIds, employeeId, options.injectedData);
         const { candidateShifts, existingShifts, employee } = scenario;
 
         // ── Step 2: Sort candidates chronologically ──────────────────────────

@@ -12,8 +12,10 @@ export const minRestGapRule: V8RuleEvaluator = (ctx) => {
     
     // 1. Sort shifts chronologically
     const sorted = [...shifts].sort((a, b) => {
-        const timeA = parseISO(`${a.date}T${a.start_time}`).getTime();
-        const timeB = parseISO(`${b.date}T${b.start_time}`).getTime();
+        const dateA = a.date || a.shift_date || '';
+        const dateB = b.date || b.shift_date || '';
+        const timeA = parseISO(`${dateA}T${a.start_time}`).getTime();
+        const timeB = parseISO(`${dateB}T${b.start_time}`).getTime();
         return timeA - timeB;
     });
     
@@ -24,8 +26,11 @@ export const minRestGapRule: V8RuleEvaluator = (ctx) => {
         const current = sorted[i];
         const next = sorted[i + 1];
         
-        const currentEnd = parseISO(`${current.date}T${current.end_time}`);
-        const nextStart = parseISO(`${next.date}T${next.start_time}`);
+        const dateCurrent = current.date || current.shift_date || '';
+        const dateNext = next.date || next.shift_date || '';
+        
+        const currentEnd = parseISO(`${dateCurrent}T${current.end_time}`);
+        const nextStart = parseISO(`${dateNext}T${next.start_time}`);
         
         // Handle cross-midnight for the gap calculation
         let gapMins = differenceInMinutes(nextStart, currentEnd);

@@ -13,7 +13,7 @@ import {
     ComplianceCheckResult,
     ShiftTimeRange
 } from '../types';
-import { runV8LegacyBridge } from '../engine';
+import { runV8LegacyBridge } from '..';
 
 interface UseComplianceOptions {
     debounceMs?: number;   // Debounce delay in ms (default: 300)
@@ -61,8 +61,8 @@ export function useCompliance(options: UseComplianceOptions = {}): UseCompliance
                 setError(null);
 
                 try {
-                    // Run compliance checks (synchronous, pure function)
-                    const checkResult = runV8LegacyBridge(input);
+                    // Run compliance checks (now async)
+                    const checkResult = await runV8LegacyBridge(input);
                     setResult(checkResult);
 
                     resolve(checkResult);
@@ -117,8 +117,8 @@ export function buildComplianceInput(params: {
 /**
  * Immediate check without debounce (for form submission)
  */
-export function runV8LegacyBridgeNow(input: ComplianceCheckInput): ComplianceCheckResult {
-    return runV8LegacyBridge(input);
+export async function runV8LegacyBridgeNow(input: ComplianceCheckInput): Promise<ComplianceCheckResult> {
+    return await runV8LegacyBridge(input);
 }
 
 export default useCompliance;

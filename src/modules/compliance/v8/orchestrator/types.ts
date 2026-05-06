@@ -4,7 +4,7 @@
  * Unified type contract for simulation, orchestration, and aggregation.
  */
 
-import { V8ShiftId, V8EmpId, V8RoleId, V8ContractType, V8Status, V8Hit, V8Config, V8Shift } from '../types';
+import { V8ShiftId, V8EmpId, V8RoleId, V8ContractType, V8Status, V8Hit, V8Config, V8Shift, V8Employee } from '../types';
 
 export type V8OperationType = 'ASSIGN' | 'BID' | 'SWAP';
 export type V8EvalMode      = 'CURRENT' | 'SIMULATED';
@@ -34,9 +34,7 @@ export interface V8OrchestratorShift extends V8Shift {
     break_minutes:           number;
 }
 
-export interface V8EmployeeContext {
-    employee_id:              V8EmpId;
-    contract_type:            V8ContractType;
+export interface V8EmployeeContext extends V8Employee {
     contracted_weekly_hours:  number;
     skill_ids:                string[];
     license_ids:              string[];

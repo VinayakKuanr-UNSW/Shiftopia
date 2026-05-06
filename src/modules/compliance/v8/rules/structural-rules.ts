@@ -11,8 +11,10 @@ export const noOverlapRule: V8RuleEvaluator = (ctx) => {
     if (shifts.length < 2) return [];
 
     const sorted = [...shifts].sort((a, b) => {
-        const timeA = parseISO(`${a.date}T${a.start_time}`).getTime();
-        const timeB = parseISO(`${b.date}T${b.start_time}`).getTime();
+        const dateA = a.date || a.shift_date || '';
+        const dateB = b.date || b.shift_date || '';
+        const timeA = parseISO(`${dateA}T${a.start_time}`).getTime();
+        const timeB = parseISO(`${dateB}T${b.start_time}`).getTime();
         return timeA - timeB;
     });
 
@@ -22,8 +24,10 @@ export const noOverlapRule: V8RuleEvaluator = (ctx) => {
         const current = sorted[i];
         const next = sorted[i + 1];
 
-        const currentEnd = parseISO(`${current.date}T${current.end_time}`);
-        const nextStart = parseISO(`${next.date}T${next.start_time}`);
+        const dateCurrent = current.date || current.shift_date || '';
+        const dateNext = next.date || next.shift_date || '';
+        const currentEnd = parseISO(`${dateCurrent}T${current.end_time}`);
+        const nextStart = parseISO(`${dateNext}T${next.start_time}`);
 
         if (nextStart < currentEnd) {
             violations.push({
@@ -51,8 +55,9 @@ export const minShiftLengthRule: V8RuleEvaluator = (ctx) => {
     const violations: V8Hit[] = [];
 
     for (const s of shifts) {
-        const start = parseISO(`${s.date}T${s.start_time}`);
-        const end = parseISO(`${s.date}T${s.end_time}`);
+        const date = s.date || s.shift_date || '';
+        const start = parseISO(`${date}T${s.start_time}`);
+        const end = parseISO(`${date}T${s.end_time}`);
         let mins = differenceInMinutes(end, start);
         if (mins < 0) mins += 1440; // Cross-midnight
 

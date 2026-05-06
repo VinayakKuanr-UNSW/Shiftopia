@@ -23,15 +23,25 @@ export interface ShiftMeta {
     start_time: string;
     end_time: string;
     role_id?: string | null;
+    roleName?: string;
     unpaid_break_minutes?: number;
     demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
     target_employment_type?: 'FT' | 'PT' | 'Casual' | null;
+    level?: number;
+    is_training?: boolean;
 }
 
 export interface EmployeeMeta {
     id: string;
     name: string;
     contract_type?: 'FT' | 'PT' | 'CASUAL' | null;
+    contracted_weekly_hours?: number;
+    remuneration_rate?: number;
+    max_weekly_minutes?: number;
+    level?: number;
+    is_flexible?: boolean;
+    is_student?: boolean;
+    visa_limit?: number;
 }
 
 // =============================================================================
@@ -47,6 +57,8 @@ export interface EnrichedProposal {
     endTime: string;
     cost: number;
     employmentType: string;
+    roleName?: string;
+    roleId?: string | null;
 }
 
 // =============================================================================
@@ -104,6 +116,8 @@ export class SolutionParser {
                 endTime: shift.end_time,
                 cost: proposal.cost,
                 employmentType: proposal.employment_type,
+                roleName: shift.roleName,
+                roleId: shift.role_id,
             });
         }
 

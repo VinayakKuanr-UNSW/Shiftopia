@@ -5,7 +5,7 @@ Key improvements over v1:
   - Configurable solver time limit + worker threads
   - Full debug metrics in response (variables, constraints, coverage_rate, timing)
   - INFEASIBLE/UNKNOWN returns graceful response (not 500)
-  - Request size guards (max 500 shifts / 200 employees)
+  - Request size guards (max 5000 shifts / 1000 employees)
   - Structured JSON logging
 
 Start:
@@ -23,7 +23,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -35,6 +35,7 @@ from model_builder import (
     ExistingShiftInput,
     OptimizerConstraints,
     SolverParameters,
+    StrategyInput,
 )
 
 # =============================================================================
@@ -61,6 +62,10 @@ class ShiftReq(BaseModel):
     required_skill_ids: list[str] = Field(default_factory=list)
     required_license_ids: list[str] = Field(default_factory=list)
     priority: int = 1
+    unpaid_break_minutes: int = 0
+    target_employment_type: Optional[str] = None
+    level: int = 0
+    is_training: bool = False
 
 
 class ExistingShiftReq(BaseModel):
@@ -71,6 +76,7 @@ class ExistingShiftReq(BaseModel):
     start_time: str
     end_time: str
     duration_minutes: int
+    unpaid_break_minutes: int = 0
 
 
 class EmployeeReq(BaseModel):
@@ -85,7 +91,15 @@ class EmployeeReq(BaseModel):
     license_ids: list[str] = Field(default_factory=list)
     preferred_shift_ids: list[str] = Field(default_factory=list)
     unavailable_dates: list[str] = Field(default_factory=list)
+    # Severity-based availability (dates or intervals)
+    # [ (start_time, end_time, severity) ]
+    availability_overrides: list[tuple[str, str, str]] = Field(default_factory=list)
     existing_shifts: list[ExistingShiftReq] = Field(default_factory=list)
+    level: int = 0
+    is_flexible: bool = False
+    is_student: bool = False
+    visa_limit: int = 2880
+    contract_weekly_minutes: int = 2280
 
 
 class ConstraintsReq(BaseModel):
@@ -93,6 +107,14 @@ class ConstraintsReq(BaseModel):
     enforce_role_match: bool = True
     enforce_skill_match: bool = True
     allow_partial: bool = True
+    relax_constraints: bool = False
+
+
+class StrategyReq(BaseModel):
+    fatigue_weight: int = 50
+    fairness_weight: int = 50
+    cost_weight: int = 50
+    coverage_weight: int = 100
 
 
 class SolverParamsReq(BaseModel):
@@ -105,6 +127,7 @@ class OptimizeReq(BaseModel):
     shifts: list[ShiftReq]
     employees: list[EmployeeReq]
     constraints: ConstraintsReq = Field(default_factory=ConstraintsReq)
+    strategy: StrategyReq = Field(default_factory=StrategyReq)
     solver_params: SolverParamsReq = Field(default_factory=SolverParamsReq)
 
 
@@ -132,6 +155,8 @@ class OptimizeRes(BaseModel):
     assignments: list[AssignmentRes]
     unassigned_shift_ids: list[str]
     objective_value: float
+    best_objective_bound: float
+    proven_optimal: bool
     debug: DebugMetricsRes
 
 
@@ -159,7 +184,9 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['*'],   # Tighten in production to known frontend domain
+    # TODO: In production, replace '*' with specific frontend origins 
+    # e.g. ['https://app.shiftopia.unsw.edu.au']
+    allow_origins=['*'],
     allow_methods=['GET', 'POST'],
     allow_headers=['*'],
 )
@@ -183,21 +210,25 @@ def health_check():
 
 
 @app.post('/optimize', response_model=OptimizeRes)
-def optimize(req: OptimizeReq) -> OptimizeRes:
+async def optimize(request: Request) -> OptimizeRes:
     """
     Run the CP-SAT optimizer and return proposed shift assignments.
-
-    Returns gracefully for INFEASIBLE/UNKNOWN — response status indicates the
-    solver outcome. TypeScript fallback should trigger on non-OPTIMAL/FEASIBLE.
     """
+    try:
+        raw_body = await request.json()
+        logger.info("[optimize] Raw request body received")
+        req = OptimizeReq(**raw_body)
+    except Exception as e:
+        logger.error("[optimize] Pydantic validation failed: %s", e)
+        raise HTTPException(status_code=400, detail=f"Validation Error: {e}")
     if not req.shifts:
         raise HTTPException(status_code=400, detail='shifts list is empty')
     if not req.employees:
         raise HTTPException(status_code=400, detail='employees list is empty')
-    if len(req.shifts) > 500:
-        raise HTTPException(status_code=400, detail='Max 500 shifts per request')
-    if len(req.employees) > 200:
-        raise HTTPException(status_code=400, detail='Max 200 employees per request')
+    if len(req.shifts) > 5000:
+        raise HTTPException(status_code=400, detail='Max 5000 shifts per request')
+    if len(req.employees) > 1000:
+        raise HTTPException(status_code=400, detail='Max 1000 employees per request')
 
     logger.info(
         '[optimize] %d shifts × %d employees | time_limit=%.1fs workers=%d hint=%s',
@@ -226,6 +257,7 @@ def optimize(req: OptimizeReq) -> OptimizeRes:
             shifts=[ShiftInput(**{k: v for k, v in s.model_dump().items() if k in ShiftInput.__dataclass_fields__}) for s in req.shifts],
             employees=[_build_employee(e) for e in req.employees],
             constraints=OptimizerConstraints(**{k: v for k, v in req.constraints.model_dump().items() if k in OptimizerConstraints.__dataclass_fields__}),
+            strategy=StrategyInput(**{k: v for k, v in req.strategy.model_dump().items() if k in StrategyInput.__dataclass_fields__}) if hasattr(req, 'strategy') else StrategyInput(),
             solver_params=SolverParameters(**{k: v for k, v in req.solver_params.model_dump().items() if k in SolverParameters.__dataclass_fields__}),
         )
         builder = ScheduleModelBuilder(data)
@@ -254,6 +286,8 @@ def optimize(req: OptimizeReq) -> OptimizeRes:
         ],
         unassigned_shift_ids=output.unassigned_shift_ids,
         objective_value=output.objective_value,
+        best_objective_bound=output.best_objective_bound,
+        proven_optimal=output.proven_optimal,
         debug=DebugMetricsRes(
             raw_pairs=m.raw_pairs,
             eligible_pairs=m.eligible_pairs,

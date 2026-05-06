@@ -13,16 +13,20 @@ import {
 import { ordinaryHoursAvgRule } from './rules/ordinary-hours-avg';
 import { maxDailyHoursRule } from './rules/daily-limits';
 import { minRestGapRule } from './rules/rest-requirements';
-import { maxConsecutiveDaysRule } from './rules/consecutive-days';
+import { maxWorkdayLimitsRule } from './rules/consecutive-days';
 import { studentVisaRule } from './rules/student-visa';
 import { noOverlapRule, minShiftLengthRule } from './rules/structural-rules';
-import { mealBreakRule, qualificationRule } from './rules/employment-rules';
+import { mealBreakRule } from './rules/meal-break';
+import { spreadOfHoursRule } from './rules/spread-of-hours';
+import { minEngagementRule } from './rules/min-engagement';
+import { qualificationRule } from './rules/employment-rules';
 
 // Rule Registry (Optimized Execution Order)
 const ACTIVE_RULES: V8RuleEvaluator[] = [
     // 1. Structural (Fastest)
     noOverlapRule,
     minShiftLengthRule,
+    minEngagementRule,
     
     // 2. Staffing
     qualificationRule,
@@ -30,10 +34,11 @@ const ACTIVE_RULES: V8RuleEvaluator[] = [
     // 3. Safety & Breaks
     mealBreakRule,
     maxDailyHoursRule,
+    spreadOfHoursRule,
     minRestGapRule,
     
     // 4. Budget & Patterns (Cumulative)
-    maxConsecutiveDaysRule,
+    maxWorkdayLimitsRule,
     studentVisaRule,
     ordinaryHoursAvgRule,
 ];

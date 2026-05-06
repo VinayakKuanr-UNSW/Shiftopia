@@ -25,8 +25,12 @@
 
 import { optimizerClient, OptimizerError } from './optimizer/optimizer.client';
 import { solutionParser } from './optimizer/solution-parser';
-import { bulkAssignmentController } from '@/modules/rosters/bulk-assignment';
+import { bulkAssignmentController, type BulkAssignmentResult } from '@/modules/rosters/bulk-assignment';
 import { supabase } from '@/platform/realtime/client';
+import { format } from 'date-fns';
+import { estimateShiftCost } from '../rosters/domain/projections/utils/cost';
+import { calculateFatigueWithRecovery } from '../rosters/domain/projections/utils/fatigue';
+import { calculateUtilization } from '../rosters/domain/projections/utils/fairness';
 import type { ShiftMeta, EmployeeMeta } from './optimizer/solution-parser';
 import type { ExistingShiftRef } from './types';
 import type {
@@ -36,6 +40,7 @@ import type {
     AutoSchedulerResult,
     ValidatedProposal,
     OptimizerConstraints,
+    OptimizerStrategy,
     OptimizerHealth,
     OptimizerStatus,
     UncoveredAudit,
@@ -53,8 +58,8 @@ const DEFAULT_MAX_DAILY_MINUTES = 600;
 
 // Mirrors the Python service guards (ortools_runner.py). Surface to the user
 // before we serialize a giant payload and round-trip to the optimizer.
-export const MAX_OPTIMIZER_SHIFTS = 500;
-export const MAX_OPTIMIZER_EMPLOYEES = 200;
+export const MAX_OPTIMIZER_SHIFTS = 2000;
+export const MAX_OPTIMIZER_EMPLOYEES = 500;
 
 export class AutoSchedulerInputTooLargeError extends Error {
     constructor(message: string) {
@@ -62,10 +67,6 @@ export class AutoSchedulerInputTooLargeError extends Error {
         this.name = 'AutoSchedulerInputTooLargeError';
     }
 }
-import { calculateFatigueWithRecovery } from '@/modules/rosters/domain/projections/utils/fatigue';
-import { calculateUtilization } from '@/modules/rosters/domain/projections/utils/fairness';
-import { format } from 'date-fns';
-import type { BulkAssignmentResult } from '@/modules/rosters/bulk-assignment';
 
 // =============================================================================
 // INPUT / OPTIONS
@@ -76,6 +77,7 @@ export interface AutoSchedulerInput {
     employees: EmployeeMeta[];
     employeeDetails?: Map<string, Partial<OptimizerEmployee>>;
     constraints?: OptimizerConstraints;
+    strategy?: OptimizerStrategy;
     timeLimitSeconds?: number;
     numWorkers?: number;
     /** Allows the caller to abort an in-flight run before it overwrites state. */
@@ -98,14 +100,8 @@ export interface CommitResult {
  * first-fit strategy: iterate employees in load-ascending order, assign each
  * unfilled shift to the first employee that passes compliance simulation.
  *
- * This guarantees the user always gets a usable result.
- */
-/**
- * When OR-Tools is unavailable or returns INFEASIBLE, fall back to a greedy
- * first-fit strategy: iterate employees in load-ascending order, assign each
- * unfilled shift to the first employee that passes compliance simulation.
- *
- * This version integrates Fatigue and Fairness (Utilization) into the scoring.
+ * This guarantees the user always gets a usable result and integrates 
+ * Fatigue and Fairness (Utilization) into the scoring.
  */
 async function greedyFallback(
     shifts: ShiftMeta[],
@@ -176,18 +172,65 @@ async function greedyFallback(
         });
 
         // Try employees in order of highest score
-        const sorted = candidateScores.sort((a, b) => b.score - a.score);
+        const sorted = candidateScores
+            .filter(c => {
+                // HC-Skill (Pre-filter to avoid network call)
+                if ((c.emp.level ?? 0) < (shift.level ?? 0)) return false;
+                
+                // HC-EmploymentType (Isolation)
+                if (shift.target_employment_type) {
+                    const empType = c.emp.contract_type === 'CASUAL' ? 'Casual' : c.emp.contract_type === 'PT' ? 'PT' : 'FT';
+                    if (empType !== shift.target_employment_type) return false;
+                }
+                
+                return true;
+            })
+            .sort((a, b) => b.score - a.score);
+
+        if (sorted.length === 0) {
+            console.debug('[AutoScheduler] No eligible employees for shift %s (Role/Skill mismatch)', shift.id);
+        }
 
         for (const candidate of sorted) {
             const { emp } = candidate;
+            
+            // Skill Alignment Penalty: small penalty for senior doing junior work
+            const levelGap = (emp.level ?? 0) - (shift.level ?? 0);
+            const alignmentPenalty = levelGap > 0 ? levelGap * 50 : 0;
+            const finalScore = candidate.score - alignmentPenalty;
+
             const existingV8ShiftIds = assignedByEmployee.get(emp.id) ?? [];
             const candidateIds = [...existingV8ShiftIds, shift.id];
 
             try {
+                // Build injected context from pre-fetched maps
+                const details = employeeDetails.get(emp.id);
+                const existing = existingRoster.get(emp.id) ?? [];
+                
+                // Only simulate if they passed the basic pre-filters above
                 const simResult = await bulkAssignmentController.simulate(
                     candidateIds,
                     emp.id,
-                    { mode: 'PARTIAL_APPLY' },
+                    { 
+                        mode: 'PARTIAL_APPLY',
+                        injectedData: {
+                            candidateShifts: shifts.filter(s => candidateIds.includes(s.id)) as any,
+                            existingShifts: existing.map(e => ({
+                                id: e.id,
+                                shift_date: e.shift_date,
+                                start_time: e.start_time,
+                                end_time: e.end_time,
+                                assigned_employee_id: emp.id,
+                                unpaid_break_minutes: e.unpaid_break_minutes ?? 0,
+                            })) as any,
+                            employee: {
+                                id: emp.id,
+                                name: emp.name,
+                                contracts: details?.contracts || [],
+                                qualifications: details?.qualifications || [],
+                            } as any
+                        }
+                    },
                 );
                 const shiftResult = simResult.results.find(r => r.shiftId === shift.id);
                 if (shiftResult?.passing) {
@@ -200,7 +243,7 @@ async function greedyFallback(
                         startTime: shift.start_time,
                         endTime: shift.end_time,
                         optimizerCost: 0,
-                        employmentType: emp.contract_type ?? 'Casual',
+                        employmentType: emp.contract_type === 'CASUAL' ? 'Casual' : 'Full-time',
                         complianceStatus: 'PASS',
                         violations: [],
                         passing: true,
@@ -301,6 +344,31 @@ export class AutoSchedulerController {
             );
         }
 
+        // ── Layer 0.5: Past-shift identification ─────────────────────────────
+        // We identify shifts that have already started and exclude them from
+        // the optimizer. This prevents the solver from wasting capacity on
+        // shifts that can't be assigned, and ensures the user sees a clear
+        // failure reason for them.
+        const now = Date.now();
+        const pastShifts: ShiftMeta[] = [];
+        const futureShifts: ShiftMeta[] = [];
+
+        for (const s of input.shifts) {
+            // Re-use logic from IncrementalValidator but on ShiftMeta
+            // Note: ShiftMeta doesn't have start_at, but we can fetch it if needed.
+            // For now, use shift_date + start_time.
+            const start = new Date(`${s.shift_date}T${s.start_time}`);
+            if (start.getTime() <= now) {
+                pastShifts.push(s);
+            } else {
+                futureShifts.push(s);
+            }
+        }
+
+        if (pastShifts.length > 0) {
+            console.debug('[AutoScheduler] Found %d past shifts — excluding from optimizer', pastShifts.length);
+        }
+
         // ── Layer 1: Build optimizer request ─────────────────────────────────
         const dates = input.shifts.map(s => s.shift_date).sort();
         const start = new Date(dates[0]);
@@ -310,7 +378,7 @@ export class AutoSchedulerController {
 
         console.debug('[AutoScheduler] Scaling limits for %f week(s) (%d days)', weekScale.toFixed(2), diffDays);
 
-        const optimizerShifts: OptimizerShift[] = input.shifts.map(s => ({
+        const optimizerShifts: OptimizerShift[] = futureShifts.map(s => ({
             id: s.id,
             shift_date: s.shift_date,
             start_time: s.start_time,
@@ -320,6 +388,8 @@ export class AutoSchedulerController {
             priority: s.demand_source === 'baseline' ? 10 : 1, // Prioritize baseline shifts
             demand_source: s.demand_source,
             target_employment_type: s.target_employment_type,
+            level: s.level ?? 0,
+            is_training: (s as any).is_training ?? false,
             unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
         }));
 
@@ -333,11 +403,17 @@ export class AutoSchedulerController {
                 id: e.id,
                 name: e.name,
                 contract_type: e.contract_type,
-                employment_type: e.contract_type ?? 'Casual',
-                hourly_rate: e.contract_type === 'FT' ? 15.0 : e.contract_type === 'PT' ? 20.0 : 25.0, 
+
+                hourly_rate: e.remuneration_rate ?? (e.contract_type === 'FT' ? 25.65 : e.contract_type === 'PT' ? 25.65 : 32.06), 
                 // Scale limits by the number of weeks in the request to support averaging
                 min_contract_minutes: Math.round((det?.min_contract_minutes ?? baseMin) * weekScale),
                 max_weekly_minutes: Math.round((det?.max_weekly_minutes ?? baseMax) * weekScale),
+                contract_weekly_minutes: (e.contracted_weekly_hours || 38) * 60,
+                level: det?.level ?? 0,
+                is_flexible: det?.is_flexible ?? false,
+                is_student: det?.is_student ?? false,
+                visa_limit: (det as any)?.visa_limit ?? 2880,
+                employment_type: e.contract_type === 'CASUAL' ? 'Casual' : e.contract_type === 'PT' ? 'PT' : 'FT',
                 initial_fatigue_score: calculateFatigueWithRecovery(
                   existingRoster.get(e.id) ?? [],
                   format(new Date(), 'yyyy-MM-dd') // Today's fatigue as baseline
@@ -359,8 +435,12 @@ export class AutoSchedulerController {
             const optimizeReq: OptimizeRequest = {
                 shifts: optimizerShifts,
                 employees: optimizerEmployees,
-                constraints: input.constraints ?? { min_rest_minutes: 600 },
-                time_limit_seconds: input.timeLimitSeconds ?? 30,
+                constraints: input.constraints ?? { min_rest_minutes: 600, relax_constraints: false },
+                strategy: input.strategy ?? { fatigue_weight: 50, fairness_weight: 50, cost_weight: 50, coverage_weight: 100 },
+                solver_params: {
+                    max_time_seconds: input.timeLimitSeconds ?? 30,
+                    num_workers: input.numWorkers ?? 8,
+                },
             };
 
             const optimizeResponse = await optimizerClient.optimize(optimizeReq, input.signal);
@@ -373,6 +453,7 @@ export class AutoSchedulerController {
                 console.warn('[AutoScheduler] Optimizer returned %s — falling back to greedy engine', optimizerStatus);
                 usedFallback = true;
                 const validationStart = performance.now();
+                // Note: greedyFallback still processes all shifts, it will naturally handle the past ones
                 validatedProposals = await greedyFallback(input.shifts, input.employees, input.employeeDetails ?? new Map(), existingRoster);
                 validationTimeMs = Math.round(performance.now() - validationStart);
                 uncoveredV8ShiftIds = validatedProposals.filter(p => !p.passing).map(p => p.shiftId);
@@ -380,10 +461,34 @@ export class AutoSchedulerController {
                 // ── Parse + compliance validate ───────────────────────────────
                 const { shiftMap, employeeMap } = solutionParser.buildMaps(input.shifts, input.employees);
                 const { groups, uncoveredV8ShiftIds: uncov } = solutionParser.parse(optimizeResponse, shiftMap, employeeMap);
-                uncoveredV8ShiftIds = uncov;
+                
+                // Add back the past shifts as uncovered (since optimizer never saw them)
+                uncoveredV8ShiftIds = [...uncov, ...pastShifts.map(s => s.id)];
 
                 const validationStart = performance.now();
-                validatedProposals = await this._validateProposals(groups);
+                validatedProposals = await this._validateProposals(
+                    groups, 
+                    input.employeeDetails ?? new Map(), 
+                    existingRoster
+                );
+
+                // Add back the past shifts as explicitly failed proposals (for UI visibility)
+                for (const ps of pastShifts) {
+                    validatedProposals.push({
+                        shiftId: ps.id,
+                        employeeId: '',
+                        employeeName: '',
+                        shiftDate: ps.shift_date,
+                        startTime: ps.start_time,
+                        endTime: ps.end_time,
+                        optimizerCost: 0,
+                        employmentType: 'Casual',
+                        complianceStatus: 'FAIL',
+                        violations: [{ type: 'PAST_SHIFT', description: 'This shift has already started and cannot be assigned.', blocking: true }],
+                        passing: false,
+                    });
+                }
+
                 validationTimeMs = Math.round(performance.now() - validationStart);
                 console.debug('[AutoScheduler] Compliance validation: %dms', validationTimeMs);
             }
@@ -402,6 +507,67 @@ export class AutoSchedulerController {
         }
         throwIfAborted();
 
+        // ── Layer 2.5: Enrich with Health Metrics (Fatigue/Fairness/Cost) ────
+        // We calculate production-grade metrics for all proposals to ensure
+        // the manager has an accurate audit of the projected roster health.
+        if (validatedProposals.length > 0) {
+            const employeeMap = new Map(input.employees.map(e => [e.id, e]));
+            
+            for (const p of validatedProposals) {
+                if (!p.employeeId) continue;
+                const emp = employeeMap.get(p.employeeId);
+                const shift = input.shifts.find(s => s.id === p.shiftId);
+                
+                // 1. Calculate Production Cost
+                if (shift && emp) {
+                    const mins = this._durationMinutes(shift.start_time, shift.end_time);
+                    p.optimizerCost = estimateShiftCost(
+                        mins,
+                        shift.start_time,
+                        shift.end_time,
+                        emp.remuneration_rate ?? 25,
+                        mins,
+                        (shift as any).is_overnight ?? false,
+                        false, // is_cancelled
+                        shift.shift_date,
+                        undefined, // allowances
+                        false,
+                        false,
+                        false,
+                        undefined,
+                        emp.contract_type === 'CASUAL' ? 'Casual' : emp.contract_type as any,
+                        shift.roleName?.toLowerCase().includes('security')
+                    );
+                }
+
+                // 2. Calculate Fatigue
+                const empShifts = existingRoster.get(p.employeeId) ?? [];
+                const proposedForEmp = validatedProposals.filter(pr => pr.employeeId === p.employeeId && pr.passing);
+                
+                const totalShifts = [
+                    ...empShifts,
+                    ...proposedForEmp.map(pr => ({
+                        id: pr.shiftId,
+                        shift_date: pr.shiftDate,
+                        start_time: pr.startTime,
+                        end_time: pr.endTime,
+                        duration_minutes: this._durationMinutes(pr.startTime, pr.endTime),
+                        unpaid_break_minutes: input.shifts.find(s => s.id === pr.shiftId)?.unpaid_break_minutes ?? 0
+                    })),
+                ];
+
+                p.fatigueScore = calculateFatigueWithRecovery(
+                    totalShifts as any,
+                    p.shiftDate,
+                ).current;
+
+                // 3. Calculate Utilization (Fairness)
+                const scheduledMins = totalShifts.reduce((acc, s) => acc + (s as any).duration_minutes || 0, 0);
+                const contractedMins = (emp?.max_weekly_minutes ?? 2400) * weekScale;
+                p.utilization = calculateUtilization(scheduledMins / 60, contractedMins / 60);
+            }
+        }
+
         const passing = validatedProposals.filter(p => p.passing).length;
         const failing = validatedProposals.length - passing;
 
@@ -419,48 +585,30 @@ export class AutoSchedulerController {
             capacityCheck,
         };
 
-        // ── Layer 2.5: Enrich with Health Metrics (Fatigue/Fairness) ──────────
-        // Even if we used the optimizer, we want the UI to show the projected
-        // health of these assignments so the manager can audit the fairness.
-        if (result.proposals.length > 0 && !usedFallback) {
-          for (const p of result.proposals) {
-            if (!p.employeeId) continue;
-            const empDetails = input.employeeDetails?.get(p.employeeId);
-            const empShifts = existingRoster.get(p.employeeId) ?? [];
-            
-            // Current week shifts (including current proposals for THIS employee)
-            const proposedForEmp = result.proposals.filter(x => x.employeeId === p.employeeId);
-            const totalShifts = [
-              ...empShifts,
-              ...proposedForEmp.map(x => ({
-                id: x.shiftId,
-                shift_date: x.shiftDate,
-                start_time: x.startTime,
-                end_time: x.endTime,
-                unpaid_break_minutes: input.shifts.find(s => s.id === x.shiftId)?.unpaid_break_minutes ?? 0
-              }))
-            ];
 
-            p.fatigueScore = calculateFatigueWithRecovery(
-              totalShifts as any,
-              p.shiftDate
-            ).current;
-
-            const contractedMins = empDetails?.min_contract_minutes ?? 0;
-            const scheduledMins = totalShifts.reduce((acc, s) => acc + (s as any).duration_minutes || 0, 0);
-            p.utilization = calculateUtilization(scheduledMins / 60, contractedMins / 60);
-          }
-        }
 
         // ── Layer 3: Audit uncovered shifts (the "Why") ───────────────────────
-        if (result.uncoveredV8ShiftIds.length > 0) {
+        if (result.uncoveredV8ShiftIds.length > 0 || result.failing > 0) {
             throwIfAborted();
             const auditStart = performance.now();
+            
+            // We audit both:
+            // 1. Uncovered shifts (optimizer couldn't place)
+            // 2. Failed shifts (optimizer placed but compliance rejected)
+        const shiftsToAudit = [
+                ...result.uncoveredV8ShiftIds,
+                ...result.proposals.filter(p => !p.passing).map(p => p.shiftId)
+            ];
+            // Remove duplicates
+            const uniqueAuditIds = Array.from(new Set(shiftsToAudit));
+
             result.uncoveredAudit = await this._auditUncoveredShifts(
-                result.uncoveredV8ShiftIds,
+                uniqueAuditIds,
                 input.shifts,
                 input.employees,
                 result.proposals,
+                input.employeeDetails ?? new Map(),
+                existingRoster,
                 capacityCheck,
             );
             result.auditedUncoveredCount = result.uncoveredAudit.length;
@@ -492,43 +640,51 @@ export class AutoSchedulerController {
             byEmployee.set(p.employeeId, list);
         }
 
-        // ── Per-employee commits run in parallel ─────────────────────────────
-        // Each employee's recheck + sm_bulk_assign is independent — no shared
-        // employee state — so there is no reason to serialize.
+        // ── Per-employee commits run in chunks ─────────────────────────────
+        // We process in small batches (e.g., 5 at a time) to avoid browser lock
+        // contention during the massive recheck/commit phase.
         type EmpOutcome = { employeeId: string; committed: number; failed: boolean; conflicts: string[] };
-        const outcomes: EmpOutcome[] = await Promise.all(
-            Array.from(byEmployee.entries()).map(async ([employeeId, shiftIds]): Promise<EmpOutcome> => {
-                let freshResult: BulkAssignmentResult;
-                try {
-                    freshResult = await bulkAssignmentController.simulate(
-                        shiftIds, employeeId, { mode: 'PARTIAL_APPLY' },
-                    );
-                } catch (err) {
-                    console.error('[AutoScheduler] Recheck failed for employee', employeeId, err);
-                    return { employeeId, committed: 0, failed: true, conflicts: [] };
-                }
+        const outcomes: EmpOutcome[] = [];
+        const entries = Array.from(byEmployee.entries());
+        const CHUNK_SIZE = 5;
 
-                const nowFailing = freshResult.failedV8ShiftIds;
-                if (freshResult.passedV8ShiftIds.length === 0) {
-                    console.warn('[AutoScheduler] All shifts failed recheck for', employeeId);
-                    return { employeeId, committed: 0, failed: true, conflicts: nowFailing };
-                }
-
-                try {
-                    const commitResult = await bulkAssignmentController.commit(freshResult, employeeId);
-                    if (commitResult.success) {
-                        if (nowFailing.length > 0) {
-                            console.warn('[AutoScheduler] Concurrency: skipped %d shifts for %s', nowFailing.length, employeeId);
-                        }
-                        return { employeeId, committed: commitResult.committed.length, failed: false, conflicts: nowFailing };
+        for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
+            const chunk = entries.slice(i, i + CHUNK_SIZE);
+            const chunkOutcomes = await Promise.all(
+                chunk.map(async ([employeeId, shiftIds]): Promise<EmpOutcome> => {
+                    let freshResult: BulkAssignmentResult;
+                    try {
+                        freshResult = await bulkAssignmentController.simulate(
+                            shiftIds, employeeId, { mode: 'PARTIAL_APPLY' },
+                        );
+                    } catch (err) {
+                        console.error('[AutoScheduler] Recheck failed for employee', employeeId, err);
+                        return { employeeId, committed: 0, failed: true, conflicts: [] };
                     }
-                    return { employeeId, committed: 0, failed: true, conflicts: nowFailing };
-                } catch (err) {
-                    console.error('[AutoScheduler] Commit error for', employeeId, err);
-                    return { employeeId, committed: 0, failed: true, conflicts: nowFailing };
-                }
-            }),
-        );
+
+                    const nowFailing = freshResult.failedV8ShiftIds;
+                    if (freshResult.passedV8ShiftIds.length === 0) {
+                        console.warn('[AutoScheduler] All shifts failed recheck for', employeeId);
+                        return { employeeId, committed: 0, failed: true, conflicts: nowFailing };
+                    }
+
+                    try {
+                        const commitResult = await bulkAssignmentController.commit(freshResult, employeeId);
+                        if (commitResult.success) {
+                            if (nowFailing.length > 0) {
+                                console.warn('[AutoScheduler] Concurrency: skipped %d shifts for %s', nowFailing.length, employeeId);
+                            }
+                            return { employeeId, committed: commitResult.committed.length, failed: false, conflicts: nowFailing };
+                        }
+                        return { employeeId, committed: 0, failed: true, conflicts: nowFailing };
+                    } catch (err) {
+                        console.error('[AutoScheduler] Commit error for', employeeId, err);
+                        return { employeeId, committed: 0, failed: true, conflicts: nowFailing };
+                    }
+                })
+            );
+            outcomes.push(...chunkOutcomes);
+        }
 
         const totalCommitted = outcomes.reduce((acc, o) => acc + o.committed, 0);
         const failedEmployees = outcomes.filter(o => o.failed).map(o => o.employeeId);
@@ -563,6 +719,13 @@ export class AutoSchedulerController {
      * silently omit shifts in other departments, producing false-pass
      * proposals that would later be rejected by compliance.
      */
+    /**
+     * Fetch each candidate employee's already-committed shifts within (and
+     * just outside) the optimization window.
+     *
+     * OPTIMIZATION (Bulk): We now use a single RPC call for all employees to
+     * avoid browser request limits and Navigator Lock timeouts (common with 50+ staff).
+     */
     private async _fetchExistingRoster(
         shifts: ShiftMeta[],
         employees: EmployeeMeta[],
@@ -571,50 +734,97 @@ export class AutoSchedulerController {
         if (shifts.length === 0 || employees.length === 0) return result;
 
         const dates = shifts.map(s => s.shift_date).sort();
-        const windowStart = this._shiftDate(dates[0], -1);
+        // Look back 28 days to support V8 rolling average context (2W/3W/4W checks)
+        const windowStart = this._shiftDate(dates[0], -28);
         const windowEnd = this._shiftDate(dates[dates.length - 1], +1);
         const candidateV8ShiftIds = new Set(shifts.map(s => s.id));
 
-        await Promise.all(employees.map(async emp => {
-            try {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const { data, error } = await (supabase.rpc as any)('get_employee_shift_window', {
-                    p_employee_id: emp.id,
-                    p_start_date: windowStart,
-                    p_end_date: windowEnd,
-                    p_exclude_id: null,
-                });
-                if (error) {
-                    console.warn('[AutoScheduler] Roster fetch failed for', emp.id, error);
-                    result.set(emp.id, []);
-                    return;
-                }
-                const rows = (data ?? []) as Array<{
+        console.debug('[AutoScheduler] Fetching roster context for %d employees...', employees.length);
+
+        try {
+            // ── Try Bulk Fetch First (New RPC) ───────────────────────────────
+            const { data, error } = await (supabase.rpc as any)('get_employees_shift_window_bulk', {
+                p_employee_ids: employees.map(e => e.id),
+                p_start_date: windowStart,
+                p_end_date: windowEnd,
+            });
+
+            if (!error && data) {
+                const rows = data as Array<{
                     id: string;
+                    assigned_employee_id: string;
                     shift_date: string;
                     start_time: string;
                     end_time: string;
+                    unpaid_break_minutes: number;
                 }>;
-                // Drop the candidate shifts themselves — they're what we're
-                // about to assign, not pre-existing constraints.
-                const refs: ExistingShiftRef[] = rows
-                    .filter(r => !candidateV8ShiftIds.has(r.id))
-                    .map(r => ({
-                        id: r.id,
-                        shift_date: r.shift_date,
-                        start_time: this._normalizeTime(r.start_time),
-                        end_time: this._normalizeTime(r.end_time),
-                        duration_minutes: this._durationMinutes(
-                            this._normalizeTime(r.start_time),
-                            this._normalizeTime(r.end_time),
-                        ),
-                    }));
-                result.set(emp.id, refs);
-            } catch (err) {
-                console.warn('[AutoScheduler] Roster fetch threw for', emp.id, err);
-                result.set(emp.id, []);
+
+                // Group by employee
+                for (const emp of employees) {
+                    const empRows = rows.filter(r => r.assigned_employee_id === emp.id);
+                    const refs: ExistingShiftRef[] = empRows
+                        .filter(r => !candidateV8ShiftIds.has(r.id))
+                        .map(r => ({
+                            id: r.id,
+                            shift_date: r.shift_date,
+                            start_time: this._normalizeTime(r.start_time),
+                            end_time: this._normalizeTime(r.end_time),
+                            duration_minutes: this._durationMinutes(
+                                this._normalizeTime(r.start_time),
+                                this._normalizeTime(r.end_time),
+                            ),
+                            unpaid_break_minutes: r.unpaid_break_minutes ?? 0,
+                        }));
+                    result.set(emp.id, refs);
+                }
+                console.debug('[AutoScheduler] Bulk roster fetch successful (%d total shifts)', rows.length);
+                return result;
             }
-        }));
+
+            console.warn('[AutoScheduler] Bulk roster fetch failed or RPC missing, falling back to chunked sequential...', error);
+        } catch (err) {
+            console.warn('[AutoScheduler] Bulk roster fetch threw, falling back...', err);
+        }
+
+        // ── Fallback: Chunked Sequential Fetch ──────────────────────────────
+        // We process in small batches (e.g., 5 at a time) to avoid browser lock contention
+        const CHUNK_SIZE = 5;
+        for (let i = 0; i < employees.length; i += CHUNK_SIZE) {
+            const chunk = employees.slice(i, i + CHUNK_SIZE);
+            await Promise.all(chunk.map(async emp => {
+                try {
+                    const { data, error } = await (supabase.rpc as any)('get_employee_shift_window', {
+                        p_employee_id: emp.id,
+                        p_start_date: windowStart,
+                        p_end_date: windowEnd,
+                        p_exclude_id: null,
+                    });
+                    if (error) {
+                        console.warn('[AutoScheduler] Roster fetch failed for', emp.id, error);
+                        result.set(emp.id, []);
+                        return;
+                    }
+                    const rows = (data ?? []) as any[];
+                    const refs: ExistingShiftRef[] = rows
+                        .filter(r => !candidateV8ShiftIds.has(r.id))
+                        .map(r => ({
+                            id: r.id,
+                            shift_date: r.shift_date,
+                            start_time: this._normalizeTime(r.start_time),
+                            end_time: this._normalizeTime(r.end_time),
+                            duration_minutes: this._durationMinutes(
+                                this._normalizeTime(r.start_time),
+                                this._normalizeTime(r.end_time),
+                            ),
+                            unpaid_break_minutes: r.unpaid_break_minutes ?? 0,
+                        }));
+                    result.set(emp.id, refs);
+                } catch (err) {
+                    console.warn('[AutoScheduler] Roster fetch threw for', emp.id, err);
+                    result.set(emp.id, []);
+                }
+            }));
+        }
 
         return result;
     }
@@ -645,6 +855,8 @@ export class AutoSchedulerController {
         allShifts: ShiftMeta[],
         allEmployees: EmployeeMeta[],
         proposals: ValidatedProposal[],
+        employeeDetails: Map<string, Partial<OptimizerEmployee>>,
+        existingRoster: Map<string, ExistingShiftRef[]>,
         capacityCheck?: CapacityCheck,
     ): Promise<UncoveredAudit[]> {
         const shiftMap = new Map(allShifts.map(s => [s.id, s]));
@@ -667,8 +879,32 @@ export class AutoSchedulerController {
         type EmpSim = { emp: EmployeeMeta; resultByShift: Map<string, ShiftSimRow> };
         const empSims: EmpSim[] = await Promise.all(allEmployees.map(async (emp): Promise<EmpSim> => {
             try {
+                const details = employeeDetails.get(emp.id);
+                const existing = existingRoster.get(emp.id) ?? [];
+
                 const sim = await bulkAssignmentController.simulate(
-                    targetIds, emp.id, { mode: 'PARTIAL_APPLY' },
+                    targetIds, 
+                    emp.id, 
+                    { 
+                        mode: 'PARTIAL_APPLY',
+                        injectedData: {
+                            candidateShifts: allShifts.filter(s => targetIds.includes(s.id)) as any,
+                            existingShifts: existing.map(e => ({
+                                id: e.id,
+                                shift_date: e.shift_date,
+                                start_time: e.start_time,
+                                end_time: e.end_time,
+                                assigned_employee_id: emp.id,
+                                unpaid_break_minutes: e.unpaid_break_minutes ?? 0,
+                            })) as any,
+                            employee: {
+                                id: emp.id,
+                                name: emp.name,
+                                contracts: details?.contracts || [],
+                                qualifications: details?.qualifications || [],
+                            } as any
+                        }
+                    },
                 );
                 const map = new Map<string, ShiftSimRow>();
                 for (const r of sim.results) {
@@ -750,6 +986,7 @@ export class AutoSchedulerController {
                 startTime: s.start_time,
                 endTime: s.end_time,
                 rejectionSummary: summary,
+                roleName: s.roleName,
                 employeeDetails: details,
             });
         }
@@ -788,13 +1025,22 @@ export class AutoSchedulerController {
             return DEFAULT_MAX_DAILY_MINUTES;
         };
 
-        // Aggregate demand by day
-        const demandByDate = new Map<string, { minutes: number; count: number }>();
+        // aggregate demand by day
+        const demandByDate = new Map<string, { minutes: number; count: number; pastMinutes: number }>();
+        const now = Date.now();
+        
         for (const s of shifts) {
             const mins = this._durationMinutes(s.start_time, s.end_time);
-            const cur = demandByDate.get(s.shift_date) ?? { minutes: 0, count: 0 };
+            const cur = demandByDate.get(s.shift_date) ?? { minutes: 0, count: 0, pastMinutes: 0 };
             cur.minutes += mins;
             cur.count += 1;
+            
+            // Identify if this shift is already started
+            const start = new Date(`${s.shift_date}T${s.start_time}`);
+            if (start.getTime() <= now) {
+                cur.pastMinutes += mins;
+            }
+            
             demandByDate.set(s.shift_date, cur);
         }
 
@@ -808,7 +1054,11 @@ export class AutoSchedulerController {
         let totalSupply = 0;
 
         for (const [date, demand] of demandByDate) {
-            const deficit = Math.max(0, demand.minutes - supplyPerDay);
+            // For capacity calculation, past shifts should subtract from supply OR add to deficit.
+            // Here we treat them as "unfillable demand" that reduces effective supply.
+            const availableSupply = demand.pastMinutes > 0 ? Math.max(0, supplyPerDay - demand.pastMinutes) : supplyPerDay;
+            
+            const deficit = Math.max(0, demand.minutes - availableSupply);
             const day: CapacityDayBreakdown = {
                 date,
                 shiftCount: demand.count,
@@ -837,14 +1087,47 @@ export class AutoSchedulerController {
 
     private async _validateProposals(
         groups: ReturnType<typeof solutionParser.parse>['groups'],
+        employeeDetails: Map<string, Partial<OptimizerEmployee>>,
+        existingRoster: Map<string, ExistingShiftRef[]>,
     ): Promise<ValidatedProposal[]> {
         const all: ValidatedProposal[] = [];
 
         for (const group of groups) {
             let bulkResult: BulkAssignmentResult;
             try {
+                const details = employeeDetails.get(group.employeeId);
+                const existing = existingRoster.get(group.employeeId) ?? [];
+
                 bulkResult = await bulkAssignmentController.simulate(
-                    group.shiftIds, group.employeeId, { mode: 'PARTIAL_APPLY' },
+                    group.shiftIds, 
+                    group.employeeId, 
+                    { 
+                        mode: 'PARTIAL_APPLY',
+                        injectedData: {
+                            candidateShifts: group.proposals.map(p => ({
+                                id: p.shiftId,
+                                shift_date: p.shiftDate,
+                                start_time: p.startTime,
+                                end_time: p.endTime,
+                                assigned_employee_id: group.employeeId,
+                                role_id: p.roleId,
+                            })) as any,
+                            existingShifts: existing.map(e => ({
+                                id: e.id,
+                                shift_date: e.shift_date,
+                                start_time: e.start_time,
+                                end_time: e.end_time,
+                                assigned_employee_id: group.employeeId,
+                                unpaid_break_minutes: e.unpaid_break_minutes ?? 0,
+                            })) as any,
+                            employee: {
+                                id: group.employeeId,
+                                name: group.employeeName,
+                                contracts: details?.contracts || [],
+                                qualifications: details?.qualifications || [],
+                            } as any
+                        }
+                    },
                 );
             } catch (err) {
                 for (const p of group.proposals) {
@@ -852,6 +1135,7 @@ export class AutoSchedulerController {
                         shiftId: p.shiftId, employeeId: p.employeeId, employeeName: p.employeeName,
                         shiftDate: p.shiftDate, startTime: p.startTime, endTime: p.endTime,
                         optimizerCost: p.cost, employmentType: p.employmentType, complianceStatus: 'FAIL',
+                        roleName: p.roleName,
                         violations: [{ type: 'SYSTEM', description: 'Compliance check error', blocking: true }],
                         passing: false,
                     });
@@ -867,6 +1151,7 @@ export class AutoSchedulerController {
                     shiftDate: p.shiftDate, startTime: p.startTime, endTime: p.endTime,
                     optimizerCost: p.cost,
                     employmentType: p.employmentType,
+                    roleName: p.roleName,
                     complianceStatus: cr?.status === 'PASS' ? 'PASS' : cr?.status === 'WARN' ? 'WARN' : 'FAIL',
                     violations: (cr?.violations ?? []).map(v => ({
                         type: v.violation_type, description: v.description, blocking: v.blocking,

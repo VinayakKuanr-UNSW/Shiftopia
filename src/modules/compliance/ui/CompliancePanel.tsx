@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { cn } from '@/modules/core/lib/utils';
-import { RULE_METADATA } from '@/modules/compliance/v8/rules/registry';
+import { V8_RULE_METADATA as RULE_METADATA } from '@/modules/compliance/v8/metadata';
 import type { UseCompliancePanelReturn } from './useCompliancePanel';
 import type { V8Hit } from '@/modules/compliance/v8/types';
 import { type PassedRule, UI_VALIDATED_RULES } from './bucket-map';
@@ -85,17 +85,16 @@ const BUCKET_CONFIG = {
 
 /** Display codes matching rule numbers — all active rules registered in the engine */
 const DISPLAY_CODE: Record<string, string> = {
-    'R01_NO_OVERLAP':           'R01',
-    'R02_MIN_SHIFT_LENGTH':     'R02',
-    'R03_MAX_DAILY_HOURS':      'R03',
-    'R05_STUDENT_VISA':         'R05',
-    'R06_ORD_HOURS_AVG':        'R06',
-    'R07_REST_GAP':             'R07',
-    'R08_MEAL_BREAK':           'R08',
-    'R09_MAX_CONSECUTIVE_DAYS': 'R09',
-    'R10_ROLE_CONTRACT_MATCH':  'R10',
-    'R11_QUALIFICATIONS':       'R11',
-    'R_AVAILABILITY_MATCH':     'AV',
+    'V8_NO_OVERLAP':            'R01',
+    'V8_MIN_SHIFT_LENGTH':      'R02',
+    'V8_MAX_DAILY_HOURS':       'R03',
+    'V8_STUDENT_VISA_LIMIT':    'R05',
+    'V8_ORD_HOURS_AVG':         'R06',
+    'V8_MIN_REST_GAP':          'R07',
+    'V8_MEAL_BREAK':            'R08',
+    'V8_MAX_CONSECUTIVE_DAYS':  'R09',
+    'V8_QUALIFICATIONS':        'R11',
+    'V8_AVAILABILITY_CONFLICT': 'AV',
 };
 
 

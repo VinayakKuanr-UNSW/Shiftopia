@@ -31,6 +31,7 @@ import { buildStats } from './shared';
 function toProjectedShift(shift: Shift): ProjectedShift {
   const netMinutes    = netMinutesFromShift(shift);
   const estimatedCost = estimateCostFromShift(shift, netMinutes);
+  const detail        = estimateDetailedCostFromShift(shift, netMinutes);
   const groupType     = shift.group_type ?? null;
   const colors        = groupType
     ? (ALL_GROUP_TYPES.includes(groupType) ? GROUP_COLORS[groupType] : UNASSIGNED_COLORS)
@@ -47,6 +48,13 @@ function toProjectedShift(shift: Shift): ProjectedShift {
     endTime:        shift.end_time,
     netMinutes,
     estimatedCost,
+    costBreakdown: {
+      base: detail.baseCost,
+      penalty: detail.penaltyCost,
+      overtime: detail.overtimeCost,
+      allowance: detail.allowanceCost,
+      leave: detail.leaveLoadingCost,
+    },
     stateId:        determineShiftState(shift),
     roleName:       shift.roles?.name ?? 'Shift',
     roleId:         shift.role_id,

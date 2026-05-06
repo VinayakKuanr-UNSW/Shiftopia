@@ -9,13 +9,13 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { CheckCircle, XCircle, AlertTriangle, Info, Play, Circle, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, Info, Play, Circle, Loader2, X } from 'lucide-react';
 import {
     ComplianceCheckResult,
     ComplianceResult,
     ComplianceCheckInput
 } from '../types';
-import { getRegisteredRules, runRule } from '../engine';
+import { getRegisteredRules, runRule } from '../v8';
 import { cn } from '@/modules/core/lib/utils';
 import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 
@@ -235,7 +235,7 @@ export function ComplianceModal({
     const buildRuleStates = useCallback((): RuleDisplayState[] => {
         const registeredRules = getRegisteredRules();
 
-        return registeredRules.map(rule => {
+        return registeredRules.map((rule: any) => {
             // Find existing result if available
             const existingResult = result?.results.find(r => r.rule_id === rule.id);
 

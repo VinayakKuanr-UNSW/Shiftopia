@@ -2,13 +2,14 @@ import React, { useState } from 'react'; // Re-triggering build
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '@/modules/core/ui/primitives/dialog';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Label } from '@/modules/core/ui/primitives/label';
-import { Plus, Building2, Users, ChevronRight, Briefcase, DollarSign, Loader2, Sparkles, CheckCircle2, Pencil } from 'lucide-react';
+import { Plus, Building2, Users, ChevronRight, Briefcase, DollarSign, Loader2, Sparkles, CheckCircle2, Pencil, Clock } from 'lucide-react';
 import { useReferenceData } from '../hooks/useReferenceData';
 import { useContractForm } from '../hooks/useContractForm';
 import { CommandSelector } from './CommandSelector';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/modules/core/lib/utils';
 import { supabase } from '@/platform/realtime/client';
+import { Input } from '@/modules/core/ui/primitives/input';
 
 interface AddContractDialogProps {
     employeeId: string;
@@ -53,7 +54,8 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                 sub_department_id: existingContract.sub_department_id || '',
                 role_id: existingContract.role_id,
                 rem_level_id: existingContract.rem_level_id || '',
-                employment_status: (existingContract.employment_status as any) || 'Casual'
+                employment_status: (existingContract.employment_status as any) || 'Casual',
+                contracted_weekly_hours: (existingContract as any).contracted_weekly_hours || 0
             });
         } else if (open && !existingContract) {
             setFormData({
@@ -62,7 +64,8 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                 sub_department_id: '',
                 role_id: '',
                 rem_level_id: '',
-                employment_status: 'Casual'
+                employment_status: '',
+                contracted_weekly_hours: 0
             });
         }
     }, [open, existingContract, setFormData]);
@@ -89,7 +92,8 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                     sub_department_id: formData.sub_department_id,
                     role_id: formData.role_id,
                     rem_level_id: formData.rem_level_id,
-                    employment_status: formData.employment_status as any
+                    employment_status: formData.employment_status as any,
+                    contracted_weekly_hours: formData.contracted_weekly_hours
                 })
                 .eq('id', existingContract!.id);
             
@@ -139,10 +143,10 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                     )}
                 </Button>
             </DialogTrigger>
-            <DialogContent className="w-[calc(100vw-2rem)] max-w-xl bg-[#0b0e14]/95 border-border/40 text-foreground shadow-2xl backdrop-blur-2xl rounded-[2rem] overflow-hidden p-0">
+            <DialogContent className="w-[calc(100vw-2rem)] max-w-xl h-[85vh] flex flex-col bg-[#0b0e14]/95 border-border/40 text-foreground shadow-2xl backdrop-blur-2xl rounded-[2rem] overflow-hidden p-0">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
                 
-                <div className="p-8 pb-4">
+                <div className="p-8 pb-4 flex-shrink-0">
                     <DialogHeader className="mb-6">
                         <div className="flex items-center gap-3 mb-2">
                             <div className="p-2 rounded-xl bg-primary/10 text-primary shadow-inner">
@@ -159,7 +163,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                         </div>
                     </DialogHeader>
 
-                    <div className="flex flex-col gap-6 py-2 relative">
+                    <div className="flex-1 overflow-y-auto px-8 py-4 relative custom-scrollbar flex flex-col gap-6">
                         {/* Progress Line */}
                         <div className="absolute left-6 top-8 bottom-8 w-[1px] bg-gradient-to-b from-primary/50 via-primary/20 to-transparent opacity-20 pointer-events-none" />
 
@@ -245,44 +249,84 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                             )}
                         </AnimatePresence>
 
-                        {/* 5. Remuneration & Employment (Locked) */}
+                        {/* 5. Remuneration & Employment */}
                         <AnimatePresence>
                             {isRoleSelected && (
                                 <motion.div
                                     initial={{ opacity: 0, height: 0, y: 10 }}
                                     animate={{ opacity: 1, height: 'auto', y: 0 }}
                                     transition={{ duration: 0.6, ease: "easeOut", delay: 0.2 }}
-                                    className="grid grid-cols-2 gap-4 mt-2 p-4 rounded-2xl bg-primary/5 border border-primary/10 shadow-inner"
+                                    className="flex flex-col gap-6"
                                 >
-                                    <div className="space-y-1">
-                                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-bold flex items-center gap-1.5">
-                                            <DollarSign className="w-3 h-3" /> Remuneration
-                                        </Label>
-                                        <div className="text-sm font-semibold text-primary/90 flex items-center gap-2">
-                                            {selectedRemLevel ? (
-                                                <>
-                                                    <span className="px-1.5 py-0.5 rounded bg-primary/10 text-xs">L{selectedRemLevel.level_number}</span>
-                                                    <span>{selectedRemLevel.level_name}</span>
-                                                </>
-                                            ) : '—'}
+                                    <div className="grid grid-cols-2 gap-4 mt-2 p-4 rounded-2xl bg-primary/5 border border-primary/10 shadow-inner">
+                                        <div className="space-y-1">
+                                            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-bold flex items-center gap-1.5">
+                                                <DollarSign className="w-3 h-3" /> Remuneration
+                                            </Label>
+                                            <div className="text-sm font-semibold text-primary/90 flex items-center gap-2">
+                                                {selectedRemLevel ? (
+                                                    <>
+                                                        <span className="px-1.5 py-0.5 rounded bg-primary/10 text-xs">L{selectedRemLevel.level_number}</span>
+                                                        <span>{selectedRemLevel.level_name}</span>
+                                                    </>
+                                                ) : '—'}
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1 border-l border-border/40 pl-4">
+                                            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-bold flex items-center gap-1.5">
+                                                <Briefcase className="w-3 h-3" /> Selection Type
+                                            </Label>
+                                            <div className="text-sm font-semibold text-primary/90 flex items-center gap-2">
+                                                <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                                {formData.employment_status || '—'}
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="space-y-1 border-l border-border/40 pl-4">
-                                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-bold flex items-center gap-1.5">
-                                            <Briefcase className="w-3 h-3" /> Type
-                                        </Label>
-                                        <div className="text-sm font-semibold text-primary/90 flex items-center gap-2">
-                                            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                                            {formData.employment_status || '—'}
-                                        </div>
-                                    </div>
+
+                                    <CommandSelector
+                                        label="Change Employment Type"
+                                        placeholder="Select type"
+                                        value={formData.employment_status}
+                                        options={[
+                                            { id: 'Full-Time', name: 'Full-Time' },
+                                            { id: 'Part-Time', name: 'Part-Time' },
+                                            { id: 'Casual', name: 'Casual' },
+                                            { id: 'Flexible Part-Time', name: 'Flexible Part-Time' }
+                                        ]}
+                                        onValueChange={(val) => updateField('employment_status', val)}
+                                        icon={<Briefcase className="w-5 h-5" />}
+                                    />
+
+                                    {(formData.employment_status === 'Full-Time' || formData.employment_status === 'Part-Time' || formData.employment_status === 'Flexible Part-Time') && (
+                                        <motion.div
+                                            initial={{ opacity: 0, x: -10 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            className="p-4 rounded-2xl bg-primary/5 border border-primary/10 shadow-inner space-y-3"
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-bold flex items-center gap-1.5">
+                                                    <Clock className="w-3 h-3" /> Contracted Weekly Hours
+                                                </Label>
+                                                <span className="text-[10px] font-mono text-primary/40 italic">EA Standard: {formData.employment_status === 'Full-Time' ? '38h' : '20h+'}</span>
+                                            </div>
+                                            <div className="relative group">
+                                                <Input
+                                                    type="number"
+                                                    value={formData.contracted_weekly_hours}
+                                                    onChange={(e) => updateField('contracted_weekly_hours', parseFloat(e.target.value) || 0)}
+                                                    className="bg-black/40 border-primary/20 focus:border-primary/50 text-lg font-bold text-primary pl-4 h-12 rounded-xl transition-all"
+                                                />
+                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground/40 font-medium">hours / week</div>
+                                            </div>
+                                        </motion.div>
+                                    )}
                                 </motion.div>
                             )}
                         </AnimatePresence>
                     </div>
                 </div>
 
-                <div className="p-8 pt-4 bg-muted/20 border-t border-border/20">
+                <div className="p-8 pt-4 bg-muted/20 border-t border-border/20 flex-shrink-0">
                     <DialogFooter className="gap-3 sm:gap-0">
                         <Button 
                             variant="ghost" 

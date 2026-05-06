@@ -13,15 +13,16 @@ export const maxDailyHoursRule: V8RuleEvaluator = (ctx) => {
     const dailyMinutes = new Map<string, number>();
     
     for (const s of shifts) {
-        const start = parseISO(`${s.date}T${s.start_time}`);
-        const end = parseISO(`${s.date}T${s.end_time}`);
+        const date = s.date || s.shift_date || '';
+        const start = parseISO(`${date}T${s.start_time}`);
+        const end = parseISO(`${date}T${s.end_time}`);
         let totalMins = differenceInMinutes(end, start);
         if (totalMins < 0) totalMins += 1440; // Cross-midnight
         
         // Attribution logic:
         // For simplicity in V8, we attribute the shift hours to the start date.
         // (Full segmentation is handled in V8's high-performance mode if needed).
-        dailyMinutes.set(s.date, (dailyMinutes.get(s.date) || 0) + totalMins);
+        dailyMinutes.set(date, (dailyMinutes.get(date) || 0) + totalMins);
     }
     
     const violations: V8Hit[] = [];

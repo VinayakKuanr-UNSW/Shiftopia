@@ -38,6 +38,9 @@ export interface CandidateShift {
     required_skills?: string[] | null;
     /** Qualification IDs required to work this shift (license IDs). */
     required_licenses?: string[] | null;
+    /** Canonical time columns for past-shift validation. */
+    start_at?: string | null;
+    end_at?: string | null;
 }
 
 // =============================================================================
@@ -75,13 +78,14 @@ export interface SimulatedRoster {
  *   8.  WEEKLY_HOURS          — max ordinary hours per 4-week rolling cycle
  *   9.  DAILY_HOURS           — max hours in a single calendar day (12h cap)
  *   10. WORKING_DAYS_CAP      — max 20 working days in rolling 28-day window (EBA Cl 35.1e)
- *   11. STUDENT_VISA          — student visa 48h/fortnight limit (warning only)
- *
- * Removed:
- *   SHIFT_LENGTH     — duration validated when the shift was created in Step 1
- *   CONSECUTIVE_DAYS — R04/28-day cap is the authoritative work-pattern limit
+ *   11. STREAK_LIMIT          — max consecutive working days (6 or 10)
+ *   12. MIN_ENGAGEMENT        — minimum shift duration (3h or 4h)
+ *   13. SPREAD_OF_HOURS       — max 12h span from first start to last end
+ *   14. MEAL_BREAK            — break required for shifts > 5h
+ *   15. STUDENT_VISA          — student visa 48h/fortnight limit (warning only)
  */
 export type ViolationType =
+    | 'PAST_SHIFT'
     | 'DRAFT_STATE'
     | 'ALREADY_ASSIGNED'
     | 'OVERLAP'
@@ -92,6 +96,10 @@ export type ViolationType =
     | 'WEEKLY_HOURS'
     | 'DAILY_HOURS'
     | 'WORKING_DAYS_CAP'
+    | 'STREAK_LIMIT'
+    | 'MIN_ENGAGEMENT'
+    | 'SPREAD_OF_HOURS'
+    | 'MEAL_BREAK'
     | 'STUDENT_VISA';
 
 /**
@@ -178,10 +186,18 @@ export interface EmployeeInfo {
 // CONTROLLER INPUT / OPTIONS
 // =============================================================================
 
+export interface InjectedSimulationData {
+    candidateShifts: CandidateShift[];
+    existingShifts: CandidateShift[];
+    employee: EmployeeInfo;
+}
+
 export interface BulkAssignmentOptions {
     mode: 'PARTIAL_APPLY' | 'ALL_OR_NOTHING';
     /** When true, skips role and qualification checks (faster). */
     skipQualificationChecks?: boolean;
+    /** (Optional) Pre-fetched data to skip network calls. */
+    injectedData?: InjectedSimulationData;
 }
 
 

@@ -20,7 +20,7 @@ import {
     BulkAssignmentPanel,
     BulkAssignmentEmployee,
 } from '@/modules/rosters/ui/dialogs/BulkAssignmentPanel';
-import { AutoSchedulerPanel } from '@/modules/scheduling/ui/AutoSchedulerPanel';
+import { AutoSchedulerModal } from '@/modules/scheduling/ui/AutoSchedulerModal';
 
 // =============================================================================
 // TYPES
@@ -32,6 +32,7 @@ interface AutoSchedulerShift {
     start_time: string;
     end_time: string;
     role_id: string | null;
+    roleName?: string;
     unpaid_break_minutes: number;
     demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
     target_employment_type?: 'FT' | 'PT' | 'Casual' | null;
@@ -45,7 +46,12 @@ interface RosterModalsProps {
     /** Unassigned shifts for AutoSchedulerPanel. */
     autoSchedulerShifts: AutoSchedulerShift[];
     /** Employee summary for AutoSchedulerPanel. */
-    autoSchedulerEmployees: Array<{ id: string; name: string; contract_type?: 'FT' | 'PT' | 'CASUAL' | null }>;
+    autoSchedulerEmployees: Array<{ 
+        id: string; 
+        name: string; 
+        contract_type?: 'FT' | 'PT' | 'CASUAL' | null;
+        contracted_weekly_hours?: number;
+    }>;
     /** Called when a shift is created or saved successfully. */
     onShiftSaved: () => void;
     /** Called after bulk assignment completes (clears selection). */
@@ -127,8 +133,8 @@ export const RosterModals = forwardRef<RosterModalsHandle, RosterModalsProps>((
                 existingShift={editShift}
             />
 
-            {/* Auto-Scheduler Panel */}
-            <AutoSchedulerPanel
+            {/* Auto-Scheduler Modal */}
+            <AutoSchedulerModal
                 open={isAutoSchedulerOpen}
                 onClose={() => setIsAutoSchedulerOpen(false)}
                 shifts={autoSchedulerShifts}

@@ -19,13 +19,14 @@ export const studentVisaRule: V8RuleEvaluator = (ctx) => {
     // 1. Build Daily Hours Map
     const dailyHours = new Map<string, number>();
     for (const s of shifts) {
-        const start = parseISO(`${s.date}T${s.start_time}`);
-        const end = parseISO(`${s.date}T${s.end_time}`);
+        const date = s.date || s.shift_date || '';
+        const start = parseISO(`${date}T${s.start_time}`);
+        const end = parseISO(`${date}T${s.end_time}`);
         let mins = differenceInMinutes(end, start);
         if (mins < 0) mins += 1440; // Cross-midnight
         
         const netHours = Math.max(0, (mins - (s.unpaid_break_minutes || 0)) / 60);
-        dailyHours.set(s.date, (dailyHours.get(s.date) || 0) + netHours);
+        dailyHours.set(date, (dailyHours.get(date) || 0) + netHours);
     }
     
     const sortedDates = Array.from(dailyHours.keys()).sort();

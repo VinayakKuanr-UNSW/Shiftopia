@@ -42,6 +42,7 @@ export interface EligibleEmployee {
     department_name?: string;
     sub_department_name?: string;
     contract_type?: 'FT' | 'PT' | 'CASUAL' | null;
+    contracted_weekly_hours?: number;
 }
 
 export interface EligibleContract {
@@ -83,6 +84,7 @@ export const EligibilityService = {
                         role_id,
                         status,
                         employment_status,
+                        contracted_weekly_hours,
                         department:departments(name),
                         sub_department:sub_departments(name)
                     )
@@ -151,7 +153,8 @@ export const EligibilityService = {
                     contract_type: displayContract?.employment_status === 'Full-Time' ? 'FT' :
                                   displayContract?.employment_status === 'Part-Time' ? 'PT' :
                                   displayContract?.employment_status === 'Casual' ? 'CASUAL' :
-                                  displayContract?.employment_status === 'Flexible Part-Time' ? 'PT' : null
+                                  displayContract?.employment_status === 'Flexible Part-Time' ? 'PT' : null,
+                    contracted_weekly_hours: displayContract?.contracted_weekly_hours ?? 38
                 } as EligibleEmployee);
             });
 

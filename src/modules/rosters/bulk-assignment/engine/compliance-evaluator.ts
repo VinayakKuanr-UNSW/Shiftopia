@@ -21,15 +21,16 @@ import { assignmentEvaluator } from '@/modules/compliance';
 import type { RosterShift } from '@/modules/compliance';
 import type { CandidateShift, EmployeeInfo, ShiftViolation, SimulatedRoster, ViolationType } from '../types';
 
-// Map solver constraint IDs to our ViolationType codes.
-// MIN_SHIFT_LENGTH → removed (duration validated when the shift was created)
-// CONSECUTIVE_DAYS → removed (R04/28-day cap is the authoritative work-pattern limit)
 const CONSTRAINT_TO_VIOLATION: Record<string, ViolationType> = {
-    MIN_REST_GAP:        'REST_GAP',
-    AVG_FOUR_WEEK_CYCLE: 'WEEKLY_HOURS',
-    MAX_DAILY_HOURS:     'DAILY_HOURS',       // 12h calendar-day cap (R03)
-    WORKING_DAYS_CAP:    'WORKING_DAYS_CAP',  // 20/28-day rolling cap (R04, EBA Cl 35.1e)
-    STUDENT_VISA_48H:    'STUDENT_VISA',
+    V8_MIN_REST_GAP:     'REST_GAP',
+    V8_ORD_HOURS_AVG:    'WEEKLY_HOURS',
+    V8_MAX_DAILY_HOURS:  'DAILY_HOURS',
+    V8_WORKING_DAYS_CAP: 'WORKING_DAYS_CAP',
+    V8_STREAK_LIMIT:     'STREAK_LIMIT',
+    V8_MIN_ENGAGEMENT:   'MIN_ENGAGEMENT',
+    V8_SPREAD_OF_HOURS:  'SPREAD_OF_HOURS',
+    V8_MEAL_BREAK:       'MEAL_BREAK',
+    V8_STUDENT_VISA:     'STUDENT_VISA',
 };
 
 // =============================================================================
@@ -39,10 +40,14 @@ const CONSTRAINT_TO_VIOLATION: Record<string, ViolationType> = {
 function candidateToRosterShift(s: CandidateShift): RosterShift {
     return {
         id: s.id,
+        date: s.shift_date,
         shift_date: s.shift_date,
         start_time: s.start_time,
         end_time: s.end_time,
         unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
+        is_ordinary_hours: true, // Default for V8 rules
+        role_id: s.role_id ?? undefined,
+        is_training: s.lifecycle_status === 'TRAINING', // If applicable
     };
 }
 

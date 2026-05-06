@@ -35,7 +35,9 @@ import {
     ComplianceResult,
     ShiftTimeRange
 } from './types';
-import { runV8LegacyBridge } from './engine';
+import { runV8LegacyBridge } from './v8';
+import { fetchV8EmployeeContext } from './employee-context';
+import { V8Employee } from './v8/types';
 import { checkBulkRestGaps, ShiftForRestGap, BulkRestGapResult } from './bulk-rest-gap';
 import { checkBulkStudentVisa, ShiftForVisa, BulkStudentVisaResult } from './bulk-student-visa';
 import { parseISO, format, addDays, subDays, min, max } from 'date-fns';
@@ -87,6 +89,19 @@ export async function checkBulkCompliance(
         dateRange.minDate,
         dateRange.maxDate
     );
+
+    // Step 5b: Batch fetch employee contexts for EBA accuracy
+    const contexts = await Promise.all(employeeIds.map(id => fetchV8EmployeeContext(id)));
+    const employeeMap = new Map<string, V8Employee>(contexts.map(ctx => [
+        ctx.employee_id,
+        {
+            id: ctx.employee_id,
+            name: 'Employee',
+            contract_type: ctx.contract_type as any, // Cast to V8ContractType
+            contracted_weekly_hours: ctx.contracted_weekly_hours,
+            skill_ids: ctx.qualifications.map(q => q.qualification_id)
+        }
+    ]));
 
     // Step 6: Evaluate compliance for each employee
     const allResults: BulkShiftComplianceResult[] = [];
@@ -152,11 +167,12 @@ export async function checkBulkCompliance(
         const employeeResults: BulkShiftComplianceResult[] = [];
 
         for (const candidate of employeeCandidates) {
-            const result = evaluateShiftForEmployee(
+            const result = await evaluateShiftForEmployee(
                 employeeId,
                 candidate,
                 existingShifts,
                 employeeCandidates,
+                employeeMap.get(employeeId), // Pass pre-fetched employee
                 restGapResult,  // Pass pre-computed rest gaps
                 studentVisaResult // Pass pre-computed visa results
             );
@@ -214,7 +230,12 @@ async function fetchShiftsByIds(shiftIds: string[]): Promise<ShiftForCompliance[
         return [];
     }
 
-    return data || [];
+    return (data || []).map(s => ({
+        ...s,
+        unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
+        assigned_employee_id: s.assigned_employee_id || null,
+        role_id: s.role_id || null
+    })) as any[];
 }
 
 /**
@@ -248,7 +269,10 @@ async function fetchExistingShiftsByEmployee(
     for (const shift of data || []) {
         if (!shift.assigned_employee_id) continue;
         const existing = map.get(shift.assigned_employee_id) || [];
-        existing.push(shift);
+        existing.push({
+            ...shift,
+            unpaid_break_minutes: shift.unpaid_break_minutes ?? 0
+        } as any);
         map.set(shift.assigned_employee_id, existing);
     }
 
@@ -291,14 +315,15 @@ function computeDateRange(shifts: ShiftForCompliance[]): { minDate: string; maxD
  * @param existingShifts - Employee's existing assigned shifts
  * @param otherCandidates - Other candidate shifts in this bulk operation
  */
-function evaluateShiftForEmployee(
+async function evaluateShiftForEmployee(
     employeeId: string,
     candidate: ShiftForCompliance,
     existingShifts: ShiftForCompliance[],
     otherCandidates: ShiftForCompliance[],
+    employeeOverride?: V8Employee,
     restGapResult?: BulkRestGapResult,
     studentVisaResult?: BulkStudentVisaResult
-): BulkShiftComplianceResult {
+): Promise<BulkShiftComplianceResult> {
     // Build simulated timeline: existing + all candidates (including this one)
     // This ensures we check the combined effect of all assignments
     const simulatedExisting = [
@@ -335,7 +360,7 @@ function evaluateShiftForEmployee(
         excludeRules
     };
 
-    const complianceResult = runV8LegacyBridge(input);
+    const complianceResult = await runV8LegacyBridge(input, employeeOverride);
 
     // Convert to bulk result format
     const details: BulkRuleDetail[] = complianceResult.results.map(r => ({
@@ -355,9 +380,10 @@ function evaluateShiftForEmployee(
         const hasViolation = violations.length > 0;
         const status: BulkComplianceResultStatus = hasViolation ? 'FAIL' : 'PASS';
 
+        const restGapMinHours = 10; // Unified default
         // Construct rich data for visualization
         const calculationData = {
-            limit: restGapMinHours ?? 10, // F2: unified default
+            limit: restGapMinHours, // F2: unified default
             // Basic data for simple views
             prev_day_gap_hours: impact?.rest_before_hours ?? null,
             next_day_gap_hours: impact?.rest_after_hours ?? null,

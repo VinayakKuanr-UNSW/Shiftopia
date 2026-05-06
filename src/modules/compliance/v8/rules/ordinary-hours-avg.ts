@@ -21,13 +21,40 @@ export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
     for (const s of shifts) {
         if (!s.is_ordinary_hours) continue;
         
-        const start = parseISO(`${s.date}T${s.start_time}`);
-        const end = parseISO(`${s.date}T${s.end_time}`);
-        let mins = differenceInMinutes(end, start);
-        if (mins < 0) mins += 1440; // Cross-midnight
+        const dateStr = s.date || s.shift_date || '';
+        const start = parseISO(`${dateStr}T${s.start_time}`);
+        let end = parseISO(`${dateStr}T${s.end_time}`);
         
-        const netMins = Math.max(0, mins - (s.unpaid_break_minutes || 0));
-        dailyHours.set(s.date, (dailyHours.get(s.date) || 0) + (netMins / 60));
+        // Handle cross-midnight
+        if (end <= start) {
+            end = addDays(end, 1);
+        }
+        
+        const totalMins = differenceInMinutes(end, start);
+        const breakMins = s.unpaid_break_minutes || 0;
+        
+        // Split at midnight
+        const nextDayDate = format(addDays(start, 1), 'yyyy-MM-dd');
+        const midnight = parseISO(`${nextDayDate}T00:00:00`);
+        
+        if (end > midnight) {
+            // Overlapping midnight
+            const minsDay1 = differenceInMinutes(midnight, start);
+            const minsDay2 = differenceInMinutes(end, midnight);
+            
+            // Pro-rate break across both days
+            const break1 = (minsDay1 / totalMins) * breakMins;
+            const break2 = (minsDay2 / totalMins) * breakMins;
+            
+            const net1 = Math.max(0, minsDay1 - break1) / 60;
+            const net2 = Math.max(0, minsDay2 - break2) / 60;
+            
+            dailyHours.set(dateStr, (dailyHours.get(dateStr) || 0) + net1);
+            dailyHours.set(nextDayDate, (dailyHours.get(nextDayDate) || 0) + net2);
+        } else {
+            const netMins = Math.max(0, totalMins - breakMins);
+            dailyHours.set(dateStr, (dailyHours.get(dateStr) || 0) + (netMins / 60));
+        }
     }
     
     const sortedDates = Array.from(dailyHours.keys()).sort();
@@ -39,47 +66,68 @@ export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
         prefix[i + 1] = prefix[i] + dailyHours.get(sortedDates[i])!;
     }
     
-    // 3. Scan 28-Day Rolling Windows
-    let worstHours = 0;
-    let worstStartDate = '';
-    let worstEndDate = '';
+    // 3. Scan Rolling Windows (7, 14, 21, and 28 days)
+    const windowSizes = [7, 14, 21, 28];
+    let worstViolation: { hours: number, limit: number, window: number, start: string, end: string } | null = null;
     
-    let startPtr = 0;
     for (let endIdx = 0; endIdx < sortedDates.length; endIdx++) {
         const endDateStr = sortedDates[endIdx];
         const endDate = parseISO(endDateStr);
-        const winStartDate = format(addDays(endDate, -(windowDays - 1)), 'yyyy-MM-dd');
-        
-        while (startPtr <= endIdx && sortedDates[startPtr] < winStartDate) {
-            startPtr++;
-        }
-        
-        const windowHours = prefix[endIdx + 1] - prefix[startPtr];
-        if (windowHours > worstHours) {
-            worstHours = windowHours;
-            worstStartDate = winStartDate;
-            worstEndDate = endDateStr;
+
+        for (const winSize of windowSizes) {
+            const winStartDate = format(addDays(endDate, -(winSize - 1)), 'yyyy-MM-dd');
+            
+            // Find start pointer for this specific window size
+            let ptr = 0;
+            while (ptr <= endIdx && sortedDates[ptr] < winStartDate) {
+                ptr++;
+            }
+            
+            const windowHours = prefix[endIdx + 1] - prefix[ptr];
+            
+            // EDGE CASE 4: Replace 152 with contract-specific limit (e.g. 20h for PT)
+            const weeklyLimit = employee.contracted_weekly_hours || config.ord_avg_weekly_limit;
+            const limit = (winSize / 7) * weeklyLimit;
+            
+            if (windowHours > limit) {
+                const excess = windowHours - limit;
+                if (!worstViolation || excess > (worstViolation.hours - worstViolation.limit)) {
+                    worstViolation = { 
+                        hours: windowHours, 
+                        limit, 
+                        window: winSize, 
+                        start: winStartDate, 
+                        end: endDateStr 
+                    };
+                }
+            }
         }
     }
     
-    if (worstHours <= limitTotalHours) return [];
+    if (!worstViolation) return [];
     
     // Violation detected
-    const avg = worstHours / config.ord_avg_cycle_weeks;
+    const avg = worstViolation.hours / (worstViolation.window / 7);
+    const windowName = worstViolation.window === 28 ? '4-week' : `${worstViolation.window / 7}-week`;
+    
     return [{
         rule_id: 'V8_ORD_HOURS_AVG',
         rule_name: 'Ordinary Hours Averaging',
         status: 'BLOCKING',
-        summary: `Exceeds ${limitTotalHours}h in 4-week window`,
-        details: `Employee worked ${worstHours.toFixed(1)}h in the 28-day window from ${worstStartDate} to ${worstEndDate}. This averages to ${avg.toFixed(1)}h/week, exceeding the EBA limit of ${config.ord_avg_weekly_limit}h/week.`,
-        affected_shifts: shifts.filter(s => s.date >= worstStartDate && s.date <= worstEndDate).map(s => s.id),
+        summary: `Exceeds ${worstViolation.limit.toFixed(1)}h in ${windowName} window`,
+        details: `Employee worked ${worstViolation.hours.toFixed(1)}h in the ${worstViolation.window}-day window from ${worstViolation.start} to ${worstViolation.end}. This averages to ${avg.toFixed(1)}h/week, exceeding the limit of ${config.ord_avg_weekly_limit}h/week.`,
+        affected_shifts: shifts.filter(s => {
+            const d = s.date || s.shift_date || '';
+            return d >= worstViolation!.start && d <= worstViolation!.end;
+        }).map(s => s.id),
         blocking: true,
         calculation: {
-            total_hours: worstHours,
-            limit: limitTotalHours,
+            total_hours: worstViolation.hours,
+            limit: worstViolation.limit,
             average: avg,
-            window_start: worstStartDate,
-            window_end: worstEndDate
+            window_days: worstViolation.window,
+            window_start: worstViolation.start,
+            window_end: worstViolation.end
         }
     }];
 };

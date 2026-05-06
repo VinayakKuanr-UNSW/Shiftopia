@@ -57,6 +57,7 @@ interface BulkAssignmentPanelProps {
 // =============================================================================
 
 const VIOLATION_LABELS: Record<string, string> = {
+    PAST_SHIFT:            'Shift Already Started',
     DRAFT_STATE:           'Not Draft',
     ALREADY_ASSIGNED:      'Already Assigned',
     OVERLAP:               'Time Overlap',

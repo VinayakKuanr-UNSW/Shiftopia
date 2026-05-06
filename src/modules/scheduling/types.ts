@@ -21,6 +21,7 @@ export interface OptimizerShift {
     priority?: number;            // 1 (default) → higher = more important
     demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
     target_employment_type?: 'FT' | 'PT' | 'Casual' | null;
+    level?: number;
 }
 
 export interface ExistingShiftRef {
@@ -29,6 +30,7 @@ export interface ExistingShiftRef {
     start_time: string;     // HH:MM
     end_time: string;       // HH:MM
     duration_minutes: number;
+    unpaid_break_minutes: number;
 }
 
 export interface OptimizerEmployee {
@@ -39,20 +41,26 @@ export interface OptimizerEmployee {
     employment_type?: string;
     hourly_rate?: number;
     min_contract_minutes?: number;   // FT/PT contract minimum (0 for Casuals)
+    contract_weekly_minutes?: number; // Raw weekly contract base
     max_weekly_minutes?: number;  // Default 2400 (40h)
     skill_ids?: string[];
     license_ids?: string[];
     preferred_shift_ids?: string[];
     unavailable_dates?: string[];
-    /**
-     * Already-committed shifts for this employee. Treated as fixed by the
-     * optimizer: it will not propose any shift that overlaps or violates
-     * the rest gap against these, and counts their minutes against
-     * max_weekly_minutes. Without this field, re-running the optimizer
-     * after a partial commit collapses to almost no passing proposals
-     * because the solver is blind to the live roster.
-     */
+    level?: number;
+    is_flexible?: boolean;
+    is_student?: boolean;
+    visa_limit?: number;
     existing_shifts?: ExistingShiftRef[];
+    contracts?: any[];
+    qualifications?: any[];
+}
+
+export interface OptimizerStrategy {
+    fatigue_weight?: number;      // 0-100, default 50
+    fairness_weight?: number;     // 0-100, default 50
+    cost_weight?: number;         // 0-100, default 50
+    coverage_weight?: number;     // 0-100, default 100 (critical)
 }
 
 export interface OptimizerConstraints {
@@ -60,13 +68,19 @@ export interface OptimizerConstraints {
     enforce_role_match?: boolean;    // Default true
     enforce_skill_match?: boolean;   // Default true
     allow_partial?: boolean;         // Default true — allow uncovered shifts
+    relax_constraints?: boolean;     // If true, softens overlap/rest-gap to soft constraints
 }
 
 export interface OptimizeRequest {
     shifts: OptimizerShift[];
     employees: OptimizerEmployee[];
-    constraints?: OptimizerConstraints;
-    time_limit_seconds?: number;     // Default 30s
+    constraints: OptimizerConstraints;
+    strategy?: OptimizerStrategy;
+    solver_params?: {
+        max_time_seconds?: number;
+        num_workers?: number;
+        enable_greedy_hint?: boolean;
+    };
 }
 
 // =============================================================================
@@ -116,6 +130,8 @@ export interface ValidatedProposal {
     }>;
     fatigueScore?: number;
     utilization?: number;
+    roleName?: string;
+    roleId?: string | null;
     passing: boolean;
 }
 
@@ -125,6 +141,8 @@ export interface UncoveredAudit {
     startTime: string;
     endTime: string;
     rejectionSummary: Record<string, number>; // violationType -> count
+    roleName?: string;
+    roleId?: string | null;
     employeeDetails: Array<{
         employeeId: string;
         employeeName: string;

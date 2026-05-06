@@ -15,7 +15,7 @@
 import { supabase } from '@/platform/realtime/client';
 import { getScenarioWindow } from '@/modules/compliance';
 import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
-import type { CandidateShift, EmployeeInfo } from '../types';
+import type { CandidateShift, EmployeeInfo, InjectedSimulationData } from '../types';
 
 export interface LoadedScenario {
     candidateShifts: CandidateShift[];
@@ -27,10 +27,21 @@ export class ScenarioLoader {
     /**
      * Load all data needed to validate bulk assignment for a single employee.
      *
-     * @param shiftIds   - The candidate shift IDs selected in the planner
-     * @param employeeId - The target employee
+     * @param shiftIds     - The candidate shift IDs selected in the planner
+     * @param employeeId   - The target employee
+     * @param injectedData - (Optional) Pre-fetched data to skip network calls
      */
-    async load(shiftIds: string[], employeeId: string): Promise<LoadedScenario> {
+    async load(
+        shiftIds: string[], 
+        employeeId: string, 
+        injectedData?: InjectedSimulationData
+    ): Promise<LoadedScenario> {
+        // If data is injected (e.g. by AutoScheduler), use it directly
+        // to avoid thousands of redundant network calls and Navigator Locks.
+        if (injectedData) {
+            return injectedData;
+        }
+
         const [candidateShifts, employee] = await Promise.all([
             this._fetchCandidateShifts(shiftIds),
             this._fetchEmployee(employeeId),
@@ -52,7 +63,7 @@ export class ScenarioLoader {
 
         const { data, error } = await (supabase as any)
             .from('shifts')
-            .select('id, shift_date, start_time, end_time, assigned_employee_id, lifecycle_status, role_id, organization_id, department_id, sub_department_id, unpaid_break_minutes, required_skills, required_licenses')
+            .select('id, shift_date, start_time, end_time, assigned_employee_id, lifecycle_status, role_id, organization_id, department_id, sub_department_id, unpaid_break_minutes, required_skills, required_licenses, start_at, end_at')
             .in('id', shiftIds)
             .is('deleted_at', null);
 

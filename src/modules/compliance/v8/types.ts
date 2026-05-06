@@ -12,7 +12,7 @@ export type V8ShiftId = string;
 export type V8EmpId   = string;
 export type V8RoleId  = string;
 
-export type V8ContractType = 'FULL_TIME' | 'PART_TIME' | 'CASUAL' | 'STUDENT_VISA';
+export type V8ContractType = 'FULL_TIME' | 'PART_TIME' | 'CASUAL' | 'STUDENT_VISA' | 'FLEXI_PART_TIME';
 export type V8Severity     = 'WARNING' | 'BLOCKING';
 export type V8Status       = 'PASS' | 'WARNING' | 'BLOCKING';
 
@@ -20,12 +20,16 @@ export type V8Status       = 'PASS' | 'WARNING' | 'BLOCKING';
 export interface V8Shift {
     id:                    V8ShiftId;
     date:                  string;    // YYYY-MM-DD
+    shift_date?:           string;    // Alias for compatibility
     start_time:            string;    // HH:mm
     end_time:              string;    // HH:mm
     is_ordinary_hours:     boolean;
     unpaid_break_minutes?: number;
     role_id?:              V8RoleId;
     is_training?:          boolean;
+    is_sunday?:            boolean;
+    is_public_holiday?:    boolean;
+    shift_type?:           'NORMAL' | 'MULTI_HIRE';
 }
 
 /** Unified employee context */

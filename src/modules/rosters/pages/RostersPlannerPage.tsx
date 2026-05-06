@@ -664,7 +664,7 @@ const NewRostersPage: React.FC = () => {
                 group: ps.groupType ?? 'convention_centre',
                 groupColor: resolveGroupType(ps.raw),
                 hours: ps.netMinutes / 60,
-                pay: ps.costBreakdown.totalCost,
+                pay: ps.estimatedCost,
                 status: ps.employeeId ? (ps.isDraft ? 'Draft' : 'Assigned') : 'Open',
                 lifecycleStatus: ps.isPublished ? 'published' : 'draft',
                 assignmentStatus: ps.employeeId ? 'assigned' : 'unassigned',
@@ -689,7 +689,7 @@ const NewRostersPage: React.FC = () => {
             Object.values(shiftsMap).flat().reduce((acc, s) => acc + s.pay, 0)
           ) : 0,
           fatigueScore: calculateFatigueWithRecovery(
-            Object.values(shiftsMap).flat().map(s => s.rawShift).filter(Boolean),
+            Object.values(shiftsMap).flat().map(s => s.rawShift).filter((s): s is Shift => !!s),
             format(addDays(selectedDate, 0), 'yyyy-MM-dd')
           ).current,
           utilization: calculateUtilization(pe.scheduledHours, pe.contractedHours),
@@ -1262,11 +1262,14 @@ const NewRostersPage: React.FC = () => {
             start_time: s.start_time,
             end_time: s.end_time,
             role_id: (s as any).role_id ?? null,
+            roleName: (s as any).role_name || (s as any).roles?.name || '',
             unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
           }))}
         autoSchedulerEmployees={employees.map((e) => ({
           id: e.id,
           name: `${e.first_name} ${e.last_name}`.trim() || e.id,
+          contracted_weekly_hours: (e as any).contracted_weekly_hours,
+          contract_type: (e as any).contract_type,
         }))}
         onShiftSaved={handleShiftCreated}
         onAssignComplete={() => { clearSelection(); setBulkModeActive(false); }}

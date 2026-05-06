@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { supabase } from '@/platform/realtime/client';
 import { useToast } from '@/modules/core/ui/primitives/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
-import { AccessLevel } from '@/platform/auth/types';
 
 export interface ContractFormState {
     organization_id: string;
@@ -11,6 +10,7 @@ export interface ContractFormState {
     role_id: string;
     rem_level_id: string;
     employment_status: string;
+    contracted_weekly_hours: number;
 }
 
 const INITIAL_STATE: ContractFormState = {
@@ -19,7 +19,8 @@ const INITIAL_STATE: ContractFormState = {
     sub_department_id: '',
     role_id: '',
     rem_level_id: '',
-    employment_status: 'Full-Time',
+    employment_status: '',
+    contracted_weekly_hours: 0,
 };
 
 export const useContractForm = (employeeId: string, onSuccess?: () => void) => {
@@ -28,12 +29,10 @@ export const useContractForm = (employeeId: string, onSuccess?: () => void) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState<ContractFormState>(INITIAL_STATE);
 
-    // Cascading updates
-    const updateField = (field: keyof ContractFormState, value: string) => {
+    const updateField = (field: keyof ContractFormState, value: any) => {
         setFormData(prev => {
             const next = { ...prev, [field]: value };
 
-            // Cascading resets
             if (field === 'organization_id') {
                 next.department_id = '';
                 next.sub_department_id = '';
@@ -45,35 +44,38 @@ export const useContractForm = (employeeId: string, onSuccess?: () => void) => {
                 next.role_id = '';
             }
 
+            // Auto-update hours based on status
+            if (field === 'employment_status') {
+                if (value === 'Full-Time') next.contracted_weekly_hours = 38;
+                else if (value === 'Part-Time' || value === 'Flexible Part-Time') next.contracted_weekly_hours = 20;
+                else next.contracted_weekly_hours = 0;
+            }
+
             return next;
         });
     };
 
-    // Auto-select rem level when role changes
     const updateRole = (roleId: string, linkedRemLevelId?: string, employmentType?: string) => {
         setFormData(prev => {
             let nextStatus = prev.employment_status;
             if (employmentType) {
                 const lower = employmentType.toLowerCase();
-                const statuses: string[] = [];
-                if (lower.includes('full time')) statuses.push('Full-Time');
-                if (lower.includes('part time')) statuses.push('Part-Time');
-                if (lower.includes('casual')) statuses.push('Casual');
-                if (lower.includes('flexible')) statuses.push('Flexible Part-Time');
-                
-                if (statuses.length > 0) {
-                    // Default to the first allowed status
-                    if (!statuses.includes(nextStatus)) {
-                        nextStatus = statuses[0];
-                    }
-                }
+                if (lower.includes('full time')) nextStatus = 'Full-Time';
+                else if (lower.includes('part time')) nextStatus = 'Part-Time';
+                else if (lower.includes('casual')) nextStatus = 'Casual';
             }
+
+            let nextHours = prev.contracted_weekly_hours;
+            if (nextStatus === 'Full-Time') nextHours = 38;
+            else if (nextStatus === 'Part-Time' || nextStatus === 'Flexible Part-Time') nextHours = 20;
+            else nextHours = 0;
 
             return {
                 ...prev,
                 role_id: roleId,
                 rem_level_id: linkedRemLevelId || prev.rem_level_id,
-                employment_status: nextStatus
+                employment_status: nextStatus,
+                contracted_weekly_hours: nextHours
             };
         });
     };
@@ -103,7 +105,13 @@ export const useContractForm = (employeeId: string, onSuccess?: () => void) => {
         try {
             const { error } = await (supabase as any).from('user_contracts').insert({
                 user_id: employeeId,
-                ...formData,
+                organization_id: formData.organization_id,
+                department_id: formData.department_id,
+                sub_department_id: formData.sub_department_id,
+                role_id: formData.role_id,
+                rem_level_id: formData.rem_level_id,
+                employment_status: formData.employment_status,
+                contracted_weekly_hours: formData.contracted_weekly_hours
             });
 
             if (error) throw error;
@@ -111,7 +119,6 @@ export const useContractForm = (employeeId: string, onSuccess?: () => void) => {
             toast({ title: 'Success', description: 'Contract added successfully' });
             queryClient.invalidateQueries({ queryKey: ['user_contracts', employeeId] });
 
-            // Partial Reset
             setFormData(prev => ({
                 ...prev,
                 role_id: '',
