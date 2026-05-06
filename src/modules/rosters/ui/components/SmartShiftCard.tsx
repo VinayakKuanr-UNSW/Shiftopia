@@ -41,6 +41,8 @@ import {
     getProtectionContext,
     getShiftStatusIcons
 } from '../../domain/shift-ui';
+import { estimateDetailedShiftCost } from '../../domain/projections/utils/cost/standard';
+import { CostCalculatorOptions } from '../../domain/projections/utils/cost/types';
 
 
 // ============================================================================
@@ -140,6 +142,49 @@ function useTilt() {
     return { rotateX, rotateY, onMouseMove, onMouseLeave };
 }
 
+/**
+ * Renders the cost breakdown tooltip content.
+ */
+const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }) => {
+    if (!breakdown) return null;
+    
+    const { totalCost, ordinaryCost, overtimeCost, allowanceCost, ordinaryHours, overtimeHours, breakdown: details } = breakdown;
+    
+    return (
+        <div className="space-y-2 p-1 min-w-[180px]">
+            <div className="flex justify-between items-center pb-1 border-b border-white/10">
+                <span className="text-[10px] uppercase tracking-wider opacity-60">Estimated Pay</span>
+                <span className="text-xs font-bold text-emerald-400">${totalCost.toFixed(2)}</span>
+            </div>
+            
+            <div className="space-y-1 text-[10px]">
+                <div className="flex justify-between">
+                    <span>Ordinary ({ordinaryHours.toFixed(1)}h @ ${details.penaltyRate.toFixed(2)})</span>
+                    <span>${ordinaryCost.toFixed(2)}</span>
+                </div>
+                
+                {overtimeCost > 0 && (
+                    <div className="flex justify-between text-orange-300">
+                        <span>Overtime ({overtimeHours.toFixed(1)}h)</span>
+                        <span>${overtimeCost.toFixed(2)}</span>
+                    </div>
+                )}
+                
+                {allowanceCost > 0 && (
+                    <div className="flex justify-between text-blue-300">
+                        <span>Night Allowance ({details.nightHours.toFixed(1)}h)</span>
+                        <span>${allowanceCost.toFixed(2)}</span>
+                    </div>
+                )}
+            </div>
+            
+            <div className="pt-1 text-[9px] opacity-40 italic border-t border-white/5">
+                Calculated per ICC Sydney EA 2025
+            </div>
+        </div>
+    );
+};
+
 // ============================================================================
 // COMPACT VARIANT
 // ============================================================================
@@ -205,6 +250,27 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     const statusIcons = useMemo(() => 
         showStatusIcons ? getShiftStatusIcons(shift) : [], 
     [shift, showStatusIcons]);
+
+    const costBreakdown = useMemo(() => {
+        const options: CostCalculatorOptions = {
+            netMinutes: shift.net_length_minutes || 0,
+            start_time: shift.start_time,
+            end_time: shift.end_time,
+            rate: shift.actual_hourly_rate || shift.remuneration_rate || 24.10, // Default if unknown
+            scheduled_length_minutes: shift.scheduled_length_minutes || 0,
+            is_overnight: !!shift.is_overnight,
+            is_cancelled: !!shift.is_cancelled,
+            shift_date: shift.shift_date,
+            employmentType: shift.target_employment_type === 'FT' ? 'Full-Time' : shift.target_employment_type === 'PT' ? 'Part-Time' : 'Casual',
+            allowances: shift.allowances,
+            is_trainee: !!shift.is_training,
+            is_apprentice: !!shift.apprenticeInfo,
+            apprentice_type: shift.apprenticeInfo?.isAdultApprentice ? 'adult' : 'standard',
+            apprentice_year: shift.apprenticeInfo?.year,
+            has_completed_year_12: shift.apprenticeInfo?.completedYear12
+        };
+        return estimateDetailedShiftCost(options);
+    }, [shift]);
 
     const { rotateX, rotateY, onMouseMove, onMouseLeave } = useTilt();
 
@@ -324,6 +390,22 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                             <span className="font-mono font-medium text-foreground text-[9px]">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
                         </div>
                     </div>
+                    
+                    {/* Estimated Pay Badge */}
+                    <div className="flex justify-center mt-auto">
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 cursor-help">
+                                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                                        ${costBreakdown.totalCost.toFixed(2)}
+                                    </span>
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-xl">
+                                <CostBreakdownTooltip breakdown={costBreakdown} />
+                            </TooltipContent>
+                        </Tooltip>
+                    </div>
                 </div>
             </div>
 
@@ -388,6 +470,27 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
     const statusIcons = useMemo(() => 
         showStatusIcons ? getShiftStatusIcons(shift) : [], 
     [shift, showStatusIcons]);
+
+    const costBreakdown = useMemo(() => {
+        const options: CostCalculatorOptions = {
+            netMinutes: shift.net_length_minutes || 0,
+            start_time: shift.start_time,
+            end_time: shift.end_time,
+            rate: shift.actual_hourly_rate || shift.remuneration_rate || 24.10,
+            scheduled_length_minutes: shift.scheduled_length_minutes || 0,
+            is_overnight: !!shift.is_overnight,
+            is_cancelled: !!shift.is_cancelled,
+            shift_date: shift.shift_date,
+            employmentType: shift.target_employment_type === 'FT' ? 'Full-Time' : shift.target_employment_type === 'PT' ? 'Part-Time' : 'Casual',
+            allowances: shift.allowances,
+            is_trainee: !!shift.is_training,
+            is_apprentice: !!shift.apprenticeInfo,
+            apprentice_type: shift.apprenticeInfo?.isAdultApprentice ? 'adult' : 'standard',
+            apprentice_year: shift.apprenticeInfo?.year,
+            has_completed_year_12: shift.apprenticeInfo?.completedYear12
+        };
+        return estimateDetailedShiftCost(options);
+    }, [shift]);
 
     const dot = getStatusDotInfo({
         lifecycle_status:   shift.lifecycle_status,
@@ -513,7 +616,21 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                             <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                             <span className="text-xs font-mono font-bold text-foreground">{formatTime(shift.start_time)} - {formatTime(shift.end_time)}</span>
                         </div>
-                        {totalHours && <Badge variant="secondary" className="text-xs">{totalHours}h net</Badge>}
+                        <div className="flex flex-col items-end gap-1">
+                            {totalHours && <Badge variant="secondary" className="text-xs">{totalHours}h net</Badge>}
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 cursor-help hover:bg-emerald-500/20 transition-colors">
+                                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                            ${costBreakdown.totalCost.toFixed(2)}
+                                        </span>
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-2xl" side="right">
+                                    <CostBreakdownTooltip breakdown={costBreakdown} />
+                                </TooltipContent>
+                            </Tooltip>
+                        </div>
                     </div>
 
                     {hasComplianceIssue && (

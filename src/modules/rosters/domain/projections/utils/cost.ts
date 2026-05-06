@@ -35,6 +35,23 @@ export function estimateShiftCost(
   previousWage?: number,
   employmentType?: any,
   isSecurityRole?: boolean,
+  is_apprentice?: boolean,
+  apprentice_type?: any,
+  apprentice_year?: number,
+  has_completed_year_12?: boolean,
+  is_trainee?: boolean,
+  trainee_category?: any,
+  trainee_level?: any,
+  trainee_exit_year?: number,
+  trainee_years_out?: number,
+  trainee_aqf_level?: number,
+  trainee_year?: number,
+  is_training_on_job?: boolean,
+  prefers_sba_loading?: boolean,
+  is_sws?: boolean,
+  sws_capacity_percentage?: number,
+  is_sws_trial?: boolean,
+  sws_trial_start_date?: string
 ): number {
   return dispatcherEstimateShiftCost({
     netMinutes,
@@ -51,7 +68,24 @@ export function estimateShiftCost(
     isCarerLeave,
     previousWage,
     employmentType,
-    isSecurityRole
+    isSecurityRole,
+    is_apprentice,
+    apprentice_type,
+    apprentice_year,
+    has_completed_year_12,
+    is_trainee,
+    trainee_category,
+    trainee_level,
+    trainee_exit_year,
+    trainee_years_out,
+    trainee_aqf_level,
+    trainee_year,
+    is_training_on_job,
+    prefers_sba_loading,
+    is_sws,
+    sws_capacity_percentage,
+    is_sws_trial,
+    sws_trial_start_date
   } as any);
 }
 
@@ -71,6 +105,23 @@ export function estimateDetailedShiftCost(
   previousWage?: number,
   employmentType?: any,
   isSecurityRole?: boolean,
+  is_apprentice?: boolean,
+  apprentice_type?: any,
+  apprentice_year?: number,
+  has_completed_year_12?: boolean,
+  is_trainee?: boolean,
+  trainee_category?: any,
+  trainee_level?: any,
+  trainee_exit_year?: number,
+  trainee_years_out?: number,
+  trainee_aqf_level?: number,
+  trainee_year?: number,
+  is_training_on_job?: boolean,
+  prefers_sba_loading?: boolean,
+  is_sws?: boolean,
+  sws_capacity_percentage?: number,
+  is_sws_trial?: boolean,
+  sws_trial_start_date?: string
 ): any {
   return dispatcherEstimateDetailedShiftCost({
     netMinutes,
@@ -87,7 +138,24 @@ export function estimateDetailedShiftCost(
     isCarerLeave,
     previousWage,
     employmentType,
-    isSecurityRole
+    isSecurityRole,
+    is_apprentice,
+    apprentice_type,
+    apprentice_year,
+    has_completed_year_12,
+    is_trainee,
+    trainee_category,
+    trainee_level,
+    trainee_exit_year,
+    trainee_years_out,
+    trainee_aqf_level,
+    trainee_year,
+    is_training_on_job,
+    prefers_sba_loading,
+    is_sws,
+    sws_capacity_percentage,
+    is_sws_trial,
+    sws_trial_start_date
   } as any);
 }
 
