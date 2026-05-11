@@ -1,5 +1,5 @@
 import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
-import { differenceInMinutes, parseISO } from 'date-fns';
+import { parseTimeToMinutes } from '../utils/time';
 
 /**
  * V8 Rule: Spread of Hours
@@ -27,16 +27,15 @@ export const spreadOfHoursRule: V8RuleEvaluator = (ctx) => {
         let latestEnd = -Infinity;
 
         for (const s of dayShifts) {
-            const dateS = s.date || s.shift_date || '';
-            const start = parseISO(`${dateS}T${s.start_time}`).getTime();
-            let end = parseISO(`${dateS}T${s.end_time}`).getTime();
-            if (end <= start) end += 86400000; // Cross-midnight adjustment
+            const start = parseTimeToMinutes(s.start_time);
+            let end = parseTimeToMinutes(s.end_time);
+            if (end <= start) end += 1440; // Cross-midnight adjustment
 
             if (start < earliestStart) earliestStart = start;
             if (end > latestEnd) latestEnd = end;
         }
 
-        const spreadMins = (latestEnd - earliestStart) / 60000;
+        const spreadMins = latestEnd - earliestStart;
 
         if (spreadMins > 720) {
             violations.push({
@@ -44,7 +43,7 @@ export const spreadOfHoursRule: V8RuleEvaluator = (ctx) => {
                 rule_name: 'Spread of Hours',
                 status: 'BLOCKING',
                 summary: `Daily spread exceeds 12h (${(spreadMins / 60).toFixed(1)}h)`,
-                details: `Total spread on ${date} is ${(spreadMins / 60).toFixed(1)} hours (Earliest: ${new Date(earliestStart).toLocaleTimeString()} - Latest: ${new Date(latestEnd).toLocaleTimeString()}). Max allowed is 12h.`,
+                details: `Total spread on ${date} is ${(spreadMins / 60).toFixed(1)} hours. Max allowed is 12h.`,
                 affected_shifts: dayShifts.map(s => s.id),
                 blocking: true,
                 calculation: {

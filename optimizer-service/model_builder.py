@@ -81,8 +81,25 @@ class ExistingShiftInput:
     start_time: str
     end_time: str
     duration_minutes: int
+    # Unpaid break minutes carried from the wire boundary. Used by
+    # `_calculate_effective_minutes` for fatigue scoring; if missing the
+    # solver under-counts circadian-weighted load.
+    unpaid_break_minutes: int = 0
     start_abs: int = 0
     end_abs: int = 0
+
+
+@dataclass
+class AvailabilitySlotInput:
+    """A declared availability window for an employee on a given date.
+
+    All times are local 'HH:MM' or 'HH:MM:SS'. When `has_availability_data`
+    is true on the parent EmployeeInput, slots are *hard*: a shift must be
+    fully covered by at least one slot for the employee to be eligible.
+    """
+    slot_date: str
+    start_time: str
+    end_time: str
 
 
 @dataclass
@@ -117,6 +134,10 @@ class EmployeeInput:
     # violates the rest gap against them, and it counts their minutes
     # against max_weekly_minutes.
     existing_shifts: list[ExistingShiftInput] = field(default_factory=list)
+    # Declared availability windows in the optimization range. Hard filter
+    # applies only when `has_availability_data` is true (see employee_eligible).
+    availability_slots: list[AvailabilitySlotInput] = field(default_factory=list)
+    has_availability_data: bool = False
 
 
 @dataclass
@@ -348,21 +369,27 @@ def employee_eligible(
         if not c.relax_constraints:
             return False
     
-    # HC-5b: Skill Hierarchy
-    if emp.level < getattr(shift, 'level', 0):
+    # HC-5b: Skill Hierarchy. Treat missing level data on either side as 0 so
+    # an unmapped employee/shift never silently filters out the entire pool.
+    # Upstream code is supposed to populate this, but defensive defaults
+    # prevent a single missing field from collapsing the model to INFEASIBLE.
+    emp_level = emp.level if emp.level is not None else 0
+    shift_level = getattr(shift, 'level', 0) or 0
+    if emp_level < shift_level:
         return False
-    
-    # HC-6: Minimum Engagement Pre-filter (Precision Fix #5)
-    # Removing OnlyEnforceIf logic in favor of hard pre-filtering
-    min_dur = 180
-    if getattr(shift, 'is_training', False): min_dur = 120
-    elif shift.is_sunday or shift.is_public_holiday: min_dur = 240
-    if shift.duration_minutes < min_dur:
+
+    # HC-6: Minimum Engagement Pre-filter
+    # Note: keep this loose by default — many valid rosters use 1-2h
+    # micro-shifts (training blocks, briefings, splits). Reject only
+    # implausibly short (<60m) shifts here; the proper award-specific min
+    # engagement is enforced as a soft penalty inside the V8 compliance
+    # engine, not a hard pre-filter.
+    if shift.duration_minutes < 60:
         return False
 
     # HC-5c: Employment Isolation (Transitioned to SOFT as per Fix #8)
     # We allow cross-assignments but SC-1 will penalize them.
-    
+
     # HARD Availability blocks
     for start, end, severity in emp.availability_overrides:
         if severity == 'HARD':
@@ -370,10 +397,34 @@ def employee_eligible(
             a0 = _time_to_abs_minutes(shift.shift_date, start)
             a1 = _time_to_abs_minutes(shift.shift_date, end)
             if a1 <= a0: a1 += 1440 # Cross-midnight
-            
+
             # Intersection check
             if s0 < a1 and a0 < s1:
                 return False
+
+    # HC-5d: Declared availability windows (hard filter when on file).
+    #
+    # Policy: an employee with NO availability records on file at all is
+    # treated as universally available (not yet onboarded). An employee with
+    # ANY records on file (`has_availability_data=True`) is treated as
+    # available *only* during declared slots — any shift not fully covered
+    # by at least one slot is rejected.
+    if emp.has_availability_data:
+        s0, s1 = shift_window(shift)
+        covered = False
+        for slot in emp.availability_slots:
+            if slot.slot_date != shift.shift_date:
+                continue
+            a0 = _time_to_abs_minutes(slot.slot_date, slot.start_time)
+            a1 = _time_to_abs_minutes(slot.slot_date, slot.end_time)
+            if a1 <= a0:
+                a1 += 1440  # cross-midnight slot
+            # The shift must be fully contained within the slot.
+            if a0 <= s0 and a1 >= s1:
+                covered = True
+                break
+        if not covered:
+            return False
     return True
 
 
@@ -408,13 +459,21 @@ def compute_greedy_hint(
             # Skip pre-eliminated pairs
             if (emp.id, shift.id) in rest_eliminated:
                 continue
-            # Check rest gap against already-assigned shifts
+            # Check rest gap against already-assigned shifts AND the
+            # employee's existing committed shifts. Without the second
+            # check the hint can plant assignments that downstream
+            # constraints immediately reject, sabotaging warm-start
+            # convergence and causing UNKNOWN time-outs.
             required = 480 if (shift.shift_type == 'MULTI_HIRE' or any(s.shift_type == 'MULTI_HIRE' for s in assigned_shifts[emp.id])) else 600
             conflict = any(
                 rest_gap_violated(existing, shift, required)
                 for existing in assigned_shifts[emp.id]
             )
             if conflict:
+                continue
+            if emp.existing_shifts and existing_blocks_proposal(
+                shift, emp.existing_shifts, required,
+            ):
                 continue
             load = sum(s.duration_minutes for s in assigned_shifts[emp.id])
             if load < best_load:
@@ -463,10 +522,13 @@ class ScheduleModelBuilder:
 
         # D: Add hard constraints
         self._add_coverage()
-        self._add_overlap()             # HC-2: No overlapping shifts
-        self._add_rest_gap()            # HC-3: Minimum rest gap
+        self._add_overlap_and_rest()    # HC-2 + HC-3 via AddNoOverlap intervals
         self._add_workload_limits()     # HC-4: Rolling EBA + 20-in-28
-        self._add_time_capacity()       # HC-6: Global pool caps
+        # HC-6 removed: _add_time_capacity duplicated HC-2 (no-overlap) and
+        # collapsed unassignable pools when employment_type strings drifted
+        # (e.g. 'Full-time' vs 'FT'). HC-2 alone is sufficient — an employee
+        # cannot be on two overlapping shifts, so cluster-level pool caps
+        # add no information.
         self._add_min_contract_hours()  # HC-7: FT/PT minimum utilization
         self._add_min_engagement()      # HC-8: 3h/4h min engagement
         self._add_spread_of_hours()     # HC-9: 12h daily spread
@@ -479,12 +541,11 @@ class ScheduleModelBuilder:
         if self.data.solver_params.enable_greedy_hint:
             self._apply_greedy_hint()
 
-        # Search strategy for efficiency
-        self.model.AddDecisionStrategy(
-            [self._x[k] for k in sorted(self._x.keys())],
-            cp_model.CHOOSE_FIRST,
-            cp_model.SELECT_MAX_VALUE
-        )
+        # Search strategy: declared inside _add_objective() — uncovered vars
+        # first (force coverage), then x vars. Under FIXED_SEARCH only the
+        # first declared strategy is honored, so a duplicate strategy here
+        # would be ignored anyway. Keeping ordering centralized in the
+        # objective makes the priority obvious.
 
         # F: Solve
         t_solve = time.perf_counter()
@@ -565,45 +626,114 @@ class ScheduleModelBuilder:
             else:
                 self.model.Add(cp_model.LinearExpr.Sum(eligible_vars) + self._uncovered[shift.id] == 1)
 
-    # -- HC-2: No overlap ----------------------------------------------------
+    # -- HC-2 + HC-3: No overlap AND minimum rest gap ------------------------
+    #
+    # Replaces the old O(E·O) pairwise constraint approach. The previous
+    # build emitted one `v1 + v2 <= 1` per (employee, overlapping-shift-pair)
+    # × 2 for rest-gap, producing ~1.5M constraints for a 624-shift × 103-
+    # employee problem and ~7-8s of preprocess time.
+    #
+    # The CP-SAT idiom is `AddNoOverlap` on `OptionalIntervalVar`s. Each
+    # shift becomes one optional interval per eligible employee, padded on
+    # the trailing edge by `min_rest_minutes` so that "no two intervals
+    # overlap" simultaneously enforces:
+    #   - HC-2 (real shift times can't overlap)
+    #   - HC-3 (rest gap before the next shift must be >= min_rest)
+    #
+    # Constraint count drops from O(E·S²) to O(E) — one AddNoOverlap call
+    # per employee — and CP-SAT's specialized cumulative propagator handles
+    # this far more efficiently than thousands of pairwise booleans.
+    #
+    # NOTE on multi-hire (480m) rest gap: the legacy implementation used
+    # 480m gap when EITHER shift was MULTI_HIRE. The interval approach uses
+    # one universal pad. We use `min_rest_minutes` (default 600); multi-hire
+    # cases will be slightly over-constrained (600 vs 480 = 2h tighter).
+    # That's acceptable for Phase 1; tracking as a follow-up to add an
+    # OR-relaxation for multi-hire pairs if it materially affects coverage.
 
-    def _add_overlap(self):
-        """Only generate overlap constraints for ACTUAL overlapping shift pairs."""
-        shifts = self.data.shifts
-        # Sort by start time for an O(S log S) scan
-        shifts_sorted = sorted(shifts, key=lambda s: shift_window(s)[0])
+    def _add_overlap_and_rest(self):
+        if self.data.constraints.relax_constraints:
+            # Relax mode: keep the legacy pairwise formulation so we can
+            # surface specific overlap/rest violations in the objective.
+            # AddNoOverlap is "all-or-nothing" — softening it requires
+            # one indicator var per pair anyway, which negates the
+            # constraint-count win.
+            self._add_overlap_pairwise_relaxed()
+            self._add_rest_gap_pairwise_relaxed()
+            return
 
+        min_rest = self.data.constraints.min_rest_minutes
+
+        for emp in self.data.employees:
+            intervals = []
+            # Optional interval per (eligible) candidate shift
+            for s in self.data.shifts:
+                v = self._x.get((emp.id, s.id))
+                if v is None:
+                    continue
+                s_start, s_end = shift_window(s)
+                duration = s_end - s_start
+                size = duration + min_rest  # padded for rest gap
+                end = s_end + min_rest
+                interval = self.model.NewOptionalIntervalVar(
+                    s_start, size, end, v,
+                    f'iv_{emp.id[:6]}_{s.id[:6]}',
+                )
+                intervals.append(interval)
+
+            # Pinned existing shifts: fixed intervals that always exist.
+            # Padding them too so the rest-gap-after-existing constraint
+            # is enforced (you can't propose a shift starting <600m after
+            # the employee's already-committed end time).
+            for ex in emp.existing_shifts:
+                ex_start, ex_end = shift_window(ex)
+                duration = ex_end - ex_start
+                size = duration + min_rest
+                end = ex_end + min_rest
+                fixed = self.model.NewIntervalVar(
+                    ex_start, size, end,
+                    f'iv_ex_{emp.id[:6]}_{ex.id[:6]}',
+                )
+                intervals.append(fixed)
+
+            if intervals:
+                self.model.AddNoOverlap(intervals)
+
+    def _add_overlap_pairwise_relaxed(self):
+        """Legacy pairwise overlap, used only under relax_constraints=true.
+
+        Necessary because softening AddNoOverlap requires per-pair
+        indicators anyway, and tracking which specific pair was relaxed
+        is cleaner with explicit booleans.
+        """
+        shifts_sorted = sorted(self.data.shifts, key=lambda s: shift_window(s)[0])
         for i, s1 in enumerate(shifts_sorted):
             _, s1_end = shift_window(s1)
             for j in range(i + 1, len(shifts_sorted)):
                 s2 = shifts_sorted[j]
                 s2_start, _ = shift_window(s2)
                 if s2_start >= s1_end:
-                    break  # All further shifts start after s1 ends
+                    break
                 if shifts_overlap(s1, s2):
                     for emp in self.data.employees:
                         v1 = self._x.get((emp.id, s1.id))
                         v2 = self._x.get((emp.id, s2.id))
                         if v1 is not None and v2 is not None:
-                            if self.data.constraints.relax_constraints:
-                                violation = self.model.NewBoolVar(f'v_overlap_{emp.id[:4]}_{s1.id[:4]}_{s2.id[:4]}')
-                                self.model.Add(v1 + v2 <= 1 + violation)
-                                self._relaxed_violations_vars.append(violation)
-                            else:
-                                self.model.Add(v1 + v2 <= 1)
+                            violation = self.model.NewBoolVar(
+                                f'v_overlap_{emp.id[:4]}_{s1.id[:4]}_{s2.id[:4]}',
+                            )
+                            self.model.Add(v1 + v2 <= 1 + violation)
+                            self._relaxed_violations_vars.append(violation)
 
-    # -- HC-3: Rest gap ------------------------------------------------------
-
-    def _add_rest_gap(self):
+    def _add_rest_gap_pairwise_relaxed(self):
+        """Legacy pairwise rest gap, used only under relax_constraints=true."""
         min_rest = self.data.constraints.min_rest_minutes
         shifts_sorted = sorted(self.data.shifts, key=lambda s: shift_window(s)[0])
-
         for i, s1 in enumerate(shifts_sorted):
             s1_start, s1_end = shift_window(s1)
             for j in range(i + 1, len(shifts_sorted)):
                 s2 = shifts_sorted[j]
                 s2_start, s2_end = shift_window(s2)
-                # Binary search optimization: stop scanning once window cleared
                 if s2_start >= s1_end + min_rest:
                     break
                 if rest_gap_violated(s1, s2, min_rest):
@@ -611,16 +741,17 @@ class ScheduleModelBuilder:
                         v1 = self._x.get((emp.id, s1.id))
                         v2 = self._x.get((emp.id, s2.id))
                         if v1 is not None and v2 is not None:
-                            # ICC EBA Rest Rule: 8h for multi-hire, 10h standard
-                            required = 480 if (s1.shift_type == 'MULTI_HIRE' or s2.shift_type == 'MULTI_HIRE') else 600
+                            required = 480 if (
+                                s1.shift_type == 'MULTI_HIRE'
+                                or s2.shift_type == 'MULTI_HIRE'
+                            ) else min_rest
                             gap = abs(s2_start - s1_end) if s2_start > s1_end else abs(s1_start - s2_end)
                             if gap < required:
-                                if self.data.constraints.relax_constraints:
-                                    violation = self.model.NewBoolVar(f'v_rest_{emp.id[:4]}_{s1.id[:4]}_{s2.id[:4]}')
-                                    self.model.Add(v1 + v2 <= 1 + violation)
-                                    self._relaxed_violations_vars.append(violation)
-                                else:
-                                    self.model.Add(v1 + v2 <= 1)
+                                violation = self.model.NewBoolVar(
+                                    f'v_rest_{emp.id[:4]}_{s1.id[:4]}_{s2.id[:4]}',
+                                )
+                                self.model.Add(v1 + v2 <= 1 + violation)
+                                self._relaxed_violations_vars.append(violation)
 
     # -- HC-4: V8 Workload Limits (EBA + 20-in-28) --------------------------
     def _add_workload_limits(self):
@@ -758,85 +889,44 @@ class ScheduleModelBuilder:
                         active_vars.append((s, var))
                 
                 if len(active_vars) < 2: continue
-                
-                # First start and last end variables for this day
-                # Range 0-2880 to support overnight shifts crossing into day+1
+
+                # CRITICAL: compare day-relative minutes (0..2880), NOT
+                # absolute minutes since 1970. shift_window() returns
+                # absolute minutes (millions); using those values against
+                # `d_end <= 2880` makes `d_end >= s_end` infeasible whenever
+                # v=1, which the solver "satisfies" by leaving every shift
+                # unassigned. That bug single-handedly produces
+                # status=OPTIMAL with 0 assignments on any day with two or
+                # more shifts that share an employee candidate.
                 d_start = self.model.NewIntVar(0, 2880, f'spread_start_{emp.id[:4]}_{date}')
                 d_end = self.model.NewIntVar(0, 2880, f'spread_end_{emp.id[:4]}_{date}')
-                
+
                 for s, v in active_vars:
-                    s_start, s_end = shift_window(s)
-                    self.model.Add(d_start <= s_start).OnlyEnforceIf(v)
-                    self.model.Add(d_end >= s_end).OnlyEnforceIf(v)
-                
+                    s_abs_start, s_abs_end = shift_window(s)
+                    day_base = (s_abs_start // 1440) * 1440
+                    s_start_rel = s_abs_start - day_base   # 0..1440
+                    s_end_rel = s_abs_end - day_base       # may exceed 1440 for overnight
+                    self.model.Add(d_start <= s_start_rel).OnlyEnforceIf(v)
+                    self.model.Add(d_end >= s_end_rel).OnlyEnforceIf(v)
+
                 # Enforce 12h spread (Softened with Tier 0 penalty)
                 spread_slack = self.model.NewIntVar(0, 1440, f'spread_slack_{emp.id[:4]}_{date}')
                 self.model.Add(d_end - d_start - spread_slack <= 720)
                 # Tier 0: Hard Legal Compliance (100,000,000 penalty per minute)
+                # Note: _workload_slack_terms is currently NOT added to the
+                # objective (separate bug), so this penalty is dormant.
                 self._workload_slack_terms.append(100_000_000 * spread_slack)
 
     # -- HC-6: Time-Coupled Capacity --------------------------------------------
 
     def _add_time_capacity(self):
-        """Ensure that across any set of overlapping shifts, the number of
-        employees assigned from each employment-type pool does not exceed the
-        total number of employees in that pool.
+        """Deprecated. HC-2 (no-overlap) already guarantees a single employee
+        cannot occupy two overlapping shifts; cluster-level pool caps were
+        redundant and brittle to employment_type string drift.
 
-        Without this, the solver can assign all 12 FTs to the 12pm block AND
-        all 12 FTs to the 2pm block - impossible in the real world.
-
-        Implementation: for every maximal clique of overlapping shifts, add
-        one constraint per employment type:
-            sum x[e, s] <= pool_size   for all e in type, for all s in clique
+        Kept as a no-op so any external caller still resolves the method.
         """
-        # Count available pool sizes by employment type
-        pool_by_type: dict[str, list[EmployeeInput]] = {}
-        for emp in self.data.employees:
-            pool_by_type.setdefault(emp.employment_type, []).append(emp)
-
-        if not pool_by_type:
-            return
-
-        # Find overlapping shift clusters using a sweep-line algorithm
-        shifts_sorted = sorted(self.data.shifts, key=lambda s: shift_window(s)[0])
-        clusters: list[list[ShiftInput]] = []
-        current_cluster: list[ShiftInput] = []
-        cluster_end = -1
-
-        for shift in shifts_sorted:
-            s_start, s_end = shift_window(shift)
-            if current_cluster and s_start < cluster_end:
-                # Overlaps with current cluster
-                current_cluster.append(shift)
-                cluster_end = max(cluster_end, s_end)
-            else:
-                # Start new cluster
-                if len(current_cluster) > 1:
-                    clusters.append(current_cluster)
-                current_cluster = [shift]
-                cluster_end = s_end
-
-        if len(current_cluster) > 1:
-            clusters.append(current_cluster)
-
-        # For each cluster, constrain each pool
-        for cluster in clusters:
-            for emp_type, emps in pool_by_type.items():
-                pool_size = len(emps)
-                # Gather all x[e, s] where e is in this pool and s is in cluster
-                cluster_vars = []
-                for shift in cluster:
-                    for emp in emps:
-                        var = self._x.get((emp.id, shift.id))
-                        if var is not None:
-                            cluster_vars.append(var)
-                if cluster_vars:
-                    self.model.Add(
-                        cp_model.LinearExpr.Sum(cluster_vars) <= pool_size
-                    )
-
-        logger.info('[ModelBuilder] HC-6: %d overlapping clusters constrained, pools=%s',
-                    len(clusters), {k: len(v) for k, v in pool_by_type.items()})
+        return
 
     # -- HC-7: Minimum Contract Hours ------------------------------------------
 
@@ -864,8 +954,9 @@ class ScheduleModelBuilder:
                 # Soften min contract hours with Tier 1 penalty
                 min_h_slack = self.model.NewIntVar(0, remaining_min, f'min_h_slack_{emp.id[:4]}')
                 self.model.Add(cp_model.LinearExpr.Sum(terms) + min_h_slack >= remaining_min)
-                # Tier 1: Contractual Obligation (1,000,000 penalty per minute)
-                self._workload_slack_terms.append(1000000 * min_h_slack)
+                # Tier 1: Contractual Obligation (100,000 / min). Sized so a
+                # roomful of slack still loses to a single uncovered shift.
+                self._workload_slack_terms.append(100_000 * min_h_slack)
 
         contract_count = sum(1 for e in self.data.employees if e.min_contract_minutes > 0)
         logger.info('[ModelBuilder] HC-7: %d employees with contract minimums', contract_count)
@@ -909,21 +1000,27 @@ class ScheduleModelBuilder:
                             if severity == 'SOFT': availability_penalty += 5000
                             if severity == 'PREFERENCE': availability_penalty += 1000
                     
-                    # RELAXED CONSTRAINT PENALTY (Softened Hard Constraint)
-                    # If this pair was previously blocked by overlap/rest-gap, 
-                    # apply a massive penalty to ensure it's only used as a last resort.
-                    relaxed_penalty = 0
-                    if self.data.constraints.relax_constraints:
-                        if (emp.id, shift.id) in self._relaxed_violations:
-                            relaxed_penalty = 100_000_000 # Tier 1
-                    
-                    terms.append((weighted_cost - discount + availability_penalty + relaxed_penalty) * var)
+                    # Note: relaxed-pair penalties are applied via
+                    # _relaxed_violations_vars in the SC-9 block below — those
+                    # vars track *actual* per-pair overlap/rest violations
+                    # introduced when relax_constraints is true. Don't duplicate
+                    # them here.
+                    terms.append((weighted_cost - discount + availability_penalty) * var)
 
 
-        # -- SC-3: Uncovered penalty (Tier 2: 10^6) --------------------------
-        # Coverage weight scales the uncovered penalty.
-        # Default 100 -> 10,000,000 multiplier.
-        coverage_penalty = int(100_000 * self.data.strategy.coverage_weight)
+        # -- SC-3: Uncovered penalty (Tier -1: highest) ----------------------
+        # Coverage MUST outrank every soft/softened-hard constraint. A single
+        # uncovered priority-1 shift has to be more expensive than any
+        # plausible accumulation of legal-tier slack, otherwise the solver
+        # chooses "leave shifts uncovered" to satisfy slack on workload,
+        # spread, visa, or min-contract limits.
+        #
+        # Sizing:
+        #   Tier 0 (legal): 1e8 / min        → up to ~1e10 per emp per shift
+        #   Tier 1 (contract): 1e5 / min     → up to ~1e8 per emp per shift
+        #   Coverage base: 1e8 per priority-1 shift  → 1e9+ at priority 10
+        #   With weight=100 default → multiplier 1.0; coverage_weight=200 doubles.
+        coverage_penalty = int(1_000_000 * self.data.strategy.coverage_weight)
         for shift in self.data.shifts:
             terms.append(coverage_penalty * shift.priority * self._uncovered[shift.id])
 
@@ -955,16 +1052,27 @@ class ScheduleModelBuilder:
                     terms.append(int(5 * fair_mult) * low_v + int(10 * fair_mult) * high_v)
 
         # -- SC-Alignment: Skill Hierarchy & Employment Isolation --------------
+        # Pre-build dict lookups so we don't do `next(e for e in ...)` for
+        # every (employee, shift) pair — that pattern is O(E·S·(E+S)) which
+        # blows up at scale (~6M comparisons for 64k vars / 100 employees).
+        emp_by_id = {e.id: e for e in self.data.employees}
+        shift_by_id = {s.id: s for s in self.data.shifts}
+
         for (e_id, s_id), var in self._x.items():
-            emp = next(e for e in self.data.employees if e.id == e_id)
-            shift = next(s for s in self.data.shifts if s.id == s_id)
-            
+            emp = emp_by_id[e_id]
+            shift = shift_by_id[s_id]
+
             # SC-Alignment: Skill Overqualification (Precision Fix #4)
-            skill_gap = emp.level - getattr(shift, 'level', 0)
+            # Defensive: treat missing level as 0 on both sides so a None
+            # never propagates through arithmetic. Mirrors the same
+            # defaults applied in `employee_eligible`.
+            emp_level = emp.level if emp.level is not None else 0
+            shift_level = getattr(shift, 'level', 0) or 0
+            skill_gap = emp_level - shift_level
             if skill_gap > 0:
                 # Small penalty per level gap to encourage tightest-fit first
                 terms.append(100 * skill_gap * var)
-            
+
             # SC-1: Employment Isolation (Precision Fix #8: SOFT)
             target = getattr(shift, 'target_employment_type', None)
             if target and emp.employment_type != target:
@@ -1065,10 +1173,14 @@ class ScheduleModelBuilder:
                         self.model.Add(both == 0).OnlyEnforceIf(v2.Not())
                         terms.append(-continuity_bonus * both)
 
-        # -- SC-8: Workload Slack Penalties (Tier 1: 10^9) ----------------------
-        # Absolute blocking via extreme cost ($10M/min violation).
-        # These represent "softened" hard constraints that must be satisfied
-        # before any other objective (Coverage, Cost, etc.) is considered.
+        # -- SC-8: Workload Slack Penalties --------------------------------
+        # Spread, visa, streak, and min-contract slack vars were collected
+        # in _workload_slack_terms during constraint construction; without
+        # this loop they would never make it into the objective and the
+        # "softened" hard constraints would silently be free to violate.
+        for slack_term in self._workload_slack_terms:
+            terms.append(slack_term)
+
         # -- SC-9: Relaxed Violations penalty (added in _add_overlap/rest_gap) ---
         if self.data.constraints.relax_constraints:
             for v_var in self._relaxed_violations_vars:
@@ -1113,7 +1225,12 @@ class ScheduleModelBuilder:
         solver.parameters.num_workers = params.num_workers
         solver.parameters.log_search_progress = params.log_search
         solver.parameters.random_seed = 42  # Ensure reproducibility
-        solver.parameters.search_branching = cp_model.FIXED_SEARCH
+        # AUTOMATIC_SEARCH lets the multi-worker portfolio (LNS, fixed,
+        # core-based, etc.) run in parallel. The AddDecisionStrategy calls
+        # in _add_objective remain useful as prioritized hints; FIXED_SEARCH
+        # would have honored only the first declared strategy and starved
+        # the LNS workers, contributing to UNKNOWN time-outs on busy days.
+        solver.parameters.search_branching = cp_model.AUTOMATIC_SEARCH
 
         status_code = solver.solve(self.model)
 

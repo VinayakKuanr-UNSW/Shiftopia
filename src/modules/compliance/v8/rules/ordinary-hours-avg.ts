@@ -1,5 +1,5 @@
 import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
-import { differenceInMinutes, addDays, parseISO, format } from 'date-fns';
+import { parseTimeToMinutes } from '../utils/time';
 
 /**
  * V8 Rule: Ordinary Hours Averaging
@@ -13,48 +13,25 @@ export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
     // Not applicable for casuals (no contracted rate)
     if (employee.contract_type === 'CASUAL') return [];
     
-    const limitTotalHours = config.ord_avg_cycle_weeks * config.ord_avg_weekly_limit;
-    const windowDays = config.ord_avg_cycle_weeks * 7;
-    
     // 1. Build Daily Net Hours Map
     const dailyHours = new Map<string, number>();
     for (const s of shifts) {
+        const dateStr = s.date || s.shift_date || '';
+        // CRITICAL: Skip shifts with missing scheduling info to prevent crashes
+        if (!dateStr || !s.start_time || !s.end_time) continue;
         if (!s.is_ordinary_hours) continue;
         
-        const dateStr = s.date || s.shift_date || '';
-        const start = parseISO(`${dateStr}T${s.start_time}`);
-        let end = parseISO(`${dateStr}T${s.end_time}`);
+        const startMins = parseTimeToMinutes(s.start_time);
+        let endMins = parseTimeToMinutes(s.end_time);
         
-        // Handle cross-midnight
-        if (end <= start) {
-            end = addDays(end, 1);
-        }
+        if (endMins <= startMins) endMins += 1440; // Cross-midnight
         
-        const totalMins = differenceInMinutes(end, start);
+        const totalMins = endMins - startMins;
         const breakMins = s.unpaid_break_minutes || 0;
         
-        // Split at midnight
-        const nextDayDate = format(addDays(start, 1), 'yyyy-MM-dd');
-        const midnight = parseISO(`${nextDayDate}T00:00:00`);
-        
-        if (end > midnight) {
-            // Overlapping midnight
-            const minsDay1 = differenceInMinutes(midnight, start);
-            const minsDay2 = differenceInMinutes(end, midnight);
-            
-            // Pro-rate break across both days
-            const break1 = (minsDay1 / totalMins) * breakMins;
-            const break2 = (minsDay2 / totalMins) * breakMins;
-            
-            const net1 = Math.max(0, minsDay1 - break1) / 60;
-            const net2 = Math.max(0, minsDay2 - break2) / 60;
-            
-            dailyHours.set(dateStr, (dailyHours.get(dateStr) || 0) + net1);
-            dailyHours.set(nextDayDate, (dailyHours.get(nextDayDate) || 0) + net2);
-        } else {
-            const netMins = Math.max(0, totalMins - breakMins);
-            dailyHours.set(dateStr, (dailyHours.get(dateStr) || 0) + (netMins / 60));
-        }
+        // Simple attribution to start date for V8 performance
+        const netHours = Math.max(0, totalMins - breakMins) / 60;
+        dailyHours.set(dateStr, (dailyHours.get(dateStr) || 0) + netHours);
     }
     
     const sortedDates = Array.from(dailyHours.keys()).sort();
@@ -72,10 +49,12 @@ export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
     
     for (let endIdx = 0; endIdx < sortedDates.length; endIdx++) {
         const endDateStr = sortedDates[endIdx];
-        const endDate = parseISO(endDateStr);
 
         for (const winSize of windowSizes) {
-            const winStartDate = format(addDays(endDate, -(winSize - 1)), 'yyyy-MM-dd');
+            // Calculate start date string manually to avoid date-fns
+            const d = new Date(endDateStr);
+            d.setUTCDate(d.getUTCDate() - (winSize - 1));
+            const winStartDate = d.toISOString().split('T')[0];
             
             // Find start pointer for this specific window size
             let ptr = 0;
@@ -85,7 +64,6 @@ export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
             
             const windowHours = prefix[endIdx + 1] - prefix[ptr];
             
-            // EDGE CASE 4: Replace 152 with contract-specific limit (e.g. 20h for PT)
             const weeklyLimit = employee.contracted_weekly_hours || config.ord_avg_weekly_limit;
             const limit = (winSize / 7) * weeklyLimit;
             

@@ -1,5 +1,5 @@
-import { V8RuleContext, V8Hit, V8RuleEvaluator, V8Shift } from '../types';
-import { differenceInMinutes, parseISO } from 'date-fns';
+import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
+import { parseTimeToMinutes } from '../utils/time';
 
 /**
  * V8 Rule: Minimum Rest Gap
@@ -8,17 +8,18 @@ import { differenceInMinutes, parseISO } from 'date-fns';
  */
 export const minRestGapRule: V8RuleEvaluator = (ctx) => {
     const { shifts, config } = ctx;
-    if (shifts.length < 2) return [];
     
-    // 1. Sort shifts chronologically
-    const sorted = [...shifts].sort((a, b) => {
-        const dateA = a.date || a.shift_date || '';
-        const dateB = b.date || b.shift_date || '';
-        const timeA = parseISO(`${dateA}T${a.start_time}`).getTime();
-        const timeB = parseISO(`${dateB}T${b.start_time}`).getTime();
-        return timeA - timeB;
-    });
+    // 1. Filter and sort shifts chronologically
+    const sorted = [...shifts]
+        .filter(s => !!(s.date || s.shift_date) && !!s.start_time && !!s.end_time)
+        .sort((a, b) => {
+            const dA = a.date || a.shift_date || '';
+            const dB = b.date || b.shift_date || '';
+            if (dA !== dB) return dA.localeCompare(dB);
+            return parseTimeToMinutes(a.start_time) - parseTimeToMinutes(b.start_time);
+        });
     
+    if (sorted.length < 2) return [];
     const violations: V8Hit[] = [];
     
     // 2. Scan consecutive pairs
@@ -29,16 +30,28 @@ export const minRestGapRule: V8RuleEvaluator = (ctx) => {
         const dateCurrent = current.date || current.shift_date || '';
         const dateNext = next.date || next.shift_date || '';
         
-        const currentEnd = parseISO(`${dateCurrent}T${current.end_time}`);
-        const nextStart = parseISO(`${dateNext}T${next.start_time}`);
+        const currentStart = parseTimeToMinutes(current.start_time);
+        let currentEnd = parseTimeToMinutes(current.end_time);
+        if (currentEnd <= currentStart) currentEnd += 1440; // Segment end (next day if overnight)
+
+        const nextStart = parseTimeToMinutes(next.start_time);
         
-        // Handle cross-midnight for the gap calculation
-        let gapMins = differenceInMinutes(nextStart, currentEnd);
-        if (gapMins < 0) {
-            // This might be an overlap conflict or a cross-midnight shift
-            // If it's a negative gap, we let NoOverlapRule handle it or adjust
-            continue; 
+        let gapMins = 0;
+        
+        if (dateCurrent === dateNext) {
+            gapMins = nextStart - currentEnd;
+        } else {
+            // Assume consecutive days for simplicity in rest-gap
+            gapMins = (1440 - currentEnd) + nextStart;
+            
+            // If more than 1 day apart, gap is definitely > 10h
+            const d1 = new Date(dateCurrent).getTime();
+            const d2 = new Date(dateNext).getTime();
+            // 86400000 ms = 1 day. If diff > 1 day, gap is huge.
+            if (d2 - d1 > 86400000) continue; 
         }
+
+        if (gapMins < 0) continue; // Handled by NoOverlap
         
         if (gapMins < config.min_rest_gap_minutes) {
             violations.push({
@@ -46,7 +59,7 @@ export const minRestGapRule: V8RuleEvaluator = (ctx) => {
                 rule_name: 'Minimum Rest Gap',
                 status: 'BLOCKING',
                 summary: `Insufficient rest between shifts (${Math.round(gapMins / 60)}h)`,
-                details: `Only ${Math.round(gapMins / 60)}h rest provided between shifts on ${current.date} and ${next.date}. Minimum requirement is ${config.min_rest_gap_minutes / 60}h.`,
+                details: `Only ${Math.round(gapMins / 60)}h rest provided between shifts on ${dateCurrent} and ${dateNext}. Minimum requirement is ${config.min_rest_gap_minutes / 60}h.`,
                 affected_shifts: [current.id, next.id],
                 blocking: true,
                 calculation: {

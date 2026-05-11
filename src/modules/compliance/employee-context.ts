@@ -100,14 +100,23 @@ export async function fetchV8EmployeeContext(
 
     // Determine contract type — map DB employment_type enum to ContractType,
     // then visa flag override, then default to CASUAL.
+    const rawType = (profile?.employment_type || '').toLowerCase().replace(/[-_]/g, ' ');
     const employmentTypeMap: Record<string, ContractType> = {
-        full_time:   'FULL_TIME',
-        part_time:   'PART_TIME',
-        casual:      'CASUAL',
-        contractual: 'CASUAL',
+        'full time':   'FULL_TIME',
+        'full_time':   'FULL_TIME', // fallback
+        'part time':   'PART_TIME',
+        'part_time':   'PART_TIME', // fallback
+        'casual':      'CASUAL',
+        'contractual': 'CASUAL',
     };
     let contract_type: ContractType =
-        (profile?.employment_type ? employmentTypeMap[profile.employment_type] : undefined) ?? 'CASUAL';
+        (employmentTypeMap[rawType] || (profile?.employment_type as any)) ?? 'CASUAL';
+    
+    // Explicit safety for Title-Case variants that might bypass normalization
+    if (!employmentTypeMap[rawType]) {
+        if (/full/i.test(rawType)) contract_type = 'FULL_TIME';
+        else if (/part/i.test(rawType)) contract_type = 'PART_TIME';
+    }
 
     const hasStudentVisa = licenses.some(
         l => l.license_type === 'WorkRights' && l.has_restricted_work_limit === true,
@@ -179,7 +188,7 @@ export async function fetchEmployeeShiftsV2(
     windowDays = 35,
     excludeV8ShiftId: string | null = null,
 ): Promise<V8OrchestratorShift[]> {
-    const center   = parseISO(centerDate);
+    const center   = centerDate ? parseISO(centerDate) : new Date();
     const startDate = format(subDays(center, windowDays), 'yyyy-MM-dd');
     const endDate   = format(addDays(center, windowDays), 'yyyy-MM-dd');
 

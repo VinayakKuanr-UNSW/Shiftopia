@@ -6,7 +6,7 @@
  * Security: Building Services -> Security
  */
 
-export * from './cost/index';
+// Re-export everything except the ones we override
 export * from './cost/types';
 export * from './cost/constants';
 
@@ -16,9 +16,15 @@ import {
   estimateCostFromShift as dispatcherEstimateCostFromShift,
   estimateDetailedCostFromShift as dispatcherEstimateDetailedCostFromShift
 } from './cost/index';
-import { CostCalculatorOptions } from './cost/types';
 
-// Multi-argument wrapper for backward compatibility
+// Re-export these names explicitly to avoid any 'export *' ambiguity
+export { 
+  estimateCostFromShift, 
+  estimateDetailedCostFromShift,
+  extractLevel
+} from './cost/index';
+
+// Multi-argument wrapper for backward compatibility - OVERRIDES the one in index.ts
 export function estimateShiftCost(
   netMinutes: number, 
   start_time: string, 
@@ -51,7 +57,8 @@ export function estimateShiftCost(
   is_sws?: boolean,
   sws_capacity_percentage?: number,
   is_sws_trial?: boolean,
-  sws_trial_start_date?: string
+  sws_trial_start_date?: string,
+  classificationLevel?: string
 ): number {
   return dispatcherEstimateShiftCost({
     netMinutes,
@@ -85,7 +92,8 @@ export function estimateShiftCost(
     is_sws,
     sws_capacity_percentage,
     is_sws_trial,
-    sws_trial_start_date
+    sws_trial_start_date,
+    classificationLevel
   } as any);
 }
 
@@ -121,7 +129,8 @@ export function estimateDetailedShiftCost(
   is_sws?: boolean,
   sws_capacity_percentage?: number,
   is_sws_trial?: boolean,
-  sws_trial_start_date?: string
+  sws_trial_start_date?: string,
+  classificationLevel?: string
 ): any {
   return dispatcherEstimateDetailedShiftCost({
     netMinutes,
@@ -155,12 +164,10 @@ export function estimateDetailedShiftCost(
     is_sws,
     sws_capacity_percentage,
     is_sws_trial,
-    sws_trial_start_date
+    sws_trial_start_date,
+    classificationLevel
   } as any);
 }
-
-export const estimateCostFromShift = dispatcherEstimateCostFromShift;
-export const estimateDetailedCostFromShift = dispatcherEstimateDetailedCostFromShift;
 
 export function formatCost(amount: number, currency = 'AUD'): string {
   return amount.toLocaleString('en-AU', {

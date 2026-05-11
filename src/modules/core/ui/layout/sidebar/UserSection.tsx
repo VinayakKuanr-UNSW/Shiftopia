@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, HelpCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -15,24 +14,26 @@ import {
 import { BroadcastNotifications } from '../broadcast/BroadcastNotifications';
 import ThemeToggle from './ThemeToggle';
 import UserProfile from './UserProfile';
+import { useTheme } from '@/modules/core/contexts/ThemeContext';
 
 interface UserSectionProps {
   user: any;
   isCollapsed: boolean;
-  theme: 'dark' | 'light' | 'glass' | 'lovable';
-  handleThemeChange: (theme: 'dark' | 'light' | 'glass' | 'lovable') => void;
   handleLogout: () => void;
 }
 
 const UserSection: React.FC<UserSectionProps> = ({
   user,
   isCollapsed,
-  theme,
-  handleThemeChange,
   handleLogout,
 }) => {
   const navigate = useNavigate();
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const { theme, setTheme } = useTheme();
+
+  const handleThemeChange = useCallback((newTheme: 'dark' | 'light' | 'glass' | 'lovable') => {
+    setTheme(newTheme);
+  }, [setTheme]);
 
   // Handle keyboard shortcut for search
   React.useEffect(() => {

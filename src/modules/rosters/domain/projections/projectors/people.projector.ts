@@ -1,88 +1,35 @@
 /**
- * People Mode Projector
+ * People Mode Projector (Worker-Safe)
  *
- * Transforms a flat Shift[] + optional EmployeeRecord[] into a PeopleProjection.
- *
- * Design:
- *  - Each known employee gets a row, even with zero shifts in the window.
- *    This lets PeopleModeGrid render empty rows for fully-available staff.
- *  - Shifts with no assigned_employee_id land in a single "Open Shifts" bucket
- *    (id = UNASSIGNED_BUCKET_ID) that always sorts last.
- *  - scheduledHours counts only non-cancelled shifts.
- *  - overHoursWarning is true when scheduledHours > contractedHours and
- *    contractedHours > 0.  contractedHours defaults to 0 when unknown
- *    (the hook layer can pass real contracted hours from a separate query).
- *  - Avatar URLs are generated via dicebearUrl() — consistent with GroupMode.
+ * Transforms a flat WorkerShiftDTO[] + WorkerEmployeeDTO[] into a PeopleProjection.
+ * NO React, NO DOM, NO raw Shift entities. Runs natively inside Web Worker.
  */
 
-import type { Shift } from '../../shift.entity';
-import type { EmployeeRecord, PeopleProjection, ProjectedEmployee, ProjectedShift } from '../types';
+import type { 
+  ProjectedEmployee, 
+  PeopleProjection 
+} from '../types';
+import type { 
+  WorkerShiftDTO, 
+  WorkerEmployeeDTO, 
+  ProjectedShiftResult 
+} from '../worker/protocol';
 import { computeBiddingUrgency, isOnBidding } from '../../bidding-urgency';
 import { UNASSIGNED_BUCKET_ID, dicebearUrl } from '../constants';
-import { netMinutesFromShift, minutesToHours } from '../utils/duration';
-import { estimateCostFromShift } from '../utils/cost';
+import { minutesToHours } from '../utils/duration';
+import { getCachedCost, makeCacheKey } from '../cache/projection.cache';
+import { ZERO_COST_BREAKDOWN } from '../utils/cost/constants';
 import { determineShiftState } from '../../shift-state.utils';
-import { GROUP_COLORS, UNASSIGNED_COLORS } from '../constants';
-import { ALL_GROUP_TYPES } from '../constants';
-import { buildStats } from './shared';
+import { GROUP_COLORS, UNASSIGNED_COLORS, ALL_GROUP_TYPES } from '../constants';
+import { calculateFatigueWithRecovery } from '../utils/fatigue';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function toProjectedShift(shift: Shift): ProjectedShift {
-  const netMinutes    = netMinutesFromShift(shift);
-  const estimatedCost = estimateCostFromShift(shift, netMinutes);
-  const detail        = estimateDetailedCostFromShift(shift, netMinutes);
-  const groupType     = shift.group_type ?? null;
-  const colors        = groupType
-    ? (ALL_GROUP_TYPES.includes(groupType) ? GROUP_COLORS[groupType] : UNASSIGNED_COLORS)
-    : UNASSIGNED_COLORS;
-
-  const assignmentOutcome = (shift as any).assignment_outcome ??
-    (shift.assigned_employee_id ? 'pending' : undefined);
-
-  return {
-    id:             shift.id,
-    reactKey:       shift.id,
-    date:           shift.shift_date,
-    startTime:      shift.start_time,
-    endTime:        shift.end_time,
-    netMinutes,
-    estimatedCost,
-    costBreakdown: {
-      base: detail.baseCost,
-      penalty: detail.penaltyCost,
-      overtime: detail.overtimeCost,
-      allowance: detail.allowanceCost,
-      leave: detail.leaveLoadingCost,
-    },
-    stateId:        determineShiftState(shift),
-    roleName:       shift.roles?.name ?? 'Shift',
-    roleId:         shift.role_id,
-    levelName:      shift.remuneration_levels?.level_name ?? '',
-    levelNumber:    shift.remuneration_levels?.level_number ?? 0,
-    levelId:        shift.remuneration_level_id,
-    groupType,
-    subGroupName:   shift.sub_group_name ?? null,
-    groupColors:    colors,
-    employeeName:   resolveEmployeeName(shift),
-    employeeId:     shift.assigned_employee_id,
-    isLocked:       shift.is_locked,
-    isUrgent:       isOnBidding(shift.bidding_status) && computeBiddingUrgency(shift.shift_date, shift.start_time) === 'urgent',
-    isOnBidding:    isOnBidding(shift.bidding_status),
-    isTrading:      !!shift.trade_requested_at,
-    isCancelled:    shift.is_cancelled,
-    isPublished:    shift.lifecycle_status === 'Published',
-    isDraft:        shift.lifecycle_status === 'Draft',
-    raw:            shift,
-  };
-}
-
-function resolveEmployeeName(shift: Shift): string | null {
-  const profile = (shift as any).assigned_profiles ?? (shift as any).profiles;
-  if (profile?.first_name || profile?.last_name) {
-    return `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim() || null;
+function resolveEmployeeName(shift: WorkerShiftDTO): string | null {
+  if (shift.employeeFirstName || shift.employeeLastName) {
+    return `${shift.employeeFirstName ?? ''} ${shift.employeeLastName ?? ''}`.trim() || null;
   }
-  if (shift.assigned_employee_id) return 'Assigned';
+  if (shift.assignedEmployeeId) return 'Assigned';
   return null;
 }
 
@@ -90,41 +37,123 @@ function makeEmployee(
   id: string,
   name: string,
   contractedHours: number,
-  avatarUrl: string,
+  avatar: string,
 ): ProjectedEmployee {
-  return { id, name, avatarUrl, contractedHours, scheduledHours: 0, overHoursWarning: false, shiftsByDate: {} };
+  return { 
+    id, 
+    name, 
+    avatar, 
+    contractedHours, 
+    currentHours: 0, 
+    overHoursWarning: false, 
+    shifts: {},
+    estimatedPay: 0,
+    fatigueScore: 0,
+    utilization: 0,
+    payBreakdown: {
+      base: 0,
+      penalty: 0,
+      overtime: 0,
+      allowance: 0,
+      leave: 0,
+    }
+  };
+}
+
+function toProjectedShift(shift: WorkerShiftDTO): ProjectedShiftResult {
+  const isAssigned = !!shift.assignedEmployeeId;
+  const netMinutes = shift.netLengthMinutes ?? shift.scheduledLengthMinutes;
+  
+  // Try to get cost from cache, default to zero if not computed (pipeline should compute it)
+  const key = makeCacheKey(shift.id, shift.updatedAtMs);
+  const detail = isAssigned ? (getCachedCost(key) ?? ZERO_COST_BREAKDOWN) : ZERO_COST_BREAKDOWN;
+  const estimatedCost = detail.totalCost;
+
+  const groupType = shift.groupType ?? null;
+  const colors = groupType && ALL_GROUP_TYPES.includes(groupType)
+    ? GROUP_COLORS[groupType] 
+    : UNASSIGNED_COLORS;
+
+  const stateId = determineShiftState({
+    lifecycle_status: shift.lifecycleStatus as any,
+    assignment_status: (shift.assignmentStatus ?? 'unassigned') as any,
+    assignment_outcome: shift.assignmentOutcome as any,
+    trading_status: shift.tradingStatus as any,
+    is_cancelled: shift.isCancelled,
+  });
+
+  return {
+    id: shift.id,
+    date: shift.shiftDate,
+    startTime: shift.startTime,
+    endTime: shift.endTime,
+    netMinutes,
+    estimatedCost,
+    costBreakdown: {
+      base: detail.ordinaryCost,
+      penalty: detail.penaltyCost,
+      overtime: detail.overtimeCost,
+      allowance: detail.allowanceCost ?? 0,
+      leave: 0,
+    },
+    detailedCost: detail,
+    stateId,
+    roleName: shift.roleName ?? 'Shift',
+    roleId: shift.roleId,
+    levelName: shift.levelName ?? '',
+    levelNumber: shift.levelNumber ?? 0,
+    levelId: shift.remunerationLevelId,
+    groupType,
+    subGroupName: shift.subGroupName ?? shift.rosterSubgroupName ?? null,
+    groupColorKey: groupType ?? 'unassigned',
+    employeeName: resolveEmployeeName(shift),
+    employeeId: shift.assignedEmployeeId,
+    isLocked: shift.isLocked,
+    isUrgent: isOnBidding(shift.biddingStatus) && computeBiddingUrgency(shift.shiftDate, shift.startTime) === 'urgent',
+    isOnBidding: isOnBidding(shift.biddingStatus),
+    isTrading: !!shift.tradeRequestedAt,
+    isCancelled: shift.isCancelled,
+    isPublished: shift.isPublished,
+    isDraft: shift.isDraft,
+    
+    role: shift.roleName ?? 'Shift',
+    hours: minutesToHours(netMinutes),
+    pay: estimatedCost,
+    status: shift.isCancelled ? 'Draft' : (shift.assignedEmployeeId ? (shift.isDraft ? 'Draft' : 'Assigned') : 'Open'),
+    lifecycleStatus: shift.isPublished ? 'published' : 'draft',
+    assignmentStatus: shift.assignedEmployeeId ? 'assigned' : 'unassigned',
+    fulfillmentStatus: shift.fulfillmentStatus,
+  };
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export interface PeopleProjectorContext {
-  employees?: EmployeeRecord[];
-  /** If not provided, contractedHours defaults to 0 for all employees */
+  employees?: WorkerEmployeeDTO[];
   contractedHoursMap?: Record<string, number>;
+  nowIso?: string;
 }
 
 export function projectPeople(
-  shifts:  Shift[],
-  ctx:     PeopleProjectorContext = {},
+  shifts: WorkerShiftDTO[],
+  ctx: PeopleProjectorContext = {},
 ): PeopleProjection {
   const { employees = [], contractedHoursMap = {} } = ctx;
 
-  // ─── 1. Seed known employees ─────────────────────────────────────────────
   const empMap = new Map<string, ProjectedEmployee>();
 
   employees.forEach(emp => {
-    const name = `${emp.first_name ?? ''} ${emp.last_name ?? ''}`.trim() || 'Unknown';
+    const name = `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() || 'Unknown';
     empMap.set(emp.id, makeEmployee(
       emp.id,
       name,
-      contractedHoursMap[emp.id] ?? 0,
-      dicebearUrl(emp.first_name ?? emp.id),
+      emp.contractedHours ?? contractedHoursMap[emp.id] ?? 0,
+      dicebearUrl(emp.firstName ?? emp.id),
     ));
   });
 
-  // ─── 2. Walk shifts, bucket by employee ──────────────────────────────────
   shifts.forEach(shift => {
-    const targetId = shift.assigned_employee_id ?? UNASSIGNED_BUCKET_ID;
+    const targetId = shift.assignedEmployeeId ?? UNASSIGNED_BUCKET_ID;
 
     if (!empMap.has(targetId)) {
       if (targetId === UNASSIGNED_BUCKET_ID) {
@@ -135,10 +164,8 @@ export function projectPeople(
           dicebearUrl('unassigned', 'shapes'),
         ));
       } else {
-        // Employee not in the known list (different org, historical shift, etc.)
-        const profile = (shift as any).assigned_profiles ?? (shift as any).profiles;
-        const firstName = profile?.first_name ?? 'Assigned';
-        const lastName  = profile?.last_name  ?? '';
+        const firstName = shift.employeeFirstName ?? 'Assigned';
+        const lastName  = shift.employeeLastName  ?? '';
         empMap.set(targetId, makeEmployee(
           targetId,
           `${firstName} ${lastName}`.trim(),
@@ -149,28 +176,49 @@ export function projectPeople(
     }
 
     const emp = empMap.get(targetId)!;
-    const ps  = toProjectedShift(shift);
+    const ps = toProjectedShift(shift);
 
-    if (!emp.shiftsByDate[shift.shift_date]) {
-      emp.shiftsByDate[shift.shift_date] = [];
+    if (!emp.shifts[shift.shiftDate]) {
+      emp.shifts[shift.shiftDate] = [];
     }
-    emp.shiftsByDate[shift.shift_date].push(ps);
+    // We forcefully cast to any for UI compatibility in the pipeline
+    emp.shifts[shift.shiftDate].push(ps as any);
 
-    // Accumulate scheduled hours for non-cancelled assigned shifts
-    if (!shift.is_cancelled && shift.assigned_employee_id) {
-      emp.scheduledHours = Math.round(
-        (emp.scheduledHours + minutesToHours(netMinutesFromShift(shift))) * 100,
-      ) / 100;
+    if (!shift.isCancelled && shift.assignedEmployeeId) {
+      emp.currentHours = Math.round((emp.currentHours + ps.hours) * 100) / 100;
+      emp.estimatedPay += ps.pay;
+      
+      emp.payBreakdown.base += ps.costBreakdown.base;
+      emp.payBreakdown.penalty += ps.costBreakdown.penalty;
+      emp.payBreakdown.overtime += ps.costBreakdown.overtime;
+      emp.payBreakdown.allowance += ps.costBreakdown.allowance;
+      emp.payBreakdown.leave += ps.costBreakdown.leave;
     }
   });
 
-  // ─── 3. Compute overHoursWarning + sort ──────────────────────────────────
-  const empArray = [...empMap.values()];
+  const empArray = Array.from(empMap.values());
+  const todayStr = ctx.nowIso ? ctx.nowIso.substring(0, 10) : new Date().toISOString().substring(0, 10);
+
   empArray.forEach(emp => {
-    emp.overHoursWarning = emp.contractedHours > 0 && emp.scheduledHours > emp.contractedHours;
+    emp.overHoursWarning = emp.contractedHours > 0 && emp.currentHours > emp.contractedHours;
+    emp.utilization = emp.contractedHours > 0 ? (emp.currentHours / emp.contractedHours) * 100 : 0;
+    
+    const empShifts = Object.values(emp.shifts).flat() as unknown as ProjectedShiftResult[];
+    if (empShifts.length > 0 && emp.id !== UNASSIGNED_BUCKET_ID) {
+      // Map DTO back to the specific keys fatigue.ts expects
+      const fatigueInput = empShifts.map(ps => {
+        const originalDto = shifts.find(s => s.id === ps.id)!;
+        return {
+          shift_date: originalDto.shiftDate,
+          start_time: originalDto.startTime,
+          end_time: originalDto.endTime,
+          unpaid_break_minutes: originalDto.unpaidBreakMinutes,
+        };
+      });
+      emp.fatigueScore = calculateFatigueWithRecovery(fatigueInput, todayStr).current;
+    }
   });
 
-  // Unassigned bucket always sorts last; the rest sort by name
   empArray.sort((a, b) => {
     if (a.id === UNASSIGNED_BUCKET_ID) return 1;
     if (b.id === UNASSIGNED_BUCKET_ID) return -1;
@@ -179,6 +227,15 @@ export function projectPeople(
 
   return {
     employees: empArray,
-    stats:     buildStats(shifts),
+    // Note: Stats are built separately in the pipeline, this returns a dummy
+    stats: {
+        totalShifts: 0,
+        assignedShifts: 0,
+        openShifts: 0,
+        publishedShifts: 0,
+        totalNetMinutes: 0,
+        estimatedCost: 0,
+        costBreakdown: { base: 0, penalty: 0, overtime: 0, allowance: 0, leave: 0 },
+    },
   };
 }

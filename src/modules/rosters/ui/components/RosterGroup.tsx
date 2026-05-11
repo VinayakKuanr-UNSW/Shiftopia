@@ -15,7 +15,7 @@ export type DepartmentName = string;
 
 interface RosterGroupProps {
   group: Group;
-  templateId?: number;
+  templateId?: string | number;
   onAddSubGroup?: (groupId: string | number, name: string) => void;
   onUpdateGroup?: (groupId: string | number, updates: Partial<Group>) => void;
   onDeleteGroup?: (groupId: string | number) => void;

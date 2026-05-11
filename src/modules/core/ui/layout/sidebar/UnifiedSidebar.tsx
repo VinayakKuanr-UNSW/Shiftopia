@@ -1,11 +1,9 @@
-
 import React, { useState, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { cn } from '@/modules/core/lib/utils';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useSidebar } from '@/modules/core/ui/primitives/sidebar';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import LogoSection from './sidebar/LogoSection';
 import NavigationLinks from './sidebar/NavigationLinks';
 import UserSection from './sidebar/UserSection';
@@ -18,7 +16,6 @@ const UnifiedSidebar: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { state } = useSidebar();
-  const { theme, setTheme } = useTheme();
   
   // Use a typed state for open menus
   const [openMenus, setOpenMenus] = useState<Record<MenuKey, boolean>>({
@@ -55,10 +52,6 @@ const UnifiedSidebar: React.FC = () => {
     await logout();
     navigate('/login');
   }, [logout, navigate]);
-  
-  const handleThemeChange = useCallback((newTheme: 'dark' | 'light' | 'glass' | 'lovable') => {
-    setTheme(newTheme);
-  }, [setTheme]);
 
   // Use memoization for the dynamic class string
   const sidebarWidth = useMemo(() => isCollapsed ? "w-[70px]" : "w-[250px]", [isCollapsed]);
@@ -79,8 +72,6 @@ const UnifiedSidebar: React.FC = () => {
       <UserSection 
         user={user} 
         isCollapsed={isCollapsed}
-        theme={theme}
-        handleThemeChange={handleThemeChange}
         handleLogout={handleLogout}
       />
     </motion.nav>

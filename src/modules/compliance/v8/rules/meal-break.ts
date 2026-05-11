@@ -1,5 +1,5 @@
 import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
-import { differenceInMinutes, parseISO } from 'date-fns';
+import { parseTimeToMinutes } from '../utils/time';
 
 /**
  * V8 Rule: Meal Breaks
@@ -11,10 +11,10 @@ export const mealBreakRule: V8RuleEvaluator = (ctx) => {
     const violations: V8Hit[] = [];
 
     for (const s of shifts) {
-        const date = s.date || s.shift_date || '';
-        const start = parseISO(`${date}T${s.start_time}`);
-        const end = parseISO(`${date}T${s.end_time}`);
-        let totalMins = differenceInMinutes(end, start);
+        const start = parseTimeToMinutes(s.start_time);
+        let end = parseTimeToMinutes(s.end_time);
+        
+        let totalMins = end - start;
         if (totalMins < 0) totalMins += 1440; // Cross-midnight
 
         // If shift is longer than 5 hours, we check if a break is recorded.
@@ -26,11 +26,11 @@ export const mealBreakRule: V8RuleEvaluator = (ctx) => {
                 violations.push({
                     rule_id: 'V8_MEAL_BREAK',
                     rule_name: 'Meal Break Requirement',
-                    status: 'BLOCKING',
+                    status: 'WARNING',
                     summary: `Missing meal break (>5h shift)`,
-                    details: `Shift on ${s.date} is ${(totalMins / 60).toFixed(1)}h but has no valid meal break. EBA requires a break after 5 hours worked.`,
+                    details: `Shift on ${s.date} is ${(totalMins / 60).toFixed(1)}h but has no scheduled meal break. EBA requires a break to be taken after 5 hours worked — confirm at timesheet.`,
                     affected_shifts: [s.id],
-                    blocking: true,
+                    blocking: false,
                     calculation: {
                         duration_minutes: totalMins,
                         break_minutes: s.unpaid_break_minutes || 0

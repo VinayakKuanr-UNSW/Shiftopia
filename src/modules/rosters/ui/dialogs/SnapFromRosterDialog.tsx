@@ -10,7 +10,6 @@ import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { Separator } from '@/modules/core/ui/primitives/separator';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
     Check,
     AlertTriangle,
@@ -277,21 +276,16 @@ const SnapFromRosterDialog: React.FC<SnapFromRosterDialogProps> = ({
                                 </div>
 
                                 {/* Date range validation feedback */}
-                                <AnimatePresence>
-                                    {startDate && endDate && !datesValid && (
-                                        <motion.div
-                                            initial={{ height: 0, opacity: 0 }}
-                                            animate={{ height: 'auto', opacity: 1 }}
-                                            exit={{ height: 0, opacity: 0 }}
-                                            className="flex items-center gap-2.5 p-3 bg-red-500/5 border border-red-500/20 rounded-xl text-red-600 dark:text-red-400"
-                                        >
-                                            <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                                            <span className="text-[10px] font-black uppercase tracking-tight">
-                                                End date precedes start date
-                                            </span>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
+                                {startDate && endDate && !datesValid && (
+                                    <div
+                                        className="flex items-center gap-2.5 p-3 bg-red-500/5 border border-red-500/20 rounded-xl text-red-600 dark:text-red-400"
+                                    >
+                                        <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                                        <span className="text-[10px] font-black uppercase tracking-tight">
+                                            End date precedes start date
+                                        </span>
+                                    </div>
+                                )}
 
                                 <Separator className="bg-border" />
 
@@ -451,19 +445,14 @@ const SnapFromRosterDialog: React.FC<SnapFromRosterDialogProps> = ({
                                                 nameError && 'border-red-500/50 focus:ring-red-500/30'
                                             )}
                                         />
-                                        <AnimatePresence>
-                                            {nameError && (
-                                                <motion.p
-                                                    initial={{ height: 0, opacity: 0 }}
-                                                    animate={{ height: 'auto', opacity: 1 }}
-                                                    exit={{ height: 0, opacity: 0 }}
-                                                    className="text-[10px] font-bold text-red-500 dark:text-red-400 flex items-center gap-1.5 mt-1"
-                                                >
-                                                    <AlertTriangle className="h-3 w-3 flex-shrink-0" />
-                                                    {nameError}
-                                                </motion.p>
-                                            )}
-                                        </AnimatePresence>
+                                        {nameError && (
+                                            <p
+                                                className="text-[10px] font-bold text-red-500 dark:text-red-400 flex items-center gap-1.5 mt-1"
+                                            >
+                                                <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+                                                {nameError}
+                                            </p>
+                                        )}
                                         <p className="text-[10px] text-muted-foreground/50 font-medium">
                                             {templateName.trim().length}/100 characters
                                         </p>
@@ -494,135 +483,120 @@ const SnapFromRosterDialog: React.FC<SnapFromRosterDialogProps> = ({
 
                         <div className="flex-1 overflow-y-auto px-8 pb-10 flex flex-col gap-6 custom-scrollbar">
 
-                            <AnimatePresence mode="wait">
-                                {successResult ? (
-                                    /* ---- SUCCESS STATE ---- */
-                                    <motion.div
-                                        key="success"
-                                        initial={{ opacity: 0, scale: 0.95 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0.95 }}
-                                        className="flex flex-col items-center justify-center text-center py-10 gap-6"
+                        {successResult ? (
+                            /* ---- SUCCESS STATE ---- */
+                            <div
+                                className="flex flex-col items-center justify-center text-center py-10 gap-6"
+                            >
+                                <div className="h-20 w-20 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shadow-inner">
+                                    <Check className="h-9 w-9 text-emerald-600 dark:text-emerald-400" />
+                                </div>
+                                <div className="space-y-2">
+                                    <p className="text-lg font-black text-foreground tracking-tight">
+                                        Template captured!
+                                    </p>
+                                    <p className="text-sm text-muted-foreground font-medium">
+                                        <span className="font-black text-foreground dark:text-white">
+                                            {successResult.shiftsCaptured}
+                                        </span>{' '}
+                                        shift{successResult.shiftsCaptured !== 1 ? 's' : ''} saved as draft.
+                                    </p>
+                                    <p className="text-[11px] text-muted-foreground/70 font-medium mt-1">
+                                        Visit Templates to publish it.
+                                    </p>
+                                </div>
+                                <Button
+                                    onClick={() => { navigate('/templates'); onOpenChange(false); }}
+                                    variant="outline"
+                                    className="w-full h-12 rounded-2xl font-black text-xs uppercase tracking-widest border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 transition-all"
+                                >
+                                    Go to Templates
+                                </Button>
+                                <Button
+                                    onClick={handleClose}
+                                    className="w-full h-12 rounded-2xl font-black text-xs uppercase tracking-widest bg-emerald-600 hover:bg-emerald-500 text-white border-b-4 border-emerald-700 transition-all active:scale-[0.97]"
+                                >
+                                    Close
+                                </Button>
+                            </div>
+                        ) : (
+                            /* ---- NORMAL STATE ---- */
+                            <div
+                                className="flex flex-col gap-6"
+                            >
+                                {/* What will happen summary */}
+                                <div className="space-y-3 p-5 rounded-2xl bg-muted/40 border border-border">
+                                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                                        What will happen
+                                    </p>
+                                    <ul className="space-y-2">
+                                        {[
+                                            'Shifts in the selected range will be read from the roster.',
+                                            'Employee assignments will be stripped from all shifts.',
+                                            'A new template will be created in DRAFT status.',
+                                            'No existing roster data will be modified.',
+                                        ].map((line, i) => (
+                                            <li key={i} className="flex items-start gap-2">
+                                                <div className="h-1.5 w-1.5 rounded-full bg-primary/60 mt-1.5 flex-shrink-0" />
+                                                <span className="text-[11px] font-medium text-muted-foreground leading-snug">
+                                                    {line}
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+
+                                {/* Inline errors */}
+                                {error && (
+                                    <div
+                                        className="flex items-start gap-3 p-4 bg-red-500/5 border border-red-500/20 rounded-2xl text-red-600 dark:text-red-400"
                                     >
-                                        <div className="h-20 w-20 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shadow-inner">
-                                            <Check className="h-9 w-9 text-emerald-600 dark:text-emerald-400" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <p className="text-lg font-black text-foreground tracking-tight">
-                                                Template captured!
-                                            </p>
-                                            <p className="text-sm text-muted-foreground font-medium">
-                                                <span className="font-black text-foreground dark:text-white">
-                                                    {successResult.shiftsCaptured}
-                                                </span>{' '}
-                                                shift{successResult.shiftsCaptured !== 1 ? 's' : ''} saved as draft.
-                                            </p>
-                                            <p className="text-[11px] text-muted-foreground/70 font-medium mt-1">
-                                                Visit Templates to publish it.
-                                            </p>
-                                        </div>
-                                        <Button
-                                            onClick={() => { navigate('/templates'); onOpenChange(false); }}
-                                            variant="outline"
-                                            className="w-full h-12 rounded-2xl font-black text-xs uppercase tracking-widest border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 transition-all"
-                                        >
-                                            Go to Templates
-                                        </Button>
-                                        <Button
-                                            onClick={handleClose}
-                                            className="w-full h-12 rounded-2xl font-black text-xs uppercase tracking-widest bg-emerald-600 hover:bg-emerald-500 text-white border-b-4 border-emerald-700 transition-all active:scale-[0.97]"
-                                        >
-                                            Close
-                                        </Button>
-                                    </motion.div>
-                                ) : (
-                                    /* ---- NORMAL STATE ---- */
-                                    <motion.div
-                                        key="form"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        className="flex flex-col gap-6"
-                                    >
-                                        {/* What will happen summary */}
-                                        <div className="space-y-3 p-5 rounded-2xl bg-muted/40 border border-border">
-                                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                                                What will happen
-                                            </p>
-                                            <ul className="space-y-2">
-                                                {[
-                                                    'Shifts in the selected range will be read from the roster.',
-                                                    'Employee assignments will be stripped from all shifts.',
-                                                    'A new template will be created in DRAFT status.',
-                                                    'No existing roster data will be modified.',
-                                                ].map((line, i) => (
-                                                    <li key={i} className="flex items-start gap-2">
-                                                        <div className="h-1.5 w-1.5 rounded-full bg-primary/60 mt-1.5 flex-shrink-0" />
-                                                        <span className="text-[11px] font-medium text-muted-foreground leading-snug">
-                                                            {line}
-                                                        </span>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-
-                                        {/* Inline errors */}
-                                        <AnimatePresence>
-                                            {error && (
-                                                <motion.div
-                                                    initial={{ height: 0, opacity: 0 }}
-                                                    animate={{ height: 'auto', opacity: 1 }}
-                                                    exit={{ height: 0, opacity: 0 }}
-                                                    className="flex items-start gap-3 p-4 bg-red-500/5 border border-red-500/20 rounded-2xl text-red-600 dark:text-red-400"
-                                                >
-                                                    <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                                                    <span className="text-[11px] font-bold leading-snug">{error}</span>
-                                                </motion.div>
-                                            )}
-                                        </AnimatePresence>
-
-                                        <div className="space-y-3">
-                                            <Button
-                                                onClick={handleSnap}
-                                                disabled={!canSubmit}
-                                                className={cn(
-                                                    'w-full h-16 rounded-[1.5rem] font-black text-md uppercase tracking-[0.2em] transition-all relative overflow-hidden active:scale-[0.97]',
-                                                    canSubmit
-                                                        ? 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 border-b-4 border-primary/20'
-                                                        : 'bg-muted text-muted-foreground cursor-not-allowed border-border'
-                                                )}
-                                            >
-                                                {snapMutation.isPending ? (
-                                                    <div className="flex items-center gap-3">
-                                                        <Loader2 className="h-5 w-5 animate-spin" />
-                                                        <span>Capturing...</span>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex items-center gap-3">
-                                                        <Camera className="h-5 w-5" />
-                                                        <span>Snap Template</span>
-                                                    </div>
-                                                )}
-                                            </Button>
-
-                                            {previewCount === 0 && !previewLoading && (
-                                                <p className="text-[10px] text-center text-red-500 font-black uppercase tracking-[0.1em] px-4 animate-in fade-in slide-in-from-top-1">
-                                                    No shifts found in selected range
-                                                </p>
-                                            )}
-                                        </div>
-
-                                        {/* Cancel */}
-                                        <Button
-                                            variant="ghost"
-                                            onClick={handleClose}
-                                            className="w-full h-12 rounded-2xl font-black text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
-                                        >
-                                            Cancel
-                                        </Button>
-                                    </motion.div>
+                                        <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                                        <span className="text-[11px] font-bold leading-snug">{error}</span>
+                                    </div>
                                 )}
-                            </AnimatePresence>
+
+                                <div className="space-y-3">
+                                    <Button
+                                        onClick={handleSnap}
+                                        disabled={!canSubmit}
+                                        className={cn(
+                                            'w-full h-16 rounded-[1.5rem] font-black text-md uppercase tracking-[0.2em] transition-all relative overflow-hidden active:scale-[0.97]',
+                                            canSubmit
+                                                ? 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 border-b-4 border-primary/20'
+                                                : 'bg-muted text-muted-foreground cursor-not-allowed border-border'
+                                        )}
+                                    >
+                                        {snapMutation.isPending ? (
+                                            <div className="flex items-center gap-3">
+                                                <Loader2 className="h-5 w-5 animate-spin" />
+                                                <span>Capturing...</span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-3">
+                                                <Camera className="h-5 w-5" />
+                                                <span>Snap Template</span>
+                                            </div>
+                                        )}
+                                    </Button>
+
+                                    {previewCount === 0 && !previewLoading && (
+                                        <p className="text-[10px] text-center text-red-500 font-black uppercase tracking-[0.1em] px-4 animate-in fade-in slide-in-from-top-1">
+                                            No shifts found in selected range
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Cancel */}
+                                <Button
+                                    variant="ghost"
+                                    onClick={handleClose}
+                                    className="w-full h-12 rounded-2xl font-black text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+                        )}
                         </div>
 
                         {/* Footer hint */}

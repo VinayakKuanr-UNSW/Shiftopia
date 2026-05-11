@@ -62,109 +62,112 @@ export const ShiftBucketHeader: React.FC<ShiftBucketHeaderProps> = ({
     return (
         <div
             className={cn(
-                'flex flex-col gap-1.5 px-3 py-2 rounded-lg cursor-pointer select-none transition-colors border',
-                'bg-card hover:bg-accent/20 border-border shadow-sm',
-                isExpanded && 'rounded-b-none border-b-0'
+                'flex flex-col gap-3 px-5 py-4 rounded-xl cursor-pointer select-none border-2 transition-colors',
+                'bg-card shadow-lg border-border hover:bg-accent/40 hover:border-primary/30',
+                isExpanded && 'rounded-b-none border-b-0 border-primary/40 bg-accent/10 shadow-xl'
             )}
             onClick={onToggle}
         >
             {/* Row 1: Time & Actions */}
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                     {/* Expand/Collapse chevron */}
-                    <div className="flex-shrink-0 text-muted-foreground/70">
+                    <div className="flex-shrink-0 text-muted-foreground/60">
                         {isExpanded ? (
-                            <ChevronDown className="h-3.5 w-3.5" />
+                            <ChevronDown className="h-5 w-5" />
                         ) : (
-                            <ChevronRight className="h-3.5 w-3.5" />
+                            <ChevronRight className="h-5 w-5" />
                         )}
                     </div>
 
                     {/* Time range */}
-                    <div className="flex items-center gap-1.5">
-                        <Clock className="h-3 w-3 text-muted-foreground/60" />
-                        <span className="text-xs font-semibold text-foreground tracking-tight">
+                    <div className="flex items-center gap-2.5">
+                        <div className="p-1.5 rounded-md bg-primary/10">
+                            <Clock className="h-4.5 w-4.5 text-primary" />
+                        </div>
+                        <span className="text-lg font-black text-foreground tracking-tighter">
                             {formatTime(startTime)} - {formatTime(endTime)}
                         </span>
                     </div>
                 </div>
 
                 {/* Actions & Lock */}
-                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                     {hasLocked && (
-                        <div className="flex items-center gap-0.5 text-amber-500 mr-1" title={`${stats.lockedCount} locked shifts`}>
-                            <Lock className="h-3 w-3" />
-                            <span className="text-[10px] font-medium">{stats.lockedCount}</span>
+                        <div className="flex items-center gap-1.5 text-amber-500 mr-3 px-2 py-1 bg-amber-500/5 rounded-md border border-amber-500/20" title={`${stats.lockedCount} locked shifts`}>
+                            <Lock className="h-4 w-4" />
+                            <span className="text-sm font-black">{stats.lockedCount}</span>
                         </div>
                     )}
 
                     {hasDrafts && (
                         <Button
-                            variant="ghost"
+                            variant="secondary"
                             size="icon"
-                            className="h-6 w-6 hover:bg-emerald-500/20 text-emerald-400/70 hover:text-emerald-400"
+                            className="h-8 w-8 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20"
                             onClick={onPublishBucket}
                             disabled={!canEdit}
                             title="Publish all draft shifts"
                         >
-                            <Send className="h-3 w-3" />
+                            <Send className="h-4 w-4" />
                         </Button>
                     )}
                     
                     {hasPublished && (
                         <Button
-                            variant="ghost"
+                            variant="secondary"
                             size="icon"
-                            className="h-6 w-6 hover:bg-amber-500/20 text-amber-400/70 hover:text-amber-400"
+                            className="h-8 w-8 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/20"
                             onClick={onUnpublishBucket}
                             disabled={!canEdit}
                             title="Unpublish all published shifts"
                         >
-                            <Undo2 className="h-3 w-3" />
+                            <Undo2 className="h-4 w-4" />
                         </Button>
                     )}
 
                     <Button
-                        variant="ghost"
+                        variant="secondary"
                         size="icon"
-                        className="h-6 w-6 hover:bg-red-500/20 text-red-400/70 hover:text-red-400"
+                        className="h-8 w-8 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20"
                         onClick={onDeleteBucket}
                         disabled={!canEdit}
                         title="Delete all shifts"
                     >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="h-4 w-4" />
                     </Button>
                 </div>
             </div>
 
             {/* Row 2: Stats & Status */}
-            <div className="flex items-center gap-3 text-[10px] pl-5.5">
+            <div className="flex items-center gap-5 text-[11px] pl-8">
                 {/* Total Count */}
-                <div title="Total Shifts" className="flex items-center gap-1 text-muted-foreground/80 font-medium">
-                    <Box className="h-3 w-3 opacity-70" />
-                    <span>{stats.total}</span>
+                <div title="Total Shifts" className="flex items-center gap-2 text-muted-foreground font-black uppercase tracking-wider">
+                    <Box className="h-4 w-4 opacity-60" />
+                    <span>{stats.total} Total</span>
                 </div>
 
                 {/* Assigned Count */}
-                <div title="Assigned" className="flex items-center gap-1 text-emerald-400/90 font-medium">
-                    <UserCheck className="h-3 w-3 opacity-80" />
-                    <span>{stats.assignedCount}</span>
+                <div title="Assigned" className="flex items-center gap-2 text-emerald-500 font-black uppercase tracking-wider">
+                    <UserCheck className="h-4 w-4" />
+                    <span>{stats.assignedCount} Filled</span>
                 </div>
 
                 {/* Unassigned Count (only if exists) */}
                 {stats.unassignedCount > 0 && (
-                    <div title="Unassigned" className="flex items-center gap-1 text-amber-400/90 font-medium">
-                        <UserX className="h-3 w-3 opacity-80" />
-                        <span>{stats.unassignedCount}</span>
+                    <div title="Unassigned" className="flex items-center gap-2 text-amber-500 font-black uppercase tracking-wider">
+                        <UserX className="h-4 w-4" />
+                        <span>{stats.unassignedCount} Open</span>
                     </div>
                 )}
 
                 {/* Status Text (Right aligned) */}
-                <div className={cn("ml-auto font-medium", publishStatusStyle)}>
+                <div className={cn("ml-auto font-black uppercase tracking-[0.2em] text-[10px] px-2 py-0.5 rounded bg-muted/30", publishStatusStyle)}>
                     {publishStatus === 'Partially Published' ? 'Partial' : publishStatus}
                 </div>
             </div>
         </div>
+
     );
 };
 

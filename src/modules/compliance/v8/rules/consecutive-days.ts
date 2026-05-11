@@ -1,5 +1,5 @@
 import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
-import { parseISO, addDays, format, differenceInCalendarDays } from 'date-fns';
+import { parseTimeToMinutes } from '../utils/time';
 
 /**
  * V8 Rule: Workday Limits (20-in-28 & Streaks)
@@ -11,37 +11,43 @@ import { parseISO, addDays, format, differenceInCalendarDays } from 'date-fns';
  *    - Flexible Part-Time: Up to 10 days.
  */
 export const maxWorkdayLimitsRule: V8RuleEvaluator = (ctx) => {
-    const { shifts, employee, config } = ctx;
+    const { shifts, employee } = ctx;
     if (shifts.length === 0) return [];
     
     // 1. Build Workday Vector
     const workingDates = new Set<string>();
     for (const s of shifts) {
         const date = s.date || s.shift_date || '';
+        // CRITICAL: Skip shifts with missing scheduling info to prevent crashes
+        if (!date || !s.start_time || !s.end_time) continue;
+
         workingDates.add(date);
         
         // Handle cross-midnight by adding the next day too
-        const start = parseISO(`${date}T${s.start_time}`);
-        const end = parseISO(`${date}T${s.end_time}`);
-        if (end < start || (s.end_time === '00:00' && s.start_time !== '00:00')) {
-             const nextDay = format(addDays(parseISO(date), 1), 'yyyy-MM-dd');
-             workingDates.add(nextDay);
+        const start = parseTimeToMinutes(s.start_time);
+        const end = parseTimeToMinutes(s.end_time);
+        if (end <= start && s.end_time !== '00:00') {
+             const d = new Date(date);
+             d.setUTCDate(d.getUTCDate() + 1);
+             workingDates.add(d.toISOString().split('T')[0]);
         }
     }
     
     const sortedDates = Array.from(workingDates).sort();
+    if (sortedDates.length === 0) return [];
     const violations: V8Hit[] = [];
 
     // --- RULE A: 20 IN 28 (Rolling Window) ---
-    const windowDays = 28;
     const maxWorkdays = 20;
 
     let worstWindow: any = null;
 
     for (let i = 0; i < sortedDates.length; i++) {
         const endDateStr = sortedDates[i];
-        const endDate = parseISO(endDateStr);
-        const windowStart = format(addDays(endDate, -27), 'yyyy-MM-dd');
+        
+        const d = new Date(endDateStr);
+        d.setUTCDate(d.getUTCDate() - 27);
+        const windowStart = d.toISOString().split('T')[0];
 
         const windowWorked = sortedDates.filter(d => d >= windowStart && d <= endDateStr).length;
 
@@ -80,10 +86,12 @@ export const maxWorkdayLimitsRule: V8RuleEvaluator = (ctx) => {
     let streakStart = sortedDates[0];
 
     for (let i = 1; i < sortedDates.length; i++) {
-        const prev = parseISO(sortedDates[i - 1]);
-        const curr = parseISO(sortedDates[i]);
+        const d1 = new Date(sortedDates[i - 1]).getTime();
+        const d2 = new Date(sortedDates[i]).getTime();
         
-        if (differenceInCalendarDays(curr, prev) === 1) {
+        const diffDays = Math.round((d2 - d1) / 86400000);
+        
+        if (diffDays === 1) {
             currentStreak++;
         } else {
             if (currentStreak > streakLimit) {

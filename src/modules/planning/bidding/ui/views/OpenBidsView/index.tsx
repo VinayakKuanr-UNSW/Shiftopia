@@ -45,7 +45,6 @@ import { useManagerBidShifts } from './useOpenShifts';
 import { useShiftBids } from './useShiftBids';
 import { useTimeTicker } from './useTimeTicker';
 import { getAvailabilitySlots } from '@/modules/availability/api/availability.api';
-import { checkAvailabilityOnly } from '@/modules/compliance/v8/eligibility';
 import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
 import { classifyBuckets, getBucketSummary } from '@/modules/compliance/ui/bucket-map';
 import type { UseCompliancePanelReturn, PanelStatus, PanelResult } from '@/modules/compliance/ui/useCompliancePanel';
@@ -280,27 +279,32 @@ function useBidsCompliancePanel(
         });
       } catch { /* server check optional */ }
 
-      // Availability check
+      // Availability check: lightweight inline overlap test against the
+      // employee's declared slots for the shift date. The deeper, V8-engine
+      // version of this check has been removed; the server-side compliance
+      // pass below covers the authoritative case.
       if (!allHits.some(h => h.rule_id === 'R_AVAILABILITY_MATCH')) {
         try {
           const slots = await getAvailabilitySlots(selectedBid.employeeId, expandedShift.date, expandedShift.date);
-          const avRes = checkAvailabilityOnly(
-            {
-              shift_id:    expandedShift.id,
-              employee_id: selectedBid.employeeId,
-              shift_date:  expandedShift.date,
-              start_time:  expandedShift.startTime + ':00',
-              end_time:    expandedShift.endTime   + ':00',
-            } as any,
-            { declared_slots: slots, assigned_shifts: [] },
-            'BID'
-          );
-          if (!avRes.eligible || avRes.advisories.length > 0) {
-            const msg = avRes.reasons[0] || avRes.advisories[0] || 'Outside declared availability.';
+          const toMins = (t: string) => {
+            const [h, m] = t.split(':').map(Number);
+            return (h || 0) * 60 + (m || 0);
+          };
+          const sStart = toMins(expandedShift.startTime);
+          const sEnd = toMins(expandedShift.endTime);
+          const adjustedEnd = sEnd <= sStart ? sEnd + 1440 : sEnd;
+          const covered = (slots ?? []).some((slot: any) => {
+            if (!slot?.start_time || !slot?.end_time) return false;
+            const aStart = toMins(slot.start_time);
+            const aEnd = toMins(slot.end_time);
+            const adjustedSlotEnd = aEnd <= aStart ? aEnd + 1440 : aEnd;
+            return aStart <= sStart && adjustedSlotEnd >= adjustedEnd;
+          });
+          if (!covered) {
             allHits.push({
               rule_id:         'R_AVAILABILITY_MATCH',
-              severity:        avRes.eligible ? 'WARNING' : 'BLOCKING',
-              message:         msg,
+              severity:        'WARNING',
+              message:         'Shift falls outside declared availability.',
               resolution_hint: '',
               affected_shifts: [expandedShift.id],
             } as V8Hit);

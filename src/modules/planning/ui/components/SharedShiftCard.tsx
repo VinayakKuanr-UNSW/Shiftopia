@@ -13,7 +13,6 @@ import {
     Lock,
     Flame,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 import {
     Tooltip,
     TooltipContent,
@@ -200,22 +199,20 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
 
     if (isTimecard) {
         return (
-            <motion.div
-                ref={ref}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={cn(
-                    'relative overflow-hidden transition-all duration-500',
-                    !isFlat && 'rounded-[32px] border backdrop-blur-3xl bg-white/65 dark:bg-zinc-950/95 shadow-lg',
-                    isFlat && 'bg-transparent border-none shadow-none rounded-none',
-                    (isExpired || (isPast && protection.status === 'LOCKED')) && "opacity-60 grayscale-[0.5]",
-                    className
-                )}
-                style={!isFlat ? {
-                    borderColor: 'rgba(120, 120, 120, 0.08)',
-                    boxShadow: '0 8px 32px -4px rgba(0,0,0,0.1)',
-                } : undefined}
-            >
+                <div
+                    ref={ref}
+                    className={cn(
+                        'relative overflow-hidden transition-all duration-500',
+                        !isFlat && 'rounded-[32px] border backdrop-blur-3xl bg-white/65 dark:bg-zinc-950/95 shadow-lg',
+                        isFlat && 'bg-transparent border-none shadow-none rounded-none',
+                        (isExpired || (isPast && protection.status === 'LOCKED')) && "opacity-60 grayscale-[0.5]",
+                        className
+                    )}
+                    style={!isFlat ? {
+                        borderColor: 'rgba(120, 120, 120, 0.08)',
+                        boxShadow: '0 8px 32px -4px rgba(0,0,0,0.1)',
+                    } : undefined}
+                >
                 {/* Glows */}
                 <div 
                     style={{ 
@@ -317,7 +314,7 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                         </div>
                     )}
                 </div>
-            </motion.div>
+                </div>
         );
     }
 
@@ -431,10 +428,8 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
     }
 
     return (
-        <motion.div
+        <div
             ref={ref}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
             onClick={onClick}
             className={cn(
                 "group flex flex-col overflow-hidden transition-all duration-300 h-full relative",
@@ -447,6 +442,6 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
             )}
         >
             {content}
-        </motion.div>
+        </div>
     );
 });

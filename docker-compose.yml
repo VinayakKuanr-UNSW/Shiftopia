@@ -1,4 +1,3 @@
-version: '3.9'
 
 # Two-layer workforce scheduling architecture
 #
@@ -19,8 +18,27 @@ services:
       - '5005:8080'
     environment:
       - LOG_LEVEL=info
+      # ── Phase 3 — production hardening ────────────────────────────────
+      # Auth: dev-bypass keeps localhost workflows simple. In prod, set
+      # SUPABASE_JWT_SECRET to the project's HS256 JWT secret and remove
+      # OPTIMIZER_AUTH_DISABLED (or set it to false).
+      - OPTIMIZER_AUTH_DISABLED=${OPTIMIZER_AUTH_DISABLED:-true}
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:-}
+      - SUPABASE_JWT_AUDIENCE=${SUPABASE_JWT_AUDIENCE:-authenticated}
+      # CORS allowlist — comma-separated origins. Default covers Vite
+      # dev (5173) and the local web-app (8080).
+      - OPTIMIZER_CORS_ORIGINS=${OPTIMIZER_CORS_ORIGINS:-http://localhost:8080,http://localhost:5173}
+      # Rate limits (per-IP). Bump under load test; tighten in prod.
+      - OPTIMIZER_RATE_OPTIMIZE=${OPTIMIZER_RATE_OPTIMIZE:-30/minute}
+      - OPTIMIZER_RATE_AUDIT=${OPTIMIZER_RATE_AUDIT:-60/minute}
+      # OpenTelemetry — set to a collector endpoint (e.g.
+      # http://otel-collector:4317) to enable. Empty = no-op tracing.
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-superman-optimizer}
     restart: unless-stopped
     healthcheck:
+      # Liveness probe — `/health` is the cheap one. K8s should switch
+      # to `/ready` for `readinessProbe` (also checks JWT + OR-Tools).
       test: ['CMD', 'curl', '-f', 'http://localhost:8080/health']
       interval: 30s
       timeout: 10s

@@ -1,4 +1,5 @@
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
+import type { ShiftCostBreakdown } from '@/modules/rosters/domain/projections/utils/cost/types';
 
 export interface PeopleModeShift {
     id: string;
@@ -22,6 +23,8 @@ export interface PeopleModeShift {
     requiredSkills?: string[];
     /** Raw shift entity for SmartShiftCard rendering */
     rawShift?: Shift;
+    /** Pre-computed cost breakdown — avoids re-running the payroll engine in the card. */
+    detailedCost?: ShiftCostBreakdown;
 }
 
 export interface PeopleModeEmployee {

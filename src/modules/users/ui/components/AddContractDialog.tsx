@@ -168,10 +168,19 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
     const isSubDeptSelected = !!formData.sub_department_id;
     const isRoleSelected = !!formData.role_id;
 
-    // Prefilled/Locked data logic
     const selectedRole = roles.find(r => r.id === formData.role_id);
     const selectedRemLevel = remLevels.find(rl => rl.id === formData.rem_level_id);
     const isRemLocked = !!formData.role_id && !!selectedRole?.remuneration_level_id;
+
+    // Auto-populate remuneration level when role changes
+    React.useEffect(() => {
+        if (formData.role_id && !formData.rem_level_id) {
+            const role = roles.find(r => r.id === formData.role_id);
+            if (role?.remuneration_level_id) {
+                updateField('rem_level_id', role.remuneration_level_id);
+            }
+        }
+    }, [formData.role_id, roles, formData.rem_level_id, updateField]);
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -197,7 +206,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                     )}
                 </Button>
             </DialogTrigger>
-            <DialogContent className="w-[calc(100vw-2rem)] max-w-xl h-[85vh] flex flex-col bg-[#0b0e14]/95 border-border/40 text-foreground shadow-2xl backdrop-blur-2xl rounded-[2rem] overflow-hidden p-0">
+            <DialogContent className="w-[calc(100vw-2rem)] max-w-5xl h-auto flex flex-col bg-background/95 border-border/40 text-foreground shadow-2xl backdrop-blur-2xl rounded-[2rem] overflow-hidden p-0">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
                 
                 <div className="p-8 pb-4 flex-shrink-0">
@@ -217,91 +226,99 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                         </div>
                     </DialogHeader>
 
-                    <div className="flex-1 overflow-y-auto px-8 py-4 relative custom-scrollbar flex flex-col gap-6">
-                        {/* Progress Line */}
-                        <div className="absolute left-6 top-8 bottom-8 w-[1px] bg-gradient-to-b from-primary/50 via-primary/20 to-transparent opacity-20 pointer-events-none" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10 overflow-visible relative">
+                        {/* Vertical Divider for Desktop */}
+                        <div className="hidden md:block absolute left-1/2 top-4 bottom-4 w-[1px] bg-border/40 -translate-x-1/2" />
 
-                        {/* 1. Organization */}
-                        <motion.div 
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.4 }}
-                        >
+                        {/* Left Column: Primary Selection */}
+                        <div className="flex flex-col gap-6">
+                            {/* 1. Organization */}
                             <CommandSelector
                                 label="Organization"
                                 placeholder="Select organization"
                                 value={formData.organization_id}
-                                options={organizations}
-                                onValueChange={(val) => updateField('organization_id', val)}
+                                options={organizations.map(o => ({ id: o.id, name: o.name }))}
+                                onValueChange={(val) => {
+                                    updateField('organization_id', val);
+                                    updateField('department_id', '');
+                                    updateField('sub_department_id', '');
+                                    updateField('role_id', '');
+                                }}
                                 icon={<Building2 className="w-5 h-5" />}
                             />
-                        </motion.div>
 
-                        {/* 2. Department */}
-                        <AnimatePresence>
-                            {isOrgSelected && (
-                                <motion.div
-                                    initial={{ opacity: 0, height: 0, y: 10 }}
-                                    animate={{ opacity: 1, height: 'auto', y: 0 }}
-                                    exit={{ opacity: 0, height: 0, y: 10 }}
-                                    transition={{ duration: 0.5, ease: "easeOut" }}
-                                >
-                                    <CommandSelector
-                                        label="Department"
-                                        placeholder="Select department"
-                                        value={formData.department_id}
-                                        options={filteredDepartments}
-                                        onValueChange={(val) => updateField('department_id', val)}
-                                        icon={<Users className="w-5 h-5" />}
-                                    />
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+                            {/* 2. Department */}
+                            <AnimatePresence mode="wait">
+                                {isOrgSelected && (
+                                    <motion.div
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: 20 }}
+                                        transition={{ duration: 0.3 }}
+                                    >
+                                        <CommandSelector
+                                            label="Department"
+                                            placeholder="Select department"
+                                            value={formData.department_id}
+                                            options={filteredDepartments.map(d => ({ id: d.id, name: d.name }))}
+                                            onValueChange={(val) => {
+                                                updateField('department_id', val);
+                                                updateField('sub_department_id', '');
+                                                updateField('role_id', '');
+                                            }}
+                                            icon={<Users className="w-5 h-5" />}
+                                        />
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
 
-                        {/* 3. Sub-Department */}
-                        <AnimatePresence>
-                            {isDeptSelected && (
-                                <motion.div
-                                    initial={{ opacity: 0, height: 0, y: 10 }}
-                                    animate={{ opacity: 1, height: 'auto', y: 0 }}
-                                    exit={{ opacity: 0, height: 0, y: 10 }}
-                                    transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
-                                >
-                                    <CommandSelector
-                                        label="Sub-Department"
-                                        placeholder="Select sub-department"
-                                        value={formData.sub_department_id}
-                                        options={filteredSubDepartments}
-                                        onValueChange={(val) => updateField('sub_department_id', val)}
-                                        icon={<ChevronRight className="w-5 h-5" />}
-                                    />
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+                            {/* 3. Sub-Department */}
+                            <AnimatePresence mode="wait">
+                                {isDeptSelected && (
+                                    <motion.div
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: 20 }}
+                                        transition={{ duration: 0.3 }}
+                                    >
+                                        <CommandSelector
+                                            label="Sub-Department"
+                                            placeholder="Select sub-department"
+                                            value={formData.sub_department_id}
+                                            options={filteredSubDepartments.map(sd => ({ id: sd.id, name: sd.name }))}
+                                            onValueChange={(val) => {
+                                                updateField('sub_department_id', val);
+                                                updateField('role_id', '');
+                                            }}
+                                            icon={<ChevronRight className="w-5 h-5" />}
+                                        />
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
 
-                        {/* 4. Role */}
-                        <AnimatePresence>
-                            {isSubDeptSelected && (
-                                <motion.div
-                                    initial={{ opacity: 0, height: 0, y: 10 }}
-                                    animate={{ opacity: 1, height: 'auto', y: 0 }}
-                                    exit={{ opacity: 0, height: 0, y: 10 }}
-                                    transition={{ duration: 0.5, ease: "easeOut", delay: 0.15 }}
-                                >
-                                    <CommandSelector
-                                        label="Role"
-                                        placeholder="Select role"
-                                        value={formData.role_id}
-                                        options={filteredRoles}
-                                        onValueChange={(val) => {
+                            {/* 4. Role */}
+                            <AnimatePresence mode="wait">
+                                {isSubDeptSelected && (
+                                    <motion.div
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: 20 }}
+                                        transition={{ duration: 0.3 }}
+                                    >
+                                        <CommandSelector
+                                            label="Position / Role"
+                                            placeholder="Select role"
+                                            value={formData.role_id}
+                                            options={filteredRoles.map(r => ({ id: r.id, name: r.name }))}
+                                            onValueChange={(val) => {
                                             const role = roles.find(r => r.id === val);
-                                            updateRole(val, role?.remuneration_level_id, role?.employment_type);
+                                            updateRole(val, role?.remuneration_level_id);
                                         }}
-                                        icon={<Briefcase className="w-5 h-5" />}
-                                    />
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+                                            icon={<Briefcase className="w-5 h-5" />}
+                                        />
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
 
                         {/* 5. Remuneration & Employment */}
                         <AnimatePresence>
@@ -379,7 +396,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                                                             updateField('contracted_weekly_hours', val);
                                                         }
                                                     }}
-                                                    className="bg-black/40 border-primary/20 focus:border-primary/50 text-lg font-bold text-primary pl-4 h-12 rounded-xl transition-all"
+                                                    className="bg-muted/40 border-primary/20 focus:border-primary/50 text-lg font-bold text-primary pl-4 h-12 rounded-xl transition-all"
                                                 />
                                                 <div className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground/40 font-medium">
                                                     {formData.employment_status === 'Flexible Part-Time' ? 'hours / year' : 'hours / week'}
@@ -387,399 +404,411 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                                             </div>
                                         </motion.div>
                                     )}
-
-                                    {/* Apprentice Configuration */}
-                                    <div className="pt-2">
-                                        <div className="flex items-center justify-between p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 shadow-inner group hover:bg-indigo-500/10 transition-all cursor-pointer" onClick={() => updateField('is_apprentice', !formData.is_apprentice)}>
-                                            <div className="flex items-center gap-3">
-                                                <div className={cn(
-                                                    "p-2 rounded-xl transition-all",
-                                                    formData.is_apprentice ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20" : "bg-indigo-500/10 text-indigo-400"
-                                                )}>
-                                                    <GraduationCap className="w-5 h-5" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-bold text-indigo-100">Apprentice Mode</p>
-                                                    <p className="text-[10px] text-indigo-300/60 uppercase tracking-tighter">Schedule 4 Wage Alignment</p>
-                                                </div>
-                                            </div>
-                                            <div className={cn(
-                                                "w-10 h-5 rounded-full relative transition-all duration-300",
-                                                formData.is_apprentice ? "bg-indigo-500" : "bg-white/10"
-                                            )}>
-                                                <motion.div 
-                                                    animate={{ x: formData.is_apprentice ? 20 : 2 }}
-                                                    className="absolute top-1 left-0 w-3 h-3 bg-white rounded-full shadow-sm"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <AnimatePresence>
-                                            {formData.is_apprentice && (
-                                                <motion.div
-                                                    initial={{ opacity: 0, height: 0 }}
-                                                    animate={{ opacity: 1, height: 'auto' }}
-                                                    exit={{ opacity: 0, height: 0 }}
-                                                    className="mt-4 space-y-6 overflow-hidden pl-2 border-l border-indigo-500/20"
-                                                >
-                                                    {/* Apprentice Type */}
-                                                    <div className="grid grid-cols-3 gap-2">
-                                                        {[
-                                                            { id: 'standard', name: 'Standard', icon: <Award className="w-4 h-4" /> },
-                                                            { id: 'adult', name: 'Adult (21+)', icon: <CheckCircle2 className="w-4 h-4" /> },
-                                                            { id: 'school_based', name: 'School-Based', icon: <School className="w-4 h-4" /> }
-                                                        ].map((t) => (
-                                                            <button
-                                                                key={t.id}
-                                                                onClick={() => updateField('apprentice_type', t.id)}
-                                                                className={cn(
-                                                                    "flex flex-col items-center gap-2 p-3 rounded-xl border transition-all text-center",
-                                                                    formData.apprentice_type === t.id 
-                                                                        ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-200 shadow-lg shadow-indigo-500/10"
-                                                                        : "bg-black/20 border-white/5 text-muted-foreground hover:bg-white/5"
-                                                                )}
-                                                            >
-                                                                {t.icon}
-                                                                <span className="text-[10px] font-bold">{t.name}</span>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-
-                                                    {/* Year and Yr 12 */}
-                                                    <div className="flex gap-4">
-                                                        <div className="flex-1 space-y-2">
-                                                            <Label className="text-[10px] uppercase tracking-widest text-indigo-300/50 font-bold ml-1">Apprenticeship Year</Label>
-                                                            <div className="flex bg-black/40 rounded-xl p-1 border border-indigo-500/10">
-                                                                {[1, 2, 3, 4].map((y) => (
-                                                                    <button
-                                                                        key={y}
-                                                                        onClick={() => updateField('apprentice_year', y)}
-                                                                        className={cn(
-                                                                            "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
-                                                                            formData.apprentice_year === y 
-                                                                                ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/20"
-                                                                                : "text-muted-foreground hover:text-indigo-200"
-                                                                        )}
-                                                                    >
-                                                                        Yr {y}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-
-                                                        {formData.apprentice_type === 'standard' && (
-                                                            <div className="space-y-2">
-                                                                <Label className="text-[10px] uppercase tracking-widest text-indigo-300/50 font-bold ml-1">Year 12 Completion</Label>
-                                                                <button
-                                                                    onClick={() => updateField('has_completed_year_12', !formData.has_completed_year_12)}
-                                                                    className={cn(
-                                                                        "w-full px-4 py-3 rounded-xl border flex items-center justify-between gap-4 transition-all h-[42px]",
-                                                                        formData.has_completed_year_12
-                                                                            ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-200"
-                                                                            : "bg-black/40 border-white/10 text-muted-foreground"
-                                                                    )}
-                                                                >
-                                                                    <span className="text-xs font-bold">Graduated?</span>
-                                                                    {formData.has_completed_year_12 ? <CheckCircle2 className="w-4 h-4" /> : <div className="w-4 h-4 rounded-full border border-white/20" />}
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/10 flex items-center gap-3">
-                                                        <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
-                                                        <p className="text-[10px] text-indigo-200/70 font-medium italic">
-                                                            {formData.apprentice_type === 'adult' 
-                                                                ? "Adult rate: 80% of L4 in Yr 1, Min Adult rate thereafter."
-                                                                : formData.apprentice_type === 'school_based'
-                                                                ? "SBA: Standard % + 25% loading for training time."
-                                                                : "Standard: Base % applied to ICC Sydney Level 4."}
-                                                        </p>
-                                                    </div>
-                                                </motion.div>
-                                            )}
-                                        </AnimatePresence>
-                                    </div>
-
-                                    {/* Trainee Configuration */}
-                                    <div className="pt-2 border-t border-white/5">
-                                        <div className="flex items-center justify-between p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 shadow-inner group hover:bg-amber-500/10 transition-all cursor-pointer" onClick={() => updateField('is_trainee', !formData.is_trainee)}>
-                                            <div className="flex items-center gap-3">
-                                                <div className={cn(
-                                                    "p-2 rounded-xl transition-all",
-                                                    formData.is_trainee ? "bg-amber-500 text-white shadow-lg shadow-amber-500/20" : "bg-amber-500/10 text-amber-400"
-                                                )}>
-                                                    <BookOpen className="w-5 h-5" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-bold text-amber-100">Trainee Mode</p>
-                                                    <p className="text-[10px] text-amber-300/60 uppercase tracking-tighter">Schedule 5 Wage Matrix</p>
-                                                </div>
-                                            </div>
-                                            <div className={cn(
-                                                "w-10 h-5 rounded-full relative transition-all duration-300",
-                                                formData.is_trainee ? "bg-amber-500" : "bg-white/10"
-                                            )}>
-                                                <motion.div 
-                                                    animate={{ x: formData.is_trainee ? 20 : 2 }}
-                                                    className="absolute top-1 left-0 w-3 h-3 bg-white rounded-full shadow-sm"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <AnimatePresence>
-                                            {formData.is_trainee && (
-                                                <motion.div
-                                                    initial={{ opacity: 0, height: 0 }}
-                                                    animate={{ opacity: 1, height: 'auto' }}
-                                                    exit={{ opacity: 0, height: 0 }}
-                                                    className="mt-4 space-y-6 overflow-hidden pl-2 border-l border-amber-500/20"
-                                                >
-                                                    {/* Wage Level A vs B */}
-                                                    <div className="flex bg-black/40 rounded-xl p-1 border border-amber-500/10">
-                                                        <button
-                                                            onClick={() => updateField('trainee_level', 'A')}
-                                                            className={cn(
-                                                                "flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2",
-                                                                formData.trainee_level === 'A' ? "bg-amber-500 text-white shadow-md" : "text-muted-foreground hover:text-amber-200"
-                                                            )}
-                                                        >
-                                                            Wage Level A
-                                                            {formData.trainee_level === 'A' && <Trophy className="w-3 h-3" />}
-                                                        </button>
-                                                        <button
-                                                            onClick={() => updateField('trainee_level', 'B')}
-                                                            className={cn(
-                                                                "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
-                                                                formData.trainee_level === 'B' ? "bg-amber-500 text-white shadow-md" : "text-muted-foreground hover:text-amber-200"
-                                                            )}
-                                                        >
-                                                            Wage Level B
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Category Selector */}
-                                                    <div className="grid grid-cols-3 gap-2">
-                                                        {[
-                                                            { id: 'junior', name: 'Junior', icon: <GraduationCap className="w-4 h-4" /> },
-                                                            { id: 'adult', name: 'Adult', icon: <CheckCircle2 className="w-4 h-4" /> },
-                                                            { id: 'school_based', name: 'SBA', icon: <School className="w-4 h-4" /> }
-                                                        ].map((c) => (
-                                                            <button
-                                                                key={c.id}
-                                                                onClick={() => updateField('trainee_category', c.id)}
-                                                                className={cn(
-                                                                    "flex flex-col items-center gap-2 p-3 rounded-xl border transition-all",
-                                                                    formData.trainee_category === c.id 
-                                                                        ? "bg-amber-500/20 border-amber-500/50 text-amber-200"
-                                                                        : "bg-black/20 border-white/5 text-muted-foreground"
-                                                                )}
-                                                            >
-                                                                {c.icon}
-                                                                <span className="text-[10px] font-bold">{c.name}</span>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-
-                                                    {/* School Exit Year (Junior) */}
-                                                    {formData.trainee_category === 'junior' && (
-                                                        <div className="space-y-4">
-                                                            <div className="space-y-2">
-                                                                <Label className="text-[10px] uppercase tracking-widest text-amber-300/50 font-bold ml-1">Left School At</Label>
-                                                                <div className="grid grid-cols-3 gap-2">
-                                                                    {[10, 11, 12].map(y => (
-                                                                        <button
-                                                                            key={y}
-                                                                            onClick={() => updateField('trainee_exit_year', y)}
-                                                                            className={cn(
-                                                                                "py-2 rounded-lg border text-xs font-bold transition-all",
-                                                                                formData.trainee_exit_year === y ? "bg-amber-500/20 border-amber-500/50 text-amber-200" : "bg-black/20 border-white/5 text-muted-foreground"
-                                                                            )}
-                                                                        >
-                                                                            Year {y}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                            <div className="space-y-2">
-                                                                <div className="flex justify-between items-center px-1">
-                                                                    <Label className="text-[10px] uppercase tracking-widest text-amber-300/50 font-bold">Years Since Graduation</Label>
-                                                                    <span className="text-[10px] font-bold text-amber-500">{formData.trainee_years_out} years</span>
-                                                                </div>
-                                                                <input 
-                                                                    type="range" min="0" max="5" step="1" 
-                                                                    value={formData.trainee_years_out}
-                                                                    onChange={(e) => updateField('trainee_years_out', parseInt(e.target.value))}
-                                                                    className="w-full h-1.5 bg-black/40 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Adult Years */}
-                                                    {formData.trainee_category === 'adult' && (
-                                                        <div className="space-y-2">
-                                                            <Label className="text-[10px] uppercase tracking-widest text-amber-300/50 font-bold ml-1">Traineeship Year</Label>
-                                                            <div className="grid grid-cols-2 gap-2">
-                                                                {[1, 2].map(y => (
-                                                                    <button
-                                                                        key={y}
-                                                                        onClick={() => updateField('trainee_year', y)}
-                                                                        className={cn(
-                                                                            "py-2 rounded-lg border text-xs font-bold transition-all",
-                                                                            formData.trainee_year === y ? "bg-amber-500/20 border-amber-500/50 text-amber-200" : "bg-black/20 border-white/5 text-muted-foreground"
-                                                                        )}
-                                                                    >
-                                                                        {y === 1 ? '1st Year' : '2nd+ Year'}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {/* AQF Level Selector */}
-                                                    <div className="space-y-2">
-                                                        <Label className="text-[10px] uppercase tracking-widest text-amber-300/50 font-bold ml-1">AQF Certificate Level</Label>
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <button
-                                                                onClick={() => updateField('trainee_aqf_level', 3)}
-                                                                className={cn(
-                                                                    "py-2 rounded-lg border text-xs font-bold transition-all",
-                                                                    formData.trainee_aqf_level === 3 ? "bg-amber-500/20 border-amber-500/50 text-amber-200" : "bg-black/20 border-white/5 text-muted-foreground"
-                                                                )}
-                                                            >
-                                                                Level I / II / III
-                                                            </button>
-                                                            <button
-                                                                onClick={() => updateField('trainee_aqf_level', 4)}
-                                                                className={cn(
-                                                                    "py-2 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-2",
-                                                                    formData.trainee_aqf_level === 4 ? "bg-amber-500/20 border-amber-500/50 text-amber-200" : "bg-black/20 border-white/5 text-muted-foreground"
-                                                                )}
-                                                            >
-                                                                Level IV (+3.8%)
-                                                                <Sparkles className="w-3 h-3" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 flex items-center gap-3">
-                                                        <Info className="w-4 h-4 text-amber-400/60" />
-                                                        <p className="text-[10px] text-amber-200/70 font-medium italic">
-                                                            {formData.trainee_category === 'junior' 
-                                                                ? `Junior Level ${formData.trainee_level}: Rates scaled based on years out of school.`
-                                                                : formData.trainee_category === 'school_based'
-                                                                ? "SBA: Fixed hourly rate based on current school year (11/12)."
-                                                                : "Adult Trainee: First year floor rate applied based on Wage Level."}
-                                                        </p>
-                                                    </div>
-                                                </motion.div>
-                                            )}
-                                        </AnimatePresence>
-                                    </div>
-
-                                    {/* SWS Configuration */}
-                                    <div className="pt-2 border-t border-white/5">
-                                        <div className="flex items-center justify-between p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 shadow-inner group hover:bg-emerald-500/10 transition-all cursor-pointer" onClick={() => updateField('is_sws', !formData.is_sws)}>
-                                            <div className="flex items-center gap-3">
-                                                <div className={cn(
-                                                    "p-2 rounded-xl transition-all",
-                                                    formData.is_sws ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "bg-emerald-500/10 text-emerald-400"
-                                                )}>
-                                                    <Accessibility className="w-5 h-5" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-bold text-emerald-100">Supported Wage (SWS)</p>
-                                                    <p className="text-[10px] text-emerald-300/60 uppercase tracking-tighter">Schedule 6 Compliance</p>
-                                                </div>
-                                            </div>
-                                            <div className={cn(
-                                                "w-10 h-5 rounded-full relative transition-all duration-300",
-                                                formData.is_sws ? "bg-emerald-500" : "bg-white/10"
-                                            )}>
-                                                <motion.div 
-                                                    animate={{ x: formData.is_sws ? 20 : 2 }}
-                                                    className="absolute top-1 left-0 w-3 h-3 bg-white rounded-full shadow-sm"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <AnimatePresence>
-                                            {formData.is_sws && (
-                                                <motion.div
-                                                    initial={{ opacity: 0, height: 0 }}
-                                                    animate={{ opacity: 1, height: 'auto' }}
-                                                    exit={{ opacity: 0, height: 0 }}
-                                                    className="mt-4 space-y-6 overflow-hidden pl-2 border-l border-emerald-500/20"
-                                                >
-                                                    {/* Capacity Slider */}
-                                                    <div className="space-y-3">
-                                                        <div className="flex justify-between items-center px-1">
-                                                            <div className="flex items-center gap-2">
-                                                                <Scale className="w-4 h-4 text-emerald-400/60" />
-                                                                <Label className="text-[10px] uppercase tracking-widest text-emerald-300/50 font-bold">Assessed Capacity</Label>
-                                                            </div>
-                                                            <span className="text-lg font-black text-emerald-400">{formData.sws_capacity_percentage}%</span>
-                                                        </div>
-                                                        <div className="relative pt-2">
-                                                            <input 
-                                                                type="range" min="10" max="90" step="10" 
-                                                                value={formData.sws_capacity_percentage}
-                                                                onChange={(e) => updateField('sws_capacity_percentage', parseInt(e.target.value))}
-                                                                className="w-full h-2 bg-black/40 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-                                                            />
-                                                            <div className="flex justify-between mt-2 px-1 text-[8px] font-bold text-emerald-500/30">
-                                                                <span>10%</span>
-                                                                <span>30%</span>
-                                                                <span>50%</span>
-                                                                <span>70%</span>
-                                                                <span>90%</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Trial Period */}
-                                                    <div className="flex gap-4">
-                                                        <div className="flex-1 space-y-2">
-                                                            <Label className="text-[10px] uppercase tracking-widest text-emerald-300/50 font-bold ml-1">Trial Period</Label>
-                                                            <button
-                                                                onClick={() => updateField('is_sws_trial', !formData.is_sws_trial)}
-                                                                className={cn(
-                                                                    "w-full px-4 py-3 rounded-xl border flex items-center justify-between gap-4 transition-all h-[48px]",
-                                                                    formData.is_sws_trial
-                                                                        ? "bg-amber-500/20 border-amber-500/50 text-amber-200"
-                                                                        : "bg-black/20 border-white/5 text-muted-foreground"
-                                                                )}
-                                                            >
-                                                                <div className="flex items-center gap-2">
-                                                                    <CalendarClock className="w-4 h-4" />
-                                                                    <span className="text-xs font-bold">Trial Active</span>
-                                                                </div>
-                                                                <div className={cn(
-                                                                    "w-2 h-2 rounded-full transition-all",
-                                                                    formData.is_sws_trial ? "bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "bg-white/10"
-                                                                )} />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10 space-y-2">
-                                                        <div className="flex items-center gap-2">
-                                                            <Info className="w-3 h-3 text-emerald-400" />
-                                                            <p className="text-[10px] text-emerald-100 font-bold uppercase tracking-tight">SWS Wage Guarantee</p>
-                                                        </div>
-                                                        <p className="text-[10px] text-emerald-200/60 font-medium italic leading-relaxed">
-                                                            Point 24: Absolute minimum payable must not be less than **$90 per week**. 
-                                                            {formData.is_sws_trial && " Trial period is capped at 12 weeks."}
-                                                        </p>
-                                                    </div>
-                                                </motion.div>
-                                            )}
-                                        </AnimatePresence>
-                                    </div>
                                 </motion.div>
                             )}
                         </AnimatePresence>
+                    </div>
+
+                    {/* Right Column: Special Configurations */}
+                    <div className="flex flex-col gap-6">
+                        <div className={cn(
+                            "p-4 rounded-2xl border transition-all h-fit",
+                            formData.is_apprentice ? "bg-indigo-500/10 border-indigo-500/30" : "bg-muted/5 border-border/40"
+                        )}>
+                            <div className="flex items-center justify-between group cursor-pointer" onClick={() => updateField('is_apprentice', !formData.is_apprentice)}>
+                                <div className="flex items-center gap-3">
+                                    <div className={cn(
+                                        "p-2 rounded-xl transition-all",
+                                        formData.is_apprentice ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20" : "bg-muted text-muted-foreground"
+                                    )}>
+                                        <GraduationCap className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <p className={cn("text-sm font-bold", formData.is_apprentice ? "text-indigo-600 dark:text-indigo-100" : "text-foreground")}>Apprentice Mode</p>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-tighter">Schedule 4 Wage Alignment</p>
+                                    </div>
+                                </div>
+                                <div className={cn(
+                                    "w-10 h-5 rounded-full relative transition-all duration-300",
+                                    formData.is_apprentice ? "bg-indigo-500" : "bg-muted"
+                                )}>
+                                    <motion.div 
+                                        animate={{ x: formData.is_apprentice ? 20 : 2 }}
+                                        className="absolute top-1 left-0 w-3 h-3 bg-background rounded-full shadow-sm"
+                                    />
+                                </div>
+                            </div>
+
+                            <AnimatePresence>
+                                {formData.is_apprentice && (
+                                    <motion.div
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        className="mt-4 space-y-6 overflow-hidden pl-2 border-l border-indigo-500/20"
+                                    >
+                                        {/* Apprentice Type */}
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {[
+                                                { id: 'standard', name: 'Standard', icon: <Award className="w-4 h-4" /> },
+                                                { id: 'adult', name: 'Adult (21+)', icon: <CheckCircle2 className="w-4 h-4" /> },
+                                                { id: 'school_based', name: 'School-Based', icon: <School className="w-4 h-4" /> }
+                                            ].map((t) => (
+                                                <button
+                                                    key={t.id}
+                                                    onClick={() => updateField('apprentice_type', t.id)}
+                                                    className={cn(
+                                                        "flex flex-col items-center gap-2 p-3 rounded-xl border transition-all text-center",
+                                                        formData.apprentice_type === t.id 
+                                                            ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-700 dark:text-indigo-200 shadow-lg shadow-indigo-500/10"
+                                                            : "bg-muted/20 border-transparent text-muted-foreground hover:bg-muted/30"
+                                                    )}
+                                                >
+                                                    {t.icon}
+                                                    <span className="text-[10px] font-bold">{t.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Year and Yr 12 */}
+                                        <div className="flex gap-4">
+                                            <div className="flex-1 space-y-2">
+                                                <Label className="text-[10px] uppercase tracking-widest text-indigo-500/50 font-bold ml-1">Apprenticeship Year</Label>
+                                                <div className="flex bg-muted/20 rounded-xl p-1 border border-indigo-500/10">
+                                                    {[1, 2, 3, 4].map((y) => (
+                                                        <button
+                                                            key={y}
+                                                            onClick={() => updateField('apprentice_year', y)}
+                                                            className={cn(
+                                                                "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
+                                                                formData.apprentice_year === y 
+                                                                    ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/20"
+                                                                    : "text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-200"
+                                                            )}
+                                                        >
+                                                            Yr {y}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {formData.apprentice_type === 'standard' && (
+                                                <div className="space-y-2">
+                                                    <Label className="text-[10px] uppercase tracking-widest text-indigo-500/50 font-bold ml-1">Year 12 Completion</Label>
+                                                    <button
+                                                        onClick={() => updateField('has_completed_year_12', !formData.has_completed_year_12)}
+                                                        className={cn(
+                                                            "w-full px-4 py-3 rounded-xl border flex items-center justify-between gap-4 transition-all h-[42px]",
+                                                            formData.has_completed_year_12
+                                                                ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-700 dark:text-emerald-200"
+                                                                : "bg-muted/20 border-transparent text-muted-foreground"
+                                                        )}
+                                                    >
+                                                        <span className="text-xs font-bold">Graduated?</span>
+                                                        {formData.has_completed_year_12 ? <CheckCircle2 className="w-4 h-4" /> : <div className="w-4 h-4 rounded-full border border-current opacity-20" />}
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/10 flex items-center gap-3">
+                                            <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+                                            <p className="text-[10px] text-indigo-600/70 dark:text-indigo-200/70 font-medium italic">
+                                                {formData.apprentice_type === 'adult' 
+                                                    ? "Adult rate: 80% of L4 in Yr 1, Min Adult rate thereafter."
+                                                    : formData.apprentice_type === 'school_based'
+                                                    ? "SBA: Standard % + 25% loading for training time."
+                                                    : "Standard: Base % applied to ICC Sydney Level 4."}
+                                            </p>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+
+                        {/* Trainee Configuration */}
+                        <div className={cn(
+                            "p-4 rounded-2xl border transition-all h-fit",
+                            formData.is_trainee ? "bg-amber-500/10 border-amber-500/30" : "bg-muted/5 border-border/40"
+                        )}>
+                            <div className="flex items-center justify-between group cursor-pointer" onClick={() => updateField('is_trainee', !formData.is_trainee)}>
+                                <div className="flex items-center gap-3">
+                                    <div className={cn(
+                                        "p-2 rounded-xl transition-all",
+                                        formData.is_trainee ? "bg-amber-500 text-white shadow-lg shadow-amber-500/20" : "bg-muted text-muted-foreground"
+                                    )}>
+                                        <BookOpen className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <p className={cn("text-sm font-bold", formData.is_trainee ? "text-amber-600 dark:text-amber-100" : "text-foreground")}>Trainee Mode</p>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-tighter">Schedule 5 Wage Matrix</p>
+                                    </div>
+                                </div>
+                                <div className={cn(
+                                    "w-10 h-5 rounded-full relative transition-all duration-300",
+                                    formData.is_trainee ? "bg-amber-500" : "bg-muted"
+                                )}>
+                                    <motion.div 
+                                        animate={{ x: formData.is_trainee ? 20 : 2 }}
+                                        className="absolute top-1 left-0 w-3 h-3 bg-background rounded-full shadow-sm"
+                                    />
+                                </div>
+                            </div>
+
+                            <AnimatePresence>
+                                {formData.is_trainee && (
+                                    <motion.div
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        className="mt-4 space-y-6 overflow-hidden pl-2 border-l border-amber-500/20"
+                                    >
+                                        {/* Wage Level A vs B */}
+                                        <div className="flex bg-muted/20 rounded-xl p-1 border border-amber-500/10">
+                                            <button
+                                                onClick={() => updateField('trainee_level', 'A')}
+                                                className={cn(
+                                                    "flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2",
+                                                    formData.trainee_level === 'A' ? "bg-amber-500 text-white shadow-md" : "text-muted-foreground hover:text-amber-600 dark:hover:text-amber-200"
+                                                )}
+                                            >
+                                                Wage Level A
+                                                {formData.trainee_level === 'A' && <Trophy className="w-3 h-3" />}
+                                            </button>
+                                            <button
+                                                onClick={() => updateField('trainee_level', 'B')}
+                                                className={cn(
+                                                    "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
+                                                    formData.trainee_level === 'B' ? "bg-amber-500 text-white shadow-md" : "text-muted-foreground hover:text-amber-600 dark:hover:text-amber-200"
+                                                )}
+                                            >
+                                                Wage Level B
+                                            </button>
+                                        </div>
+
+                                        {/* Category Selector */}
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {[
+                                                { id: 'junior', name: 'Junior', icon: <GraduationCap className="w-4 h-4" /> },
+                                                { id: 'adult', name: 'Adult', icon: <CheckCircle2 className="w-4 h-4" /> },
+                                                { id: 'school_based', name: 'SBA', icon: <School className="w-4 h-4" /> }
+                                            ].map((c) => (
+                                                <button
+                                                    key={c.id}
+                                                    onClick={() => updateField('trainee_category', c.id)}
+                                                    className={cn(
+                                                        "flex flex-col items-center gap-2 p-3 rounded-xl border transition-all",
+                                                        formData.trainee_category === c.id 
+                                                            ? "bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-200"
+                                                            : "bg-muted/20 border-transparent text-muted-foreground hover:bg-muted/30"
+                                                    )}
+                                                >
+                                                    {c.icon}
+                                                    <span className="text-[10px] font-bold">{c.name}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* School Exit Year (Junior) */}
+                                        {formData.trainee_category === 'junior' && (
+                                            <div className="space-y-4">
+                                                <div className="space-y-2">
+                                                    <Label className="text-[10px] uppercase tracking-widest text-amber-500/50 font-bold ml-1">Left School At</Label>
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        {[10, 11, 12].map(y => (
+                                                            <button
+                                                                key={y}
+                                                                onClick={() => updateField('trainee_exit_year', y)}
+                                                                className={cn(
+                                                                    "py-2 rounded-lg border text-xs font-bold transition-all",
+                                                                    formData.trainee_exit_year === y ? "bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-200" : "bg-muted/20 border-transparent text-muted-foreground"
+                                                                )}
+                                                            >
+                                                                Year {y}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <div className="flex justify-between items-center px-1">
+                                                        <Label className="text-[10px] uppercase tracking-widest text-amber-500/50 font-bold">Years Since Graduation</Label>
+                                                        <span className="text-[10px] font-bold text-amber-500">{formData.trainee_years_out} years</span>
+                                                    </div>
+                                                    <input 
+                                                        type="range" min="0" max="5" step="1" 
+                                                        value={formData.trainee_years_out}
+                                                        onChange={(e) => updateField('trainee_years_out', parseInt(e.target.value))}
+                                                        className="w-full h-1.5 bg-muted/40 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Adult Years */}
+                                        {formData.trainee_category === 'adult' && (
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] uppercase tracking-widest text-amber-500/50 font-bold ml-1">Traineeship Year</Label>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {[1, 2].map(y => (
+                                                        <button
+                                                            key={y}
+                                                            onClick={() => updateField('trainee_year', y)}
+                                                            className={cn(
+                                                                "py-2 rounded-lg border text-xs font-bold transition-all",
+                                                                formData.trainee_year === y ? "bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-200" : "bg-muted/20 border-transparent text-muted-foreground"
+                                                            )}
+                                                        >
+                                                            {y === 1 ? '1st Year' : '2nd+ Year'}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* AQF Level Selector */}
+                                        <div className="space-y-2">
+                                            <Label className="text-[10px] uppercase tracking-widest text-amber-500/50 font-bold ml-1">AQF Certificate Level</Label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <button
+                                                    onClick={() => updateField('trainee_aqf_level', 3)}
+                                                    className={cn(
+                                                        "py-2 rounded-lg border text-xs font-bold transition-all",
+                                                        formData.trainee_aqf_level === 3 ? "bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-200" : "bg-muted/20 border-transparent text-muted-foreground"
+                                                    )}
+                                                >
+                                                    Level I / II / III
+                                                </button>
+                                                <button
+                                                    onClick={() => updateField('trainee_aqf_level', 4)}
+                                                    className={cn(
+                                                        "py-2 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-2",
+                                                        formData.trainee_aqf_level === 4 ? "bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-200" : "bg-muted/20 border-transparent text-muted-foreground"
+                                                    )}
+                                                >
+                                                    Level IV (+3.8%)
+                                                    <Sparkles className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 flex items-center gap-3">
+                                            <Info className="w-4 h-4 text-amber-400/60" />
+                                            <p className="text-[10px] text-amber-600/70 dark:text-amber-200/70 font-medium italic">
+                                                {formData.trainee_category === 'junior' 
+                                                    ? `Junior Level ${formData.trainee_level}: Rates scaled based on years out of school.`
+                                                    : formData.trainee_category === 'school_based'
+                                                    ? "SBA: Fixed hourly rate based on current school year (11/12)."
+                                                    : "Adult Trainee: First year floor rate applied based on Wage Level."}
+                                            </p>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+
+                        {/* SWS Configuration */}
+                        <div className={cn(
+                            "p-4 rounded-2xl border transition-all h-fit",
+                            formData.is_sws ? "bg-emerald-500/10 border-emerald-500/30" : "bg-muted/5 border-border/40"
+                        )}>
+                            <div className="flex items-center justify-between group cursor-pointer" onClick={() => updateField('is_sws', !formData.is_sws)}>
+                                <div className="flex items-center gap-3">
+                                    <div className={cn(
+                                        "p-2 rounded-xl transition-all",
+                                        formData.is_sws ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "bg-muted text-muted-foreground"
+                                    )}>
+                                        <Accessibility className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <p className={cn("text-sm font-bold", formData.is_sws ? "text-emerald-600 dark:text-emerald-100" : "text-foreground")}>Supported Wage (SWS)</p>
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-tighter">Schedule 6 Compliance</p>
+                                    </div>
+                                </div>
+                                <div className={cn(
+                                    "w-10 h-5 rounded-full relative transition-all duration-300",
+                                    formData.is_sws ? "bg-emerald-500" : "bg-muted"
+                                )}>
+                                    <motion.div 
+                                        animate={{ x: formData.is_sws ? 20 : 2 }}
+                                        className="absolute top-1 left-0 w-3 h-3 bg-background rounded-full shadow-sm"
+                                    />
+                                </div>
+                            </div>
+
+                            <AnimatePresence>
+                                {formData.is_sws && (
+                                    <motion.div
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        className="mt-4 space-y-6 overflow-hidden pl-2 border-l border-emerald-500/20"
+                                    >
+                                        {/* Capacity Slider */}
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center px-1">
+                                                <div className="flex items-center gap-2">
+                                                    <Scale className="w-4 h-4 text-emerald-400/60" />
+                                                    <Label className="text-[10px] uppercase tracking-widest text-emerald-500/50 font-bold">Assessed Capacity</Label>
+                                                </div>
+                                                <span className="text-lg font-black text-emerald-400">{formData.sws_capacity_percentage}%</span>
+                                            </div>
+                                            <div className="relative pt-2">
+                                                <input 
+                                                    type="range" min="10" max="90" step="10" 
+                                                    value={formData.sws_capacity_percentage}
+                                                    onChange={(e) => updateField('sws_capacity_percentage', parseInt(e.target.value))}
+                                                    className="w-full h-2 bg-muted/40 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                                                />
+                                                <div className="flex justify-between mt-2 px-1 text-[8px] font-bold text-emerald-500/30">
+                                                    <span>10%</span>
+                                                    <span>30%</span>
+                                                    <span>50%</span>
+                                                    <span>70%</span>
+                                                    <span>90%</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Trial Period */}
+                                        <div className="flex gap-4">
+                                            <div className="flex-1 space-y-2">
+                                                <Label className="text-[10px] uppercase tracking-widest text-emerald-500/50 font-bold ml-1">Trial Period</Label>
+                                                <button
+                                                    onClick={() => updateField('is_sws_trial', !formData.is_sws_trial)}
+                                                    className={cn(
+                                                        "w-full px-4 py-3 rounded-xl border flex items-center justify-between gap-4 transition-all h-[48px]",
+                                                        formData.is_sws_trial
+                                                            ? "bg-amber-500/20 border-amber-500/50 text-amber-700 dark:text-amber-200"
+                                                            : "bg-muted/20 border-transparent text-muted-foreground"
+                                                    )}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <CalendarClock className="w-4 h-4" />
+                                                        <span className="text-xs font-bold">Trial Active</span>
+                                                    </div>
+                                                    <div className={cn(
+                                                        "w-2 h-2 rounded-full transition-all",
+                                                        formData.is_sws_trial ? "bg-amber-500 animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "bg-muted-foreground/20"
+                                                    )} />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10 space-y-2">
+                                            <div className="flex items-center gap-2">
+                                                <Info className="w-3 h-3 text-emerald-400" />
+                                                <p className="text-[10px] text-emerald-700 dark:text-emerald-100 font-bold uppercase tracking-tight">SWS Wage Guarantee</p>
+                                            </div>
+                                            <p className="text-[10px] text-emerald-600/60 dark:text-emerald-200/60 font-medium italic leading-relaxed">
+                                                Point 24: Absolute minimum payable must not be less than **$90 per week**. 
+                                                {formData.is_sws_trial && " Trial period is capped at 12 weeks."}
+                                            </p>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    </div>
                     </div>
                 </div>
 

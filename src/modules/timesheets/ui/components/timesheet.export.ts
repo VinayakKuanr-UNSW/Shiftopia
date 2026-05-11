@@ -1,7 +1,4 @@
 import { format } from 'date-fns';
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import type { TimesheetRow } from '../../model/timesheet.types';
 
 // ── Column definition (shared between both exporters) ─────────────────────────
@@ -38,7 +35,8 @@ function cellValue(entry: TimesheetRow, key: keyof TimesheetRow): string {
 
 // ── XLSX export ───────────────────────────────────────────────────────────────
 
-export function exportTimesheetXLSX(entries: TimesheetRow[], date: Date): void {
+export async function exportTimesheetXLSX(entries: TimesheetRow[], date: Date): Promise<void> {
+    const XLSX = await import('xlsx');
     const rows = entries.map(e =>
         Object.fromEntries(COLUMNS.map(c => [c.header, cellValue(e, c.key)])),
     );
@@ -69,7 +67,12 @@ const PDF_GROUPS = [
     { label: 'Status',              span: 2 },
 ];
 
-export function exportTimesheetPDF(entries: TimesheetRow[], date: Date): void {
+export async function exportTimesheetPDF(entries: TimesheetRow[], date: Date): Promise<void> {
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable')
+    ]);
+
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' });
 
     const dateLabel = format(date, 'EEEE, d MMMM yyyy');
@@ -87,16 +90,16 @@ export function exportTimesheetPDF(entries: TimesheetRow[], date: Date): void {
     doc.setTextColor(0);
 
     // Group header row
-    const groupRow: { content: string; colSpan: number; styles: object }[] = PDF_GROUPS.map(g => ({
+    const groupRow: { content: string; colSpan: number; styles: any }[] = PDF_GROUPS.map(g => ({
         content: g.label,
         colSpan: g.span,
-        styles: { halign: 'center', fontStyle: 'bold', fillColor: [240, 240, 248], fontSize: 7 },
+        styles: { halign: 'center' as const, fontStyle: 'bold' as const, fillColor: [240, 240, 248] as [number, number, number], fontSize: 7 },
     }));
 
     // Sub-header row (column names)
     const subHeader = COLUMNS.slice(0, 20).map(c => ({
         content: c.header,
-        styles: { halign: 'center', fontStyle: 'bold', fontSize: 6.5, fillColor: [248, 248, 252] },
+        styles: { halign: 'center' as const, fontStyle: 'bold' as const, fontSize: 6.5, fillColor: [248, 248, 252] as [number, number, number] },
     }));
 
     // Data rows

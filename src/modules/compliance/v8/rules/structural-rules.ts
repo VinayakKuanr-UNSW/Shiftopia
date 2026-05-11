@@ -1,5 +1,5 @@
 import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
-import { differenceInMinutes, parseISO } from 'date-fns';
+import { parseTimeToMinutes } from '../utils/time';
 
 /**
  * V8 Rule: No Overlap
@@ -10,12 +10,17 @@ export const noOverlapRule: V8RuleEvaluator = (ctx) => {
     const { shifts } = ctx;
     if (shifts.length < 2) return [];
 
-    const sorted = [...shifts].sort((a, b) => {
-        const dateA = a.date || a.shift_date || '';
-        const dateB = b.date || b.shift_date || '';
-        const timeA = parseISO(`${dateA}T${a.start_time}`).getTime();
-        const timeB = parseISO(`${dateB}T${b.start_time}`).getTime();
-        return timeA - timeB;
+    // 1. Filter out incomplete shifts and sort by minutes-since-epoch
+    const sorted = [...shifts]
+        .filter(s => !!(s.date || s.shift_date) && !!s.start_time)
+        .sort((a, b) => {
+        const dA = a.date || a.shift_date || '';
+        const dB = b.date || b.shift_date || '';
+        if (dA !== dB) return dA.localeCompare(dB);
+        
+        const tA = parseTimeToMinutes(a.start_time || '00:00');
+        const tB = parseTimeToMinutes(b.start_time || '00:00');
+        return tA - tB;
     });
 
     const violations: V8Hit[] = [];
@@ -26,8 +31,16 @@ export const noOverlapRule: V8RuleEvaluator = (ctx) => {
 
         const dateCurrent = current.date || current.shift_date || '';
         const dateNext = next.date || next.shift_date || '';
-        const currentEnd = parseISO(`${dateCurrent}T${current.end_time}`);
-        const nextStart = parseISO(`${dateNext}T${next.start_time}`);
+        
+        // Only check overlap if on same day (multi-day overlap handled by shift duration rules)
+        if (dateCurrent !== dateNext) continue;
+
+        const currentStart = parseTimeToMinutes(current.start_time || '00:00');
+        let currentEnd = parseTimeToMinutes(current.end_time || '00:00');
+        const nextStart = parseTimeToMinutes(next.start_time || '00:00');
+
+        // Handle cross-midnight segment of the current shift
+        if (currentEnd <= currentStart) currentEnd += 1440;
 
         if (nextStart < currentEnd) {
             violations.push({
@@ -51,15 +64,15 @@ export const noOverlapRule: V8RuleEvaluator = (ctx) => {
  * Enforces the minimum duration (usually 2h, 3h, or 4h) based on shift type.
  */
 export const minShiftLengthRule: V8RuleEvaluator = (ctx) => {
-    const { shifts, config } = ctx;
+    const { shifts } = ctx;
     const violations: V8Hit[] = [];
 
     for (const s of shifts) {
-        const date = s.date || s.shift_date || '';
-        const start = parseISO(`${date}T${s.start_time}`);
-        const end = parseISO(`${date}T${s.end_time}`);
-        let mins = differenceInMinutes(end, start);
-        if (mins < 0) mins += 1440; // Cross-midnight
+        const start = parseTimeToMinutes(s.start_time || '00:00');
+        let end = parseTimeToMinutes(s.end_time || '00:00');
+        
+        let mins = end - start;
+        if (mins <= 0) mins += 1440; // Cross-midnight
 
         // Default min is 2h (120m) for training, 3h (180m) for regular
         const requiredMins = s.is_training ? 120 : 180;

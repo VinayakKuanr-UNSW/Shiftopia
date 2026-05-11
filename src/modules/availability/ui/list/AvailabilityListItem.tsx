@@ -14,12 +14,10 @@
 import React from 'react';
 import { format, parseISO } from 'date-fns';
 import { Pencil, Trash2, Calendar, Clock, Repeat } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Card, CardContent } from '@/modules/core/ui/primitives/card';
 import { AvailabilityRule } from '../../model/availability.types';
-import { listItemSpring } from '@/modules/core/ui/motion/presets';
 
 interface AvailabilityListItemProps {
   rule: AvailabilityRule;
@@ -37,7 +35,7 @@ export const AvailabilityListItem: React.FC<AvailabilityListItemProps> = ({
   const repeatEndDate = rule.repeat_end_date ? parseISO(rule.repeat_end_date) : null;
 
   return (
-    <motion.div {...listItemSpring}>
+    <div>
     <Card className="bg-card border border-border rounded-2xl hover:shadow-md transition-shadow">
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-4">
@@ -122,6 +120,6 @@ export const AvailabilityListItem: React.FC<AvailabilityListItemProps> = ({
         </div>
       </CardContent>
     </Card>
-    </motion.div>
+    </div>
   );
 };

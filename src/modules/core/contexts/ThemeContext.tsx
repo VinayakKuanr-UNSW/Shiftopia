@@ -66,14 +66,25 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Apply Light/Dark Theme Class
   useEffect(() => {
     const root = window.document.documentElement;
+    
+    // Disable transitions during the switch to prevent "lag" from thousands of 
+    // simultaneous property animations.
+    root.setAttribute('data-theme-switching', 'true');
+    
     root.classList.remove('light', 'dark');
     root.classList.add(theme);
     localStorage.setItem('theme', theme);
+
+    const timer = setTimeout(() => {
+      root.removeAttribute('data-theme-switching');
+    }, 300);
 
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
       metaThemeColor.setAttribute('content', theme === 'dark' ? '#0f172a' : '#ffffff');
     }
+
+    return () => clearTimeout(timer);
   }, [theme]);
 
   // Apply Organizational Branding (Brand Color)

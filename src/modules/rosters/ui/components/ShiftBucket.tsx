@@ -156,8 +156,8 @@ export const ShiftBucket: React.FC<ShiftBucketProps> = ({
             {isExpanded && (
                 <div
                     className={cn(
-                        'border border-t-0 border-white/[0.06] rounded-b-lg overflow-hidden',
-                        'bg-black/10'
+                        'border-2 border-t-0 border-border rounded-b-lg overflow-hidden',
+                        'bg-accent/5 shadow-inner'
                     )}
                 >
                     {shifts.map(shift => (
@@ -165,8 +165,6 @@ export const ShiftBucket: React.FC<ShiftBucketProps> = ({
                             key={shift.id}
                             shiftId={shift.id}
                             role={shift.role}
-                            startTime={shift.startTime}
-                            endTime={shift.endTime}
                             employeeName={shift.employeeName}
                             isAssigned={shift.isAssigned}
                             isPublished={shift.isPublished}

@@ -1,5 +1,5 @@
 import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
-import { parseISO, areIntervalsOverlapping } from 'date-fns';
+import { parseTimeToMinutes } from '../utils/time';
 
 /**
  * V8 Rule: Availability & Conflicts
@@ -12,22 +12,22 @@ export const availabilityMatchRule: V8RuleEvaluator = (ctx) => {
     const { candidate_shift, shifts } = ctx;
     if (!candidate_shift) return [];
     
-    // In V8, the candidate is already in the 'shifts' array.
-    // We check if it overlaps with ANY OTHER shift.
     const others = shifts.filter(s => s.id !== candidate_shift.id);
     const violations: V8Hit[] = [];
 
-    const candStart = parseISO(`${candidate_shift.date}T${candidate_shift.start_time}`);
-    const candEnd = parseISO(`${candidate_shift.date}T${candidate_shift.end_time}`);
+    const cS = parseTimeToMinutes(candidate_shift.start_time);
+    let cE = parseTimeToMinutes(candidate_shift.end_time);
+    if (cE <= cS) cE += 1440;
 
     for (const other of others) {
-        const otherStart = parseISO(`${other.date}T${other.start_time}`);
-        const otherEnd = parseISO(`${other.date}T${other.end_time}`);
+        if ((other.date || other.shift_date) !== (candidate_shift.date || candidate_shift.shift_date)) continue;
 
-        if (areIntervalsOverlapping(
-            { start: candStart, end: candEnd },
-            { start: otherStart, end: otherEnd }
-        )) {
+        const oS = parseTimeToMinutes(other.start_time);
+        let oE = parseTimeToMinutes(other.end_time);
+        if (oE <= oS) oE += 1440;
+
+        // Overlap: max(start) < min(end)
+        if (Math.max(cS, oS) < Math.min(cE, oE)) {
             violations.push({
                 rule_id: 'V8_AVAILABILITY_CONFLICT',
                 rule_name: 'Availability Match',

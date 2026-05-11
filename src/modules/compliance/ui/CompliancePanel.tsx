@@ -100,11 +100,13 @@ const DISPLAY_CODE: Record<string, string> = {
 
 /** Extract sequential display code: R01_NO_OVERLAP → "R01", R_AVAILABILITY_MATCH → "AV" */
 function getRuleCode(ruleId: string): string {
+    if (!ruleId) return '';
     return DISPLAY_CODE[ruleId.toUpperCase()] ?? DISPLAY_CODE[ruleId] ?? ruleId.replace(/^R_/, '').slice(0, 2).toUpperCase();
 }
 
 /** Get the human-readable description from RULE_METADATA, falling back to formatted rule_id */
 function getRuleDescription(ruleId: string): string {
+    if (!ruleId) return '';
     const meta = RULE_METADATA[ruleId.toUpperCase()] ?? RULE_METADATA[ruleId];
     return meta?.description ?? ruleId.replace(/_/g, ' ');
 }
@@ -337,7 +339,7 @@ function StatPill({ color, label }: { color: 'red' | 'amber' | 'emerald'; label:
 // =============================================================================
 
 function IdleRuleList() {
-    const rules = Object.values(RULE_METADATA).filter(r => !UI_VALIDATED_RULES.has(r.rule_id));
+    const rules = Object.values(RULE_METADATA).filter(r => r.id && !UI_VALIDATED_RULES.has(r.id));
     return (
         <div className="space-y-2">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/40 px-1">
@@ -345,9 +347,9 @@ function IdleRuleList() {
             </p>
             <div className="space-y-1.5">
                 {rules.map(rule => (
-                    <div key={rule.rule_id} className="flex items-center gap-3 px-3 py-2 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/30 transition-colors">
+                    <div key={rule.id} className="flex items-center gap-3 px-3 py-2 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/30 transition-colors">
                         <span className="text-[9px] font-black font-mono px-1.5 py-0.5 rounded bg-muted/80 border border-border/80 text-muted-foreground/60 shrink-0 min-w-[2.2rem] text-center shadow-sm">
-                            {getRuleCode(rule.rule_id)}
+                            {getRuleCode(rule.id)}
                         </span>
                         <span className="text-[11px] text-muted-foreground/50 font-medium truncate">{rule.description}</span>
                     </div>
@@ -482,7 +484,7 @@ function ResultBuckets({
                                     <div className="flex items-center gap-3 min-w-0">
                                         <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
                                         <span className="text-[9px] font-black font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 shrink-0 min-w-[2.2rem] text-center">
-                                            {getRuleCode(rule.rule_id)}
+                                            {getRuleCode(rule.id)}
                                         </span>
                                         <p className="text-[11px] text-foreground/70 dark:text-muted-foreground font-medium truncate">{rule.description}</p>
                                     </div>

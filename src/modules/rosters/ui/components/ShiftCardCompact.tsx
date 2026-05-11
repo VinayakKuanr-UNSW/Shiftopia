@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 import { Clock, MoreHorizontal, Gavel, ArrowLeftRight, Ban, X, Check, Flame, Edit, Megaphone, Hourglass, CheckCircle, XCircle, UserPlus, UserCheck, Users, MailOpen, BadgeCheck, Zap, Circle, Lock, Minus, Handshake, ShieldCheck } from 'lucide-react';
@@ -157,22 +157,6 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
     showStatusIcons ? getShiftStatusIcons(rawShift as any) : [], 
   [rawShift, showStatusIcons]);
 
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const mouseXSpring = useSpring(x, { stiffness: 300, damping: 30 });
-  const mouseYSpring = useSpring(y, { stiffness: 300, damping: 30 });
-  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["7.5deg", "-7.5deg"]);
-  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-7.5deg", "7.5deg"]);
-
-  const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    x.set((e.clientX - rect.left) / rect.width - 0.5);
-    y.set((e.clientY - rect.top) / rect.height - 0.5);
-  };
-  const onMouseLeave = () => {
-    x.set(0);
-    y.set(0);
-  };
 
   const protection = useMemo(() => getProtectionContext(
     { lifecycle_status: rawShift.lifecycle_status || shift.lifecycleStatus }, 
@@ -181,14 +165,10 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
 
   return (
     <motion.div
-      style={{ rotateX, rotateY, transformStyle: "preserve-3d", perspective: "1000px" }}
-      onMouseMove={onMouseMove}
-      onMouseLeave={onMouseLeave}
       className={cn(
         'relative flex flex-col rounded-xl overflow-hidden border bg-card shadow-sm transition-all h-full group select-none',
         // Removed urgency rings to make room for left strip
 
-        // Hover effect for interactivity
         // Hover effect for interactivity
         onClick && 'cursor-pointer hover:shadow-lg',
         isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background',

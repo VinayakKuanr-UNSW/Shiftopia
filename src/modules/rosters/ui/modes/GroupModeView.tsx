@@ -416,6 +416,7 @@ interface ShiftDisplay {
   isUrgent: boolean;
   isLocked?: boolean;
   assignmentOutcome?: string;
+  detailedCost?: import('@/modules/rosters/domain/projections/utils/cost/types').ShiftCostBreakdown;
 }
 
 /* ============================================================
@@ -1198,6 +1199,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                 rawShift: ps.raw,
                 isUrgent: ps.isUrgent,
                 isLocked: ps.isLocked,
+                detailedCost: ps.detailedCost,
               })),
             ])
           ),
@@ -1773,6 +1775,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
           isLocked={isLocked || (isDnDModeActive && !shift.isDraft)}
           isPast={isPastDate}
           isDnDActive={isDnDModeActive}
+          detailedCost={shift.detailedCost}
           onClick={() => isBulkMode && handleToggleShiftSelection(shift.id)}
         />
       </div>

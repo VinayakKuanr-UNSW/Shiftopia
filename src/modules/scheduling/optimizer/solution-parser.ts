@@ -59,6 +59,7 @@ export interface EnrichedProposal {
     employmentType: string;
     roleName?: string;
     roleId?: string | null;
+    unpaidBreakMinutes?: number;
 }
 
 // =============================================================================
@@ -118,6 +119,7 @@ export class SolutionParser {
                 employmentType: proposal.employment_type,
                 roleName: shift.roleName,
                 roleId: shift.role_id,
+                unpaidBreakMinutes: shift.unpaid_break_minutes,
             });
         }
 

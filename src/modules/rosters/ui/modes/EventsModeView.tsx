@@ -191,7 +191,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
     }
   };
 
-  const buildShiftMenu = (shift: Shift) => (
+  const buildShiftMenu = (shift: any) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
@@ -248,7 +248,10 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
         startTime: pe.startTime,
         endTime: pe.endTime,
         location: pe.location,
-        shifts: pe.shifts.map(ps => ps.raw),
+        shifts: pe.shifts.map(ps => ({
+          ...ps.raw,
+          detailedCost: ps.detailedCost
+        })) as any,
         totalHours: pe.totalHours,
         assignedCount: pe.assignedCount,
         unassignedCount: pe.totalCount - pe.assignedCount,
@@ -556,6 +559,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                               isDnDActive={isDnDModeActive}
                               showStatusIcons={true}
                               headerAction={buildShiftMenu(shift)}
+                              detailedCost={(shift as any).detailedCost}
                               onClick={() => onEditShift?.(shift)}
                             />
                           </div>

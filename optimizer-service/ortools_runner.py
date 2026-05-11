@@ -23,8 +23,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from model_builder import (
@@ -33,9 +32,22 @@ from model_builder import (
     ShiftInput,
     EmployeeInput,
     ExistingShiftInput,
+    AvailabilitySlotInput,
     OptimizerConstraints,
     SolverParameters,
     StrategyInput,
+    existing_blocks_proposal,
+    shift_window,
+    _time_to_abs_minutes,
+)
+from security import (
+    AuthContext,
+    install as install_security,
+    limiter,
+    readiness_status,
+    require_auth,
+    RATE_OPTIMIZE,
+    RATE_AUDIT,
 )
 
 # =============================================================================
@@ -66,6 +78,16 @@ class ShiftReq(BaseModel):
     target_employment_type: Optional[str] = None
     level: int = 0
     is_training: bool = False
+    # Penalty-rate flags — promoted to the wire boundary so the TS layer
+    # can mark a Sunday/PH shift and have the solver actually charge the
+    # 1.5×/2.5× rate. Previously these were dataclass-only and silently
+    # ignored on the boundary.
+    is_sunday: bool = False
+    is_public_holiday: bool = False
+    # 'NORMAL' or 'MULTI_HIRE' — affects the rest-gap rule (480m vs 600m).
+    # MULTI_HIRE handling is currently approximated by AddNoOverlap with
+    # the 600m pad; flag is here for forward-compat.
+    shift_type: str = 'NORMAL'
 
 
 class ExistingShiftReq(BaseModel):
@@ -77,6 +99,13 @@ class ExistingShiftReq(BaseModel):
     end_time: str
     duration_minutes: int
     unpaid_break_minutes: int = 0
+
+
+class AvailabilitySlotReq(BaseModel):
+    """A declared availability window for an employee on a given date."""
+    slot_date: str
+    start_time: str
+    end_time: str
 
 
 class EmployeeReq(BaseModel):
@@ -94,6 +123,11 @@ class EmployeeReq(BaseModel):
     # Severity-based availability (dates or intervals)
     # [ (start_time, end_time, severity) ]
     availability_overrides: list[tuple[str, str, str]] = Field(default_factory=list)
+    # Declared availability slots in the optimization window. When
+    # `has_availability_data` is True, these become the only times the
+    # employee may be assigned (hard filter).
+    availability_slots: list[AvailabilitySlotReq] = Field(default_factory=list)
+    has_availability_data: bool = False
     existing_shifts: list[ExistingShiftReq] = Field(default_factory=list)
     level: int = 0
     is_flexible: bool = False
@@ -121,6 +155,9 @@ class SolverParamsReq(BaseModel):
     max_time_seconds: float = 30.0
     num_workers: int = 8
     enable_greedy_hint: bool = True
+    # Surface the solver's verbose search log when debugging a stuck
+    # problem. Off by default — produces ~MB of output per second.
+    log_search: bool = False
 
 
 class OptimizeReq(BaseModel):
@@ -160,6 +197,45 @@ class OptimizeRes(BaseModel):
     debug: DebugMetricsRes
 
 
+# ---- /audit (server-side eligibility audit) -------------------------------
+#
+# Replaces the controller's per-(employee, shift) `simulate()` fan-out
+# (~5 000 round-trips for a 50-shift × 103-employee audit) with a single
+# server-side computation. Uses the same `employee_eligible` filter the
+# solver uses, plus identifies the *specific* reason each pair was
+# rejected so the UI can show a meaningful violation type.
+
+class AuditReq(BaseModel):
+    """Audit a target subset of shifts against a candidate employee pool.
+
+    `target_shift_ids` is the subset to audit (typically the uncovered
+    shifts from a previous /optimize run). When omitted, every shift is
+    audited.
+    """
+    shifts: list[ShiftReq]
+    employees: list[EmployeeReq]
+    constraints: ConstraintsReq = Field(default_factory=ConstraintsReq)
+    target_shift_ids: Optional[list[str]] = None
+
+
+class AuditEmployeeRow(BaseModel):
+    employee_id: str
+    status: str            # 'PASS' | 'FAIL'
+    rejection_reasons: list[str]
+
+
+class AuditShiftRow(BaseModel):
+    shift_id: str
+    rejection_summary: dict[str, int]  # reason → count
+    employees: list[AuditEmployeeRow]
+
+
+class AuditRes(BaseModel):
+    audited_shift_count: int
+    rows: list[AuditShiftRow]
+    elapsed_ms: float
+
+
 # =============================================================================
 # APP
 # =============================================================================
@@ -182,14 +258,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    # TODO: In production, replace '*' with specific frontend origins 
-    # e.g. ['https://app.shiftopia.unsw.edu.au']
-    allow_origins=['*'],
-    allow_methods=['GET', 'POST'],
-    allow_headers=['*'],
-)
+# Phase 3: install CORS allowlist, rate limiter, OpenTelemetry, and the
+# auth-posture banner all in one call. Replaces the previous wide-open
+# `allow_origins=['*']` middleware. See `security.py` for the env-driven
+# config (OPTIMIZER_CORS_ORIGINS, OPTIMIZER_RATE_*, SUPABASE_JWT_SECRET,
+# OTEL_EXPORTER_OTLP_ENDPOINT).
+install_security(app)
 
 # =============================================================================
 # ROUTES
@@ -197,6 +271,11 @@ app.add_middleware(
 
 @app.get('/health')
 def health_check():
+    """Liveness probe — process is up. Cheap; no auth, no rate limit.
+
+    K8s should use this for `livenessProbe`. Use `/ready` for
+    `readinessProbe` (which also checks JWT + OR-Tools availability).
+    """
     try:
         from ortools.sat.python import cp_model  # noqa: F401
         return {
@@ -209,17 +288,46 @@ def health_check():
         raise HTTPException(status_code=503, detail='OR-Tools not available')
 
 
+@app.get('/ready')
+def ready_check():
+    """Readiness probe — service can actually accept traffic.
+
+    K8s should use this for `readinessProbe`. Returns 503 (not 200)
+    when JWT is misconfigured, so the deployment manager refuses to
+    route traffic to a misconfigured pod.
+    """
+    status = readiness_status()
+    if not status['ready']:
+        raise HTTPException(status_code=503, detail=status)
+    return status
+
+
 @app.post('/optimize', response_model=OptimizeRes)
-async def optimize(request: Request) -> OptimizeRes:
+@limiter.limit(RATE_OPTIMIZE)
+async def optimize(
+    request: Request,
+    auth: AuthContext = Depends(require_auth),
+) -> OptimizeRes:
     """
     Run the CP-SAT optimizer and return proposed shift assignments.
+
+    Requires a valid Supabase JWT in `Authorization: Bearer <token>`
+    (or OPTIMIZER_AUTH_DISABLED=true for dev). Rate-limited per IP via
+    OPTIMIZER_RATE_OPTIMIZE (default 30/minute).
     """
+    # Correlation ID — accept the client's X-Request-ID and prefix every
+    # log line for this request. When a user reports a bad run, grep this
+    # ID across browser console, optimizer container logs, and any
+    # downstream writers.
+    request_id = request.headers.get('X-Request-ID') or '-'
+    rid = f'[rid={request_id[:8]} sub={auth.subject[:8]}]'
+
     try:
         raw_body = await request.json()
-        logger.info("[optimize] Raw request body received")
+        logger.info("%s [optimize] Raw request body received", rid)
         req = OptimizeReq(**raw_body)
     except Exception as e:
-        logger.error("[optimize] Pydantic validation failed: %s", e)
+        logger.error("%s [optimize] Pydantic validation failed: %s", rid, e)
         raise HTTPException(status_code=400, detail=f"Validation Error: {e}")
     if not req.shifts:
         raise HTTPException(status_code=400, detail='shifts list is empty')
@@ -231,8 +339,8 @@ async def optimize(request: Request) -> OptimizeRes:
         raise HTTPException(status_code=400, detail='Max 1000 employees per request')
 
     logger.info(
-        '[optimize] %d shifts × %d employees | time_limit=%.1fs workers=%d hint=%s',
-        len(req.shifts), len(req.employees),
+        '%s [optimize] %d shifts × %d employees | time_limit=%.1fs workers=%d hint=%s',
+        rid, len(req.shifts), len(req.employees),
         req.solver_params.max_time_seconds,
         req.solver_params.num_workers,
         req.solver_params.enable_greedy_hint,
@@ -248,9 +356,21 @@ async def optimize(request: Request) -> OptimizeRes:
                 })
                 for es in payload.pop('existing_shifts', []) or []
             ]
+            slots = [
+                AvailabilitySlotInput(**{
+                    k: v for k, v in s.items()
+                    if k in AvailabilitySlotInput.__dataclass_fields__
+                })
+                for s in payload.pop('availability_slots', []) or []
+            ]
             return EmployeeInput(
-                **{k: v for k, v in payload.items() if k in EmployeeInput.__dataclass_fields__ and k != 'existing_shifts'},
+                **{
+                    k: v for k, v in payload.items()
+                    if k in EmployeeInput.__dataclass_fields__
+                    and k not in ('existing_shifts', 'availability_slots')
+                },
                 existing_shifts=existing,
+                availability_slots=slots,
             )
 
         data = OptimizerInput(
@@ -263,15 +383,16 @@ async def optimize(request: Request) -> OptimizeRes:
         builder = ScheduleModelBuilder(data)
         output = builder.build_and_solve()
     except Exception as exc:
-        logger.exception('[optimize] Unexpected error: %s', exc)
+        logger.exception('%s [optimize] Unexpected error: %s', rid, exc)
         raise HTTPException(status_code=500, detail=f'Solver error: {exc}')
 
     m = output.metrics
     coverage_rate = len(output.assignments) / max(len(req.shifts), 1)
 
     logger.info(
-        '[optimize] status=%s assignments=%d unassigned=%d coverage=%.0f%% '
+        '%s [optimize] status=%s assignments=%d unassigned=%d coverage=%.0f%% '
         'vars=%d constraints=%d pre=%.1fms solve=%.1fms obj=%.1f',
+        rid,
         output.status, len(output.assignments), len(output.unassigned_shift_ids),
         coverage_rate * 100,
         m.final_variables, m.num_constraints,
@@ -299,6 +420,212 @@ async def optimize(request: Request) -> OptimizeRes:
             solve_ms=m.solve_ms,
             coverage_rate=round(coverage_rate, 3),
         ),
+    )
+
+
+# =============================================================================
+# AUDIT
+# =============================================================================
+#
+# This is the C3 fix from the audit doc. Previously the TS controller
+# made one bulk-assignment-controller.simulate() call per (employee,
+# shift) pair to populate the "why is this shift uncovered?" report —
+# at 50 audited shifts × 103 employees that's ~5 000 round-trips,
+# typically 2+ minutes wall-clock. The same eligibility logic already
+# runs in the solver's `employee_eligible()`. Exposing it via /audit
+# collapses everything into a single server-side computation.
+#
+# The handler returns one row per audited shift, with a per-employee
+# breakdown of the rejection reason (or PASS).
+#
+# Note: this audit covers SOLVER-SIDE eligibility only. The downstream
+# V8 compliance engine still runs in the browser to catch divergent
+# rules (qualifications expiry, complex multi-rule interactions).
+# C3 reduces the *bulk* of audit work from O(N×M) RPCs to O(1).
+
+def _explain_eligibility(
+    emp: EmployeeInput, shift: ShiftInput, c: OptimizerConstraints,
+) -> list[str]:
+    """Run the same checks as `employee_eligible` but return REASON CODES
+    instead of a bool. Empty list = eligible.
+
+    Reason codes intentionally mirror the violation types surfaced by the
+    TS bulk-validator so the UI can render them with existing labels.
+    """
+    reasons: list[str] = []
+
+    # Calendar-day unavailability
+    if shift.shift_date in emp.unavailable_dates:
+        reasons.append('UNAVAILABLE_DATE')
+
+    # Role / skill / license
+    if c.enforce_role_match and shift.role_id and emp.role_id and emp.role_id != shift.role_id:
+        reasons.append('ROLE_MISMATCH')
+    if c.enforce_skill_match and shift.required_skill_ids:
+        if not set(shift.required_skill_ids).issubset(set(emp.skill_ids)):
+            reasons.append('QUALIFICATION_MISSING')
+    if c.enforce_skill_match and shift.required_license_ids:
+        if not set(shift.required_license_ids).issubset(set(emp.license_ids)):
+            reasons.append('QUALIFICATION_MISSING')
+
+    # Existing-shift overlap / rest gap
+    if emp.existing_shifts and existing_blocks_proposal(
+        shift, emp.existing_shifts, c.min_rest_minutes,
+    ):
+        if not c.relax_constraints:
+            reasons.append('REST_GAP')
+
+    # Skill hierarchy
+    emp_level = emp.level if emp.level is not None else 0
+    shift_level = getattr(shift, 'level', 0) or 0
+    if emp_level < shift_level:
+        reasons.append('LEVEL_TOO_LOW')
+
+    # Min engagement floor
+    if shift.duration_minutes < 60:
+        reasons.append('SHIFT_TOO_SHORT')
+
+    # HARD availability override windows
+    for start, end, severity in emp.availability_overrides:
+        if severity == 'HARD':
+            s0, s1 = shift_window(shift)
+            a0 = _time_to_abs_minutes(shift.shift_date, start)
+            a1 = _time_to_abs_minutes(shift.shift_date, end)
+            if a1 <= a0:
+                a1 += 1440
+            if s0 < a1 and a0 < s1:
+                reasons.append('HARD_AVAILABILITY_BLOCK')
+                break
+
+    # Declared availability slots (HC-5d)
+    if emp.has_availability_data:
+        s0, s1 = shift_window(shift)
+        covered = False
+        for slot in emp.availability_slots:
+            if slot.slot_date != shift.shift_date:
+                continue
+            a0 = _time_to_abs_minutes(slot.slot_date, slot.start_time)
+            a1 = _time_to_abs_minutes(slot.slot_date, slot.end_time)
+            if a1 <= a0:
+                a1 += 1440
+            if a0 <= s0 and a1 >= s1:
+                covered = True
+                break
+        if not covered:
+            reasons.append('OUTSIDE_DECLARED_AVAILABILITY')
+
+    return reasons
+
+
+@app.post('/audit', response_model=AuditRes)
+@limiter.limit(RATE_AUDIT)
+async def audit(
+    request: Request,
+    auth: AuthContext = Depends(require_auth),
+) -> AuditRes:
+    """Server-side eligibility audit — replaces the per-pair TS RPC fan-out.
+
+    Returns, for each requested shift, the eligibility status of every
+    employee in the candidate pool plus the specific rejection reason(s).
+
+    Auth: same Supabase JWT contract as /optimize. Rate limit:
+    OPTIMIZER_RATE_AUDIT (default 60/minute per IP).
+    """
+    request_id = request.headers.get('X-Request-ID') or '-'
+    rid = f'[rid={request_id[:8]} sub={auth.subject[:8]}]'
+
+    try:
+        raw_body = await request.json()
+        req = AuditReq(**raw_body)
+    except Exception as e:
+        logger.error('%s [audit] Pydantic validation failed: %s', rid, e)
+        raise HTTPException(status_code=400, detail=f'Validation Error: {e}')
+
+    if not req.shifts:
+        raise HTTPException(status_code=400, detail='shifts list is empty')
+    if not req.employees:
+        raise HTTPException(status_code=400, detail='employees list is empty')
+
+    # Reuse the optimize endpoint's payload→dataclass adapter so the
+    # eligibility logic sees identical inputs to the solver.
+    def _build_employee(e: EmployeeReq) -> EmployeeInput:
+        payload = e.model_dump()
+        existing = [
+            ExistingShiftInput(**{
+                k: v for k, v in es.items()
+                if k in ExistingShiftInput.__dataclass_fields__
+            })
+            for es in payload.pop('existing_shifts', []) or []
+        ]
+        slots = [
+            AvailabilitySlotInput(**{
+                k: v for k, v in s.items()
+                if k in AvailabilitySlotInput.__dataclass_fields__
+            })
+            for s in payload.pop('availability_slots', []) or []
+        ]
+        return EmployeeInput(
+            **{
+                k: v for k, v in payload.items()
+                if k in EmployeeInput.__dataclass_fields__
+                and k not in ('existing_shifts', 'availability_slots')
+            },
+            existing_shifts=existing,
+            availability_slots=slots,
+        )
+
+    shifts_dc = [
+        ShiftInput(**{
+            k: v for k, v in s.model_dump().items()
+            if k in ShiftInput.__dataclass_fields__
+        })
+        for s in req.shifts
+    ]
+    employees_dc = [_build_employee(e) for e in req.employees]
+    constraints_dc = OptimizerConstraints(**{
+        k: v for k, v in req.constraints.model_dump().items()
+        if k in OptimizerConstraints.__dataclass_fields__
+    })
+
+    target_ids = set(req.target_shift_ids) if req.target_shift_ids else None
+    targets = [s for s in shifts_dc if target_ids is None or s.id in target_ids]
+
+    t0 = time.perf_counter()
+    rows: list[AuditShiftRow] = []
+    for shift in targets:
+        summary: dict[str, int] = {}
+        emp_rows: list[AuditEmployeeRow] = []
+        for emp in employees_dc:
+            reasons = _explain_eligibility(emp, shift, constraints_dc)
+            if reasons:
+                for r in reasons:
+                    summary[r] = summary.get(r, 0) + 1
+                emp_rows.append(AuditEmployeeRow(
+                    employee_id=emp.id, status='FAIL', rejection_reasons=reasons,
+                ))
+            else:
+                # Pass at the eligibility level — solver still chose not
+                # to assign, which is recorded by the controller as
+                # OPTIMIZER_TRADEOFF in the final UI summary.
+                emp_rows.append(AuditEmployeeRow(
+                    employee_id=emp.id, status='PASS', rejection_reasons=[],
+                ))
+        rows.append(AuditShiftRow(
+            shift_id=shift.id,
+            rejection_summary=summary,
+            employees=emp_rows,
+        ))
+
+    elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
+    logger.info(
+        '%s [audit] %d targets × %d employees → %d rows in %.1fms',
+        rid, len(targets), len(employees_dc), len(rows), elapsed_ms,
+    )
+
+    return AuditRes(
+        audited_shift_count=len(rows),
+        rows=rows,
+        elapsed_ms=elapsed_ms,
     )
 
 

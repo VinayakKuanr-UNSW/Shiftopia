@@ -1,5 +1,5 @@
 import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
-import { differenceInMinutes, parseISO } from 'date-fns';
+import { parseTimeToMinutes } from '../utils/time';
 
 /**
  * V8 Rule: Minimum Engagement
@@ -13,11 +13,11 @@ export const minEngagementRule: V8RuleEvaluator = (ctx) => {
     const violations: V8Hit[] = [];
 
     for (const s of shifts) {
-        const date = s.date || s.shift_date || '';
-        const start = parseISO(`${date}T${s.start_time}`);
-        const end = parseISO(`${date}T${s.end_time}`);
-        let totalMins = differenceInMinutes(end, start);
-        if (totalMins < 0) totalMins += 1440; // Cross-midnight
+        const start = parseTimeToMinutes(s.start_time);
+        let end = parseTimeToMinutes(s.end_time);
+        if (end <= start) end += 1440; // Cross-midnight
+
+        const totalMins = end - start;
 
         const isHoliday = s.is_sunday || s.is_public_holiday;
         const isTraining = s.is_training === true;

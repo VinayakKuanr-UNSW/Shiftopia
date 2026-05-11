@@ -127,7 +127,7 @@ const DroppableShiftAssign: React.FC<DroppableShiftAssignProps> = ({
     <div
       ref={drop}
       className={cn(
-        'rounded-lg transition-all duration-200 h-full',
+        'rounded-lg transition-[box-shadow,background-color,ring-color] duration-200 h-full',
         isOver && canDrop  && 'ring-2 ring-emerald-500 ring-inset bg-emerald-500/5 shadow-lg',
         isOver && !canDrop && 'ring-2 ring-red-500 ring-inset opacity-60 bg-red-500/5',
       )}
@@ -146,7 +146,8 @@ const DraggableShiftCard: React.FC<{
   isBulkMode: boolean;
   onAssignEmployee: (shiftId: string, employeeId: string, employeeName: string) => void;
   headerAction?: React.ReactNode;
-}> = ({ shift, isDnDModeActive, onEdit, isSelected, onToggleSelection, isBulkMode, onAssignEmployee, headerAction }) => {
+  detailedCost?: import('@/modules/rosters/domain/projections/utils/cost/types').ShiftCostBreakdown;
+}> = ({ shift, isDnDModeActive, onEdit, isSelected, onToggleSelection, isBulkMode, onAssignEmployee, headerAction, detailedCost }) => {
   const { isPast, isLocked: isManagementLocked } = resolveShiftStatus(shift);
   const isLocked = isManagementLocked || (isDnDModeActive && shift.lifecycle_status !== 'Published');
 
@@ -193,6 +194,7 @@ const DraggableShiftCard: React.FC<{
           groupColor={groupColor}
           isSelected={isSelected}
           headerAction={headerAction}
+          detailedCost={detailedCost}
         />
       </DroppableShiftAssign>
     </div>
@@ -243,7 +245,7 @@ const DroppableRoleCell: React.FC<{
     <td
       ref={drop}
       className={cn(
-        'min-w-[200px] px-2 py-2 border-l border-b border-border align-top relative group/cell transition-all duration-300',
+        'min-w-[200px] px-2 py-2 border-l border-b border-border align-top relative group/cell transition-[background-color,box-shadow,transform] duration-300',
         isOver && canDrop && 'bg-emerald-500/10 ring-2 ring-emerald-500/50 ring-inset shadow-[inset_0_0_20px_rgba(16,185,129,0.2)] scale-[1.01] z-10',
         isOver && !canDrop && 'bg-red-500/10 ring-2 ring-red-500/50 ring-inset cursor-no-drop opacity-60'
       )}
@@ -352,7 +354,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
     }
   };
 
-  const buildShiftMenu = (shift: Shift) => (
+  const buildShiftMenu = (shift: any) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
@@ -410,11 +412,17 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
     if (projection) {
       projection.levels.forEach(l => l.roles.forEach(r => {
         if (!shiftsByRoleAndDate[r.id]) shiftsByRoleAndDate[r.id] = {};
-        Object.entries(r.shiftsByDate).forEach(([d, pShifts]) => shiftsByRoleAndDate[r.id][d] = pShifts.map(ps => ps.raw));
+        Object.entries(r.shiftsByDate).forEach(([d, pShifts]) => shiftsByRoleAndDate[r.id][d] = pShifts.map(ps => ({
+          ...ps.raw,
+          detailedCost: ps.detailedCost
+        })));
       }));
       projection.unassignedRoles.forEach(r => {
         if (!shiftsByRoleAndDate[r.id]) shiftsByRoleAndDate[r.id] = {};
-        Object.entries(r.shiftsByDate).forEach(([d, pShifts]) => shiftsByRoleAndDate[r.id][d] = pShifts.map(ps => ps.raw));
+        Object.entries(r.shiftsByDate).forEach(([d, pShifts]) => shiftsByRoleAndDate[r.id][d] = pShifts.map(ps => ({
+          ...ps.raw,
+          detailedCost: ps.detailedCost
+        })));
       });
     } else {
       activeShifts.forEach(shift => {
@@ -582,9 +590,9 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                 </tr>
 
                 {!collapsedLevels.has(group.levelNumber) && group.roles.map((role, idx) => (
-                  <tr key={role.id} className={cn("group transition-colors", idx % 2 === 0 ? "bg-card" : "bg-muted/30", "hover:bg-accent/30")}>
-                    <td className="sticky left-0 z-20 w-64 min-w-[256px] px-4 py-3 align-middle border-r border-b border-border bg-card/80 backdrop-blur-md group-hover:bg-accent/40 transition-colors shadow-[4px_0_8px_-4px_rgba(0,0,0,0.3)]">
-                      <span className="text-[13px] font-semibold text-foreground/80 group-hover:text-foreground transition-colors">{role.name}</span>
+                  <tr key={role.id} className={cn("group transition-[background-color]", idx % 2 === 0 ? "bg-card" : "bg-muted/30", "hover:bg-accent/30")}>
+                    <td className="sticky left-0 z-20 w-64 min-w-[256px] px-4 py-3 align-middle border-r border-b border-border bg-card/80 backdrop-blur-md group-hover:bg-accent/40 transition-[background-color] shadow-[4px_0_8px_-4px_rgba(0,0,0,0.3)]">
+                      <span className="text-[13px] font-semibold text-foreground/80 group-hover:text-foreground transition-[color]">{role.name}</span>
                     </td>
                     {dates.map(date => {
                       const dStr = format(date, 'yyyy-MM-dd');
@@ -603,11 +611,12 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                                 isBulkMode={isBulkMode}
                                 onAssignEmployee={onAssignShift || (() => {})}
                                 headerAction={buildShiftMenu(s)}
+                                detailedCost={(s as any).detailedCost}
                               />
                             ))}
                             {canEdit && !isBulkMode && !isShiftLocked(dStr, '23:59', 'roster_management') && (
                               <div className={cn("absolute inset-0 flex pointer-events-none z-10", cellShifts.length > 0 ? "items-end justify-end p-2" : "items-center justify-center")}>
-                                <button onClick={() => handleCellClick(role.id, date)} className="flex items-center justify-center rounded-full transition-all duration-300 pointer-events-auto bg-primary/30 text-primary border border-primary/40 backdrop-blur-md hover:bg-primary/60 hover:scale-110 w-9 h-9 opacity-40 group-hover/cell:opacity-100"><Plus className="h-5 w-5" /></button>
+                                <button onClick={() => handleCellClick(role.id, date)} className="flex items-center justify-center rounded-full transition-[transform,background-color,opacity,box-shadow] duration-200 pointer-events-auto bg-primary/30 text-primary border border-primary/40 backdrop-blur-md hover:bg-primary/60 hover:scale-110 w-9 h-9 opacity-40 group-hover/cell:opacity-100"><Plus className="h-5 w-5" /></button>
                               </div>
                             )}
                           </div>

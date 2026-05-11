@@ -92,7 +92,7 @@ export const CommandSelector: React.FC<CommandSelectorProps> = ({
                     side="right" 
                     align="start" 
                     sideOffset={12}
-                    className="w-[320px] p-0 overflow-hidden rounded-2xl border border-border/50 bg-popover/95 backdrop-blur-xl shadow-2xl animate-in fade-in zoom-in-95 slide-in-from-left-2 duration-300"
+                    className="w-[320px] p-0 overflow-hidden rounded-2xl border border-border/50 bg-popover/95 backdrop-blur-xl shadow-2xl animate-in fade-in zoom-in-95 slide-in-from-left-2 duration-300 pointer-events-auto"
                 >
                     <Command className="bg-transparent">
                         <div className="flex items-center border-b border-border/50 px-3 py-2">
@@ -107,7 +107,10 @@ export const CommandSelector: React.FC<CommandSelectorProps> = ({
                             {label}
                         </div>
 
-                        <CommandList className="max-h-[300px] overflow-y-auto px-1 pb-2 custom-scrollbar">
+                        <CommandList 
+                            className="max-h-[280px] overflow-y-auto px-1 pb-2 custom-scrollbar touch-pan-y"
+                            onWheel={(e) => e.stopPropagation()}
+                        >
                             <CommandEmpty className="py-6 text-center text-sm text-muted-foreground">
                                 No results found.
                             </CommandEmpty>

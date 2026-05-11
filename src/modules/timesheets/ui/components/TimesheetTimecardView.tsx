@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Clock, CheckSquare, Square } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { TimesheetMobileCard } from './TimesheetMobileCard';
@@ -35,9 +34,7 @@ export const TimesheetTimecardView: React.FC<TimesheetTimecardViewProps> = ({
 }) => {
     if (entries.length === 0) {
         return (
-            <motion.div
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
+            <div
                 className="flex flex-col items-center justify-center py-24 px-6 text-center"
             >
                 <div className="relative mb-8">
@@ -60,7 +57,7 @@ export const TimesheetTimecardView: React.FC<TimesheetTimecardViewProps> = ({
                         </Button>
                     </div>
                 )}
-            </motion.div>
+            </div>
         );
     }
 
@@ -68,15 +65,10 @@ export const TimesheetTimecardView: React.FC<TimesheetTimecardViewProps> = ({
 
     return (
         <div className="space-y-4">
-            {/* Select-all context row — only visible in select mode */}
-            <AnimatePresence>
-                {isSelectMode && (
-                    <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="overflow-hidden"
-                    >
+            {isSelectMode && (
+                <div
+                    className="overflow-hidden"
+                >
                         <div className="flex items-center gap-3 px-1 pb-1">
                             <button
                                 onClick={allSelected ? onClearSelection : onSelectAll}
@@ -102,13 +94,11 @@ export const TimesheetTimecardView: React.FC<TimesheetTimecardViewProps> = ({
                                 </button>
                             )}
                         </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5 pb-12">
-                <AnimatePresence mode="popLayout">
-                    {entries.map((entry) => (
+                {entries.map((entry) => (
                         <TimesheetMobileCard
                             key={entry.id}
                             entry={entry}
@@ -119,8 +109,7 @@ export const TimesheetTimecardView: React.FC<TimesheetTimecardViewProps> = ({
                             onMarkNoShow={onMarkNoShow}
                             readOnly={readOnly}
                         />
-                    ))}
-                </AnimatePresence>
+                ))}
             </div>
         </div>
     );

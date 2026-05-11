@@ -36,7 +36,6 @@ import {
 } from 'lucide-react';
 import { format, addDays, startOfMonth, endOfMonth, addMonths } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import {
   useTemplates,
   useRostersLookup,

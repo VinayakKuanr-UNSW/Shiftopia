@@ -22,6 +22,15 @@ export interface OptimizerShift {
     demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
     target_employment_type?: 'FT' | 'PT' | 'Casual' | null;
     level?: number;
+    /** Used by SC-1 to apply award-rate multipliers (1.5× / 2.5×). */
+    is_sunday?: boolean;
+    is_public_holiday?: boolean;
+    /** Lower min-engagement floor (training shifts can be 2h vs 3h). */
+    is_training?: boolean;
+    /** Required by `_calculate_effective_minutes` for fatigue scoring. */
+    unpaid_break_minutes?: number;
+    /** 'NORMAL' or 'MULTI_HIRE' — shorter rest gap (480m) for multi-hire. */
+    shift_type?: 'NORMAL' | 'MULTI_HIRE';
 }
 
 export interface ExistingShiftRef {
@@ -31,6 +40,18 @@ export interface ExistingShiftRef {
     end_time: string;       // HH:MM
     duration_minutes: number;
     unpaid_break_minutes: number;
+}
+
+/**
+ * A single declared availability window. Sent to the optimizer as the
+ * authoritative "yes I am available here" signal. If an employee has
+ * `has_availability_data: true` and a shift falls outside every slot, the
+ * optimizer treats them as unavailable for that shift.
+ */
+export interface AvailabilitySlotRef {
+    slot_date: string;     // YYYY-MM-DD
+    start_time: string;    // HH:MM
+    end_time: string;      // HH:MM
 }
 
 export interface OptimizerEmployee {
@@ -54,6 +75,31 @@ export interface OptimizerEmployee {
     existing_shifts?: ExistingShiftRef[];
     contracts?: any[];
     qualifications?: any[];
+    /**
+     * Declared availability windows in the optimization range. Empty array
+     * means "no data on file" (treated as universally available);
+     * non-empty means "available only when a shift fits within one of
+     * these windows" (treated as unavailable otherwise).
+     */
+    availability_slots?: AvailabilitySlotRef[];
+    /**
+     * True if the employee has *any* availability record on file —
+     * including outside the current window. Distinguishes "not yet
+     * onboarded" (no records ever → universally available) from "has
+     * declared availability but none in this window" (records elsewhere →
+     * universally unavailable for this window).
+     */
+    has_availability_data?: boolean;
+    /**
+     * Severity-based availability windows: tuples of
+     * `[start_time, end_time, severity]` where severity is 'HARD',
+     * 'SOFT', or 'PREFERENCE'. HARD entries are pre-filter blockers;
+     * SOFT/PREFERENCE add penalties to the objective. The TS controller
+     * doesn't currently populate these (they come from a future bulk
+     * leave-management feature) but the field exists on the wire to
+     * forward-compat the Python service.
+     */
+    availability_overrides?: Array<[string, string, 'HARD' | 'SOFT' | 'PREFERENCE']>;
 }
 
 export interface OptimizerStrategy {
@@ -81,6 +127,38 @@ export interface OptimizeRequest {
         num_workers?: number;
         enable_greedy_hint?: boolean;
     };
+}
+
+// =============================================================================
+// SERVER-SIDE AUDIT (replaces per-pair simulate() fan-out)
+// =============================================================================
+
+export interface AuditRequest {
+    shifts: OptimizerShift[];
+    employees: OptimizerEmployee[];
+    constraints: OptimizerConstraints;
+    /** Subset of shift IDs to audit. Omit to audit every shift in `shifts`. */
+    target_shift_ids?: string[];
+}
+
+export interface AuditEmployeeRow {
+    employee_id: string;
+    status: 'PASS' | 'FAIL';
+    /** Reason codes (e.g. 'LEVEL_TOO_LOW', 'OUTSIDE_DECLARED_AVAILABILITY'). */
+    rejection_reasons: string[];
+}
+
+export interface AuditShiftRow {
+    shift_id: string;
+    /** Map of reason code → number of employees rejected for that reason. */
+    rejection_summary: Record<string, number>;
+    employees: AuditEmployeeRow[];
+}
+
+export interface AuditResponse {
+    audited_shift_count: number;
+    rows: AuditShiftRow[];
+    elapsed_ms: number;
 }
 
 // =============================================================================

@@ -1,95 +1,97 @@
 /**
- * Roles Mode Projector
+ * Roles Mode Projector (Worker-Safe)
  *
- * Transforms a flat Shift[] + optional RoleRecord[] / LevelRecord[] into a
- * RolesProjection structured as:
- *
- *   Level (e.g. "Level 3 – Technician")
- *     └─ Role (e.g. "V8Stage Hand")
- *          └─ shiftsByDate: { '2025-03-15': [ProjectedShift, …], … }
- *
- * Design:
- *  - Levels without any shifts are omitted (they clutter the view).
- *  - Roles without a remuneration_level_id appear in `unassignedRoles`.
- *  - Roles are seeded from RoleRecord[] first so even empty roles appear when
- *    the RoleRecord list is passed.  Ad-hoc role_id / role_name combos found
- *    only on shifts are appended.
- *  - Levels are sorted by level_number asc; roles within each level by name.
- *  - theatre accent = red (via GROUP_COLORS / UNASSIGNED_COLORS from constants).
- *  - levelColorClass() is the single authoritative colour mapper for level badges.
+ * Transforms a flat WorkerShiftDTO[] + optional WorkerRoleDTO[] / WorkerLevelDTO[] into a
+ * RolesProjection.
+ * NO React, NO DOM, NO raw Shift entities. Runs natively inside Web Worker.
  */
 
-import type { Shift } from '../../shift.entity';
 import type {
-  RoleRecord,
-  LevelRecord,
   RolesProjection,
   ProjectedLevel,
   ProjectedRole,
-  ProjectedShift,
 } from '../types';
+import type { WorkerShiftDTO, WorkerRoleDTO, WorkerLevelDTO, ProjectedShiftResult } from '../worker/protocol';
 import { computeBiddingUrgency, isOnBidding } from '../../bidding-urgency';
 import { GROUP_COLORS, UNASSIGNED_COLORS, ALL_GROUP_TYPES, levelColorClass } from '../constants';
-import { netMinutesFromShift, minutesToHours } from '../utils/duration';
-import { estimateCostFromShift, estimateDetailedCostFromShift } from '../utils/cost';
+import { minutesToHours } from '../utils/duration';
+import { getCachedCost, makeCacheKey } from '../cache/projection.cache';
+import { ZERO_COST_BREAKDOWN } from '../utils/cost/constants';
 import { determineShiftState } from '../../shift-state.utils';
-import { buildStats } from './shared';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function toProjectedShift(shift: Shift): ProjectedShift {
-  const netMinutes = netMinutesFromShift(shift);
-  const estimatedCost = estimateCostFromShift(shift, netMinutes);
-  const detail = estimateDetailedCostFromShift(shift, netMinutes);
-  const groupType = shift.group_type ?? null;
+function resolveEmployeeName(shift: WorkerShiftDTO): string | null {
+  if (shift.employeeFirstName || shift.employeeLastName) {
+    return `${shift.employeeFirstName ?? ''} ${shift.employeeLastName ?? ''}`.trim() || null;
+  }
+  if (shift.assignedEmployeeId) return 'Assigned';
+  return null;
+}
+
+function toProjectedShift(shift: WorkerShiftDTO): ProjectedShiftResult {
+  const isAssigned = !!shift.assignedEmployeeId;
+  const netMinutes = shift.netLengthMinutes ?? shift.scheduledLengthMinutes;
+  
+  const key = makeCacheKey(shift.id, shift.updatedAtMs);
+  const detail = isAssigned ? (getCachedCost(key) ?? ZERO_COST_BREAKDOWN) : ZERO_COST_BREAKDOWN;
+  const estimatedCost = detail.totalCost;
+
+  const groupType = shift.groupType ?? null;
   const colors = groupType && ALL_GROUP_TYPES.includes(groupType)
     ? GROUP_COLORS[groupType]
     : UNASSIGNED_COLORS;
 
+  const stateId = determineShiftState({
+    lifecycle_status: shift.lifecycleStatus as any,
+    assignment_status: (shift.assignmentStatus ?? 'unassigned') as any,
+    assignment_outcome: shift.assignmentOutcome as any,
+    trading_status: shift.tradingStatus as any,
+    is_cancelled: shift.isCancelled,
+  });
+
   return {
     id: shift.id,
-    reactKey: shift.id,
-    date: shift.shift_date,
-    startTime: shift.start_time,
-    endTime: shift.end_time,
+    date: shift.shiftDate,
+    startTime: shift.startTime,
+    endTime: shift.endTime,
     netMinutes,
     estimatedCost,
     costBreakdown: {
-      base: detail.baseCost,
+      base: detail.ordinaryCost,
       penalty: detail.penaltyCost,
       overtime: detail.overtimeCost,
-      allowance: detail.allowanceCost,
-      leave: detail.leaveLoadingCost,
+      allowance: detail.allowanceCost ?? 0,
+      leave: 0,
     },
-    stateId: determineShiftState(shift),
-    roleName: shift.roles?.name ?? 'Shift',
-    roleId: shift.role_id,
-    levelName: shift.remuneration_levels?.level_name ?? '',
-    levelNumber: shift.remuneration_levels?.level_number ?? 0,
-    levelId: shift.remuneration_level_id,
+    detailedCost: detail,
+    stateId,
+    roleName: shift.roleName ?? 'Shift',
+    roleId: shift.roleId,
+    levelName: shift.levelName ?? '',
+    levelNumber: shift.levelNumber ?? 0,
+    levelId: shift.remunerationLevelId,
     groupType,
-    subGroupName: shift.sub_group_name ?? null,
-    groupColors: colors,
+    subGroupName: shift.subGroupName ?? shift.rosterSubgroupName ?? null,
+    groupColorKey: groupType ?? 'unassigned',
     employeeName: resolveEmployeeName(shift),
-    employeeId: shift.assigned_employee_id,
-    isLocked: shift.is_locked,
-    isUrgent: isOnBidding(shift.bidding_status) && computeBiddingUrgency(shift.shift_date, shift.start_time) === 'urgent',
-    isOnBidding: isOnBidding(shift.bidding_status),
-    isTrading: !!shift.trade_requested_at,
-    isCancelled: shift.is_cancelled,
-    isPublished: shift.lifecycle_status === 'Published',
-    isDraft: shift.lifecycle_status === 'Draft',
-    raw: shift,
-  };
-}
+    employeeId: shift.assignedEmployeeId,
+    isLocked: shift.isLocked,
+    isUrgent: isOnBidding(shift.biddingStatus) && computeBiddingUrgency(shift.shiftDate, shift.startTime) === 'urgent',
+    isOnBidding: isOnBidding(shift.biddingStatus),
+    isTrading: !!shift.tradeRequestedAt,
+    isCancelled: shift.isCancelled,
+    isPublished: shift.isPublished,
+    isDraft: shift.isDraft,
 
-function resolveEmployeeName(shift: Shift): string | null {
-  const profile = (shift as any).assigned_profiles ?? (shift as any).profiles;
-  if (profile?.first_name || profile?.last_name) {
-    return `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim() || null;
-  }
-  if (shift.assigned_employee_id) return 'Assigned';
-  return null;
+    role: shift.roleName ?? 'Shift',
+    hours: minutesToHours(netMinutes),
+    pay: estimatedCost,
+    status: shift.isCancelled ? 'Draft' : (shift.assignedEmployeeId ? (shift.isDraft ? 'Draft' : 'Assigned') : 'Open'),
+    lifecycleStatus: shift.isPublished ? 'published' : 'draft',
+    assignmentStatus: shift.assignedEmployeeId ? 'assigned' : 'unassigned',
+    fulfillmentStatus: shift.fulfillmentStatus,
+  };
 }
 
 // Immutable role accumulator — mutated only during projection build
@@ -97,8 +99,8 @@ type RoleAccum = {
   id: string;
   name: string;
   code: string;
-  /** roleId → date → ProjectedShift[] */
-  shiftsByDate: Map<string, ProjectedShift[]>;
+  /** roleId → date → ProjectedShiftResult[] */
+  shiftsByDate: Map<string, ProjectedShiftResult[]>;
 };
 
 function emptyRoleAccum(id: string, name: string, code: string): RoleAccum {
@@ -106,7 +108,7 @@ function emptyRoleAccum(id: string, name: string, code: string): RoleAccum {
 }
 
 function finaliseRole(r: RoleAccum): ProjectedRole {
-  const shiftsByDate: Record<string, ProjectedShift[]> = {};
+  const shiftsByDate: Record<string, ProjectedShiftResult[]> = {};
   let totalMins = 0;
   let totalCost = 0;
 
@@ -122,14 +124,15 @@ function finaliseRole(r: RoleAccum): ProjectedRole {
     id: r.id,
     name: r.name,
     code: r.code,
-    shiftsByDate,
+    // Cast to any for the pipeline (hook maps it back)
+    shiftsByDate: shiftsByDate as any,
     totalHours: minutesToHours(totalMins),
     totalCost: Math.round(totalCost * 100) / 100,
   };
 }
 
-function addShiftToRole(accum: RoleAccum, shift: Shift, ps: ProjectedShift): void {
-  const date = shift.shift_date;
+function addShiftToRole(accum: RoleAccum, shift: WorkerShiftDTO, ps: ProjectedShiftResult): void {
+  const date = shift.shiftDate;
   if (!accum.shiftsByDate.has(date)) accum.shiftsByDate.set(date, []);
   accum.shiftsByDate.get(date)!.push(ps);
 }
@@ -137,33 +140,26 @@ function addShiftToRole(accum: RoleAccum, shift: Shift, ps: ProjectedShift): voi
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export interface RolesProjectorContext {
-  roles?: RoleRecord[];
-  levels?: LevelRecord[];
+  roles?: WorkerRoleDTO[];
+  levels?: WorkerLevelDTO[];
 }
 
 export function projectRoles(
-  shifts: Shift[],
+  shifts: WorkerShiftDTO[],
   ctx: RolesProjectorContext = {},
 ): RolesProjection {
   const { roles = [], levels = [] } = ctx;
 
-  // ─── 1. Build lookup maps from context ────────────────────────────────────
-  // levelId → LevelRecord
-  const levelById = new Map<string, LevelRecord>(levels.map(l => [l.id, l]));
-  // roleId  → RoleRecord
-  const roleById = new Map<string, RoleRecord>(roles.map(r => [r.id, r]));
+  const levelById = new Map<string, WorkerLevelDTO>(levels.map(l => [l.id, l]));
+  const roleById = new Map<string, WorkerRoleDTO>(roles.map(r => [r.id, r]));
 
-  // ─── 2. Accumulators ──────────────────────────────────────────────────────
-  //  levelId → roleId → RoleAccum
   const levelRoleMap = new Map<string, Map<string, RoleAccum>>();
-  //  roleId → RoleAccum  (no level)
   const unassignedRoleMap = new Map<string, RoleAccum>();
 
-  // Seed known roles into their respective level buckets
   roles.forEach(role => {
     const roleAccum = emptyRoleAccum(role.id, role.name, role.code ?? '');
-    if (role.remuneration_level_id) {
-      const lid = role.remuneration_level_id;
+    if (role.remunerationLevelId) {
+      const lid = role.remunerationLevelId;
       if (!levelRoleMap.has(lid)) levelRoleMap.set(lid, new Map());
       levelRoleMap.get(lid)!.set(role.id, roleAccum);
     } else {
@@ -171,14 +167,12 @@ export function projectRoles(
     }
   });
 
-  // ─── 3. Route each shift ─────────────────────────────────────────────────
   shifts.forEach(shift => {
     const ps = toProjectedShift(shift);
-    const roleId = shift.role_id ?? 'unknown';
-    const roleName = shift.roles?.name ?? 'Unnamed Role';
-    // Use the shift's own level first; fall back to the role definition's level
-    const levelId = shift.remuneration_level_id
-      ?? roleById.get(roleId)?.remuneration_level_id
+    const roleId = shift.roleId ?? 'unknown';
+    const roleName = shift.roleName ?? 'Unnamed Role';
+    const levelId = shift.remunerationLevelId
+      ?? roleById.get(roleId)?.remunerationLevelId
       ?? null;
 
     if (levelId) {
@@ -204,39 +198,32 @@ export function projectRoles(
     }
   });
 
-  // ─── 4. Build ProjectedLevel[] ────────────────────────────────────────────
-  //  Collect all levelIds seen (from context + from shifts)
   const allLevelIds = new Set<string>([
     ...levels.map(l => l.id),
-    ...levelRoleMap.keys(),
+    ...Array.from(levelRoleMap.keys()),
   ]);
 
   const projectedLevels: ProjectedLevel[] = [];
 
   allLevelIds.forEach(levelId => {
     const roleMap = levelRoleMap.get(levelId);
-    if (!roleMap || roleMap.size === 0) return; // skip levels with no roles
-    // Skip levels where no role has actual shifts (seeded-but-empty roles don't count)
-    const hasAnyShifts = [...roleMap.values()].some(r => r.shiftsByDate.size > 0);
+    if (!roleMap || roleMap.size === 0) return;
+    const hasAnyShifts = Array.from(roleMap.values()).some(r => r.shiftsByDate.size > 0);
     if (!hasAnyShifts) return;
 
     const levelMeta = levelById.get(levelId);
-    const levelNumber = levelMeta?.level_number ?? 0;
+    const levelNumber = levelMeta?.levelNumber ?? 0;
 
-    // Include all seeded roles for this level, regardless of having shifts
-    const projectedRoles: ProjectedRole[] = [...roleMap.values()]
+    const projectedRoles: ProjectedRole[] = Array.from(roleMap.values())
       .map(finaliseRole)
       .sort((a, b) => a.name.localeCompare(b.name));
-
-    // Allow levels to render even if they only contain empty roles
-    // if (projectedRoles.length === 0) return;
 
     const totalHours = projectedRoles.reduce((acc, r) => acc + r.totalHours, 0);
     const totalCost = projectedRoles.reduce((acc, r) => acc + r.totalCost, 0);
 
     projectedLevels.push({
       id: levelId,
-      name: levelMeta?.level_name ?? `Level ${levelNumber}`,
+      name: levelMeta?.levelName ?? `Level ${levelNumber}`,
       levelNumber,
       colorClass: levelColorClass(levelNumber),
       roles: projectedRoles,
@@ -245,16 +232,23 @@ export function projectRoles(
     });
   });
 
-  // Sort levels by level_number asc
   projectedLevels.sort((a, b) => a.levelNumber - b.levelNumber);
 
-  const unassignedRoles: ProjectedRole[] = [...unassignedRoleMap.values()]
+  const unassignedRoles: ProjectedRole[] = Array.from(unassignedRoleMap.values())
     .map(finaliseRole)
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return {
     levels: projectedLevels,
     unassignedRoles,
-    stats: buildStats(shifts),
+    stats: {
+      totalShifts: 0,
+      assignedShifts: 0,
+      openShifts: 0,
+      publishedShifts: 0,
+      totalNetMinutes: 0,
+      estimatedCost: 0,
+      costBreakdown: { base: 0, penalty: 0, overtime: 0, allowance: 0, leave: 0 },
+    },
   };
 }

@@ -29,7 +29,7 @@ import {
 } from '@/modules/core/ui/primitives/dialog';
 
 interface RosterSubGroupProps {
-  templateId?: number;
+  templateId?: string | number;
   subGroup: SubGroup;
   groupId: number | string;
   groupColor: string;
@@ -126,7 +126,7 @@ const RosterSubGroup: React.FC<RosterSubGroupProps> = ({
               onAddShift={handleAddShift}
               trigger={
                 <button
-                  className="p-1 rounded-lg bg-black/20 hover:bg-black/40 text-white/80 hover:text-white transition-all duration-200 hover:scale-110"
+                  className="p-1 rounded-lg bg-black/20 hover:bg-black/40 text-white/80 hover:text-white transition-[background-color,color,transform] duration-200 hover:scale-110"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Plus size={14} />
@@ -135,7 +135,7 @@ const RosterSubGroup: React.FC<RosterSubGroupProps> = ({
             />
 
             <button
-              className="p-1 rounded-lg bg-black/20 hover:bg-black/40 text-blue-400/80 hover:text-blue-400 transition-all duration-200 hover:scale-110"
+              className="p-1 rounded-lg bg-black/20 hover:bg-black/40 text-blue-400/80 hover:text-blue-400 transition-[background-color,color,transform] duration-200 hover:scale-110"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsEditDialogOpen(true);
@@ -151,7 +151,7 @@ const RosterSubGroup: React.FC<RosterSubGroupProps> = ({
             />
 
             <button
-              className="p-1 rounded-lg bg-black/20 hover:bg-black/40 text-indigo-400/80 hover:text-indigo-400 transition-all duration-200 hover:scale-110"
+              className="p-1 rounded-lg bg-black/20 hover:bg-black/40 text-indigo-400/80 hover:text-indigo-400 transition-[background-color,color,transform] duration-200 hover:scale-110"
               onClick={(e) => {
                 e.stopPropagation();
                 handleCloneSubGroup();
@@ -163,7 +163,7 @@ const RosterSubGroup: React.FC<RosterSubGroupProps> = ({
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <button
-                  className="p-1 rounded-lg bg-black/20 hover:bg-black/40 text-red-400/80 hover:text-red-400 transition-all duration-200 hover:scale-110"
+                  className="p-1 rounded-lg bg-black/20 hover:bg-black/40 text-red-400/80 hover:text-red-400 transition-[background-color,color,transform] duration-200 hover:scale-110"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Trash size={14} />
@@ -193,15 +193,15 @@ const RosterSubGroup: React.FC<RosterSubGroupProps> = ({
           {subGroup.shifts.map((shift) => (
             <ShiftItem
               key={shift.id}
-              id={shift.id}
-              role={shift.role}
+              id={String(shift.id)}
+              role={shift.roleName || 'No Role'}
               startTime={shift.startTime}
               endTime={shift.endTime}
-              breakDuration={shift.breakDuration || ""}
+              breakDuration={`${(shift.unpaidBreakDuration || 0) + (shift.paidBreakDuration || 0)}m`}
               remunerationLevel={String(shift.remunerationLevel || "")}
-              employeeId={shift.employeeId}
-              employee={shift.employee}
-              status={shift.status}
+              employeeId={shift.assignedEmployeeId || undefined}
+              employee={shift.assignedEmployeeName ? { name: shift.assignedEmployeeName } as any : undefined}
+              status={undefined}
             />
           ))}
 
@@ -230,7 +230,7 @@ const RosterSubGroup: React.FC<RosterSubGroupProps> = ({
               date={format(getSydneyToday(), 'yyyy-MM-dd')}
               onAddShift={handleAddShift}
               trigger={
-                <button className="w-full py-1.5 mt-2 rounded-md flex items-center justify-center bg-black/20 hover:bg-black/30 text-white/70 hover:text-white border border-white/5 hover:border-white/10 transition-all duration-200 text-sm">
+                <button className="w-full py-1.5 mt-2 rounded-md flex items-center justify-center bg-black/20 hover:bg-black/30 text-white/70 hover:text-white border border-white/5 hover:border-white/10 transition-[background-color,border-color,color] duration-200 text-sm">
                   <Plus size={12} className="mr-1" />
                   <span>Add Shift</span>
                 </button>

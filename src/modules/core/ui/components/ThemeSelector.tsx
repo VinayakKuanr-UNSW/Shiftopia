@@ -22,12 +22,6 @@ export const ThemeSelector: React.FC = () => {
 
   const handleToggle = () => {
     toggleTheme();
-
-    toast({
-      title: 'Theme Changed',
-      description: `${isDark ? 'Light' : 'Dark'} theme applied.`,
-      duration: 1500,
-    });
   };
 
   return (

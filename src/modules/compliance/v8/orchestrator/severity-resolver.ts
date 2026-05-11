@@ -23,11 +23,13 @@ import { V8Severity, V8SeverityOverride, V8SeverityMatrix, V8OperationType, V8St
 // =============================================================================
 
 export const DEFAULT_SEVERITY_MATRIX: V8SeverityMatrix = {
-    // Meal break: not relevant for bid simulation; escalates to BLOCKING at publish
+    // Meal break: advisory only — taken at timesheet, not at roster time.
+    // Never block assignment over a missing break field; keep visible as a
+    // WARNING so managers can confirm at clock-out.
     R08_MEAL_BREAK: {
-        ASSIGN: { DRAFT: 'WARNING',  PUBLISH: 'BLOCKING', LIVE: 'WARNING'  },
-        BID:    { DRAFT: null,       PUBLISH: null,        LIVE: null       },
-        SWAP:   { DRAFT: 'WARNING',  PUBLISH: 'BLOCKING',  LIVE: 'WARNING'  },
+        ASSIGN: { DRAFT: 'WARNING', PUBLISH: 'WARNING', LIVE: 'WARNING' },
+        BID:    { DRAFT: null,      PUBLISH: null,      LIVE: null      },
+        SWAP:   { DRAFT: 'WARNING', PUBLISH: 'WARNING', LIVE: 'WARNING' },
     },
 
     // Qualifications: strict for ASSIGN/SWAP; softer at BID/DRAFT (manager can note exception)

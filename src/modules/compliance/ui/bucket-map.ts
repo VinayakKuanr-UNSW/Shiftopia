@@ -80,3 +80,5 @@ export function getV8BucketSummary(buckets: BucketMap): BucketSummary {
         systemFails: buckets.D.filter(h => h.status === 'BLOCKING').length,
     };
 }
+
+export { getV8BucketSummary as getBucketSummary };

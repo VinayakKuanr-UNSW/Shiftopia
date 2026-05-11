@@ -1,94 +1,96 @@
 /**
- * Events Mode Projector
+ * Events Mode Projector (Worker-Safe)
  *
- * Transforms a flat Shift[] + optional EventRecord[] into an EventsProjection.
- *
- * Design:
- *  - A shift may appear in multiple events (shift.event_ids: string[]).
- *    Each event gets its own fully-resolved shifts list.  This mirrors how
- *    EventsModeView renders: shifts repeated per event card, not de-duped.
- *  - Shifts with no event_ids (or empty array) land in a synthetic
- *    "No Event" bucket (eventId = '__no_event__').
- *  - Events from EventRecord[] are included even when they have zero shifts
- *    so the UI can render an empty event card with a "no shifts" state.
- *  - Events are sorted by eventDate asc, then by eventName.  The no-event
- *    bucket always sorts last.
- *  - Coverage is computed per-event (assigned / total shifts in that event).
+ * Transforms a flat WorkerShiftDTO[] + optional WorkerEventDTO[] into an EventsProjection.
+ * NO React, NO DOM, NO raw Shift entities. Runs natively inside Web Worker.
  */
 
-import type { Shift } from '../../shift.entity';
-import type {
-  EventRecord,
-  EventsProjection,
-  ProjectedEvent,
-  ProjectedShift,
-} from '../types';
+import type { EventsProjection, ProjectedEvent } from '../types';
+import type { WorkerShiftDTO, WorkerEventDTO, ProjectedShiftResult } from '../worker/protocol';
 import { computeBiddingUrgency, isOnBidding } from '../../bidding-urgency';
 import { GROUP_COLORS, UNASSIGNED_COLORS, ALL_GROUP_TYPES } from '../constants';
-import { netMinutesFromShift, minutesToHours } from '../utils/duration';
-import { estimateCostFromShift, estimateDetailedCostFromShift } from '../utils/cost';
+import { minutesToHours } from '../utils/duration';
+import { getCachedCost, makeCacheKey } from '../cache/projection.cache';
+import { ZERO_COST_BREAKDOWN } from '../utils/cost/constants';
 import { coverageHealth } from '../utils/coverage';
 import { determineShiftState } from '../../shift-state.utils';
-import { buildStats } from './shared';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const NO_EVENT_ID   = '__no_event__';
 const NO_EVENT_NAME = 'No Event';
 
-function toProjectedShift(shift: Shift): ProjectedShift {
-  const netMinutes    = netMinutesFromShift(shift);
-  const estimatedCost = estimateCostFromShift(shift, netMinutes);
-  const detail         = estimateDetailedCostFromShift(shift, netMinutes);
-  const groupType     = shift.group_type ?? null;
-  const colors        = groupType && ALL_GROUP_TYPES.includes(groupType)
+function resolveEmployeeName(shift: WorkerShiftDTO): string | null {
+  if (shift.employeeFirstName || shift.employeeLastName) {
+    return `${shift.employeeFirstName ?? ''} ${shift.employeeLastName ?? ''}`.trim() || null;
+  }
+  if (shift.assignedEmployeeId) return 'Assigned';
+  return null;
+}
+
+function toProjectedShift(shift: WorkerShiftDTO): ProjectedShiftResult {
+  const isAssigned = !!shift.assignedEmployeeId;
+  const netMinutes = shift.netLengthMinutes ?? shift.scheduledLengthMinutes;
+  
+  const key = makeCacheKey(shift.id, shift.updatedAtMs);
+  const detail = isAssigned ? (getCachedCost(key) ?? ZERO_COST_BREAKDOWN) : ZERO_COST_BREAKDOWN;
+  const estimatedCost = detail.totalCost;
+
+  const groupType = shift.groupType ?? null;
+  const colors = groupType && ALL_GROUP_TYPES.includes(groupType)
     ? GROUP_COLORS[groupType]
     : UNASSIGNED_COLORS;
 
+  const stateId = determineShiftState({
+    lifecycle_status: shift.lifecycleStatus as any,
+    assignment_status: (shift.assignmentStatus ?? 'unassigned') as any,
+    assignment_outcome: shift.assignmentOutcome as any,
+    trading_status: shift.tradingStatus as any,
+    is_cancelled: shift.isCancelled,
+  });
+
   return {
-    id:             shift.id,
-    reactKey:       shift.id,
-    date:           shift.shift_date,
-    startTime:      shift.start_time,
-    endTime:        shift.end_time,
+    id: shift.id,
+    date: shift.shiftDate,
+    startTime: shift.startTime,
+    endTime: shift.endTime,
     netMinutes,
     estimatedCost,
     costBreakdown: {
-      base: detail.baseCost,
+      base: detail.ordinaryCost,
       penalty: detail.penaltyCost,
       overtime: detail.overtimeCost,
-      allowance: detail.allowanceCost,
-      leave: detail.leaveLoadingCost,
+      allowance: detail.allowanceCost ?? 0,
+      leave: 0,
     },
-    stateId:        determineShiftState(shift),
-    roleName:       shift.roles?.name ?? 'Shift',
-    roleId:         shift.role_id,
-    levelName:      shift.remuneration_levels?.level_name ?? '',
-    levelNumber:    shift.remuneration_levels?.level_number ?? 0,
-    levelId:        shift.remuneration_level_id,
+    detailedCost: detail,
+    stateId,
+    roleName: shift.roleName ?? 'Shift',
+    roleId: shift.roleId,
+    levelName: shift.levelName ?? '',
+    levelNumber: shift.levelNumber ?? 0,
+    levelId: shift.remunerationLevelId,
     groupType,
-    subGroupName:   shift.sub_group_name ?? null,
-    groupColors:    colors,
-    employeeName:   resolveEmployeeName(shift),
-    employeeId:     shift.assigned_employee_id,
-    isLocked:       shift.is_locked,
-    isUrgent:       isOnBidding(shift.bidding_status) && computeBiddingUrgency(shift.shift_date, shift.start_time) === 'urgent',
-    isOnBidding:    isOnBidding(shift.bidding_status),
-    isTrading:      !!shift.trade_requested_at,
-    isCancelled:    shift.is_cancelled,
-    isPublished:    shift.lifecycle_status === 'Published',
-    isDraft:        shift.lifecycle_status === 'Draft',
-    raw:            shift,
-  };
-}
+    subGroupName: shift.subGroupName ?? shift.rosterSubgroupName ?? null,
+    groupColorKey: groupType ?? 'unassigned',
+    employeeName: resolveEmployeeName(shift),
+    employeeId: shift.assignedEmployeeId,
+    isLocked: shift.isLocked,
+    isUrgent: isOnBidding(shift.biddingStatus) && computeBiddingUrgency(shift.shiftDate, shift.startTime) === 'urgent',
+    isOnBidding: isOnBidding(shift.biddingStatus),
+    isTrading: !!shift.tradeRequestedAt,
+    isCancelled: shift.isCancelled,
+    isPublished: shift.isPublished,
+    isDraft: shift.isDraft,
 
-function resolveEmployeeName(shift: Shift): string | null {
-  const profile = (shift as any).assigned_profiles ?? (shift as any).profiles;
-  if (profile?.first_name || profile?.last_name) {
-    return `${profile.first_name ?? ''} ${profile.last_name ?? ''}`.trim() || null;
-  }
-  if (shift.assigned_employee_id) return 'Assigned';
-  return null;
+    role: shift.roleName ?? 'Shift',
+    hours: minutesToHours(netMinutes),
+    pay: estimatedCost,
+    status: shift.isCancelled ? 'Draft' : (shift.assignedEmployeeId ? (shift.isDraft ? 'Draft' : 'Assigned') : 'Open'),
+    lifecycleStatus: shift.isPublished ? 'published' : 'draft',
+    assignmentStatus: shift.assignedEmployeeId ? 'assigned' : 'unassigned',
+    fulfillmentStatus: shift.fulfillmentStatus,
+  };
 }
 
 function buildProjectedEvent(
@@ -98,7 +100,7 @@ function buildProjectedEvent(
   startTime: string,
   endTime:   string,
   location:  string,
-  shifts:    ProjectedShift[],
+  shifts:    ProjectedShiftResult[],
 ): ProjectedEvent {
   const assigned = shifts.filter(s => !!s.employeeId).length;
   const totalMins = shifts.reduce((acc, s) => acc + s.netMinutes, 0);
@@ -109,7 +111,8 @@ function buildProjectedEvent(
     startTime,
     endTime,
     location,
-    shifts,
+    // Cast to any for internal projection pipeline, useRosterProjections maps the raw property back
+    shifts: shifts as any,
     totalHours:    minutesToHours(totalMins),
     assignedCount: assigned,
     totalCount:    shifts.length,
@@ -120,32 +123,28 @@ function buildProjectedEvent(
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export interface EventsProjectorContext {
-  events?: EventRecord[];
+  events?: WorkerEventDTO[];
 }
 
 export function projectEvents(
-  shifts:  Shift[],
+  shifts:  WorkerShiftDTO[],
   ctx:     EventsProjectorContext = {},
 ): EventsProjection {
   const { events = [] } = ctx;
 
-  // ─── 1. Seed event map from EventRecord[] ─────────────────────────────────
-  // eventId → accumulated ProjectedShift[]
-  const eventShiftsMap = new Map<string, ProjectedShift[]>();
-  const eventMeta      = new Map<string, EventRecord>();
+  const eventShiftsMap = new Map<string, ProjectedShiftResult[]>();
+  const eventMeta      = new Map<string, WorkerEventDTO>();
 
   events.forEach(ev => {
     eventShiftsMap.set(ev.id, []);
     eventMeta.set(ev.id, ev);
   });
 
-  // ─── 2. Route each shift to its events ───────────────────────────────────
   shifts.forEach(shift => {
     const ps       = toProjectedShift(shift);
-    const eventIds = shift.event_ids ?? [];
+    const eventIds = shift.eventIds ?? [];
 
     if (eventIds.length === 0) {
-      // No event → no-event bucket
       if (!eventShiftsMap.has(NO_EVENT_ID)) {
         eventShiftsMap.set(NO_EVENT_ID, []);
       }
@@ -155,33 +154,30 @@ export function projectEvents(
 
     eventIds.forEach(eid => {
       if (!eventShiftsMap.has(eid)) {
-        // Ad-hoc event referenced by a shift but absent from EventRecord[]
         eventShiftsMap.set(eid, []);
       }
       eventShiftsMap.get(eid)!.push(ps);
     });
   });
 
-  // ─── 3. Build ProjectedEvent[] ────────────────────────────────────────────
   const projectedEvents: ProjectedEvent[] = [];
 
   eventShiftsMap.forEach((pShifts, eid) => {
-    if (eid === NO_EVENT_ID) return; // handled separately below
+    if (eid === NO_EVENT_ID) return;
 
     const meta  = eventMeta.get(eid);
     const event = buildProjectedEvent(
       eid,
       meta?.name       ?? 'Unknown Event',
-      meta?.event_date ?? null,
-      meta?.start_time ?? '',
-      meta?.end_time   ?? '',
+      meta?.eventDate  ?? null,
+      meta?.startTime  ?? '',
+      meta?.endTime    ?? '',
       meta?.location   ?? '',
       pShifts,
     );
     projectedEvents.push(event);
   });
 
-  // Sort by eventDate asc, then by name
   projectedEvents.sort((a, b) => {
     if (a.eventDate && b.eventDate) {
       const dateCmp = a.eventDate.localeCompare(b.eventDate);
@@ -192,7 +188,6 @@ export function projectEvents(
     return a.eventName.localeCompare(b.eventName);
   });
 
-  // Append no-event bucket last
   const noEventShifts = eventShiftsMap.get(NO_EVENT_ID);
   if (noEventShifts && noEventShifts.length > 0) {
     projectedEvents.push(
@@ -202,6 +197,14 @@ export function projectEvents(
 
   return {
     events: projectedEvents,
-    stats:  buildStats(shifts),
+    stats: {
+      totalShifts: 0,
+      assignedShifts: 0,
+      openShifts: 0,
+      publishedShifts: 0,
+      totalNetMinutes: 0,
+      estimatedCost: 0,
+      costBreakdown: { base: 0, penalty: 0, overtime: 0, allowance: 0, leave: 0 },
+    },
   };
 }

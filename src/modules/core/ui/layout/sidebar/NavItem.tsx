@@ -9,7 +9,6 @@ import {
   TooltipTrigger,
 } from '@/modules/core/ui/primitives/tooltip';
 import { NavItemProps } from './types';
-import { motion } from 'framer-motion';
 
 const NavItem: React.FC<NavItemProps> = ({
   icon,
@@ -46,25 +45,20 @@ const NavItem: React.FC<NavItemProps> = ({
           >
             {/* Active indicator bar */}
             {active && (
-              <motion.div
+              <div
                 className={cn(
                   "absolute left-0 top-0 h-full w-1 rounded-l-lg",
                   sectionColor === "primary"
                     ? "bg-primary"
                     : `bg-${sectionColor}-500`
                 )}
-                layoutId="activeNavIndicator"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
               />
             )}
             
             {/* Icon */}
             <span
               className={cn(
-                "transition-transform duration-200 group-hover:scale-105",
+                "transition-transform duration-200",
                 active
                   ? colorClasses[sectionColor]
                   : "text-muted-foreground group-hover:text-foreground"

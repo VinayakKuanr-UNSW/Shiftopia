@@ -21,7 +21,7 @@ import { spreadOfHoursRule } from './rules/spread-of-hours';
 import { minEngagementRule } from './rules/min-engagement';
 import { qualificationRule } from './rules/employment-rules';
 
-// Rule Registry (Optimized Execution Order)
+// Optimized Rule Execution Order
 const ACTIVE_RULES: V8RuleEvaluator[] = [
     // 1. Structural (Fastest)
     noOverlapRule,

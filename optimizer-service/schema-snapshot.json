@@ -1,0 +1,74 @@
+{
+  "AvailabilitySlot": [
+    "end_time",
+    "slot_date",
+    "start_time"
+  ],
+  "Constraints": [
+    "allow_partial",
+    "enforce_role_match",
+    "enforce_skill_match",
+    "min_rest_minutes",
+    "relax_constraints"
+  ],
+  "Employee": [
+    "availability_overrides",
+    "availability_slots",
+    "contract_weekly_minutes",
+    "employment_type",
+    "existing_shifts",
+    "has_availability_data",
+    "hourly_rate",
+    "id",
+    "is_flexible",
+    "is_student",
+    "level",
+    "license_ids",
+    "max_weekly_minutes",
+    "min_contract_minutes",
+    "name",
+    "preferred_shift_ids",
+    "role_id",
+    "skill_ids",
+    "unavailable_dates",
+    "visa_limit"
+  ],
+  "ExistingShift": [
+    "duration_minutes",
+    "end_time",
+    "id",
+    "shift_date",
+    "start_time",
+    "unpaid_break_minutes"
+  ],
+  "Shift": [
+    "duration_minutes",
+    "end_time",
+    "id",
+    "is_public_holiday",
+    "is_sunday",
+    "is_training",
+    "level",
+    "priority",
+    "required_license_ids",
+    "required_skill_ids",
+    "role_id",
+    "shift_date",
+    "shift_type",
+    "start_time",
+    "target_employment_type",
+    "unpaid_break_minutes"
+  ],
+  "SolverParams": [
+    "enable_greedy_hint",
+    "log_search",
+    "max_time_seconds",
+    "num_workers"
+  ],
+  "Strategy": [
+    "cost_weight",
+    "coverage_weight",
+    "fairness_weight",
+    "fatigue_weight"
+  ]
+}

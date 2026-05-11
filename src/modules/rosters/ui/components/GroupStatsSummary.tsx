@@ -80,11 +80,10 @@ export const GroupStatsSummary: React.FC<GroupStatsSummaryProps> = ({
 
         const estimatedCost = activeShifts.reduce((acc, s) => {
             const detail = estimateDetailedCostFromShift(s);
-            breakdown.base += detail.baseCost;
+            breakdown.base += detail.ordinaryCost;
             breakdown.penalty += detail.penaltyCost;
             breakdown.overtime += detail.overtimeCost;
-            breakdown.allowance += detail.allowanceCost;
-            breakdown.leave += detail.leaveLoadingCost;
+            breakdown.allowance += detail.allowanceCost ?? 0;
             return acc + detail.totalCost;
         }, 0);
 

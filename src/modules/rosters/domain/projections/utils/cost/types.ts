@@ -65,6 +65,7 @@ export interface CostCalculatorOptions {
   sws_capacity_percentage?: number;
   is_sws_trial?: boolean;
   sws_trial_start_date?: string;
+  classificationLevel?: string;
 }
 
 export interface CostEngine {

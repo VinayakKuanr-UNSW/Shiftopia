@@ -16,6 +16,7 @@
 import type { Shift, TemplateGroupType } from '../shift.entity';
 import type { ShiftStateID } from '../shift-state.utils';
 import type { CoverageHealth } from './utils/coverage';
+import type { ShiftCostBreakdown } from './utils/cost/types';
 
 // ── Styling token set (lives in constants.ts, typed here) ─────────────────────
 
@@ -58,6 +59,11 @@ export interface ProjectedShift {
     allowance: number;
     leave: number;
   };
+  /**
+   * Full ICC EA cost breakdown — pre-computed once at projection time so the
+   * UI doesn't re-run the payroll engine for every card on every render.
+   */
+  detailedCost:    ShiftCostBreakdown;
 
   // Domain classification
   stateId:         ShiftStateID;
@@ -84,6 +90,15 @@ export interface ProjectedShift {
   isCancelled:     boolean;
   isPublished:     boolean;
   isDraft:         boolean;
+
+  // Legacy UI compatibility fields (computed once in projector)
+  role:            string;
+  hours:           number;
+  pay:             number;
+  status:          'Open' | 'Assigned' | 'Completed' | 'Draft';
+  lifecycleStatus: 'draft' | 'published';
+  assignmentStatus: 'assigned' | 'unassigned';
+  fulfillmentStatus: 'scheduled' | 'bidding' | 'offered' | 'none';
 
   /**
    * Escape hatch: the raw Supabase `Shift` row.
@@ -194,14 +209,25 @@ export interface RolesProjection {
 export interface ProjectedEmployee {
   id:               string;
   name:             string;
-  avatarUrl:        string;
+  avatar:           string;
   contractedHours:  number;
   /** Hours scheduled in the current view window */
-  scheduledHours:   number;
+  currentHours:     number;
   /** true when scheduledHours > contractedHours */
   overHoursWarning: boolean;
   /** Keyed by ISO date string YYYY-MM-DD */
-  shiftsByDate:     Record<string, ProjectedShift[]>;
+  shifts:           Record<string, ProjectedShift[]>;
+  /** Derived statistics for the employee window */
+  estimatedPay:     number;
+  fatigueScore:     number;
+  utilization:      number;
+  payBreakdown: {
+    base:      number;
+    penalty:   number;
+    overtime:  number;
+    allowance: number;
+    leave:     number;
+  };
 }
 
 export interface PeopleProjection {

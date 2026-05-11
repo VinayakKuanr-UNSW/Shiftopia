@@ -63,7 +63,6 @@ import { useRosterProjections } from '@/modules/rosters/hooks/useRosterProjectio
 import { useRosterStructure } from '@/modules/rosters/state/useRosterStructure';
 import { useRostersByDateRange } from '@/modules/rosters/state/useEnhancedRosters';
 import { usePublishRoster } from '@/modules/rosters/state/useRosterMutations';
-import { usePeopleModeData } from '@/modules/rosters/hooks/usePeopleModeData';
 import { useRosterViewPrefetch } from '@/modules/rosters/hooks/useRosterViewPrefetch';
 import { shiftKeys, type ShiftFilters } from '@/modules/rosters/api/queryKeys';
 import { ScopeFilterBanner } from '@/modules/core/ui/components/ScopeFilterBanner';
@@ -81,9 +80,7 @@ import type { ToolbarPreflightData } from '@/modules/rosters/ui/components/BulkA
 import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import { executeAssignShift } from '@/modules/rosters/domain/commands/assignShift.command';
 import { resolveGroupType } from '@/modules/rosters/utils/roster-utils';
-import { estimateDetailedCostFromShift, formatCost } from '@/modules/rosters/domain/projections/utils/cost';
-import { calculateFatigueWithRecovery } from '@/modules/rosters/domain/projections/utils/fatigue';
-import { calculateUtilization } from '@/modules/rosters/domain/projections/utils/fairness';
+import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
 import {
   Tooltip,
   TooltipContent,
@@ -97,7 +94,6 @@ import {
 const NewRostersPage: React.FC = () => {
   const { toast } = useToast();
   const { hasPermission } = useAuth();
-  const { isDark } = useTheme();
   const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
   const queryClient = useQueryClient();
 
@@ -623,83 +619,11 @@ const NewRostersPage: React.FC = () => {
   };
 
   // ==================== EMPLOYEES WITH SHIFTS ====================
-  // Legacy derivation (always called — hooks cannot be conditional)
-  const legacyEmployeesWithShifts = usePeopleModeData({ employees, shifts });
-
-  // When projection.people is available, adapt ProjectedEmployee → PeopleModeEmployee
-  const GROUP_ACCENT: Record<string, string> = {
-    convention_centre: 'convention_centre',
-    exhibition_centre: 'exhibition_centre',
-    theatre: 'theatre',
-  };
-  const employeesWithShifts = useMemo((): PeopleModeEmployee[] => {
-    if (projection.people) {
-      return projection.people.employees.map((pe): PeopleModeEmployee => {
-        const breakdown = {
-          base: 0,
-          penalty: 0,
-          overtime: 0,
-          allowance: 0,
-          leave: 0,
-        };
-
-        const shiftsMap = Object.fromEntries(
-          Object.entries(pe.shiftsByDate).map(([date, pShifts]) => [
-            date,
-            pShifts.map((ps): PeopleModeShift => {
-              breakdown.base += ps.costBreakdown.base;
-              breakdown.penalty += ps.costBreakdown.penalty;
-              breakdown.overtime += ps.costBreakdown.overtime;
-              breakdown.allowance += ps.costBreakdown.allowance;
-              breakdown.leave += ps.costBreakdown.leave;
-
-              return {
-                id: ps.id,
-                role: ps.roleName,
-                remunerationLevel: ps.raw.remuneration_levels?.level_name ?? 'L1',
-                startTime: ps.startTime,
-                endTime: ps.endTime,
-                department: ps.raw.group_type ?? 'General',
-                subGroup: ps.subGroupName ?? '',
-                group: ps.groupType ?? 'convention_centre',
-                groupColor: resolveGroupType(ps.raw),
-                hours: ps.netMinutes / 60,
-                pay: ps.estimatedCost,
-                status: ps.employeeId ? (ps.isDraft ? 'Draft' : 'Assigned') : 'Open',
-                lifecycleStatus: ps.isPublished ? 'published' : 'draft',
-                assignmentStatus: ps.employeeId ? 'assigned' : 'unassigned',
-                fulfillmentStatus: ps.raw.fulfillment_status,
-                isTradeRequested: ps.isTrading,
-                isCancelled: ps.isCancelled,
-                rawShift: ps.raw,
-              };
-            }),
-          ])
-        );
-
-        return {
-          id: pe.id,
-          name: pe.name,
-          employeeId: pe.id.slice(0, 8),
-          avatar: pe.avatarUrl,
-          contractedHours: pe.contractedHours,
-          currentHours: pe.scheduledHours,
-          overHoursWarning: pe.overHoursWarning,
-          estimatedPay: pe.scheduledHours > 0 ? (
-            Object.values(shiftsMap).flat().reduce((acc, s) => acc + s.pay, 0)
-          ) : 0,
-          fatigueScore: calculateFatigueWithRecovery(
-            Object.values(shiftsMap).flat().map(s => s.rawShift).filter((s): s is Shift => !!s),
-            format(addDays(selectedDate, 0), 'yyyy-MM-dd')
-          ).current,
-          utilization: calculateUtilization(pe.scheduledHours, pe.contractedHours),
-          payBreakdown: breakdown,
-          shifts: shiftsMap,
-        };
-      });
-    }
-    return legacyEmployeesWithShifts;
-  }, [projection.people, legacyEmployeesWithShifts]);
+  // Use the projected people directly from our data engine.
+  // This avoids re-running expensive cost/fatigue logic in the UI render loop.
+  const employeesWithShifts = useMemo(() => {
+    return (projection.people?.employees || []) as any[];
+  }, [projection.people]);
 
   // ── Drag-and-drop assignment ─────────────────────────────────────────
   // handleDndAssign: Used in People Mode (Unfilled Shift -> Employee row)
@@ -958,16 +882,10 @@ const NewRostersPage: React.FC = () => {
   return (
     <div 
       className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4"
-      style={{ zoom: 0.67 }}
     >
       {/* ── Unified Header ────────────────────────────────────────────── */}
       <div className="sticky top-0 z-30">
-        <div className={cn(
-          "rounded-[32px] p-4 lg:p-6 transition-all border",
-          isDark 
-            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
-        )}>
+        <div className="rounded-[32px] p-4 lg:p-6 transition-all border bg-white/95 border-white shadow-xl shadow-slate-200/50 dark:bg-[#1c2333] dark:border-white/5 dark:shadow-2xl dark:shadow-black/20">
           {/* Row 1: Identity & Clock + Row 2: Scope Filter */}
           <PersonalPageHeader
             title="Roster Planner"
@@ -1040,12 +958,7 @@ const NewRostersPage: React.FC = () => {
 
       {/* ── Main Content Area ─────────────────────────── */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        <div className={cn(
-          "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col",
-          isDark 
-            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
-        )}>
+        <div className="h-full rounded-[32px] overflow-hidden transition-all border flex flex-col bg-white/95 border-white shadow-xl shadow-slate-200/50 dark:bg-[#1c2333] dark:border-white/5 dark:shadow-2xl dark:shadow-black/20">
           <DndProvider backend={HTML5Backend}>
             <div className="flex-1 min-h-0 overflow-hidden flex relative">
         {/* Loading Overlay */}

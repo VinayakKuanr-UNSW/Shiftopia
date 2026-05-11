@@ -6,8 +6,7 @@
  * - Detailed: Full info card with compliance warnings, skills, and actions
  */
 
-import React, { useMemo } from 'react';
-import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
+import React, { useMemo, useState, useCallback } from 'react';
 import {
     Clock,
     User,
@@ -41,8 +40,8 @@ import {
     getProtectionContext,
     getShiftStatusIcons
 } from '../../domain/shift-ui';
-import { estimateDetailedShiftCost } from '../../domain/projections/utils/cost/standard';
-import { CostCalculatorOptions } from '../../domain/projections/utils/cost/types';
+import type { ShiftCostBreakdown } from '../../domain/projections/utils/cost/types';
+import { ZERO_COST_BREAKDOWN } from '../../domain/projections/utils/cost/constants';
 
 
 // ============================================================================
@@ -75,6 +74,12 @@ export interface SmartShiftCardProps {
     className?: string;
     compliancePending?: boolean;
     showStatusIcons?: boolean;
+    /**
+     * Pre-computed cost breakdown. When provided, the card skips its own
+     * call to the payroll engine — meaningful for dense grids where the
+     * projector already computed it once for every shift.
+     */
+    detailedCost?: ShiftCostBreakdown;
 }
 
 const GROUP_COLORS: Record<string, { header: string; accent: string; text: string; badge: string }> = {
@@ -118,29 +123,8 @@ function getNormalizedStatus(shift: any): string {
     return (shift.lifecycle_status || shift.lifecycleStatus || 'draft').toLowerCase();
 }
 
-/**
- * Hook for 3D tilt effect that follows the mouse cursor.
- */
-function useTilt() {
-    const x = useMotionValue(0);
-    const y = useMotionValue(0);
-    const mouseXSpring = useSpring(x, { stiffness: 300, damping: 30 });
-    const mouseYSpring = useSpring(y, { stiffness: 300, damping: 30 });
-    const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["7.5deg", "-7.5deg"]);
-    const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-7.5deg", "7.5deg"]);
 
-    const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        x.set((e.clientX - rect.left) / rect.width - 0.5);
-        y.set((e.clientY - rect.top) / rect.height - 0.5);
-    };
-    const onMouseLeave = () => {
-        x.set(0);
-        y.set(0);
-    };
 
-    return { rotateX, rotateY, onMouseMove, onMouseLeave };
-}
 
 /**
  * Renders the cost breakdown tooltip content.
@@ -185,6 +169,28 @@ const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }) => {
     );
 };
 
+/**
+ * Simple card shell that replaces the previous 3D tilt version.
+ * This ensures UI stability and prevents child components (like dropdowns)
+ * from unmounting during hover state transitions.
+ */
+interface CardShellProps {
+    className?: string;
+    onClick?: (e: React.MouseEvent) => void;
+    children: React.ReactNode;
+}
+
+const CardShell: React.FC<CardShellProps> = ({ className, onClick, children }) => {
+    return (
+        <div
+            className={className}
+            onClick={onClick}
+        >
+            {children}
+        </div>
+    );
+};
+
 // ============================================================================
 // COMPACT VARIANT
 // ============================================================================
@@ -202,6 +208,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     groupColor = 'default_yellow',
     className,
     showStatusIcons,
+    detailedCost,
 }) => {
     const colors = GROUP_COLORS[groupColor] || GROUP_COLORS.default_yellow;
     const employeeName = shift.assigned_employee_id ? (shift as any).assigned_profiles ? `${(shift as any).assigned_profiles.first_name} ${(shift as any).assigned_profiles.last_name}` : 'Assigned' : null;
@@ -251,42 +258,14 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
         showStatusIcons ? getShiftStatusIcons(shift) : [], 
     [shift, showStatusIcons]);
 
-    const costBreakdown = useMemo(() => {
-        const options: CostCalculatorOptions = {
-            netMinutes: shift.net_length_minutes || 0,
-            start_time: shift.start_time,
-            end_time: shift.end_time,
-            rate: shift.actual_hourly_rate || shift.remuneration_rate || 24.10, // Default if unknown
-            scheduled_length_minutes: shift.scheduled_length_minutes || 0,
-            is_overnight: !!shift.is_overnight,
-            is_cancelled: !!shift.is_cancelled,
-            shift_date: shift.shift_date,
-            employmentType: shift.target_employment_type === 'FT' ? 'Full-Time' : shift.target_employment_type === 'PT' ? 'Part-Time' : 'Casual',
-            allowances: shift.allowances,
-            is_trainee: !!shift.is_training,
-            is_apprentice: !!shift.apprenticeInfo,
-            apprentice_type: shift.apprenticeInfo?.isAdultApprentice ? 'adult' : 'standard',
-            apprentice_year: shift.apprenticeInfo?.year,
-            has_completed_year_12: shift.apprenticeInfo?.completedYear12
-        };
-        return estimateDetailedShiftCost(options);
-    }, [shift]);
-
-    const { rotateX, rotateY, onMouseMove, onMouseLeave } = useTilt();
+    const costBreakdown = detailedCost ?? ZERO_COST_BREAKDOWN;
 
     return (
-        <motion.div
-            style={{ 
-                rotateX, 
-                rotateY, 
-                transformStyle: "preserve-3d", 
-                perspective: "1000px",
-                zoom: 1.5 // 150% scale as requested
-            }}
-            onMouseMove={onMouseMove}
-            onMouseLeave={onMouseLeave}
+        <CardShell
             className={cn(
-                'relative flex flex-col rounded-lg overflow-hidden border bg-card shadow-sm transition-all h-full group select-none',
+                'relative group/card cursor-pointer rounded-lg overflow-hidden bg-card',
+                'border transition-[border-color,box-shadow,transform,background-color] duration-300',
+                'will-change-[transform,box-shadow]',
                 onClick && (!isFullyLocked || isSelected) && 'cursor-pointer hover:shadow-md',
                 isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background border-primary/50 bg-primary/5 dark:bg-primary/20',
                 isDragging && 'opacity-50 scale-95',
@@ -303,7 +282,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
             {/* Content container — body greyscales on past, header (dot) stays crisp */}
             <div className="flex-1 flex flex-col min-h-0">
                 {/* Header */}
-                <div className={cn('px-3 py-1.5 flex justify-between items-center transition-all duration-300 relative z-[20]',
+                <div className={cn('px-3 py-1.5 flex justify-between items-center transition-[background-color,color] duration-300 relative z-[20]',
                     shift.bidding_status === 'bidding_closed_no_winner' ? 'bg-orange-500/20 text-orange-900 dark:text-orange-100' : colors.header,
                     isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-40 backdrop-blur-[2px]',
                     !isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-100',
@@ -356,11 +335,13 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                             </Tooltip>
                         )}
 
-                        {headerAction || (!isFullyLocked && (
-                          <button className="min-h-[44px] min-w-[44px] flex items-center justify-center -mr-1">
-                            <MoreHorizontal className="h-3 w-3 opacity-40" />
-                          </button>
-                        ))}
+                        <div onClick={(e) => e.stopPropagation()} className="relative z-30">
+                            {headerAction || (!isFullyLocked && (
+                                <button className="h-8 w-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors -mr-1">
+                                    <MoreHorizontal className="h-3 w-3 opacity-60" />
+                                </button>
+                            ))}
+                        </div>
 
                         {showStatusIcons && statusIcons.length > 0 && (
                             <div className="flex items-center gap-1 ml-1">
@@ -377,7 +358,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                     </div>
                 </div>
 
-                {/* Body — greyscaled for past shifts while header/dot stays crisp */}
+                {/* Body — greyscaled for past shifts while header (dot) stays crisp */}
                 <div className={cn("px-3 py-1.5 flex flex-col gap-1 flex-1 relative z-[20]",
                     isPast && dot !== null && "grayscale opacity-80")}>
                     <div className="flex flex-col items-center justify-center min-h-[24px] gap-0.5">
@@ -391,32 +372,34 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                         </div>
                     </div>
                     
-                    {/* Estimated Pay Badge */}
-                    <div className="flex justify-center mt-auto">
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 cursor-help">
-                                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                                        ${costBreakdown.totalCost.toFixed(2)}
-                                    </span>
-                                </div>
-                            </TooltipTrigger>
-                            <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-xl">
-                                <CostBreakdownTooltip breakdown={costBreakdown} />
-                            </TooltipContent>
-                        </Tooltip>
-                    </div>
+                    {/* Committed Cost Badge — only shown for assigned shifts */}
+                    {employeeName && costBreakdown.totalCost > 0 && (
+                        <div className="flex justify-center mt-auto">
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 cursor-help">
+                                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                                            ${costBreakdown.totalCost.toFixed(2)}
+                                        </span>
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-xl">
+                                    <CostBreakdownTooltip breakdown={costBreakdown} />
+                                </TooltipContent>
+                            </Tooltip>
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* DnD Blocking Overlay (highest layer) */}
             {isDnDActive && isLocked && isPublished && (
-                <div 
-                    className="absolute inset-0 bg-stripe-red pointer-events-none rounded-inherit z-[100] border-2 border-red-500/50 shadow-[inset_0_0_20px_rgba(239,68,68,0.3)]" 
-                    aria-hidden="true" 
+                <div
+                    className="absolute inset-0 bg-stripe-red pointer-events-none rounded-inherit z-[100] border-2 border-red-500/50 shadow-[inset_0_0_20px_rgba(239,68,68,0.3)]"
+                    aria-hidden="true"
                 />
             )}
-        </motion.div>
+        </CardShell>
     );
 };
 
@@ -438,6 +421,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
     groupColor = 'default_yellow',
     className,
     showStatusIcons,
+    detailedCost,
 }) => {
     const colors = GROUP_COLORS[groupColor] || GROUP_COLORS.default_yellow;
     const employeeName = shift.assigned_employee_id ? (shift as any).assigned_profiles ? `${(shift as any).assigned_profiles.first_name} ${(shift as any).assigned_profiles.last_name}` : 'Assigned' : null;
@@ -471,26 +455,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
         showStatusIcons ? getShiftStatusIcons(shift) : [], 
     [shift, showStatusIcons]);
 
-    const costBreakdown = useMemo(() => {
-        const options: CostCalculatorOptions = {
-            netMinutes: shift.net_length_minutes || 0,
-            start_time: shift.start_time,
-            end_time: shift.end_time,
-            rate: shift.actual_hourly_rate || shift.remuneration_rate || 24.10,
-            scheduled_length_minutes: shift.scheduled_length_minutes || 0,
-            is_overnight: !!shift.is_overnight,
-            is_cancelled: !!shift.is_cancelled,
-            shift_date: shift.shift_date,
-            employmentType: shift.target_employment_type === 'FT' ? 'Full-Time' : shift.target_employment_type === 'PT' ? 'Part-Time' : 'Casual',
-            allowances: shift.allowances,
-            is_trainee: !!shift.is_training,
-            is_apprentice: !!shift.apprenticeInfo,
-            apprentice_type: shift.apprenticeInfo?.isAdultApprentice ? 'adult' : 'standard',
-            apprentice_year: shift.apprenticeInfo?.year,
-            has_completed_year_12: shift.apprenticeInfo?.completedYear12
-        };
-        return estimateDetailedShiftCost(options);
-    }, [shift]);
+    const costBreakdown = detailedCost ?? ZERO_COST_BREAKDOWN;
 
     const dot = getStatusDotInfo({
         lifecycle_status:   shift.lifecycle_status,
@@ -511,21 +476,12 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
         : ctx.state === 'S5' && ctx.urgency === 'emergent' ? 'S5*'
         : ctx.state;
 
-    const { rotateX, rotateY, onMouseMove, onMouseLeave } = useTilt();
-
     return (
-        <motion.div
-            style={{ 
-                rotateX, 
-                rotateY, 
-                transformStyle: "preserve-3d", 
-                perspective: "1000px",
-                zoom: 1.5 // 150% scale as requested
-            }}
-            onMouseMove={onMouseMove}
-            onMouseLeave={onMouseLeave}
+        <CardShell
             className={cn(
-                'relative flex flex-col rounded-xl overflow-hidden border bg-card shadow-sm transition-all group select-none',
+                'relative group/card cursor-pointer rounded-xl overflow-hidden bg-card',
+                'border transition-[border-color,box-shadow,transform,background-color] duration-300',
+                'will-change-[transform,box-shadow]',
                 onClick && !isFullyLocked && 'cursor-pointer hover:shadow-lg',
                 isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background border-primary/50 bg-primary/5 dark:bg-primary/20',
                 isDragging && 'opacity-50 scale-95',
@@ -541,7 +497,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
             {/* Content container — body greyscales on past, header (dot) stays crisp */}
             <div className="flex-1 flex flex-col min-h-0">
                 {/* Header */}
-                <div className={cn('px-4 py-2.5 flex justify-between items-center transition-all duration-300 relative z-[20]',
+                <div className={cn('px-4 py-2.5 flex justify-between items-center transition-[background-color,color] duration-300 relative z-[20]',
                     shift.bidding_status === 'bidding_closed_no_winner' ? 'bg-orange-500/20 text-orange-900 dark:text-orange-100' : colors.header,
                     isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-40 backdrop-blur-[2px]',
                     !isDraft && shift.bidding_status !== 'bidding_closed_no_winner' && 'bg-opacity-100',
@@ -575,11 +531,13 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         {shift.is_from_template && <Badge variant="outline" className="text-[9px] bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 h-4 px-1 gap-1"><CopyPlus className="h-2.5 w-2.5" />Template</Badge>}
 
                         {getLifecycleIcon(statusStr)}
-                        {headerAction || (!isFullyLocked && (
-                          <button className="min-h-[44px] min-w-[44px] flex items-center justify-center -mr-1">
-                            <MoreHorizontal className="h-4 w-4 opacity-50" />
-                          </button>
-                        ))}
+                        <div onClick={(e) => e.stopPropagation()} className="relative z-30">
+                            {headerAction || (!isFullyLocked && (
+                                <button className="h-9 w-9 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-colors -mr-1">
+                                    <MoreHorizontal className="h-4 w-4 opacity-60" />
+                                </button>
+                            ))}
+                        </div>
 
                         {showStatusIcons && statusIcons.length > 0 && (
                             <div className="flex items-center gap-1.5 ml-1">
@@ -618,18 +576,21 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         </div>
                         <div className="flex flex-col items-end gap-1">
                             {totalHours && <Badge variant="secondary" className="text-xs">{totalHours}h net</Badge>}
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 cursor-help hover:bg-emerald-500/20 transition-colors">
-                                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                                            ${costBreakdown.totalCost.toFixed(2)}
-                                        </span>
-                                    </div>
-                                </TooltipTrigger>
-                                <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-2xl" side="right">
-                                    <CostBreakdownTooltip breakdown={costBreakdown} />
-                                </TooltipContent>
-                            </Tooltip>
+                            {/* Committed Cost Badge — only shown for assigned shifts */}
+                            {employeeName && costBreakdown.totalCost > 0 && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 cursor-help hover:bg-emerald-500/20 transition-colors">
+                                            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                                ${costBreakdown.totalCost.toFixed(2)}
+                                            </span>
+                                        </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-2xl" side="right">
+                                        <CostBreakdownTooltip breakdown={costBreakdown} />
+                                    </TooltipContent>
+                                </Tooltip>
+                            )}
                         </div>
                     </div>
 
@@ -656,19 +617,21 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
 
             {/* DnD Blocking Overlay (highest layer) */}
             {isDnDActive && isLocked && isPublished && (
-                <div 
-                    className="absolute inset-0 bg-stripe-red pointer-events-none rounded-inherit z-[100] border-2 border-red-500/50 shadow-[inset_0_0_20px_rgba(239,68,68,0.3)]" 
-                    aria-hidden="true" 
+                <div
+                    className="absolute inset-0 bg-stripe-red pointer-events-none rounded-inherit z-[100] border-2 border-red-500/50 shadow-[inset_0_0_20px_rgba(239,68,68,0.3)]"
+                    aria-hidden="true"
                 />
             )}
-        </motion.div>
+        </CardShell>
     );
 };
 
-export const SmartShiftCard: React.FC<SmartShiftCardProps> = (props) => {
+const SmartShiftCardImpl: React.FC<SmartShiftCardProps> = (props) => {
     const { variant = 'compact' } = props;
-    
+
     return variant === 'detailed' ? <DetailedCard {...props} /> : <CompactCard {...props} />;
 };
+
+export const SmartShiftCard = React.memo(SmartShiftCardImpl);
 
 export default SmartShiftCard;

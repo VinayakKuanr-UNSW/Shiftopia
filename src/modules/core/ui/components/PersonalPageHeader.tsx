@@ -5,8 +5,6 @@ import { LucideIcon } from 'lucide-react';
 import { ScopeFilterBanner } from './ScopeFilterBanner';
 import { ScopeSelection } from '@/platform/auth/types';
 import { itemVariants } from '../motion/presets';
-import { cn } from '@/modules/core/lib/utils';
-import { useTheme } from '@/modules/core/contexts/ThemeContext';
 
 interface PersonalPageHeaderProps {
     title: string;
@@ -38,7 +36,6 @@ export const PersonalPageHeader: React.FC<PersonalPageHeaderProps> = ({
     className,
 }) => {
     const [now, setNow] = useState(new Date());
-    const { isDark } = useTheme();
 
     useEffect(() => {
         const timer = setInterval(() => setNow(new Date()), 1000);
@@ -54,10 +51,7 @@ export const PersonalPageHeader: React.FC<PersonalPageHeaderProps> = ({
                 <div>
                     <div className="flex items-center gap-2 mb-0.5">
                         <Icon className="h-6 w-6 text-primary" />
-                        <h1 className={cn(
-                            "text-3xl font-black tracking-tight",
-                            isDark ? "text-foreground" : "text-slate-900"
-                        )}>
+                        <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-foreground">
                             {title}
                         </h1>
                     </div>
@@ -65,17 +59,11 @@ export const PersonalPageHeader: React.FC<PersonalPageHeaderProps> = ({
                 <div className="flex flex-col items-end gap-2">
                     <div className="text-right">
                         <div className="flex items-center justify-end gap-3 mb-1">
-                            <p className={cn(
-                                "text-3xl font-mono font-black tabular-nums leading-none",
-                                isDark ? "text-foreground" : "text-slate-800"
-                            )}>
+                            <p className="text-3xl font-mono font-black tabular-nums leading-none text-slate-800 dark:text-foreground">
                                 {format(now, 'HH:mm')}
                             </p>
                         </div>
-                        <p className={cn(
-                            "text-xs font-mono tabular-nums",
-                            isDark ? "text-muted-foreground" : "text-slate-400"
-                        )}>
+                        <p className="text-xs font-mono tabular-nums text-slate-400 dark:text-muted-foreground">
                             :{format(now, 'ss')}
                         </p>
                     </div>
@@ -101,3 +89,5 @@ export const PersonalPageHeader: React.FC<PersonalPageHeaderProps> = ({
         </div>
     );
 };
+
+export default PersonalPageHeader;
