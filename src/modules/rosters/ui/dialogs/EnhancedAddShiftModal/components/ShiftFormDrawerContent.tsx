@@ -79,8 +79,8 @@ const GROUP_LABEL: Record<string, string> = {
    PRIMITIVE HELPERS
    ═══════════════════════════════════════════════════════════════════════ */
 
-/** Red required asterisk */
-const Req = () => <span className="text-rose-500 ml-0.5 select-none">*</span>;
+/** Indigo required asterisk */
+const Req = () => <span className="text-indigo-500 ml-0.5 select-none">*</span>;
 
 /**
  * Numbered section header with leading / trailing rule lines.
@@ -336,7 +336,14 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
         'h-10 bg-background border-border rounded-lg text-xs font-medium text-foreground focus:ring-indigo-500/30 focus:border-indigo-500/40 focus-visible:ring-indigo-500/30';
 
     return (
-        <div className="flex-1 min-h-0 flex flex-col bg-card dark:bg-[#09090e]">
+        <div className={cn(
+            "flex-1 min-h-0 flex flex-col transition-all duration-500",
+            isReadOnly 
+                ? "bg-[#0a0a0c]" 
+                : isPublished 
+                    ? "bg-[#0c0512]" 
+                    : "bg-card dark:bg-[#09090e]"
+        )}>
 
             {/* ── STICKY HEADER ─────────────────────────────────────── */}
             <div className="flex-shrink-0 border-b border-border bg-card/90 dark:bg-[rgba(13,14,18,0.90)] backdrop-blur-xl px-5 py-3.5 flex items-center justify-between z-20">
@@ -376,16 +383,16 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                             className={cn(
                                 'flex items-start gap-3 p-3.5 rounded-xl border',
                                 readOnlyBanner.kind === 'published'
-                                    ? 'bg-amber-50 dark:bg-amber-500/[0.07] border-amber-200 dark:border-amber-500/20'
-                                    : 'bg-rose-50 dark:bg-rose-500/[0.07] border-rose-200 dark:border-rose-500/20',
+                                    ? 'bg-purple-500/5 border-purple-500/20'
+                                    : 'bg-slate-500/5 border-slate-500/20',
                             )}
                         >
                             <LockIcon
                                 className={cn(
                                     'h-4 w-4 shrink-0 mt-0.5',
                                     readOnlyBanner.kind === 'published'
-                                        ? 'text-amber-600 dark:text-amber-400'
-                                        : 'text-rose-600 dark:text-rose-400',
+                                        ? 'text-purple-400'
+                                        : 'text-slate-400',
                                 )}
                             />
                             <div className="flex-1 min-w-0">
@@ -393,8 +400,8 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                     className={cn(
                                         'text-[9px] font-black uppercase tracking-[0.15em] mb-0.5',
                                         readOnlyBanner.kind === 'published'
-                                            ? 'text-amber-700 dark:text-amber-400'
-                                            : 'text-rose-700 dark:text-rose-400',
+                                            ? 'text-purple-400'
+                                            : 'text-slate-400',
                                     )}
                                 >
                                     {readOnlyBanner.title}
@@ -403,8 +410,8 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                     className={cn(
                                         'text-[9px] font-medium leading-tight opacity-70',
                                         readOnlyBanner.kind === 'published'
-                                            ? 'text-amber-800 dark:text-amber-300'
-                                            : 'text-rose-800 dark:text-rose-300',
+                                            ? 'text-purple-300'
+                                            : 'text-slate-300',
                                     )}
                                 >
                                     {readOnlyBanner.body}
@@ -416,7 +423,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                     variant="ghost"
                                     size="sm"
                                     onClick={onUnpublish}
-                                    className="h-7 px-3 text-[9px] font-black uppercase tracking-widest bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20 hover:bg-amber-200 dark:hover:bg-amber-500/20 shrink-0"
+                                    className="h-7 px-3 text-[9px] font-black uppercase tracking-widest bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 shrink-0"
                                 >
                                     Unpublish
                                 </Button>

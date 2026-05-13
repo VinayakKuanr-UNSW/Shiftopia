@@ -36,6 +36,8 @@ import { Label } from '@/modules/core/ui/primitives/label';
 import type { TimesheetRow as TimesheetRowType } from "../../model/timesheet.types";
 import { calculateHoursBetween, formatHours, formatDifferential, isShiftFinished } from "./TimesheetTable.utils";
 import { getProtectionContext } from "@/modules/rosters/domain/shift-ui";
+import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
+import { ZERO_COST_BREAKDOWN } from '@/modules/rosters/domain/projections/utils/cost/constants';
 
 interface TimesheetRowProps {
     entry: TimesheetRowType;
@@ -250,11 +252,17 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
         }
         setTimingError('');
 
-        const levelMatch = entry.remunerationLevel.match(/\d+/);
-        const level = levelMatch ? parseInt(levelMatch[0]) : 1;
-        const hourlyRate = 30 + (level * 5);
-        const netLengthNum = parseFloat(calculatedValues.netLength) || 0;
-        const approximatePay = `$${(netLengthNum * hourlyRate).toFixed(2)}`;
+        const fakeShift = {
+            shift_date: String(entry.date),
+            start_time: editedAdjusted.adjustedStart,
+            end_time: editedAdjusted.adjustedEnd,
+            roles: { name: entry.role },
+            unpaid_break_minutes: parseFloat(editedAdjusted.unpaidBreak) || 0,
+            scheduled_length_minutes: calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd) * 60,
+        };
+
+        const cost = estimateDetailedCostFromShift(fakeShift);
+        const approximatePay = `$${cost.totalCost.toFixed(2)}`;
 
         onSave?.(String(entry.id), {
             adjustedStart: editedAdjusted.adjustedStart,
@@ -342,9 +350,11 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                 <td className={cellClass}>{entry.subGroup}</td>
                 <td className={cellClass}>{entry.role}</td>
                 <td className={`${cellClass} border-r border-border/30`}>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-primary/10 text-primary border border-primary/20 shadow-sm">
-                        {entry.remunerationLevel}
-                    </span>
+                    {entry.remunerationLevel && !entry.remunerationLevel.toLowerCase().includes('team lead') && !entry.remunerationLevel.toLowerCase().includes('operational control') && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black uppercase bg-primary/10 text-primary border border-primary/20 shadow-sm">
+                            {entry.remunerationLevel}
+                        </span>
+                    )}
                 </td>
 
                 {/* Scheduled — always first to match header order */}

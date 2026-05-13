@@ -10,7 +10,7 @@
  */
 
 import type { V8Hit } from '@/modules/compliance/v8';
-import { V8_RULE_METADATA } from '@/modules/compliance/v8';
+import { V8_RULE_METADATA } from '@/modules/compliance/v8/metadata';
 
 export interface BucketMap {
     A: V8Hit[];    // blockers

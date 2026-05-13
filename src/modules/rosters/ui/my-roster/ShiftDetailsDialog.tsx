@@ -21,6 +21,13 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import CreateSwapRequestModal from './CreateSwapRequestModal';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
+import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
+import { ZERO_COST_BREAKDOWN } from '@/modules/rosters/domain/projections/utils/cost/constants';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/modules/core/ui/primitives/tooltip';
 
 interface ShiftWithDetails {
   shift: Shift;
@@ -35,6 +42,41 @@ interface ShiftDetailsDialogProps {
   shiftData: ShiftWithDetails | null;
   shiftDate: Date;
 }
+
+// ── Cost Tooltip ──────────────────────────────────────────────────────────
+export const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }) => {
+  if (!breakdown) return null;
+  const { totalCost, ordinaryCost, overtimeCost, allowanceCost, ordinaryHours, overtimeHours, breakdown: details } = breakdown;
+  return (
+      <div className="space-y-2 p-1 min-w-[180px]">
+          <div className="flex justify-between items-center pb-1 border-b border-white/10">
+              <span className="text-[10px] uppercase tracking-wider opacity-60">Estimated Pay</span>
+              <span className="text-xs font-bold text-emerald-400">${totalCost.toFixed(2)}</span>
+          </div>
+          <div className="space-y-1 text-[10px]">
+              <div className="flex justify-between">
+                  <span>Ordinary ({ordinaryHours.toFixed(1)}h @ ${details.penaltyRate.toFixed(2)})</span>
+                  <span>${ordinaryCost.toFixed(2)}</span>
+              </div>
+              {overtimeCost > 0 && (
+                  <div className="flex justify-between text-orange-300">
+                      <span>Overtime ({overtimeHours.toFixed(1)}h)</span>
+                      <span>${overtimeCost.toFixed(2)}</span>
+                  </div>
+              )}
+              {allowanceCost > 0 && (
+                  <div className="flex justify-between text-blue-300">
+                      <span>Night Allowance ({details.nightHours.toFixed(1)}h)</span>
+                      <span>${allowanceCost.toFixed(2)}</span>
+                  </div>
+              )}
+          </div>
+          <div className="pt-1 text-[9px] opacity-40 italic border-t border-white/5">
+              Calculated per ICC Sydney EA 2025
+          </div>
+      </div>
+  );
+};
 
 const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   isOpen,
@@ -61,79 +103,75 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
     }
   }, [shiftData?.shift?.shift_date, shiftData?.shift?.end_time]);
 
-  if (!shiftData) return null;
-  const { shift, groupName, groupColor, subGroupName } = shiftData;
+  const isWithinLockoutPeriod = React.useMemo(() => 
+    shiftData ? isShiftLocked(shiftData.shift.shift_date, shiftData.shift.start_time, 'my_roster') : false
+  , [shiftData]);
 
-  const shiftDate = new Date(shift.shift_date);
+  const isCommenced = React.useMemo(() => 
+    shiftData ? isShiftCommenced(shiftData.shift.shift_date, shiftData.shift.start_time) : false
+  , [shiftData]);
 
-  const isWithinLockoutPeriod = isShiftLocked(shift.shift_date, shift.start_time, 'my_roster');
-  const isCommenced = isShiftCommenced(shift.shift_date, shift.start_time);
+  const existingSwapRequest = React.useMemo(() => 
+    mySwapRequests.find(
+      s => (s.requester_shift_id === shiftData?.shift.id || s.target_shift_id === shiftData?.shift.id) &&
+        (s.status === 'OPEN' || s.status === 'MANAGER_PENDING')
+    )
+  , [mySwapRequests, shiftData?.shift.id]);
 
-  const existingSwapRequest = mySwapRequests.find(
-    s => (s.requester_shift_id === shift.id || s.target_shift_id === shift.id) &&
-      (s.status === 'OPEN' || s.status === 'MANAGER_PENDING')
-  );
+  const isPendingInOffer = React.useMemo(() => 
+    isLoadingOfferDetails
+      ? true
+      : myActiveOfferDetails?.some(offer => offer.offered_shift_id === shiftData?.shift.id)
+  , [isLoadingOfferDetails, myActiveOfferDetails, shiftData?.shift.id]);
 
-  const isPendingInOffer = isLoadingOfferDetails
-    ? true
-    : myActiveOfferDetails?.some(offer => offer.offered_shift_id === shift.id);
+  const isActiveOrCommenced = shiftData?.shift.lifecycle_status === 'InProgress' || shiftData?.shift.lifecycle_status === 'Completed' || isCommenced;
+  const hasCheckedIn = shiftData?.shift.attendance_status === 'checked_in' || shiftData?.shift.attendance_status === 'late';
 
-  const isActiveOrCommenced = shift.lifecycle_status === 'InProgress' || shift.lifecycle_status === 'Completed' || isCommenced;
-  const hasCheckedIn = shift.attendance_status === 'checked_in' || shift.attendance_status === 'late';
+  const isS3PendingOffer = shiftData?.shift.lifecycle_status === 'Published' && shiftData?.shift.assignment_status === 'assigned' && !shiftData?.shift.assignment_outcome;
 
-  const isS3PendingOffer = shift.lifecycle_status === 'Published' && shift.assignment_status === 'assigned' && !shift.assignment_outcome;
+  const isLockedFromActions = shiftData?.shift.is_cancelled || !!existingSwapRequest || isPendingInOffer || isWithinLockoutPeriod || isS3PendingOffer || isActiveOrCommenced || hasCheckedIn || isPast;
 
-  const isLockedFromActions = shift.is_cancelled || !!existingSwapRequest || isPendingInOffer || isWithinLockoutPeriod || isS3PendingOffer || isActiveOrCommenced || hasCheckedIn || isPast;
+  const paidBreak = (shiftData?.shift as any)?.paid_break_minutes ?? 0;
+  const unpaidBreak = (shiftData?.shift as any)?.unpaid_break_minutes ?? shiftData?.shift.break_minutes ?? 0;
 
-  // ── SharedShiftCard props ──────────────────────────────────────────────────
-  const paidBreak = (shift as any).paid_break_minutes ?? 0;
-  const unpaidBreak = (shift as any).unpaid_break_minutes ?? shift.break_minutes ?? 0;
+  const netLengthMinutes = React.useMemo(() => {
+    if (!shiftData?.shift.start_time || !shiftData?.shift.end_time) return 0;
+    const [sh, sm] = shiftData.shift.start_time.split(':').map(Number);
+    const [eh, em] = shiftData.shift.end_time.split(':').map(Number);
+    let gross = (eh * 60 + em) - (sh * 60 + sm);
+    if (gross < 0) gross += 1440;
+    return Math.max(0, gross - unpaidBreak);
+  }, [shiftData?.shift.start_time, shiftData?.shift.end_time, unpaidBreak]);
 
-  const [sh, sm] = shift.start_time.split(':').map(Number);
-  const [eh, em] = shift.end_time.split(':').map(Number);
-  let gross = (eh * 60 + em) - (sh * 60 + sm);
-  if (gross < 0) gross += 1440;
-  const netLengthMinutes = Math.max(0, gross - unpaidBreak);
-
-  const urgency = computeShiftUrgency(shift.shift_date, shift.start_time, (shift as any).start_at);
+  const urgency = computeShiftUrgency(shiftData?.shift.shift_date || '', shiftData?.shift.start_time || '', (shiftData?.shift as any)?.start_at);
 
   const groupVariant = (() => {
-    if (shift.group_type === 'convention_centre') return 'convention' as const;
-    if (shift.group_type === 'exhibition_centre') return 'exhibition' as const;
-    if (shift.group_type === 'theatre') return 'theatre' as const;
+    if (!shiftData?.shift) return 'default' as const;
+    const s = shiftData.shift;
+    if (s.group_type === 'convention_centre') return 'convention' as const;
+    if (s.group_type === 'exhibition_centre') return 'exhibition' as const;
+    if (s.group_type === 'theatre') return 'theatre' as const;
 
-    const name = (shift.departments?.name || '').toLowerCase();
+    const name = (s.departments?.name || '').toLowerCase();
     if (name.includes('convention')) return 'convention' as const;
     if (name.includes('exhibition')) return 'exhibition' as const;
     if (name.includes('theatre') || name.includes('theater')) return 'theatre' as const;
     return 'default' as const;
   })();
 
-  // ── Status badge ───────────────────────────────────────────────────────────
-  const statusText = shift.is_cancelled ? 'Cancelled'
-    : shift.lifecycle_status === 'Completed' ? 'Completed'
-    : isActiveOrCommenced ? 'In Progress'
-    : hasCheckedIn ? 'Clocked In'
-    : existingSwapRequest ? (isWithinLockoutPeriod ? 'Swap Expired' : 'Swap Active')
-    : isS3PendingOffer ? 'Offer Pending'
-    : 'Assigned';
-
-  const statusBadgeCls = shift.is_cancelled
-    ? 'bg-red-500/10 text-red-500 border-red-500/20'
-    : shift.lifecycle_status === 'Completed' || isActiveOrCommenced || hasCheckedIn
-      ? 'bg-blue-500/10 text-blue-500 border-blue-500/20'
-      : existingSwapRequest
-        ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
-        : isS3PendingOffer
-          ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 animate-pulse'
-          : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
-
-  const scheduledStartISO = `${shift.shift_date}T${shift.start_time}`;
-  const scheduledEndISO = `${shift.shift_date}T${shift.end_time}`;
-  const showAttendanceBadge = shift.lifecycle_status === 'InProgress' || shift.lifecycle_status === 'Completed';
-
   const swapLabel = 'Swap';
   const dropLabel = 'Drop';
+
+  // ── Cost Calculation ──────────────────────────────────────────────────────
+  const costBreakdown = React.useMemo(() => {
+    if (!shiftData?.shift) return ZERO_COST_BREAKDOWN;
+    return estimateDetailedCostFromShift(shiftData.shift);
+  }, [shiftData?.shift]);
+
+  if (!shiftData) return null;
+  const { shift, groupName, groupColor, subGroupName } = shiftData;
+
+  const shiftDate = new Date(shift.shift_date);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handleDropShift = () => setIsCancelConfirmOpen(true);
@@ -200,22 +238,21 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
             shiftData={shift}
             lifecycleStatus={shift.lifecycle_status}
             className="pb-8" // Add some bottom padding for mobile drawers
-            statusIcons={
-              <>
-                {shift.remuneration_levels?.level_name && (
-                  <Badge className="text-[9px] font-black bg-primary/10 text-primary border-primary/20 border uppercase tracking-wider h-8 flex items-center justify-center">
-                    {shift.remuneration_levels.level_name}
-                  </Badge>
-                )}
-                {shift.remuneration_levels?.hourly_rate_min && (
-                  <div className="flex items-center justify-center bg-muted/30 rounded-md border border-border/50 h-8">
-                    <span className="text-[9px] font-mono font-black text-muted-foreground uppercase">
-                      ${shift.remuneration_levels.hourly_rate_min}/hr
+            estimatedPay={(
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center justify-end gap-1.5 cursor-help group/pay">
+                    <span className="text-[14px] font-black text-emerald-500 tabular-nums">
+                      ${(costBreakdown.totalCost || 0).toFixed(2)}
                     </span>
                   </div>
-                )}
-              </>
-            }
+                </TooltipTrigger>
+                <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-2xl" side="top">
+                  <CostBreakdownTooltip breakdown={costBreakdown} />
+                </TooltipContent>
+              </Tooltip>
+            )}
+            statusIcons={null}
             footerActions={
               <div className="flex flex-col gap-2 w-full">
                 {!isLockedFromActions && (

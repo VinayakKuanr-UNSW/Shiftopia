@@ -19,6 +19,8 @@ interface ManagerBidFilters {
   organizationId?: string | null;
   departmentId?: string | null;
   subDepartmentId?: string | null;
+  startDate?: string;
+  endDate?: string;
 }
 
 export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidShiftsReturn {
@@ -28,6 +30,8 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
     organizationId: filters.organizationId || activeContract?.organizationId || '',
     departmentId: filters.departmentId || undefined,
     subDepartmentId: filters.subDepartmentId || undefined,
+    startDate: filters.startDate || undefined,
+    endDate: filters.endDate || undefined,
   };
 
   console.log('[useManagerBidShifts] Hook triggered with queryFilters:', queryFilters);

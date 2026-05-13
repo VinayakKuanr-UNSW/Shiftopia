@@ -1151,9 +1151,11 @@ export const shiftsQueries = {
         organizationId: string;
         departmentId?: string;
         subDepartmentId?: string;
+        startDate?: string;
+        endDate?: string;
     }): Promise<Shift[]> {
         try {
-            const { organizationId, departmentId, subDepartmentId } = filters;
+            const { organizationId, departmentId, subDepartmentId, startDate, endDate } = filters;
 
             if (!isValidUuid(organizationId)) {
                 console.warn('Invalid organization ID for getManagerBidShifts:', organizationId);
@@ -1179,6 +1181,13 @@ export const shiftsQueries = {
                 .eq('is_cancelled', false)
                 // Fetch shifts that are or were on bidding
                 .eq('lifecycle_status', 'Published');
+
+            if (startDate) {
+                query = query.gte('shift_date', startDate);
+            }
+            if (endDate) {
+                query = query.lte('shift_date', endDate);
+            }
 
             if (subDepartmentId && isValidUuid(subDepartmentId)) {
                 query = query.eq('sub_department_id', subDepartmentId);

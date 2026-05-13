@@ -155,6 +155,6 @@ export const isPublicHoliday = (date: Date): boolean => {
 export const isSydneyStarted = (dateStr: string, timeStr: string): boolean => {
     if (!dateStr || !timeStr) return false;
     const shiftStart = parseZonedDateTime(dateStr, timeStr, SYDNEY_TZ);
-    const now = getSydneyNow();
+    const now = new Date(); // Absolute UTC comparison
     return now >= shiftStart;
 };

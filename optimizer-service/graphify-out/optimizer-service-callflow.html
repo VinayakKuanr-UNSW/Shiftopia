@@ -1,0 +1,2030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>optimizer-service — Complete Call Flow &amp; Architecture Documentation</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+:root {
+  --bg: #0f172a; --surface: #1e293b; --border: #334155;
+  --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8;
+  --warn: #fbbf24; --err: #f87171; --ok: #34d399;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+.container { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+h1 { font-size: 2.4rem; margin-bottom: 8px; background: linear-gradient(135deg, var(--accent), #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+h2 { font-size: 1.7rem; margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); }
+h3 { font-size: 1.25rem; margin: 32px 0 12px; color: var(--accent); }
+h4 { font-size: 1.05rem; margin: 20px 0 8px; color: var(--warn); }
+p { margin: 8px 0; color: var(--muted); }
+.subtitle { color: var(--muted); font-size: 1.1rem; margin-bottom: 32px; }
+.mermaid { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin: 20px 0; overflow-x: auto; position: relative; }
+.mermaid.is-enhanced { padding: 0; overflow: hidden; min-height: 260px; }
+.mermaid-viewport { padding: 54px 24px 24px; overflow: hidden; cursor: grab; touch-action: none; min-height: 260px; }
+.mermaid-viewport.is-dragging { cursor: grabbing; }
+.mermaid-viewport svg { max-width: none !important; height: auto; transform-origin: 0 0; transition: transform 120ms ease; }
+.mermaid-toolbar { position: absolute; top: 10px; right: 10px; z-index: 3; display: flex; align-items: center; gap: 6px; padding: 6px; background: rgba(15,23,42,0.92); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.28); }
+.mermaid-toolbar button, .mermaid-toolbar .zoom-level { height: 28px; min-width: 32px; border: 1px solid var(--border); border-radius: 6px; background: #1e293b; color: var(--text); font: 600 0.78rem system-ui, sans-serif; display: inline-flex; align-items: center; justify-content: center; }
+.mermaid-toolbar button { cursor: pointer; }
+.mermaid-toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+.mermaid-toolbar .zoom-level { min-width: 52px; color: var(--muted); background: transparent; }
+.call-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.92rem; }
+.call-table th { background: #1a2744; color: var(--accent); text-align: left; padding: 10px 14px; border: 1px solid var(--border); }
+.call-table td { padding: 8px 14px; border: 1px solid var(--border); vertical-align: top; }
+.call-table tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+.tag-async { background: #7c3aed33; color: #a78bfa; }
+.tag-class { background: #05966933; color: var(--ok); }
+.tag-func { background: #2563eb33; color: var(--accent); }
+.tag-cmd { background: #d9770633; color: var(--warn); }
+.tag-endpoint { background: #dc262633; color: var(--err); }
+.tag-hook { background: #db277733; color: #f472b6; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin: 16px 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin: 16px 0; }
+.arrow-chain { font-family: 'Fira Code', monospace; font-size: 0.85rem; color: var(--accent); padding: 10px; background: rgba(56,189,248,0.06); border-radius: 6px; }
+code { font-family: 'Fira Code', 'Cascadia Code', monospace; background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 3px; font-size: 0.88em; }
+ul, ol { margin: 8px 0 8px 24px; color: var(--muted); }
+li { margin: 4px 0; }
+a { color: var(--accent); }
+hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+.nav { position: sticky; top: 0; background: var(--bg); z-index: 10; padding: 12px 0; border-bottom: 1px solid var(--border); display: flex; gap: 20px; flex-wrap: wrap; font-size: 0.9rem; }
+.nav a { text-decoration: none; }
+.nav a:hover { text-decoration: underline; }
+@media (max-width: 768px) { .container { padding: 16px; } h1 { font-size: 1.8rem; } }
+
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>optimizer-service — Complete Call Flow &amp; Architecture Documentation</h1>
+<p class="subtitle">Generated from graphify knowledge graph: 180 nodes, 453 edges, 15 communities. Commit: 26b98bc</p>
+
+<div class="nav">
+    <a href="#overview">Architecture Overview</a>
+    <a href="#build-graph">Graph Build</a>
+    <a href="#security-global">Security &amp; Global Graph</a>
+    <a href="#tests-fixtures">Tests &amp; Fixtures</a>
+    <a href="#model-builderpy-add">Model Builderpy Add</a>
+    <a href="#model-builderpy-eligible">Model Builderpy Eligible</a>
+    <a href="#model-builderpy-rest">Model Builderpy Rest</a>
+    <a href="#model-builderpy-assignmentproposal">Model Builderpy Assignmentproposal</a>
+    <a href="#model-builderpy-day">Model Builderpy Day</a>
+    <a href="#model-builderpy-effective">Model Builderpy Effective</a>
+    <a href="#ortools-runnerpy-health">Ortools Runnerpy Health</a>
+</div>
+
+<!-- ====== Architecture Overview ====== -->
+<h2 id="overview">1. Architecture Overview</h2>
+
+<div class="mermaid">
+
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    BUILD_GRAPH_321CBB04("Graph Build<br/><small>11 nodes</small>")
+    class BUILD_GRAPH_321CBB04 module;
+    SECURITY_GLOBAL_5B9C6A04("Security &amp; Global Graph<br/><small>45 nodes</small>")
+    class SECURITY_GLOBAL_5B9C6A04 module;
+    TESTS_FIXTURES_B84B1DCC("Tests &amp; Fixtures<br/><small>76 nodes</small>")
+    class TESTS_FIXTURES_B84B1DCC module;
+    MODEL_BUILDERPY_ADD_1CD5BA4A("Model Builderpy Add<br/><small>12 nodes</small>")
+    class MODEL_BUILDERPY_ADD_1CD5BA4A module;
+    MODEL_BUILDERPY_ELIGIBLE_C1B63E30("Model Builderpy Eligible<br/><small>11 nodes</small>")
+    class MODEL_BUILDERPY_ELIGIBLE_C1B63E30 module;
+    MODEL_BUILDERPY_REST_9EA4EE4F("Model Builderpy Rest<br/><small>10 nodes</small>")
+    class MODEL_BUILDERPY_REST_9EA4EE4F module;
+    MODEL_BUILDERPY_ASSIGNMENTPROPOSAL_E1B2AC6C("Model Builderpy Assignmentproposal<br/><small>6 nodes</small>")
+    class MODEL_BUILDERPY_ASSIGNMENTPROPOSAL_E1B2AC6C module;
+    MODEL_BUILDERPY_DAY_6E03D6AC("Model Builderpy Day<br/><small>4 nodes</small>")
+    class MODEL_BUILDERPY_DAY_6E03D6AC module;
+    MODEL_BUILDERPY_EFFECTIVE_EFD083C0("Model Builderpy Effective<br/><small>3 nodes</small>")
+    class MODEL_BUILDERPY_EFFECTIVE_EFD083C0 module;
+    ORTOOLS_RUNNERPY_HEALTH_808D1FE9("Ortools Runnerpy Health<br/><small>2 nodes</small>")
+    class ORTOOLS_RUNNERPY_HEALTH_808D1FE9 module;
+    MODEL_BUILDERPY_ASSIGNMENTPROPOSAL_E1B2AC6C -->|contains x8| SECURITY_GLOBAL_5B9C6A04
+    MODEL_BUILDERPY_ASSIGNMENTPROPOSAL_E1B2AC6C -->|contains x4| MODEL_BUILDERPY_ELIGIBLE_C1B63E30
+    MODEL_BUILDERPY_ADD_1CD5BA4A -->|method x4| MODEL_BUILDERPY_REST_9EA4EE4F
+    MODEL_BUILDERPY_ASSIGNMENTPROPOSAL_E1B2AC6C -->|contains x3| MODEL_BUILDERPY_REST_9EA4EE4F
+    MODEL_BUILDERPY_REST_9EA4EE4F -->|calls x3| MODEL_BUILDERPY_ELIGIBLE_C1B63E30
+    MODEL_BUILDERPY_ASSIGNMENTPROPOSAL_E1B2AC6C -->|calls x2| TESTS_FIXTURES_B84B1DCC
+    MODEL_BUILDERPY_REST_9EA4EE4F -->|calls x2| MODEL_BUILDERPY_EFFECTIVE_EFD083C0
+    MODEL_BUILDERPY_ADD_1CD5BA4A -->|method x2| MODEL_BUILDERPY_ELIGIBLE_C1B63E30
+    MODEL_BUILDERPY_ADD_1CD5BA4A -->|method x2| MODEL_BUILDERPY_DAY_6E03D6AC
+    MODEL_BUILDERPY_ADD_1CD5BA4A -->|method x2| MODEL_BUILDERPY_EFFECTIVE_EFD083C0
+    MODEL_BUILDERPY_ASSIGNMENTPROPOSAL_E1B2AC6C -->|contains| MODEL_BUILDERPY_DAY_6E03D6AC
+    MODEL_BUILDERPY_ASSIGNMENTPROPOSAL_E1B2AC6C -->|contains| MODEL_BUILDERPY_EFFECTIVE_EFD083C0
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h4>Architecture Layers</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>Layer</th><th>Nodes</th><th>Communities</th></tr>
+      <tr><td>Graph Build</td><td>11</td><td><code>7</code></td></tr><tr><td>Security &amp; Global Graph</td><td>45</td><td><code>1, 5</code></td></tr><tr><td>Tests &amp; Fixtures</td><td>76</td><td><code>0, 2, 6, 10, 14</code></td></tr><tr><td>Model Builderpy Add</td><td>12</td><td><code>3</code></td></tr><tr><td>Model Builderpy Eligible</td><td>11</td><td><code>4</code></td></tr><tr><td>Model Builderpy Rest</td><td>10</td><td><code>8</code></td></tr><tr><td>Model Builderpy Assignmentproposal</td><td>6</td><td><code>9</code></td></tr><tr><td>Model Builderpy Day</td><td>4</td><td><code>11</code></td></tr><tr><td>Model Builderpy Effective</td><td>3</td><td><code>12</code></td></tr><tr><td>Ortools Runnerpy Health</td><td>2</td><td><code>13</code></td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Core Flow</h4>
+    <div class="arrow-chain">Graph Build -&gt; Security &amp; Global Graph -&gt; Ortools Runnerpy Health -&gt; Tests &amp; Fixtures -&gt; Model Builderpy Add -&gt; Model Builderpy Rest -&gt; Model Builderpy Eligible</div>
+  </div>
+</div>
+<hr>
+<!-- ====== 2. Graph Build ====== -->
+<h2 id="build-graph">2. Graph Build</h2>
+<p>Graph Build groups implementation around scripts, loadtestpy, dump, schemapy, mostly in scripts/loadtest.py, scripts/dump_schema.py. This section covers 11 nodes and 15 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Graph Build (11 nodes, 15 edges)
+    subgraph build_graph_scripts_loadtest_py_2670436a["scripts/loadtest.py"]
+        scripts_loadtest_make_problem_af6f1465("make_problem()<br/><small>scripts/loadtest.py</small>")
+        scripts_loadtest_report_85b07474("report()<br/><small>scripts/loadtest.py</small>")
+        scripts_loadtest_result_7295395a("Result<br/><small>scripts/loadtest.py</small>")
+        scripts_loadtest_run_one_da13b563("run_one()<br/><small>scripts/loadtest.py</small>")
+        scripts_loadtest_run_matrix_0304b42c("run_matrix()<br/><small>scripts/loadtest.py</small>")
+        scripts_loadtest_main_b0f0171a("main()<br/><small>scripts/loadtest.py</small>")
+        scripts_loadtest_py_d0af5e8b("loadtest.py")
+        scripts_loadtest_rationale_1_a5ea67c6("AutoScheduler load test — capacity plan...<br/><small>scripts/loadtest.py</small>")
+        scripts_loadtest_rationale_41_e5d3a6ed("Generate a synthetic problem of the req...<br/><small>scripts/loadtest.py</small>")
+    end
+    subgraph build_graph_scripts_dump_schema_py_0f570385["scripts/dump_schema.py"]
+        scripts_dump_schema_py_05dbe513("dump_schema.py")
+        scripts_dump_schema_rationale_1_02216df1("Dump field-name snapshots for the optim...<br/><small>scripts/dump_schema.py</small>")
+    end
+    scripts_loadtest_make_problem_af6f1465 -->|calls| scripts_loadtest_run_matrix_0304b42c
+    scripts_loadtest_result_7295395a -->|calls| scripts_loadtest_run_one_da13b563
+    scripts_loadtest_run_one_da13b563 -->|calls| scripts_loadtest_run_matrix_0304b42c
+    scripts_loadtest_run_matrix_0304b42c -->|calls| scripts_loadtest_main_b0f0171a
+    scripts_loadtest_report_85b07474 -->|calls| scripts_loadtest_main_b0f0171a
+    class scripts_loadtest_make_problem_af6f1465 test;
+    class scripts_loadtest_report_85b07474 test;
+    class scripts_loadtest_result_7295395a test;
+    class scripts_loadtest_run_one_da13b563 test;
+    class scripts_loadtest_run_matrix_0304b42c test;
+    class scripts_loadtest_main_b0f0171a test;
+    class scripts_loadtest_py_d0af5e8b test;
+    class scripts_loadtest_rationale_1_a5ea67c6 concept;
+    class scripts_loadtest_rationale_41_e5d3a6ed concept;
+    class scripts_dump_schema_py_05dbe513 module;
+    class scripts_dump_schema_rationale_1_02216df1 concept;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>dump_schema.py</code><br><small style="color:var(--muted)">scripts/dump_schema.py</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Module file in scripts/dump_schema.py.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>Dump field-name snapshots for the optimizer&#x27;s HTTP boundary types.  Writes `opti</code><br><small style="color:var(--muted)">scripts/dump_schema.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Dump field-name snapshots for the optimizer&#x27;s HTTP boundary types.  Writes `opti.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>loadtest.py</code><br><small style="color:var(--muted)">scripts/loadtest.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Module file in scripts/loadtest.py.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>make_problem()</code><br><small style="color:var(--muted)">scripts/loadtest.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>run_matrix()</code><br><small style="color:var(--muted)">scripts/loadtest.py</small></td>
+  <td>make_problem() node in scripts/loadtest.py.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>Result</code><br><small style="color:var(--muted)">scripts/loadtest.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>run_one()</code><br><small style="color:var(--muted)">scripts/loadtest.py</small></td>
+  <td>Result node in scripts/loadtest.py.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>run_one()</code><br><small style="color:var(--muted)">scripts/loadtest.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>Result</code><br><small style="color:var(--muted)">scripts/loadtest.py</small></td>
+  <td><code>run_matrix()</code><br><small style="color:var(--muted)">scripts/loadtest.py</small></td>
+  <td>run_one() node in scripts/loadtest.py.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>run_matrix()</code><br><small style="color:var(--muted)">scripts/loadtest.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>make_problem()</code><br><small style="color:var(--muted)">scripts/loadtest.py</small><br><code>run_one()</code><br><small style="color:var(--muted)">scripts/loadtest.py</small></td>
+  <td><code>main()</code><br><small style="color:var(--muted)">scripts/loadtest.py</small></td>
+  <td>run_matrix() node in scripts/loadtest.py.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>report()</code><br><small style="color:var(--muted)">scripts/loadtest.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>main()</code><br><small style="color:var(--muted)">scripts/loadtest.py</small></td>
+  <td>report() node in scripts/loadtest.py.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>main()</code><br><small style="color:var(--muted)">scripts/loadtest.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>report()</code><br><small style="color:var(--muted)">scripts/loadtest.py</small><br><code>run_matrix()</code><br><small style="color:var(--muted)">scripts/loadtest.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>main() node in scripts/loadtest.py.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>AutoScheduler load test — capacity planning against realistic shapes.  Runs a ma</code><br><small style="color:var(--muted)">scripts/loadtest.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for AutoScheduler load test — capacity planning against realistic shapes.  Runs a ma.</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>Generate a synthetic problem of the requested size with shapes     that resemble</code><br><small style="color:var(--muted)">scripts/loadtest.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Generate a synthetic problem of the requested size with shapes     that resemble.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>scripts/loadtest.py</code></td><td>9 nodes</td></tr>
+<tr><td><code>scripts/dump_schema.py</code></td><td>2 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: contains x7, calls x5, explains x3. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 3. Security & Global Graph ====== -->
+<h2 id="security-global">3. Security &amp; Global Graph</h2>
+<p>Security &amp; Global Graph groups implementation around ortools, runnerpy, securitypy, model, mostly in ortools_runner.py, security.py, model_builder.py. This section covers 45 nodes and 173 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Security &amp; Global Graph (45 nodes, 173 edges)
+    subgraph security_global_model_builder_py_60ce168c["model_builder.py"]
+        optimizer_service_model_builder_employeeinput_32d49e32("EmployeeInput<br/><small>model_builder.py</small>")
+        optimizer_service_model_builder_existingshiftinp_6fdf403e("ExistingShiftInput<br/><small>model_builder.py</small>")
+        optimizer_service_model_builder_optimizerconstra_fd8c482b("OptimizerConstraints<br/><small>model_builder.py</small>")
+        optimizer_service_model_builder_optimizerinput_f626180f("OptimizerInput<br/><small>model_builder.py</small>")
+        optimizer_service_model_builder_shiftinput_0e5f70d5("ShiftInput<br/><small>model_builder.py</small>")
+        optimizer_service_model_builder_solverparameters_87c7934d("SolverParameters<br/><small>model_builder.py</small>")
+        optimizer_service_model_builder_strategyinput_bffc4b73("StrategyInput<br/><small>model_builder.py</small>")
+    end
+    subgraph security_global_ortools_runner_py_51711a8b["ortools_runner.py"]
+        optimizer_service_ortools_runner_assignmentres_0adc2045("AssignmentRes<br/><small>ortools_runner.py</small>")
+        optimizer_service_ortools_runner_auditemployeero_c296fc91("AuditEmployeeRow<br/><small>ortools_runner.py</small>")
+        optimizer_service_ortools_runner_auditreq_0cb672e6("AuditReq<br/><small>ortools_runner.py</small>")
+        optimizer_service_ortools_runner_auditshiftrow_132e1b02("AuditShiftRow<br/><small>ortools_runner.py</small>")
+        optimizer_service_ortools_runner_debugmetricsres_8959eae4("DebugMetricsRes<br/><small>ortools_runner.py</small>")
+        optimizer_service_ortools_runner_optimize_ca503c0e("optimize()<br/><small>ortools_runner.py</small>")
+        optimizer_service_ortools_runner_audit_09965b54("audit()<br/><small>ortools_runner.py</small>")
+    end
+    subgraph security_global_security_py_3921123a["security.py"]
+        optimizer_service_security_authcontext_928eb825("AuthContext<br/><small>security.py</small>")
+        optimizer_service_security_authcontext_repr_00d8a489("__repr__()<br/><small>security.py</small>")
+        optimizer_service_security_require_auth_1cb8c796("require_auth()<br/><small>security.py</small>")
+    end
+    basemodel_a0392da1("BaseModel")
+    optimizer_service_security_authcontext_928eb825 -->|method| optimizer_service_security_authcontext_repr_00d8a489
+    optimizer_service_security_authcontext_928eb825 -->|calls| optimizer_service_security_require_auth_1cb8c796
+    optimizer_service_ortools_runner_debugmetricsres_8959eae4 -->|calls| optimizer_service_ortools_runner_optimize_ca503c0e
+    optimizer_service_ortools_runner_assignmentres_0adc2045 -->|calls| optimizer_service_ortools_runner_optimize_ca503c0e
+    optimizer_service_ortools_runner_auditreq_0cb672e6 -->|calls| optimizer_service_ortools_runner_audit_09965b54
+    optimizer_service_ortools_runner_auditemployeero_c296fc91 -->|calls| optimizer_service_ortools_runner_audit_09965b54
+    optimizer_service_ortools_runner_auditshiftrow_132e1b02 -->|calls| optimizer_service_ortools_runner_audit_09965b54
+    %% Omitted for readability: 27 nodes, 0 edges
+    class optimizer_service_model_builder_employeeinput_32d49e32 klass;
+    class optimizer_service_model_builder_existingshiftinp_6fdf403e klass;
+    class optimizer_service_model_builder_optimizerconstra_fd8c482b klass;
+    class optimizer_service_model_builder_optimizerinput_f626180f klass;
+    class optimizer_service_model_builder_shiftinput_0e5f70d5 klass;
+    class optimizer_service_model_builder_solverparameters_87c7934d klass;
+    class optimizer_service_model_builder_strategyinput_bffc4b73 klass;
+    class optimizer_service_ortools_runner_assignmentres_0adc2045 klass;
+    class optimizer_service_ortools_runner_auditemployeero_c296fc91 klass;
+    class optimizer_service_ortools_runner_auditreq_0cb672e6 klass;
+    class optimizer_service_ortools_runner_auditshiftrow_132e1b02 klass;
+    class optimizer_service_ortools_runner_debugmetricsres_8959eae4 klass;
+    class optimizer_service_ortools_runner_optimize_ca503c0e function;
+    class optimizer_service_ortools_runner_audit_09965b54 function;
+    class optimizer_service_security_authcontext_928eb825 klass;
+    class optimizer_service_security_authcontext_repr_00d8a489 function;
+    class optimizer_service_security_require_auth_1cb8c796 function;
+    class basemodel_a0392da1 klass;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>ShiftInput</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>AssignmentRes</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>audit()</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuditEmployeeRow</code><br><small style="color:var(--muted)">ortools_runner.py</small><br>+11 more</td>
+  <td>ShiftInput node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>ExistingShiftInput</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>AssignmentRes</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuditEmployeeRow</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuditReq</code><br><small style="color:var(--muted)">ortools_runner.py</small><br>+10 more</td>
+  <td>ExistingShiftInput node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>EmployeeInput</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>AssignmentRes</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuditEmployeeRow</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuditReq</code><br><small style="color:var(--muted)">ortools_runner.py</small><br>+10 more</td>
+  <td>EmployeeInput node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>OptimizerConstraints</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>AssignmentRes</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>audit()</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuditEmployeeRow</code><br><small style="color:var(--muted)">ortools_runner.py</small><br>+11 more</td>
+  <td>OptimizerConstraints node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>StrategyInput</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>AssignmentRes</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuditEmployeeRow</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuditReq</code><br><small style="color:var(--muted)">ortools_runner.py</small><br>+10 more</td>
+  <td>StrategyInput node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>SolverParameters</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>AssignmentRes</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuditEmployeeRow</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuditReq</code><br><small style="color:var(--muted)">ortools_runner.py</small><br>+10 more</td>
+  <td>SolverParameters node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>OptimizerInput</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>AssignmentRes</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuditEmployeeRow</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuditReq</code><br><small style="color:var(--muted)">ortools_runner.py</small><br>+10 more</td>
+  <td>OptimizerInput node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>A shift already committed to an employee (cannot be reassigned by the     optimi</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for A shift already committed to an employee (cannot be reassigned by the     optimi.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>A declared availability window for an employee on a given date.      All times a</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for A declared availability window for an employee on a given date.      All times a.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>AuthContext</code><br><small style="color:var(--muted)">security.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>__repr__()</code><br><small style="color:var(--muted)">security.py</small><br><code>AssignmentRes</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuditEmployeeRow</code><br><small style="color:var(--muted)">ortools_runner.py</small><br>+12 more</td>
+  <td>AuthContext node in security.py.</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>.__repr__()</code><br><small style="color:var(--muted)">security.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>AuthContext</code><br><small style="color:var(--muted)">security.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>.__repr__() node in security.py.</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td><code>Resolved principal — what the request was authenticated as.      `subject` is th</code><br><small style="color:var(--muted)">security.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Resolved principal — what the request was authenticated as.      `subject` is th.</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td><code>ortools_runner.py</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Module file in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td><code>ShiftReq</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>AuthContext</code><br><small style="color:var(--muted)">security.py</small><br><code>EmployeeInput</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>ExistingShiftInput</code><br><small style="color:var(--muted)">model_builder.py</small><br>+5 more</td>
+  <td><code>AvailabilitySlotReq</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td>ShiftReq node in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td><code>BaseModel</code><br><small style="color:var(--muted)"></small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>BaseModel node in project.</td>
+</tr>
+<tr>
+  <td>16</td>
+  <td><code>ExistingShiftReq</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>AuthContext</code><br><small style="color:var(--muted)">security.py</small><br><code>EmployeeInput</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>ExistingShiftInput</code><br><small style="color:var(--muted)">model_builder.py</small><br>+5 more</td>
+  <td><code>AvailabilitySlotReq</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td>ExistingShiftReq node in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>17</td>
+  <td><code>AvailabilitySlotReq</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>AuthContext</code><br><small style="color:var(--muted)">security.py</small><br><code>EmployeeInput</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>ExistingShiftInput</code><br><small style="color:var(--muted)">model_builder.py</small><br>+7 more</td>
+  <td><code>AssignmentRes</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuditEmployeeRow</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuditReq</code><br><small style="color:var(--muted)">ortools_runner.py</small><br>+7 more</td>
+  <td>AvailabilitySlotReq node in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>18</td>
+  <td><code>EmployeeReq</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>AuthContext</code><br><small style="color:var(--muted)">security.py</small><br><code>AvailabilitySlotReq</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>EmployeeInput</code><br><small style="color:var(--muted)">model_builder.py</small><br>+6 more</td>
+  <td>No direct outbound edge</td>
+  <td>EmployeeReq node in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>19</td>
+  <td><code>ConstraintsReq</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>AuthContext</code><br><small style="color:var(--muted)">security.py</small><br><code>AvailabilitySlotReq</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>EmployeeInput</code><br><small style="color:var(--muted)">model_builder.py</small><br>+6 more</td>
+  <td>No direct outbound edge</td>
+  <td>ConstraintsReq node in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>20</td>
+  <td><code>StrategyReq</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>AuthContext</code><br><small style="color:var(--muted)">security.py</small><br><code>AvailabilitySlotReq</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>EmployeeInput</code><br><small style="color:var(--muted)">model_builder.py</small><br>+6 more</td>
+  <td>No direct outbound edge</td>
+  <td>StrategyReq node in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>21</td>
+  <td><code>SolverParamsReq</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>AuthContext</code><br><small style="color:var(--muted)">security.py</small><br><code>AvailabilitySlotReq</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>EmployeeInput</code><br><small style="color:var(--muted)">model_builder.py</small><br>+6 more</td>
+  <td>No direct outbound edge</td>
+  <td>SolverParamsReq node in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>22</td>
+  <td><code>DebugMetricsRes</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>AuthContext</code><br><small style="color:var(--muted)">security.py</small><br><code>AvailabilitySlotReq</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>EmployeeInput</code><br><small style="color:var(--muted)">model_builder.py</small><br>+6 more</td>
+  <td><code>optimize()</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td>DebugMetricsRes node in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>23</td>
+  <td><code>AssignmentRes</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>AuthContext</code><br><small style="color:var(--muted)">security.py</small><br><code>AvailabilitySlotReq</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>EmployeeInput</code><br><small style="color:var(--muted)">model_builder.py</small><br>+6 more</td>
+  <td><code>optimize()</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td>AssignmentRes node in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>24</td>
+  <td><code>AuditReq</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>AuthContext</code><br><small style="color:var(--muted)">security.py</small><br><code>AvailabilitySlotReq</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>EmployeeInput</code><br><small style="color:var(--muted)">model_builder.py</small><br>+6 more</td>
+  <td><code>audit()</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td>AuditReq node in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td><code>AuditEmployeeRow</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>AuthContext</code><br><small style="color:var(--muted)">security.py</small><br><code>AvailabilitySlotReq</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>EmployeeInput</code><br><small style="color:var(--muted)">model_builder.py</small><br>+6 more</td>
+  <td><code>audit()</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td>AuditEmployeeRow node in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>26</td>
+  <td><code>AuditShiftRow</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td><code>AuthContext</code><br><small style="color:var(--muted)">security.py</small><br><code>AvailabilitySlotReq</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>EmployeeInput</code><br><small style="color:var(--muted)">model_builder.py</small><br>+6 more</td>
+  <td><code>audit()</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td>AuditShiftRow node in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>27</td>
+  <td><code>lifespan()</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>lifespan() node in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>28</td>
+  <td><code>optimize()</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>AssignmentRes</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuthContext</code><br><small style="color:var(--muted)">security.py</small><br><code>AvailabilitySlotReq</code><br><small style="color:var(--muted)">ortools_runner.py</small><br>+8 more</td>
+  <td>No direct outbound edge</td>
+  <td>optimize() node in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>29</td>
+  <td><code>audit()</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>AuditEmployeeRow</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuditReq</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>AuditShiftRow</code><br><small style="color:var(--muted)">ortools_runner.py</small><br>+2 more</td>
+  <td>No direct outbound edge</td>
+  <td>audit() node in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>30</td>
+  <td><code>OR-Tools FastAPI Optimization Service — v2 (Production)  Key improvements over v</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for OR-Tools FastAPI Optimization Service — v2 (Production)  Key improvements over v.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>ortools_runner.py</code></td><td>23 nodes</td></tr>
+<tr><td><code>security.py</code></td><td>12 nodes</td></tr>
+<tr><td><code>model_builder.py</code></td><td>9 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: contains x21, explains x13, inherits x13, calls x6. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 4. Tests & Fixtures ====== -->
+<h2 id="tests-fixtures">4. Tests &amp; Fixtures</h2>
+<p>Tests &amp; Fixtures groups implementation around test, tests, solver, regressionspy, mostly in tests/test_solver_regressions.py, tests/test_phase3_security.py, tests/test_audit_endpoint.py. This section covers 76 nodes and 140 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Tests &amp; Fixtures (76 nodes, 140 edges)
+    subgraph tests_fixtures_tests_test_solver_regressions_py_5174efda["tests/test_solver_regressions.py"]
+        tests_test_solver_regressions_test_two_shifts_sa_2fb77aa2("at least one()<br/><small>tests/test_solver_regressions.py</small>")
+        tests_test_solver_regressions_test_overlapping_s_5b3f4346("distribute across employees()<br/><small>tests/test_solver_regressions.py</small>")
+        tests_test_solver_regressions_test_coverage_outr_88f7b4f9("min contract slack()<br/><small>tests/test_solver_regressions.py</small>")
+        tests_test_solver_regressions_test_coverage_outr_0af6b040("outranks workload slack()<br/><small>tests/test_solver_regressions.py</small>")
+        tests_test_solver_regressions_test_strategy_slid_b6341548("change assignment choice()<br/><small>tests/test_solver_regressions.py</small>")
+        tests_test_solver_regressions_test_missing_level_f893a7a6("filter out pool()<br/><small>tests/test_solver_regressions.py</small>")
+        tests_test_solver_regressions_test_short_shift_u_b5baf07e("180m still assignable()<br/><small>tests/test_solver_regressions.py</small>")
+        tests_test_solver_regressions_test_no_availabili_b56905e4("as universally available()<br/><small>tests/test_solver_regressions.py</small>")
+        tests_test_solver_regressions_test_declared_avai_c838598a("shift allows assignment()<br/><small>tests/test_solver_regressions.py</small>")
+        tests_test_solver_regressions_test_declared_avai_25da2262("shift blocks assignment()<br/><small>tests/test_solver_regressions.py</small>")
+        tests_test_solver_regressions_test_relax_constra_83eee77a("does not raise()<br/><small>tests/test_solver_regressions.py</small>")
+    end
+    subgraph tests_fixtures_tests_conftest_py_b1a1d686["tests/conftest.py"]
+        tests_conftest_make_employee_d397f256("make_employee()<br/><small>tests/conftest.py</small>")
+        tests_conftest_make_shift_754ad7e6("make_shift()<br/><small>tests/conftest.py</small>")
+        tests_conftest_solve_6d2135bb("solve()<br/><small>tests/conftest.py</small>")
+        tests_conftest_trivial_problem_e5f48489("trivial_problem()<br/><small>tests/conftest.py</small>")
+    end
+    subgraph tests_fixtures_tests_test_audit_endpoint_py_9d001529["tests/test_audit_endpoint.py"]
+        tests_test_audit_endpoint_employee_47b1d515("_employee()<br/><small>tests/test_audit_endpoint.py</small>")
+        tests_test_audit_endpoint_shift_8dbfea4e("_shift()<br/><small>tests/test_audit_endpoint.py</small>")
+    end
+    tests_test_phase3_security_reload_app_0719bf01("reload_app()<br/><small>tests/test_phase3_security.py</small>")
+    tests_conftest_make_shift_754ad7e6 -->|calls| tests_conftest_trivial_problem_e5f48489
+    tests_conftest_make_shift_754ad7e6 -->|calls| tests_test_solver_regressions_test_two_shifts_sa_2fb77aa2
+    tests_conftest_make_shift_754ad7e6 -->|calls| tests_test_solver_regressions_test_overlapping_s_5b3f4346
+    tests_conftest_make_shift_754ad7e6 -->|calls| tests_test_solver_regressions_test_coverage_outr_88f7b4f9
+    tests_conftest_make_shift_754ad7e6 -->|calls| tests_test_solver_regressions_test_coverage_outr_0af6b040
+    tests_conftest_make_shift_754ad7e6 -->|calls| tests_test_solver_regressions_test_strategy_slid_b6341548
+    tests_conftest_make_shift_754ad7e6 -->|calls| tests_test_solver_regressions_test_missing_level_f893a7a6
+    tests_conftest_make_shift_754ad7e6 -->|calls| tests_test_solver_regressions_test_short_shift_u_b5baf07e
+    tests_conftest_make_shift_754ad7e6 -->|calls| tests_test_solver_regressions_test_no_availabili_b56905e4
+    tests_conftest_make_shift_754ad7e6 -->|calls| tests_test_solver_regressions_test_declared_avai_c838598a
+    tests_conftest_make_shift_754ad7e6 -->|calls| tests_test_solver_regressions_test_declared_avai_25da2262
+    tests_conftest_make_shift_754ad7e6 -->|calls| tests_test_solver_regressions_test_relax_constra_83eee77a
+    tests_conftest_make_employee_d397f256 -->|calls| tests_conftest_trivial_problem_e5f48489
+    tests_conftest_make_employee_d397f256 -->|calls| tests_test_solver_regressions_test_two_shifts_sa_2fb77aa2
+    tests_conftest_make_employee_d397f256 -->|calls| tests_test_solver_regressions_test_overlapping_s_5b3f4346
+    tests_conftest_make_employee_d397f256 -->|calls| tests_test_solver_regressions_test_coverage_outr_88f7b4f9
+    tests_conftest_make_employee_d397f256 -->|calls| tests_test_solver_regressions_test_coverage_outr_0af6b040
+    tests_conftest_make_employee_d397f256 -->|calls| tests_test_solver_regressions_test_strategy_slid_b6341548
+    tests_conftest_make_employee_d397f256 -->|calls| tests_test_solver_regressions_test_missing_level_f893a7a6
+    tests_conftest_make_employee_d397f256 -->|calls| tests_test_solver_regressions_test_short_shift_u_b5baf07e
+    tests_conftest_make_employee_d397f256 -->|calls| tests_test_solver_regressions_test_no_availabili_b56905e4
+    tests_conftest_make_employee_d397f256 -->|calls| tests_test_solver_regressions_test_declared_avai_c838598a
+    tests_conftest_make_employee_d397f256 -->|calls| tests_test_solver_regressions_test_declared_avai_25da2262
+    tests_conftest_make_employee_d397f256 -->|calls| tests_test_solver_regressions_test_relax_constra_83eee77a
+    %% Omitted for readability: 58 nodes, 11 edges
+    class tests_test_solver_regressions_test_two_shifts_sa_2fb77aa2 test;
+    class tests_test_solver_regressions_test_overlapping_s_5b3f4346 test;
+    class tests_test_solver_regressions_test_coverage_outr_88f7b4f9 test;
+    class tests_test_solver_regressions_test_coverage_outr_0af6b040 test;
+    class tests_test_solver_regressions_test_strategy_slid_b6341548 test;
+    class tests_test_solver_regressions_test_missing_level_f893a7a6 test;
+    class tests_test_solver_regressions_test_short_shift_u_b5baf07e test;
+    class tests_test_solver_regressions_test_no_availabili_b56905e4 test;
+    class tests_test_solver_regressions_test_declared_avai_c838598a test;
+    class tests_test_solver_regressions_test_declared_avai_25da2262 test;
+    class tests_test_solver_regressions_test_relax_constra_83eee77a test;
+    class tests_conftest_make_employee_d397f256 test;
+    class tests_conftest_make_shift_754ad7e6 test;
+    class tests_conftest_solve_6d2135bb test;
+    class tests_conftest_trivial_problem_e5f48489 test;
+    class tests_test_audit_endpoint_employee_47b1d515 test;
+    class tests_test_audit_endpoint_shift_8dbfea4e test;
+    class tests_test_phase3_security_reload_app_0719bf01 test;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>conftest.py</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>test_solver_regressions.py</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td>Module file in tests/conftest.py.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>make_shift()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>180m still assignable()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small><br><code>as universally available()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small><br><code>at least one()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small><br>+10 more</td>
+  <td>make_shift() node in tests/conftest.py.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>make_employee()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>180m still assignable()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small><br><code>as universally available()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small><br><code>at least one()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small><br>+10 more</td>
+  <td>make_employee() node in tests/conftest.py.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>solve()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>180m still assignable()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small><br><code>as universally available()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small><br><code>at least one()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small><br>+10 more</td>
+  <td>solve() node in tests/conftest.py.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>trivial_problem()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>make_employee()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>make_shift()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>trivial_problem() node in tests/conftest.py.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>Shared pytest fixtures for the AutoScheduler optimizer service.  Run from the `o</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Shared pytest fixtures for the AutoScheduler optimizer service.  Run from the `o.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>Build + solve, return the OptimizerOutput.      Tests should assert on `output.s</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Build + solve, return the OptimizerOutput.      Tests should assert on `output.s.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>One shift, one employee, both compatible. Should always solve.</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for One shift, one employee, both compatible. Should always solve..</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>test_solver_regressions.py</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>conftest.py</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Module file in tests/test_solver_regressions.py.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>test_trivial_problem_solves()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>solve()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Verifies imports, entry points, or version behavior.</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>test_two_shifts_same_day_one_employee_assigns_at_least_one()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>make_employee()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>make_shift()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>solve()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Verifies imports, entry points, or version behavior.</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td><code>test_overlapping_shifts_distribute_across_employees()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>make_employee()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>make_shift()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>solve()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Verifies imports, entry points, or version behavior.</td>
+</tr>
+<tr>
+  <td>13</td>
+  <td><code>test_coverage_outranks_min_contract_slack()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>make_employee()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>make_shift()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>solve()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Supports retrieval-augmented Q&amp;A or streaming chat.</td>
+</tr>
+<tr>
+  <td>14</td>
+  <td><code>test_coverage_outranks_workload_slack()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>make_employee()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>make_shift()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>solve()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Supports retrieval-augmented Q&amp;A or streaming chat.</td>
+</tr>
+<tr>
+  <td>15</td>
+  <td><code>test_strategy_sliders_change_assignment_choice()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>make_employee()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>make_shift()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>solve()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Verifies imports, entry points, or version behavior.</td>
+</tr>
+<tr>
+  <td>16</td>
+  <td><code>test_missing_level_does_not_filter_out_pool()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>make_employee()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>make_shift()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>solve()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Verifies imports, entry points, or version behavior.</td>
+</tr>
+<tr>
+  <td>17</td>
+  <td><code>test_short_shift_under_180m_still_assignable()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>make_employee()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>make_shift()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>solve()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Verifies imports, entry points, or version behavior.</td>
+</tr>
+<tr>
+  <td>18</td>
+  <td><code>test_no_availability_records_treated_as_universally_available()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>make_employee()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>make_shift()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>solve()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Verifies imports, entry points, or version behavior.</td>
+</tr>
+<tr>
+  <td>19</td>
+  <td><code>test_declared_availability_covering_shift_allows_assignment()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>make_employee()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>make_shift()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>solve()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Verifies imports, entry points, or version behavior.</td>
+</tr>
+<tr>
+  <td>20</td>
+  <td><code>test_declared_availability_not_covering_shift_blocks_assignment()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>make_employee()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>make_shift()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>solve()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Verifies imports, entry points, or version behavior.</td>
+</tr>
+<tr>
+  <td>21</td>
+  <td><code>test_relax_constraints_does_not_raise()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>make_employee()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>make_shift()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>solve()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Verifies imports, entry points, or version behavior.</td>
+</tr>
+<tr>
+  <td>22</td>
+  <td><code>test_interval_vars_drop_constraint_count()</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Test</span></td>
+  <td><code>make_employee()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>make_shift()</code><br><small style="color:var(--muted)">tests/conftest.py</small><br><code>solve()</code><br><small style="color:var(--muted)">tests/conftest.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Verifies imports, entry points, or version behavior.</td>
+</tr>
+<tr>
+  <td>23</td>
+  <td><code>Regression tests for every solver-side fix landed during the 2026-05 audit.  Eac</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Regression tests for every solver-side fix landed during the 2026-05 audit.  Eac.</td>
+</tr>
+<tr>
+  <td>24</td>
+  <td><code>Regression: spread-of-hours used absolute-since-1970 minutes against     a [0..2</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Regression: spread-of-hours used absolute-since-1970 minutes against     a [0..2.</td>
+</tr>
+<tr>
+  <td>25</td>
+  <td><code>Regression: with 3 overlapping morning shifts and 3 employees, a     correct sol</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Regression: with 3 overlapping morning shifts and 3 employees, a     correct sol.</td>
+</tr>
+<tr>
+  <td>26</td>
+  <td><code>Regression: pre-fix, min_contract_minutes slack at 1e6/min could     accumulate</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Regression: pre-fix, min_contract_minutes slack at 1e6/min could     accumulate.</td>
+</tr>
+<tr>
+  <td>27</td>
+  <td><code>Same principle for HC-4 (workload) slack: coverage &gt; Tier-0 per-shift.     A sin</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Same principle for HC-4 (workload) slack: coverage &gt; Tier-0 per-shift.     A sin.</td>
+</tr>
+<tr>
+  <td>28</td>
+  <td><code>Regression: confirm the strategy multipliers actually flow through     to the ob</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Regression: confirm the strategy multipliers actually flow through     to the ob.</td>
+</tr>
+<tr>
+  <td>29</td>
+  <td><code>Regression: emp.level=None or shift.level=None used to compare as     `None &lt; 0`</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Regression: emp.level=None or shift.level=None used to compare as     `None &lt; 0`.</td>
+</tr>
+<tr>
+  <td>30</td>
+  <td><code>Regression: pre-fix, the eligibility filter rejected any shift     under 180m as</code><br><small style="color:var(--muted)">tests/test_solver_regressions.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Regression: pre-fix, the eligibility filter rejected any shift     under 180m as.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>tests/test_solver_regressions.py</code></td><td>27 nodes</td></tr>
+<tr><td><code>tests/test_phase3_security.py</code></td><td>23 nodes</td></tr>
+<tr><td><code>tests/test_audit_endpoint.py</code></td><td>11 nodes</td></tr>
+<tr><td><code>tests/conftest.py</code></td><td>8 nodes</td></tr>
+<tr><td><code>tests/test_schema_contract.py</code></td><td>6 nodes</td></tr>
+<tr><td><code>tests/__init__.py</code></td><td>1 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: calls x69, contains x43, explains x27, imports x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 5. Model Builderpy Add ====== -->
+<h2 id="model-builderpy-add">5. Model Builderpy Add</h2>
+<p>Model Builderpy Add groups implementation around model, builderpy, add, hours, mostly in model_builder.py. This section covers 12 nodes and 17 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Model Builderpy Add (12 nodes, 17 edges)
+    optimizer_service_model_builder_schedulemodelbui_45aaec95("ScheduleModelBuilder<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_schedulemodelbui_c7097134("build_and_solve()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_schedulemodelbui_0e857b21("_create_variables()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_schedulemodelbui_6121da6c("_add_coverage()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_schedulemodelbui_e51dc15a("_add_min_engagement()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_schedulemodelbui_14a71304("_add_spread_of_hours()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_schedulemodelbui_cef36666("_add_time_capacity()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_schedulemodelbui_0c38a290("_add_min_contract_hours()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_schedulemodelbui_f9d46ff5("_apply_greedy_hint()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_rationale_923_b03457ee("Deprecated. HC-2 (no-overlap) already g...<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_rationale_934_d84e5178("FT/PT employees must be assigned at lea...<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_rationale_869_8c33faff("Total spread (first start to last end)...<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_schedulemodelbui_45aaec95 -->|method| optimizer_service_model_builder_schedulemodelbui_c7097134
+    optimizer_service_model_builder_schedulemodelbui_45aaec95 -->|method| optimizer_service_model_builder_schedulemodelbui_0e857b21
+    optimizer_service_model_builder_schedulemodelbui_45aaec95 -->|method| optimizer_service_model_builder_schedulemodelbui_6121da6c
+    optimizer_service_model_builder_schedulemodelbui_45aaec95 -->|method| optimizer_service_model_builder_schedulemodelbui_e51dc15a
+    optimizer_service_model_builder_schedulemodelbui_45aaec95 -->|method| optimizer_service_model_builder_schedulemodelbui_14a71304
+    optimizer_service_model_builder_schedulemodelbui_45aaec95 -->|method| optimizer_service_model_builder_schedulemodelbui_cef36666
+    optimizer_service_model_builder_schedulemodelbui_45aaec95 -->|method| optimizer_service_model_builder_schedulemodelbui_0c38a290
+    optimizer_service_model_builder_schedulemodelbui_45aaec95 -->|method| optimizer_service_model_builder_schedulemodelbui_f9d46ff5
+    optimizer_service_model_builder_schedulemodelbui_c7097134 -->|calls| optimizer_service_model_builder_schedulemodelbui_0e857b21
+    optimizer_service_model_builder_schedulemodelbui_c7097134 -->|calls| optimizer_service_model_builder_schedulemodelbui_6121da6c
+    optimizer_service_model_builder_schedulemodelbui_c7097134 -->|calls| optimizer_service_model_builder_schedulemodelbui_0c38a290
+    optimizer_service_model_builder_schedulemodelbui_c7097134 -->|calls| optimizer_service_model_builder_schedulemodelbui_e51dc15a
+    optimizer_service_model_builder_schedulemodelbui_c7097134 -->|calls| optimizer_service_model_builder_schedulemodelbui_14a71304
+    optimizer_service_model_builder_schedulemodelbui_c7097134 -->|calls| optimizer_service_model_builder_schedulemodelbui_f9d46ff5
+    class optimizer_service_model_builder_schedulemodelbui_45aaec95 klass;
+    class optimizer_service_model_builder_schedulemodelbui_c7097134 function;
+    class optimizer_service_model_builder_schedulemodelbui_0e857b21 function;
+    class optimizer_service_model_builder_schedulemodelbui_6121da6c function;
+    class optimizer_service_model_builder_schedulemodelbui_e51dc15a function;
+    class optimizer_service_model_builder_schedulemodelbui_14a71304 function;
+    class optimizer_service_model_builder_schedulemodelbui_cef36666 function;
+    class optimizer_service_model_builder_schedulemodelbui_0c38a290 function;
+    class optimizer_service_model_builder_schedulemodelbui_f9d46ff5 function;
+    class optimizer_service_model_builder_rationale_923_b03457ee concept;
+    class optimizer_service_model_builder_rationale_934_d84e5178 concept;
+    class optimizer_service_model_builder_rationale_869_8c33faff concept;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>ScheduleModelBuilder</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>_add_coverage()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>_add_min_contract_hours()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>_add_min_engagement()</code><br><small style="color:var(--muted)">model_builder.py</small><br>+5 more</td>
+  <td>ScheduleModelBuilder node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>.build_and_solve()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>ScheduleModelBuilder</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><code>_add_coverage()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>_add_min_contract_hours()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>_add_min_engagement()</code><br><small style="color:var(--muted)">model_builder.py</small><br>+3 more</td>
+  <td>.build_and_solve() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>._create_variables()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>build_and_solve()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>ScheduleModelBuilder</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>._create_variables() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>._add_coverage()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>build_and_solve()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>ScheduleModelBuilder</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>Supports retrieval-augmented Q&amp;A or streaming chat.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>._add_min_engagement()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>build_and_solve()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>ScheduleModelBuilder</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>._add_min_engagement() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>._add_spread_of_hours()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>build_and_solve()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>ScheduleModelBuilder</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>._add_spread_of_hours() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>._add_time_capacity()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>ScheduleModelBuilder</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>._add_time_capacity() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>._add_min_contract_hours()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>build_and_solve()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>ScheduleModelBuilder</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>._add_min_contract_hours() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>._apply_greedy_hint()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>build_and_solve()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>ScheduleModelBuilder</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>._apply_greedy_hint() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>Total spread (first start to last end) &lt;= 12h per day.                  Optimize</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Total spread (first start to last end) &lt;= 12h per day.                  Optimize.</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>Deprecated. HC-2 (no-overlap) already guarantees a single employee         canno</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Deprecated. HC-2 (no-overlap) already guarantees a single employee         canno.</td>
+</tr>
+<tr>
+  <td>12</td>
+  <td><code>FT/PT employees must be assigned at least their contracted minimum         hours</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for FT/PT employees must be assigned at least their contracted minimum         hours.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>model_builder.py</code></td><td>12 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: method x8, calls x6, explains x3. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 6. Model Builderpy Eligible ====== -->
+<h2 id="model-builderpy-eligible">6. Model Builderpy Eligible</h2>
+<p>Model Builderpy Eligible groups implementation around model, builderpy, eligible, eligibility, mostly in model_builder.py, ortools_runner.py. This section covers 11 nodes and 11 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Model Builderpy Eligible (11 nodes, 11 edges)
+    subgraph model_builderpy_eligible_model_builder_py_2687f5fc["model_builder.py"]
+        optimizer_service_model_builder_existing_blocks_102073a4("existing_blocks_proposal()<br/><small>model_builder.py</small>")
+        optimizer_service_model_builder_time_to_abs_minu_f26bc37e("_time_to_abs_minutes()<br/><small>model_builder.py</small>")
+        optimizer_service_model_builder_employee_eligibl_e8dbe1bd("employee_eligible()<br/><small>model_builder.py</small>")
+        optimizer_service_model_builder_compute_greedy_h_2f2e3cb9("compute_greedy_hint()<br/><small>model_builder.py</small>")
+        optimizer_service_model_builder_schedulemodelbui_08251849("_compute_eligibility()<br/><small>model_builder.py</small>")
+        optimizer_service_model_builder_rationale_576_25ca921d("Build eligibility_map[shift_id] = [elig...<br/><small>model_builder.py</small>")
+        optimizer_service_model_builder_rationale_213_da35bd26("Convert YYYY-MM-DD HH:MM to absolute mi...<br/><small>model_builder.py</small>")
+        optimizer_service_model_builder_rationale_441_6775f77a("Fast greedy assignment: for each shift...<br/><small>model_builder.py</small>")
+        optimizer_service_model_builder_rationale_280_81795b9c("True if any of the employee's existing...<br/><small>model_builder.py</small>")
+    end
+    subgraph model_builderpy_eligible_ortools_runner_py_b4883e80["ortools_runner.py"]
+        optimizer_service_ortools_runner_explain_eligibi_b008bde5("_explain_eligibility()<br/><small>ortools_runner.py</small>")
+        optimizer_service_ortools_runner_rationale_449_50aa22c6("Run the same checks as employee_eligib...<br/><small>ortools_runner.py</small>")
+    end
+    optimizer_service_model_builder_time_to_abs_minu_f26bc37e -->|calls| optimizer_service_model_builder_employee_eligibl_e8dbe1bd
+    optimizer_service_model_builder_existing_blocks_102073a4 -->|calls| optimizer_service_model_builder_employee_eligibl_e8dbe1bd
+    optimizer_service_model_builder_existing_blocks_102073a4 -->|calls| optimizer_service_model_builder_compute_greedy_h_2f2e3cb9
+    optimizer_service_model_builder_employee_eligibl_e8dbe1bd -->|calls| optimizer_service_model_builder_schedulemodelbui_08251849
+    class optimizer_service_model_builder_existing_blocks_102073a4 function;
+    class optimizer_service_model_builder_time_to_abs_minu_f26bc37e function;
+    class optimizer_service_model_builder_employee_eligibl_e8dbe1bd function;
+    class optimizer_service_model_builder_compute_greedy_h_2f2e3cb9 function;
+    class optimizer_service_model_builder_schedulemodelbui_08251849 function;
+    class optimizer_service_model_builder_rationale_576_25ca921d concept;
+    class optimizer_service_model_builder_rationale_213_da35bd26 concept;
+    class optimizer_service_model_builder_rationale_441_6775f77a concept;
+    class optimizer_service_model_builder_rationale_280_81795b9c concept;
+    class optimizer_service_ortools_runner_explain_eligibi_b008bde5 function;
+    class optimizer_service_ortools_runner_rationale_449_50aa22c6 concept;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>_time_to_abs_minutes()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>_explain_eligibility()</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>employee_eligible()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>_time_to_abs_minutes() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>existing_blocks_proposal()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>_explain_eligibility()</code><br><small style="color:var(--muted)">ortools_runner.py</small><br><code>compute_greedy_hint()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>employee_eligible()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>existing_blocks_proposal() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>employee_eligible()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>_time_to_abs_minutes()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>existing_blocks_proposal()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><code>_compute_eligibility()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>employee_eligible() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>compute_greedy_hint()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>existing_blocks_proposal()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>compute_greedy_hint() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>._compute_eligibility()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>employee_eligible()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>._compute_eligibility() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>Convert YYYY-MM-DD HH:MM to absolute minutes (stable epoch for scheduling).</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Convert YYYY-MM-DD HH:MM to absolute minutes (stable epoch for scheduling)..</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>True if any of the employee&#x27;s existing (pinned) shifts overlaps or     violates</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for True if any of the employee&#x27;s existing (pinned) shifts overlaps or     violates.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>Fast greedy assignment: for each shift (highest priority first),     assign to t</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Fast greedy assignment: for each shift (highest priority first),     assign to t.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>Build eligibility_map[shift_id] = [eligible employees].          Improvement: va</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Build eligibility_map[shift_id] = [eligible employees].          Improvement: va.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>_explain_eligibility()</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>_time_to_abs_minutes()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>existing_blocks_proposal()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>_explain_eligibility() node in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>11</td>
+  <td><code>Run the same checks as `employee_eligible` but return REASON CODES     instead o</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Run the same checks as `employee_eligible` but return REASON CODES     instead o.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>model_builder.py</code></td><td>9 nodes</td></tr>
+<tr><td><code>ortools_runner.py</code></td><td>2 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: explains x5, calls x4. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 7. Model Builderpy Rest ====== -->
+<h2 id="model-builderpy-rest">7. Model Builderpy Rest</h2>
+<p>Model Builderpy Rest groups implementation around model, builderpy, rest, overlap, mostly in model_builder.py. This section covers 10 nodes and 14 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Model Builderpy Rest (10 nodes, 14 edges)
+    optimizer_service_model_builder_shift_window_89c21a51("shift_window()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_schedulemodelbui_41bf26f4("_add_overlap_and_rest()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_shifts_overlap_c791adce("shifts_overlap()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_rest_gap_violate_7be5c979("rest_gap_violated()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_schedulemodelbui_58ab448c("_add_overlap_pairwise_relaxed()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_schedulemodelbui_f5077470("_add_rest_gap_pairwise_relaxed()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_rationale_703_86be5233("Legacy pairwise overlap, used only unde...<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_rationale_729_31783b1a("Legacy pairwise rest gap, used only und...<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_rationale_228_9fc09879("Return (start_min, end_min) - handles o...<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_rationale_264_40e13ae5("True if placing a and b in the same sch...<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_shift_window_89c21a51 -->|calls| optimizer_service_model_builder_shifts_overlap_c791adce
+    optimizer_service_model_builder_shift_window_89c21a51 -->|calls| optimizer_service_model_builder_rest_gap_violate_7be5c979
+    optimizer_service_model_builder_shift_window_89c21a51 -->|calls| optimizer_service_model_builder_schedulemodelbui_41bf26f4
+    optimizer_service_model_builder_shift_window_89c21a51 -->|calls| optimizer_service_model_builder_schedulemodelbui_58ab448c
+    optimizer_service_model_builder_shift_window_89c21a51 -->|calls| optimizer_service_model_builder_schedulemodelbui_f5077470
+    optimizer_service_model_builder_shifts_overlap_c791adce -->|calls| optimizer_service_model_builder_rest_gap_violate_7be5c979
+    optimizer_service_model_builder_shifts_overlap_c791adce -->|calls| optimizer_service_model_builder_schedulemodelbui_58ab448c
+    optimizer_service_model_builder_rest_gap_violate_7be5c979 -->|calls| optimizer_service_model_builder_schedulemodelbui_f5077470
+    optimizer_service_model_builder_schedulemodelbui_41bf26f4 -->|calls| optimizer_service_model_builder_schedulemodelbui_58ab448c
+    optimizer_service_model_builder_schedulemodelbui_41bf26f4 -->|calls| optimizer_service_model_builder_schedulemodelbui_f5077470
+    class optimizer_service_model_builder_shift_window_89c21a51 function;
+    class optimizer_service_model_builder_schedulemodelbui_41bf26f4 function;
+    class optimizer_service_model_builder_shifts_overlap_c791adce function;
+    class optimizer_service_model_builder_rest_gap_violate_7be5c979 function;
+    class optimizer_service_model_builder_schedulemodelbui_58ab448c function;
+    class optimizer_service_model_builder_schedulemodelbui_f5077470 function;
+    class optimizer_service_model_builder_rationale_703_86be5233 concept;
+    class optimizer_service_model_builder_rationale_729_31783b1a concept;
+    class optimizer_service_model_builder_rationale_228_9fc09879 concept;
+    class optimizer_service_model_builder_rationale_264_40e13ae5 concept;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>shift_window()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>_add_overlap_and_rest()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>_add_overlap_pairwise_relaxed()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>_add_rest_gap_pairwise_relaxed()</code><br><small style="color:var(--muted)">model_builder.py</small><br>+2 more</td>
+  <td>shift_window() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>shifts_overlap()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>shift_window()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><code>_add_overlap_pairwise_relaxed()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>rest_gap_violated()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>shifts_overlap() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>rest_gap_violated()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>shift_window()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>shifts_overlap()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><code>_add_rest_gap_pairwise_relaxed()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>rest_gap_violated() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>._add_overlap_and_rest()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>shift_window()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><code>_add_overlap_pairwise_relaxed()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>_add_rest_gap_pairwise_relaxed()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>._add_overlap_and_rest() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>._add_overlap_pairwise_relaxed()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>_add_overlap_and_rest()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>shift_window()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>shifts_overlap()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>._add_overlap_pairwise_relaxed() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>._add_rest_gap_pairwise_relaxed()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>_add_overlap_and_rest()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>rest_gap_violated()</code><br><small style="color:var(--muted)">model_builder.py</small><br><code>shift_window()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>._add_rest_gap_pairwise_relaxed() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>Return (start_min, end_min) - handles overnight shifts correctly.      Accepts a</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Return (start_min, end_min) - handles overnight shifts correctly.      Accepts a.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>True if placing a and b in the same schedule violates the rest gap.</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for True if placing a and b in the same schedule violates the rest gap..</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>Legacy pairwise overlap, used only under relax_constraints=true.          Necess</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Legacy pairwise overlap, used only under relax_constraints=true.          Necess.</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td><code>Legacy pairwise rest gap, used only under relax_constraints=true.</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Legacy pairwise rest gap, used only under relax_constraints=true..</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>model_builder.py</code></td><td>10 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: calls x10, explains x4. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 8. Model Builderpy Assignmentproposal ====== -->
+<h2 id="model-builderpy-assignmentproposal">8. Model Builderpy Assignmentproposal</h2>
+<p>Model Builderpy Assignmentproposal groups implementation around model, builderpy, assignmentproposal, optimizerdebugmetrics, mostly in model_builder.py, security.py. This section covers 6 nodes and 5 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Model Builderpy Assignmentproposal (6 nodes, 5 edges)
+    subgraph model_builderpy_assignmentproposal_model_builder_a3a37aa6["model_builder.py"]
+        optimizer_service_model_builder_optimizerdebugme_67cf955f("OptimizerDebugMetrics<br/><small>model_builder.py</small>")
+        optimizer_service_model_builder_assignmentpropos_b404e9c6("AssignmentProposal<br/><small>model_builder.py</small>")
+        optimizer_service_model_builder_optimizeroutput_0c463431("OptimizerOutput<br/><small>model_builder.py</small>")
+        model_builder_py_bd0e8e87("model_builder.py")
+        optimizer_service_model_builder_rationale_1_a8d19813("CP-SAT Model Builder - Production Grade...<br/><small>model_builder.py</small>")
+    end
+    optimizer_service_security_authcontext_init_e4a5f818("__init__()<br/><small>security.py</small>")
+    optimizer_service_model_builder_optimizerdebugme_67cf955f -->|calls| optimizer_service_security_authcontext_init_e4a5f818
+    class optimizer_service_model_builder_optimizerdebugme_67cf955f klass;
+    class optimizer_service_model_builder_assignmentpropos_b404e9c6 klass;
+    class optimizer_service_model_builder_optimizeroutput_0c463431 klass;
+    class model_builder_py_bd0e8e87 module;
+    class optimizer_service_model_builder_rationale_1_a8d19813 concept;
+    class optimizer_service_security_authcontext_init_e4a5f818 function;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>model_builder.py</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-class">Module</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Module file in model_builder.py.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>AssignmentProposal</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>AssignmentProposal node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>OptimizerDebugMetrics</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>__init__()</code><br><small style="color:var(--muted)">security.py</small></td>
+  <td>OptimizerDebugMetrics node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>OptimizerOutput</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-class">Class</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>OptimizerOutput node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>CP-SAT Model Builder - Production Grade (v8.1)  Key improvements over v2:   A) C</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for CP-SAT Model Builder - Production Grade (v8.1)  Key improvements over v2:   A) C.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>.__init__()</code><br><small style="color:var(--muted)">security.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>OptimizerDebugMetrics</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>.__init__() node in security.py.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>model_builder.py</code></td><td>5 nodes</td></tr>
+<tr><td><code>security.py</code></td><td>1 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: contains x3, explains x1, calls x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 9. Model Builderpy Day ====== -->
+<h2 id="model-builderpy-day">9. Model Builderpy Day</h2>
+<p>Model Builderpy Day groups implementation around model, builderpy, day, minutes, mostly in model_builder.py. This section covers 4 nodes and 3 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Model Builderpy Day (4 nodes, 3 edges)
+    optimizer_service_model_builder_minutes_on_day_27a37903("minutes_on_day()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_schedulemodelbui_6e233fe0("_add_workload_limits()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_rationale_758_fecf09a1("Implements: 1. EBA 28-day rolling windo...<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_rationale_246_1776cc0c("Returns the number of minutes a shift f...<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_minutes_on_day_27a37903 -->|calls| optimizer_service_model_builder_schedulemodelbui_6e233fe0
+    class optimizer_service_model_builder_minutes_on_day_27a37903 function;
+    class optimizer_service_model_builder_schedulemodelbui_6e233fe0 function;
+    class optimizer_service_model_builder_rationale_758_fecf09a1 concept;
+    class optimizer_service_model_builder_rationale_246_1776cc0c concept;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>minutes_on_day()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>_add_workload_limits()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>minutes_on_day() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>._add_workload_limits()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>minutes_on_day()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>._add_workload_limits() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>Returns the number of minutes a shift falls on a specific calendar day.</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Returns the number of minutes a shift falls on a specific calendar day..</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>Implements:         1. EBA 28-day rolling window: S[i+27] - S[i-1] &lt;= 152h</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Implements:         1. EBA 28-day rolling window: S[i+27] - S[i-1] &lt;= 152h.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>model_builder.py</code></td><td>4 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: explains x2, calls x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 10. Model Builderpy Effective ====== -->
+<h2 id="model-builderpy-effective">10. Model Builderpy Effective</h2>
+<p>Model Builderpy Effective groups implementation around model, builderpy, effective, calculate, mostly in model_builder.py. This section covers 3 nodes and 2 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Model Builderpy Effective (3 nodes, 2 edges)
+    optimizer_service_model_builder_calculate_effect_8328c98e("calculate effective minutes()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_schedulemodelbui_4e2bd570("_add_objective()<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_rationale_296_3b02a5db("Calculates effective duration (weighted...<br/><small>model_builder.py</small>")
+    optimizer_service_model_builder_calculate_effect_8328c98e -->|calls| optimizer_service_model_builder_schedulemodelbui_4e2bd570
+    class optimizer_service_model_builder_calculate_effect_8328c98e function;
+    class optimizer_service_model_builder_schedulemodelbui_4e2bd570 function;
+    class optimizer_service_model_builder_rationale_296_3b02a5db concept;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>_calculate_effective_minutes()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td><code>_add_objective()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>_calculate_effective_minutes() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>._add_objective()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td><code>calculate effective minutes()</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td>No direct outbound edge</td>
+  <td>._add_objective() node in model_builder.py.</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>Calculates effective duration (weighted by circadian penalties).          Weight</code><br><small style="color:var(--muted)">model_builder.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Calculates effective duration (weighted by circadian penalties).          Weight.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>model_builder.py</code></td><td>3 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: calls x1, explains x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<!-- ====== 11. Ortools Runnerpy Health ====== -->
+<h2 id="ortools-runnerpy-health">11. Ortools Runnerpy Health</h2>
+<p>Ortools Runnerpy Health groups implementation around ortools, runnerpy, health, check, mostly in ortools_runner.py. This section covers 2 nodes and 1 internal edges; the diagram shows only representative relationships to stay readable.</p>
+
+<div class="mermaid">
+%%{init: {"theme": "dark", "themeVariables": {"fontSize": "15.0px", "fontFamily": "Segoe UI, system-ui, sans-serif", "primaryColor": "#1e293b", "primaryTextColor": "#e2e8f0", "primaryBorderColor": "#38bdf8", "secondaryColor": "#0f172a", "tertiaryColor": "#334155", "lineColor": "#64748b", "textColor": "#e2e8f0"}, "flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 48, "rankSpacing": 64, "padding": 14, "diagramPadding": 10, "useMaxWidth": true}}}%%
+flowchart LR
+    %% Section: Ortools Runnerpy Health (2 nodes, 1 edges)
+    optimizer_service_ortools_runner_health_check_e353db3b("health_check()<br/><small>ortools_runner.py</small>")
+    optimizer_service_ortools_runner_rationale_274_8da0ee63("Liveness probe — process is up. Cheap;...<br/><small>ortools_runner.py</small>")
+    optimizer_service_ortools_runner_health_check_e353db3b -->|explains| optimizer_service_ortools_runner_rationale_274_8da0ee63
+    class optimizer_service_ortools_runner_health_check_e353db3b function;
+    class optimizer_service_ortools_runner_rationale_274_8da0ee63 concept;
+    classDef entry fill:#422006,stroke:#fbbf24,color:#fde68a,stroke-width:1px;
+    classDef api fill:#450a0a,stroke:#f87171,color:#fee2e2,stroke-width:1px;
+    classDef async fill:#2e1065,stroke:#a78bfa,color:#ede9fe,stroke-width:1px;
+    classDef klass fill:#064e3b,stroke:#34d399,color:#d1fae5,stroke-width:1px;
+    classDef ui fill:#831843,stroke:#f472b6,color:#fce7f3,stroke-width:1px;
+    classDef module fill:#172554,stroke:#60a5fa,color:#dbeafe,stroke-width:1px;
+    classDef test fill:#3f3f46,stroke:#a1a1aa,color:#f4f4f5,stroke-width:1px;
+    classDef concept fill:#292524,stroke:#a8a29e,color:#fafaf9,stroke-dasharray:4 3;
+    classDef function fill:#0f172a,stroke:#38bdf8,color:#e0f2fe,stroke-width:1px;
+</div>
+
+<h3>Call Details</h3>
+<table class="call-table">
+<tr>
+  <th style="width:5%">#</th>
+  <th style="width:28%">Node</th>
+  <th style="width:10%">Type</th>
+  <th style="width:17%">Caller</th>
+  <th style="width:20%">Callees</th>
+  <th style="width:20%">Description</th>
+</tr>
+<tr>
+  <td>1</td>
+  <td><code>health_check()</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-func">Function</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>health_check() node in ortools_runner.py.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>Liveness probe — process is up. Cheap; no auth, no rate limit.      K8s should u</code><br><small style="color:var(--muted)">ortools_runner.py</small></td>
+  <td><span class="tag tag-func">Concept</span></td>
+  <td>External entry / no inbound edge</td>
+  <td>No direct outbound edge</td>
+  <td>Design note for Liveness probe — process is up. Cheap; no auth, no rate limit.      K8s should u.</td>
+</tr>
+</table>
+
+<div class="grid">
+  <div class="card">
+    <h4>Key Files</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><th>File</th><th>Coverage</th></tr>
+      <tr><td><code>ortools_runner.py</code></td><td>2 nodes</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Design Notes</h4>
+    <p>This section comes from graphify community clustering. Relationship summary: explains x1. The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader node inventory.</p>
+  </div>
+</div>
+<hr>
+
+<h2 id="stats">Project Statistics</h2>
+
+<div class="grid">
+  <div class="card">
+    <h4>Graph</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><td>Nodes</td><td>180</td></tr>
+      <tr><td>Edges</td><td>453</td></tr>
+      <tr><td>Hyperedges</td><td>0</td></tr>
+      <tr><td>Communities</td><td>15</td></tr>
+      <tr><td>Documented Sections</td><td>10</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>Edge Confidence</h4>
+    <table style="width:100%;font-size:0.85rem;">
+      <tr><td>EXTRACTED</td><td>307</td></tr>
+      <tr><td>INFERRED</td><td>146</td></tr>
+      <tr><td>AMBIGUOUS</td><td>0</td></tr>
+    </table>
+  </div>
+</div>
+
+<div style="text-align:center; padding:40px 0; color: var(--muted); font-size:0.9rem;">
+  <p>optimizer-service — Architecture Documentation</p>
+  <p>Generated: 2026-05-13 01:48 UTC · graphify callflow-html</p>
+</div>
+
+</div><!-- .container -->
+
+<script>
+(function () {
+  const mermaidConfig = {
+    startOnLoad: false,
+    theme: 'dark',
+    securityLevel: 'loose',
+    flowchart: { htmlLabels: true, useMaxWidth: true },
+    themeVariables: {
+      primaryColor: '#1e293b',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#38bdf8',
+      secondaryColor: '#0f172a',
+      tertiaryColor: '#334155',
+      lineColor: '#64748b',
+      textColor: '#e2e8f0',
+    }
+  };
+
+  mermaid.initialize(mermaidConfig);
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function enhanceMermaidDiagrams() {
+    document.querySelectorAll('.mermaid').forEach((container) => {
+      if (container.dataset.zoomReady === 'true') return;
+      const svg = container.querySelector('svg');
+      if (!svg) return;
+
+      container.dataset.zoomReady = 'true';
+      container.classList.add('is-enhanced');
+
+      const viewport = document.createElement('div');
+      viewport.className = 'mermaid-viewport';
+      svg.parentNode.insertBefore(viewport, svg);
+      viewport.appendChild(svg);
+
+      const toolbar = document.createElement('div');
+      toolbar.className = 'mermaid-toolbar';
+      toolbar.innerHTML = [
+        '<button type="button" data-action="zoom-out" title="Zoom out">-</button>',
+        '<span class="zoom-level" data-role="level">100%</span>',
+        '<button type="button" data-action="zoom-in" title="Zoom in">+</button>',
+        '<button type="button" data-action="fit" title="Fit width">Fit</button>',
+        '<button type="button" data-action="reset" title="Reset view">Reset</button>'
+      ].join('');
+      container.insertBefore(toolbar, viewport);
+
+      const state = { scale: 1, x: 0, y: 0, dragging: false, startX: 0, startY: 0, originX: 0, originY: 0 };
+      const level = toolbar.querySelector('[data-role="level"]');
+
+      function applyTransform() {
+        svg.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
+        level.textContent = `${Math.round(state.scale * 100)}%`;
+      }
+
+      function zoomBy(delta) {
+        state.scale = clamp(state.scale + delta, 0.25, 3);
+        applyTransform();
+      }
+
+      function reset() {
+        state.scale = 1;
+        state.x = 0;
+        state.y = 0;
+        applyTransform();
+      }
+
+      function fitWidth() {
+        const rawWidth = svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width
+          ? svg.viewBox.baseVal.width
+          : svg.getBoundingClientRect().width / state.scale;
+        if (!rawWidth) {
+          reset();
+          return;
+        }
+        state.scale = clamp((viewport.clientWidth - 48) / rawWidth, 0.25, 1.4);
+        state.x = 0;
+        state.y = 0;
+        applyTransform();
+      }
+
+      toolbar.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) return;
+        const action = button.dataset.action;
+        if (action === 'zoom-in') zoomBy(0.15);
+        if (action === 'zoom-out') zoomBy(-0.15);
+        if (action === 'fit') fitWidth();
+        if (action === 'reset') reset();
+      });
+
+      viewport.addEventListener('wheel', (event) => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        zoomBy(event.deltaY < 0 ? 0.1 : -0.1);
+      }, { passive: false });
+
+      viewport.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0) return;
+        state.dragging = true;
+        state.startX = event.clientX;
+        state.startY = event.clientY;
+        state.originX = state.x;
+        state.originY = state.y;
+        viewport.classList.add('is-dragging');
+        viewport.setPointerCapture(event.pointerId);
+      });
+
+      viewport.addEventListener('pointermove', (event) => {
+        if (!state.dragging) return;
+        state.x = state.originX + event.clientX - state.startX;
+        state.y = state.originY + event.clientY - state.startY;
+        applyTransform();
+      });
+
+      function endDrag(event) {
+        if (!state.dragging) return;
+        state.dragging = false;
+        viewport.classList.remove('is-dragging');
+        if (viewport.hasPointerCapture(event.pointerId)) {
+          viewport.releasePointerCapture(event.pointerId);
+        }
+      }
+
+      viewport.addEventListener('pointerup', endDrag);
+      viewport.addEventListener('pointercancel', endDrag);
+      applyTransform();
+    });
+  }
+
+  function renderMermaid() {
+    const result = mermaid.run
+      ? mermaid.run({ querySelector: '.mermaid' })
+      : Promise.resolve();
+    Promise.resolve(result)
+      .then(enhanceMermaidDiagrams)
+      .catch((error) => {
+        console.error('Mermaid render failed:', error);
+        enhanceMermaidDiagrams();
+      });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', renderMermaid);
+  } else {
+    renderMermaid();
+  }
+})();
+</script>
+
+</body>
+</html>

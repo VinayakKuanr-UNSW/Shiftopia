@@ -150,15 +150,21 @@ export const ShiftBucket: React.FC<ShiftBucketProps> = ({
                 onPublishBucket={handlePublishBucket}
                 onUnpublishBucket={handleUnpublishBucket}
                 onDeleteBucket={handleDeleteBucket}
+                accentColor={accentColor}
             />
 
             {/* Expanded rows */}
             {isExpanded && (
                 <div
                     className={cn(
-                        'border-2 border-t-0 border-border rounded-b-lg overflow-hidden',
+                        'border-2 border-t-0 border-border rounded-b-lg overflow-hidden transition-all duration-200',
                         'bg-accent/5 shadow-inner'
                     )}
+                    style={{ 
+                        borderColor: `${accentColor}99`,
+                        borderLeftWidth: '6px',
+                        borderLeftColor: accentColor 
+                    }}
                 >
                     {shifts.map(shift => (
                         <ShiftBucketRow
@@ -176,6 +182,7 @@ export const ShiftBucket: React.FC<ShiftBucketProps> = ({
                             onDelete={onDeleteShift}
                             onPublish={onPublishShift}
                             onUnpublish={onUnpublishShift}
+                            accentColor={accentColor}
                         />
                     ))}
                 </div>

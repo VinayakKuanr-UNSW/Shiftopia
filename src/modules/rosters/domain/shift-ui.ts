@@ -330,13 +330,16 @@ export function getShiftStatusIcons(shift: Partial<Shift>): ShiftStatusIcon[] {
     const icons: ShiftStatusIcon[] = [];
     const now = Date.now();
     const schedStartMs = shift.start_at ? new Date(shift.start_at).getTime() : 
-                        (shift.shift_date && shift.start_time ? new Date(`${shift.shift_date}T${shift.start_time}`).getTime() : null);
+                        (shift.shift_date && shift.start_time ? parseZonedDateTime(shift.shift_date, shift.start_time).getTime() : null);
     const schedEndMs = shift.end_at ? new Date(shift.end_at).getTime() :
-                      (shift.shift_date && shift.end_time ? new Date(`${shift.shift_date}T${shift.end_time}`).getTime() : null);
+                      (shift.shift_date && shift.end_time ? parseZonedDateTime(shift.shift_date, shift.end_time).getTime() : null);
     
     // Use the actual end time if available, otherwise scheduled end
     const effectiveEndMs = shift.actual_end ? new Date(shift.actual_end).getTime() : (schedEndMs || 0);
-    const isPast = effectiveEndMs > 0 && now > effectiveEndMs;
+    
+    // A shift is considered "Past" (Locked) as soon as it starts for Manager view
+    // But for general status, we use start time for the Lock icon consistency
+    const isPast = schedStartMs && now > schedStartMs;
 
     // 1. Clock for Finalized or No Show
     const tsStatus = (shift.timesheet_status || '').toLowerCase();

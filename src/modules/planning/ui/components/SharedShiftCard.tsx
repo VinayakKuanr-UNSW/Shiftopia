@@ -59,6 +59,7 @@ export interface SharedShiftCardProps {
     clockOut?: string | null;
     adjustedStart?: string | null;
     adjustedEnd?: string | null;
+    estimatedPay?: React.ReactNode;
 }
 
 const DataRow: React.FC<{
@@ -114,6 +115,7 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
     clockOut,
     adjustedStart,
     adjustedEnd,
+    estimatedPay,
 }, ref) => {
     const protection = React.useMemo(() => getProtectionContext(
         { lifecycle_status: lifecycleStatus },
@@ -275,6 +277,12 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                             </div>
                         )}
 
+                        {estimatedPay && (
+                            <div className="pt-1.5 mt-1.5 border-t border-foreground/[0.03]">
+                                <DataRow label="Estimated Pay" value={estimatedPay} emphasis accentColor="text-emerald-500" />
+                            </div>
+                        )}
+
                         {statusDot && (
                             <div className="mt-1 pt-1 border-t border-foreground/[0.01]">
                                 <DataRow label="Live Status" value={statusDot} />
@@ -382,6 +390,15 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                     <span className="text-border">|</span>
                     <span className="text-primary font-black font-mono">Net Length: {(netLength / 60).toFixed(1)}h</span>
                 </div>
+
+                {estimatedPay && (
+                    <div className="mb-3 px-3 py-2 bg-emerald-500/5 border border-emerald-500/10 rounded-xl flex items-center justify-between">
+                        <span className="text-[10px] font-black text-emerald-500/60 uppercase tracking-widest">Est. Pay</span>
+                        <div className="text-sm font-black text-emerald-500 tabular-nums">
+                            {estimatedPay}
+                        </div>
+                    </div>
+                )}
 
                 {/* COUNTDOWN */}
                 {timerText && (

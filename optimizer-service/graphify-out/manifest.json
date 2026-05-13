@@ -1,0 +1,54 @@
+{
+  "/Users/vinayakkuanr/Documents/Superman_ULTIMATE/optimizer-service/model_builder.py": {
+    "mtime": 1778215351.0821319,
+    "hash": "41eaa83a06eb466e85a35f5f40a97dcd"
+  },
+  "/Users/vinayakkuanr/Documents/Superman_ULTIMATE/optimizer-service/security.py": {
+    "mtime": 1778244918.2082088,
+    "hash": "e3595281debeb6e309895a50a9191817"
+  },
+  "/Users/vinayakkuanr/Documents/Superman_ULTIMATE/optimizer-service/ortools_runner.py": {
+    "mtime": 1778245009.3398163,
+    "hash": "08f3cf48beefaf874e4feae5c39f3689"
+  },
+  "/Users/vinayakkuanr/Documents/Superman_ULTIMATE/optimizer-service/tests/conftest.py": {
+    "mtime": 1778211844.8774655,
+    "hash": "235ee7ae60f65a17f5ac548f5c5828cd"
+  },
+  "/Users/vinayakkuanr/Documents/Superman_ULTIMATE/optimizer-service/tests/test_audit_endpoint.py": {
+    "mtime": 1778213411.9906976,
+    "hash": "cc79e13230d9f68b2609c99d16dff4e1"
+  },
+  "/Users/vinayakkuanr/Documents/Superman_ULTIMATE/optimizer-service/tests/test_schema_contract.py": {
+    "mtime": 1778215275.7640376,
+    "hash": "fc559b2e509cb557b6b808b7696bf964"
+  },
+  "/Users/vinayakkuanr/Documents/Superman_ULTIMATE/optimizer-service/tests/test_phase3_security.py": {
+    "mtime": 1778248512.2666771,
+    "hash": "34a6b1a1b53651e77ec8d020c237a740"
+  },
+  "/Users/vinayakkuanr/Documents/Superman_ULTIMATE/optimizer-service/tests/__init__.py": {
+    "mtime": 1778211819.1955702,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "/Users/vinayakkuanr/Documents/Superman_ULTIMATE/optimizer-service/tests/test_solver_regressions.py": {
+    "mtime": 1778211904.516878,
+    "hash": "2bec2293324af3a14886263705d788fe"
+  },
+  "/Users/vinayakkuanr/Documents/Superman_ULTIMATE/optimizer-service/scripts/dump_schema.py": {
+    "mtime": 1778215400.268612,
+    "hash": "910b798e3123543f651e3fb0ff0722d9"
+  },
+  "/Users/vinayakkuanr/Documents/Superman_ULTIMATE/optimizer-service/scripts/loadtest.py": {
+    "mtime": 1778248587.877402,
+    "hash": "6ef176a90eef93684d2e2742fc101335"
+  },
+  "/Users/vinayakkuanr/Documents/Superman_ULTIMATE/optimizer-service/requirements.txt": {
+    "mtime": 1778244865.0553052,
+    "hash": "feaf707ba253bce7e89e7c0392a067b0"
+  },
+  "/Users/vinayakkuanr/Documents/Superman_ULTIMATE/optimizer-service/SCHEMA.md": {
+    "mtime": 1778215615.2249482,
+    "hash": "1b694334ef3c7805a61eadecd67a7372"
+  }
+}

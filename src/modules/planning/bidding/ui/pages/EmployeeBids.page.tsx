@@ -24,6 +24,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
 import { calculateTimeRemaining, formatTimeRemaining } from '../views/OpenBidsView/utils';
 import { SharedShiftCard } from '../../../../planning/ui/components/SharedShiftCard';
+import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
+import { getStatusDotInfo } from '@/modules/rosters/domain/shift-ui';
+import { ZERO_COST_BREAKDOWN } from '@/modules/rosters/domain/projections/utils/cost/constants';
+import { CostBreakdownTooltip } from '@/modules/rosters/ui/my-roster/ShiftDetailsDialog';
 
 import {
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -95,6 +99,7 @@ interface BidData {
     notes: string | null;
     groupType?: string | null;
     stateId?: string;
+    lifecycleStatus?: string;
     subGroupColor?: string;
 }
 
@@ -411,6 +416,7 @@ export const EmployeeBidsPage: React.FC = () => {
                 biddingWindowCloses: (s as any).bidding_close_at || null,
                 isUrgent,
                 stateId: determineShiftState(s as any),
+                lifecycleStatus: s.lifecycle_status,
                 subGroupColor: getDeptColor(s.group_type, s.departments?.name || ''),
                 droppedById: (s as any).dropped_by_id,
                 last_dropped_by: (s as any).last_dropped_by,
@@ -454,6 +460,7 @@ export const EmployeeBidsPage: React.FC = () => {
                 netLength,
                 remunerationLevel: s.remuneration_levels?.level_name || 'Level-4',
                 status: b.status as any,
+                lifecycleStatus: s.lifecycle_status,
                 bidTime: format(parseISO(b.created_at), 'yyyy-MM-dd HH:mm'),
                 notes: b.notes,
                 groupType: s.group_type,
@@ -765,6 +772,10 @@ export const EmployeeBidsPage: React.FC = () => {
             </div>
         );
 
+        const rawShift = rawAvailableShifts.find(s => s.id === opp.id);
+        const costBreakdown = rawShift ? estimateDetailedCostFromShift(rawShift as any) : ZERO_COST_BREAKDOWN;
+        const isPast = shiftStart.getTime() < Date.now();
+
         return (
             <motion.div key={opp.id} {...listItemSpring} whileHover={{ y: -2, transition: { duration: 0.15 } }} whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}>
                 <SharedShiftCard
@@ -782,6 +793,7 @@ export const EmployeeBidsPage: React.FC = () => {
                     timerText={timerDisplay}
                     isExpired={isTerminal ? false : tr.isExpired}
                     isUrgent={opp.isUrgent}
+                    isPast={isPast}
                     lifecycleStatus={opp.lifecycleStatus || 'Published'}
                     groupVariant={
                         opp.groupType === 'convention_centre' ? 'convention' :
@@ -790,6 +802,21 @@ export const EmployeeBidsPage: React.FC = () => {
                     }
                     footerActions={footerActions}
                     topContent={topContent}
+                    shiftData={rawShift}
+                    estimatedPay={(
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center justify-end gap-1.5 cursor-help group/pay">
+                            <span className="text-[14px] font-black text-emerald-500 tabular-nums">
+                              ${(costBreakdown.totalCost || 0).toFixed(2)}
+                            </span>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-2xl" side="top">
+                          <CostBreakdownTooltip breakdown={costBreakdown} />
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                 />
             </motion.div>
         );
@@ -1335,6 +1362,10 @@ export const EmployeeBidsPage: React.FC = () => {
                                 </div>
                             );
 
+                            const rawShift = rawAvailableShifts.find(s => s.id === opp.id);
+                            const costBreakdown = rawShift ? estimateDetailedCostFromShift(rawShift as any) : ZERO_COST_BREAKDOWN;
+                            const isPast = shiftStart.getTime() < Date.now();
+
                             return (
                                 <div className="space-y-6">
                                     <div className="flex justify-center mb-2">
@@ -1356,6 +1387,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                         timerText={isTerminal ? undefined : (isExpired ? 'Bidding Closed' : `Closes in ${timerStr}`)}
                                         isExpired={isTerminal ? false : isExpired}
                                         isUrgent={opp.isUrgent}
+                                        isPast={isPast}
                                         lifecycleStatus={opp.lifecycleStatus || 'Published'}
                                         groupVariant={
                                             opp.groupType === 'convention_centre' ? 'convention' :
@@ -1365,6 +1397,21 @@ export const EmployeeBidsPage: React.FC = () => {
                                         footerActions={footerActions}
                                         isFlat={false}
                                         className="shadow-2xl border-white/10"
+                                        shiftData={rawShift}
+                                        estimatedPay={(
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <div className="flex items-center justify-end gap-1.5 cursor-help group/pay">
+                                                <span className="text-[14px] font-black text-emerald-500 tabular-nums">
+                                                  ${(costBreakdown.totalCost || 0).toFixed(2)}
+                                                </span>
+                                              </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-2xl" side="top">
+                                              <CostBreakdownTooltip breakdown={costBreakdown} />
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        )}
                                     />
                                     
                                     <div className="px-2 pb-4">

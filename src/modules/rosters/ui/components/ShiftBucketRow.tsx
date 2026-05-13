@@ -27,6 +27,7 @@ import {
     onUnpublish: (shiftId: string) => void;
     rawShift?: any;
     showStatusIcons?: boolean;
+    accentColor?: string;
 }
 
 export const ShiftBucketRow: React.FC<ShiftBucketRowProps> = ({
@@ -44,6 +45,7 @@ export const ShiftBucketRow: React.FC<ShiftBucketRowProps> = ({
     onUnpublish,
     rawShift,
     showStatusIcons = true, // Default to true in Roster views
+    accentColor,
 }) => {
     const disabled = isLocked || !canEdit;
     
@@ -54,10 +56,13 @@ export const ShiftBucketRow: React.FC<ShiftBucketRowProps> = ({
     return (
         <div
             className={cn(
-                'flex items-center gap-2 px-3 py-2 rounded-md group',
-                'hover:bg-accent/30',
+                'flex items-center gap-2 px-3 py-2 rounded-md group transition-colors duration-150',
+                'hover:bg-[var(--hover-bg,rgba(255,255,255,0.05))]',
                 isLocked && 'opacity-30'
             )}
+            style={{ 
+                '--hover-bg': `${accentColor}15`,
+            } as any}
         >
             {/* Assignment indicator */}
             <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center">

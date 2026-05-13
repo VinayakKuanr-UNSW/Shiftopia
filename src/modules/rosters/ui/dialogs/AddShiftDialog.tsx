@@ -75,7 +75,7 @@ export const AddShiftDialog: React.FC<AddShiftDialogProps> = ({
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      role: "Team Leader",
+      role: "TM1",
       startTime: "09:00",
       endTime: "17:00",
       breakDuration: "30",
@@ -148,7 +148,7 @@ export const AddShiftDialog: React.FC<AddShiftDialogProps> = ({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent className="bg-gray-900/95 backdrop-blur-xl border-gray-800">
-                      <SelectItem value="Team Leader">Team Leader</SelectItem>
+                      <SelectItem value="TM1">TM1</SelectItem>
                       <SelectItem value="TM3">TM3</SelectItem>
                       <SelectItem value="TM2">TM2</SelectItem>
                     </SelectContent>

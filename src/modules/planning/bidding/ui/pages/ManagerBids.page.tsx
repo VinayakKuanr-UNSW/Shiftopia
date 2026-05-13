@@ -25,6 +25,8 @@ export const ManagerBidsPage: React.FC = () => {
     const [activeToggle, setActiveToggle] = useState<BidToggle>('urgent');
     const [counts, setCounts] = useState<ToggleCounts>({ urgent: 0, normal: 0, resolved: 0 });
     const [autoAssign, setAutoAssign] = useState<{ run: () => void; isRunning: boolean }>({ run: () => {}, isRunning: false });
+    const [startDate, setStartDate] = useState<Date>(() => new Date());
+    const [endDate, setEndDate]     = useState<Date>(() => new Date());
 
     const handleAutoAssignReady = useCallback((fn: { run: () => void; isRunning: boolean }) => {
         setAutoAssign(fn);
@@ -98,6 +100,12 @@ export const ManagerBidsPage: React.FC = () => {
                 onViewModeChange={setViewMode}
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
+                startDate={startDate}
+                endDate={endDate}
+                onDateChange={(start: Date, end: Date) => {
+                    setStartDate(start);
+                    setEndDate(end);
+                }}
                 filters={toggleChips}
                 functionBarChildren={autoAssignButton}
             />
@@ -120,6 +128,8 @@ export const ManagerBidsPage: React.FC = () => {
                         onToggleChange={setActiveToggle}
                         onCountsChange={setCounts}
                         onAutoAssignReady={handleAutoAssignReady}
+                        startDate={startDate}
+                        endDate={endDate}
                     />
                 </div>
             </div>

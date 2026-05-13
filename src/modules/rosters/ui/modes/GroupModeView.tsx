@@ -1649,7 +1649,7 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                   Clone Shift
                 </DropdownMenuItem>
 
-                {hasStarted && shift.rawShift.lifecycle_status !== 'Published' ? (
+                {hasStarted ? (
                   <>
                     <DropdownMenuItem disabled className="text-muted-foreground/50 cursor-not-allowed">
                       <Lock className="h-4 w-4 mr-2" />
@@ -2156,6 +2156,13 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
                                                 bucket={bucket}
                                                 shifts={bucketShiftData}
                                                 canEdit={canEdit}
+                                                accentColor={
+                                                  group.color?.startsWith('#') 
+                                                    ? group.color 
+                                                    : (group.color === 'blue' ? '#3b82f6' : 
+                                                       group.color === 'emerald' ? '#10b981' : 
+                                                       group.color === 'red' ? '#ef4444' : '#6b7280')
+                                                }
                                                 onEditShift={(shiftId) => {
                                                   const sd = cellShifts.find(cs => cs.id === shiftId);
                                                   if (sd) handleEditShift(sd, group, subGroup, date);

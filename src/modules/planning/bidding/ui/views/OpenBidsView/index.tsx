@@ -224,7 +224,7 @@ function useBidsCompliancePanel(
 
       // Run v2 engine
       const v2Result = runV8Orchestrator(v2Input);
-      const allHits: V8Hit[] = [...v2Result.rule_hits];
+      const allHits: V8Hit[] = [...(v2Result.hits || [])];
 
       // Server-side qual/eligibility check → convert to V8Hit
       try {
@@ -246,7 +246,7 @@ function useBidsCompliancePanel(
 
         (bucketAResult.qualificationViolations ?? []).forEach((v: any) => {
           allHits.push({
-            rule_id:          'R11_QUALIFICATIONS',
+            rule_id:          'V8_QUALIFICATIONS',
             severity:         'BLOCKING',
             message:          v.message || 'Missing required qualification.',
             resolution_hint:  'Employee must hold all required qualifications.',
@@ -258,11 +258,13 @@ function useBidsCompliancePanel(
           v.toLowerCase().includes('contract') || v.toLowerCase().includes('role')
         ).forEach((v: string) => {
           allHits.push({
-            rule_id:         'R10_ROLE_CONTRACT_MATCH',
-            severity:        'BLOCKING',
-            message:         v,
-            resolution_hint: 'Ensure employee is contracted for the required role.',
+            rule_id:         'V8_QUALIFICATIONS',
+            rule_name:       'Qualifications',
+            status:          'BLOCKING',
+            summary:         v,
+            details:         'Ensure employee is contracted for the required role.',
             affected_shifts: [expandedShift.id],
+            blocking:        true,
           } as V8Hit);
         });
 
@@ -270,11 +272,13 @@ function useBidsCompliancePanel(
           w.toLowerCase().includes('availability') || w.toLowerCase().includes('locked')
         ).forEach((w: string) => {
           allHits.push({
-            rule_id:         'R_AVAILABILITY_MATCH',
-            severity:        'WARNING',
-            message:         w,
-            resolution_hint: '',
+            rule_id:         'V8_AVAILABILITY_CONFLICT',
+            rule_name:       'Availability Conflict',
+            status:          'WARNING',
+            summary:         w,
+            details:         '',
             affected_shifts: [expandedShift.id],
+            blocking:        false,
           } as V8Hit);
         });
       } catch { /* server check optional */ }
@@ -283,7 +287,7 @@ function useBidsCompliancePanel(
       // employee's declared slots for the shift date. The deeper, V8-engine
       // version of this check has been removed; the server-side compliance
       // pass below covers the authoritative case.
-      if (!allHits.some(h => h.rule_id === 'R_AVAILABILITY_MATCH')) {
+      if (!allHits.some(h => h.rule_id === 'V8_AVAILABILITY_CONFLICT')) {
         try {
           const slots = await getAvailabilitySlots(selectedBid.employeeId, expandedShift.date, expandedShift.date);
           const toMins = (t: string) => {
@@ -302,11 +306,13 @@ function useBidsCompliancePanel(
           });
           if (!covered) {
             allHits.push({
-              rule_id:         'R_AVAILABILITY_MATCH',
-              severity:        'WARNING',
-              message:         'Shift falls outside declared availability.',
-              resolution_hint: '',
+              rule_id:         'V8_AVAILABILITY_CONFLICT',
+              rule_name:       'Availability Conflict',
+              status:          'WARNING',
+              summary:         'Shift falls outside declared availability.',
+              details:         '',
               affected_shifts: [expandedShift.id],
+              blocking:        false,
             } as V8Hit);
           }
         } catch { /* availability check optional */ }
@@ -323,6 +329,7 @@ function useBidsCompliancePanel(
       });
       setStatus('results');
     } catch (e: unknown) {
+      console.error('[useBidsCompliancePanel] Error during compliance check:', e);
       setError(e instanceof Error ? e.message : 'Compliance check failed');
       setStatus('error');
     } finally {
@@ -463,41 +470,66 @@ const RoleCard: React.FC<RoleCardProps> = ({
   })();
 
   return (
-    <SharedShiftCard
-      variant="timecard"
-      organization={shift.organization}
-      department={shift.department}
-      subGroup={shift.subDepartment}
-      role={shift.role}
-      shiftDate={shift.dayLabel}
-      startTime={shift.startTime}
-      endTime={shift.endTime}
-      netLength={netLength}
-      paidBreak={shift.paidBreak}
-      unpaidBreak={shift.unpaidBreak}
-      urgency={urgency}
-      groupVariant={groupVariant}
-      timerText={!isResolved ? (timeRemaining.isExpired ? 'CLOSED' : `${timerLabel} left`) : undefined}
-      isExpired={!isResolved && timeRemaining.isExpired}
+    <motion.button
       onClick={onSelect}
       className={cn(
-        isSelected && 'ring-2 ring-primary/40',
-        isResolved && 'opacity-40',
+        "w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border transition-all text-left group",
+        isSelected
+          ? "bg-primary/5 border-primary/30 ring-1 ring-primary/20 shadow-sm"
+          : "bg-white dark:bg-slate-900 border-border/50 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:border-border",
+        isResolved && "opacity-60"
       )}
-      statusIcons={
-        <div className="col-span-3 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            <Users className="h-3 w-3 text-muted-foreground/40" />
-            <span className="text-[10px] font-bold tabular-nums text-muted-foreground/60">
-              {shift.bidCount} {shift.bidCount === 1 ? 'bid' : 'bids'}
+      whileHover={{ y: -1 }}
+      whileTap={{ scale: 0.98 }}
+    >
+      <div className="flex items-center gap-4 min-w-0">
+        {/* Date & Time */}
+        <div className="flex flex-col shrink-0">
+          <span className="text-[11px] font-black uppercase tracking-wider text-muted-foreground/70">
+            {shift.dayLabel}
+          </span>
+          <span className="text-[13px] font-mono font-bold text-foreground">
+            {shift.startTime}–{shift.endTime}
+          </span>
+        </div>
+
+        {/* Separator */}
+        <div className="w-px h-6 bg-border/50 shrink-0" />
+
+        {/* Role & Dept */}
+        <div className="flex flex-col min-w-0">
+          <span className="text-sm font-bold text-primary truncate">
+            {shift.role}
+          </span>
+          <span className="text-[10px] text-muted-foreground truncate max-w-[150px]">
+            {shift.department} {shift.subDepartment ? `· ${shift.subDepartment}` : ''}
+          </span>
+        </div>
+      </div>
+
+      {/* Right side: Bids & Status */}
+      <div className="flex items-center gap-3 shrink-0">
+        {!isResolved && !timeRemaining.isExpired && (
+          <div className="hidden sm:flex flex-col items-end">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/50">Closes in</span>
+            <span className={cn("text-[11px] font-mono font-bold", timeRemaining.hours < 2 ? "text-rose-500" : "text-amber-500")}>
+              {timerLabel}
             </span>
           </div>
-          {isResolved && (
-            <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 leading-none uppercase tracking-wider">Filled</span>
-          )}
-        </div>
-      }
-    />
+        )}
+        
+        <Badge variant={isSelected ? 'default' : 'secondary'} className={cn(
+          "font-mono tabular-nums text-[11px] h-6 px-2 rounded-md",
+          !isSelected && "bg-muted text-muted-foreground"
+        )}>
+          {shift.bidCount} {shift.bidCount === 1 ? 'bid' : 'bids'}
+        </Badge>
+        
+        {isResolved && (
+          <CheckCircle className="h-4 w-4 text-emerald-500" />
+        )}
+      </div>
+    </motion.button>
   );
 };
 
@@ -579,6 +611,8 @@ interface OpenBidsViewProps {
   onCountsChange?: (counts: ToggleCounts) => void;
   /** Hands a ready-to-call auto-assign function back to the parent. */
   onAutoAssignReady?: (fn: { run: () => void; isRunning: boolean }) => void;
+  startDate?: Date;
+  endDate?: Date;
 }
 
 export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
@@ -591,6 +625,8 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
   onToggleChange,
   onCountsChange,
   onAutoAssignReady,
+  startDate,
+  endDate,
 }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -625,6 +661,8 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     organizationId: organizationId ?? undefined,
     departmentId: departmentId ?? undefined,
     subDepartmentId: subDepartmentId ?? undefined,
+    startDate: startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
+    endDate: endDate ? format(endDate, 'yyyy-MM-dd') : undefined,
   });
 
   const { bids, isLoading: isLoadingBids } = useShiftBids(expandedV8ShiftId);
@@ -1340,6 +1378,14 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                         </div>
                       </div>
                     </motion.div>
+                  ) : bidsPanel.status === 'error' ? (
+                    <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="py-20 flex flex-col items-center gap-3 text-rose-500/50">
+                      <CircleX className="h-5 w-5" />
+                      <p className="text-[10px] uppercase tracking-widest font-semibold text-center">Engine Error</p>
+                      <p className="text-[9px] font-mono text-center max-w-[200px] break-words">
+                        {bidsPanel.error}
+                      </p>
+                    </motion.div>
                   ) : (
                     <motion.div key="results" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
                       {/* Summary label */}
@@ -1361,14 +1407,14 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                           <div className="px-3.5 py-2 border-b border-white/[0.04] flex items-center gap-2">
                             <CircleX className="h-3 w-3 text-rose-400 shrink-0" />
                             <span className="text-[10px] font-semibold text-rose-400">
-                              {hit.rule_id.replace(/_/g, ' ')}
+                              {hit.rule_name || hit.rule_id.replace(/_/g, ' ')}
                             </span>
                           </div>
                           <div className="px-3.5 py-2.5">
-                            <p className="text-[9px] text-muted-foreground/50 leading-relaxed">{hit.message}</p>
-                            {hit.resolution_hint && (
+                            <p className="text-[9px] text-muted-foreground/50 leading-relaxed">{hit.summary || (hit as any).message}</p>
+                            {(hit.details || (hit as any).resolution_hint) && (
                               <p className="text-[9px] text-foreground/50 leading-relaxed mt-1.5 border-t border-white/[0.04] pt-1.5">
-                                {hit.resolution_hint}
+                                {hit.details || (hit as any).resolution_hint}
                               </p>
                             )}
                           </div>
@@ -1387,14 +1433,14 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                           <div className="px-3.5 py-2 border-b border-white/[0.04] flex items-center gap-2">
                             <TriangleAlert className="h-3 w-3 text-amber-400 shrink-0" />
                             <span className="text-[10px] font-semibold text-amber-400">
-                              {hit.rule_id.replace(/_/g, ' ')}
+                              {hit.rule_name || hit.rule_id.replace(/_/g, ' ')}
                             </span>
                           </div>
                           <div className="px-3.5 py-2.5">
-                            <p className="text-[9px] text-muted-foreground/50 leading-relaxed">{hit.message}</p>
-                            {hit.resolution_hint && (
+                            <p className="text-[9px] text-muted-foreground/50 leading-relaxed">{hit.summary || (hit as any).message}</p>
+                            {(hit.details || (hit as any).resolution_hint) && (
                               <p className="text-[9px] text-foreground/50 leading-relaxed mt-1.5 border-t border-white/[0.04] pt-1.5">
-                                {hit.resolution_hint}
+                                {hit.details || (hit as any).resolution_hint}
                               </p>
                             )}
                           </div>

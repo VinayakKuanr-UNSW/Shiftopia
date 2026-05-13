@@ -119,10 +119,14 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                 <SheetContent
                     side="right"
                     className={cn(
-                        "sm:max-w-[600px] p-0 gap-0 overflow-hidden flex flex-col focus-visible:ring-0 focus:outline-none transition-colors duration-300",
-                        isEmergencyAssignment
-                            ? "bg-[#120505] dark:bg-[#120505] border-red-900/60"
-                            : "bg-card dark:bg-slate-950 border-border"
+                        "sm:max-w-[600px] p-0 gap-0 overflow-hidden flex flex-col focus-visible:ring-0 focus:outline-none transition-all duration-500",
+                        isReadOnly 
+                            ? "bg-[#0a0a0c] dark:bg-[#0a0a0c] border-slate-800/60 shadow-none grayscale opacity-90"
+                            : isPublished
+                                ? "bg-[#0c0512] dark:bg-[#0c0512] border-purple-900/40 shadow-[0_0_50px_-12px_rgba(168,85,247,0.2)]"
+                                : isEmergencyAssignment
+                                    ? "bg-[#050505] dark:bg-[#09090b] border-indigo-500/20 shadow-[0_0_50px_-12px_rgba(99,102,241,0.15)]"
+                                    : "bg-card dark:bg-slate-950 border-border"
                     )}
                     aria-describedby={undefined}
                 >
@@ -140,18 +144,6 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                             className="flex flex-col h-full overflow-hidden"
                         >
                             {/* ── Emergency mode banner ───────────────────── */}
-                            {isEmergencyAssignment && (
-                                <div className="flex-shrink-0 flex items-center gap-2.5 px-5 py-2 bg-red-950/80 border-b border-red-800/50">
-                                    <div className="flex items-center gap-1.5 min-w-0">
-                                        <Zap className="h-3.5 w-3.5 text-red-400 flex-shrink-0" />
-                                        <span className="text-[11px] font-black uppercase tracking-[0.15em] text-red-400">Emergency Assignment</span>
-                                    </div>
-                                    <div className="flex items-center gap-1 ml-auto flex-shrink-0">
-                                        <ShieldAlert className="h-3 w-3 text-red-500/70" />
-                                        <span className="text-[10px] text-red-500/70 font-medium">Bidding window closed · Direct assign only</span>
-                                    </div>
-                                </div>
-                            )}
                             <ShiftFormDrawerContent
                                 form={form}
                                 isReadOnly={isReadOnly}
@@ -193,10 +185,14 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
 
                             {/* STICKY FOOTER ACTIONS */}
                             <div className={cn(
-                                "flex-shrink-0 px-6 py-4 border-t backdrop-blur-xl flex items-center justify-between gap-4 z-20 transition-colors duration-300",
-                                isEmergencyAssignment
-                                    ? "border-red-900/40 bg-[#1a0606]/90"
-                                    : "border-border bg-card/90 dark:bg-slate-900/80"
+                                "flex-shrink-0 px-6 py-4 border-t backdrop-blur-xl flex items-center justify-between gap-4 z-20 transition-all duration-300",
+                                isReadOnly
+                                    ? "border-slate-800/40 bg-slate-950/40 grayscale"
+                                    : isPublished
+                                        ? "border-purple-500/20 bg-purple-950/20"
+                                        : isEmergencyAssignment
+                                            ? "border-indigo-500/20 bg-indigo-950/20"
+                                            : "border-border bg-card/90 dark:bg-slate-900/80"
                             )}>
                                 <Button
                                     type="button"
@@ -214,7 +210,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                                             type="button"
                                             variant="ghost"
                                             onClick={handleUnpublish}
-                                            className="h-11 px-6 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 font-bold transition-all flex items-center gap-2 border border-rose-500/20"
+                                            className="h-11 px-6 rounded-xl text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 font-bold transition-all flex items-center gap-2 border border-purple-500/20"
                                         >
                                             <Undo2 className="h-4 w-4" />
                                             <span>Unpublish</span>
@@ -227,10 +223,12 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                                         className={cn(
                                             "h-11 px-8 rounded-xl font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg",
                                             canSave
-                                                ? isEmergencyAssignment
-                                                    ? "bg-red-700 hover:bg-red-600 text-white shadow-red-900/40 border border-red-600/30"
-                                                    : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20"
-                                                : "bg-slate-800 text-slate-500 cursor-not-allowed border border-white/5"
+                                                ? isPublished
+                                                    ? "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-500/25 border border-purple-400/20"
+                                                    : isEmergencyAssignment
+                                                        ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/25 border border-indigo-400/20"
+                                                        : "bg-slate-950 hover:bg-slate-900 text-white shadow-indigo-500/20 border border-white/5"
+                                                : "bg-slate-900/50 text-slate-500 cursor-not-allowed border border-white/5"
                                         )}
                                     >
                                         {isLoading ? (

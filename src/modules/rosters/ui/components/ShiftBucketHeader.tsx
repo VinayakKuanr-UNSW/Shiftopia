@@ -31,6 +31,7 @@ export interface ShiftBucketHeaderProps {
     onPublishBucket: () => void;
     onUnpublishBucket: () => void;
     onDeleteBucket: () => void;
+    accentColor?: string;
 }
 
 function formatTime(time: string): string {
@@ -47,6 +48,7 @@ export const ShiftBucketHeader: React.FC<ShiftBucketHeaderProps> = ({
     onPublishBucket,
     onUnpublishBucket,
     onDeleteBucket,
+    accentColor,
 }) => {
     const publishStatus = getBucketPublishStatus(stats);
     const hasLocked = stats.lockedCount > 0;
@@ -62,10 +64,16 @@ export const ShiftBucketHeader: React.FC<ShiftBucketHeaderProps> = ({
     return (
         <div
             className={cn(
-                'flex flex-col gap-3 px-5 py-4 rounded-xl cursor-pointer select-none border-2 transition-colors',
-                'bg-card shadow-lg border-border hover:bg-accent/40 hover:border-primary/30',
-                isExpanded && 'rounded-b-none border-b-0 border-primary/40 bg-accent/10 shadow-xl'
+                'flex flex-col gap-3 px-5 py-4 rounded-xl cursor-pointer select-none border-2 transition-all duration-200 shadow-lg',
+                'bg-card border-border hover:bg-accent/40',
+                isExpanded && 'rounded-b-none border-b-0 shadow-xl'
             )}
+            style={{
+                borderColor: isExpanded ? `${accentColor}99` : `${accentColor}33`,
+                backgroundColor: isExpanded ? `${accentColor}15` : undefined,
+                borderLeftWidth: isExpanded ? '6px' : '2px',
+                borderLeftColor: accentColor,
+            }}
             onClick={onToggle}
         >
             {/* Row 1: Time & Actions */}
@@ -82,8 +90,11 @@ export const ShiftBucketHeader: React.FC<ShiftBucketHeaderProps> = ({
 
                     {/* Time range */}
                     <div className="flex items-center gap-2.5">
-                        <div className="p-1.5 rounded-md bg-primary/10">
-                            <Clock className="h-4.5 w-4.5 text-primary" />
+                        <div 
+                            className="p-1.5 rounded-md"
+                            style={{ backgroundColor: `${accentColor}25` }}
+                        >
+                            <Clock className="h-4.5 w-4.5" style={{ color: accentColor }} />
                         </div>
                         <span className="text-lg font-black text-foreground tracking-tighter">
                             {formatTime(startTime)} - {formatTime(endTime)}

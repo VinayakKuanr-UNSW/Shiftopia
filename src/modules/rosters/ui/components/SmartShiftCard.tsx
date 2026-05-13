@@ -229,7 +229,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     const stateId = ctx.state;
     const fsmLock = getLockState(ctx.state);
     // FSM-based lock overrides — differentiation between interactive protection vs absolute lock
-    const isFullyLocked = isLocked || fsmLock.fullyLocked;
+    const isFullyLocked = isLocked || fsmLock.fullyLocked || isPast;
     
     // Centralized protection logic
     const protection = useMemo(() => getProtectionContext({ lifecycle_status: shift.lifecycle_status }, !!isPast), [shift.lifecycle_status, isPast]);

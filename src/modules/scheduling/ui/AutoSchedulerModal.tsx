@@ -630,9 +630,12 @@ export function AutoSchedulerModal({
                     <ScrollArea className="flex-1">
                         <div className="p-8">
                             <AnimatePresence mode="wait">
-                                {phase === 'idle' && (
-                                    <div 
+                                {phase === 'idle' &&
+                                    <motion.div 
                                         className="max-w-3xl mx-auto space-y-8 py-12"
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.95 }}
                                     >
                                         <div className="flex flex-col items-center text-center gap-4 mb-12">
                                             <div className="h-20 w-20 rounded-3xl bg-primary/10 flex items-center justify-center text-primary shadow-2xl shadow-primary/20 mb-4">
@@ -666,9 +669,9 @@ export function AutoSchedulerModal({
                                             </div>
                                         )}
                                     </motion.div>
-                                )}
+                                }
 
-                                {phase === 'optimizing' && (
+                                {phase === 'optimizing' &&
                                     <div className="py-24 flex flex-col items-center gap-8 max-w-xl mx-auto">
                                         <div className="relative">
                                             <div className="h-32 w-32 rounded-full border-2 border-primary/20 animate-ping absolute" />
@@ -707,10 +710,14 @@ export function AutoSchedulerModal({
                                             </div>
                                         </div>
                                     </div>
-                                )}
+                                }
 
-                                {['reviewing', 'done'].includes(phase) && result && (
-                                    <div className="space-y-12">
+                                {['reviewing', 'done'].includes(phase) && result &&
+                                    <motion.div 
+                                        className="space-y-12"
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                    >
                                         
                                         {/* Result Stats Grid (Visual Excellence) */}
                                         <div className="grid grid-cols-4 gap-4">
@@ -1211,12 +1218,12 @@ export function AutoSchedulerModal({
                                                         )}
                                                     </div>
                                                 </div>
-                                        )}
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-                    </ScrollArea>
+                                            )}
+                                        </motion.div>
+                                    }
+                                </AnimatePresence>
+                            </div>
+                        </ScrollArea>
 
                     {/* ACTION DECK: FLOATING FOOTER */}
                     <div className="p-8 flex justify-center bg-gradient-to-t from-background to-transparent pt-12">

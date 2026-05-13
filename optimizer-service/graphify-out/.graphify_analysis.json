@@ -1,0 +1,344 @@
+{
+  "communities": {
+    "0": [
+      "tests_conftest_make_employee",
+      "tests_conftest_make_shift",
+      "tests_conftest_py",
+      "tests_conftest_rationale_1",
+      "tests_conftest_rationale_109",
+      "tests_conftest_rationale_140",
+      "tests_conftest_solve",
+      "tests_conftest_trivial_problem",
+      "tests_test_solver_regressions_py",
+      "tests_test_solver_regressions_rationale_1",
+      "tests_test_solver_regressions_rationale_104",
+      "tests_test_solver_regressions_rationale_115",
+      "tests_test_solver_regressions_rationale_139",
+      "tests_test_solver_regressions_rationale_150",
+      "tests_test_solver_regressions_rationale_165",
+      "tests_test_solver_regressions_rationale_175",
+      "tests_test_solver_regressions_rationale_194",
+      "tests_test_solver_regressions_rationale_220",
+      "tests_test_solver_regressions_rationale_240",
+      "tests_test_solver_regressions_rationale_40",
+      "tests_test_solver_regressions_rationale_58",
+      "tests_test_solver_regressions_rationale_81",
+      "tests_test_solver_regressions_test_coverage_outranks_min_contract_slack",
+      "tests_test_solver_regressions_test_coverage_outranks_workload_slack",
+      "tests_test_solver_regressions_test_declared_availability_covering_shift_allows_assignment",
+      "tests_test_solver_regressions_test_declared_availability_not_covering_shift_blocks_assignment",
+      "tests_test_solver_regressions_test_interval_vars_drop_constraint_count",
+      "tests_test_solver_regressions_test_missing_level_does_not_filter_out_pool",
+      "tests_test_solver_regressions_test_no_availability_records_treated_as_universally_available",
+      "tests_test_solver_regressions_test_overlapping_shifts_distribute_across_employees",
+      "tests_test_solver_regressions_test_relax_constraints_does_not_raise",
+      "tests_test_solver_regressions_test_short_shift_under_180m_still_assignable",
+      "tests_test_solver_regressions_test_strategy_sliders_change_assignment_choice",
+      "tests_test_solver_regressions_test_trivial_problem_solves",
+      "tests_test_solver_regressions_test_two_shifts_same_day_one_employee_assigns_at_least_one"
+    ],
+    "1": [
+      "basemodel",
+      "optimizer_service_model_builder_employeeinput",
+      "optimizer_service_model_builder_existingshiftinput",
+      "optimizer_service_model_builder_optimizerconstraints",
+      "optimizer_service_model_builder_optimizerinput",
+      "optimizer_service_model_builder_rationale_77",
+      "optimizer_service_model_builder_rationale_94",
+      "optimizer_service_model_builder_shiftinput",
+      "optimizer_service_model_builder_solverparameters",
+      "optimizer_service_model_builder_strategyinput",
+      "optimizer_service_ortools_runner_assignmentres",
+      "optimizer_service_ortools_runner_audit",
+      "optimizer_service_ortools_runner_auditemployeerow",
+      "optimizer_service_ortools_runner_auditreq",
+      "optimizer_service_ortools_runner_auditshiftrow",
+      "optimizer_service_ortools_runner_availabilityslotreq",
+      "optimizer_service_ortools_runner_constraintsreq",
+      "optimizer_service_ortools_runner_debugmetricsres",
+      "optimizer_service_ortools_runner_employeereq",
+      "optimizer_service_ortools_runner_existingshiftreq",
+      "optimizer_service_ortools_runner_lifespan",
+      "optimizer_service_ortools_runner_optimize",
+      "optimizer_service_ortools_runner_rationale_1",
+      "optimizer_service_ortools_runner_rationale_209",
+      "optimizer_service_ortools_runner_rationale_311",
+      "optimizer_service_ortools_runner_rationale_526",
+      "optimizer_service_ortools_runner_rationale_94",
+      "optimizer_service_ortools_runner_shiftreq",
+      "optimizer_service_ortools_runner_solverparamsreq",
+      "optimizer_service_ortools_runner_strategyreq",
+      "optimizer_service_security_authcontext",
+      "optimizer_service_security_authcontext_repr",
+      "optimizer_service_security_rationale_70",
+      "ortools_runner_py"
+    ],
+    "2": [
+      "tests_test_phase3_security_make_jwt",
+      "tests_test_phase3_security_py",
+      "tests_test_phase3_security_rationale_1",
+      "tests_test_phase3_security_rationale_190",
+      "tests_test_phase3_security_rationale_211",
+      "tests_test_phase3_security_rationale_233",
+      "tests_test_phase3_security_rationale_29",
+      "tests_test_phase3_security_rationale_59",
+      "tests_test_phase3_security_rationale_78",
+      "tests_test_phase3_security_reload_app",
+      "tests_test_phase3_security_test_correlation_log_includes_jwt_subject",
+      "tests_test_phase3_security_test_health_is_unauthenticated",
+      "tests_test_phase3_security_test_optimize_503_when_secret_missing_in_prod_mode",
+      "tests_test_phase3_security_test_optimize_accepts_valid_token",
+      "tests_test_phase3_security_test_optimize_rejects_expired_token",
+      "tests_test_phase3_security_test_optimize_rejects_malformed_token",
+      "tests_test_phase3_security_test_optimize_rejects_token_with_wrong_audience",
+      "tests_test_phase3_security_test_optimize_rejects_token_with_wrong_secret",
+      "tests_test_phase3_security_test_optimize_requires_authorization_header",
+      "tests_test_phase3_security_test_rate_limit_trips_after_threshold",
+      "tests_test_phase3_security_test_ready_returns_200_when_dev_bypass_enabled",
+      "tests_test_phase3_security_test_ready_returns_200_when_jwt_configured",
+      "tests_test_phase3_security_test_ready_returns_503_when_jwt_misconfigured"
+    ],
+    "3": [
+      "optimizer_service_model_builder_rationale_869",
+      "optimizer_service_model_builder_rationale_923",
+      "optimizer_service_model_builder_rationale_934",
+      "optimizer_service_model_builder_schedulemodelbuilder",
+      "optimizer_service_model_builder_schedulemodelbuilder_add_coverage",
+      "optimizer_service_model_builder_schedulemodelbuilder_add_min_contract_hours",
+      "optimizer_service_model_builder_schedulemodelbuilder_add_min_engagement",
+      "optimizer_service_model_builder_schedulemodelbuilder_add_spread_of_hours",
+      "optimizer_service_model_builder_schedulemodelbuilder_add_time_capacity",
+      "optimizer_service_model_builder_schedulemodelbuilder_apply_greedy_hint",
+      "optimizer_service_model_builder_schedulemodelbuilder_build_and_solve",
+      "optimizer_service_model_builder_schedulemodelbuilder_create_variables"
+    ],
+    "4": [
+      "optimizer_service_model_builder_compute_greedy_hint",
+      "optimizer_service_model_builder_employee_eligible",
+      "optimizer_service_model_builder_existing_blocks_proposal",
+      "optimizer_service_model_builder_rationale_213",
+      "optimizer_service_model_builder_rationale_280",
+      "optimizer_service_model_builder_rationale_441",
+      "optimizer_service_model_builder_rationale_576",
+      "optimizer_service_model_builder_schedulemodelbuilder_compute_eligibility",
+      "optimizer_service_model_builder_time_to_abs_minutes",
+      "optimizer_service_ortools_runner_explain_eligibility",
+      "optimizer_service_ortools_runner_rationale_449"
+    ],
+    "5": [
+      "optimizer_service_ortools_runner_rationale_293",
+      "optimizer_service_ortools_runner_ready_check",
+      "optimizer_service_security_env_bool",
+      "optimizer_service_security_install",
+      "optimizer_service_security_rationale_1",
+      "optimizer_service_security_rationale_144",
+      "optimizer_service_security_rationale_213",
+      "optimizer_service_security_rationale_88",
+      "optimizer_service_security_readiness_status",
+      "optimizer_service_security_require_auth",
+      "security_py"
+    ],
+    "6": [
+      "tests_test_audit_endpoint_employee",
+      "tests_test_audit_endpoint_py",
+      "tests_test_audit_endpoint_rationale_1",
+      "tests_test_audit_endpoint_rationale_125",
+      "tests_test_audit_endpoint_shift",
+      "tests_test_audit_endpoint_test_audit_flags_level_too_low",
+      "tests_test_audit_endpoint_test_audit_flags_outside_declared_availability",
+      "tests_test_audit_endpoint_test_audit_handles_50_shifts_x_100_employees_under_50ms",
+      "tests_test_audit_endpoint_test_audit_pass_when_universally_available",
+      "tests_test_audit_endpoint_test_audit_rejects_empty_inputs",
+      "tests_test_audit_endpoint_test_audit_target_filter_only_returns_requested_shifts"
+    ],
+    "7": [
+      "scripts_dump_schema_py",
+      "scripts_dump_schema_rationale_1",
+      "scripts_loadtest_main",
+      "scripts_loadtest_make_problem",
+      "scripts_loadtest_py",
+      "scripts_loadtest_rationale_1",
+      "scripts_loadtest_rationale_41",
+      "scripts_loadtest_report",
+      "scripts_loadtest_result",
+      "scripts_loadtest_run_matrix",
+      "scripts_loadtest_run_one"
+    ],
+    "8": [
+      "optimizer_service_model_builder_rationale_228",
+      "optimizer_service_model_builder_rationale_264",
+      "optimizer_service_model_builder_rationale_703",
+      "optimizer_service_model_builder_rationale_729",
+      "optimizer_service_model_builder_rest_gap_violated",
+      "optimizer_service_model_builder_schedulemodelbuilder_add_overlap_and_rest",
+      "optimizer_service_model_builder_schedulemodelbuilder_add_overlap_pairwise_relaxed",
+      "optimizer_service_model_builder_schedulemodelbuilder_add_rest_gap_pairwise_relaxed",
+      "optimizer_service_model_builder_shift_window",
+      "optimizer_service_model_builder_shifts_overlap"
+    ],
+    "9": [
+      "model_builder_py",
+      "optimizer_service_model_builder_assignmentproposal",
+      "optimizer_service_model_builder_optimizerdebugmetrics",
+      "optimizer_service_model_builder_optimizeroutput",
+      "optimizer_service_model_builder_rationale_1",
+      "optimizer_service_security_authcontext_init"
+    ],
+    "10": [
+      "tests_test_schema_contract_dataclass_fields",
+      "tests_test_schema_contract_py",
+      "tests_test_schema_contract_pydantic_fields",
+      "tests_test_schema_contract_rationale_1",
+      "tests_test_schema_contract_rationale_82",
+      "tests_test_schema_contract_test_pydantic_dataclass_fields_match"
+    ],
+    "11": [
+      "optimizer_service_model_builder_minutes_on_day",
+      "optimizer_service_model_builder_rationale_246",
+      "optimizer_service_model_builder_rationale_758",
+      "optimizer_service_model_builder_schedulemodelbuilder_add_workload_limits"
+    ],
+    "12": [
+      "optimizer_service_model_builder_calculate_effective_minutes",
+      "optimizer_service_model_builder_rationale_296",
+      "optimizer_service_model_builder_schedulemodelbuilder_add_objective"
+    ],
+    "13": [
+      "optimizer_service_ortools_runner_health_check",
+      "optimizer_service_ortools_runner_rationale_274"
+    ],
+    "14": [
+      "tests_init_py"
+    ]
+  },
+  "cohesion": {
+    "0": 0.12,
+    "1": 0.29,
+    "2": 0.16,
+    "3": 0.26,
+    "4": 0.2,
+    "5": 0.18,
+    "6": 0.36,
+    "7": 0.27,
+    "8": 0.31,
+    "9": 0.33,
+    "10": 0.47,
+    "11": 0.5,
+    "12": 0.67,
+    "13": 1.0,
+    "14": 1.0
+  },
+  "gods": [
+    {
+      "id": "optimizer_service_model_builder_schedulemodelbuilder",
+      "label": "ScheduleModelBuilder",
+      "degree": 30
+    },
+    {
+      "id": "optimizer_service_ortools_runner_availabilityslotreq",
+      "label": "AvailabilitySlotReq",
+      "degree": 27
+    },
+    {
+      "id": "tests_conftest_solve",
+      "label": "solve()",
+      "degree": 23
+    },
+    {
+      "id": "optimizer_service_security_authcontext",
+      "label": "AuthContext",
+      "degree": 18
+    },
+    {
+      "id": "optimizer_service_model_builder_optimizerconstraints",
+      "label": "OptimizerConstraints",
+      "degree": 17
+    },
+    {
+      "id": "optimizer_service_model_builder_shiftinput",
+      "label": "ShiftInput",
+      "degree": 16
+    },
+    {
+      "id": "optimizer_service_model_builder_strategyinput",
+      "label": "StrategyInput",
+      "degree": 16
+    },
+    {
+      "id": "optimizer_service_model_builder_existingshiftinput",
+      "label": "ExistingShiftInput",
+      "degree": 15
+    },
+    {
+      "id": "optimizer_service_model_builder_employeeinput",
+      "label": "EmployeeInput",
+      "degree": 15
+    },
+    {
+      "id": "optimizer_service_model_builder_solverparameters",
+      "label": "SolverParameters",
+      "degree": 15
+    }
+  ],
+  "surprises": [
+    {
+      "source": "make_shift()",
+      "target": "ShiftInput",
+      "source_files": [
+        "tests/conftest.py",
+        "model_builder.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "make_employee()",
+      "target": "EmployeeInput",
+      "source_files": [
+        "tests/conftest.py",
+        "model_builder.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "solve()",
+      "target": "OptimizerConstraints",
+      "source_files": [
+        "tests/conftest.py",
+        "model_builder.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "test_relax_constraints_does_not_raise()",
+      "target": "OptimizerConstraints",
+      "source_files": [
+        "tests/test_solver_regressions.py",
+        "model_builder.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "solve()",
+      "target": "StrategyInput",
+      "source_files": [
+        "tests/conftest.py",
+        "model_builder.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    }
+  ],
+  "tokens": {
+    "input": 0,
+    "output": 0
+  }
+}
