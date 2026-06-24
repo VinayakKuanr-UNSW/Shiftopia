@@ -221,9 +221,13 @@ export function deriveEpisodes(
         currentEpisode.employeeId !== event.employee_id;
 
       if (needsNewEpisode) {
-        // Finalize any open episode that wasn't explicitly closed
+        // Finalize the prior open episode. It is being SUPERSEDED by a new
+        // episode (different holder / re-open after a close), so it can NEVER
+        // be 'fulfilled' even on a Completed shift — only the FINAL episode of
+        // the shift can be fulfilled. (Mirrors the SQL view, which gates
+        // 'fulfilled' to episode_seq = max(episode_seq) per shift.)
         if (currentEpisode && !currentEpisode.closed) {
-          currentEpisode.terminalOutcome = opts?.completed ? 'fulfilled' : 'open';
+          currentEpisode.terminalOutcome = 'open';
           episodes.push(buildEpisode(currentEpisode));
         }
 

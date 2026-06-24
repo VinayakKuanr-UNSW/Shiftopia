@@ -137,9 +137,13 @@ episode_agg AS (
 ),
 
 -- ─── Join with shifts for context and terminal_outcome derivation ──────────
+-- max_episode_seq lets us gate 'fulfilled' to the FINAL episode only: a
+-- closeless episode that was later superseded by another episode for the same
+-- shift must NOT be credited as worked just because the shift completed.
 episode_with_shift AS (
     SELECT
         ep.*,
+        MAX(ep.episode_seq) OVER (PARTITION BY ep.shift_id) AS max_episode_seq,
         s.shift_date,
         s.organization_id,
         s.department_id,
@@ -188,9 +192,13 @@ episode_final AS (
                     THEN 'cancelled_late'
                     ELSE 'cancelled_standard'
                 END
-            -- No closing event: check if shift completed with this holder
-            WHEN ews.closing_event_type IS NULL AND ews.lifecycle_status = 'Completed' THEN 'fulfilled'
-            -- Still open
+            -- No closing event on the FINAL episode of a completed shift → worked.
+            -- (Earlier, superseded closeless episodes fall through to 'open' — they
+            --  were replaced by a later episode and must not be credited as worked.)
+            WHEN ews.closing_event_type IS NULL
+                 AND ews.lifecycle_status = 'Completed'
+                 AND ews.episode_seq = ews.max_episode_seq THEN 'fulfilled'
+            -- Still open / superseded without an explicit close
             ELSE 'open'
         END AS terminal_outcome,
         -- Within-episode flags
@@ -213,6 +221,21 @@ episode_final AS (
         ews.scheduled_end,
         ews.lifecycle_status
     FROM episode_with_shift ews
+),
+
+-- ─── One timesheet row per (shift, employee) ───────────────────────────────
+-- Pre-aggregate so the final LEFT JOIN cannot FAN OUT (which would duplicate
+-- episode rows and double-count metrics when a (shift, employee) has >1
+-- timesheet). MIN(clock_in)/MAX(clock_out) collapse to a single span.
+ts_agg AS (
+    SELECT
+        ts.shift_id,
+        ts.employee_id,
+        MIN(ts.clock_in)  AS clock_in,
+        MAX(ts.clock_out) AS clock_out
+    FROM public.timesheets ts
+    WHERE ts.clock_in IS NOT NULL
+    GROUP BY ts.shift_id, ts.employee_id
 )
 
 SELECT
@@ -229,7 +252,7 @@ SELECT
     ef.had_emergency,
     ef.had_swap_in,
     -- Attendance: OR event-based flags with timesheet-derived flags
-    (ef.attended_from_events OR t.shift_id IS NOT NULL) AS attended,
+    (ef.attended_from_events OR t.clock_in IS NOT NULL) AS attended,
     (ef.late_in_from_events
         OR (t.clock_in IS NOT NULL AND ef.scheduled_start IS NOT NULL
             AND t.clock_in > ef.scheduled_start + interval '5 minutes')
@@ -243,11 +266,14 @@ SELECT
     ef.department_id,
     ef.sub_department_id
 FROM episode_final ef
--- LEFT JOIN timesheets for the "worked" episode (the one that covers the scheduled period)
-LEFT JOIN public.timesheets t
+-- Attach the timesheet to the episode whose window contains the clock-in, so a
+-- holder's earlier (e.g. cancelled) episode on the same shift is NOT credited
+-- with attendance — only the episode that was open at clock-in time is.
+LEFT JOIN ts_agg t
     ON t.shift_id = ef.shift_id
     AND t.employee_id = ef.employee_id
-    AND t.clock_in IS NOT NULL;
+    AND t.clock_in >= ef.opened_at
+    AND (ef.closed_at IS NULL OR t.clock_in <= ef.closed_at);
 
 -- Index to speed up the view's core query
 CREATE INDEX IF NOT EXISTS idx_shift_events_shift_employee_time

@@ -389,4 +389,29 @@ describe('deriveEpisodes', () => {
     expect(episodes[0].hadAssign).toBe(true);
     expect(episodes[0].hadEmergency).toBe(true);
   });
+
+  // 16. Superseded episode must NOT be 'fulfilled' on a completed shift.
+  //     Only the FINAL episode of a shift can be fulfilled (parity with the
+  //     SQL view gating 'fulfilled' to episode_seq = max(episode_seq)).
+  it('marks a superseded (replaced) episode as open, not fulfilled, even when completed', () => {
+    const events: ShiftLifecycleEvent[] = [
+      // Episode 1: Alice held the shift but was replaced with no explicit close event
+      mkEvent({ event_type: 'ASSIGNED', event_time: hoursFromBase(-48), employee_id: 'alice-uuid', employee_name: 'Alice' }),
+      mkEvent({ event_type: 'ACCEPTED', event_time: hoursFromBase(-47), employee_id: 'alice-uuid', employee_name: 'Alice' }),
+      // Episode 2: Bob takes over and actually works it
+      mkEvent({ event_type: 'ASSIGNED', event_time: hoursFromBase(-24), employee_id: 'bob-uuid', employee_name: 'Bob' }),
+      mkEvent({ event_type: 'CHECKED_IN', event_time: hoursFromBase(0), employee_id: 'bob-uuid', employee_name: 'Bob' }),
+    ];
+
+    const episodes = deriveEpisodes(events, { scheduledStart: SCHEDULED_START, completed: true });
+
+    expect(episodes).toHaveLength(2);
+    // Alice's episode was superseded — must be 'open', NOT 'fulfilled'
+    expect(episodes[0].employeeId).toBe('alice-uuid');
+    expect(episodes[0].terminalOutcome).toBe('open');
+    // Only Bob's final episode is fulfilled
+    expect(episodes[1].employeeId).toBe('bob-uuid');
+    expect(episodes[1].terminalOutcome).toBe('fulfilled');
+    expect(episodes[1].attended).toBe(true);
+  });
 });
