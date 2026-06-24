@@ -15,6 +15,8 @@ import { cn } from '@/modules/core/lib/utils';
 import { Shift } from '@/modules/rosters';
 import { useDropShift } from '@/modules/rosters/state/useRosterShifts';
 import { AttendanceBadge } from '@/modules/rosters/ui/components/AttendanceBadge';
+import { useShiftLifecycle } from '@/modules/rosters/ui/hooks/useShiftLifecycle';
+import { ShiftLifecycleTimeline } from '@/modules/rosters/ui/components/ShiftLifecycleTimeline';
 
 import { useSwaps } from '@/modules/planning';
 import { useToast } from '@/modules/core/hooks/use-toast';
@@ -89,6 +91,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [showLifecycle, setShowLifecycle] = useState(false);
 
   const dropShiftMutation = useDropShift();
   const isDropping = dropShiftMutation.isPending;
@@ -167,6 +170,17 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
     if (!shiftData?.shift) return ZERO_COST_BREAKDOWN;
     return estimateDetailedCostFromShift(shiftData.shift);
   }, [shiftData?.shift]);
+
+  // Shift lifecycle episodes (lazy-loaded when expanded)
+  const lifecycleQuery = useShiftLifecycle(
+    showLifecycle ? shiftData?.shift?.id : null,
+    {
+      scheduledStart: shiftData?.shift?.shift_date && shiftData?.shift?.start_time
+        ? `${shiftData.shift.shift_date}T${shiftData.shift.start_time}`
+        : undefined,
+      completed: shiftData?.shift?.lifecycle_status === 'Completed',
+    },
+  );
 
   if (!shiftData) return null;
   const { shift, groupName, groupColor, subGroupName } = shiftData;
@@ -292,6 +306,38 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
             }
 
           />
+        </div>
+
+        {/* Assignment Lifecycle Timeline */}
+        <div className="px-4 pb-4">
+          <button
+            type="button"
+            onClick={() => setShowLifecycle((v) => !v)}
+            className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-muted/30 hover:bg-muted/50 border border-border/30 transition-all text-xs font-semibold text-muted-foreground uppercase tracking-wider"
+            id="toggle-lifecycle-timeline"
+          >
+            <span>Assignment History</span>
+            <span className="text-[10px] font-mono">{showLifecycle ? '▲' : '▼'}</span>
+          </button>
+          {showLifecycle && (
+            <div className="mt-2 animate-in fade-in-0 slide-in-from-top-2 duration-200">
+              {lifecycleQuery.isLoading ? (
+                <div className="flex items-center justify-center py-6 gap-2 text-muted-foreground text-xs">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Loading lifecycle...
+                </div>
+              ) : lifecycleQuery.data ? (
+                <ShiftLifecycleTimeline
+                  episodes={lifecycleQuery.data.episodes}
+                  className=""
+                />
+              ) : lifecycleQuery.error ? (
+                <div className="text-xs text-destructive/70 italic text-center py-4">
+                  Failed to load assignment history.
+                </div>
+              ) : null}
+            </div>
+          )}
         </div>
 
       </ResponsiveDialog>

@@ -295,7 +295,13 @@ export function deriveEpisodes(
   return episodes;
 }
 
-/** Converts internal mutable episode state to the public AssignmentEpisode. */
+/** Converts internal mutable episode state to the public AssignmentEpisode.
+ *
+ *  IMPORTANT: openingEvent is derived from within-episode flags using the same
+ *  priority hierarchy as the SQL view `v_shift_assignment_episodes`:
+ *    EMERGENCY_ASSIGNED > SWAPPED_IN > ASSIGNED > OFFERED
+ *  This ensures byte-identical results between TS and SQL.
+ */
 function buildEpisode(ep: {
   seq: number;
   employeeId: string;
@@ -314,13 +320,20 @@ function buildEpisode(ep: {
   closedAt: string | null;
   terminalOutcome: TerminalOutcome;
 }): AssignmentEpisode {
+  // Derive openingEvent from flags (priority matches SQL CASE expression)
+  let openingEvent: ShiftEventType = ep.openingEvent;
+  if (ep.hadEmergency) openingEvent = 'EMERGENCY_ASSIGNED';
+  else if (ep.hadSwapIn) openingEvent = 'SWAPPED_IN';
+  else if (ep.hadAssign) openingEvent = 'ASSIGNED';
+  else if (ep.hadOffer) openingEvent = 'OFFERED';
+
   return {
     episodeSeq: ep.seq,
     employeeId: ep.employeeId,
     employeeName: ep.employeeName,
     openedAt: ep.openedAt,
     closedAt: ep.closedAt,
-    openingEvent: ep.openingEvent,
+    openingEvent,
     terminalOutcome: ep.terminalOutcome,
     hadOffer: ep.hadOffer,
     hadAccept: ep.hadAccept,

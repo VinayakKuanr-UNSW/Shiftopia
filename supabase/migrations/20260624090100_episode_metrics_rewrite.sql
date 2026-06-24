@@ -211,19 +211,19 @@ BEGIN
 
         -- Offer rates
         ROUND(CASE WHEN COALESCE(ea.total_offers_sent,0)=0 THEN 0
-              ELSE ea.total_accepted::numeric/ea.total_offers_sent*100 END,1) AS acceptance_rate,
+              ELSE ea.total_accepted::numeric/ea.total_offers_sent*100 END,2) AS acceptance_rate,
         ROUND(CASE WHEN COALESCE(ea.total_offers_sent,0)=0 THEN 0
-              ELSE ea.total_rejected::numeric/ea.total_offers_sent*100 END,1) AS rejection_rate,
+              ELSE ea.total_rejected::numeric/ea.total_offers_sent*100 END,2) AS rejection_rate,
         ROUND(CASE WHEN COALESCE(ea.total_offers_sent,0)=0 THEN 0
-              ELSE ea.total_expired::numeric/ea.total_offers_sent*100 END,1)  AS ignorance_rate,
+              ELSE ea.total_expired::numeric/ea.total_offers_sent*100 END,2)  AS ignorance_rate,
 
         -- Assignment/cancellation rates — denominator = held_count (episode-based)
         ROUND(CASE WHEN COALESCE(ea.held_count,0)=0 THEN 0
-              ELSE COALESCE(ea.cancel_standard_count,0)::numeric/ea.held_count*100 END,1) AS cancel_rate,
+              ELSE COALESCE(ea.cancel_standard_count,0)::numeric/ea.held_count*100 END,2) AS cancel_rate,
         ROUND(CASE WHEN COALESCE(ea.held_count,0)=0 THEN 0
-              ELSE COALESCE(ea.cancel_late_count,0)::numeric/ea.held_count*100 END,1) AS late_cancel_rate,
+              ELSE COALESCE(ea.cancel_late_count,0)::numeric/ea.held_count*100 END,2) AS late_cancel_rate,
         ROUND(CASE WHEN COALESCE(ea.held_count,0)=0 THEN 0
-              ELSE COALESCE(ea.swap_out_count,0)::numeric/ea.held_count*100 END,1) AS swap_rate,
+              ELSE COALESCE(ea.swap_out_count,0)::numeric/ea.held_count*100 END,2) AS swap_rate,
 
         -- Reliability: same formula shape, episode-based denominators
         -- Emergency NOT penalised. Swap NOT in formula.
@@ -239,21 +239,21 @@ BEGIN
                   ELSE COALESCE(ea.late_clock_in_count,0)::numeric/ea.completed_count*5 END
             -CASE WHEN COALESCE(ea.completed_count,0)=0 THEN 0
                   ELSE COALESCE(ea.early_clock_out_count,0)::numeric/ea.completed_count*5 END
-        ,1))) AS reliability_score,
+        ,2))) AS reliability_score,
 
         ROUND(CASE WHEN COALESCE(ea.completed_count,0)=0 THEN 0
-              ELSE COALESCE(ea.late_clock_in_count,0)::numeric/ea.completed_count*100 END,1) AS late_clock_in_rate,
+              ELSE COALESCE(ea.late_clock_in_count,0)::numeric/ea.completed_count*100 END,2) AS late_clock_in_rate,
         ROUND(CASE WHEN COALESCE(ea.completed_count,0)=0 THEN 0
-              ELSE COALESCE(ea.early_clock_out_count,0)::numeric/ea.completed_count*100 END,1) AS early_clock_out_rate,
+              ELSE COALESCE(ea.early_clock_out_count,0)::numeric/ea.completed_count*100 END,2) AS early_clock_out_rate,
         ROUND(CASE WHEN COALESCE(ea.held_count,0)=0 THEN 0
-              ELSE COALESCE(ea.no_show_count,0)::numeric/ea.held_count*100 END,1) AS no_show_rate,
+              ELSE COALESCE(ea.no_show_count,0)::numeric/ea.held_count*100 END,2) AS no_show_rate,
         ROUND(CASE WHEN COALESCE(ea.total_accepted,0)=0 THEN 0
-              ELSE COALESCE(ea.dropped_count,0)::numeric/ea.total_accepted*100 END,1) AS drop_rate,
+              ELSE COALESCE(ea.dropped_count,0)::numeric/ea.total_accepted*100 END,2) AS drop_rate,
 
         COALESCE(ba.total_bids, 0)::int AS total_bids,
         COALESCE(ba.bids_accepted, 0)::int AS bids_accepted,
         ROUND(CASE WHEN COALESCE(ba.total_bids,0)=0 THEN 0
-              ELSE ba.bids_accepted::numeric/ba.total_bids*100 END, 1) AS bid_success_rate
+              ELSE ba.bids_accepted::numeric/ba.total_bids*100 END, 2) AS bid_success_rate
     FROM all_emps ae
     LEFT JOIN profiles      prof ON prof.id   = ae.emp_id
     LEFT JOIN episode_agg   ea   ON ea.emp_id = ae.emp_id

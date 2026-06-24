@@ -356,4 +356,37 @@ describe('deriveEpisodes', () => {
     expect(episodes[0].earlyOut).toBe(true);
     expect(episodes[0].attended).toBe(true);
   });
+
+  // 14. Opening event priority: ASSIGNED > OFFERED (matches SQL CASE hierarchy)
+  it('derives openingEvent using priority hierarchy (ASSIGNED beats OFFERED)', () => {
+    const events: ShiftLifecycleEvent[] = [
+      mkEvent({ event_type: 'OFFERED', event_time: hoursFromBase(-48) }),
+      mkEvent({ event_type: 'ASSIGNED', event_time: hoursFromBase(-47) }),
+      mkEvent({ event_type: 'ACCEPTED', event_time: hoursFromBase(-46) }),
+    ];
+
+    const episodes = deriveEpisodes(events, { scheduledStart: SCHEDULED_START, completed: true });
+
+    expect(episodes).toHaveLength(1);
+    // SQL: CASE WHEN had_emergency THEN ... WHEN had_swap_in THEN ... WHEN had_assign THEN 'ASSIGNED' ...
+    // Both OFFERED and ASSIGNED are present, but ASSIGNED has higher priority.
+    expect(episodes[0].openingEvent).toBe('ASSIGNED');
+    expect(episodes[0].hadOffer).toBe(true);
+    expect(episodes[0].hadAssign).toBe(true);
+  });
+
+  // 15. Opening event priority: EMERGENCY_ASSIGNED beats everything
+  it('derives openingEvent with EMERGENCY_ASSIGNED priority', () => {
+    const events: ShiftLifecycleEvent[] = [
+      mkEvent({ event_type: 'ASSIGNED', event_time: hoursFromBase(-48) }),
+      mkEvent({ event_type: 'EMERGENCY_ASSIGNED', event_time: hoursFromBase(-47) }),
+    ];
+
+    const episodes = deriveEpisodes(events, { scheduledStart: SCHEDULED_START, completed: true });
+
+    expect(episodes).toHaveLength(1);
+    expect(episodes[0].openingEvent).toBe('EMERGENCY_ASSIGNED');
+    expect(episodes[0].hadAssign).toBe(true);
+    expect(episodes[0].hadEmergency).toBe(true);
+  });
 });
