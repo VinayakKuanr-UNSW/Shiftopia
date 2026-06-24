@@ -175,9 +175,13 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   const lifecycleQuery = useShiftLifecycle(
     showLifecycle ? shiftData?.shift?.id : null,
     {
-      scheduledStart: shiftData?.shift?.shift_date && shiftData?.shift?.start_time
-        ? `${shiftData.shift.shift_date}T${shiftData.shift.start_time}`
-        : undefined,
+      // Prefer the TZ-aware start_at so the late-cancel boundary matches the DB
+      // (scheduled_start). Fall back to a naive local timestamp only if absent.
+      scheduledStart:
+        (shiftData?.shift as any)?.start_at
+        ?? (shiftData?.shift?.shift_date && shiftData?.shift?.start_time
+              ? `${shiftData.shift.shift_date}T${shiftData.shift.start_time}`
+              : undefined),
       completed: shiftData?.shift?.lifecycle_status === 'Completed',
     },
   );

@@ -62,6 +62,19 @@ Two defects were found and fixed in `20260624090000_shift_assignment_episodes.sq
 1. **Timesheet fan-out / mis-attribution.** The final `timesheets` LEFT JOIN matched on `(shift_id, employee_id)` only. If a (shift, employee) had >1 timesheet row it would **duplicate the episode row and double-count every metric**; it also stamped attendance onto *all* of that employee's episodes on the shift (e.g. a cancelled earlier attempt). Fixed by (a) pre-aggregating to one row per `(shift, employee)` via `ts_agg` (MIN clock_in / MAX clock_out), and (b) bounding the join to the episode window (`clock_in BETWEEN opened_at AND closed_at`), so attendance lands only on the episode that was open at clock-in.
 2. **`fulfilled` over-attribution.** A closeless episode on a `Completed` shift was marked `fulfilled` regardless of whether it was later superseded by another episode — crediting a replaced holder as having worked the shift (inflating `shifts_worked`/`completed`/reliability). Fixed by gating `fulfilled` to the **final** episode only (`episode_seq = max(episode_seq)` per shift); superseded closeless episodes fall through to `open`. The TS `deriveEpisodes` mirrors this (a superseded open episode is finalized as `open`, never `fulfilled`). Regression test: "marks a superseded (replaced) episode as open, not fulfilled".
 
-## Known remaining gap (not a regression — pre-existing, separate fix)
+## Second-round fixes (all flagged items now closed)
 
-The `get_shift_lifecycle` RPC (timeline UI) reads only the `shift_events` ledger, while the metrics view *also* reads `timesheets`. Because `sm_clock_in`/`sm_clock_out_shift` don't reliably emit CHECKED_IN/LATE_IN/EARLY_OUT, the **timeline may not show an "Attended / Late In" badge even though the metrics correctly count it**. The correct long-term fix is to make the clock RPCs emit those events; until then the metrics remain correct (timesheet-sourced) and only the visual timeline understates attendance.
+3. **Boundary detection robustness.** Episode boundaries are now decided over
+   opening/closing events only (`boundary_events` CTE), so an intra-episode event
+   (ACCEPTED, CHECKED_IN, …) wedged between a close and a same-employee re-open can
+   no longer merge two attempts. Matches the stateful TS deriver exactly.
+4. **Timeline ↔ metrics attendance parity.** `get_shift_lifecycle` now synthesises
+   CHECKED_IN/LATE_IN/EARLY_OUT from `timesheets` (only when the ledger lacks them),
+   so the timeline shows the same attendance the metrics view counts. Synthetic rows
+   are deterministic (`md5`-based id) and tagged `metadata->>'synthetic'=true`.
+   The proper long-term fix remains making `sm_clock_in`/`sm_clock_out_shift` emit
+   those events to the ledger; this RPC-side synthesis makes the surfaces consistent
+   in the meantime without touching the prod clock write-path.
+5. **Late-cancel TZ classification (timeline).** `ShiftDetailsDialog` now passes the
+   TZ-aware `start_at` to the deriver instead of a naive `${date}T${time}`, so the
+   timeline's standard-vs-late cancel boundary matches the DB `scheduled_start`.

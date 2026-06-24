@@ -54,54 +54,63 @@ ordered_events AS (
     WHERE se.employee_id IS NOT NULL
 ),
 
--- ─── Classify each event as opening, closing, or intra-episode ─────────────
+-- ─── Classify each event as opening / closing ─────────────────────────────
 classified AS (
     SELECT
         oe.*,
-        -- Is this an opening event type?
-        CASE WHEN oe.event_type IN ('ASSIGNED','OFFERED','EMERGENCY_ASSIGNED','SWAPPED_IN')
-             THEN TRUE ELSE FALSE END AS is_opening_type,
-        -- Is this a closing event type?
-        CASE WHEN oe.event_type IN ('REJECTED','IGNORED','CANCELLED','LATE_CANCELLED',
-                                     'SWAPPED_OUT','NO_SHOW','UNASSIGNED')
-             THEN TRUE ELSE FALSE END AS is_closing_type,
-        -- Previous event's employee for same shift (to detect holder change)
-        LAG(oe.employee_id) OVER (PARTITION BY oe.shift_id ORDER BY oe.event_time, oe.id) AS prev_employee_id,
-        -- Track whether previous event was a closing event
-        LAG(CASE WHEN oe.event_type IN ('REJECTED','IGNORED','CANCELLED','LATE_CANCELLED',
-                                         'SWAPPED_OUT','NO_SHOW','UNASSIGNED')
-                 THEN TRUE ELSE FALSE END)
-            OVER (PARTITION BY oe.shift_id ORDER BY oe.event_time, oe.id) AS prev_was_closing
+        (oe.event_type IN ('ASSIGNED','OFFERED','EMERGENCY_ASSIGNED','SWAPPED_IN')) AS is_opening_type,
+        (oe.event_type IN ('REJECTED','IGNORED','CANCELLED','LATE_CANCELLED',
+                           'SWAPPED_OUT','NO_SHOW','UNASSIGNED'))                    AS is_closing_type
     FROM ordered_events oe
 ),
 
--- ─── Mark episode boundaries ───────────────────────────────────────────────
--- An event starts a new episode if:
--- 1. It is an opening event AND (no previous event exists OR prev was closing OR employee changed)
--- 2. OR it is any event from a different employee than the previous (non-closing) event while opening
-episode_boundaries AS (
+-- ─── Boundary detection over OPENING/CLOSING events only ───────────────────
+-- Episode boundaries are decided using only "boundary" (opening/closing) events,
+-- so intra-episode events (ACCEPTED, CHECKED_IN, LATE_IN, …) cannot break the
+-- "previous boundary was a close" signal. This makes the gaps-and-islands logic
+-- robust to a non-boundary event wedged between a close and a same-employee
+-- re-open, matching the stateful TS deriver exactly.
+boundary_events AS (
     SELECT
-        c.*,
-        CASE
-            -- First event for this shift that is an opening event → new episode
-            WHEN c.is_opening_type AND c.prev_employee_id IS NULL THEN TRUE
-            -- Opening event after a close → new episode
-            WHEN c.is_opening_type AND c.prev_was_closing THEN TRUE
-            -- Opening event with different employee → new episode
-            WHEN c.is_opening_type AND c.employee_id IS DISTINCT FROM c.prev_employee_id THEN TRUE
-            ELSE FALSE
-        END AS starts_new_episode
+        c.shift_id,
+        c.event_id,
+        c.event_time,
+        c.employee_id,
+        c.is_opening_type,
+        LAG(c.is_closing_type) OVER w AS prev_boundary_was_closing,
+        LAG(c.employee_id)     OVER w AS prev_boundary_employee
     FROM classified c
+    WHERE c.is_opening_type OR c.is_closing_type
+    WINDOW w AS (PARTITION BY c.shift_id ORDER BY c.event_time, c.event_id)
 ),
 
--- ─── Assign episode_seq using cumulative sum of boundary markers ───────────
+boundary_starts AS (
+    SELECT
+        be.shift_id,
+        be.event_id,
+        CASE
+            WHEN be.is_opening_type AND (
+                     be.prev_boundary_employee IS NULL          -- first holder
+                  OR be.prev_boundary_was_closing               -- re-open after a close
+                  OR be.employee_id IS DISTINCT FROM be.prev_boundary_employee  -- holder change
+                 )
+            THEN 1 ELSE 0
+        END AS starts_new_episode
+    FROM boundary_events be
+),
+
+-- ─── Assign episode_seq: cumulative sum of start-markers over ALL events ────
+-- Intra events contribute 0, so each event inherits the episode_seq of the
+-- boundary that opened its episode.
 episode_assigned AS (
     SELECT
-        eb.*,
-        SUM(CASE WHEN eb.starts_new_episode THEN 1 ELSE 0 END)
-            OVER (PARTITION BY eb.shift_id ORDER BY eb.event_time, eb.event_id
+        c.*,
+        SUM(COALESCE(bs.starts_new_episode, 0))
+            OVER (PARTITION BY c.shift_id ORDER BY c.event_time, c.event_id
                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS episode_seq
-    FROM episode_boundaries eb
+    FROM classified c
+    LEFT JOIN boundary_starts bs
+           ON bs.shift_id = c.shift_id AND bs.event_id = c.event_id
 ),
 
 -- ─── Aggregate per episode ─────────────────────────────────────────────────
