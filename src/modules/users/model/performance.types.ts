@@ -45,6 +45,25 @@ export type PerformanceMetrics = {
     bids_accepted: number;
     bid_success_rate: number;
 
+    // Snapshot Restructuring additions
+    assignment_changes?: number;
+    trade_requests?: number;
+    trade_completion_rate?: number;
+    trade_cancellation_rate?: number;
+    attendance_compliance_rate?: number;
+    performance_score?: number;
+    engagement_score?: number;
+    standard_drop_rate?: number;
+    urgent_drop_rate?: number;
+    early_clock_in?: number;
+    late_clock_out?: number;
+    early_clock_in_rate?: number;
+    late_clock_out_rate?: number;
+    on_time_in?: number;
+    on_time_out?: number;
+    on_time_in_rate?: number;
+    on_time_out_rate?: number;
+
     // Phase 2: Performance Insights (not yet returned by any DB function)
     performance_flag?: PerformanceFlag;
 
