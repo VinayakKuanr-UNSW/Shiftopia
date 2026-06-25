@@ -108,7 +108,12 @@ BEGIN
             s.sub_department_id
         FROM shifts s
         WHERE s.deleted_at IS NULL
-          AND s.lifecycle_status <> 'Draft'
+          -- "published" = EVER published (published_at is set on first publish and
+          -- survives a revert-to-Draft from offer-expiry / bidding-expiry). Using
+          -- lifecycle_status <> 'Draft' would wrongly DROP shifts that were published,
+          -- failed to fill, and reverted (e.g. a bidding shift that expired unfilled),
+          -- inflating the fill rate. published_at IS NOT NULL keeps them in scope.
+          AND s.published_at IS NOT NULL
           AND s.shift_date BETWEEN p_from AND p_to
           AND (p_org_ids     IS NULL OR s.organization_id   = ANY(p_org_ids))
           AND (p_dept_ids    IS NULL OR s.department_id     = ANY(p_dept_ids))
@@ -236,21 +241,33 @@ BEGIN
     -- Resolved = ACCEPTED + REJECTED + IGNORED (an OFFERED with no terminal
     -- event is still pending and is excluded). Scoped by joining shifts for
     -- the window + org/dept/subdept. The three rates sum to 100.
+    -- ── Offer funnel — EPISODE-sourced (an offer = an S3 OFFERED in an episode) ──
+    -- IMPORTANT: a raw ACCEPTED event is emitted for offer-accepts AND for bid-wins
+    -- (select_winner sets assignment_outcome='confirmed') AND for trade-confirms.
+    -- Counting raw ACCEPTED events therefore OVER-counts the acceptance rate. The
+    -- offer funnel must count only episodes that carried a real S3 offer (had_offer):
+    --   accepted = had_offer AND had_accept       (the offer was accepted — even if
+    --                                               later dropped/swapped; that's a
+    --                                               separate cancellation event)
+    --   ignored  = had_offer AND not accepted AND terminal_outcome='ignored'
+    --   rejected = had_offer AND not accepted AND terminal_outcome NOT IN ('ignored','open')
+    --   resolved = accepted + rejected + ignored  (a still-outstanding offer with
+    --              terminal_outcome='open' is pending and excluded)
     offer_metrics AS (
         SELECT
-            COUNT(*) FILTER (WHERE e.event_type = 'ACCEPTED')::int AS accepted,
-            COUNT(*) FILTER (WHERE e.event_type = 'REJECTED')::int AS rejected,
-            COUNT(*) FILTER (WHERE e.event_type = 'IGNORED')::int  AS ignored,
-            COUNT(*) FILTER (WHERE e.event_type IN ('ACCEPTED','REJECTED','IGNORED'))::int
-                                                                   AS resolved
-        FROM shift_events e
-        JOIN shifts s ON s.id = e.shift_id
-        WHERE e.event_type IN ('ACCEPTED','REJECTED','IGNORED')
-          AND s.deleted_at IS NULL
-          AND s.shift_date BETWEEN p_from AND p_to
-          AND (p_org_ids     IS NULL OR s.organization_id   = ANY(p_org_ids))
-          AND (p_dept_ids    IS NULL OR s.department_id     = ANY(p_dept_ids))
-          AND (p_subdept_ids IS NULL OR s.sub_department_id = ANY(p_subdept_ids))
+            COUNT(*) FILTER (WHERE ep.had_offer AND ep.had_accept)::int AS accepted,
+            COUNT(*) FILTER (WHERE ep.had_offer AND NOT ep.had_accept
+                                   AND ep.terminal_outcome NOT IN ('ignored','open'))::int AS rejected,
+            COUNT(*) FILTER (WHERE ep.had_offer AND NOT ep.had_accept
+                                   AND ep.terminal_outcome = 'ignored')::int AS ignored,
+            COUNT(*) FILTER (WHERE ep.had_offer
+                                   AND (ep.had_accept OR ep.terminal_outcome <> 'open'))::int AS resolved
+        FROM v_shift_assignment_episodes ep
+        WHERE ep.shift_date BETWEEN p_from AND p_to
+          AND ep.terminal_outcome <> 'shift_deleted'
+          AND (p_org_ids     IS NULL OR ep.organization_id   = ANY(p_org_ids))
+          AND (p_dept_ids    IS NULL OR ep.department_id     = ANY(p_dept_ids))
+          AND (p_subdept_ids IS NULL OR ep.sub_department_id = ANY(p_subdept_ids))
     ),
 
     -- ── Trade funnel over shift_swaps in window ───────────────────────
