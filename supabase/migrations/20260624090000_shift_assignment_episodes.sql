@@ -122,6 +122,13 @@ episode_agg AS (
         (ARRAY_AGG(ea.employee_id ORDER BY ea.event_time, ea.event_id))[1] AS employee_id,
         -- opened_at = first event time in the episode
         MIN(ea.event_time) AS opened_at,
+        -- became_active_at = confirmation moment: the FIRST time the holder became a
+        -- confirmed owner of this episode via offer-accept / emergency-fill / trade-in.
+        -- This is the AssignmentSnapshot spine's "published-active" timestamp. NULL for
+        -- offer-only / rejected / ignored episodes (no confirming event ever occurred).
+        MIN(ea.event_time) FILTER (
+            WHERE ea.event_type IN ('ACCEPTED','EMERGENCY_ASSIGNED','SWAPPED_IN')
+        ) AS became_active_at,
         -- Within-episode flags (any event in the episode matches)
         BOOL_OR(ea.event_type = 'OFFERED')              AS had_offer,
         BOOL_OR(ea.event_type = 'ACCEPTED')              AS had_accept,
@@ -174,6 +181,8 @@ episode_final AS (
         ews.episode_seq,
         ews.employee_id,
         ews.opened_at,
+        -- Confirmation moment (carried from episode_agg through episode_with_shift's ep.*)
+        ews.became_active_at,
         ews.closing_event_time AS closed_at,
         -- Opening event (first opening event type in the episode)
         CASE
@@ -273,7 +282,17 @@ SELECT
     ef.shift_date,
     ef.organization_id,
     ef.department_id,
-    ef.sub_department_id
+    ef.sub_department_id,
+    -- ─── TRAILING ADDITIONS (AssignmentSnapshot spine) ──────────────────────────
+    -- Appended at the very end so CREATE OR REPLACE VIEW keeps the existing column
+    -- list byte-identical (no reorder / removal). Both columns are nullable.
+    --   became_active_at: first ACCEPTED/EMERGENCY_ASSIGNED/SWAPPED_IN time in the
+    --     episode (the confirmation moment). NULL for offer-only / rejected / ignored
+    --     episodes that never became published-active.
+    --   scheduled_start: the shift's scheduled_start (already in episode_final), surfaced
+    --     here so the snapshot projection can denormalise it without re-joining shifts.
+    ef.became_active_at,
+    ef.scheduled_start
 FROM episode_final ef
 -- Attach the timesheet to the episode whose window contains the clock-in, so a
 -- holder's earlier (e.g. cancelled) episode on the same shift is NOT credited
