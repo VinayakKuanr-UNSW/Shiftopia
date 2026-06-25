@@ -13,9 +13,10 @@
 --   * Every divide is guarded (CASE WHEN denom = 0 THEN 0 ...).
 --   * Rates ROUND(...,2) and expressed as percentages (0..100), except
 --     fill_rate / open_coverage_rate / utilization which are also 0..100 %.
---   * Offer behaviour is sourced from the immutable `shift_events` ledger
---     (event_type IN OFFERED/ACCEPTED/REJECTED/IGNORED) so it survives the
---     offer -> Draft reversion that hid the shift-column heuristics.
+--   * Offer behaviour is EPISODE-sourced (v_shift_assignment_episodes): an offer
+--     is an episode with had_offer (a real S3 OFFERED). This is deliberate — a raw
+--     ACCEPTED event is also emitted for bid-wins and trade-confirms, so counting
+--     raw events would over-count the acceptance rate.
 --
 -- DATA SOURCES (verified against src/platform/supabase/types.ts):
 --   * public.shifts            — lifecycle_status (enum shift_lifecycle:
@@ -39,7 +40,9 @@
 --                                drafts / offer-only / rejected / ignored are
 --                                excluded by design upstream.
 --
--- "Published" shift  := lifecycle_status <> 'Draft' AND deleted_at IS NULL.
+-- "Published" shift  := published_at IS NOT NULL AND deleted_at IS NULL (EVER
+--                       published — survives a revert-to-Draft from offer/bidding
+--                       expiry, so unfilled-then-reverted shifts still count).
 -- "Filled"  shift    := published shift with a non-null assigned_employee_id
 --                       (assignment, NOT attendance — a no-show shift is filled).
 -- =====================================================================
@@ -78,6 +81,7 @@ RETURNS TABLE(
     -- ── Trade funnel (shift_swaps in window) ──────────────────────────
     trades_initiated             int,
     trade_completion_rate        numeric,
+    trade_rejection_rate         numeric,
     trade_cancellation_rate      numeric,
     trade_expiry_rate            numeric
 )
@@ -273,19 +277,19 @@ BEGIN
     -- ── Trade funnel over shift_swaps in window ───────────────────────
     -- Scoped by joining the requester's shift (requester_shift_id) for the
     -- window + org/dept/subdept. Bucket mapping over swap_request_status:
-    --   completed   := APPROVED
-    --   cancelled   := REJECTED + CANCELLED   (CANCELLED is the "withdrawn"
-    --                  value in this schema; there is no WITHDRAWN enum member)
+    --   completed   := APPROVED    (the trade went through)
+    --   rejected    := REJECTED    (the manager rejected the trade)
+    --   cancelled   := CANCELLED   (the requester withdrew the trade)
     --   expired     := EXPIRED
     --   (OPEN / OFFER_SELECTED / MANAGER_PENDING are still in-flight: counted
-    --    in the denominator `total` but in none of the three terminal buckets,
-    --    so the three rates need not sum to 100.)
+    --    in the denominator `total` but in none of the four terminal buckets,
+    --    so the four rates need not sum to 100.)
     trade_metrics AS (
         SELECT
             COUNT(*)::int                                                  AS total,
             COUNT(*) FILTER (WHERE ss.status = 'APPROVED')::int            AS completed,
-            COUNT(*) FILTER (WHERE ss.status IN ('REJECTED','CANCELLED'))::int
-                                                                           AS cancelled,
+            COUNT(*) FILTER (WHERE ss.status = 'REJECTED')::int            AS rejected,
+            COUNT(*) FILTER (WHERE ss.status = 'CANCELLED')::int           AS cancelled,
             COUNT(*) FILTER (WHERE ss.status = 'EXPIRED')::int             AS expired
         FROM shift_swaps ss
         JOIN shifts s ON s.id = ss.requester_shift_id
@@ -341,6 +345,8 @@ BEGIN
         CASE WHEN trm.total = 0 THEN 0
              ELSE ROUND(trm.completed::numeric / trm.total * 100, 2) END AS trade_completion_rate,
         CASE WHEN trm.total = 0 THEN 0
+             ELSE ROUND(trm.rejected::numeric / trm.total * 100, 2) END AS trade_rejection_rate,
+        CASE WHEN trm.total = 0 THEN 0
              ELSE ROUND(trm.cancelled::numeric / trm.total * 100, 2) END AS trade_cancellation_rate,
         CASE WHEN trm.total = 0 THEN 0
              ELSE ROUND(trm.expired::numeric / trm.total * 100, 2) END AS trade_expiry_rate
@@ -353,4 +359,4 @@ END;
 $function$;
 
 COMMENT ON FUNCTION public.get_marketplace_kpis(date, date, uuid[], uuid[], uuid[]) IS
-'Single-row marketplace KPIs (fill / open-coverage / churn / time-to-fill / utilization / offer funnel / trade funnel) for a [p_from,p_to] shift_date window, optionally scoped by org/dept/subdept arrays (NULL = no filter). Offer behaviour is event-sourced from shift_events; churn & time-to-fill are snapshot-grain over assignment_snapshots; trades over shift_swaps (APPROVED=completed, REJECTED+CANCELLED=cancelled, EXPIRED=expired). SECURITY DEFINER / STABLE.';
+'Single-row marketplace KPIs (fill / open-coverage / churn / time-to-fill / utilization / offer funnel / trade funnel) for a [p_from,p_to] shift_date window, optionally scoped by org/dept/subdept arrays (NULL = no filter). Offer behaviour is event-sourced from shift_events; churn & time-to-fill are snapshot-grain over assignment_snapshots; trades over shift_swaps (APPROVED=completed, REJECTED=rejected [manager rejected], CANCELLED=cancelled [requester withdrew], EXPIRED=expired). SECURITY DEFINER / STABLE.';

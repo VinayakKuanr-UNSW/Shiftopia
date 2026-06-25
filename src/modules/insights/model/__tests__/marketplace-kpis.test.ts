@@ -56,6 +56,30 @@ describe('getKpiStatus — lower-is-better (churn_rate)', () => {
     });
 });
 
+describe('getKpiStatus — lower-is-better (trade_rejection_rate)', () => {
+    // thresholds: good 15, warn 30
+    it('returns good at/below the good threshold', () => {
+        expect(getKpiStatus('trade_rejection_rate', 0)).toBe('good');
+        expect(getKpiStatus('trade_rejection_rate', 15)).toBe('good');
+    });
+
+    it('returns warn between good and warn', () => {
+        expect(getKpiStatus('trade_rejection_rate', 15.1)).toBe('warn');
+        expect(getKpiStatus('trade_rejection_rate', 30)).toBe('warn');
+    });
+
+    it('returns critical above the warn threshold', () => {
+        expect(getKpiStatus('trade_rejection_rate', 30.1)).toBe('critical');
+        expect(getKpiStatus('trade_rejection_rate', 100)).toBe('critical');
+    });
+});
+
+describe('EMPTY_KPIS includes trade_rejection_rate', () => {
+    it('has trade_rejection_rate defaulted to 0', () => {
+        expect(EMPTY_KPIS.trade_rejection_rate).toBe(0);
+    });
+});
+
 describe('getKpiStatus — unthresholded keys default to good', () => {
     it('counts and avg_time_to_fill_hours have no threshold and return good', () => {
         expect(KPI_THRESHOLDS.avg_time_to_fill_hours).toBeUndefined();

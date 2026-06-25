@@ -36,7 +36,8 @@ export interface MarketplaceKpis {
     // ── Trades ──────────────────────────────────────────────────────────────
     trades_initiated: number;          // count — trades/swaps initiated
     trade_completion_rate: number;     // % (0–100) — completed / initiated (higher is better)
-    trade_cancellation_rate: number;   // % (0–100) — cancelled / initiated (lower is better)
+    trade_rejection_rate: number;      // % (0–100) — manager rejected / initiated (lower is better)
+    trade_cancellation_rate: number;   // % (0–100) — requester withdrew / initiated (lower is better)
     trade_expiry_rate: number;         // % (0–100) — expired / initiated (lower is better)
 }
 
@@ -63,6 +64,7 @@ export const EMPTY_KPIS: MarketplaceKpis = {
     offer_ignore_rate: 0,
     trades_initiated: 0,
     trade_completion_rate: 0,
+    trade_rejection_rate: 0,
     trade_cancellation_rate: 0,
     trade_expiry_rate: 0,
 };
@@ -94,7 +96,8 @@ export const KPI_THRESHOLDS: Partial<Record<MarketplaceKpiKey, { good: number; w
     churn_rate:                   { good: 10, warn: 25 },  // little re-assignment churn
     offer_reject_rate:            { good: 20, warn: 40 },  // few outright rejections
     offer_ignore_rate:            { good: 15, warn: 30 },  // few ignored offers
-    trade_cancellation_rate:      { good: 15, warn: 30 },  // few cancelled trades
+    trade_rejection_rate:         { good: 15, warn: 30 },  // few manager-rejected trades
+    trade_cancellation_rate:      { good: 15, warn: 30 },  // few requester-withdrawn trades
     trade_expiry_rate:            { good: 15, warn: 30 },  // few expired trades
 } as const;
 

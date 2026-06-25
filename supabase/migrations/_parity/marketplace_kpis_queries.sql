@@ -246,24 +246,29 @@ WHERE e.event_type IN ('ACCEPTED','REJECTED','IGNORED')
 -- TRADE STATUS -> BUCKET MAPPING (over enum swap_request_status, whose members
 -- are exactly: OPEN | OFFER_SELECTED | MANAGER_PENDING | APPROVED | REJECTED |
 -- CANCELLED | EXPIRED — verified in src/platform/supabase/types.ts):
---   completed   := APPROVED
---   cancelled   := REJECTED + CANCELLED
+--   completed   := APPROVED    (the trade went through)
+--   rejected    := REJECTED    (the MANAGER rejected the trade)
+--   cancelled   := CANCELLED   (the REQUESTER withdrew the trade)
 --                  (this schema has NO 'WITHDRAWN' member; CANCELLED is the
---                   requester-withdrew value, so it joins REJECTED in the
---                   "cancellation" bucket)
+--                   requester-withdrew value. REJECTED and CANCELLED are now
+--                   DISTINCT terminal buckets — manager-rejection is split from
+--                   requester-withdrawal.)
 --   expired     := EXPIRED
 --   in-flight   := OPEN, OFFER_SELECTED, MANAGER_PENDING  (counted in `total`
---                  denominator but in NONE of the three terminal buckets — so
---                  the three rates do NOT necessarily sum to 100)
--- completion_rate = APPROVED/total, cancellation_rate = (REJECTED+CANCELLED)/total,
--- expiry_rate = EXPIRED/total.
+--                  denominator but in NONE of the four terminal buckets — so
+--                  the four rates do NOT necessarily sum to 100)
+-- completion_rate = APPROVED/total, rejection_rate = REJECTED/total,
+-- cancellation_rate = CANCELLED/total, expiry_rate = EXPIRED/total.
 SELECT
     COUNT(*)                                                          AS trades_initiated,
     CASE WHEN COUNT(*) = 0 THEN 0
          ELSE ROUND(COUNT(*) FILTER (WHERE ss.status = 'APPROVED')::numeric
               / COUNT(*) * 100, 2) END                                AS trade_completion_rate,
     CASE WHEN COUNT(*) = 0 THEN 0
-         ELSE ROUND(COUNT(*) FILTER (WHERE ss.status IN ('REJECTED','CANCELLED'))::numeric
+         ELSE ROUND(COUNT(*) FILTER (WHERE ss.status = 'REJECTED')::numeric
+              / COUNT(*) * 100, 2) END                                AS trade_rejection_rate,
+    CASE WHEN COUNT(*) = 0 THEN 0
+         ELSE ROUND(COUNT(*) FILTER (WHERE ss.status = 'CANCELLED')::numeric
               / COUNT(*) * 100, 2) END                                AS trade_cancellation_rate,
     CASE WHEN COUNT(*) = 0 THEN 0
          ELSE ROUND(COUNT(*) FILTER (WHERE ss.status = 'EXPIRED')::numeric

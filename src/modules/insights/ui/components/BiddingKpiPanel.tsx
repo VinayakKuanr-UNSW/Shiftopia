@@ -1,29 +1,29 @@
 import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/modules/core/ui/primitives/card';
 import {
-    MarketplaceKpis,
-    MarketplaceKpiKey,
-    getKpiStatus,
-} from '../../model/marketplace-kpis.types';
+    BiddingKpis,
+    BiddingKpiKey,
+    getBiddingStatus,
+} from '../../model/bidding-kpis.types';
 
 // ---------------------------------------------------------------------------
-// MarketplaceKpiPanel — read-only, presentational panel of marketplace KPIs.
+// BiddingKpiPanel — read-only, presentational panel of open-bidding KPIs.
 //
 // Usage:
-//   const { data, isLoading } = useMarketplaceKpis(from, to, scope);
-//   <MarketplaceKpiPanel kpis={data ?? EMPTY_KPIS} isLoading={isLoading} />
+//   const { data, isLoading } = useBiddingKpis(from, to, scope);
+//   <BiddingKpiPanel kpis={data ?? EMPTY_BIDDING_KPIS} isLoading={isLoading} />
 //
 // Not wired into any page/route here — just exported.
 // ---------------------------------------------------------------------------
 
-type ValueFormat = 'percent' | 'hours' | 'count';
+type ValueFormat = 'percent' | 'avg' | 'count';
 
 interface KpiCardSpec {
-    key: MarketplaceKpiKey;
+    key: BiddingKpiKey;
     label: string;
     format: ValueFormat;
     /** Optional supporting numerator/denominator counts shown as subtext. */
-    support?: (kpis: MarketplaceKpis) => string;
+    support?: (kpis: BiddingKpis) => string;
 }
 
 interface KpiGroupSpec {
@@ -36,8 +36,8 @@ const formatValue = (value: number, format: ValueFormat): string => {
     switch (format) {
         case 'percent':
             return `${value.toFixed(1)}%`;
-        case 'hours':
-            return `${value.toFixed(1)} h`;
+        case 'avg':
+            return value.toFixed(1);
         case 'count':
         default:
             return `${value}`;
@@ -60,99 +60,65 @@ const STATUS_DOT_CLASS: Record<'good' | 'warn' | 'critical', string> = {
 // ── Panel layout / grouping ──────────────────────────────────────────────────
 const KPI_GROUPS: KpiGroupSpec[] = [
     {
-        title: 'Coverage',
+        title: 'Outcomes',
         cards: [
             {
-                key: 'fill_rate',
-                label: 'Fill Rate',
+                key: 'open_shift_fill_rate',
+                label: 'Open Shift Fill Rate',
                 format: 'percent',
-                support: (k) => `${k.filled_shifts} / ${k.published_shifts} published filled`,
+                support: (k) => `${k.winners_selected} / ${k.open_bidding_shifts} open shifts filled`,
             },
             {
-                key: 'open_coverage_rate',
-                label: 'Open Coverage',
+                key: 'bid_success_rate',
+                label: 'Bid Success Rate',
                 format: 'percent',
-                support: (k) => `${k.covered_open_shifts} / ${k.open_shifts} open covered`,
+                support: (k) => `${k.winners_selected} / ${k.total_bids} bids won`,
             },
             {
-                key: 'avg_time_to_fill_hours',
-                label: 'Avg Time to Fill',
-                format: 'hours',
+                key: 'unfilled_open_shift_rate',
+                label: 'Unfilled Open Rate',
+                format: 'percent',
+                support: (k) => `${k.unfilled_open_shifts} / ${k.open_bidding_shifts} open unfilled`,
+            },
+            {
+                key: 'avg_bids_per_open_shift',
+                label: 'Avg Bids / Open Shift',
+                format: 'avg',
+                support: (k) => `${k.total_bids} bids across ${k.open_bidding_shifts} shifts`,
             },
         ],
     },
     {
-        title: 'Stability',
+        title: 'Volume',
         cards: [
             {
-                key: 'churn_rate',
-                label: 'Churn Rate',
-                format: 'percent',
-                support: (k) =>
-                    `${k.published_snapshots} snapshots / ${k.distinct_filled_shifts} distinct filled`,
-            },
-        ],
-    },
-    {
-        title: 'Marketplace',
-        cards: [
-            {
-                key: 'marketplace_utilization_rate',
-                label: 'Utilization',
-                format: 'percent',
-                support: (k) =>
-                    `${k.marketplace_used_shifts} / ${k.marketplace_eligible_shifts} eligible used`,
+                key: 'open_bidding_shifts',
+                label: 'Open Bidding Shifts',
+                format: 'count',
             },
             {
-                key: 'offer_accept_rate',
-                label: 'Offer Accept',
-                format: 'percent',
-                support: (k) => `${k.offers_resolved} offers resolved`,
+                key: 'total_bids',
+                label: 'Total Bids',
+                format: 'count',
             },
             {
-                key: 'offer_reject_rate',
-                label: 'Offer Reject',
-                format: 'percent',
-                support: (k) => `${k.offers_resolved} offers resolved`,
+                key: 'winners_selected',
+                label: 'Winners Selected',
+                format: 'count',
             },
             {
-                key: 'offer_ignore_rate',
-                label: 'Offer Ignore',
-                format: 'percent',
-                support: (k) => `${k.offers_resolved} offers resolved`,
-            },
-            {
-                key: 'trade_completion_rate',
-                label: 'Trade Completion',
-                format: 'percent',
-                support: (k) => `${k.trades_initiated} trades initiated`,
-            },
-            {
-                key: 'trade_rejection_rate',
-                label: 'Trade Rejection',
-                format: 'percent',
-                support: (k) => `${k.trades_initiated} trades initiated`,
-            },
-            {
-                key: 'trade_cancellation_rate',
-                label: 'Trade Cancellation',
-                format: 'percent',
-                support: (k) => `${k.trades_initiated} trades initiated`,
-            },
-            {
-                key: 'trade_expiry_rate',
-                label: 'Trade Expiry',
-                format: 'percent',
-                support: (k) => `${k.trades_initiated} trades initiated`,
+                key: 'unfilled_open_shifts',
+                label: 'Unfilled Open Shifts',
+                format: 'count',
             },
         ],
     },
 ];
 
 // ── Single KPI card ──────────────────────────────────────────────────────────
-const KpiCard: React.FC<{ spec: KpiCardSpec; kpis: MarketplaceKpis }> = ({ spec, kpis }) => {
+const KpiCard: React.FC<{ spec: KpiCardSpec; kpis: BiddingKpis }> = ({ spec, kpis }) => {
     const value = kpis[spec.key];
-    const status = getKpiStatus(spec.key, value);
+    const status = getBiddingStatus(spec.key, value);
     const support = spec.support?.(kpis);
 
     return (
@@ -178,17 +144,17 @@ const SkeletonCard: React.FC = () => (
     </div>
 );
 
-interface MarketplaceKpiPanelProps {
-    kpis: MarketplaceKpis;
+interface BiddingKpiPanelProps {
+    kpis: BiddingKpis;
     isLoading?: boolean;
 }
 
-const MarketplaceKpiPanel: React.FC<MarketplaceKpiPanelProps> = ({ kpis, isLoading }) => {
+const BiddingKpiPanel: React.FC<BiddingKpiPanelProps> = ({ kpis, isLoading }) => {
     return (
         <Card className="bg-card border-border">
             <CardHeader className="pb-3">
                 <CardTitle className="text-base font-semibold text-foreground">
-                    Marketplace KPIs
+                    Bidding KPIs
                 </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -213,5 +179,5 @@ const MarketplaceKpiPanel: React.FC<MarketplaceKpiPanelProps> = ({ kpis, isLoadi
     );
 };
 
-export default MarketplaceKpiPanel;
-export { MarketplaceKpiPanel };
+export default BiddingKpiPanel;
+export { BiddingKpiPanel };
