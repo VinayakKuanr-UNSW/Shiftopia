@@ -724,6 +724,240 @@ export const ManagerSwapsPage: React.FC = () => {
                                 <p className="text-[11px] text-muted-foreground/40 font-mono font-black">Check back later or adjust your filters</p>
                             </div>
                         </div>
+                    ) : viewMode === 'table' ? (
+                        /* Table List View */
+                        <div className="w-full overflow-hidden border border-border/40 rounded-2xl bg-card/10 backdrop-blur-md">
+                            <div className="overflow-x-auto w-full custom-scrollbar">
+                                <table className="w-full text-left border-collapse min-w-[950px]">
+                                    <thead>
+                                        <tr className="border-b border-border/40 text-muted-foreground/60 text-[10px] font-black uppercase tracking-widest font-mono bg-muted/20">
+                                            {statusFilter === 'MANAGER_PENDING' && (
+                                                <th className="py-4 px-4 w-[48px]">
+                                                    <Checkbox
+                                                        checked={selectedIds.size === filteredRequests.length}
+                                                        onCheckedChange={handleSelectAll}
+                                                        className="border-border/50"
+                                                    />
+                                                </th>
+                                            )}
+                                            <th className="py-4 px-4 w-[110px]">Priority</th>
+                                            <th className="py-4 px-4 w-[30%]">Requester</th>
+                                            <th className="py-4 px-4 w-[30%]">Offerer</th>
+                                            <th className="py-4 px-4 text-center w-[100px]">Delta</th>
+                                            <th className="py-4 px-4 text-center w-[100px]">Compliance</th>
+                                            <th className="py-4 px-4 text-right w-[150px]">Requested At</th>
+                                            <th className="py-4 px-4 text-right w-[180px]">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border/20">
+                                        <AnimatePresence mode="popLayout">
+                                            {filteredRequests.map((request, idx) => {
+                                                const isSelected = selectedIds.has(request.id);
+                                                return (
+                                                    <motion.tr
+                                                        key={request.id}
+                                                        initial={{ opacity: 0, y: 4 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        exit={{ opacity: 0 }}
+                                                        transition={{ delay: idx * 0.02, duration: 0.2 }}
+                                                        className={cn(
+                                                            "hover:bg-muted/5 transition-colors duration-200",
+                                                            isSelected && "bg-primary/[0.03] hover:bg-primary/[0.05]"
+                                                        )}
+                                                    >
+                                                        {statusFilter === 'MANAGER_PENDING' && (
+                                                            <td className="py-3 px-4">
+                                                                <Checkbox
+                                                                    checked={isSelected}
+                                                                    onCheckedChange={() => toggleSelection(request.id)}
+                                                                    className="border-border/50"
+                                                                />
+                                                            </td>
+                                                        )}
+                                                        <td className="py-3 px-4">
+                                                            {request.priority ? (() => {
+                                                                const pc = PRIORITY_CONFIG[request.priority];
+                                                                const PIcon = pc.icon;
+                                                                return (
+                                                                    <span className={cn(
+                                                                        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[8px] font-black font-mono uppercase tracking-wider",
+                                                                        pc.badgeCls
+                                                                    )}>
+                                                                        <PIcon className="h-2.5 w-2.5" />
+                                                                        {pc.label.replace('TTS ', '')}
+                                                                    </span>
+                                                                );
+                                                            })() : (
+                                                                <span className="text-muted-foreground/30 font-mono text-[9px]">—</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            <div className="flex items-center gap-3">
+                                                                {request.requestor.avatar ? (
+                                                                    <img src={request.requestor.avatar} alt="" className="h-8 w-8 rounded-full border border-border bg-muted/20 object-cover" />
+                                                                ) : (
+                                                                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center border border-border">
+                                                                        <span className="text-[10px] font-black text-primary uppercase">
+                                                                            {request.requestor.employeeName.slice(0, 2)}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <span className="text-xs font-black uppercase tracking-wide text-foreground truncate">
+                                                                        {request.requestor.employeeName}
+                                                                    </span>
+                                                                    <span className="text-[9px] text-muted-foreground/60 uppercase tracking-widest font-black leading-none mt-0.5">
+                                                                        {request.requestor.roleName} · {request.requestor.deptName}
+                                                                    </span>
+                                                                    <span className="text-[10px] font-mono text-foreground/70 mt-1">
+                                                                        {request.requestor.formattedDate} · {request.requestor.time.replace(/:\d{2}/g, '')} ({request.requestor.duration})
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            {request.recipient ? (
+                                                                <div className="flex items-center gap-3">
+                                                                    {request.recipient.avatar ? (
+                                                                        <img src={request.recipient.avatar} alt="" className="h-8 w-8 rounded-full border border-border bg-muted/20 object-cover" />
+                                                                    ) : (
+                                                                        <div className="h-8 w-8 rounded-full bg-emerald-500/10 flex items-center justify-center border border-border">
+                                                                            <span className="text-[10px] font-black text-emerald-500 uppercase">
+                                                                                {request.recipient.employeeName.slice(0, 2)}
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="flex flex-col min-w-0">
+                                                                        <span className="text-xs font-black uppercase tracking-wide text-foreground truncate">
+                                                                            {request.recipient.employeeName}
+                                                                        </span>
+                                                                        <span className="text-[9px] text-muted-foreground/60 uppercase tracking-widest font-black leading-none mt-0.5">
+                                                                            {request.recipient.roleName} · {request.recipient.deptName}
+                                                                        </span>
+                                                                        <span className="text-[10px] font-mono text-foreground/70 mt-1">
+                                                                            {request.recipient.formattedDate} · {request.recipient.time.replace(/:\d{2}/g, '')} ({request.recipient.duration})
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex items-center gap-2 text-muted-foreground/45 italic text-[11px] font-mono pl-2">
+                                                                    <Circle className="h-3 w-3 text-muted-foreground/20" />
+                                                                    <span>Open Market Swap</span>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            <div className="flex flex-col items-center justify-center gap-1">
+                                                                <Badge 
+                                                                    variant="secondary" 
+                                                                    className={cn(
+                                                                        "text-[9px] font-black font-mono shadow-none px-1.5 py-0",
+                                                                        request.hoursDiff > 0 
+                                                                            ? "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" 
+                                                                            : request.hoursDiff < 0 
+                                                                                ? "text-rose-600 dark:text-rose-400 bg-rose-500/10" 
+                                                                                : "text-muted-foreground/40 bg-muted"
+                                                                    )}
+                                                                >
+                                                                    {request.hoursDiff > 0 ? '+' : ''}{request.hoursDiff.toFixed(1)}h
+                                                                </Badge>
+                                                                {request.payDiff !== 0 ? (
+                                                                    <span className={cn(
+                                                                        "text-[10px] font-mono font-black",
+                                                                        request.payDiff > 0 
+                                                                            ? "text-emerald-600 dark:text-emerald-400" 
+                                                                            : "text-rose-600 dark:text-rose-400"
+                                                                    )}>
+                                                                        {request.payDiff > 0 ? '+' : ''}${request.payDiff.toFixed(2)}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground/30 font-mono text-[10px]">—</span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            <div className="flex justify-center">
+                                                                {request.complianceStatus ? (() => {
+                                                                    const cStyle = COMPLIANCE_STYLES[request.complianceStatus];
+                                                                    return (
+                                                                        <TooltipProvider>
+                                                                            <Tooltip>
+                                                                                <TooltipTrigger>
+                                                                                    <div className={cn("h-7 w-7 rounded-full flex items-center justify-center border", cStyle.ring)}>
+                                                                                        {cStyle.icon}
+                                                                                    </div>
+                                                                                </TooltipTrigger>
+                                                                                <TooltipContent side="top" className="bg-popover text-popover-foreground border-border shadow-xl">
+                                                                                    <div className="flex flex-col gap-0.5">
+                                                                                        <span className="text-[10px] font-black uppercase tracking-wider">{cStyle.label}</span>
+                                                                                        <span className="text-[9px] font-mono text-muted-foreground opacity-60">Engine v2</span>
+                                                                                    </div>
+                                                                                </TooltipContent>
+                                                                            </Tooltip>
+                                                                        </TooltipProvider>
+                                                                    );
+                                                                })() : (
+                                                                    <span className="text-muted-foreground/30 font-mono text-[11px]">—</span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3 px-4 text-right">
+                                                            <span className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-wider font-black block">
+                                                                {format(parseISO(request.requestedAt), 'MMM d, h:mm a')}
+                                                            </span>
+                                                            {request.reason && (
+                                                                <span className="text-[9px] text-foreground/40 italic font-medium max-w-[140px] truncate block ml-auto mt-0.5" title={request.reason}>
+                                                                    "{request.reason}"
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3 px-4 text-right">
+                                                            <div className="flex items-center justify-end gap-1.5">
+                                                                {request.status === 'MANAGER_PENDING' ? (
+                                                                    <>
+                                                                        <Button
+                                                                            onClick={() => setComplianceApprovalTarget(request)}
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            className="h-8 px-2 rounded-lg border-border/60 text-muted-foreground hover:bg-muted/50 hover:text-foreground text-[9px] font-black uppercase tracking-wider transition-all"
+                                                                            title="Check Compliance & Approve"
+                                                                        >
+                                                                            <ScanSearch className="h-3 w-3 mr-1" />
+                                                                            Review
+                                                                        </Button>
+                                                                        <Button
+                                                                            onClick={() => handleAction([request.id], 'rejected')}
+                                                                            size="sm"
+                                                                            className="h-8 px-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[9px] font-black uppercase tracking-wider transition-all"
+                                                                        >
+                                                                            <X className="h-3 w-3 mr-1" />
+                                                                            Reject
+                                                                        </Button>
+                                                                    </>
+                                                                ) : (
+                                                                    <div className={cn(
+                                                                        "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border",
+                                                                        request.status === 'APPROVED'
+                                                                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                                                                            : request.status === 'REJECTED'
+                                                                                ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+                                                                                : "bg-muted text-muted-foreground/50 border-border"
+                                                                    )}>
+                                                                        {request.status === 'APPROVED' && <CheckCircle className="h-3 w-3" />}
+                                                                        {request.status === 'REJECTED' && <XCircle className="h-3 w-3" />}
+                                                                        {request.status}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </motion.tr>
+                                                );
+                                            })}
+                                        </AnimatePresence>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     ) : (
                         /* Request Cards */
                         <div className="space-y-4">

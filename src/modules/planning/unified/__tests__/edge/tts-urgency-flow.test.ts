@@ -89,7 +89,7 @@ describe('Assignment Offer flow — reject routing', () => {
   /**
    * When an employee rejects an offer:
    *   TTS > 4h  → shift goes to bidding (sm_reject_offer → S5)
-   *   TTS ≤ 4h  → shift goes to draft+unassigned (sm_expire_offer_now → S1)
+   *   TTS ≤ 4h  → shift goes to draft+assigned (sm_expire_offer_now → S2)
    *
    * This routing prevents the shift from entering a locked bidding window.
    */
@@ -108,17 +108,17 @@ describe('Assignment Offer flow — reject routing', () => {
     expect(rejectRoute(FIXED_DATE, FIXED_TIME)).toBe('bidding');
   });
 
-  it('routes reject to draft+unassigned when TTS ≤ 4h (locked)', () => {
+  it('routes reject to draft+assigned when TTS ≤ 4h (locked)', () => {
     setNow(4 * 3600_000); // exactly 4h — boundary must be locked
     expect(rejectRoute(FIXED_DATE, FIXED_TIME)).toBe('draft');
   });
 
-  it('routes reject to draft+unassigned at 2h', () => {
+  it('routes reject to draft+assigned at 2h', () => {
     setNow(2 * 3600_000);
     expect(rejectRoute(FIXED_DATE, FIXED_TIME)).toBe('draft');
   });
 
-  it('routes reject to draft+unassigned when shift has already started', () => {
+  it('routes reject to draft+assigned when shift has already started', () => {
     setNow(-30 * 60_000); // 30min past start
     expect(rejectRoute(FIXED_DATE, FIXED_TIME)).toBe('draft');
   });

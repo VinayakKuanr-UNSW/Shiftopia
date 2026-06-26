@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
     Tabs, TabsContent,
 } from '@/modules/core/ui/primitives/tabs';
@@ -9,15 +9,39 @@ import type { DatePreset, InsightsFilters } from '../model/metric.types';
 import OverviewTab from '../ui/views/OverviewTab';
 import WorkforceTab from '../ui/views/WorkforceTab';
 import ComplianceCostTab from '../ui/views/ComplianceCostTab';
+import PerformanceTab from '../ui/views/PerformanceTab';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { InsightsFunctionBar } from '../ui/components/InsightsFunctionBar';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
 import { BarChart3 } from 'lucide-react';
+import { getCurrentQuarter } from '@/modules/users/hooks/usePerformanceMetrics';
 
 const PRESETS: DatePreset[] = ['THIS_WEEK', 'THIS_MONTH', 'LAST_30', 'LAST_90'];
 
+/* ═══════════════════ QUARTER OPTIONS ═══════════════════ */
+const buildQuarterOptions = () => {
+    const opts: { year: number; quarter: number; label: string }[] = [];
+    const { year, quarter } = getCurrentQuarter();
+    for (let i = 0; i < 5; i++) {
+        let q = quarter - i;
+        let y = year;
+        while (q <= 0) { q += 4; y -= 1; }
+        opts.push({ year: y, quarter: q, label: `Q${q} ${y}` });
+    }
+    return opts;
+};
+
 const InsightsPage: React.FC = () => {
+    const [activeTab, setActiveTab] = useState('overview');
+    
+    // Performance Tab Quarter State
+    const quarterOptions = useMemo(buildQuarterOptions, []);
+    const defaultQ = quarterOptions[0];
+    const [selectedYear, setSelectedYear] = useState(defaultQ.year);
+    const [selectedQuarter, setSelectedQuarter] = useState(defaultQ.quarter);
+    const selectedQuarterLabel = `Q${selectedQuarter} ${selectedYear}`;
+
     const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
     const { preset, startDate, endDate, setPreset } = useDateRange('THIS_MONTH');
     const queryClient = useQueryClient();
@@ -33,15 +57,27 @@ const InsightsPage: React.FC = () => {
     const { isDark } = useTheme();
 
     function handleRefresh() {
-        queryClient.invalidateQueries({ queryKey: ['insights_summary'] });
-        queryClient.invalidateQueries({ queryKey: ['insights_trend'] });
-        queryClient.invalidateQueries({ queryKey: ['insights_dept_breakdown'] });
-        queryClient.invalidateQueries({ queryKey: ['quarterly_performance_report'] });
+        if (activeTab === 'performance') {
+            queryClient.invalidateQueries({ queryKey: ['quarterly_performance_report'] });
+            queryClient.invalidateQueries({ queryKey: ['performance_metrics'] });
+        } else {
+            queryClient.invalidateQueries({ queryKey: ['insights_summary'] });
+            queryClient.invalidateQueries({ queryKey: ['insights_trend'] });
+            queryClient.invalidateQueries({ queryKey: ['insights_dept_breakdown'] });
+        }
+    }
+
+    function handleQuarterChange(val: string) {
+        const opt = quarterOptions.find(o => o.label === val);
+        if (opt) { 
+            setSelectedYear(opt.year); 
+            setSelectedQuarter(opt.quarter); 
+        }
     }
 
     return (
         <div className="h-full flex flex-col overflow-hidden bg-background">
-            <Tabs defaultValue="overview" className="flex-1 flex flex-col min-h-0">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
                 {/* ── GOLD STANDARD HEADER (Title · Scope · Function Bar) ── */}
                 <GoldStandardHeader
                     title="My Insights"
@@ -52,6 +88,7 @@ const InsightsPage: React.FC = () => {
                     isGammaLocked={isGammaLocked}
                     functionBar={
                         <InsightsFunctionBar
+                            activeTab={activeTab}
                             preset={preset}
                             onPresetChange={v => setPreset(v as DatePreset)}
                             presetLabels={DATE_PRESET_LABELS}
@@ -59,6 +96,9 @@ const InsightsPage: React.FC = () => {
                             startDate={startDate}
                             endDate={endDate}
                             onRefresh={handleRefresh}
+                            selectedQuarterLabel={selectedQuarterLabel}
+                            quarterOptions={quarterOptions}
+                            onQuarterChange={handleQuarterChange}
                         />
                     }
                 />
@@ -80,6 +120,10 @@ const InsightsPage: React.FC = () => {
 
                     <TabsContent value="compliance" className="mt-0 outline-none">
                         <ComplianceCostTab filters={filters} />
+                    </TabsContent>
+
+                    <TabsContent value="performance" className="mt-0 outline-none">
+                        <PerformanceTab scope={scope} selectedYear={selectedYear} selectedQuarter={selectedQuarter} />
                     </TabsContent>
                 </div>
             </Tabs>

@@ -49,7 +49,7 @@ const AnalysisPage = lazy(() => import('@/modules/insights/pages/AnalysisPage.ts
 const GridPage = lazy(() => import('@/modules/insights/pages/GridPage.tsx'));
 const ComplianceRejectionsPage = lazy(() => import('@/modules/compliance/ui/pages/RejectionsPage.tsx'));
 const UsersPage = lazy(() => import('@/modules/users/pages/UsersPage.tsx'));
-const PerformancePage = lazy(() => import('@/modules/users/pages/PerformancePage.tsx'));
+
 
 const SettingsPage = lazy(() => import('@/modules/settings/pages/SettingsPage.tsx'));
 
@@ -181,7 +181,7 @@ const AppRouter: React.FC = () => {
                     <Route element={<FeatureGate feature="management" />}>
                         <Route path="/management/bids" element={<ManagerBidsPage />} />
                         <Route path="/management/swaps" element={<ManagerSwapsPage />} />
-                        <Route path="/performance" element={<PerformancePage />} />
+
 
                     </Route>
 

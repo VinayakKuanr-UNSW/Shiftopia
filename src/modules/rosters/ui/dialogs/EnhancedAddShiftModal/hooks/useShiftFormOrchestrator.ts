@@ -21,7 +21,11 @@ import { format, startOfDay, parse, getDay } from 'date-fns';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCreateShift, useUpdateShift, useUnpublishShift } from '@/modules/rosters/state/useRosterShifts';
+import { shiftKeys, rosterKeys } from '@/modules/rosters/api/queryKeys';
+import { applyShiftOp } from '@/modules/rosters/api/shifts.api';
+import { mapShiftOpResultToUx, type ShiftOpResult } from '@/modules/rosters/domain/shift-ops.contract';
 import { formatInTimezone, isPastInTimezone, isPublicHoliday, parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 import type { TemplateGroupType } from '@/modules/rosters/domain/shift.entity';
@@ -57,6 +61,7 @@ export function useShiftFormOrchestrator({
     const safeContext = context ?? {};
     const { toast } = useToast();
     const { scopeTree } = useScopeFilter('managerial');
+    const queryClient = useQueryClient();
 
     // ── Mutations ────────────────────────────────────────────────────────────
     const createShiftMutation = useCreateShift();
@@ -613,13 +618,15 @@ export function useShiftFormOrchestrator({
 
         if (isTemplateMode) return true;
 
-        // Compliance check
+        // Compliance is required ONLY when an employee is assigned. An unassigned /
+        // open shift has nothing employee-specific to validate, so it can be saved
+        // directly without running compliance.
+        if (!watchEmployeeId) return true;
+
+        // Compliance check (assigned shifts): must have run and passed.
         if (compliancePanel.status !== 'results') return false;
-        
-        // If employee assigned, must pass all checks (including employee-specific)
-        // If no employee, must pass shift-level checks (which are the only ones that run)
         return compliancePanel.canProceed;
-    }, [watchV8RoleId, watchShiftDate, watchStart, watchEnd, hasDepartment, hasRoster, isTemplateMode, hardValidation.passed, compliancePanel.status, compliancePanel.canProceed]);
+    }, [watchV8RoleId, watchShiftDate, watchStart, watchEnd, hasDepartment, hasRoster, isTemplateMode, watchEmployeeId, hardValidation.passed, compliancePanel.status, compliancePanel.canProceed]);
 
     // v2-powered "Run All" — replaces v1 rule runners in ComplianceTabContent.
     // Maps v2 V8Hit[] results back to the v1 ComplianceResult format so
@@ -757,10 +764,10 @@ export function useShiftFormOrchestrator({
                     description: hardValidation.errors.join('. ') || 'Hard validation failed.',
                     variant: 'destructive',
                 });
-            } else if (!isTemplateMode && !complianceHasRun) {
+            } else if (!isTemplateMode && !!watchEmployeeId && !complianceHasRun) {
                 toast({
                     title: 'Compliance Required',
-                    description: 'Please run compliance checks before saving this shift.',
+                    description: 'Please run compliance checks before saving this assigned shift.',
                     variant: 'destructive',
                 });
             } else {
@@ -792,6 +799,13 @@ export function useShiftFormOrchestrator({
         }
 
         const onMutationSuccess = () => {
+            // The gateway edit/assign ops call applyShiftOp directly (not via the
+            // useUpdateShift mutation), so nothing invalidates the roster cache. With
+            // staleTime 30s, returning to /rosters would otherwise show STALE shifts
+            // (e.g. a just-applied assignment missing from the bucket). Mark the list
+            // + roster queries stale here so the grid refetches when it remounts.
+            queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+            queryClient.invalidateQueries({ queryKey: rosterKeys.all });
             toast({
                 title: editMode ? 'Shift Updated' : 'Shift Created',
                 description: `Shift ${editMode ? 'updated' : 'created'} for ${format(values.shift_date!, 'dd MMM yyyy')}`,
@@ -915,10 +929,104 @@ export function useShiftFormOrchestrator({
                     : { ...basePayloadWithUtc, lifecycle_status: 'Draft' as const, fulfillment_status: (values.assigned_employee_id ? 'scheduled' : 'none') as 'scheduled' | 'none' };
 
                 if (editMode && existingShift?.id) {
-                    updateShiftMutation.mutate(
-                        { shiftId: existingShift.id, updates: payload },
-                        { onSuccess: onMutationSuccess, onError: onMutationError },
-                    );
+                    // Route through the shift-mutation gateway for version-CAS + conflict UX.
+                    // The gateway's edit branch covers all the fields in basePayloadWithUtc
+                    // except structural ones (roster_id, department_id, organization_id,
+                    // assigned_employee_id) which are deliberately excluded.
+                    try {
+                        const gatewayPayload: Record<string, unknown> = {
+                            // Schedule
+                            start_time: basePayloadWithUtc.start_time,
+                            end_time: basePayloadWithUtc.end_time,
+                            shift_date: basePayloadWithUtc.shift_date,
+                            // Breaks
+                            paid_break_minutes: basePayloadWithUtc.paid_break_minutes,
+                            unpaid_break_minutes: basePayloadWithUtc.unpaid_break_minutes,
+                            // References
+                            role_id: basePayloadWithUtc.role_id || '',
+                            sub_department_id: basePayloadWithUtc.sub_department_id || '',
+                            remuneration_level_id: basePayloadWithUtc.remuneration_level_id || '',
+                            shift_group_id: basePayloadWithUtc.shift_group_id || '',
+                            shift_subgroup_id: basePayloadWithUtc.shift_subgroup_id || '',
+                            // Grouping
+                            group_type: basePayloadWithUtc.group_type || '',
+                            sub_group_name: basePayloadWithUtc.sub_group_name ?? '',
+                            display_order: basePayloadWithUtc.display_order ?? 0,
+                            // Timezone — start_at/end_at are recomputed by the
+                            // trg_recalc_shift_utc_timestamps trigger, so we don't send them.
+                            timezone: basePayloadWithUtc.timezone,
+                            // Training
+                            is_training: basePayloadWithUtc.is_training ?? false,
+                            // Text
+                            notes: basePayloadWithUtc.notes ?? '',
+                        };
+
+                        // Surface a gateway failure without closing the modal.
+                        const showOpFailure = (res: ShiftOpResult) => {
+                            const ux = mapShiftOpResultToUx(res);
+                            toast({
+                                title: ux.toast ?? 'Update Failed',
+                                description: res.code === 'VERSION_CONFLICT'
+                                    ? 'Another user modified this shift. Please close and reopen to see the latest version.'
+                                    : ux.toast ?? 'Could not update the shift.',
+                                variant: 'destructive',
+                            });
+                            // Don't close modal — let user retry or close manually
+                        };
+
+                        // 1) Field edit. The gateway's `edit` op owns schedule/grouping
+                        // fields but DELIBERATELY excludes assignment (see _apply_shift_op_write),
+                        // so the assignee is applied separately in step 2.
+                        const editResult = await applyShiftOp({
+                            shiftId: existingShift.id,
+                            expectedVersion: existingShift.version ?? 0,
+                            op: 'edit',
+                            payload: gatewayPayload,
+                        });
+
+                        if (!editResult.ok) {
+                            showOpFailure(editResult);
+                            return;
+                        }
+
+                        // 2) Assignment delta. Assignment is owned by the `assign` op (which
+                        // also sets assigned_at / assignment_status / outcome), NOT `edit`, so
+                        // a changed assignee must go through it — version-chained off the edit's
+                        // new version (each applied op bumps shifts.version via the CAS trigger).
+                        const prevAssignee =
+                            existingShift.assigned_employee_id ?? existingShift.assignedEmployeeId ?? null;
+                        const nextAssignee = values.assigned_employee_id || null;
+
+                        if (nextAssignee && nextAssignee !== prevAssignee) {
+                            const assignResult = await applyShiftOp({
+                                shiftId: existingShift.id,
+                                expectedVersion: editResult.version ?? (existingShift.version ?? 0) + 1,
+                                op: 'assign',
+                                payload: { employee_id: nextAssignee },
+                            });
+                            if (!assignResult.ok) {
+                                showOpFailure(assignResult);
+                                return;
+                            }
+                        } else if (!nextAssignee && prevAssignee) {
+                            // Removing the assignee → the `unassign` op (inverse of assign).
+                            // Legal only from S2 (Draft assigned) → S1; a published shift would
+                            // be rejected as ILLEGAL_TRANSITION (unpublish it first).
+                            const unassignResult = await applyShiftOp({
+                                shiftId: existingShift.id,
+                                expectedVersion: editResult.version ?? (existingShift.version ?? 0) + 1,
+                                op: 'unassign',
+                            });
+                            if (!unassignResult.ok) {
+                                showOpFailure(unassignResult);
+                                return;
+                            }
+                        }
+
+                        onMutationSuccess();
+                    } catch (err: unknown) {
+                        onMutationError(err);
+                    }
                 } else {
                     createShiftMutation.mutate(
                         payload,
@@ -940,7 +1048,8 @@ export function useShiftFormOrchestrator({
         resolvedContext, selectedRosterId, isTemplateMode, editMode, watchTimezone,
         onShiftCreated, roles, remunerationLevels, employees, netLength,
         onSuccess, form, onClose, createShiftMutation, updateShiftMutation,
-        existingShift, toast, complianceHasRun, isEmergencyAssignment,
+        existingShift, toast, complianceHasRun, isEmergencyAssignment, queryClient,
+        watchEmployeeId,
     ]);
 
     // ── Return ────────────────────────────────────────────────────────────────

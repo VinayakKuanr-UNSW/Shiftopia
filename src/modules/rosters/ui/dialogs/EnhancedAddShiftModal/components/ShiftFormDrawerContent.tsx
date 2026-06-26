@@ -87,7 +87,7 @@ const GROUP_LABEL: Record<string, string> = {
     the_cutaway: 'The Cutaway',
 };
 
-type Accent = 'amber' | 'cyan' | 'emerald' | 'indigo';
+type Accent = 'amber' | 'cyan' | 'emerald' | 'indigo' | 'slate';
 type CardState = 'active' | 'enabled' | 'locked';
 
 /** Per-accent static class strings (kept literal so Tailwind's JIT keeps them). */
@@ -98,7 +98,7 @@ const ACCENT = {
         text: 'text-amber-600 dark:text-amber-400',
         bar: 'from-amber-400 to-amber-600',
         activeBorder:
-            'border-amber-500/60 shadow-[0_10px_45px_-15px_rgba(245,158,11,0.45)]',
+            'border-amber-500/60 shadow-sm',
         badge: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25',
     },
     cyan: {
@@ -107,7 +107,7 @@ const ACCENT = {
         text: 'text-cyan-600 dark:text-cyan-400',
         bar: 'from-cyan-400 to-cyan-600',
         activeBorder:
-            'border-cyan-500/60 shadow-[0_10px_45px_-15px_rgba(6,182,212,0.45)]',
+            'border-cyan-500/60 shadow-sm',
         badge: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/25',
     },
     emerald: {
@@ -116,7 +116,7 @@ const ACCENT = {
         text: 'text-emerald-600 dark:text-emerald-400',
         bar: 'from-emerald-400 to-emerald-600',
         activeBorder:
-            'border-emerald-500/60 shadow-[0_10px_45px_-15px_rgba(16,185,129,0.45)]',
+            'border-emerald-500/60 shadow-sm',
         badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25',
     },
     indigo: {
@@ -125,8 +125,17 @@ const ACCENT = {
         text: 'text-indigo-600 dark:text-indigo-400',
         bar: 'from-indigo-400 to-indigo-600',
         activeBorder:
-            'border-indigo-500/60 shadow-[0_10px_45px_-15px_rgba(99,102,241,0.45)]',
+            'border-indigo-500/60 shadow-sm',
         badge: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/25',
+    },
+    slate: {
+        rgb: '148,163,184',
+        chip: 'bg-slate-500',
+        text: 'text-slate-600 dark:text-slate-400',
+        bar: 'from-slate-400 to-slate-600',
+        activeBorder:
+            'border-slate-500/60 shadow-sm',
+        badge: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/25',
     },
 } as const;
 
@@ -154,7 +163,9 @@ const Card = ({
     return (
         <div
             onClick={state === 'enabled' ? onClick : undefined}
-            style={{ animationDelay: `${index * 70}ms` }}
+            // One step renders at a time now, so the old per-card stagger delay
+            // (index * 70ms) would just blank the panel before later steps fade in.
+            style={{ animationDelay: '0ms' }}
             className={cn(
                 'group/card relative flex min-h-[284px] flex-col overflow-hidden rounded-[20px] border bg-card dark:bg-[#111419]',
                 'animate-in fade-in slide-in-from-bottom-3 duration-500 fill-mode-both',
@@ -389,6 +400,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
     const watchStart        = form.watch('start_time');
     const watchEnd          = form.watch('end_time');
     const watchV8RoleId     = form.watch('role_id');
+    const watchEmployeeId   = form.watch('assigned_employee_id');
 
     const isStep1Valid = !!watchGroup && !!watchSubGroupName && !!watchV8RoleId;
     const isStep2Valid = true; // Details/notes/events/training are optional
@@ -484,7 +496,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
         { n: 2, label: 'Requirements', accent: 'amber' as Accent },
         { n: 3, label: 'Timings', accent: 'cyan' as Accent },
         { n: 4, label: 'Assignment', accent: 'emerald' as Accent },
-        { n: 5, label: 'Compliance', accent: 'indigo' as Accent },
+        { n: 5, label: 'Compliance', accent: watchEmployeeId ? ('indigo' as Accent) : ('slate' as Accent) },
     ];
 
     const nextDisabled =
@@ -545,11 +557,75 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                 </div>
             )}
 
-            {/* ── CARD GRID (2 cols × 3 rows) — single scroll surface ───────── */}
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
+            {/* ── WIZARD BODY: left vertical stepper + one active step ───────── */}
+            <div className="flex min-h-0 flex-1 overflow-hidden">
+
+                {/* Left vertical stepper rail (desktop) */}
+                <nav
+                    aria-label="Shift form steps"
+                    className="hidden w-[190px] shrink-0 flex-col border-r border-border/40 bg-muted/15 px-4 py-5 dark:bg-[#0c0e14]/40 sm:flex"
+                >
+                    {STEP_META.map(({ n, label, accent }, i) => {
+                        const reached = n <= maxUnlockedStep;
+                        const isCurrent = wizardStep === n;
+                        const done = n < wizardStep && reached;
+                        return (
+                            <button
+                                key={n}
+                                type="button"
+                                disabled={!reached}
+                                onClick={() => goToStep(n)}
+                                aria-current={isCurrent ? 'step' : undefined}
+                                className={cn('group flex gap-3 text-left outline-none', !reached && 'cursor-not-allowed')}
+                            >
+                                <div className="flex flex-col items-center">
+                                    <span
+                                        className={cn(
+                                            'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-black transition-all duration-300',
+                                            isCurrent
+                                                ? cn(ACCENT[accent].chip, 'text-white shadow-md')
+                                                : done
+                                                ? 'bg-emerald-500/15 text-emerald-500'
+                                                : reached
+                                                ? 'bg-muted text-muted-foreground group-hover:bg-muted/70'
+                                                : 'bg-muted/40 text-muted-foreground/40',
+                                        )}
+                                    >
+                                        {done ? <Check className="h-4 w-4" strokeWidth={3} /> : n}
+                                    </span>
+                                    {i < STEP_META.length - 1 && (
+                                        <span
+                                            className={cn(
+                                                'my-1 min-h-[22px] w-px flex-1 transition-colors',
+                                                n < wizardStep ? 'bg-emerald-500/40' : 'bg-border/60',
+                                            )}
+                                        />
+                                    )}
+                                </div>
+                                <span
+                                    className={cn(
+                                        'mt-1.5 text-[10px] font-bold uppercase leading-tight tracking-[0.12em] transition-colors',
+                                        isCurrent
+                                            ? 'text-foreground'
+                                            : done
+                                            ? 'text-emerald-500/80'
+                                            : reached
+                                            ? 'text-muted-foreground group-hover:text-foreground/80'
+                                            : 'text-muted-foreground/40',
+                                    )}
+                                >
+                                    {label}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </nav>
+
+                {/* Right: the single active step */}
+                <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
 
                     {/* ─────────── CARD 1 · Role & Context ─────────── */}
+                    {wizardStep === 1 && (
                     <Card
                         accent="amber"
                         state={cardState(1)}
@@ -710,8 +786,10 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                             </div>
                         </div>
                     </Card>
+                    )}
 
                     {/* ─────────── CARD 2 · Requirements & Notes ─────────── */}
+                    {wizardStep === 2 && (
                     <Card
                         accent="amber"
                         state={cardState(2)}
@@ -835,8 +913,10 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                             />
                         </div>
                     </Card>
+                    )}
 
                     {/* ─────────── CARD 3 · Timings ─────────── */}
+                    {wizardStep === 3 && (
                     <Card
                         accent="cyan"
                         state={cardState(3)}
@@ -1010,8 +1090,10 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                             )}
                         </div>
                     </Card>
+                    )}
 
                     {/* ─────────── CARD 4 · Assignment ─────────── */}
+                    {wizardStep === 4 && (
                     <Card
                         accent="emerald"
                         state={cardState(4)}
@@ -1217,10 +1299,12 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                             }}
                         />
                     </Card>
+                    )}
 
                     {/* ─────────── CARD 5 · Compliance (full width) ─────────── */}
+                    {wizardStep === 5 && (
                     <Card
-                        accent="indigo"
+                        accent={watchEmployeeId ? "indigo" : "slate"}
                         state={cardState(5)}
                         index={4}
                         onClick={() => goToStep(5)}
@@ -1230,11 +1314,13 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                             icon={Shield}
                             step={5}
                             title="Compliance"
-                            subtitle="Final guardrail checks before saving"
-                            accent="indigo"
+                            subtitle={watchEmployeeId ? "Final guardrail checks before saving" : "Not required for unassigned shifts"}
+                            accent={watchEmployeeId ? "indigo" : "slate"}
                             state={cardState(5)}
                             badge={
-                                blockers > 0 ? (
+                                !watchEmployeeId ? (
+                                    <StatusBadge tone="accent" accent="slate">Not Required</StatusBadge>
+                                ) : blockers > 0 ? (
                                     <StatusBadge tone="danger">
                                         {blockers} blocker{blockers > 1 ? 's' : ''}
                                     </StatusBadge>
@@ -1254,7 +1340,19 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                                     </div>
                                 )}
 
-                                {isTemplateMode && !form.watch('assigned_employee_id') ? (
+                                {!watchEmployeeId ? (
+                                    <div className="py-10 text-center opacity-60">
+                                        <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full border border-slate-500/20 bg-slate-500/10 text-slate-500">
+                                            <Shield className="h-4 w-4" />
+                                        </div>
+                                        <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                                            Compliance Not Required
+                                        </p>
+                                        <p className="mx-auto max-w-[240px] text-[9px] text-muted-foreground/80">
+                                            Compliance is not required for unassigned shifts. Evaluated when assigned.
+                                        </p>
+                                    </div>
+                                ) : isTemplateMode ? (
                                     <div className="py-6 text-center">
                                         <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-500">
                                             <CheckCircle2 className="h-4 w-4" />
@@ -1276,6 +1374,7 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                             </div>
                         </ScrollArea>
                     </Card>
+                    )}
                 </div>
             </div>
 
@@ -1292,8 +1391,8 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
                     Back
                 </Button>
 
-                {/* Segmented progress rail */}
-                <div className="flex items-center gap-1.5">
+                {/* Segmented progress rail — mobile only (desktop uses the left vertical stepper) */}
+                <div className="flex items-center gap-1.5 sm:hidden">
                     {STEP_META.map(({ n, accent }, i) => {
                         const reached = n <= maxUnlockedStep;
                         const isCurrent = wizardStep === n;

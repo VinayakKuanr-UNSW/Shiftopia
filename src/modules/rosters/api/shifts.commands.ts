@@ -846,7 +846,7 @@ export const shiftsCommands = {
     async rejectOffer(shiftId: string, reason: string) {
         // TTS-aware routing:
         //   TTS > 4h → sm_reject_offer → bidding (S5) — peers can still bid
-        //   TTS ≤ 4h → sm_expire_offer_now → draft+unassigned (S1) — bidding window closed,
+        //   TTS ≤ 4h → sm_expire_offer_now → draft+assigned (S2) — bidding window closed,
         //              manager must use emergency assignment
         const { data: shift } = await (supabase as any)
             .from('shifts')

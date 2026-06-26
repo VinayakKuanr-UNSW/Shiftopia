@@ -25,9 +25,37 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { shiftsQueries, type ShiftDeltaRow } from '../api/shifts.queries';
 import { shiftsCommands } from '../api/shifts.commands';
+import { applyShiftOp } from '../api/shifts.api';
+import { mapShiftOpResultToUx, type ShiftOp, type ShiftOpResult } from '../domain/shift-ops.contract';
 import { complianceService } from '../services/compliance.service';
 import type { Shift } from '../domain/shift.entity';
 import { shiftKeys, rosterKeys, type ShiftFilters } from '../api/queryKeys';
+
+/**
+ * Error thrown by gateway-backed mutations when the op did not apply (conflict,
+ * gone, rejected, …). The `.message` is the human-readable UX copy; `.shiftOpResult`
+ * carries the raw gateway envelope for richer handling (diff, refresh).
+ */
+export interface ShiftOpError extends Error {
+  shiftOpResult: ShiftOpResult;
+}
+
+/** Run a gateway op and throw a `ShiftOpError` (with UX copy) when it didn't apply. */
+async function runGatewayOp(args: {
+  shiftId: string;
+  expectedVersion: number;
+  op: ShiftOp;
+  payload?: Record<string, unknown>;
+}): Promise<ShiftOpResult> {
+  const res = await applyShiftOp(args);
+  if (!res.ok) {
+    const ux = mapShiftOpResultToUx(res);
+    throw Object.assign(new Error(ux.toast ?? 'Action could not be applied.'), {
+      shiftOpResult: res,
+    }) as ShiftOpError;
+  }
+  return res;
+}
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { isAppError } from '@/platform/supabase/rpc/errors';
 import { supabase } from '@/platform/supabase/client';
@@ -96,6 +124,20 @@ function findShiftDateInLists(
     if (!data || !Array.isArray(data)) continue;
     const found = data.find(s => s.id === shiftId);
     if (found?.shift_date) return found.shift_date;
+  }
+  return undefined;
+}
+
+/** Find a shift (the version the client is currently showing) in the lists cache. */
+function findShiftInLists(
+  queryClient: ReturnType<typeof useQueryClient>,
+  shiftId: string,
+): Shift | undefined {
+  const lists = queryClient.getQueriesData<Shift[]>({ queryKey: shiftKeys.lists });
+  for (const [, data] of lists) {
+    if (!data || !Array.isArray(data)) continue;
+    const found = data.find(s => s.id === shiftId);
+    if (found) return found;
   }
   return undefined;
 }
@@ -470,13 +512,15 @@ export function useDeleteShift() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (shiftId: string) => {
-      const success = await shiftsCommands.deleteShift(shiftId);
-      if (!success) throw new Error('Failed to delete shift on the server.');
-      return success;
-    },
+    // Routed through the optimistic-concurrency gateway: a SOFT delete (deleted_at)
+    // guarded by the shift `version` the UI was showing. Two managers can no longer
+    // both delete/clobber the same shift — the stale one gets a VERSION_CONFLICT.
+    // Safe for UX because every roster read filters `deleted_at IS NULL` and
+    // delta-sync evicts tombstoned rows. (Hard archival remains via sm_delete_shift.)
+    mutationFn: ({ shiftId, expectedVersion }: { shiftId: string; expectedVersion: number }) =>
+      runGatewayOp({ shiftId, expectedVersion, op: 'delete' }),
 
-    onMutate: async (shiftId) => {
+    onMutate: async ({ shiftId }) => {
       await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
       const snapshot = snapshotLists(queryClient);
 
@@ -491,8 +535,15 @@ export function useDeleteShift() {
       return { snapshot };
     },
 
-    onError: (_err, _id, context) => {
+    onError: (err, _vars, context) => {
       if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
+      // A conflict / gone means our cache was stale — pull the truth back so the
+      // restored card reflects the other manager's change.
+      const code = (err as Partial<ShiftOpError>)?.shiftOpResult?.code;
+      if (code === 'VERSION_CONFLICT' || code === 'GONE') {
+        queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+        queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+      }
     },
 
     onSettled: () => {
@@ -500,6 +551,32 @@ export function useDeleteShift() {
       // removed the shift from cache. A refetch would just confirm it's gone.
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: rosterKeys.all, refetchType: 'none' });
+    },
+  });
+}
+
+/**
+ * Generic optimistic-concurrency mutation through the shift gateway
+ * (`sm_apply_shift_op`). Callers pass the shift's CURRENT `version`; a non-applied
+ * result is thrown as a {@link ShiftOpError} whose `.message` is ready-to-toast UX
+ * copy. Use for op call sites that don't need bespoke optimistic cache patching
+ * (the foundation for wiring edit / approve_trade / reject_trade once their
+ * gateway-semantics prerequisites are met).
+ */
+export function useApplyShiftOp() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (args: {
+      shiftId: string;
+      expectedVersion: number;
+      op: ShiftOp;
+      payload?: Record<string, unknown>;
+    }) => runGatewayOp(args),
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      queryClient.invalidateQueries({ queryKey: rosterKeys.all });
     },
   });
 }
@@ -613,8 +690,22 @@ export function useUnpublishShift() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shiftId, reason }: { shiftId: string; reason?: string }) =>
-      shiftsCommands.unpublishShift(shiftId, reason),
+    // Route through the optimistic-concurrency gateway when we know the version
+    // the client is currently showing (detail cache → lists cache). That cached
+    // version IS the correct "expected version": if another manager changed this
+    // shift since our last sync, the gateway returns VERSION_CONFLICT (e.g. they
+    // selected a bid winner while we tried to unpublish). When the version isn't
+    // cached, fall back to the legacy direct RPC (no CAS). The gateway `unpublish`
+    // branch is a faithful mirror of sm_unpublish_shift.
+    mutationFn: ({ shiftId, reason }: { shiftId: string; reason?: string }) => {
+      const cachedVersion =
+        queryClient.getQueryData<Shift>(shiftKeys.detail(shiftId))?.version ??
+        findShiftInLists(queryClient, shiftId)?.version;
+      if (typeof cachedVersion === 'number') {
+        return runGatewayOp({ shiftId, expectedVersion: cachedVersion, op: 'unpublish', payload: { reason } });
+      }
+      return shiftsCommands.unpublishShift(shiftId, reason);
+    },
 
     onMutate: async ({ shiftId }) => {
       await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
@@ -646,8 +737,14 @@ export function useUnpublishShift() {
       return { snapshot };
     },
 
-    onError: (_err, _vars, context) => {
+    onError: (err, _vars, context) => {
       if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
+      // A conflict / gone means our cached version was stale — pull the truth back.
+      const code = (err as Partial<ShiftOpError>)?.shiftOpResult?.code;
+      if (code === 'VERSION_CONFLICT' || code === 'GONE') {
+        queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+        queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+      }
     },
 
     onSettled: (_data, _err, { shiftId }) => {

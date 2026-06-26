@@ -73,7 +73,7 @@ export const RoleStep: React.FC<RoleStepProps> = ({
                                     <FormControl>
                                         <SelectTrigger className={cn(
                                             "bg-muted/50 border-border text-foreground h-11 transition-all",
-                                            !field.value && "border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.1)]"
+                                            !field.value && "border-amber-500/50 shadow-sm"
                                         )}>
                                             <SelectValue placeholder={isLoadingData ? 'Loading...' : 'Select role'} />
                                         </SelectTrigger>

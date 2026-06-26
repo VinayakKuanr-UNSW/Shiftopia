@@ -10,6 +10,7 @@ import {
   isSameDay,
 } from 'date-fns';
 import { getTodayInTimezone, isTodayInTimezone } from '@/modules/core/lib/date.utils';
+import { isPublicHoliday, getPublicHolidayName } from '@/modules/core/lib/holidays';
 import {
   ChevronLeft,
   ChevronRight,
@@ -98,8 +99,8 @@ const MonthView: React.FC<MonthViewProps> = ({
   }, [date]);
 
   const allDays = eachDayOfInterval({
-    start: startOfWeek(startOfMonth(date)),
-    end:   endOfWeek(endOfMonth(date)),
+    start: startOfWeek(startOfMonth(date), { weekStartsOn: 1 }),
+    end:   endOfWeek(endOfMonth(date), { weekStartsOn: 1 }),
   });
 
   const weeks: Date[][] = [];
@@ -287,7 +288,7 @@ const MonthView: React.FC<MonthViewProps> = ({
 
       {/* Day-of-week header */}
       <div className="flex-shrink-0 grid grid-cols-7 border-b border-border bg-muted/30">
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
           <div
             key={d}
             className="py-2.5 text-center text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground/50 border-r border-border last:border-r-0"
@@ -304,12 +305,14 @@ const MonthView: React.FC<MonthViewProps> = ({
             week.map((day, di) => {
               const isCurrentMonth = isSameMonth(day, date);
               const isToday        = isTodayInTimezone(day, SYDNEY_TZ);
+              const holiday        = isPublicHoliday(day);
               const dayShifts      = getShiftsForDate(day, { includeContinuations: false });
 
               return (
                 <div
                   key={`${wi}-${di}`}
                   onClick={() => setSelectedDay(day)}
+                  title={holiday ? getPublicHolidayName(day) ?? undefined : undefined}
                   className={cn(
                     'p-2 border-r border-b border-border last:border-r-0 cursor-default',
                     isToday && 'bg-primary/5',
@@ -323,6 +326,8 @@ const MonthView: React.FC<MonthViewProps> = ({
                         'text-xs font-black h-6 w-6 flex items-center justify-center rounded-lg transition-all',
                         isToday
                           ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/30'
+                          : holiday
+                          ? 'text-amber-500 dark:text-amber-400'
                           : 'text-foreground/70'
                       )}
                     >

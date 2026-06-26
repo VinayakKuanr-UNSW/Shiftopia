@@ -52,7 +52,7 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { useSwaps } from '../../state/useSwaps';
 import { ShiftSwap, swapsApi } from '../../api/swaps.api';
-import { format, differenceInMinutes, parse } from 'date-fns';
+import { format, differenceInMinutes, parse, startOfWeek, endOfWeek } from 'date-fns';
 import { SYDNEY_TZ, parseZonedDateTime, formatInTimezone } from '@/modules/core/lib/date.utils';
 import { ViewOffersModal } from '../components/ViewOffersModal';
 import { UnifiedSwapModal } from '../components/UnifiedSwapModal';
@@ -359,35 +359,10 @@ export const EmployeeSwapsPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState<TabType>('available-swaps');
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [priorityFilter, setPriorityFilter] = useState<ShiftUrgency | 'all'>('all');
-    const [startDate, setStartDate] = useState<Date>(() => {
-        const saved = localStorage.getItem('swaps_filter_start_date');
-        if (saved) {
-            const parsed = new Date(saved);
-            if (!isNaN(parsed.getTime())) return parsed;
-        }
-        const d = new Date();
-        d.setDate(d.getDate() - 7);
-        return d;
-    });
-    const [endDate, setEndDate]     = useState<Date>(() => {
-        const saved = localStorage.getItem('swaps_filter_end_date');
-        if (saved) {
-            const parsed = new Date(saved);
-            if (!isNaN(parsed.getTime())) return parsed;
-        }
-        const d = new Date();
-        d.setDate(d.getDate() + 30);
-        return d;
-    });
+    // Default to the current week (Mon–Sun) preset on every load.
+    const [startDate, setStartDate] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+    const [endDate, setEndDate]     = useState<Date>(() => endOfWeek(new Date(), { weekStartsOn: 1 }));
     const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
-
-    React.useEffect(() => {
-        localStorage.setItem('swaps_filter_start_date', startDate.toISOString());
-    }, [startDate]);
-
-    React.useEffect(() => {
-        localStorage.setItem('swaps_filter_end_date', endDate.toISOString());
-    }, [endDate]);
 
     // Modal State
     const [offerSwapTarget, setOfferSwapTarget] = useState<ShiftSwap | null>(null);

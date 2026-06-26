@@ -3,6 +3,8 @@ import { SwapRequestWithDetails } from '../model/swap.types';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 
 import { shiftsApi } from '@/modules/rosters';
+import { applyShiftOp } from '@/modules/rosters/api/shifts.api';
+import { mapShiftOpResultToUx } from '@/modules/rosters/domain/shift-ops.contract';
 import { ShiftTimeRange, swapEvaluator, runSwapGuards, SwapGuardError } from '@/modules/compliance';
 import { addDays, subDays, format, parseISO, differenceInHours, parse } from 'date-fns';
 
@@ -715,59 +717,53 @@ export const swapsApi = {
             throw new Error(`Compliance violation detected. Cannot approve swap. ${blockers}`);
         }
 
-        // 5. Execute Trade via SM (Atomic 2-way swap) — §4 T5
-        const { error: smError } = await db.rpc('sm_approve_peer_swap', {
-            p_requester_shift_id: swap.original_shift_id,
-            p_offered_shift_id: offeredV8ShiftId || null,
-            p_requester_id: swap.requested_by_employee_id,
-            p_offerer_id: effectiveTargetId
+        // 5+6. Execute via the shift-mutation gateway (optimistic concurrency) — §4 T5.
+        // Compliance was just verified above, so we assert compliance_ok. The gateway
+        // resolves the MANAGER_PENDING shift_swaps row, delegates the 2-way (or
+        // giveaway) reassignment to sm_approve_peer_swap using the row's own ids,
+        // marks the swap APPROVED, and version-guards the requester shift — closing
+        // the concurrent double-approve hole the old direct update had (it lacked a
+        // status guard). S10 ↔ MANAGER_PENDING is kept in sync by sm_accept_trade.
+        const approveResult = await applyShiftOp({
+            shiftId: swap.original_shift_id,
+            expectedVersion: swap.originalShift?.version ?? 0,
+            op: 'approve_trade',
+            payload: { compliance_ok: true },
         });
 
-        if (smError) {
-            console.error("SM Approve Peer Swap Error:", smError);
-            throw smError;
-        }
-
-        // 6. Mark Swap as APPROVED in DB (after SM succeeds)
-        const { error: updateError } = await db
-            .from('shift_swaps')
-            .update({ status: 'APPROVED', updated_at: new Date().toISOString() })
-            .eq('id', requestId);
-
-        if (updateError) {
-            console.error("Failed to mark swap as APPROVED:", updateError);
-            throw updateError;
+        if (!approveResult.ok) {
+            console.error('[API] approve_trade gateway rejected:', approveResult);
+            throw new Error(mapShiftOpResultToUx(approveResult).toast ?? 'Could not approve swap.');
         }
     },
 
     async rejectSwapRequest(requestId: string, reason?: string): Promise<void> {
-        // §4 T6: Only allowed from MANAGER_PENDING
+        // §4 T6: Only allowed from MANAGER_PENDING. Also fetch the requester shift's
+        // version for the gateway's optimistic CAS.
         const { data, error: fetchErr } = await db
-            .from('shift_swaps').select('status, requester_shift_id, target_shift_id').eq('id', requestId).single();
+            .from('shift_swaps')
+            .select('status, requester_shift_id, requester_shift:shifts!requester_shift_id(version)')
+            .eq('id', requestId).single();
         if (fetchErr || !data) throw fetchErr || new Error('Swap not found');
         if (data.status !== 'MANAGER_PENDING') {
             throw new Error(`Cannot reject swap in state '${data.status}'. Must be MANAGER_PENDING.`);
         }
 
-        const { error } = await db
-            .from('shift_swaps')
-            .update({ status: 'REJECTED', reason: reason })
-            .eq('id', requestId)
-            .eq('status', 'MANAGER_PENDING');
-
-        if (error) throw error;
-
-        // Revert both locked shifts to NoTrade — requester's and offerer's
-        const shiftUnlockIds = [data.requester_shift_id, data.target_shift_id].filter(Boolean) as string[];
-        if (shiftUnlockIds.length > 0) {
-            const { error: shiftUpdateError } = await db
-                .from('shifts')
-                .update({ trading_status: 'NoTrade', trade_requested_at: null })
-                .in('id', shiftUnlockIds);
-
-            if (shiftUpdateError) {
-                console.error('[API] Failed to revert shift trading status on rejection:', shiftUpdateError);
-            }
+        // Execute via the shift-mutation gateway: it flips the shift_swaps row to
+        // REJECTED and reverts BOTH shifts to NoTrade, with version-CAS + an
+        // actor-stamped audit event. (S10 ↔ MANAGER_PENDING is kept in sync by
+        // sm_accept_trade, so the gateway's S10 FSM guard is satisfied.)
+        const requesterShift = Array.isArray(data.requester_shift)
+            ? data.requester_shift[0]
+            : data.requester_shift;
+        const result = await applyShiftOp({
+            shiftId: data.requester_shift_id,
+            expectedVersion: requesterShift?.version ?? 0,
+            op: 'reject_trade',
+            payload: { reason: reason ?? 'Manager Action' },
+        });
+        if (!result.ok) {
+            throw new Error(mapShiftOpResultToUx(result).toast ?? 'Could not reject swap.');
         }
     },
 

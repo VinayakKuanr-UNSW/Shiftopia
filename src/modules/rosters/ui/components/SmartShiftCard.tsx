@@ -41,6 +41,10 @@ import {
     getShiftStatusIcons
 } from '../../domain/shift-ui';
 import { ShiftRuleHeader } from './ShiftRuleHeader';
+import { EditingPresenceBadge } from './EditingPresenceBadge';
+import { useShiftPresence } from '../presence/ShiftEditingPresenceProvider';
+import type { ShiftEditor } from '../hooks/useShiftEditingPresence';
+import { getShiftStateDisplay } from '../../domain/shift-fsm';
 import type { ShiftCostBreakdown } from '../../domain/projections/utils/cost/types';
 import { ZERO_COST_BREAKDOWN } from '../../domain/projections/utils/cost/constants';
 import { estimateDetailedCostFromShift } from '../../domain/projections/utils/cost';
@@ -50,7 +54,7 @@ import { estimateDetailedCostFromShift } from '../../domain/projections/utils/co
 // TYPES & HELPERS
 // ============================================================================
 
-export type ShiftCardVariant = 'compact' | 'detailed';
+export type ShiftCardVariant = 'compact' | 'detailed' | 'comfortable';
 export interface ComplianceInfo {
     status: 'compliant' | 'warning' | 'violation';
     violations: string[];
@@ -70,6 +74,10 @@ export interface SmartShiftCardProps {
     isDragOver?: boolean;
     headerAction?: React.ReactNode;
     groupColor?: string;
+    /** Human-readable group name for the breadcrumb (e.g. "Convention Centre"). */
+    groupName?: string;
+    /** Selection control (e.g. a checkbox) rendered at the card's top-left for consistent in-card selection. */
+    selectionSlot?: React.ReactNode;
     isLocked?: boolean;
     isPast?: boolean;
     isDnDActive?: boolean;
@@ -82,6 +90,12 @@ export interface SmartShiftCardProps {
      * projector already computed it once for every shift.
      */
     detailedCost?: ShiftCostBreakdown;
+    /**
+     * OTHER managers currently editing this shift (advisory presence). Rendered as
+     * an amber overlay pill. Never gates interaction — the server version CAS is
+     * the real concurrency guard. Injected by SmartShiftCard via useShiftPresence.
+     */
+    editors?: ShiftEditor[];
 }
 
 const GROUP_COLORS: Record<string, { header: string; accent: string; text: string; badge: string }> = {
@@ -96,6 +110,17 @@ const GROUP_COLORS: Record<string, { header: string; accent: string; text: strin
     theatre: { header: 'bg-red-600', accent: 'border-red-500/30', text: 'text-white', badge: 'bg-white/20' },
     the_cutaway: { header: 'bg-amber-500', accent: 'border-amber-500/30', text: 'text-white', badge: 'bg-white/20' },
     default_yellow: { header: 'bg-amber-400', accent: 'border-amber-400/30', text: 'text-amber-950', badge: 'bg-black/10' },
+};
+
+// Group-based colour convention (Convention=blue · Exhibition=emerald · Theatre=rose · The Cutaway=amber).
+// The whole card carries the group colour via a translucent tint overlay + a tinted border.
+const GROUP_TINT: Record<string, string> = {
+    blue: 'bg-blue-500/10', green: 'bg-emerald-500/10', red: 'bg-rose-500/10', orange: 'bg-orange-500/10', purple: 'bg-purple-500/10', amber: 'bg-amber-500/10',
+    convention_centre: 'bg-blue-500/10', exhibition_centre: 'bg-emerald-500/10', theatre: 'bg-rose-500/10', the_cutaway: 'bg-amber-500/10', default_yellow: 'bg-amber-500/10',
+};
+const GROUP_BORDER: Record<string, string> = {
+    blue: 'border-blue-400/30', green: 'border-emerald-400/30', red: 'border-rose-400/30', orange: 'border-orange-400/30', purple: 'border-purple-400/30', amber: 'border-amber-400/30',
+    convention_centre: 'border-blue-400/30', exhibition_centre: 'border-emerald-400/30', theatre: 'border-rose-400/30', the_cutaway: 'border-amber-400/30', default_yellow: 'border-amber-400/30',
 };
 
 function formatTime(time: string | null): string {
@@ -182,13 +207,15 @@ interface CardShellProps {
     className?: string;
     onClick?: (e: React.MouseEvent) => void;
     children: React.ReactNode;
+    style?: React.CSSProperties;
 }
 
-const CardShell: React.FC<CardShellProps> = ({ className, onClick, children }) => {
+const CardShell: React.FC<CardShellProps> = ({ className, onClick, children, style }) => {
     return (
         <div
             className={className}
             onClick={onClick}
+            style={style}
         >
             {children}
         </div>
@@ -213,6 +240,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     className,
     showStatusIcons,
     detailedCost,
+    editors,
 }) => {
     const colors = useMemo(
         () => GROUP_COLORS[groupColor] || GROUP_COLORS.default_yellow,
@@ -241,7 +269,10 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
         return 'standard';
     }, [ctx.urgency, isBiddingActive]);
 
-    const stateId = ctx.state;
+    const stateDisplay = useMemo(
+        () => getShiftStateDisplay(ctx.state, { emergent: ctx.urgency === 'emergent' }),
+        [ctx.state, ctx.urgency],
+    );
     const fsmLock = getLockState(ctx.state);
     // FSM-based lock overrides — differentiation between interactive protection vs absolute lock
     const isFullyLocked = isLocked || fsmLock.fullyLocked || isPast;
@@ -294,6 +325,15 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
             )}
             onClick={isFullyLocked || isPast ? undefined : onClick}
         >
+            {/* Advisory editing-presence overlay (other managers on this shift).
+                Absolutely positioned against the `relative` CardShell root so it
+                never disturbs the grid layout; pointer-events-none so it never
+                intercepts card clicks. Gates nothing — server CAS is the guard. */}
+            {editors && editors.length > 0 && (
+                <div className="absolute top-1 right-1 z-30 pointer-events-none">
+                    <EditingPresenceBadge editors={editors} />
+                </div>
+            )}
             {/* Content container — body greyscales on past, header (dot) stays crisp */}
             <div className="flex-1 flex flex-col min-h-0">
                 {/* Header */}
@@ -301,9 +341,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                     headerBgAndText)}>
                     <div className="flex items-center gap-1.5 min-w-0">
                         <span className={cn("text-[9px] font-mono font-bold px-1 py-0.5 rounded", isFullyLocked ? "bg-black/20 dark:bg-black/50 opacity-70" : colors.badge)}>
-                            {ctx.state === 'S3' && ctx.urgency === 'emergent' ? 'S3*'
-                            : ctx.state === 'S5' && ctx.urgency === 'emergent' ? 'S5*'
-                            : stateId}
+                            {stateDisplay.id}
                         </span>
                         <span className="text-[10px] font-bold uppercase tracking-widest truncate opacity-80">
                             {shift.roster_subgroup?.name || shift.sub_group_name || roleName}
@@ -349,7 +387,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
 
                 {/* Body */}
                 <div className={cn("px-3 py-1.5 flex flex-col gap-1 flex-1 relative z-[20]")}>
-                    <ShiftRuleHeader shift={shift} variant="compact" className="mb-0.5" />
+                    <ShiftRuleHeader shift={shift} variant="compact" className="mb-0.5" state={stateDisplay} assigned={!!employeeName} />
                     <div className="flex flex-col items-center justify-center min-h-[24px] gap-0.5">
                         <div className="text-[11px] font-bold text-foreground truncate text-center leading-none">{employeeName || 'Unassigned'}</div>
                         <div className="text-[9px] text-foreground/60 font-medium uppercase tracking-tight truncate">{roleName}</div>
@@ -481,10 +519,10 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
         return estimateDetailedCostFromShift(shift);
     }, [detailedCost, shift]);
 
-    const stateLabel =
-        ctx.state === 'S3' && ctx.urgency === 'emergent' ? 'S3*'
-        : ctx.state === 'S5' && ctx.urgency === 'emergent' ? 'S5*'
-        : ctx.state;
+    const stateDisplay = useMemo(
+        () => getShiftStateDisplay(ctx.state, { emergent: ctx.urgency === 'emergent' }),
+        [ctx.state, ctx.urgency],
+    );
 
     const headerBgAndText = useMemo(() => {
         if (isPast) {
@@ -525,7 +563,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         <GripVertical className={cn("h-4 w-4 shrink-0 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-40 transition-opacity", isFullyLocked ? "cursor-not-allowed" : "cursor-grab")} />
                         <span className={cn("text-[9px] font-mono font-bold px-1 py-0.5 rounded",
                             isFullyLocked ? "bg-black/20 dark:bg-black/50 opacity-70" : colors.badge)}>
-                            {stateLabel}
+                            {stateDisplay.id}
                         </span>
                         <span className="text-[11px] font-bold uppercase tracking-widest truncate opacity-80">
                             {shift.roster_subgroup?.name || shift.sub_group_name || 'Shift'}
@@ -561,7 +599,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
 
                 {/* Body */}
                 <div className={cn("p-4 space-y-3 relative z-[20]")}>
-                    <ShiftRuleHeader shift={shift} variant="detailed" />
+                    <ShiftRuleHeader shift={shift} variant="detailed" state={stateDisplay} assigned={!!employeeName} />
                     <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9 border border-border">
                             <AvatarFallback className={cn('text-xs font-bold', employeeName ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground')}>
@@ -652,10 +690,167 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
     );
 };
 
-const SmartShiftCardImpl: React.FC<SmartShiftCardProps> = (props) => {
-    const { variant = 'compact' } = props;
+// ============================================================================
+// COMFORTABLE VARIANT — job-listing aesthetic
+// ============================================================================
 
-    return variant === 'detailed' ? <DetailedCard {...props} /> : <CompactCard {...props} />;
+const ComfortableCard: React.FC<SmartShiftCardProps> = ({
+    shift,
+    onClick,
+    isSelected,
+    isLocked,
+    isPast,
+    headerAction,
+    groupColor = 'default_yellow',
+    selectionSlot,
+    className,
+}) => {
+    const tint = GROUP_TINT[groupColor] || GROUP_TINT.default_yellow;
+    const groupBorder = GROUP_BORDER[groupColor] || GROUP_BORDER.default_yellow;
+
+    const employeeName = shift.assigned_employee_id ? (shift as any).assigned_profiles ? `${(shift as any).assigned_profiles.first_name} ${(shift as any).assigned_profiles.last_name}` : 'Assigned' : null;
+    const roleName = shift.roles?.name || 'No Role';
+
+    const statusStr = getNormalizedStatus(shift);
+    const ctx = useMemo(() => getShiftUIContext({
+        lifecycle_status:   shift.lifecycle_status  ?? 'Draft',
+        assignment_status:  shift.assignment_status ?? 'unassigned',
+        assignment_outcome: shift.assignment_outcome ?? null,
+        trading_status:     shift.trading_status    ?? null,
+        is_cancelled:       shift.is_cancelled      ?? false,
+        scheduled_start:    shift.scheduled_start   ?? null,
+        scheduled_end:      shift.scheduled_end     ?? null,
+        start_at:           shift.start_at          ?? null,
+        end_at:             shift.end_at            ?? null,
+        actual_start:       shift.actual_start      ?? null,
+    }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, shift.scheduled_end, shift.start_at, shift.end_at, shift.actual_start]);
+
+    const fsmLock = getLockState(ctx.state);
+    const isFullyLocked = isLocked || fsmLock.fullyLocked;
+
+    // Centralized protection logic
+    const protection = useMemo(() => getProtectionContext({ lifecycle_status: shift.lifecycle_status }, !!isPast), [shift.lifecycle_status, isPast]);
+    const isProtected = protection.isProtected || fsmLock.partialLock;
+    const isDraft = statusStr === 'draft';
+
+    const stateDisplay = useMemo(
+        () => getShiftStateDisplay(ctx.state, { emergent: ctx.urgency === 'emergent' }),
+        [ctx.state, ctx.urgency],
+    );
+
+    const costBreakdown = useMemo(() => estimateDetailedCostFromShift(shift), [shift]);
+
+    const timeRange = `${formatTime(shift.start_time)}–${formatTime(shift.end_time)}`;
+    const durationLabel = shift.net_length_minutes ? `${(shift.net_length_minutes / 60).toFixed(1)}H` : null;
+
+    const pillClass = 'inline-flex items-center rounded-full border border-slate-200/80 dark:border-white/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300';
+
+    return (
+        <CardShell
+            className={cn(
+                'relative group/card rounded-2xl overflow-hidden bg-white dark:bg-[#0f1525] border-2 p-4 transition-all duration-300',
+                isSelected ? 'border-primary' : groupBorder,
+                'shadow-[0_10px_40px_-12px_rgba(0,0,0,0.5)]',
+                onClick && !isFullyLocked && !isPast && 'cursor-pointer',
+                isSelected && 'bg-primary/[0.04]',
+                isPast && (isDraft ? 'grayscale opacity-70 cursor-not-allowed' : 'grayscale opacity-80 cursor-not-allowed'),
+                className,
+            )}
+            onClick={isFullyLocked || isPast ? undefined : onClick}
+        >
+            {/* Group-colour tint over the whole card */}
+            <div className={cn('absolute inset-0 pointer-events-none', tint)} aria-hidden="true" />
+
+            <div className="relative z-[20] flex flex-col">
+                {/* A — Selection + action icons (group/sub-group shown in the modal header) */}
+                <div className="flex justify-between items-center gap-2 min-h-[28px]">
+                    {selectionSlot ? (
+                        <div onClick={(e) => e.stopPropagation()} className="shrink-0 flex items-center">
+                            {selectionSlot}
+                        </div>
+                    ) : <span />}
+                    <div onClick={(e) => e.stopPropagation()} className="relative z-30 shrink-0">
+                        {headerAction || (!isFullyLocked && (
+                            <button className="h-8 w-8 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 rounded-lg transition-colors -mr-1">
+                                <MoreHorizontal className="h-4 w-4 text-slate-400" />
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* B — Title (assignee / Unassigned) — full width so it always fits */}
+                <div className={cn(
+                    'mt-1.5 text-xl font-bold tracking-tight leading-tight truncate',
+                    employeeName ? 'text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500',
+                )}>
+                    {employeeName || 'Unassigned'}
+                </div>
+
+                {/* D — Subtitle cost line */}
+                {costBreakdown.totalCost > 0 && (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className="text-sm text-slate-400 dark:text-slate-400 mt-0.5 cursor-help w-fit">
+                                {employeeName ? '=' : '≈'} ${costBreakdown.totalCost.toFixed(2)} net
+                            </span>
+                        </TooltipTrigger>
+                        <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-2xl">
+                            <CostBreakdownTooltip breakdown={costBreakdown} />
+                        </TooltipContent>
+                    </Tooltip>
+                )}
+
+                {/* E — Pills row — always a single line (role pill truncates if tight) */}
+                <div className="mt-2.5 flex items-center gap-1.5">
+                    {roleName !== 'No Role' && (
+                        <span className={cn(pillClass, 'min-w-0')}>
+                            <span className="truncate">{roleName}</span>
+                        </span>
+                    )}
+                    <span className={cn(pillClass, 'shrink-0')}>{timeRange}</span>
+                    {durationLabel && <span className={cn(pillClass, 'shrink-0')}>{durationLabel}</span>}
+                    {shift.is_training && <span className={cn(pillClass, 'shrink-0')}>Training</span>}
+                </div>
+
+                {/* F — Footer band */}
+                <ShiftRuleHeader
+                    shift={shift}
+                    band
+                    liveRulesUnassigned="na"
+                    state={stateDisplay}
+                    assigned={!!employeeName}
+                    className="mt-3"
+                />
+            </div>
+        </CardShell>
+    );
+};
+
+const SmartShiftCardImpl: React.FC<SmartShiftCardProps> = (props) => {
+    const { variant = 'compact', shift, onClick } = props;
+
+    // Advisory editing presence (Google-Docs-style). Registers this shift's
+    // (department, date) scope and surfaces OTHER managers editing it. Never gates
+    // writes — the server version CAS in sm_apply_shift_op is the real guarantee.
+    const { editors, setEditing } = useShiftPresence(
+        shift?.department_id,
+        shift?.shift_date,
+        shift?.id,
+    );
+
+    // Broadcast "engaging with this shift" when the manager clicks the card, then
+    // defer to the original handler. Cleared automatically when the card unmounts.
+    const handleClick = useCallback(
+        (e: React.MouseEvent) => {
+            setEditing('editing');
+            onClick?.(e);
+        },
+        [setEditing, onClick],
+    );
+
+    return variant === 'comfortable' ? <ComfortableCard {...props} onClick={handleClick} />
+         : variant === 'detailed'    ? <DetailedCard {...props} onClick={handleClick} />
+         : <CompactCard {...props} onClick={handleClick} editors={editors} />;
 };
 
 export const SmartShiftCard = React.memo(SmartShiftCardImpl);

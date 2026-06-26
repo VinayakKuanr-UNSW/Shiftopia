@@ -24,9 +24,11 @@ import { GroupModeView } from '@/modules/rosters/ui/modes/GroupModeView';
 import { EventsModeView } from '@/modules/rosters/ui/modes/EventsModeView';
 import { RolesModeView } from '@/modules/rosters/ui/modes/RolesModeView';
 import { DrillDownPanel } from '@/modules/rosters/ui/components/DrillDownPanel';
+import { ShiftEditingPresenceProvider } from '@/modules/rosters/ui/presence/ShiftEditingPresenceProvider';
 import type { ShiftContext } from '@/modules/rosters/ui/dialogs/EnhancedAddShiftModal';
 import { BulkActionsToolbar, type BulkActionResult, type BulkPublishValidationResult } from '@/modules/rosters/ui/components/BulkActionsToolbar';
 import { RosterModals, type RosterModalsHandle } from '@/modules/rosters/ui/components/RosterModals';
+import { ShiftWizardModal } from '@/modules/rosters/ui/dialogs/EnhancedAddShiftModal/ShiftWizardModal';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { useShallow } from 'zustand/react/shallow';
 import { DndAssignModal } from '@/modules/rosters/ui/dialogs/DndAssignModal';
@@ -966,7 +968,8 @@ const NewRostersPage: React.FC = () => {
 
   // ==================== RENDER ====================
   return (
-    <div 
+    <ShiftEditingPresenceProvider>
+    <div
       className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4"
     >
       {/* ── Unified Header ────────────────────────────────────────────── */}
@@ -1292,6 +1295,9 @@ const NewRostersPage: React.FC = () => {
         onAutoScheduleComplete={() => {}}
       />
 
+      {/* Add/Edit Shift wizard — centered modal overlay (opened via useShiftFormNav store) */}
+      <ShiftWizardModal />
+
       {/* DnD Assignment Modal */}
       {pendingDndAssign && (
         <DndAssignModal
@@ -1428,6 +1434,7 @@ const NewRostersPage: React.FC = () => {
         </div>
       </div>
     </div>
+    </ShiftEditingPresenceProvider>
   );
 };
 

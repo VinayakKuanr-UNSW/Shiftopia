@@ -1701,10 +1701,16 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
 
     setIsDeleting(true);
     try {
-      await deleteShiftMutation.mutateAsync(shiftToDelete.id);
+      // Pass the version the UI is showing → the gateway rejects the delete with a
+      // VERSION_CONFLICT if another manager changed this shift in the meantime.
+      await deleteShiftMutation.mutateAsync({
+        shiftId: shiftToDelete.rawShift.id,
+        expectedVersion: shiftToDelete.rawShift.version,
+      });
       toast({ title: 'Shift Deleted', description: 'The shift has been removed.' });
     } catch (error: any) {
       console.error('[confirmDeleteShift] Error:', error);
+      // error.message is concurrency-aware (e.g. "changed by another manager").
       toast({ title: 'Error', description: error.message || 'Failed to delete shift.', variant: 'destructive' });
     } finally {
       setIsDeleting(false);

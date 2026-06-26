@@ -75,34 +75,9 @@ export const EmployeeBidsPage: React.FC = () => {
     const queryClient = useQueryClient();
     const { isDark } = useTheme();
     const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
-    const [startDate, setStartDate] = useState<Date>(() => {
-        const saved = localStorage.getItem('bids_filter_start_date');
-        if (saved) {
-            const parsed = new Date(saved);
-            if (!isNaN(parsed.getTime())) return parsed;
-        }
-        const d = new Date();
-        d.setDate(d.getDate() - 7);
-        return d;
-    });
-    const [endDate, setEndDate]     = useState<Date>(() => {
-        const saved = localStorage.getItem('bids_filter_end_date');
-        if (saved) {
-            const parsed = new Date(saved);
-            if (!isNaN(parsed.getTime())) return parsed;
-        }
-        const d = new Date();
-        d.setDate(d.getDate() + 30);
-        return d;
-    });
-
-    React.useEffect(() => {
-        localStorage.setItem('bids_filter_start_date', startDate.toISOString());
-    }, [startDate]);
-
-    React.useEffect(() => {
-        localStorage.setItem('bids_filter_end_date', endDate.toISOString());
-    }, [endDate]);
+    // Default to the current week (Mon–Sun) preset on every load.
+    const [startDate, setStartDate] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+    const [endDate, setEndDate]     = useState<Date>(() => endOfWeek(new Date(), { weekStartsOn: 1 }));
 
     const [drawerOpp, setDrawerOpp] = useState<ShiftOpportunity | null>(null);
     const [groupBy, setGroupBy] = useState<BidGroupBy>('date');

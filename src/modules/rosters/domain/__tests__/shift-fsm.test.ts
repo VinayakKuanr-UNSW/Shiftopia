@@ -262,17 +262,19 @@ describe('getAvailableActions', () => {
         expect(actions).not.toContain('ASSIGN');
     });
 
-    it('S9 → includes CANCEL_REQUEST, ACCEPT_TRADE, REJECT_TRADE', () => {
+    it('S9 → includes CANCEL_REQUEST, ACCEPT_TRADE, REJECT_TRADE, UNPUBLISH', () => {
         const actions = getAvailableActions('S9');
         expect(actions).toContain('CANCEL_REQUEST');
         expect(actions).toContain('ACCEPT_TRADE');
         expect(actions).toContain('REJECT_TRADE');
+        expect(actions).toContain('UNPUBLISH');
     });
 
-    it('S10 → includes APPROVE_TRADE, REJECT_TRADE', () => {
+    it('S10 → includes APPROVE_TRADE, REJECT_TRADE, UNPUBLISH', () => {
         const actions = getAvailableActions('S10');
         expect(actions).toContain('APPROVE_TRADE');
         expect(actions).toContain('REJECT_TRADE');
+        expect(actions).toContain('UNPUBLISH');
     });
 
     it('S11 → includes CLOCK_OUT, MARK_NO_SHOW', () => {
@@ -314,10 +316,10 @@ describe('getBadges', () => {
         expect(labels).toContain('Urgent');
     });
 
-    it('S9 → includes "Trade Requested" badge', () => {
+    it('S9 → state badge reads "Trade Requested (Pending Peer)"', () => {
         const badges = getBadges(ctx({ state: 'S9' }));
         const labels = badges.map(b => b.label);
-        expect(labels).toContain('Trade Requested');
+        expect(labels).toContain('Trade Requested (Pending Peer)');
     });
 
     it('S13 → includes "Completed" success badge', () => {
@@ -343,10 +345,10 @@ describe('getBadges', () => {
         expect(badges[0].label).toBe(FSM_STATE_META[stateId].label);
     });
 
-    it('S10 → includes "Trade Accepted" badge', () => {
+    it('S10 → state badge reads "Trade Requested (Pending Manager)"', () => {
         const badges = getBadges(ctx({ state: 'S10' }));
         const labels = badges.map(b => b.label);
-        expect(labels).toContain('Trade Accepted');
+        expect(labels).toContain('Trade Requested (Pending Manager)');
     });
 
     it('S5 + isUrgent=false → does NOT include "Urgent" badge', () => {

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { format, isToday } from 'date-fns';
 import { getSydneyNow, isSydneyToday } from '@/modules/core/lib/date.utils';
+import { isPublicHoliday, getPublicHolidayName } from '@/modules/core/lib/holidays';
 import { cn } from '@/modules/core/lib/utils';
 
 export const HOUR_HEIGHT = 48;
@@ -58,21 +59,32 @@ const TimeGrid: React.FC<TimeGridProps> = ({ days, renderShifts }) => {
           {/* Day headers */}
           {days.map((day, index) => {
             const isTodayCol = isSydneyToday(day);
+            const holiday = isPublicHoliday(day);
             return (
               <div
                 key={day.toISOString()}
+                title={holiday ? getPublicHolidayName(day) ?? undefined : undefined}
                 className={cn(
                   'flex-1 flex flex-col items-center justify-center border-r border-border last:border-r-0',
                   isTodayCol && 'bg-primary/10'
                 )}
               >
-                <div className="text-xs font-medium text-muted-foreground uppercase">
+                <div
+                  className={cn(
+                    'text-xs font-medium uppercase',
+                    holiday ? 'text-amber-500 dark:text-amber-400' : 'text-muted-foreground'
+                  )}
+                >
                   {format(day, 'EEE')}
                 </div>
                 <div
                   className={cn(
                     'text-lg font-bold mt-0.5',
-                    isTodayCol ? 'text-primary' : 'text-foreground'
+                    isTodayCol
+                      ? 'text-primary'
+                      : holiday
+                      ? 'text-amber-500 dark:text-amber-400'
+                      : 'text-foreground'
                   )}
                 >
                   {format(day, 'd')}

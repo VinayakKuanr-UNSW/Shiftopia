@@ -60,9 +60,9 @@ const EmployeeCard = ({
             className={cn(
                 'w-full flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left group/emp',
                 isSelected
-                    ? 'bg-emerald-500/10 border-emerald-500/40 shadow-[0_0_20px_-5px_rgba(16,185,129,0.2)]'
+                    ? 'bg-emerald-500/10 border-emerald-500/40 shadow-sm'
                     : isHovered
-                        ? 'bg-white/[0.04] border-white/15 shadow-md'
+                        ? 'bg-white/[0.04] border-white/15 shadow-sm'
                         : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.04] hover:border-white/10'
             )}
         >
@@ -91,7 +91,7 @@ const EmployeeCard = ({
 
             {/* Selected indicator */}
             {isSelected && (
-                <CheckCircle2 className="h-5 w-5 text-emerald-400 flex-shrink-0 drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
+                <CheckCircle2 className="h-5 w-5 text-emerald-400 flex-shrink-0" />
             )}
         </button>
     );
@@ -171,7 +171,7 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
             <div className="w-full lg:w-[45%] flex flex-col rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden">
                 {/* Header */}
                 <div className="p-4 border-b border-border bg-muted/50 flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                    <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-500 shadow-sm">
                         <Users className="h-5 w-5" />
                     </div>
                     <div className="flex-1">
@@ -335,7 +335,7 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
             <div className="w-full lg:w-[55%] flex flex-col rounded-2xl bg-card border border-border backdrop-blur-md overflow-hidden">
                 {/* Header */}
                 <div className="p-4 border-b border-border bg-muted/50 flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                    <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500 shadow-sm">
                         <Shield className="h-5 w-5" />
                     </div>
                     <div className="flex-1">
@@ -365,11 +365,11 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
                         ) : !inspectedEmployeeId ? (
                              <div className="flex flex-col items-center justify-center py-20 text-center opacity-60">
                                 <div className="p-4 rounded-full bg-muted mb-4">
-                                    <MousePointer2 className="h-8 w-8 text-muted-foreground/50" />
+                                    <Shield className="h-8 w-8 text-muted-foreground/50" />
                                 </div>
-                                <h4 className="text-sm font-bold text-foreground mb-1 uppercase tracking-wider">Select an employee first!</h4>
-                                <p className="text-xs text-muted-foreground max-w-[200px]">
-                                    Hover over or select an employee from the pool to run compliance checks.
+                                <h4 className="text-sm font-bold text-foreground mb-1 uppercase tracking-wider">Compliance Not Required</h4>
+                                <p className="text-xs text-muted-foreground max-w-[220px]">
+                                    Compliance is not required for unassigned shifts. Select or hover over an employee to run checks.
                                 </p>
                             </div>
                         ) : (

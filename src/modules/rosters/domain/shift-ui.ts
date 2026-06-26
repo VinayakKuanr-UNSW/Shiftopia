@@ -181,13 +181,10 @@ export function getShiftUIContext(shift: ShiftUIContextInput): ShiftUIContext {
 export function getBadges(ctx: ShiftUIContext): ShiftBadge[] {
     const badges: ShiftBadge[] = [];
 
-    // State badge (always present)
+    // State badge (always present). meta.label now fully describes the trade
+    // sub-states (Pending Peer / Pending Manager), so no extra trade badge needed.
     const meta = FSM_STATE_META[ctx.state];
     badges.push({ label: meta.label, tone: 'info' });
-
-    // Trade badges coexist with state badge
-    if (ctx.state === 'S9')  badges.push({ label: 'Trade Requested', tone: 'warning' });
-    if (ctx.state === 'S10') badges.push({ label: 'Trade Accepted',  tone: 'warning' });
 
     // Urgency (runtime TTS — suppressed in terminal states)
     const terminalStates = ['S13', 'S15'];
@@ -380,6 +377,12 @@ export interface ShiftDotInput {
     lifecycle_status?:  string | null;
     is_cancelled?:      boolean | null;
     /**
+     * Assignment signals — used by ShiftRuleHeader to suppress the Live Rules
+     * (attendance) row for unassigned shifts, which can never accrue attendance.
+     */
+    assignment_status?:    string | null;
+    assigned_employee_id?: string | null;
+    /**
      * True when `adjusted_start`/`adjusted_end` were manually committed by a
      * manager override (vs. auto/snapped billable times). This is the single
      * canonical signal that drives the `*` suffix, so it must be plumbed
@@ -438,7 +441,7 @@ function parseToMs(dateStr: string | Date | null | undefined, shiftDate?: string
 // etc.) are intentionally NOT modelled — the platform's clock-in window,
 // single clock-in/out, and 12.5h auto clock-out constraints prevent them.
 
-const GRACE_MS = 5 * 60 * 1000;             // on-time tolerance (spec default)
+const GRACE_MS = 7.5 * 60 * 1000;             // on-time tolerance (spec default)
 const CLOCKIN_WINDOW_MS = 60 * 60 * 1000;   // clock-in opens 1h before start
 const AUTO_CLOCKOUT_MS = 12.5 * 60 * 60 * 1000;
 
@@ -669,8 +672,8 @@ export function getAvailableActions(state: ShiftStateID | string, urgency?: Shif
         case 'S3':  return ['ACCEPT', 'REJECT', 'UNPUBLISH', 'CANCEL'];
         case 'S4':  return ['SWAP_REQUEST', 'EMERGENCY_ASSIGN', 'UNPUBLISH', 'CLOCK_IN', 'CANCEL'];
         case 'S5':  return ['SELECT_BID_WINNER', 'EMERGENCY_ASSIGN', 'UNPUBLISH', 'CANCEL'];
-        case 'S9':  return ['CANCEL_REQUEST', 'ACCEPT_TRADE', 'REJECT_TRADE'];
-        case 'S10': return ['APPROVE_TRADE', 'REJECT_TRADE'];
+        case 'S9':  return ['CANCEL_REQUEST', 'ACCEPT_TRADE', 'REJECT_TRADE', 'UNPUBLISH'];
+        case 'S10': return ['APPROVE_TRADE', 'REJECT_TRADE', 'UNPUBLISH'];
         case 'S11': return ['CLOCK_OUT', 'MARK_NO_SHOW', 'CANCEL'];
         case 'S13': return [];
         case 'S15': return [];

@@ -1,5 +1,7 @@
 import { supabase } from '@/platform/supabase/client';
 import { Shift } from '@/modules/rosters';
+import { applyShiftOp } from '@/modules/rosters/api/shifts.api';
+import { mapShiftOpResultToUx, type ShiftOpUx } from '@/modules/rosters/domain/shift-ops.contract';
 import { Bid, BidStatus } from '../model/bid.types';
 
 // --- Helper Functions ---
@@ -314,5 +316,39 @@ export const biddingApi = {
             .in('id', ids);
 
         if (error) throw error;
-    }
+    },
+
+    /* ============================================================
+       REFERENCE CALL SITE — Shift Mutation Gateway (additive)
+       ============================================================
+       Optimistic-concurrency variant of "select bid winner".
+
+       The live winner-selection path above (`updateBidStatus`) delegates to the
+       specialized `sm_select_bid_winner` RPC and is intentionally left UNCHANGED
+       — it is load-bearing and handles FOR UPDATE locking, multi-bid status
+       fan-out, and the FSM transition in one shot.
+
+       This method is the *reference wiring* for the new `sm_apply_shift_op`
+       gateway: it passes the shift's CURRENT `version` as the optimistic guard
+       and routes the gateway result through `mapShiftOpResultToUx`, returning the
+       UX intent so a caller can drive toast / refresh / conflict-diff uniformly.
+
+       It is safe to call but is NOT yet on the default UI path — the integrator
+       will swap call sites over once `sm_apply_shift_op` + `shift-op-legality`
+       have landed. Reversible: delete this method to remove the reference. */
+    async selectBidWinnerViaGateway(args: {
+        shiftId: string;
+        shiftVersion: number;
+        winnerId: string;
+    }): Promise<ShiftOpUx> {
+        const result = await applyShiftOp({
+            shiftId:         args.shiftId,
+            expectedVersion: args.shiftVersion, // optimistic concurrency guard
+            op:              'select_winner',
+            payload:         { winner_id: args.winnerId },
+        });
+
+        // Single, uniform mapping from gateway result → UX intent.
+        return mapShiftOpResultToUx(result);
+    },
 };

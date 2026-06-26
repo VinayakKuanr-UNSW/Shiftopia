@@ -72,8 +72,7 @@ type IconColorKey =
   | 'logo'
   | 'help'
   | 'contracts'
-  | 'laborDemand'
-  | 'performance';
+  | 'laborDemand';
 
 const iconColorMap: Record<IconColorKey, string> = {
   workspace: 'text-purple-400',
@@ -101,7 +100,7 @@ const iconColorMap: Record<IconColorKey, string> = {
   help: 'text-blue-400',
   contracts: 'text-violet-400',
   laborDemand: 'text-fuchsia-400',
-  performance: 'text-emerald-400',
+
 };
 
 /* ============================================================
@@ -502,16 +501,7 @@ const AppSidebar: React.FC = () => {
                 />
               )}
 
-              {hasPermission('management') && (
-                <NavigationItem
-                  to="/performance"
-                  icon={BarChart3}
-                  iconColor={iconColorMap.performance}
-                  label={t('nav.performance')}
-                  isActive={isRouteActive('/performance')}
-                  description="Quarterly metrics"
-                />
-              )}
+
             </CollapsibleSection>
           )}
 

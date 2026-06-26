@@ -1,6 +1,6 @@
-import Holidays from 'date-holidays';
-
-export const hd = new Holidays('AU', 'NSW');
+// Re-export the app-wide AU/NSW holiday instance so the cost engine and the
+// calendar UI share a single source of truth for public holidays.
+export { ausHolidays as hd } from '@/modules/core/lib/holidays';
 
 export const SUNDAY = 0;
 export const MONDAY = 1;

@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/modules/core/ui/primitives/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/modules/core/ui/primitives/command';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
 
@@ -37,7 +38,18 @@ export const UserManagementFunctionBar: React.FC<UserManagementFunctionBarProps>
   onDelete,
   transparent
 }) => {
+  const [open, setOpen] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState('');
   const { isDark } = useTheme();
+
+  const filteredProfiles = React.useMemo(() => {
+    if (!searchQuery) return profiles;
+    const query = searchQuery.toLowerCase();
+    return profiles.filter(p => 
+      p.full_name.toLowerCase().includes(query) || 
+      p.email.toLowerCase().includes(query)
+    );
+  }, [profiles, searchQuery]);
 
   return (
     <div className={cn(
@@ -53,28 +65,63 @@ export const UserManagementFunctionBar: React.FC<UserManagementFunctionBarProps>
         <div className="pl-3 text-muted-foreground/40">
           <Search className="h-4 w-4" />
         </div>
-        <Select value={selectedUserId} onValueChange={onUserSelect}>
-          <SelectTrigger className="flex-1 bg-transparent border-0 shadow-none focus:ring-0 text-[11px] font-black uppercase tracking-widest h-10 lg:h-11">
-            <SelectValue placeholder="SEARCH OR SELECT EMPLOYEE" />
-          </SelectTrigger>
-          <SelectContent className={cn(
-            "rounded-2xl border-0 shadow-2xl",
-            isDark ? "bg-[#1c2333] text-white" : "bg-white text-slate-900"
-          )}>
-            {profiles?.map(profile => (
-              <SelectItem 
-                key={profile.id} 
-                value={profile.id}
-                className="py-3 px-4 focus:bg-primary/10 rounded-xl"
-              >
-                <div className="flex flex-col">
-                  <span className="font-black uppercase tracking-widest text-[10px]">{profile.full_name}</span>
-                  <span className="text-[9px] text-muted-foreground/60">{profile.email}</span>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Input
+              type="text"
+              value={open ? searchQuery : (profiles.find(p => p.id === selectedUserId)?.full_name || '')}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (!open) setOpen(true);
+              }}
+              onFocus={() => {
+                setOpen(true);
+                setSearchQuery('');
+              }}
+              placeholder={open 
+                ? (profiles.find(p => p.id === selectedUserId)?.full_name || 'SEARCH OR SELECT EMPLOYEE') 
+                : 'SEARCH OR SELECT EMPLOYEE'}
+              className="flex-1 bg-transparent border-0 border-none shadow-none hover:bg-transparent hover:border-transparent text-[11px] font-black uppercase tracking-widest h-10 lg:h-11 px-3 text-left w-full text-foreground/90 font-mono focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-transparent focus:outline-none placeholder:text-muted-foreground/40 outline-none"
+            />
+          </PopoverTrigger>
+          <PopoverContent 
+            className="w-[320px] p-0 rounded-2xl border-none shadow-2xl z-[200]" 
+            align="start"
+            sideOffset={6}
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            <Command 
+              shouldFilter={false}
+              className={cn(
+                "rounded-2xl border-none",
+                isDark ? "bg-[#1c2333] text-white" : "bg-white text-slate-900"
+              )}
+            >
+              <CommandList>
+                <CommandEmpty className="py-4 text-center text-xs font-semibold text-muted-foreground/60">No employee found.</CommandEmpty>
+                <CommandGroup>
+                  {filteredProfiles?.map(profile => (
+                    <CommandItem 
+                      key={profile.id} 
+                      value={`${profile.full_name} ${profile.email}`}
+                      onSelect={() => {
+                        onUserSelect(profile.id);
+                        setSearchQuery('');
+                        setOpen(false);
+                      }}
+                      className="py-3 px-4 focus:bg-primary/10 rounded-xl cursor-pointer"
+                    >
+                      <div className="flex flex-col text-left w-full">
+                        <span className="font-black uppercase tracking-widest text-[10px]">{profile.full_name}</span>
+                        <span className="text-[9px] text-muted-foreground/60 font-mono">{profile.email}</span>
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {/* Right side: Action Pods */}
