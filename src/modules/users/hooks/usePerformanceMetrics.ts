@@ -47,6 +47,7 @@ export interface EmployeeMetricsSnapshot {
     offer_expirations: number;
     early_clock_outs: number;
     late_clock_ins: number;
+    auto_clock_outs: number;
 
     // Calculated rates (%)
     acceptance_rate: number;
@@ -59,6 +60,7 @@ export interface EmployeeMetricsSnapshot {
     reliability_score: number;
     late_clock_in_rate: number;
     early_clock_out_rate: number;
+    auto_clock_out_rate: number;
     no_show_rate: number;
     punctuality_rate: number;
 
@@ -89,6 +91,7 @@ export const EMPTY_METRICS: EmployeeMetricsSnapshot = {
     offer_expirations: 0,
     early_clock_outs: 0,
     late_clock_ins: 0,
+    auto_clock_outs: 0,
     acceptance_rate: 0,
     drop_rate: 0,
     rejection_rate: 0,
@@ -99,6 +102,7 @@ export const EMPTY_METRICS: EmployeeMetricsSnapshot = {
     reliability_score: 100,
     late_clock_in_rate: 0,
     early_clock_out_rate: 0,
+    auto_clock_out_rate: 0,
     no_show_rate: 0,
     punctuality_rate: 100,
     calculated_at: new Date().toISOString(),
@@ -119,6 +123,7 @@ export const METRIC_THRESHOLDS = {
     early_clock_out_rate:     { good: 5,  warn: 15 },
     early_clock_in_rate:      { good: 5,  warn: 15 },
     late_clock_out_rate:      { good: 5,  warn: 15 },
+    auto_clock_out_rate:      { good: 5,  warn: 15 },
     no_show_rate:             { good: 2,  warn: 5  },
     on_time_in_rate:          { good: 85, warn: 70 },
     on_time_out_rate:         { good: 85, warn: 70 },
@@ -270,6 +275,7 @@ export const REPORT_THRESHOLDS = {
     urgent_drop_rate:   { good: 3,  warn: 10 },
     early_clock_in_rate: { good: 5,  warn: 15 },
     late_clock_out_rate: { good: 5,  warn: 15 },
+    auto_clock_out_rate: { good: 5,  warn: 15 },
     on_time_in_rate:  { good: 85, warn: 70 },
     on_time_out_rate: { good: 85, warn: 70 },
 } as const;

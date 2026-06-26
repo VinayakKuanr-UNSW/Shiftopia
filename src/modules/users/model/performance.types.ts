@@ -63,6 +63,8 @@ export type PerformanceMetrics = {
     on_time_out?: number;
     on_time_in_rate?: number;
     on_time_out_rate?: number;
+    auto_clock_out?: number;
+    auto_clock_out_rate?: number;
 
     // Phase 2: Performance Insights (not yet returned by any DB function)
     performance_flag?: PerformanceFlag;

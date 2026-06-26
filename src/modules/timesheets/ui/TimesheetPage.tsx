@@ -19,6 +19,11 @@ import {
 } from '../api/timesheets.supabase.api';
 import { useScopeFilter, ScopeMode } from '@/platform/auth/useScopeFilter';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import {
+    computeAttendanceMetrics,
+    type AttendanceInput,
+} from '@/modules/rosters/domain/attendance-metrics';
+import { AttendanceMetricsBar } from '@/modules/rosters/ui/components/AttendanceMetricsBar';
 
 /**
  * TimesheetPage
@@ -158,6 +163,35 @@ export const TimesheetPage: React.FC = () => {
         rejectedReason: shift.rejectedReason,
     })), [shifts, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // ── Attendance scorecard ─────────────────────────────────────────────────────
+    // Same 9 metrics/definitions as My Attendance + Insights, aggregated over the
+    // full loaded set (assigned, non-draft) — independent of the status toggle.
+    const attendanceMetrics = useMemo(() => {
+        const now = Date.now();
+        const inputs: AttendanceInput[] = shifts
+            .filter((s) => {
+                const isDraft = s.lifecycleStatus === 'Draft';
+                const isUnassigned = !s.employeeId || s.employeeName?.toLowerCase().includes('unassigned');
+                return !isDraft && !isUnassigned;
+            })
+            .map((s) => {
+                const endMs = s.rawEndAt
+                    ? new Date(s.rawEndAt).getTime()
+                    : (() => {
+                          const end = new Date(`${s.shiftDate}T${s.scheduledEnd}`);
+                          if (s.scheduledEnd < s.scheduledStart) end.setDate(end.getDate() + 1);
+                          return end.getTime();
+                      })();
+                return {
+                    clockInVarianceMin: s.clockInVarianceMinutes,
+                    clockOutVarianceMin: s.clockOutVarianceMinutes,
+                    attendanceStatus: s.attendanceStatus,
+                    hasEnded: s.lifecycleStatus === 'Completed' || endMs < now,
+                };
+            });
+        return computeAttendanceMetrics(inputs);
+    }, [shifts]);
+
 
     // ── Actions ────────────────────────────────────────────────────────────────
     const handleRefresh = () => loadShifts();
@@ -260,6 +294,9 @@ export const TimesheetPage: React.FC = () => {
                         : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
                 )}>
                     <div className="flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none">
+                        {shifts.length > 0 && (
+                            <AttendanceMetricsBar metrics={attendanceMetrics} className="mb-4" />
+                        )}
                         <TimesheetTable
                             entries={entries}
                             selectedDate={selectedDate}

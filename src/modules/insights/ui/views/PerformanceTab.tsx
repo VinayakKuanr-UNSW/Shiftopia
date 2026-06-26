@@ -82,6 +82,7 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
         { key: 'late_clock_in_rate', label: 'Late In %', group: 'Attendance', isRate: true, thresholdKey: 'late_clock_in_rate' },
         { key: 'early_clock_out_rate', label: 'Early Out %', group: 'Attendance', isRate: true, thresholdKey: 'early_clock_out_rate' },
         { key: 'late_clock_out_rate', label: 'Late Out %', group: 'Attendance', isRate: true, thresholdKey: 'late_clock_out_rate' },
+        { key: 'auto_clock_out_rate', label: 'Auto Clock-Out %', group: 'Attendance', isRate: true, thresholdKey: 'auto_clock_out_rate' },
         // Bidding
         { key: 'total_bids', label: 'Bids Submitted', group: 'Bidding' },
         { key: 'bid_success_rate', label: 'Bid Success %', group: 'Bidding', isRate: true, thresholdKey: 'bid_success_rate' },
