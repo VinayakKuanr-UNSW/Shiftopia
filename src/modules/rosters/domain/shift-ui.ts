@@ -522,14 +522,17 @@ export function getTimeRule(shift: ShiftDotInput): ShiftRuleBadge | null {
     // cancelled) keeps reading "Live" until its scheduled end_at.
     if (shift.is_cancelled
         || shift.lifecycle_status === 'Completed'
-        || shift.actual_end) {
+        || shift.actual_end
+        || shift.attendance_status === 'auto_clock_out') {
         return { label: 'Closed', color: '#64748B' }; // slate
     }
 
     const now = Date.now();
+    const ci = parseToMs(shift.actual_start, shift.shift_date);
+    const isLive = ci !== null || now >= start;
 
-    if (now >= start) {
-        // After start: Live until end, Closed once ended. If end is unparseable,
+    if (isLive) {
+        // After start/clock-in: Live until end, Closed once ended. If end is unparseable,
         // fall back to the auto clock-out horizon so the card never sticks on Live.
         const effectiveEnd = end ?? start + AUTO_CLOCKOUT_MS;
         return now < effectiveEnd

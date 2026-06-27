@@ -51,6 +51,16 @@ describe('getTimeRule - 5-state schedule lifecycle', () => {
     it('returns null when the start time is unparseable', () => {
         expect(getTimeRule({ lifecycle_status: 'Published' })).toBeNull();
     });
+
+    it('Live when clocked in early, even though now is before the scheduled start time', () => {
+        expect(getTimeRule({ lifecycle_status: 'Published', start_at: iso(+1 * HOUR), end_at: iso(+9 * HOUR), actual_start: iso(-0.1 * HOUR) })?.label)
+            .toBe('Live');
+    });
+
+    it('Closed when auto clocked out', () => {
+        expect(getTimeRule({ lifecycle_status: 'Published', start_at: iso(-5 * HOUR), end_at: iso(+3 * HOUR), attendance_status: 'auto_clock_out' })?.label)
+            .toBe('Closed');
+    });
 });
 
 // ─── Live Rules ────────────────────────────────────────────────────────────────

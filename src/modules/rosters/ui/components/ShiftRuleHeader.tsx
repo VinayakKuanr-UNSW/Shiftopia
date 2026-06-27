@@ -80,6 +80,8 @@ const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 
         shift.adjusted_start, shift.adjusted_end,
     ]);
 
+    const isDraft = shift.lifecycle_status === 'Draft';
+
     // Unassigned shifts have no attendance → no Live Rules row at all. Prefer the
     // explicit prop; otherwise derive from the shift's assignment fields, falling
     // back to "show" when no assignment info is available (legacy callers).
@@ -89,7 +91,7 @@ const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 
         : shift.assigned_employee_id != null    ? !!shift.assigned_employee_id
         : true;
 
-    const showLive = isAssigned && !!(live.arrival || live.departure);
+    const showLive = isDraft || (isAssigned && !!(live.arrival || live.departure));
 
     // Band mode is a self-contained tinted footer block. It ignores compact/
     // detailed variant styling and renders the State / Time Rules / Live Rules
@@ -97,7 +99,7 @@ const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 
     if (band) {
         // Unassigned shifts: 'hide' omits the Live Rules row entirely, 'na'
         // keeps the row but shows a muted "N/A" with no status dot.
-        const showLiveBand = isAssigned ? !!(live.arrival || live.departure) : liveRulesUnassigned === 'na';
+        const showLiveBand = isDraft || (isAssigned ? !!(live.arrival || live.departure) : liveRulesUnassigned === 'na');
         if (!state && !time && !showLiveBand) return null;
 
         const labelCls = 'text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 shrink-0';
@@ -128,7 +130,9 @@ const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 
                     <div className="flex justify-between items-center gap-2">
                         <span className={labelCls}>Live Rules</span>
                         <span className={valueBandCls}>
-                            {isAssigned ? (
+                            {isDraft ? (
+                                <span className="text-slate-400 dark:text-slate-500 font-semibold text-xs uppercase">N/A</span>
+                            ) : isAssigned ? (
                                 <span className="inline-flex items-center gap-1.5 justify-end">
                                     {live.arrival && (
                                         <span className="inline-block h-1.5 w-1.5 rounded-full shrink-0" style={{ background: live.arrival.color }} />
@@ -172,7 +176,13 @@ const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 
             </RuleRow>
             {showLive && (
                 <RuleRow label="Live Rules" variant={variant}>
-                    <LiveBadges badges={live} size={isDetailed ? 'detailed' : 'compact'} />
+                    {isDraft ? (
+                        <span className={cn("font-semibold uppercase text-slate-400 dark:text-slate-500", isDetailed ? "text-xs" : "text-[10px]")}>
+                            N/A
+                        </span>
+                    ) : (
+                        <LiveBadges badges={live} size={isDetailed ? 'detailed' : 'compact'} />
+                    )}
                 </RuleRow>
             )}
         </div>
