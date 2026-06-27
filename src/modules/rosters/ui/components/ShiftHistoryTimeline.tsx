@@ -315,6 +315,18 @@ function formatTime(iso: string): string {
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
+/** Precise HH:MM:SS (24h) for the per-event row — the audit format wants seconds. */
+function formatClock(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+}
+
 function formatFullTimestamp(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -327,6 +339,43 @@ function formatFullTimestamp(iso: string): string {
     second: '2-digit',
   });
 }
+
+// ─── State pill ──────────────────────────────────────────────────────────────
+// A monospace FSM-state chip. The destination ("to") pill is accented with the
+// event colour; the origin ("from") pill is muted. A null state renders as a
+// dim "—" so the row keeps its fixed `from · action · who · to` shape.
+
+const StatePill: React.FC<{ state: string | null; color?: string }> = ({ state, color }) => {
+  if (!state) {
+    return (
+      <span className="rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground/50">
+        —
+      </span>
+    );
+  }
+  if (color) {
+    return (
+      <span
+        className="rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold"
+        style={{ backgroundColor: `${color}1A`, color }}
+      >
+        {state}
+      </span>
+    );
+  }
+  return (
+    <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+      {state}
+    </span>
+  );
+};
+
+/** Subtle inline separator between the slots of the canonical row format. */
+const Dot: React.FC = () => (
+  <span className="select-none text-muted-foreground/35" aria-hidden="true">
+    ·
+  </span>
+);
 
 // ─── Single event row ────────────────────────────────────────────────────────
 
@@ -345,12 +394,10 @@ const EventRow: React.FC<EventRowProps> = ({ row, isLast }) => {
   const roleKey = (row.actor_role ?? 'system').toLowerCase() as ShiftEventActorRole;
   const actorCfg = ACTOR_ROLE_CONFIG[roleKey] ?? ACTOR_ROLE_CONFIG.system;
 
-  // Only show the transition when it's an ACTUAL state change — hides the
-  // confusing "S1 → S1" on in-place edits and the bare arrow on trigger rows
-  // that carry no state. Mapped to the gapless display ids the cards use.
+  // Canonical row format always shows BOTH state slots (from · … · to), mapped
+  // to the gapless display ids the cards use. A null slot renders as "—".
   const fromDisp = displayState(row.from_state);
   const toDisp = displayState(row.to_state);
-  const hasStateDelta = !!toDisp && fromDisp !== toDisp;
   const changeEntries = row.changes ? Object.entries(row.changes) : [];
   const isExpandable = changeEntries.length > 0 || !!row.reason;
 
@@ -404,8 +451,8 @@ const EventRow: React.FC<EventRowProps> = ({ row, isLast }) => {
               : undefined
           }
         >
-          {/* Top line: label + actor chip + time */}
-          <div className="flex items-center gap-2">
+          {/* Canonical audit line: from · action · who (name + role) · to · time */}
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
             {isExpandable && (
               <ChevronRight
                 className={cn(
@@ -415,46 +462,47 @@ const EventRow: React.FC<EventRowProps> = ({ row, isLast }) => {
                 aria-hidden="true"
               />
             )}
-            <span className="truncate text-sm font-semibold text-foreground">
-              {eventLabel(row)}
+
+            {/* from-state */}
+            <StatePill state={fromDisp} />
+            <Dot />
+
+            {/* action */}
+            <span className="text-sm font-semibold text-foreground">{eventLabel(row)}</span>
+            <Dot />
+
+            {/* who: actor name (when known) + role chip */}
+            <span className="inline-flex items-center gap-1">
+              {row.actor_name && (
+                <span className="text-xs font-medium text-foreground">{row.actor_name}</span>
+              )}
+              <Badge variant={actorCfg.variant} className="h-4 shrink-0 px-1 text-[9px]">
+                {actorCfg.label}
+              </Badge>
             </span>
+            <Dot />
 
-            <Badge variant={actorCfg.variant} className="h-5 shrink-0 px-1.5 text-[10px]">
-              {actorCfg.label}
-            </Badge>
+            {/* to-state (accented destination) */}
+            <StatePill state={toDisp} color={color} />
 
+            {/* timestamp (HH:MM:SS) */}
             <span className="ml-auto flex shrink-0 items-center gap-1 text-xs tabular-nums text-muted-foreground">
               <Clock className="h-3 w-3" aria-hidden="true" />
-              {formatTime(row.event_time)}
+              {formatClock(row.event_time)}
             </span>
           </div>
-
-          {/* State: a single destination pill for origin events (Created — no
-              from-state), an arrow for genuine transitions. */}
-          {hasStateDelta && (
-            <div className="mt-1.5 flex items-center gap-1.5 text-xs">
-              {fromDisp && (
-                <>
-                  <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
-                    {fromDisp}
-                  </span>
-                  <ChevronRight className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
-                </>
-              )}
-              <span
-                className="rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold"
-                style={{ backgroundColor: `${color}1A`, color }}
-              >
-                {toDisp}
-              </span>
-            </div>
-          )}
 
           {/* Expanded detail: field diffs, reason, full timestamp */}
           {expanded && isExpandable && (
             <div className="mt-2.5 space-y-2 border-t border-border/60 pt-2.5">
               {changeEntries.length > 0 && (
                 <ul className="space-y-1">
+                  <li className="flex items-center gap-1.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                    <span className="flex-1">Field</span>
+                    <span>Original</span>
+                    <ChevronRight className="h-3 w-3 opacity-0" aria-hidden="true" />
+                    <span>New</span>
+                  </li>
                   {changeEntries
                     .filter(([field]) => field !== 'version' && field !== '_version')
                     .map(([field, diff]) => (

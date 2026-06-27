@@ -1508,6 +1508,8 @@ export interface ShiftEventTimelineRow {
     op: string | null;
     actor_id: string | null;
     actor_role: ShiftEventActorRole | string | null;
+    /** Human-readable actor display name; null for system/cron events. */
+    actor_name: string | null;
     employee_id: string | null;
     from_state: string | null;
     to_state: string | null;
