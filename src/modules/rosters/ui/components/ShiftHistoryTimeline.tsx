@@ -32,6 +32,7 @@ import {
   ArrowLeftRight,
   UserMinus,
   LogIn,
+  Receipt,
   ShieldAlert,
   History,
   ChevronRight,
@@ -42,7 +43,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { Badge } from '@/modules/core/ui/primitives/badge';
-import { FSM_COLOR_HEX, type ShiftFSMStateInfo } from '../../domain/shift-fsm';
+import { FSM_COLOR_HEX, FSM_STATE_META, type ShiftFSMStateInfo } from '../../domain/shift-fsm';
 import { shiftsQueries } from '../../api/shifts.queries';
 import type {
   ShiftEventTimelineRow,
@@ -59,13 +60,14 @@ type FsmColorToken = ShiftFSMStateInfo['color'];
 const DOMAIN_COLOR_TOKEN: Record<ShiftEventDomain, FsmColorToken> = {
   schedule:   'amber',   // edits / schedule changes
   assignment: 'emerald', // assign / confirm
-  lifecycle:  'blue',    // publish / lifecycle transitions
+  lifecycle:  'blue',    // create / publish / complete / lifecycle transitions
   offer:      'blue',    // offered / accepted / rejected
   trade:      'orange',  // trade requested / accepted
-  attendance: 'blue',    // check-in / out
+  attendance: 'violet',  // clock-in / clock-out
   compliance: 'red',     // compliance / cancel
   marketplace:'violet',  // bidding / marketplace
   drop:       'red',     // employee drop / cancel-like
+  payroll:    'emerald', // timesheet finalize / adjust
 };
 
 const DOMAIN_ICON: Record<ShiftEventDomain, LucideIcon> = {
@@ -78,6 +80,7 @@ const DOMAIN_ICON: Record<ShiftEventDomain, LucideIcon> = {
   compliance: ShieldAlert,
   marketplace:Gavel,
   drop:       UserMinus,
+  payroll:    Receipt,
 };
 
 function isKnownDomain(d: string | null | undefined): d is ShiftEventDomain {
@@ -130,10 +133,59 @@ function humanizeToken(token: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Explicit, friendly labels for the verbs the ledger emits. `op` (the true verb,
+// in metadata) wins; `event_type` is the coarse enum fallback for trigger rows.
+const OP_LABELS: Record<string, string> = {
+  create:             'Created',
+  assign:             'Assigned',
+  unassign:           'Unassigned',
+  publish:            'Published',
+  unpublish:          'Unpublished',
+  edit:               'Edited',
+  move:               'Moved',
+  delete:             'Deleted',
+  select_winner:      'Bid Winner Selected',
+  approve_trade:      'Trade Approved',
+  reject_trade:       'Trade Rejected',
+  complete:           'Completed',
+  timesheet_finalize: 'Timesheet Finalized',
+  timesheet_adjust:   'Timesheet Adjusted',
+};
+
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  OFFERED:            'Offered',
+  ACCEPTED:           'Offer Accepted',
+  REJECTED:           'Offer Rejected',
+  IGNORED:            'Offer Expired',
+  ASSIGNED:           'Assigned',
+  UNASSIGNED:         'Unassigned',
+  EMERGENCY_ASSIGNED: 'Emergency Assigned',
+  CANCELLED:          'Cancelled',
+  LATE_CANCELLED:     'Late Cancelled',
+  SWAPPED_OUT:        'Swapped Out',
+  SWAPPED_IN:         'Swapped In',
+  CHECKED_IN:         'Clocked In',
+  LATE_IN:            'Late In',
+  EARLY_OUT:          'Early Out',
+  NO_SHOW:            'No Show',
+};
+
 /** Human label for a row — prefers `op`, falls back to `event_type`. */
 function eventLabel(row: ShiftEventTimelineRow): string {
-  const raw = row.op || row.event_type || 'Event';
-  return humanizeToken(raw);
+  // Clock-out: surface the early/late qualifier the event_type carries.
+  if (row.op === 'clock_out') {
+    return row.event_type === 'EARLY_OUT' ? 'Clocked Out (Early)' : 'Clocked Out';
+  }
+  if (row.op && OP_LABELS[row.op]) return OP_LABELS[row.op];
+  if (row.event_type && EVENT_TYPE_LABELS[row.event_type]) return EVENT_TYPE_LABELS[row.event_type];
+  return humanizeToken(row.op || row.event_type || 'Event');
+}
+
+/** Canonical FSM id (S1…S15) → the gapless display id (S1…S10) shown on cards. */
+function displayState(s: string | null): string | null {
+  if (!s) return null;
+  const meta = (FSM_STATE_META as Record<string, ShiftFSMStateInfo | undefined>)[s];
+  return meta ? meta.displayId : s;
 }
 
 // ─── Value formatting for field diffs ────────────────────────────────────────
@@ -224,7 +276,12 @@ const EventRow: React.FC<EventRowProps> = ({ row, isLast }) => {
   const roleKey = (row.actor_role ?? 'system').toLowerCase() as ShiftEventActorRole;
   const actorCfg = ACTOR_ROLE_CONFIG[roleKey] ?? ACTOR_ROLE_CONFIG.system;
 
-  const hasStateDelta = !!(row.from_state || row.to_state);
+  // Only show the transition when it's an ACTUAL state change — hides the
+  // confusing "S1 → S1" on in-place edits and the bare arrow on trigger rows
+  // that carry no state. Mapped to the gapless display ids the cards use.
+  const fromDisp = displayState(row.from_state);
+  const toDisp = displayState(row.to_state);
+  const hasStateDelta = !!toDisp && fromDisp !== toDisp;
   const changeEntries = row.changes ? Object.entries(row.changes) : [];
   const vDelta = useMemo(() => versionDelta(row), [row]);
   const isExpandable = changeEntries.length > 0 || !!row.reason || !!vDelta;
@@ -308,14 +365,14 @@ const EventRow: React.FC<EventRowProps> = ({ row, isLast }) => {
           {hasStateDelta && (
             <div className="mt-1.5 flex items-center gap-1.5 text-xs">
               <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
-                {row.from_state ?? '—'}
+                {fromDisp ?? '—'}
               </span>
               <ChevronRight className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
               <span
                 className="rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold"
                 style={{ backgroundColor: `${color}1A`, color }}
               >
-                {row.to_state ?? '—'}
+                {toDisp ?? '—'}
               </span>
             </div>
           )}

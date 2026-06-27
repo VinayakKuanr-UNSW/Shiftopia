@@ -1487,7 +1487,8 @@ export type ShiftEventDomain =
     | 'trade'
     | 'drop'
     | 'attendance'
-    | 'compliance';
+    | 'compliance'
+    | 'payroll';
 
 /** Who triggered the event. */
 export type ShiftEventActorRole = 'manager' | 'employee' | 'system';
