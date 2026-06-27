@@ -24,6 +24,7 @@ import {
     Shield,
     Sparkles,
     Gavel,
+    History,
 } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
@@ -48,6 +49,7 @@ import { getShiftStateDisplay } from '../../domain/shift-fsm';
 import type { ShiftCostBreakdown } from '../../domain/projections/utils/cost/types';
 import { ZERO_COST_BREAKDOWN } from '../../domain/projections/utils/cost/constants';
 import { estimateDetailedCostFromShift } from '../../domain/projections/utils/cost';
+import ShiftHistoryTimeline from './ShiftHistoryTimeline';
 
 
 // ============================================================================
@@ -96,6 +98,8 @@ export interface SmartShiftCardProps {
      * the real concurrency guard. Injected by SmartShiftCard via useShiftPresence.
      */
     editors?: ShiftEditor[];
+    showHistory?: boolean;
+    onToggleHistory?: (e?: React.MouseEvent) => void;
 }
 
 const GROUP_COLORS: Record<string, { header: string; accent: string; text: string; badge: string }> = {
@@ -241,6 +245,8 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     showStatusIcons,
     detailedCost,
     editors,
+    showHistory,
+    onToggleHistory,
 }) => {
     const colors = useMemo(
         () => GROUP_COLORS[groupColor] || GROUP_COLORS.default_yellow,
@@ -270,8 +276,8 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
     }, [ctx.urgency, isBiddingActive]);
 
     const stateDisplay = useMemo(
-        () => getShiftStateDisplay(ctx.state, { emergent: ctx.urgency === 'emergent' }),
-        [ctx.state, ctx.urgency],
+        () => getShiftStateDisplay(ctx.state),
+        [ctx.state],
     );
     const fsmLock = getLockState(ctx.state);
     // FSM-based lock overrides — differentiation between interactive protection vs absolute lock
@@ -360,7 +366,14 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                             </Tooltip>
                         )}
 
-                        <div onClick={(e) => e.stopPropagation()} className="relative z-30">
+                        <div onClick={(e) => e.stopPropagation()} className="relative z-30 flex items-center">
+                            <button
+                                onClick={onToggleHistory}
+                                className={cn("h-8 w-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors", showHistory ? "bg-black/10 dark:bg-white/10" : "")}
+                                title="View History"
+                            >
+                                <History className="h-3 w-3 opacity-60" />
+                            </button>
                             {headerAction || (!isFullyLocked && (
                                 <button className="h-8 w-8 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded transition-colors -mr-1">
                                     <MoreHorizontal className="h-3 w-3 opacity-60" />
@@ -438,6 +451,11 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                         </div>
                     )}
                 </div>
+                {showHistory && (
+                    <div className="border-t border-border p-3 bg-card/80 max-h-[300px] overflow-y-auto">
+                        <ShiftHistoryTimeline shiftId={shift.id} />
+                    </div>
+                )}
             </div>
 
             {/* DnD Blocking Overlay (highest layer) */}
@@ -470,6 +488,8 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
     className,
     showStatusIcons,
     detailedCost,
+    showHistory,
+    onToggleHistory,
 }) => {
     const colors = useMemo(
         () => GROUP_COLORS[groupColor] || GROUP_COLORS.default_yellow,
@@ -520,8 +540,8 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
     }, [detailedCost, shift]);
 
     const stateDisplay = useMemo(
-        () => getShiftStateDisplay(ctx.state, { emergent: ctx.urgency === 'emergent' }),
-        [ctx.state, ctx.urgency],
+        () => getShiftStateDisplay(ctx.state),
+        [ctx.state],
     );
 
     const headerBgAndText = useMemo(() => {
@@ -573,7 +593,14 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         {shift.is_from_template && <Badge variant="outline" className="text-[9px] bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 h-4 px-1 gap-1"><CopyPlus className="h-2.5 w-2.5" />Template</Badge>}
 
                         {getLifecycleIcon(statusStr)}
-                        <div onClick={(e) => e.stopPropagation()} className="relative z-30">
+                        <div onClick={(e) => e.stopPropagation()} className="relative z-30 flex items-center">
+                            <button
+                                onClick={onToggleHistory}
+                                className={cn("h-9 w-9 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-colors", showHistory ? "bg-black/10 dark:bg-white/10" : "")}
+                                title="View History"
+                            >
+                                <History className="h-4 w-4 opacity-60" />
+                            </button>
                             {headerAction || (!isFullyLocked && (
                                 <button className="h-9 w-9 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-colors -mr-1">
                                     <MoreHorizontal className="h-4 w-4 opacity-60" />
@@ -677,6 +704,11 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         </div>
                     )}
                 </div>
+                {showHistory && (
+                    <div className="border-t border-border p-4 bg-card/80 max-h-[400px] overflow-y-auto">
+                        <ShiftHistoryTimeline shiftId={shift.id} />
+                    </div>
+                )}
             </div>
 
             {/* DnD Blocking Overlay (highest layer) */}
@@ -704,6 +736,8 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
     groupColor = 'default_yellow',
     selectionSlot,
     className,
+    showHistory,
+    onToggleHistory,
 }) => {
     const tint = GROUP_TINT[groupColor] || GROUP_TINT.default_yellow;
     const groupBorder = GROUP_BORDER[groupColor] || GROUP_BORDER.default_yellow;
@@ -734,8 +768,8 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
     const isDraft = statusStr === 'draft';
 
     const stateDisplay = useMemo(
-        () => getShiftStateDisplay(ctx.state, { emergent: ctx.urgency === 'emergent' }),
-        [ctx.state, ctx.urgency],
+        () => getShiftStateDisplay(ctx.state),
+        [ctx.state],
     );
 
     const costBreakdown = useMemo(() => estimateDetailedCostFromShift(shift), [shift]);
@@ -769,7 +803,14 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
                             {selectionSlot}
                         </div>
                     ) : <span />}
-                    <div onClick={(e) => e.stopPropagation()} className="relative z-30 shrink-0">
+                    <div onClick={(e) => e.stopPropagation()} className="relative z-30 shrink-0 flex items-center">
+                        <button
+                            onClick={onToggleHistory}
+                            className={cn("h-8 w-8 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 rounded-lg transition-colors", showHistory ? "bg-black/5 dark:bg-white/10" : "")}
+                            title="View History"
+                        >
+                            <History className="h-4 w-4 text-slate-400" />
+                        </button>
                         {headerAction || (!isFullyLocked && (
                             <button className="h-8 w-8 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 rounded-lg transition-colors -mr-1">
                                 <MoreHorizontal className="h-4 w-4 text-slate-400" />
@@ -821,6 +862,11 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
                     assigned={!!employeeName}
                     className="mt-3"
                 />
+                {showHistory && (
+                    <div className="mt-4 border-t border-border pt-4 max-h-[400px] overflow-y-auto">
+                        <ShiftHistoryTimeline shiftId={shift.id} />
+                    </div>
+                )}
             </div>
         </CardShell>
     );
@@ -828,6 +874,7 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
 
 const SmartShiftCardImpl: React.FC<SmartShiftCardProps> = (props) => {
     const { variant = 'compact', shift, onClick } = props;
+    const [showHistory, setShowHistory] = useState(false);
 
     // Advisory editing presence (Google-Docs-style). Registers this shift's
     // (department, date) scope and surfaces OTHER managers editing it. Never gates
@@ -848,9 +895,17 @@ const SmartShiftCardImpl: React.FC<SmartShiftCardProps> = (props) => {
         [setEditing, onClick],
     );
 
-    return variant === 'comfortable' ? <ComfortableCard {...props} onClick={handleClick} />
-         : variant === 'detailed'    ? <DetailedCard {...props} onClick={handleClick} />
-         : <CompactCard {...props} onClick={handleClick} editors={editors} />;
+    const handleToggleHistory = useCallback(
+        (e?: React.MouseEvent) => {
+            if (e) e.stopPropagation();
+            setShowHistory((prev) => !prev);
+        },
+        []
+    );
+
+    return variant === 'comfortable' ? <ComfortableCard {...props} onClick={handleClick} onToggleHistory={handleToggleHistory} showHistory={showHistory} />
+         : variant === 'detailed'    ? <DetailedCard {...props} onClick={handleClick} onToggleHistory={handleToggleHistory} showHistory={showHistory} />
+         : <CompactCard {...props} onClick={handleClick} editors={editors} onToggleHistory={handleToggleHistory} showHistory={showHistory} />;
 };
 
 export const SmartShiftCard = React.memo(SmartShiftCardImpl);

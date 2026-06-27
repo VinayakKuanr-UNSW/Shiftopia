@@ -23,6 +23,7 @@ import {
     RequestTradeResponseSchema,
     EmployeeDropResponseSchema,
     CloseBiddingResponseSchema,
+    ApplyShiftOpResponseSchema,
 } from './contracts';
 
 // ============================================================
@@ -186,83 +187,168 @@ export const shiftsCommands = {
     async updateShift(shiftId: string, updates: UpdateShiftData): Promise<Shift> {
         const user = await requireUser();
 
-        {
-            const payload: Record<string, unknown> = {};
-            // We pass updates directly, but mapped to correct keys/types if needed
-            // The RPC handles COALESCE logic, so we only need to pass defined fields.
+        // ── Split the incoming patch into two buckets ──────────────────────────
+        //
+        //  (1) editPayload — schedule + grouping fields that the audited gateway
+        //      'edit' op WHITELISTS. These now flow through sm_apply_shift_op so
+        //      every field edit lands in the shift_events ledger.
+        //
+        //  (2) excludedPayload — fields the gateway 'edit' op DELIBERATELY does
+        //      NOT own (assignment, structural/RLS-scoping moves, canonical
+        //      timestamps, jsonb eligibility arrays, cancellation reason). These
+        //      keep their existing direct-update behaviour so nothing regresses.
+        //      Assignment changes additionally carry assignment_source, exactly
+        //      as before.
+        //
+        // Gateway 'edit' whitelist (payload keys, per 20260621100200_sm_apply_shift_op):
+        //   start_time, end_time, shift_date, paid_break_minutes,
+        //   unpaid_break_minutes, notes, role_id, sub_department_id,
+        //   remuneration_level_id, group_type, sub_group_name, display_order,
+        //   shift_group_id, shift_subgroup_id, timezone, is_training
+        const editPayload: Record<string, unknown> = {};
 
-            if (updates.roster_id !== undefined)
-                payload.roster_id = safeUuid(updates.roster_id);
-            if (updates.department_id !== undefined)
-                payload.department_id = safeUuid(updates.department_id);
-            if (updates.sub_department_id !== undefined)
-                payload.sub_department_id = safeUuid(updates.sub_department_id);
-            if (updates.group_type !== undefined)
-                payload.group_type = updates.group_type;
-            if (updates.sub_group_name !== undefined)
-                payload.sub_group_name = updates.sub_group_name;
-            if (updates.display_order !== undefined)
-                payload.display_order = updates.display_order;
-            if (updates.shift_group_id !== undefined)
-                payload.shift_group_id = safeUuid(updates.shift_group_id);
-            if (updates.shift_subgroup_id !== undefined) {
-                const safeSubgroupId = safeUuid(updates.shift_subgroup_id);
-                if (safeSubgroupId) {
-                    payload.roster_subgroup_id = safeSubgroupId;
-                }
+        if (updates.start_time !== undefined) editPayload.start_time = updates.start_time;
+        if (updates.end_time !== undefined) editPayload.end_time = updates.end_time;
+        if (updates.shift_date !== undefined) editPayload.shift_date = updates.shift_date;
+        if (updates.paid_break_minutes !== undefined)
+            editPayload.paid_break_minutes = updates.paid_break_minutes;
+        if (updates.unpaid_break_minutes !== undefined)
+            editPayload.unpaid_break_minutes = updates.unpaid_break_minutes;
+        // notes: pass through even when null so it can be explicitly cleared
+        // (the gateway uses the `?` operator to allow clearing).
+        if (updates.notes !== undefined) editPayload.notes = updates.notes;
+        if (updates.role_id !== undefined)
+            editPayload.role_id = safeUuid(updates.role_id);
+        if (updates.sub_department_id !== undefined)
+            editPayload.sub_department_id = safeUuid(updates.sub_department_id);
+        if (updates.remuneration_level_id !== undefined)
+            editPayload.remuneration_level_id = safeUuid(updates.remuneration_level_id);
+        if (updates.group_type !== undefined) editPayload.group_type = updates.group_type;
+        // sub_group_name: pass through even when null so it can be explicitly cleared.
+        if (updates.sub_group_name !== undefined)
+            editPayload.sub_group_name = updates.sub_group_name;
+        if (updates.display_order !== undefined)
+            editPayload.display_order = updates.display_order;
+        if (updates.shift_group_id !== undefined)
+            editPayload.shift_group_id = safeUuid(updates.shift_group_id);
+        // Payload key is `shift_subgroup_id`; the gateway maps it to the DB column
+        // roster_subgroup_id internally. (Preserves the old "only set when a valid
+        // UUID is present" behaviour — a null/invalid value is simply omitted, so
+        // COALESCE keeps the existing subgroup.)
+        if (updates.shift_subgroup_id !== undefined) {
+            const safeSubgroupId = safeUuid(updates.shift_subgroup_id);
+            if (safeSubgroupId) {
+                editPayload.shift_subgroup_id = safeSubgroupId;
             }
-            if (updates.role_id !== undefined)
-                payload.role_id = safeUuid(updates.role_id);
-            if (updates.remuneration_level_id !== undefined)
-                payload.remuneration_level_id = safeUuid(updates.remuneration_level_id);
-            if (updates.shift_date !== undefined) {
-                payload.shift_date = updates.shift_date;
-                // roster_date handles separately in RPC if shift_date provided
-            }
-            if (updates.start_time !== undefined)
-                payload.start_time = updates.start_time;
-            if (updates.end_time !== undefined) payload.end_time = updates.end_time;
-            if (updates.paid_break_minutes !== undefined)
-                payload.paid_break_minutes = updates.paid_break_minutes;
-            if (updates.unpaid_break_minutes !== undefined)
-                payload.unpaid_break_minutes = updates.unpaid_break_minutes;
-            if (updates.timezone !== undefined) payload.timezone = updates.timezone;
-            if (updates.start_at !== undefined) payload.start_at = updates.start_at;
-            if (updates.end_at !== undefined) payload.end_at = updates.end_at;
-            if (updates.assigned_employee_id !== undefined) {
-                payload.assigned_employee_id = safeUuid(updates.assigned_employee_id);
-                if (updates.assigned_employee_id) {
-                    payload.assignment_source = updates.assignment_source ?? 'manual';
-                } else {
-                    payload.assignment_source = null;
-                }
-            }
-            if (updates.required_skills !== undefined)
-                payload.required_skills = updates.required_skills;
-            if (updates.required_licenses !== undefined)
-                payload.required_licenses = updates.required_licenses;
-            if (updates.event_ids !== undefined)
-                payload.event_ids = updates.event_ids;
-            if (updates.tags !== undefined) payload.tags = updates.tags;
-            if (updates.notes !== undefined) payload.notes = updates.notes;
-            if (updates.cancellation_reason !== undefined)
-                payload.cancellation_reason = updates.cancellation_reason;
-            if (updates.is_training !== undefined)
-                payload.is_training = updates.is_training;
+        }
+        if (updates.timezone !== undefined) editPayload.timezone = updates.timezone;
+        if (updates.is_training !== undefined) editPayload.is_training = updates.is_training;
 
-            // 4. Execute DB write — direct UPDATE on shifts table.
-            //    The legacy RPC `sm_update_shift` fails because it tries to call
-            //     a non-existent `notify_user` function. Direct update bypasses it.
+        // ── Non-whitelist fields: preserve the existing direct-update path ─────
+        // These are NOT silently dropped. assigned_employee_id keeps its existing
+        // assignment_source behaviour; roster_id/department_id/organization_id are
+        // structural moves; start_at/end_at are canonical timestamps; the jsonb
+        // arrays + cancellation_reason are owned by other pipelines.
+        const excludedPayload: Record<string, unknown> = {};
+
+        if (updates.roster_id !== undefined)
+            excludedPayload.roster_id = safeUuid(updates.roster_id);
+        if (updates.department_id !== undefined)
+            excludedPayload.department_id = safeUuid(updates.department_id);
+        if (updates.organization_id !== undefined)
+            excludedPayload.organization_id = safeUuid(updates.organization_id);
+        if (updates.start_at !== undefined) excludedPayload.start_at = updates.start_at;
+        if (updates.end_at !== undefined) excludedPayload.end_at = updates.end_at;
+        if (updates.assigned_employee_id !== undefined) {
+            excludedPayload.assigned_employee_id = safeUuid(updates.assigned_employee_id);
+            if (updates.assigned_employee_id) {
+                excludedPayload.assignment_source = updates.assignment_source ?? 'manual';
+            } else {
+                excludedPayload.assignment_source = null;
+            }
+        }
+        if (updates.required_skills !== undefined)
+            excludedPayload.required_skills = updates.required_skills;
+        if (updates.required_licenses !== undefined)
+            excludedPayload.required_licenses = updates.required_licenses;
+        if (updates.event_ids !== undefined)
+            excludedPayload.event_ids = updates.event_ids;
+        if (updates.tags !== undefined) excludedPayload.tags = updates.tags;
+        if (updates.cancellation_reason !== undefined)
+            excludedPayload.cancellation_reason = updates.cancellation_reason;
+
+        const hasEdit = Object.keys(editPayload).length > 0;
+        const hasExcluded = Object.keys(excludedPayload).length > 0;
+
+        // ── (1) Schedule/grouping edits → audited gateway op ──────────────────
+        if (hasEdit) {
+            // The gateway performs CAS against the EXACT current version, so an
+            // expected version is mandatory. If the caller did not supply one,
+            // read the current version (non-critical updates that omit it keep
+            // working — we just fetch the head version to satisfy the contract).
+            let expectedVersion = updates.expectedVersion;
+            if (expectedVersion === undefined) {
+                const current = await shiftsQueries.getShiftById(shiftId);
+                if (!current) {
+                    throw new Error('Shift not found or has been deleted.');
+                }
+                expectedVersion = current.version;
+            }
+
+            const envelope = await callRpc(
+                'sm_apply_shift_op',
+                {
+                    p_shift_id: shiftId,
+                    p_expected_version: expectedVersion,
+                    p_op: 'edit',
+                    p_payload: { ...editPayload, reason: 'Shift edited' },
+                    p_idempotency_key: null,
+                },
+                ApplyShiftOpResponseSchema,
+            );
+
+            switch (envelope.code) {
+                case 'APPLIED':
+                case 'IDEMPOTENT_REPLAY':
+                    break;
+                case 'VERSION_CONFLICT':
+                    throw new Error(
+                        'This shift was modified by someone else (concurrent modification). ' +
+                        'Reload and try again.',
+                    );
+                case 'ILLEGAL_TRANSITION':
+                    throw new Error(
+                        `This edit is not allowed in the shift's current state (${envelope.current_state ?? 'unknown'}).`,
+                    );
+                case 'FORBIDDEN':
+                    throw new Error('You do not have permission to edit this shift.');
+                case 'GONE':
+                    throw new Error('Shift not found or has been deleted.');
+                case 'WRITE_REJECTED':
+                    throw new Error(`Shift edit was rejected: ${envelope.note ?? 'unknown reason'}.`);
+                default:
+                    throw new Error(envelope.error ?? 'Failed to edit shift.');
+            }
+        }
+
+        // ── (2) Non-whitelist fields → existing direct-update path ────────────
+        // Behaviour-preserving: same direct UPDATE the legacy code used (the
+        // legacy RPC sm_update_shift is broken via a missing notify_user fn).
+        // Only runs when there are excluded fields to write.
+        if (hasExcluded) {
             let query = supabase
                 .from('shifts')
                 .update({
-                    ...payload,
+                    ...excludedPayload,
                     updated_at:       new Date().toISOString(),
                     last_modified_by: user.id,
                 })
                 .eq('id', shiftId);
 
-            if (updates.expectedVersion !== undefined) {
+            // Honour optimistic concurrency when the caller passed a version. If
+            // the gateway 'edit' op already ran above, it bumped the version, so
+            // only gate on the original expected version when there was NO edit.
+            if (updates.expectedVersion !== undefined && !hasEdit) {
                 query = query.eq('version', updates.expectedVersion);
             }
 
@@ -275,14 +361,14 @@ export const shiftsCommands = {
             if (!updatedRows || updatedRows.length === 0) {
                 throw new Error('No rows were updated. The shift may have been modified by another user.');
             }
-
-            const updatedShift = await shiftsQueries.getShiftById(shiftId);
-            if (!updatedShift) {
-                throw new Error('Shift updated but could not be retrieved');
-            }
-
-            return updatedShift;
         }
+
+        const updatedShift = await shiftsQueries.getShiftById(shiftId);
+        if (!updatedShift) {
+            throw new Error('Shift updated but could not be retrieved');
+        }
+
+        return updatedShift;
     },
 
     /* ============================================================
@@ -368,50 +454,60 @@ export const shiftsCommands = {
     async bulkUnassignShifts(shiftIds: string[]): Promise<Shift[]> {
         if (shiftIds.length === 0) return [];
 
-        const user = await requireUser();
-
-        // Fetch current assignment state before clearing it so the audit log
-        // records which employee was removed from each shift.  Unassign never
-        // adds compliance violations (it only removes them), so this is purely
-        // observability — the mutation is not blocked.
+        // Route each unassign through the audited mutation gateway (the `unassign`
+        // op added in 20260623000100_shift_unassign_op). The gateway records a
+        // durable UNASSIGNED shift_events row per shift (naming the removed worker),
+        // so the previous console.info "audit log" is gone. Partial-success
+        // semantics are preserved: a per-shift failure (already-unassigned, version
+        // conflict, illegal state, etc.) is skipped, not fatal.
+        //
+        // The gateway requires the EXACT current version for its CAS, so fetch
+        // version per shift first (this also lets us return the updated rows).
         const { data: preState } = await supabase
             .from('shifts')
-            .select('id, assigned_employee_id, shift_date, start_time, end_time')
+            .select('id, version, assigned_employee_id')
             .in('id', shiftIds)
             .is('deleted_at', null);
 
-        const removedAssignments = (preState ?? [])
-            .filter((s: any) => s.assigned_employee_id !== null)
-            .map((s: any) => ({
-                shift_id:             s.id,
-                removed_employee_id:  s.assigned_employee_id,
-                shift_date:           s.shift_date,
-                start_time:           s.start_time,
-                end_time:             s.end_time,
-            }));
+        const succeededIds: string[] = [];
 
-        // Structured audit log — consumed by downstream observability tooling.
-        // Unassign is never blocked (removing a shift can only reduce violations),
-        // but every removal must be observable for compliance audit trails.
-        console.info(JSON.stringify({
-            operation:           'bulk_unassign',
-            actor_id:            user.id,
-            shift_ids:           shiftIds,
-            removed_assignments: removedAssignments,
-            timestamp:           new Date().toISOString(),
-        }));
+        await Promise.all(
+            (preState ?? []).map(async (s: { id: string; version: number; assigned_employee_id: string | null }) => {
+                // Nothing to remove — the gateway would soft-reject (ALREADY_UNASSIGNED).
+                if (s.assigned_employee_id === null) return;
 
+                try {
+                    const envelope = await callRpc(
+                        'sm_apply_shift_op',
+                        {
+                            p_shift_id: s.id,
+                            p_expected_version: s.version,
+                            p_op: 'unassign',
+                            p_payload: { reason: 'Bulk unassign' },
+                            p_idempotency_key: null,
+                        },
+                        ApplyShiftOpResponseSchema,
+                    );
+
+                    if (envelope.code === 'APPLIED' || envelope.code === 'IDEMPOTENT_REPLAY') {
+                        succeededIds.push(s.id);
+                    }
+                    // Any other code (VERSION_CONFLICT / ILLEGAL_TRANSITION /
+                    // WRITE_REJECTED / FORBIDDEN / GONE) is a per-shift skip.
+                } catch {
+                    // Network/validation error on one shift must not fail the batch.
+                }
+            }),
+        );
+
+        if (succeededIds.length === 0) return [];
+
+        // Return the freshly-unassigned rows (preserves the Shift[] return type).
         const { data, error } = await supabase
             .from('shifts')
-            .update({
-                assigned_employee_id: null,
-                assigned_at: null,
-                last_modified_by: user.id,
-                updated_at: new Date().toISOString(),
-            })
-            .in('id', shiftIds)
-            .is('deleted_at', null)
-            .select('*');
+            .select('*')
+            .in('id', succeededIds)
+            .is('deleted_at', null);
 
         if (error) throw error;
 
@@ -448,6 +544,11 @@ export const shiftsCommands = {
                         assignment_outcome: 'confirmed',
                         fulfillment_status: 'scheduled',
                         bidding_status:     'not_on_bidding',
+                        // Skipping the offer step because TTS < 4h IS the emergency
+                        // signal — stamp emergency_assigned_at so fn_capture_shift_event
+                        // emits EMERGENCY_ASSIGNED (powers the Emergency Assigned metric)
+                        // while the shift still lands in S4 (Confirmed).
+                        emergency_assigned_at: new Date().toISOString(),
                         updated_at:         new Date().toISOString(),
                         last_modified_by:   user.id,
                     })
@@ -573,6 +674,10 @@ export const shiftsCommands = {
                     assignment_outcome: 'confirmed',
                     fulfillment_status: 'scheduled',
                     bidding_status:     'not_on_bidding',
+                    // TTS < 4h emergency publish — stamp emergency_assigned_at so the
+                    // confirm transition is captured as EMERGENCY_ASSIGNED (metric),
+                    // while still landing in S4 (Confirmed). See publishShift above.
+                    emergency_assigned_at: new Date().toISOString(),
                     updated_at:         new Date().toISOString(),
                     last_modified_by:   user.id,
                 })

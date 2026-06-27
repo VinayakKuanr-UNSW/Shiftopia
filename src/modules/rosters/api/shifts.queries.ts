@@ -1425,6 +1425,33 @@ export const shiftsQueries = {
 
         return (data ?? []) as ShiftDeltaRow[];
     },
+
+    /* ============================================================
+       GET SHIFT EVENT TIMELINE  (read-only audit ledger)
+       Returns the full ordered audit trail for a single shift from
+       public.shift_events, via the get_shift_event_timeline RPC.
+       Powers the read-only "History" timeline UI — never writes events.
+
+       NOTE: this RPC is not yet in the generated supabase type registry
+       (migration pending), so it follows the same `(supabase.rpc as any)`
+       + plain-interface pattern as getShiftDelta above.
+       ============================================================ */
+
+    async getShiftEventTimeline(shiftId: string): Promise<ShiftEventTimelineRow[]> {
+        if (!isValidUuid(shiftId)) return [];
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error } = await (supabase.rpc as any)('get_shift_event_timeline', {
+            p_shift_id: shiftId,
+        });
+
+        if (error) {
+            console.error('[getShiftEventTimeline] RPC error:', error);
+            throw error;
+        }
+
+        return (data ?? []) as ShiftEventTimelineRow[];
+    },
 };
 
 // ── Delta sync types ──────────────────────────────────────────────────────────
@@ -1444,5 +1471,48 @@ export interface ShiftDeltaRow {
     department_id: string | null;
     sub_department_id: string | null;
     role_id: string | null;
+}
+
+// ── Shift event timeline types ──────────────────────────────────────────────
+// Mirrors the get_shift_event_timeline RPC contract (the audit ledger view over
+// public.shift_events). Read-only — the UI never emits events.
+
+/** Domain bucket an audit event belongs to. */
+export type ShiftEventDomain =
+    | 'lifecycle'
+    | 'assignment'
+    | 'schedule'
+    | 'offer'
+    | 'marketplace'
+    | 'trade'
+    | 'drop'
+    | 'attendance'
+    | 'compliance';
+
+/** Who triggered the event. */
+export type ShiftEventActorRole = 'manager' | 'employee' | 'system';
+
+/** A single field-level diff entry inside `changes`. */
+export interface ShiftEventFieldChange {
+    old: unknown;
+    new: unknown;
+}
+
+/** One row returned by get_shift_event_timeline — a single audit-ledger event. */
+export interface ShiftEventTimelineRow {
+    event_id: string;
+    event_time: string; // ISO 8601 timestamptz
+    domain: ShiftEventDomain | string | null;
+    event_type: string;
+    op: string | null;
+    actor_id: string | null;
+    actor_role: ShiftEventActorRole | string | null;
+    employee_id: string | null;
+    from_state: string | null;
+    to_state: string | null;
+    from_version: string | null;
+    to_version: string | null;
+    changes: Record<string, ShiftEventFieldChange> | null;
+    reason: string | null;
 }
 

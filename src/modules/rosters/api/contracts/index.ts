@@ -245,6 +245,35 @@ export const CloseBiddingResponseSchema = z.object({
   error: z.string().optional(),
 });
 
+// sm_apply_shift_op — the optimistic-concurrency mutation gateway.
+// Returns a jsonb envelope: ok + a discriminating `code`. The shape varies by
+// code (VERSION_CONFLICT carries current_version/server_row, WRITE_REJECTED a
+// note, etc.) so we keep most fields optional + passthrough.
+export const ApplyShiftOpCodeSchema = z.enum([
+  'APPLIED',
+  'IDEMPOTENT_REPLAY',
+  'VERSION_CONFLICT',
+  'ILLEGAL_TRANSITION',
+  'WRITE_REJECTED',
+  'GONE',
+  'FORBIDDEN',
+  'ERROR',
+]);
+
+export const ApplyShiftOpResponseSchema = z.object({
+  ok: z.boolean(),
+  code: ApplyShiftOpCodeSchema,
+  version: z.number().int().optional(),
+  state: z.string().optional(),
+  note: z.string().nullable().optional(),
+  error: z.string().optional(),
+  // VERSION_CONFLICT extras
+  current_version: z.number().int().optional(),
+  current_state: z.string().optional(),
+  attempted: z.string().optional(),
+}).passthrough();
+export type ApplyShiftOpResponse = z.infer<typeof ApplyShiftOpResponseSchema>;
+
 // Compliance RPCs
 export const OverlapCheckSchema = z.boolean().nullable().transform(v => v ?? false);
 export const WeeklyHoursSchema = z.number().nullable().transform(v => v ?? 0);
