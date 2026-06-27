@@ -32,6 +32,22 @@ describe('getTimeRule - 5-state schedule lifecycle', () => {
             .toBe('Closed');
     });
 
+    it('Closed when clocked out early, even though still inside the scheduled window', () => {
+        // Worker clocked out (actual_end set) an hour into an 8h shift — must not read Live.
+        expect(getTimeRule({ lifecycle_status: 'Completed', start_at: iso(-1 * HOUR), end_at: iso(+7 * HOUR), actual_end: iso(-0.5 * HOUR) })?.label)
+            .toBe('Closed');
+    });
+
+    it('Closed when Completed inside the scheduled window (no clock-out recorded)', () => {
+        expect(getTimeRule({ lifecycle_status: 'Completed', start_at: iso(-1 * HOUR), end_at: iso(+7 * HOUR) })?.label)
+            .toBe('Closed');
+    });
+
+    it('Closed when cancelled inside the scheduled window', () => {
+        expect(getTimeRule({ lifecycle_status: 'Published', is_cancelled: true, start_at: iso(-1 * HOUR), end_at: iso(+7 * HOUR) })?.label)
+            .toBe('Closed');
+    });
+
     it('returns null when the start time is unparseable', () => {
         expect(getTimeRule({ lifecycle_status: 'Published' })).toBeNull();
     });

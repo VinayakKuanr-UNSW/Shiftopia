@@ -515,6 +515,17 @@ export function getTimeRule(shift: ShiftDotInput): ShiftRuleBadge | null {
     const end = shift.end_at ? parseToMs(shift.end_at) : parseToMs(shift.end_time, shift.shift_date);
     if (start === null) return null;
 
+    // A terminal or clocked-out shift is Closed regardless of the scheduled
+    // window. "Live" must reflect that work is actually in progress, not merely
+    // that the clock sits inside the scheduled window — without this guard a
+    // shift that the worker clocked out of early (or that completed / was
+    // cancelled) keeps reading "Live" until its scheduled end_at.
+    if (shift.is_cancelled
+        || shift.lifecycle_status === 'Completed'
+        || shift.actual_end) {
+        return { label: 'Closed', color: '#64748B' }; // slate
+    }
+
     const now = Date.now();
 
     if (now >= start) {
