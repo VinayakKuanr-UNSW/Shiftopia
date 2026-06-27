@@ -31,7 +31,10 @@ import {
   Store,
   ArrowLeftRight,
   UserMinus,
+  UserCheck,
+  UserX,
   LogIn,
+  LogOut,
   Receipt,
   ShieldAlert,
   History,
@@ -39,6 +42,13 @@ import {
   Loader2,
   AlertTriangle,
   Inbox,
+  Plus,
+  Zap,
+  Send,
+  RotateCcw,
+  XCircle,
+  CheckCircle2,
+  Check,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
@@ -103,6 +113,80 @@ function domainIcon(domain: string | null | undefined): LucideIcon {
 // ─── Marketplace gets its own icon when domain is the violet store-front ──────
 // (kept here so Store import is meaningful and not dead.)
 const MARKETPLACE_ICON: LucideIcon = Store;
+
+// ─── Event-specific icon + accent ────────────────────────────────────────────
+// The domain colour/icon is a coarse bucket; a per-verb icon + accent makes the
+// timeline scannable at a glance (Created ≠ Assigned ≠ Emergency ≠ Completed).
+// Resolution order is always: op (the true verb) → event_type → domain fallback.
+
+const EVENT_ICON_BY_OP: Record<string, LucideIcon> = {
+  create:             Plus,
+  assign:             UserCheck,
+  unassign:           UserMinus,
+  publish:            Send,
+  unpublish:          RotateCcw,
+  edit:               Edit3,
+  move:               Edit3,
+  delete:             XCircle,
+  complete:           CheckCircle2,
+  clock_out:          LogOut,
+  select_winner:      Gavel,
+  approve_trade:      ArrowLeftRight,
+  reject_trade:       ArrowLeftRight,
+  timesheet_finalize: Receipt,
+  timesheet_adjust:   Receipt,
+};
+
+const EVENT_ICON_BY_TYPE: Record<string, LucideIcon> = {
+  ASSIGNED:           UserCheck,
+  UNASSIGNED:         UserMinus,
+  EMERGENCY_ASSIGNED: Zap,
+  OFFERED:            Inbox,
+  ACCEPTED:           Check,
+  REJECTED:           XCircle,
+  IGNORED:            Clock,
+  CHECKED_IN:         LogIn,
+  LATE_IN:            LogIn,
+  EARLY_OUT:          LogOut,
+  NO_SHOW:            UserX,
+  CANCELLED:          XCircle,
+  LATE_CANCELLED:     XCircle,
+  SWAPPED_OUT:        ArrowLeftRight,
+  SWAPPED_IN:         ArrowLeftRight,
+};
+
+/** Most-specific icon for a row: op → event_type → domain fallback. */
+function eventIcon(row: ShiftEventTimelineRow): LucideIcon {
+  if (row.op && EVENT_ICON_BY_OP[row.op]) return EVENT_ICON_BY_OP[row.op];
+  if (row.event_type && EVENT_ICON_BY_TYPE[row.event_type]) return EVENT_ICON_BY_TYPE[row.event_type];
+  if (row.domain === 'marketplace') return MARKETPLACE_ICON;
+  return domainIcon(row.domain);
+}
+
+// Accent overrides for events whose meaning is stronger than their domain colour
+// (an emergency is amber-attention, not the emerald of the "assignment" domain).
+const EVENT_COLOR_BY_OP: Record<string, string> = {
+  unpublish: FSM_COLOR_HEX.orange,
+  delete:    FSM_COLOR_HEX.red,
+  complete:  FSM_COLOR_HEX.emerald,
+};
+
+const EVENT_COLOR_BY_TYPE: Record<string, string> = {
+  EMERGENCY_ASSIGNED: FSM_COLOR_HEX.amber,
+  EARLY_OUT:          FSM_COLOR_HEX.amber,
+  LATE_IN:            FSM_COLOR_HEX.amber,
+  NO_SHOW:            FSM_COLOR_HEX.red,
+  CANCELLED:          FSM_COLOR_HEX.red,
+  LATE_CANCELLED:     FSM_COLOR_HEX.red,
+  REJECTED:           FSM_COLOR_HEX.red,
+};
+
+/** Most-specific accent for a row: op/event_type override → domain colour. */
+function eventColor(row: ShiftEventTimelineRow): string {
+  if (row.op && EVENT_COLOR_BY_OP[row.op]) return EVENT_COLOR_BY_OP[row.op];
+  if (row.event_type && EVENT_COLOR_BY_TYPE[row.event_type]) return EVENT_COLOR_BY_TYPE[row.event_type];
+  return domainColor(row.domain);
+}
 
 // ─── Actor-role chip config ──────────────────────────────────────────────────
 
@@ -266,11 +350,8 @@ interface EventRowProps {
 const EventRow: React.FC<EventRowProps> = ({ row, isLast }) => {
   const [expanded, setExpanded] = useState(false);
 
-  const color = useMemo(() => domainColor(row.domain), [row.domain]);
-  const Icon = useMemo<LucideIcon>(() => {
-    if (row.domain === 'marketplace') return MARKETPLACE_ICON;
-    return domainIcon(row.domain);
-  }, [row.domain]);
+  const color = useMemo(() => eventColor(row), [row]);
+  const Icon = useMemo<LucideIcon>(() => eventIcon(row), [row]);
 
   const system = isSystemActor(row.actor_role);
   const roleKey = (row.actor_role ?? 'system').toLowerCase() as ShiftEventActorRole;
@@ -361,18 +442,23 @@ const EventRow: React.FC<EventRowProps> = ({ row, isLast }) => {
             </span>
           </div>
 
-          {/* Δstate transition */}
+          {/* State: a single destination pill for origin events (Created — no
+              from-state), an arrow for genuine transitions. */}
           {hasStateDelta && (
             <div className="mt-1.5 flex items-center gap-1.5 text-xs">
-              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
-                {fromDisp ?? '—'}
-              </span>
-              <ChevronRight className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+              {fromDisp && (
+                <>
+                  <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                    {fromDisp}
+                  </span>
+                  <ChevronRight className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+                </>
+              )}
               <span
                 className="rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold"
                 style={{ backgroundColor: `${color}1A`, color }}
               >
-                {toDisp ?? '—'}
+                {toDisp}
               </span>
             </div>
           )}
@@ -485,9 +571,13 @@ export function ShiftHistoryTimeline({ shiftId, className }: ShiftHistoryTimelin
   // Group events by day, oldest → newest. The RPC is expected to return ordered
   // rows, but we sort defensively so the UI never depends on RPC ordering.
   const grouped = useMemo(() => {
-    const rows = [...(query.data ?? [])].sort(
-      (a, b) => new Date(a.event_time).getTime() - new Date(b.event_time).getTime(),
-    );
+    const rows = [...(query.data ?? [])].sort((a, b) => {
+      const dt = new Date(a.event_time).getTime() - new Date(b.event_time).getTime();
+      if (dt !== 0) return dt;
+      // Same timestamp (e.g. create + its assign trigger): surface the shift's
+      // origin first; otherwise keep the RPC's order (Array.sort is stable).
+      return (a.op === 'create' ? 0 : 1) - (b.op === 'create' ? 0 : 1);
+    });
     const buckets = new Map<string, ShiftEventTimelineRow[]>();
     for (const row of rows) {
       const key = dayKey(row.event_time);
