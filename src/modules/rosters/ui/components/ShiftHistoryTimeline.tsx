@@ -328,18 +328,6 @@ function formatFullTimestamp(iso: string): string {
   });
 }
 
-// ─── Version-delta extraction ────────────────────────────────────────────────
-// If the changes diff carries a `version` field, surface it as "v3 → v4".
-
-function versionDelta(
-  row: ShiftEventTimelineRow,
-): { from: string; to: string } | null {
-  if (row.from_version && row.to_version && row.from_version !== row.to_version) {
-    return { from: row.from_version, to: row.to_version };
-  }
-  return null;
-}
-
 // ─── Single event row ────────────────────────────────────────────────────────
 
 interface EventRowProps {
@@ -364,8 +352,7 @@ const EventRow: React.FC<EventRowProps> = ({ row, isLast }) => {
   const toDisp = displayState(row.to_state);
   const hasStateDelta = !!toDisp && fromDisp !== toDisp;
   const changeEntries = row.changes ? Object.entries(row.changes) : [];
-  const vDelta = useMemo(() => versionDelta(row), [row]);
-  const isExpandable = changeEntries.length > 0 || !!row.reason || !!vDelta;
+  const isExpandable = changeEntries.length > 0 || !!row.reason;
 
   return (
     <li className="relative flex gap-3">
@@ -463,7 +450,7 @@ const EventRow: React.FC<EventRowProps> = ({ row, isLast }) => {
             </div>
           )}
 
-          {/* Expanded detail: field diffs, reason, version delta, full timestamp */}
+          {/* Expanded detail: field diffs, reason, full timestamp */}
           {expanded && isExpandable && (
             <div className="mt-2.5 space-y-2 border-t border-border/60 pt-2.5">
               {changeEntries.length > 0 && (
@@ -491,15 +478,6 @@ const EventRow: React.FC<EventRowProps> = ({ row, isLast }) => {
                       </li>
                     ))}
                 </ul>
-              )}
-
-              {vDelta && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">Version</span>
-                  <span className="font-mono text-[11px]">
-                    v{vDelta.from} → v{vDelta.to}
-                  </span>
-                </div>
               )}
 
               {row.reason && (
@@ -544,6 +522,75 @@ const DayGroup: React.FC<DayGroupProps> = ({ day, rows }) => (
   </div>
 );
 
+// ─── Derived data helpers ────────────────────────────────────────────────────
+
+/**
+ * Drop the trigger-emitted ASSIGNED that coincides with a `create` event. An
+ * assigned-at-creation shift emits BOTH (the create row + the trigger's ASSIGNED);
+ * the create row already conveys the assignment. The ledger keeps both rows
+ * (the metrics layer counts ASSIGNED) — this de-duplicates the DISPLAY only.
+ */
+function dedupeCreationAssign(rows: ShiftEventTimelineRow[]): ShiftEventTimelineRow[] {
+  const createTimes = new Set(rows.filter((r) => r.op === 'create').map((r) => r.event_time));
+  if (createTimes.size === 0) return rows;
+  return rows.filter(
+    (r) => !(r.op == null && r.event_type === 'ASSIGNED' && createTimes.has(r.event_time)),
+  );
+}
+
+interface TimelineSummary {
+  count: number;
+  firstTime: string;
+  lastTime: string;
+  finalState: string | null;
+  finalColor: string;
+}
+
+/** One-line summary: event count, time span, and the shift's most-recent state. */
+function summarize(rows: ShiftEventTimelineRow[]): TimelineSummary | null {
+  if (rows.length === 0) return null;
+  let finalState: string | null = null;
+  let finalColor = FSM_COLOR_HEX.slate;
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const ts = displayState(rows[i].to_state);
+    if (ts) {
+      finalState = ts;
+      finalColor = eventColor(rows[i]);
+      break;
+    }
+  }
+  return {
+    count: rows.length,
+    firstTime: rows[0].event_time,
+    lastTime: rows[rows.length - 1].event_time,
+    finalState,
+    finalColor,
+  };
+}
+
+// ─── Domain filter chip ──────────────────────────────────────────────────────
+
+const FilterChip: React.FC<{
+  label: string;
+  active: boolean;
+  color?: string;
+  onClick: () => void;
+}> = ({ label, active, color, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={cn(
+      'rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors',
+      active
+        ? 'border-transparent text-white shadow-sm'
+        : 'border-border text-muted-foreground hover:bg-muted',
+    )}
+    style={active ? { backgroundColor: color ?? 'hsl(var(--primary))' } : undefined}
+  >
+    {label}
+  </button>
+);
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -568,25 +615,47 @@ export function ShiftHistoryTimeline({ shiftId, className }: ShiftHistoryTimelin
     enabled: isValid,
   });
 
-  // Group events by day, oldest → newest. The RPC is expected to return ordered
-  // rows, but we sort defensively so the UI never depends on RPC ordering.
-  const grouped = useMemo(() => {
+  const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+
+  // Sorted + display-deduped event list (defensive sort so we never depend on
+  // RPC ordering; create sorts ahead of its same-instant assign trigger).
+  const allRows = useMemo(() => {
     const rows = [...(query.data ?? [])].sort((a, b) => {
       const dt = new Date(a.event_time).getTime() - new Date(b.event_time).getTime();
       if (dt !== 0) return dt;
-      // Same timestamp (e.g. create + its assign trigger): surface the shift's
-      // origin first; otherwise keep the RPC's order (Array.sort is stable).
       return (a.op === 'create' ? 0 : 1) - (b.op === 'create' ? 0 : 1);
     });
+    return dedupeCreationAssign(rows);
+  }, [query.data]);
+
+  // Domains present, in first-seen order — drives the filter chips.
+  const domains = useMemo(() => {
+    const seen: string[] = [];
+    for (const r of allRows) {
+      const d = (r.domain ?? '').toString();
+      if (d && !seen.includes(d)) seen.push(d);
+    }
+    return seen;
+  }, [allRows]);
+
+  const summary = useMemo(() => summarize(allRows), [allRows]);
+
+  const visibleRows = useMemo(
+    () => (selectedDomain ? allRows.filter((r) => r.domain === selectedDomain) : allRows),
+    [allRows, selectedDomain],
+  );
+
+  // Group the visible events by day (oldest → newest, insertion order).
+  const grouped = useMemo(() => {
     const buckets = new Map<string, ShiftEventTimelineRow[]>();
-    for (const row of rows) {
+    for (const row of visibleRows) {
       const key = dayKey(row.event_time);
       const list = buckets.get(key);
       if (list) list.push(row);
       else buckets.set(key, [row]);
     }
-    return Array.from(buckets.entries()); // already oldest→newest (insertion order)
-  }, [query.data]);
+    return Array.from(buckets.entries());
+  }, [visibleRows]);
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (query.isLoading) {
@@ -619,7 +688,7 @@ export function ShiftHistoryTimeline({ shiftId, className }: ShiftHistoryTimelin
   }
 
   // ── Empty ──────────────────────────────────────────────────────────────────
-  if (grouped.length === 0) {
+  if (allRows.length === 0) {
     return (
       <div
         className={cn(
@@ -635,10 +704,62 @@ export function ShiftHistoryTimeline({ shiftId, className }: ShiftHistoryTimelin
 
   // ── Timeline ───────────────────────────────────────────────────────────────
   return (
-    <div className={cn('space-y-5', className)} id="shift-history-timeline">
-      {grouped.map(([day, rows]) => (
-        <DayGroup key={day} day={day} rows={rows} />
-      ))}
+    <div className={cn('space-y-3', className)} id="shift-history-timeline">
+      {/* Summary band: count · time span · current state */}
+      {summary && (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+            <span>
+              <span className="font-semibold text-foreground">{summary.count}</span>{' '}
+              event{summary.count !== 1 ? 's' : ''}
+            </span>
+            <span className="text-muted-foreground/40">·</span>
+            <span className="tabular-nums">
+              {formatTime(summary.firstTime)} → {formatTime(summary.lastTime)}
+            </span>
+          </div>
+          {summary.finalState && (
+            <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+              now
+              <span
+                className="rounded px-1.5 py-0.5 font-mono font-semibold"
+                style={{ backgroundColor: `${summary.finalColor}1A`, color: summary.finalColor }}
+              >
+                {summary.finalState}
+              </span>
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Domain filter chips (only worth showing with >1 domain) */}
+      {domains.length > 1 && (
+        <div className="flex flex-wrap gap-1.5">
+          <FilterChip label="All" active={selectedDomain === null} onClick={() => setSelectedDomain(null)} />
+          {domains.map((d) => (
+            <FilterChip
+              key={d}
+              label={humanizeToken(d)}
+              color={domainColor(d)}
+              active={selectedDomain === d}
+              onClick={() => setSelectedDomain(d)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Events */}
+      {grouped.length === 0 ? (
+        <div className="px-4 py-6 text-center text-xs italic text-muted-foreground">
+          No events in this category.
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {grouped.map(([day, rows]) => (
+            <DayGroup key={day} day={day} rows={rows} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
