@@ -22,6 +22,7 @@ import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
+  Bot,
   Calendar,
   Clock,
   Cog,
@@ -195,15 +196,17 @@ const ACTOR_ROLE_CONFIG: Record<
   ShiftEventActorRole,
   { label: string; variant: 'info' | 'success' | 'secondary' }
 > = {
-  manager:  { label: 'Manager',  variant: 'info' },
-  employee: { label: 'Employee', variant: 'success' },
-  system:   { label: 'System',   variant: 'secondary' },
+  manager:       { label: 'Manager',        variant: 'info' },
+  employee:      { label: 'Employee',       variant: 'success' },
+  system:        { label: 'System',         variant: 'secondary' },
+  autoscheduler: { label: 'Auto-Scheduler', variant: 'secondary' },
 };
 
 const ROLE_COLOR: Record<ShiftEventActorRole, string> = {
-  manager:  FSM_COLOR_HEX.blue,
-  employee: FSM_COLOR_HEX.emerald,
-  system:   FSM_COLOR_HEX.slate,
+  manager:       FSM_COLOR_HEX.blue,
+  employee:      FSM_COLOR_HEX.emerald,
+  system:        FSM_COLOR_HEX.slate,
+  autoscheduler: FSM_COLOR_HEX.violet,
 };
 
 // ─── Label derivation ────────────────────────────────────────────────────────
@@ -389,7 +392,11 @@ const ActorCell: React.FC<{ row: ShiftEventTimelineRow }> = ({ row }) => {
         style={{ backgroundColor: `${color}1F`, color, boxShadow: `inset 0 0 0 1px ${color}3A` }}
         aria-hidden="true"
       >
-        {name ? actorInitials(name) : <Cpu className="h-3 w-3" />}
+        {name
+          ? actorInitials(name)
+          : role === 'autoscheduler'
+            ? <Bot className="h-3.5 w-3.5" />
+            : <Cpu className="h-3 w-3" />}
       </span>
       <div className="flex min-w-0 flex-col leading-tight">
         {name && <span className="truncate text-xs font-semibold text-foreground">{name}</span>}

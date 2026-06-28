@@ -1491,7 +1491,7 @@ export type ShiftEventDomain =
     | 'payroll';
 
 /** Who triggered the event. */
-export type ShiftEventActorRole = 'manager' | 'employee' | 'system';
+export type ShiftEventActorRole = 'manager' | 'employee' | 'system' | 'autoscheduler';
 
 /** A single field-level diff entry inside `changes`. */
 export interface ShiftEventFieldChange {
