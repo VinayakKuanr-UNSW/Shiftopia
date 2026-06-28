@@ -344,9 +344,9 @@ function formatClock(iso: string): string {
 
 // ─── Layout constant ─────────────────────────────────────────────────────────
 // Shared grid so the column header and every event row align like a table. The
-// action column (1fr) absorbs slack, so the table always fills its container
-// width — no clipped right edge. node | from | action | actor | to | time
-const GRID_TEMPLATE = '32px 52px minmax(0,1fr) 176px 52px 88px';
+// details column (minmax) absorbs slack, so the table always fills its container
+// width. node | details & transition | actor | time
+const GRID_TEMPLATE = '36px minmax(0,1fr) 180px 88px';
 
 // ─── State pill ──────────────────────────────────────────────────────────────
 // Monospace FSM-state chip. The "to" pill is accented with the event colour; the
@@ -408,28 +408,43 @@ const ActorCell: React.FC<{ row: ShiftEventTimelineRow }> = ({ row }) => {
   );
 };
 
-// ─── Action cell (label + inline Original → New diff + reason) ────────────────
+// ─── Action cell (label + inline transition + inline Original → New diff + reason) ─
 
-const ActionCell: React.FC<{ row: ShiftEventTimelineRow }> = ({ row }) => {
+const ActionCell: React.FC<{
+  row: ShiftEventTimelineRow;
+  fromDisp: string | null;
+  toDisp: string | null;
+  color: string;
+}> = ({ row, fromDisp, toDisp, color }) => {
   const label = eventLabel(row);
   const entries = (row.changes ? Object.entries(row.changes) : []).filter(
     ([field]) => field !== 'version' && field !== '_version',
   );
 
   return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <span className="text-sm font-semibold leading-tight text-foreground">{label}</span>
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-semibold leading-tight text-foreground">{label}</span>
+        {(fromDisp || toDisp) && (
+          <div className="inline-flex items-center gap-1 rounded-md bg-muted/40 px-1 py-0.5 border border-border/40 scale-[0.92] origin-left">
+            <StatePill state={fromDisp} />
+            <ArrowRight className="h-2.5 w-2.5 text-muted-foreground/45 shrink-0" aria-hidden="true" />
+            <StatePill state={toDisp} color={color} />
+          </div>
+        )}
+      </div>
 
       {entries.length > 0 && (
-        <div className="flex flex-col gap-0.5">
+        <div className="mt-1 flex flex-col gap-1 rounded-lg border border-border/50 bg-slate-50/50 dark:bg-slate-900/50 p-2 font-mono text-[11px] leading-relaxed max-w-md shadow-inner">
+          <div className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-wider mb-1 border-b border-border/30 pb-0.5">Field Changes</div>
           {entries.map(([field, diff]) => (
-            <div key={field} className="flex flex-wrap items-center gap-1 text-[11px]">
-              <span className="font-medium text-muted-foreground/80">{humanizeToken(field)}</span>
-              <span className="rounded bg-rose-500/10 px-1 py-px font-mono text-[10px] text-rose-500/90 line-through decoration-rose-500/40">
+            <div key={field} className="flex flex-wrap items-center gap-1.5 py-0.5">
+              <span className="font-semibold text-muted-foreground/80">{humanizeToken(field)}:</span>
+              <span className="rounded bg-rose-500/10 px-1.5 py-px text-rose-500/90 line-through decoration-rose-500/40">
                 {formatValue(diff.old)}
               </span>
               <ArrowRight className="h-2.5 w-2.5 text-muted-foreground/40" aria-hidden="true" />
-              <span className="rounded bg-emerald-500/10 px-1 py-px font-mono text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+              <span className="rounded bg-emerald-500/10 px-1.5 py-px font-medium text-emerald-600 dark:text-emerald-450">
                 {formatValue(diff.new)}
               </span>
             </div>
@@ -438,7 +453,9 @@ const ActionCell: React.FC<{ row: ShiftEventTimelineRow }> = ({ row }) => {
       )}
 
       {row.reason && (
-        <span className="text-[11px] italic text-muted-foreground/80">“{row.reason}”</span>
+        <div className="mt-1 border-l-2 border-primary/20 pl-2.5 py-0.5 text-[11px] text-muted-foreground/90 italic bg-muted/10 rounded-r max-w-md">
+          “{row.reason}”
+        </div>
       )}
     </div>
   );
@@ -464,7 +481,7 @@ const EventRow: React.FC<EventRowProps> = ({ row, index, isFirst, isLast }) => {
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28, delay: Math.min(index * 0.022, 0.4), ease: [0.22, 1, 0.36, 1] }}
-      className="group relative grid items-start transition-colors hover:bg-foreground/[0.025] dark:hover:bg-white/[0.025]"
+      className="group relative grid items-start transition-colors hover:bg-foreground/[0.015] dark:hover:bg-white/[0.015] py-2.5"
       style={{ gridTemplateColumns: GRID_TEMPLATE }}
     >
       {/* hover accent rail */}
@@ -475,40 +492,30 @@ const EventRow: React.FC<EventRowProps> = ({ row, index, isFirst, isLast }) => {
       />
 
       {/* spine + node */}
-      <div className="relative flex justify-center py-3">
-        {!isFirst && <span className="absolute left-1/2 top-0 h-[26px] w-px -translate-x-1/2 bg-border/70" aria-hidden="true" />}
-        {!isLast && <span className="absolute left-1/2 top-[26px] bottom-0 w-px -translate-x-1/2 bg-border/70" aria-hidden="true" />}
+      <div className="relative flex justify-center py-1">
+        {!isFirst && <span className="absolute left-1/2 top-0 h-[18px] w-px -translate-x-1/2 bg-border/60" aria-hidden="true" />}
+        {!isLast && <span className="absolute left-1/2 top-[18px] bottom-0 w-px -translate-x-1/2 bg-border/60" aria-hidden="true" />}
         <span
-          className="relative z-10 flex h-7 w-7 items-center justify-center rounded-full ring-2 ring-background"
+          className="relative z-10 flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-background transition-transform group-hover:scale-110 shadow-sm"
           style={{ backgroundColor: `${color}1F`, boxShadow: `inset 0 0 0 1px ${color}40` }}
         >
           <Icon className="h-3.5 w-3.5" style={{ color }} aria-hidden="true" />
         </span>
       </div>
 
-      {/* from-state */}
-      <div className="flex justify-center py-3.5">
-        <StatePill state={fromDisp} />
-      </div>
-
-      {/* action + diffs */}
-      <div className="min-w-0 py-3 pr-2">
-        <ActionCell row={row} />
+      {/* details & inline transition */}
+      <div className="min-w-0 py-0.5 pr-3">
+        <ActionCell row={row} fromDisp={fromDisp} toDisp={toDisp} color={color} />
       </div>
 
       {/* actor */}
-      <div className="flex items-center py-3 pr-2">
+      <div className="flex items-start py-0.5 pr-2">
         <ActorCell row={row} />
       </div>
 
-      {/* to-state */}
-      <div className="flex justify-center py-3.5">
-        <StatePill state={toDisp} color={color} />
-      </div>
-
       {/* timestamp */}
-      <div className="flex items-center justify-end gap-1 py-3.5 pr-1 text-xs tabular-nums text-muted-foreground">
-        <Clock className="h-3 w-3 opacity-50" aria-hidden="true" />
+      <div className="flex items-start justify-end gap-1 py-1 pr-1 text-xs tabular-nums text-muted-foreground/80">
+        <Clock className="h-3.5 w-3.5 opacity-50" aria-hidden="true" />
         {formatClock(row.event_time)}
       </div>
     </motion.div>
@@ -541,11 +548,9 @@ const DayGroup: React.FC<DayGroupProps> = ({ day, rows, startIndex }) => (
           style={{ gridTemplateColumns: GRID_TEMPLATE }}
         >
           <span aria-hidden="true" />
-          <span className="py-2 text-center">From</span>
-          <span className="py-2">Action</span>
-          <span className="py-2">Actor</span>
-          <span className="py-2 text-center">To</span>
-          <span className="py-2 pr-1 text-right">Time</span>
+          <span className="py-2.5">Event Details & Transition</span>
+          <span className="py-2.5">Actor</span>
+          <span className="py-2.5 pr-1 text-right">Time</span>
         </div>
 
         {/* rows */}
@@ -581,19 +586,38 @@ function dedupeCreationAssign(rows: ShiftEventTimelineRow[]): ShiftEventTimeline
 }
 
 /**
- * Carry the last-known FSM state forward across rows that don't record one (e.g.
- * legacy trigger rows), so the state column reads as one continuous lifecycle.
- * The first row keeps a null `from` (no prior state → "—").
+ * Fill the state column across rows that don't record one (legacy trigger rows,
+ * backfilled create/complete) so it reads as one continuous lifecycle.
+ *
+ * Two passes, because a single forward carry leaves leading rows blank — e.g. a
+ * backfilled `create` that predates any known state would render "— → —", the
+ * very thing it shouldn't. Instead:
+ *   • forward  — a missing `from` inherits the prior row's resolved `to`;
+ *   • backward — a still-missing `to` inherits the next row's resolved `from`,
+ *     so `create` lands on the lifecycle's initial state (— → S1).
+ * A `create` row keeps a null `from` (nothing precedes creation → "—"); explicit
+ * states are never overwritten, so the pass only ever removes spurious dashes.
  */
 function interpolateStateTransitions(rows: ShiftEventTimelineRow[]): ShiftEventTimelineRow[] {
-  let runningState: string | null = null;
-  return rows.map((row) => {
-    const from = row.from_state || (row.op === 'create' ? null : runningState);
-    if (row.from_state) runningState = row.from_state;
-    const to = row.to_state || runningState;
-    if (row.to_state) runningState = row.to_state;
-    return { ...row, from_state: from, to_state: to };
-  });
+  const out = rows.map((row) => ({ ...row }));
+
+  // Forward: carry the last-known state into rows missing a `from`/`to`.
+  let running: string | null = null;
+  for (const row of out) {
+    if (!row.from_state && row.op !== 'create') row.from_state = running;
+    if (!row.to_state) row.to_state = row.from_state ?? running;
+    running = row.to_state ?? running;
+  }
+
+  // Backward: seed leading rows (notably `create`) with the first known state.
+  let nextKnown: string | null = null;
+  for (let i = out.length - 1; i >= 0; i--) {
+    if (!out[i].to_state) out[i].to_state = nextKnown;
+    if (!out[i].from_state && out[i].op !== 'create') out[i].from_state = nextKnown;
+    nextKnown = out[i].from_state ?? out[i].to_state ?? nextKnown;
+  }
+
+  return out;
 }
 
 interface TimelineSummary {
