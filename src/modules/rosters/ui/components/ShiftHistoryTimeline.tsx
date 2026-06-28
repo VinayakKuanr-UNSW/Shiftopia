@@ -1,35 +1,36 @@
 /**
  * ShiftHistoryTimeline — read-only audit ledger UI.
  *
- * A vertical, day-grouped, oldest→newest timeline of a single shift's audit
- * events, sourced from the get_shift_event_timeline RPC (the public.shift_events
- * ledger). This surface NEVER writes or emits events — it is purely presentational.
- *
- * Self-contained: pass a shiftId and it owns its own data fetch (TanStack Query,
- * matching the useShiftLifecycle pattern). Drop it into any detail surface.
+ * A forensic, day-grouped trace of a single shift's lifecycle, sourced from the
+ * get_shift_event_timeline RPC (the public.shift_events ledger). Purely
+ * presentational — this surface NEVER writes or emits events.
  *
  *   <ShiftHistoryTimeline shiftId={shift.id} />
  *
- * Each row shows:
- *   • a domain-coloured dot/icon
- *   • an actor-role chip (Manager / Employee / System)
- *   • a human label (derived from op || event_type)
- *   • a Δstate transition (from_state → to_state) when present
+ * Design: a connected state-machine ledger. Each event is a node on a vertical
+ * spine, rendered as an aligned row:
  *
- * Rows with a `changes` field-diff (or a reason / version delta) are expandable.
- * System-actor rows are visually dimmed so human actions stand out.
+ *   ●  ┃  S2  ·  Published   ·  Kurry Admin (Manager)  ·  S4  ·  10:17:02
+ *
+ * The header shows the shift's full lifecycle journey (S2 → S4 → S11 → S13) so
+ * the flow is legible at a glance. State chips are monospace; the destination
+ * ("to") chip is accented in the event colour. Rows reveal with a staggered
+ * entrance. Field edits show an inline Original → New diff under the action.
  */
 
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
 import {
   Calendar,
   Clock,
   Cog,
+  Cpu,
   Edit3,
   Gavel,
   Store,
   ArrowLeftRight,
+  ArrowRight,
   UserMinus,
   UserCheck,
   UserX,
@@ -38,11 +39,11 @@ import {
   Receipt,
   ShieldAlert,
   History,
-  ChevronRight,
   Loader2,
   AlertTriangle,
   Inbox,
   Plus,
+  PlayCircle,
   Zap,
   Send,
   RotateCcw,
@@ -52,7 +53,6 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import { FSM_COLOR_HEX, FSM_STATE_META, type ShiftFSMStateInfo } from '../../domain/shift-fsm';
 import { shiftsQueries } from '../../api/shifts.queries';
 import type {
@@ -111,13 +111,11 @@ function domainIcon(domain: string | null | undefined): LucideIcon {
 }
 
 // ─── Marketplace gets its own icon when domain is the violet store-front ──────
-// (kept here so Store import is meaningful and not dead.)
 const MARKETPLACE_ICON: LucideIcon = Store;
 
 // ─── Event-specific icon + accent ────────────────────────────────────────────
 // The domain colour/icon is a coarse bucket; a per-verb icon + accent makes the
-// timeline scannable at a glance (Created ≠ Assigned ≠ Emergency ≠ Completed).
-// Resolution order is always: op (the true verb) → event_type → domain fallback.
+// ledger scannable at a glance. Resolution: op (true verb) → event_type → domain.
 
 const EVENT_ICON_BY_OP: Record<string, LucideIcon> = {
   create:             Plus,
@@ -125,6 +123,7 @@ const EVENT_ICON_BY_OP: Record<string, LucideIcon> = {
   unassign:           UserMinus,
   publish:            Send,
   unpublish:          RotateCcw,
+  in_progress:        PlayCircle,
   edit:               Edit3,
   move:               Edit3,
   delete:             XCircle,
@@ -163,12 +162,14 @@ function eventIcon(row: ShiftEventTimelineRow): LucideIcon {
   return domainIcon(row.domain);
 }
 
-// Accent overrides for events whose meaning is stronger than their domain colour
-// (an emergency is amber-attention, not the emerald of the "assignment" domain).
+// Accent overrides for events whose meaning is stronger than their domain colour.
 const EVENT_COLOR_BY_OP: Record<string, string> = {
-  unpublish: FSM_COLOR_HEX.orange,
-  delete:    FSM_COLOR_HEX.red,
-  complete:  FSM_COLOR_HEX.emerald,
+  create:      FSM_COLOR_HEX.slate,
+  publish:     FSM_COLOR_HEX.blue,
+  unpublish:   FSM_COLOR_HEX.orange,
+  in_progress: FSM_COLOR_HEX.violet,
+  delete:      FSM_COLOR_HEX.red,
+  complete:    FSM_COLOR_HEX.emerald,
 };
 
 const EVENT_COLOR_BY_TYPE: Record<string, string> = {
@@ -188,7 +189,7 @@ function eventColor(row: ShiftEventTimelineRow): string {
   return domainColor(row.domain);
 }
 
-// ─── Actor-role chip config ──────────────────────────────────────────────────
+// ─── Actor-role config ───────────────────────────────────────────────────────
 
 const ACTOR_ROLE_CONFIG: Record<
   ShiftEventActorRole,
@@ -199,16 +200,15 @@ const ACTOR_ROLE_CONFIG: Record<
   system:   { label: 'System',   variant: 'secondary' },
 };
 
-function isSystemActor(role: string | null | undefined): boolean {
-  return (role ?? 'system').toLowerCase() === 'system';
-}
+const ROLE_COLOR: Record<ShiftEventActorRole, string> = {
+  manager:  FSM_COLOR_HEX.blue,
+  employee: FSM_COLOR_HEX.emerald,
+  system:   FSM_COLOR_HEX.slate,
+};
 
 // ─── Label derivation ────────────────────────────────────────────────────────
 
-/**
- * Turn a raw op/event_type token (e.g. "EMERGENCY_ASSIGNED", "publish_shift")
- * into a human label ("Emergency Assigned", "Publish Shift").
- */
+/** Turn a raw token ("EMERGENCY_ASSIGNED") into a human label ("Emergency Assigned"). */
 function humanizeToken(token: string): string {
   return token
     .replace(/[_-]+/g, ' ')
@@ -217,8 +217,6 @@ function humanizeToken(token: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// Explicit, friendly labels for the verbs the ledger emits. `op` (the true verb,
-// in metadata) wins; `event_type` is the coarse enum fallback for trigger rows.
 const OP_LABELS: Record<string, string> = {
   create:             'Created',
   assign:             'Assigned',
@@ -232,6 +230,7 @@ const OP_LABELS: Record<string, string> = {
   approve_trade:      'Trade Approved',
   reject_trade:       'Trade Rejected',
   complete:           'Completed',
+  in_progress:        'In Progress',
   timesheet_finalize: 'Timesheet Finalized',
   timesheet_adjust:   'Timesheet Adjusted',
 };
@@ -256,7 +255,6 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 
 /** Human label for a row — prefers `op`, falls back to `event_type`. */
 function eventLabel(row: ShiftEventTimelineRow): string {
-  // Clock-out: surface the early/late qualifier the event_type carries.
   if (row.op === 'clock_out') {
     return row.event_type === 'EARLY_OUT' ? 'Clocked Out (Early)' : 'Clocked Out';
   }
@@ -270,6 +268,21 @@ function displayState(s: string | null): string | null {
   if (!s) return null;
   const meta = (FSM_STATE_META as Record<string, ShiftFSMStateInfo | undefined>)[s];
   return meta ? meta.displayId : s;
+}
+
+/** Hex colour for a canonical FSM state (for the lifecycle journey chips). */
+function stateColor(canonical: string | null): string {
+  if (!canonical) return FSM_COLOR_HEX.slate;
+  const meta = (FSM_STATE_META as Record<string, ShiftFSMStateInfo | undefined>)[canonical];
+  return meta ? FSM_COLOR_HEX[meta.color] : FSM_COLOR_HEX.slate;
+}
+
+/** Two-letter initials for an actor avatar ("Kurry Admin" → "KA"). */
+function actorInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 // ─── Value formatting for field diffs ────────────────────────────────────────
@@ -288,7 +301,6 @@ function formatValue(value: unknown): string {
 
 // ─── Date / time helpers ─────────────────────────────────────────────────────
 
-/** Day bucket key (YYYY-MM-DD in local time) for grouping. */
 function dayKey(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -327,28 +339,19 @@ function formatClock(iso: string): string {
   });
 }
 
-function formatFullTimestamp(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
+// ─── Layout constant ─────────────────────────────────────────────────────────
+// Shared grid so the column header and every event row align like a table.
+// node | from-state | action | actor | to-state | time
+const GRID_TEMPLATE = '34px 54px minmax(0,1fr) 188px 54px 92px';
 
 // ─── State pill ──────────────────────────────────────────────────────────────
-// A monospace FSM-state chip. The destination ("to") pill is accented with the
-// event colour; the origin ("from") pill is muted. A null state renders as a
-// dim "—" so the row keeps its fixed `from · action · who · to` shape.
+// Monospace FSM-state chip. The "to" pill is accented with the event colour; the
+// "from" pill is muted. A null state renders a dim "—" so the row keeps its shape.
 
 const StatePill: React.FC<{ state: string | null; color?: string }> = ({ state, color }) => {
   if (!state) {
     return (
-      <span className="rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground/50">
+      <span className="select-none rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] font-medium text-muted-foreground/50">
         —
       </span>
     );
@@ -356,193 +359,151 @@ const StatePill: React.FC<{ state: string | null; color?: string }> = ({ state, 
   if (color) {
     return (
       <span
-        className="rounded px-1.5 py-0.5 font-mono text-[11px] font-semibold"
-        style={{ backgroundColor: `${color}1A`, color }}
+        className="rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold ring-1"
+        style={{ backgroundColor: `${color}1F`, color, boxShadow: `inset 0 0 0 1px ${color}33` }}
       >
         {state}
       </span>
     );
   }
   return (
-    <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+    <span className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold text-muted-foreground">
       {state}
     </span>
   );
 };
 
-/** Subtle inline separator between the slots of the canonical row format. */
-const Dot: React.FC = () => (
-  <span className="select-none text-muted-foreground/35" aria-hidden="true">
-    ·
-  </span>
-);
+// ─── Actor cell ──────────────────────────────────────────────────────────────
+
+const ActorCell: React.FC<{ row: ShiftEventTimelineRow }> = ({ row }) => {
+  const role = (row.actor_role ?? 'system').toLowerCase() as ShiftEventActorRole;
+  const cfg = ACTOR_ROLE_CONFIG[role] ?? ACTOR_ROLE_CONFIG.system;
+  const color = ROLE_COLOR[role] ?? ROLE_COLOR.system;
+  const name = row.actor_name;
+
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <span
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+        style={{ backgroundColor: `${color}1F`, color, boxShadow: `inset 0 0 0 1px ${color}3A` }}
+        aria-hidden="true"
+      >
+        {name ? actorInitials(name) : <Cpu className="h-3 w-3" />}
+      </span>
+      <div className="flex min-w-0 flex-col leading-tight">
+        {name && <span className="truncate text-xs font-semibold text-foreground">{name}</span>}
+        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color }}>
+          {cfg.label}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+// ─── Action cell (label + inline Original → New diff + reason) ────────────────
+
+const ActionCell: React.FC<{ row: ShiftEventTimelineRow }> = ({ row }) => {
+  const label = eventLabel(row);
+  const entries = (row.changes ? Object.entries(row.changes) : []).filter(
+    ([field]) => field !== 'version' && field !== '_version',
+  );
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="text-sm font-semibold leading-tight text-foreground">{label}</span>
+
+      {entries.length > 0 && (
+        <div className="flex flex-col gap-0.5">
+          {entries.map(([field, diff]) => (
+            <div key={field} className="flex flex-wrap items-center gap-1 text-[11px]">
+              <span className="font-medium text-muted-foreground/80">{humanizeToken(field)}</span>
+              <span className="rounded bg-rose-500/10 px-1 py-px font-mono text-[10px] text-rose-500/90 line-through decoration-rose-500/40">
+                {formatValue(diff.old)}
+              </span>
+              <ArrowRight className="h-2.5 w-2.5 text-muted-foreground/40" aria-hidden="true" />
+              <span className="rounded bg-emerald-500/10 px-1 py-px font-mono text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                {formatValue(diff.new)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {row.reason && (
+        <span className="text-[11px] italic text-muted-foreground/80">“{row.reason}”</span>
+      )}
+    </div>
+  );
+};
 
 // ─── Single event row ────────────────────────────────────────────────────────
 
 interface EventRowProps {
   row: ShiftEventTimelineRow;
+  index: number;
+  isFirst: boolean;
   isLast: boolean;
 }
 
-const EventRow: React.FC<EventRowProps> = ({ row, isLast }) => {
-  const [expanded, setExpanded] = useState(false);
-
-  const color = useMemo(() => eventColor(row), [row]);
-  const Icon = useMemo<LucideIcon>(() => eventIcon(row), [row]);
-
-  const system = isSystemActor(row.actor_role);
-  const roleKey = (row.actor_role ?? 'system').toLowerCase() as ShiftEventActorRole;
-  const actorCfg = ACTOR_ROLE_CONFIG[roleKey] ?? ACTOR_ROLE_CONFIG.system;
-
-  // Canonical row format always shows BOTH state slots (from · … · to), mapped
-  // to the gapless display ids the cards use. A null slot renders as "—".
+const EventRow: React.FC<EventRowProps> = ({ row, index, isFirst, isLast }) => {
+  const color = eventColor(row);
+  const Icon = eventIcon(row);
   const fromDisp = displayState(row.from_state);
   const toDisp = displayState(row.to_state);
-  const changeEntries = row.changes ? Object.entries(row.changes) : [];
-  const isExpandable = changeEntries.length > 0 || !!row.reason;
 
   return (
-    <li className="relative flex gap-3">
-      {/* Vertical connector line (skipped on the last row of the group) */}
-      {!isLast && (
-        <span
-          aria-hidden="true"
-          className="absolute left-[11px] top-6 bottom-0 w-px bg-border"
-        />
-      )}
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28, delay: Math.min(index * 0.022, 0.4), ease: [0.22, 1, 0.36, 1] }}
+      className="group relative grid items-start transition-colors hover:bg-foreground/[0.025] dark:hover:bg-white/[0.025]"
+      style={{ gridTemplateColumns: GRID_TEMPLATE }}
+    >
+      {/* hover accent rail */}
+      <span
+        className="absolute left-0 top-0 bottom-0 w-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+        style={{ backgroundColor: color }}
+        aria-hidden="true"
+      />
 
-      {/* Domain dot / icon */}
-      <div className="relative z-10 mt-0.5 shrink-0">
+      {/* spine + node */}
+      <div className="relative flex justify-center py-3">
+        {!isFirst && <span className="absolute left-1/2 top-0 h-[26px] w-px -translate-x-1/2 bg-border/70" aria-hidden="true" />}
+        {!isLast && <span className="absolute left-1/2 top-[26px] bottom-0 w-px -translate-x-1/2 bg-border/70" aria-hidden="true" />}
         <span
-          className={cn(
-            'flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-background shadow-sm',
-            system && 'opacity-60',
-          )}
-          style={{ backgroundColor: `${color}1A` /* ~10% alpha */ }}
+          className="relative z-10 flex h-7 w-7 items-center justify-center rounded-full ring-2 ring-background"
+          style={{ backgroundColor: `${color}1F`, boxShadow: `inset 0 0 0 1px ${color}40` }}
         >
           <Icon className="h-3.5 w-3.5" style={{ color }} aria-hidden="true" />
         </span>
       </div>
 
-      {/* Row body */}
-      <div
-        className={cn(
-          'min-w-0 flex-1 pb-4',
-          system && 'opacity-70',
-        )}
-      >
-        <div
-          className={cn(
-            'rounded-lg border border-border bg-card/50 px-3 py-2 transition-colors',
-            isExpandable && 'cursor-pointer hover:bg-card/80',
-            system && 'bg-muted/20 dark:bg-muted/10',
-          )}
-          onClick={isExpandable ? () => setExpanded((v) => !v) : undefined}
-          role={isExpandable ? 'button' : undefined}
-          tabIndex={isExpandable ? 0 : undefined}
-          onKeyDown={
-            isExpandable
-              ? (e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setExpanded((v) => !v);
-                  }
-                }
-              : undefined
-          }
-        >
-          {/* Canonical audit line: from · action · who (name + role) · to · time */}
-          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-            {isExpandable && (
-              <ChevronRight
-                className={cn(
-                  'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
-                  expanded && 'rotate-90',
-                )}
-                aria-hidden="true"
-              />
-            )}
-
-            {/* from-state */}
-            <StatePill state={fromDisp} />
-            <Dot />
-
-            {/* action */}
-            <span className="text-sm font-semibold text-foreground">{eventLabel(row)}</span>
-            <Dot />
-
-            {/* who: actor name (when known) + role chip */}
-            <span className="inline-flex items-center gap-1">
-              {row.actor_name && (
-                <span className="text-xs font-medium text-foreground">{row.actor_name}</span>
-              )}
-              <Badge variant={actorCfg.variant} className="h-4 shrink-0 px-1 text-[9px]">
-                {actorCfg.label}
-              </Badge>
-            </span>
-            <Dot />
-
-            {/* to-state (accented destination) */}
-            <StatePill state={toDisp} color={color} />
-
-            {/* timestamp (HH:MM:SS) */}
-            <span className="ml-auto flex shrink-0 items-center gap-1 text-xs tabular-nums text-muted-foreground">
-              <Clock className="h-3 w-3" aria-hidden="true" />
-              {formatClock(row.event_time)}
-            </span>
-          </div>
-
-          {/* Expanded detail: field diffs, reason, full timestamp */}
-          {expanded && isExpandable && (
-            <div className="mt-2.5 space-y-2 border-t border-border/60 pt-2.5">
-              {changeEntries.length > 0 && (
-                <ul className="space-y-1">
-                  <li className="flex items-center gap-1.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-                    <span className="flex-1">Field</span>
-                    <span>Original</span>
-                    <ChevronRight className="h-3 w-3 opacity-0" aria-hidden="true" />
-                    <span>New</span>
-                  </li>
-                  {changeEntries
-                    .filter(([field]) => field !== 'version' && field !== '_version')
-                    .map(([field, diff]) => (
-                      <li
-                        key={field}
-                        className="flex flex-wrap items-baseline gap-1.5 text-xs"
-                      >
-                        <span className="font-medium text-foreground">
-                          {humanizeToken(field)}
-                        </span>
-                        <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground line-through decoration-rose-400/60">
-                          {formatValue(diff.old)}
-                        </span>
-                        <ChevronRight
-                          className="h-3 w-3 text-muted-foreground"
-                          aria-hidden="true"
-                        />
-                        <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[11px] text-emerald-600 dark:text-emerald-400">
-                          {formatValue(diff.new)}
-                        </span>
-                      </li>
-                    ))}
-                </ul>
-              )}
-
-              {row.reason && (
-                <div className="flex items-start gap-1.5 text-xs">
-                  <span className="font-medium text-foreground">Reason</span>
-                  <span className="italic text-muted-foreground">{row.reason}</span>
-                </div>
-              )}
-
-              <div className="text-[11px] tabular-nums text-muted-foreground/70">
-                {formatFullTimestamp(row.event_time)}
-              </div>
-            </div>
-          )}
-        </div>
+      {/* from-state */}
+      <div className="flex justify-center py-3.5">
+        <StatePill state={fromDisp} />
       </div>
-    </li>
+
+      {/* action + diffs */}
+      <div className="min-w-0 py-3 pr-2">
+        <ActionCell row={row} />
+      </div>
+
+      {/* actor */}
+      <div className="flex items-center py-3 pr-2">
+        <ActorCell row={row} />
+      </div>
+
+      {/* to-state */}
+      <div className="flex justify-center py-3.5">
+        <StatePill state={toDisp} color={color} />
+      </div>
+
+      {/* timestamp */}
+      <div className="flex items-center justify-end gap-1 py-3.5 pr-1 text-xs tabular-nums text-muted-foreground">
+        <Clock className="h-3 w-3 opacity-50" aria-hidden="true" />
+        {formatClock(row.event_time)}
+      </div>
+    </motion.div>
   );
 };
 
@@ -551,22 +512,48 @@ const EventRow: React.FC<EventRowProps> = ({ row, isLast }) => {
 interface DayGroupProps {
   day: string;
   rows: ShiftEventTimelineRow[];
+  startIndex: number;
 }
 
-const DayGroup: React.FC<DayGroupProps> = ({ day, rows }) => (
+const DayGroup: React.FC<DayGroupProps> = ({ day, rows, startIndex }) => (
   <div className="space-y-2">
-    <div className="flex items-center gap-2 px-0.5">
-      <Calendar className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+    <div className="flex items-center gap-2 px-1">
+      <Calendar className="h-3.5 w-3.5 text-muted-foreground/70" aria-hidden="true" />
+      <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80">
         {formatDayHeading(day)}
       </h4>
-      <span className="h-px flex-1 bg-border" aria-hidden="true" />
+      <span className="h-px flex-1 bg-border/50" aria-hidden="true" />
     </div>
-    <ol className="space-y-0">
-      {rows.map((row, i) => (
-        <EventRow key={row.event_id} row={row} isLast={i === rows.length - 1} />
-      ))}
-    </ol>
+
+    <div className="overflow-x-auto rounded-xl border border-border/60 bg-card/40 shadow-sm backdrop-blur-sm">
+      <div className="min-w-[600px]">
+        {/* column header */}
+        <div
+          className="grid items-center border-b border-border/60 bg-muted/30 px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70"
+          style={{ gridTemplateColumns: GRID_TEMPLATE }}
+        >
+          <span aria-hidden="true" />
+          <span className="py-2 text-center">From</span>
+          <span className="py-2">Action</span>
+          <span className="py-2">Actor</span>
+          <span className="py-2 text-center">To</span>
+          <span className="py-2 pr-1 text-right">Time</span>
+        </div>
+
+        {/* rows */}
+        <div className="divide-y divide-border/40 px-2">
+          {rows.map((row, i) => (
+            <EventRow
+              key={row.event_id}
+              row={row}
+              index={startIndex + i}
+              isFirst={i === 0}
+              isLast={i === rows.length - 1}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
   </div>
 );
 
@@ -574,9 +561,8 @@ const DayGroup: React.FC<DayGroupProps> = ({ day, rows }) => (
 
 /**
  * Drop the trigger-emitted ASSIGNED that coincides with a `create` event. An
- * assigned-at-creation shift emits BOTH (the create row + the trigger's ASSIGNED);
- * the create row already conveys the assignment. The ledger keeps both rows
- * (the metrics layer counts ASSIGNED) — this de-duplicates the DISPLAY only.
+ * assigned-at-creation shift emits BOTH; the create row already conveys it. The
+ * ledger keeps both rows (metrics count ASSIGNED) — this de-dupes the DISPLAY.
  */
 function dedupeCreationAssign(rows: ShiftEventTimelineRow[]): ShiftEventTimelineRow[] {
   const createTimes = new Set(rows.filter((r) => r.op === 'create').map((r) => r.event_time));
@@ -584,6 +570,22 @@ function dedupeCreationAssign(rows: ShiftEventTimelineRow[]): ShiftEventTimeline
   return rows.filter(
     (r) => !(r.op == null && r.event_type === 'ASSIGNED' && createTimes.has(r.event_time)),
   );
+}
+
+/**
+ * Carry the last-known FSM state forward across rows that don't record one (e.g.
+ * legacy trigger rows), so the state column reads as one continuous lifecycle.
+ * The first row keeps a null `from` (no prior state → "—").
+ */
+function interpolateStateTransitions(rows: ShiftEventTimelineRow[]): ShiftEventTimelineRow[] {
+  let runningState: string | null = null;
+  return rows.map((row) => {
+    const from = row.from_state || (row.op === 'create' ? null : runningState);
+    if (row.from_state) runningState = row.from_state;
+    const to = row.to_state || runningState;
+    if (row.to_state) runningState = row.to_state;
+    return { ...row, from_state: from, to_state: to };
+  });
 }
 
 interface TimelineSummary {
@@ -603,7 +605,7 @@ function summarize(rows: ShiftEventTimelineRow[]): TimelineSummary | null {
     const ts = displayState(rows[i].to_state);
     if (ts) {
       finalState = ts;
-      finalColor = eventColor(rows[i]);
+      finalColor = stateColor(rows[i].to_state);
       break;
     }
   }
@@ -615,6 +617,41 @@ function summarize(rows: ShiftEventTimelineRow[]): TimelineSummary | null {
     finalColor,
   };
 }
+
+interface JourneyStop {
+  state: string;
+  color: string;
+}
+
+/** Distinct-consecutive sequence of states the shift moved through. */
+function buildJourney(rows: ShiftEventTimelineRow[]): JourneyStop[] {
+  const stops: JourneyStop[] = [];
+  let prev: string | null = null;
+  for (const r of rows) {
+    const canon = r.to_state;
+    if (!canon || canon === prev) continue;
+    prev = canon;
+    const disp = displayState(canon);
+    if (disp) stops.push({ state: disp, color: stateColor(canon) });
+  }
+  return stops;
+}
+
+const JourneyMap: React.FC<{ stops: JourneyStop[] }> = ({ stops }) => (
+  <div className="flex flex-wrap items-center gap-1">
+    {stops.map((s, i) => (
+      <React.Fragment key={i}>
+        {i > 0 && <ArrowRight className="h-3 w-3 text-muted-foreground/40" aria-hidden="true" />}
+        <span
+          className="rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold"
+          style={{ backgroundColor: `${s.color}1F`, color: s.color }}
+        >
+          {s.state}
+        </span>
+      </React.Fragment>
+    ))}
+  </div>
+);
 
 // ─── Domain filter chip ──────────────────────────────────────────────────────
 
@@ -628,10 +665,10 @@ const FilterChip: React.FC<{
     type="button"
     onClick={onClick}
     className={cn(
-      'rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors',
+      'rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-all',
       active
         ? 'border-transparent text-white shadow-sm'
-        : 'border-border text-muted-foreground hover:bg-muted',
+        : 'border-border/70 text-muted-foreground hover:border-border hover:bg-muted/60',
     )}
     style={active ? { backgroundColor: color ?? 'hsl(var(--primary))' } : undefined}
   >
@@ -651,7 +688,7 @@ export interface ShiftHistoryTimelineProps {
 }
 
 /**
- * Read-only "History" timeline for a single shift's audit ledger.
+ * Read-only "History" ledger for a single shift's audit trail.
  * Owns its own data fetch — just give it a shiftId.
  */
 export function ShiftHistoryTimeline({ shiftId, className }: ShiftHistoryTimelineProps) {
@@ -665,18 +702,16 @@ export function ShiftHistoryTimeline({ shiftId, className }: ShiftHistoryTimelin
 
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
 
-  // Sorted + display-deduped event list (defensive sort so we never depend on
-  // RPC ordering; create sorts ahead of its same-instant assign trigger).
+  // Sorted + display-deduped + state-interpolated event list.
   const allRows = useMemo(() => {
     const rows = [...(query.data ?? [])].sort((a, b) => {
       const dt = new Date(a.event_time).getTime() - new Date(b.event_time).getTime();
       if (dt !== 0) return dt;
       return (a.op === 'create' ? 0 : 1) - (b.op === 'create' ? 0 : 1);
     });
-    return dedupeCreationAssign(rows);
+    return interpolateStateTransitions(dedupeCreationAssign(rows));
   }, [query.data]);
 
-  // Domains present, in first-seen order — drives the filter chips.
   const domains = useMemo(() => {
     const seen: string[] = [];
     for (const r of allRows) {
@@ -687,13 +722,13 @@ export function ShiftHistoryTimeline({ shiftId, className }: ShiftHistoryTimelin
   }, [allRows]);
 
   const summary = useMemo(() => summarize(allRows), [allRows]);
+  const journey = useMemo(() => buildJourney(allRows), [allRows]);
 
   const visibleRows = useMemo(
     () => (selectedDomain ? allRows.filter((r) => r.domain === selectedDomain) : allRows),
     [allRows, selectedDomain],
   );
 
-  // Group the visible events by day (oldest → newest, insertion order).
   const grouped = useMemo(() => {
     const buckets = new Map<string, ShiftEventTimelineRow[]>();
     for (const row of visibleRows) {
@@ -708,13 +743,8 @@ export function ShiftHistoryTimeline({ shiftId, className }: ShiftHistoryTimelin
   // ── Loading ──────────────────────────────────────────────────────────────
   if (query.isLoading) {
     return (
-      <div
-        className={cn(
-          'flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground',
-          className,
-        )}
-      >
-        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+      <div className={cn('flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground', className)}>
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
         Loading history…
       </div>
     );
@@ -725,7 +755,7 @@ export function ShiftHistoryTimeline({ shiftId, className }: ShiftHistoryTimelin
     return (
       <div
         className={cn(
-          'flex items-center justify-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-6 text-xs text-destructive',
+          'flex items-center justify-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-6 text-xs text-destructive',
           className,
         )}
       >
@@ -740,42 +770,61 @@ export function ShiftHistoryTimeline({ shiftId, className }: ShiftHistoryTimelin
     return (
       <div
         className={cn(
-          'flex flex-col items-center justify-center gap-2 px-4 py-8 text-center text-xs text-muted-foreground',
+          'flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/60 px-4 py-10 text-center text-xs text-muted-foreground',
           className,
         )}
       >
-        <History className="h-5 w-5 opacity-50" aria-hidden="true" />
+        <History className="h-6 w-6 opacity-40" aria-hidden="true" />
         <span className="italic">No history recorded for this shift yet.</span>
       </div>
     );
   }
 
-  // ── Timeline ───────────────────────────────────────────────────────────────
+  let runningIndex = 0;
+
+  // ── Ledger ─────────────────────────────────────────────────────────────────
   return (
-    <div className={cn('space-y-3', className)} id="shift-history-timeline">
-      {/* Summary band: count · time span · current state */}
+    <div className={cn('space-y-3.5', className)} id="shift-history-timeline">
+      {/* Summary band: count · span · current state, plus the lifecycle journey */}
       {summary && (
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-            <span>
-              <span className="font-semibold text-foreground">{summary.count}</span>{' '}
-              event{summary.count !== 1 ? 's' : ''}
-            </span>
-            <span className="text-muted-foreground/40">·</span>
-            <span className="tabular-nums">
-              {formatTime(summary.firstTime)} → {formatTime(summary.lastTime)}
-            </span>
-          </div>
-          {summary.finalState && (
-            <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
-              now
-              <span
-                className="rounded px-1.5 py-0.5 font-mono font-semibold"
-                style={{ backgroundColor: `${summary.finalColor}1A`, color: summary.finalColor }}
-              >
-                {summary.finalState}
+        <div className="space-y-2.5 rounded-xl border border-border/70 bg-gradient-to-br from-muted/50 to-muted/10 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5 font-bold text-foreground">
+                <History className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                {summary.count} event{summary.count !== 1 ? 's' : ''}
               </span>
-            </span>
+              <span className="text-muted-foreground/30">•</span>
+              <span className="tabular-nums">
+                {formatTime(summary.firstTime)} – {formatTime(summary.lastTime)}
+              </span>
+            </div>
+            {summary.finalState && (
+              <span className="flex shrink-0 items-center gap-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                  Current
+                </span>
+                <span
+                  className="rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold ring-1"
+                  style={{
+                    backgroundColor: `${summary.finalColor}1F`,
+                    color: summary.finalColor,
+                    boxShadow: `inset 0 0 0 1px ${summary.finalColor}33`,
+                  }}
+                >
+                  {summary.finalState}
+                </span>
+              </span>
+            )}
+          </div>
+
+          {journey.length > 1 && (
+            <div className="flex items-center gap-2 border-t border-border/40 pt-2.5">
+              <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                Lifecycle
+              </span>
+              <JourneyMap stops={journey} />
+            </div>
           )}
         </div>
       )}
@@ -798,14 +847,16 @@ export function ShiftHistoryTimeline({ shiftId, className }: ShiftHistoryTimelin
 
       {/* Events */}
       {grouped.length === 0 ? (
-        <div className="px-4 py-6 text-center text-xs italic text-muted-foreground">
+        <div className="rounded-xl border border-dashed border-border/60 px-4 py-6 text-center text-xs italic text-muted-foreground">
           No events in this category.
         </div>
       ) : (
-        <div className="space-y-5">
-          {grouped.map(([day, rows]) => (
-            <DayGroup key={day} day={day} rows={rows} />
-          ))}
+        <div className="space-y-4">
+          {grouped.map(([day, rows]) => {
+            const start = runningIndex;
+            runningIndex += rows.length;
+            return <DayGroup key={day} day={day} rows={rows} startIndex={start} />;
+          })}
         </div>
       )}
     </div>
