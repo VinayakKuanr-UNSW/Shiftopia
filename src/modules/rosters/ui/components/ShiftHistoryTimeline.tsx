@@ -340,9 +340,10 @@ function formatClock(iso: string): string {
 }
 
 // ─── Layout constant ─────────────────────────────────────────────────────────
-// Shared grid so the column header and every event row align like a table.
-// node | from-state | action | actor | to-state | time
-const GRID_TEMPLATE = '34px 54px minmax(0,1fr) 188px 54px 92px';
+// Shared grid so the column header and every event row align like a table. The
+// action column (1fr) absorbs slack, so the table always fills its container
+// width — no clipped right edge. node | from | action | actor | to | time
+const GRID_TEMPLATE = '32px 52px minmax(0,1fr) 176px 52px 88px';
 
 // ─── State pill ──────────────────────────────────────────────────────────────
 // Monospace FSM-state chip. The "to" pill is accented with the event colour; the
@@ -525,8 +526,8 @@ const DayGroup: React.FC<DayGroupProps> = ({ day, rows, startIndex }) => (
       <span className="h-px flex-1 bg-border/50" aria-hidden="true" />
     </div>
 
-    <div className="overflow-x-auto rounded-xl border border-border/60 bg-card/40 shadow-sm backdrop-blur-sm">
-      <div className="min-w-[600px]">
+    <div className="max-w-full overflow-x-auto rounded-xl border border-border/60 bg-card/40 shadow-sm backdrop-blur-sm">
+      <div className="min-w-[460px]">
         {/* column header */}
         <div
           className="grid items-center border-b border-border/60 bg-muted/30 px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70"
