@@ -518,44 +518,54 @@ export const shiftsCommands = {
 
 
     async publishShift(shiftId: string) {
-        // TTS-aware routing for already-assigned shifts.
-        // Compliance is checked at assignment time; publish is a lifecycle transition only.
+        // Publish is a lifecycle transition only — compliance is checked at assignment time.
         const shift = await shiftsQueries.getShiftById(shiftId);
-        if (shift?.assigned_employee_id && isValidUuid(shift.assigned_employee_id)) {
-            // TTS-aware routing: if 0 < TTS < 4h and the shift is already assigned,
-            // bypass the offer flow (S3) entirely and publish straight to Confirmed (S4).
-            //
-            // sm_publish_shift never sets assignment_outcome, so an assigned draft always
-            // lands in S3 (Published+Offered). With TTS < 4h the shift-state-processor
-            // cron immediately expires S3 → S2 (Draft+Assigned), creating a stuck loop.
-            const ttsMs = shift.start_at
-                ? new Date(shift.start_at).getTime() - Date.now()
-                : new Date(`${shift.shift_date}T${shift.start_time}`).getTime() - Date.now();
 
-            if (ttsMs > 0 && ttsMs < 4 * 60 * 60 * 1000) {
-                const user = await requireUser();
-                // is_draft / is_published / is_on_bidding are DB-generated columns
-                // (GENERATED ALWAYS AS) — they cannot be set explicitly. The DB
-                // derives them from lifecycle_status and bidding_status automatically.
-                const { error } = await supabase
-                    .from('shifts')
-                    .update({
-                        lifecycle_status:   'Published',
-                        assignment_outcome: 'confirmed',
-                        fulfillment_status: 'scheduled',
-                        bidding_status:     'not_on_bidding',
-                        // Skipping the offer step because TTS < 4h IS the emergency
-                        // signal — stamp emergency_assigned_at so fn_capture_shift_event
-                        // emits EMERGENCY_ASSIGNED (powers the Emergency Assigned metric)
-                        // while the shift still lands in S4 (Confirmed).
-                        emergency_assigned_at: new Date().toISOString(),
-                        updated_at:         new Date().toISOString(),
-                        last_modified_by:   user.id,
-                    })
-                    .eq('id', shiftId);
-                if (error) throw new Error(error.message);
-                return { success: true };
-            }
+        const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+        const ttsMs = shift?.start_at
+            ? new Date(shift.start_at).getTime() - Date.now()
+            : shift
+                ? new Date(`${shift.shift_date}T${shift.start_time}`).getTime() - Date.now()
+                : Number.POSITIVE_INFINITY;
+        const isAssigned = !!shift?.assigned_employee_id && isValidUuid(shift.assigned_employee_id);
+
+        // Emergent window (TTS ≤ 4h) + UNASSIGNED: opening bidding (S5) is a no-op —
+        // the shift-state-processor expires bidding inside the 4h lock, bouncing the
+        // shift straight back to Draft (S1). Block it and steer the manager to
+        // Emergency Assignment: assigning a worker publishes directly to Confirmed (S4).
+        if (!isAssigned && ttsMs <= FOUR_HOURS_MS) {
+            throw new Error(
+                'This shift starts within 4 hours, so it can’t be opened for bidding — bids are locked in the emergency window and it would immediately revert to Draft. Assign an employee to emergency-publish it instead.',
+            );
+        }
+
+        // TTS-aware routing for assigned shifts: inside the 4h window, bypass the offer
+        // flow (S3) and publish straight to Confirmed (S4). sm_publish_shift never sets
+        // assignment_outcome, so an assigned draft would otherwise land in S3 and the
+        // shift-state-processor cron would immediately expire S3 → S2, a stuck loop.
+        if (isAssigned && ttsMs > 0 && ttsMs < FOUR_HOURS_MS) {
+            const user = await requireUser();
+            // is_draft / is_published / is_on_bidding are DB-generated columns
+            // (GENERATED ALWAYS AS) — they cannot be set explicitly. The DB
+            // derives them from lifecycle_status and bidding_status automatically.
+            const { error } = await supabase
+                .from('shifts')
+                .update({
+                    lifecycle_status:   'Published',
+                    assignment_outcome: 'confirmed',
+                    fulfillment_status: 'scheduled',
+                    bidding_status:     'not_on_bidding',
+                    // Skipping the offer step because TTS < 4h IS the emergency
+                    // signal — stamp emergency_assigned_at so fn_capture_shift_event
+                    // emits EMERGENCY_ASSIGNED (powers the Emergency Assigned metric)
+                    // while the shift still lands in S4 (Confirmed).
+                    emergency_assigned_at: new Date().toISOString(),
+                    updated_at:         new Date().toISOString(),
+                    last_modified_by:   user.id,
+                })
+                .eq('id', shiftId);
+            if (error) throw new Error(error.message);
+            return { success: true };
         }
 
         const result = await callAuthenticatedRpc(
@@ -581,8 +591,22 @@ export const shiftsCommands = {
         const complianceChecks = await Promise.allSettled(
             shiftIds.map(async (id) => {
                 const shift = await shiftsQueries.getShiftById(id);
-                // Unassigned shifts: no compliance needed, always pass
+                // Unassigned shifts: no compliance needed. BUT inside the 4h emergency
+                // window, opening bidding (S5) auto-expires back to Draft (S1) — so skip
+                // the no-op and surface the emergency-assignment hint instead of passing.
                 if (!shift?.assigned_employee_id || !isValidUuid(shift.assigned_employee_id)) {
+                    const ttsUnassigned = shift?.start_at
+                        ? new Date(shift.start_at).getTime() - Date.now()
+                        : shift
+                            ? new Date(`${shift.shift_date}T${shift.start_time}`).getTime() - Date.now()
+                            : Number.POSITIVE_INFINITY;
+                    if (ttsUnassigned <= FOUR_H_MS) {
+                        return {
+                            id,
+                            pass: false as const,
+                            reason: 'Starts within 4h — assign an employee to emergency-publish (bidding would expire)',
+                        };
+                    }
                     return { id, pass: true as const, reason: '' };
                 }
                 const netMinutes =
