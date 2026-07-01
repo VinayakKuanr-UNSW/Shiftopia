@@ -82,7 +82,7 @@ const VIRT_OVERSCAN = 5;
 // absolutely-positioned) row reference the SAME track sizes, so columns can
 // never drift. This replaced the old <table>, whose absolutely-positioned
 // virtual <tr>s left the table's column model and misaligned the grid lines.
-const PEOPLE_COL_EMP_W = 200; // px — sticky employee column
+const PEOPLE_COL_EMP_W = 240; // px — sticky employee column
 const PEOPLE_COL_DAY_W = 160; // px — per-day column
 const peopleGridCols = (dayCount: number) =>
   `${PEOPLE_COL_EMP_W}px repeat(${dayCount}, minmax(${PEOPLE_COL_DAY_W}px, 1fr))`;
@@ -199,6 +199,8 @@ interface ShiftRowMenuProps {
 }
 
 const ShiftRowMenu = React.memo<ShiftRowMenuProps>(({ shift, onEdit, onClone, onUnpublish }) => {
+  const { isPast } = resolveShiftStatus(shift);
+
   return (
     // modal={false}: skip Radix focus trap + body lock. A 3-item menu over a
     // shift card doesn't need either; the trap traversal showed up as the
@@ -214,22 +216,30 @@ const ShiftRowMenu = React.memo<ShiftRowMenuProps>(({ shift, onEdit, onClone, on
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="bg-popover border-border min-w-[160px] z-50">
         <DropdownMenuItem
+          disabled={isPast}
           onClick={() => onEdit(shift)}
-          className="text-popover-foreground hover:bg-accent cursor-pointer"
+          className={cn(
+            "text-popover-foreground hover:bg-accent cursor-pointer",
+            isPast && "text-muted-foreground/50 cursor-not-allowed"
+          )}
         >
           <Edit2 className="h-4 w-4 mr-2" />
-          Edit Shift
+          Edit Shift {isPast && '(Locked)'}
         </DropdownMenuItem>
 
         <DropdownMenuItem
+          disabled={isPast}
           onClick={() => onClone(shift)}
-          className="text-popover-foreground hover:bg-accent cursor-pointer"
+          className={cn(
+            "text-popover-foreground hover:bg-accent cursor-pointer",
+            isPast && "text-muted-foreground/50 cursor-not-allowed"
+          )}
         >
           <Plus className="h-4 w-4 mr-2" />
-          Clone Shift
+          Clone Shift {isPast && '(Locked)'}
         </DropdownMenuItem>
 
-        {canUnpublish(shift) && onUnpublish && (
+        {canUnpublish(shift) && !isPast && onUnpublish && (
           <>
             <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem
@@ -612,180 +622,183 @@ const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
             </AvatarFallback>
           </Avatar>
 
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium truncate">{employee.name}</div>
-            <div className="text-[10px] tracking-[0.08em] uppercase font-mono text-muted-foreground/70">
-              {employee.employeeId}
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-foreground truncate">{employee.name}</span>
+              {employee.overHoursWarning && (
+                <span className="text-[9px] font-bold tracking-wider text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded uppercase">OT</span>
+              )}
             </div>
-            <div className="mt-1.5 space-y-0.5">
-              <div className="flex items-center justify-between">
-                <span className={cn(
-                  'text-[10px] font-mono tabular-nums',
-                  employee.overHoursWarning ? 'text-amber-400' : 'text-muted-foreground'
-                )}>
-                  {employee.currentHours.toFixed(1)}h
-                  <span className="text-muted-foreground/50"> / {Math.round(employee.periodContractedHours)}h</span>
-                </span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="text-[10px] font-mono tabular-nums text-emerald-400/80 cursor-help hover:text-emerald-400 transition-colors">
-                      {formatCost(employee.estimatedPay)}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent className="w-52 p-3 bg-zinc-900 border-white/10 shadow-xl" side="right" sideOffset={15}>
-                    <div className="space-y-2">
-                      <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{employee.name.split(' ')[0]}'s Estimate</p>
-                      <div className="space-y-1.5">
+            <div className="text-[10px] tracking-[0.08em] uppercase font-mono text-muted-foreground/60 leading-none">
+              ID: {employee.employeeId}
+            </div>
+            
+            {/* Hours and Pay row */}
+            <div className="flex items-center justify-between text-[11px] font-mono mt-1">
+              <span className={cn(
+                'tabular-nums font-medium',
+                employee.overHoursWarning ? 'text-amber-400' : 'text-muted-foreground'
+              )}>
+                {employee.currentHours.toFixed(1)}h <span className="text-muted-foreground/40">/ {Math.round(employee.periodContractedHours)}h</span>
+              </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="tabular-nums text-emerald-400 font-bold cursor-help hover:underline decoration-dotted transition-all">
+                    {formatCost(employee.estimatedPay)}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="w-52 p-3 bg-zinc-900 border-white/10 shadow-xl" side="right" sideOffset={15}>
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{employee.name.split(' ')[0]}'s Estimate</p>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-white/60">Base Pay</span>
+                        <span className="text-white font-medium">{formatCost(employee.payBreakdown.base)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-white/60">Penalties</span>
+                        <span className="text-emerald-400 font-medium">+{formatCost(employee.payBreakdown.penalty)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-white/60">Overtime</span>
+                        <span className="text-amber-400 font-medium">+{formatCost(employee.payBreakdown.overtime)}</span>
+                      </div>
+                      {employee.payBreakdown.allowance > 0 && (
                         <div className="flex justify-between text-xs">
-                          <span className="text-white/60">Base Pay</span>
-                          <span className="text-white font-medium">{formatCost(employee.payBreakdown.base)}</span>
+                          <span className="text-white/60">Allowances</span>
+                          <span className="text-blue-400 font-medium">+{formatCost(employee.payBreakdown.allowance)}</span>
                         </div>
+                      )}
+                      {employee.payBreakdown.leave > 0 && (
                         <div className="flex justify-between text-xs">
-                          <span className="text-white/60">Penalties</span>
-                          <span className="text-emerald-400 font-medium">+{formatCost(employee.payBreakdown.penalty)}</span>
+                          <span className="text-white/60">Leave Loading</span>
+                          <span className="text-purple-400 font-medium">+{formatCost(employee.payBreakdown.leave)}</span>
                         </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-white/60">Overtime</span>
-                          <span className="text-amber-400 font-medium">+{formatCost(employee.payBreakdown.overtime)}</span>
-                        </div>
-                        {employee.payBreakdown.allowance > 0 && (
-                          <div className="flex justify-between text-xs">
-                            <span className="text-white/60">Allowances</span>
-                            <span className="text-blue-400 font-medium">+{formatCost(employee.payBreakdown.allowance)}</span>
-                          </div>
-                        )}
-                        {employee.payBreakdown.leave > 0 && (
-                          <div className="flex justify-between text-xs">
-                            <span className="text-white/60">Leave Loading</span>
-                            <span className="text-purple-400 font-medium">+{formatCost(employee.payBreakdown.leave)}</span>
-                          </div>
-                        )}
-                        <div className="pt-1 border-t border-white/10 flex justify-between text-xs font-bold">
-                          <span className="text-white">Total</span>
-                          <span className="text-white">{formatCost(employee.estimatedPay)}</span>
-                        </div>
+                      )}
+                      <div className="pt-1 border-t border-white/10 flex justify-between text-xs font-bold">
+                        <span className="text-white">Total</span>
+                        <span className="text-white">{formatCost(employee.estimatedPay)}</span>
                       </div>
                     </div>
-                  </TooltipContent>
-                </Tooltip>
-                <div className="flex items-center gap-1.5 mt-1.5">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className={cn(
-                        'flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider cursor-help transition-all border backdrop-blur-sm',
-                        employee.fatigueScore < 10 ? 'text-emerald-400 border-emerald-400/20 bg-emerald-400/5 shadow-[0_0_10px_rgba(52,211,153,0.1)]' :
-                        employee.fatigueScore < 20 ? 'text-amber-400 border-amber-400/20 bg-amber-400/5 shadow-[0_0_10px_rgba(251,191,36,0.1)]' :
-                        'text-red-400 border-red-400/30 bg-red-400/10 shadow-[0_0_15px_rgba(248,113,113,0.2)] animate-pulse'
-                      )}>
-                        <Activity className="h-2.5 w-2.5" />
-                        FTG {employee.fatigueScore.toFixed(0)}
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent className="w-60 p-4 bg-zinc-900/98 backdrop-blur-md border-white/10 shadow-2xl rounded-xl" side="right">
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <div className={cn(
-                            'p-2 rounded-lg',
-                            employee.fatigueScore < 10 ? 'bg-emerald-400/20' :
-                            employee.fatigueScore < 20 ? 'bg-amber-400/20' : 'bg-red-400/20'
-                          )}>
-                            <Activity className={cn(
-                              'h-4 w-4',
-                              employee.fatigueScore < 10 ? 'text-emerald-400' :
-                              employee.fatigueScore < 20 ? 'text-amber-400' : 'text-red-400'
-                            )} />
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Fatigue Health</p>
-                            <p className="text-xs font-bold text-white">Projected: {employee.fatigueScore.toFixed(1)}</p>
-                          </div>
-                        </div>
-                        <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                          <div
-                            className={cn(
-                              'h-full',
-                              employee.fatigueScore < 10 ? 'bg-emerald-400' :
-                              employee.fatigueScore < 20 ? 'bg-amber-400' : 'bg-red-400'
-                            )}
-                            style={{ width: `${Math.min((employee.fatigueScore / 25) * 100, 100)}%` }}
-                          />
-                        </div>
-                        <p className="text-[10px] text-white/70 leading-relaxed italic">
-                          {employee.fatigueScore < 10 ? 'Optimal recovery state. Ready for high-intensity shifts.' :
-                            employee.fatigueScore < 20 ? 'Moderate accumulation. Monitor for cognitive decline.' :
-                              'Critical fatigue detected. Mandatory rest recommended per MA000080.'}
-                        </p>
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </div>
 
-                  <Tooltip>
-                    <TooltipTrigger asChild>
+            {/* Badges row */}
+            <div className="flex items-center gap-1.5 pt-0.5">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className={cn(
+                    'flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider cursor-help transition-all border backdrop-blur-sm',
+                    employee.fatigueScore < 10 ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5 shadow-[0_0_10px_rgba(52,211,153,0.1)]' :
+                    employee.fatigueScore < 20 ? 'text-amber-400 border-amber-400/20 bg-amber-400/5 shadow-[0_0_10px_rgba(251,191,36,0.1)]' :
+                    'text-red-400 border-red-400/30 bg-red-400/10 shadow-[0_0_15px_rgba(248,113,113,0.2)] animate-pulse'
+                  )}>
+                    <Activity className="h-2.5 w-2.5" />
+                    FTG {employee.fatigueScore.toFixed(0)}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="w-60 p-4 bg-zinc-900/98 backdrop-blur-md border-white/10 shadow-2xl rounded-xl" side="right">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
                       <div className={cn(
-                        'flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider cursor-help transition-all border backdrop-blur-sm',
-                        employee.utilization < 80 ? 'text-blue-400 border-blue-400/20 bg-blue-400/5 shadow-[0_0_8px_rgba(96,165,250,0.1)]' :
-                        employee.utilization <= 105 ? 'text-emerald-400 border-emerald-400/20 bg-emerald-400/5 shadow-[0_0_8px_rgba(52,211,153,0.1)]' :
-                        'text-amber-400 border-amber-400/20 bg-amber-400/5 shadow-[0_0_10px_rgba(251,191,36,0.1)]'
+                        'p-2 rounded-lg',
+                        employee.fatigueScore < 10 ? 'bg-emerald-400/20' :
+                        employee.fatigueScore < 20 ? 'bg-amber-400/20' : 'bg-red-400/20'
                       )}>
-                        <Scale className="h-2.5 w-2.5" />
-                        UTL {employee.utilization.toFixed(0)}%
+                        <Activity className={cn(
+                          'h-4 w-4',
+                          employee.fatigueScore < 10 ? 'text-emerald-400' :
+                          employee.fatigueScore < 20 ? 'text-amber-400' : 'text-red-400'
+                        )} />
                       </div>
-                    </TooltipTrigger>
-                    <TooltipContent className="w-60 p-4 bg-zinc-900/98 backdrop-blur-md border-white/10 shadow-2xl rounded-xl" side="right">
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <div className={cn(
-                            'p-2 rounded-lg',
-                            employee.utilization < 80 ? 'bg-blue-400/20' :
-                            employee.utilization <= 105 ? 'bg-emerald-400/20' : 'bg-amber-400/20'
-                          )}>
-                            <Scale className={cn(
-                              'h-4 w-4',
-                              employee.utilization < 80 ? 'text-blue-400' :
-                              employee.utilization <= 105 ? 'text-emerald-400' : 'bg-amber-400'
-                            )} />
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Fairness / Utilization</p>
-                            <p className="text-xs font-bold text-white">{employee.utilization.toFixed(0)}% of Contract</p>
-                          </div>
-                        </div>
-                        <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                          <div
-                            className={cn(
-                              'h-full',
-                              employee.utilization < 80 ? 'bg-blue-400' :
-                              employee.utilization <= 105 ? 'bg-emerald-400' : 'bg-amber-400'
-                            )}
-                            style={{ width: `${Math.min(employee.utilization, 120)}%` }}
-                          />
-                        </div>
-                        <p className="text-[10px] text-white/70 leading-relaxed italic">
-                          {employee.utilization < 80 ? 'Under-utilized. Priority candidate for additional shifts.' :
-                            employee.utilization <= 105 ? 'Perfect balance. Meeting contractual obligations.' :
-                              'Over-utilized. High risk of overtime penalties and burnout.'}
-                        </p>
+                      <div>
+                        <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Fatigue Health</p>
+                        <p className="text-xs font-bold text-white">Projected: {employee.fatigueScore.toFixed(1)}</p>
                       </div>
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-                {employee.overHoursWarning && (
-                  <span className="text-[9px] font-mono tracking-wider text-amber-400 uppercase">OT</span>
+                    </div>
+                    <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          'h-full',
+                          employee.fatigueScore < 10 ? 'bg-emerald-400' :
+                          employee.fatigueScore < 20 ? 'bg-amber-400' : 'bg-red-400'
+                        )}
+                        style={{ width: `${Math.min((employee.fatigueScore / 25) * 100, 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-white/70 leading-relaxed italic">
+                      {employee.fatigueScore < 10 ? 'Optimal recovery state. Ready for high-intensity shifts.' :
+                        employee.fatigueScore < 20 ? 'Moderate accumulation. Monitor for cognitive decline.' :
+                          'Critical fatigue detected. Mandatory rest recommended per MA000080.'}
+                    </p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className={cn(
+                    'flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider cursor-help transition-all border backdrop-blur-sm',
+                    employee.utilization < 80 ? 'text-blue-400 border-blue-500/20 bg-blue-500/5 shadow-[0_0_8px_rgba(96,165,250,0.1)]' :
+                    employee.utilization <= 105 ? 'text-emerald-400 border-emerald-400/20 bg-emerald-400/5 shadow-[0_0_8px_rgba(52,211,153,0.1)]' :
+                    'text-amber-400 border-amber-400/20 bg-amber-400/5 shadow-[0_0_10px_rgba(251,191,36,0.1)]'
+                  )}>
+                    <Scale className="h-2.5 w-2.5" />
+                    UTL {employee.utilization.toFixed(0)}%
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="w-60 p-4 bg-zinc-900/98 backdrop-blur-md border-white/10 shadow-2xl rounded-xl" side="right">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'p-2 rounded-lg',
+                        employee.utilization < 80 ? 'bg-blue-400/20' :
+                        employee.utilization <= 105 ? 'bg-emerald-400/20' : 'bg-amber-400/20'
+                      )}>
+                        <Scale className={cn(
+                          'h-4 w-4',
+                          employee.utilization < 80 ? 'text-blue-400' :
+                          employee.utilization <= 105 ? 'text-emerald-400' : 'bg-amber-400'
+                        )} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Fairness / Utilization</p>
+                        <p className="text-xs font-bold text-white">{employee.utilization.toFixed(0)}% of Contract</p>
+                      </div>
+                    </div>
+                    <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          'h-full',
+                          employee.utilization < 80 ? 'bg-blue-400' :
+                          employee.utilization <= 105 ? 'bg-emerald-400' : 'bg-amber-400'
+                        )}
+                        style={{ width: `${Math.min(employee.utilization, 120)}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-white/70 leading-relaxed italic">
+                      {employee.utilization < 80 ? 'Under-utilized. Priority candidate for additional shifts.' :
+                        employee.utilization <= 105 ? 'Perfect balance. Meeting contractual obligations.' :
+                          'Over-utilized. High risk of overtime penalties and burnout.'}
+                    </p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+
+            {/* Utilization/Contract Progress Bar */}
+            <div className="h-[3px] w-full bg-muted rounded-full overflow-hidden mt-1.5">
+              <div
+                className={cn(
+                  'h-full rounded-full',
+                  employee.overHoursWarning ? 'bg-amber-400' : 'bg-primary/60'
                 )}
-              </div>
-              <div className="h-[3px] w-full bg-muted rounded-full overflow-hidden">
-                <div
-                  className={cn(
-                    'h-full rounded-full',
-                    employee.overHoursWarning ? 'bg-amber-400' : 'bg-primary/60'
-                  )}
-                  style={{
-                    // Period-aware utilization (same denominator as the "Xh / Yh"
-                    // fraction and the UTL badge) — never the raw weekly contract.
-                    width: `${Math.min(100, employee.utilization)}%`,
-                  }}
-                />
-              </div>
+                style={{
+                  width: `${Math.min(100, employee.utilization)}%`,
+                }}
+              />
             </div>
           </div>
         </div>
@@ -813,6 +826,7 @@ const EmployeeRowImpl = React.forwardRef<HTMLDivElement, EmployeeRowProps>(({
           onUnpublishShift={onUnpublishShift}
           onAssign={onAssign}
           onMoveShift={onMoveShift}
+          dense={dates.length > 3}
         />
       ))}
     </div>
@@ -845,6 +859,7 @@ interface EmployeeDateCellProps {
   onUnpublishShift?: (shiftId: string) => void;
   onAssign: (shift: UnfilledShift, employeeId: string, dateKey: string) => void;
   onMoveShift?: (shiftId: string, targetEmployeeId: string, targetDate: string) => void;
+  dense?: boolean;
 }
 
 const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
@@ -866,6 +881,7 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
   onUnpublishShift,
   onAssign,
   onMoveShift,
+  dense = false,
 }) => {
   const dateKey = format(date, 'yyyy-MM-dd');
   const shifts = employee.shifts[dateKey] ?? [];
@@ -914,7 +930,7 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
                   employee={employee}
                   disabled={isManagementLocked}
                 >
-                  <SmartShiftCard
+                   <SmartShiftCard
                     headerAction={
                       canEdit && !isBulkMode ? (
                         <ShiftRowMenu
@@ -936,6 +952,8 @@ const EmployeeDateCellImpl: React.FC<EmployeeDateCellProps> = ({
                     showStatusIcons={true}
                     detailedCost={shift.detailedCost}
                     onClick={() => onClickShift(shift)}
+                    isPeopleMode={true}
+                    dense={dense}
                   />
                 </DraggableShiftCard>
               );

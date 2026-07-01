@@ -262,25 +262,20 @@ export const useRosterStore = create<RosterState>()(
     }),
 
     {
-      name: 'roster-ui-v2',     // 'v2' avoids collisions with old localStorage keys
+      name: 'roster-ui-v3',     // 'v3' to avoid collisions with older build formats
       storage: rosterStorage,
-      // Only persist preferences — selectedDate is a session-only concept.
-      // viewType is intentionally NOT persisted: it starts each session at the
-      // lean default ('day') so the planner never auto-loads a heavy month grid.
-      // (Month/Week remain selectable; the choice just doesn't carry across reloads.)
+      // Persist preferences, active mode, view type (date mode), and selected date filter
       partialize: (s) => ({
         activeMode: s.activeMode,
         selectedOrganizationId: s.selectedOrganizationId,
         selectedDepartmentIds: s.selectedDepartmentIds,
         selectedSubDepartmentIds: s.selectedSubDepartmentIds,
         advancedFilters: s.advancedFilters,
+        viewType: s.viewType,
+        _selectedDateISO: s._selectedDateISO,
       }),
-      // Drop any stale `viewType` that older builds persisted, so hydration
-      // never restores a heavy month grid from localStorage. (partialize alone
-      // only stops future writes; existing blobs are still merged on read.)
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Record<string, unknown>;
-        if ('viewType' in p) delete p.viewType;
         return { ...current, ...p };
       },
     },

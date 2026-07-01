@@ -47,6 +47,7 @@ function getDeptGlassClass(data?: { groupType?: string }): string {
     if (g.includes('convention')) return 'dept-card-glass-convention';
     if (g.includes('exhibition')) return 'dept-card-glass-exhibition';
     if (g.includes('theatre'))    return 'dept-card-glass-theatre';
+    if (g.includes('cutaway'))    return 'dept-card-glass-cutaway';
     return 'dept-card-glass-default';
 }
 
@@ -58,6 +59,7 @@ function getDeptAccent(dept?: string | null): string {
     if (d.includes('convention')) return 'text-blue-600 dark:text-blue-400';
     if (d.includes('exhibition')) return 'text-emerald-600 dark:text-emerald-400';
     if (d.includes('theatre')) return 'text-rose-600 dark:text-rose-400';
+    if (d.includes('cutaway')) return 'text-amber-600 dark:text-amber-400';
     return 'text-muted-foreground';
 }
 
@@ -67,6 +69,7 @@ function getDeptGlow(dept?: string | null): string {
     if (d.includes('convention')) return 'shadow-blue-500/10';
     if (d.includes('exhibition')) return 'shadow-emerald-500/10';
     if (d.includes('theatre')) return 'shadow-rose-500/10';
+    if (d.includes('cutaway')) return 'shadow-amber-500/10';
     return 'shadow-white/5';
 }
 
@@ -133,7 +136,8 @@ const ShiftPane: React.FC<{
                 groupVariant={
                     deptClass.includes('convention') ? 'convention' :
                     deptClass.includes('exhibition') ? 'exhibition' :
-                    deptClass.includes('theatre') ? 'theatre' : 'default'
+                    deptClass.includes('theatre') ? 'theatre' :
+                    deptClass.includes('cutaway') ? 'cutaway' : 'default'
                 }
                 employeeName={data.employeeName}
                 avatarUrl={data.avatar}
@@ -704,15 +708,18 @@ export const ManagerSwapsPage: React.FC = () => {
                         ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
                         : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
                 )}>
-                    <div className="flex-1 overflow-y-auto custom-scrollbar px-4 lg:px-6 py-6">
+                    <div className={cn(
+                        "flex-1 overflow-y-auto custom-scrollbar px-4 lg:px-6 py-6",
+                        (isLoading || filteredRequests.length === 0) && "flex flex-col items-center justify-center py-6"
+                    )}>
                     {isLoading ? (
-                        <div className="flex flex-col items-center justify-center py-32 gap-4">
+                        <div className="flex flex-col items-center justify-center gap-4">
                             <div className="h-10 w-10 rounded-full border-2 border-border border-t-indigo-500 animate-spin" />
                             <span className="text-[10px] font-mono text-muted-foreground/40 uppercase tracking-[0.3em]">Loading requests</span>
                         </div>
                     ) : filteredRequests.length === 0 ? (
                         /* Empty State */
-                        <div className="flex flex-col items-center justify-center py-32 gap-6">
+                        <div className="flex flex-col items-center justify-center text-center gap-6">
                             <div className="relative">
                                 <div className="h-20 w-20 rounded-3xl bg-muted/40 border border-border flex items-center justify-center shadow-2xl">
                                     <ArrowLeftRight className="h-8 w-8 text-muted-foreground/20" />

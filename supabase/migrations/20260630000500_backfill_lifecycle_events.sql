@@ -21,7 +21,14 @@ SELECT
   s.created_by_user_id,
   'OP_APPLIED'::public.shift_event_type,
   COALESCE(s.created_at, now()),
-  jsonb_build_object('op', 'create', 'domain', 'lifecycle', 'source', 'backfill_lifecycle_20260630'),
+  jsonb_build_object(
+    'op', 'create',
+    'domain', 'lifecycle',
+    'source', 'backfill_lifecycle_20260630',
+    'from_state', NULL,
+    'to_state', CASE WHEN s.assigned_employee_id IS NOT NULL THEN 'S2' ELSE 'S1' END,
+    'creation_source', s.creation_source
+  ),
   CASE WHEN s.created_by_user_id IS NULL THEN 'system' ELSE 'manager' END,
   'lifecycle'
 FROM public.shifts s

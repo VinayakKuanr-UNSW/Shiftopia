@@ -371,7 +371,7 @@ function shiftToAttendanceInput(shift: Shift, nowMs: number): AttendanceInput {
     clockInVarianceMin,
     clockOutVarianceMin,
     attendanceStatus: shift.attendance_status ?? null,
-    hasEnded: nowMs > scheduledEndMs || shift.lifecycle_status === 'Completed',
+    hasEnded: nowMs > scheduledEndMs || shift.lifecycle_status === 'Completed' || !!shift.actual_end,
   };
 }
 
@@ -690,14 +690,17 @@ const AttendancePage: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 px-4 lg:px-6 py-4 pb-32 scrollbar-none">
+            <div className={cn(
+              "flex-1 min-h-0 overflow-y-auto space-y-4 px-4 lg:px-6 py-4 pb-32 scrollbar-none",
+              groupedLogs.length === 0 && "flex flex-col items-center justify-center pb-4"
+            )}>
               {/* Attendance scorecard */}
               {logShifts.length > 0 && <AttendanceMetricsBar metrics={attendanceMetrics} />}
 
 
               {viewMode === 'card' ? (
                 groupedLogs.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                  <div className="flex flex-col items-center justify-center text-center gap-3">
                     <BarChart3 className="h-10 w-10 text-muted-foreground/40" />
                     <p className="text-base font-bold text-foreground">No attendance records</p>
                     <p className="text-sm text-muted-foreground">

@@ -60,6 +60,7 @@ import {
   useShiftDeltaSync,
 } from '@/modules/rosters/state/useRosterShifts';
 import { useRosterSummary } from '@/modules/rosters/state/useRosterSummary';
+import { useRosterPlannerStats } from '@/modules/rosters/state/useRosterPlannerStats';
 import { EligibilityService } from '@/modules/rosters/services/eligibility.service';
 import {
   TemplateGroupType,
@@ -73,7 +74,6 @@ import {
 } from '@/modules/rosters/api/shifts.api';
 import { useRosterProjections } from '@/modules/rosters/hooks/useRosterProjections';
 import { useRosterStructure } from '@/modules/rosters/state/useRosterStructure';
-import { useRostersByDateRange } from '@/modules/rosters/state/useEnhancedRosters';
 import { usePublishRoster } from '@/modules/rosters/state/useRosterMutations';
 import { useRosterViewPrefetch } from '@/modules/rosters/hooks/useRosterViewPrefetch';
 import { shiftKeys, type ShiftFilters } from '@/modules/rosters/api/queryKeys';
@@ -110,9 +110,18 @@ const EMPLOYEE_PAGE_SIZE = 200;
 // compute their own month windows for rendering.
 const MONTH_BUFFER_DAYS = 3;
 
-// Maximum shifts to render before showing a performance advisory banner.
+// Shift count above which the page shows a performance advisory banner.
 // Exceeding this threshold does not block rendering — it is informational only.
-const SHIFT_RENDER_BUDGET = 3000;
+// Lowered 3000 → 1500: a populated week can already exceed this, and warning
+// earlier nudges the user to narrow scope before the grid gets heavy.
+const SHIFT_RENDER_BUDGET = 1500;
+
+// Above this server-counted shift total, a MONTH view is auto-narrowed to a
+// WEEK when the user enters an interactive mode (DnD / Bulk), so the card grid
+// never tries to mount a 36-column month of thousands of shifts. The count is
+// read from the cheap server aggregate (useRosterPlannerStats), not from a raw
+// shift fetch, so the decision costs nothing.
+const MONTH_INTERACTIVE_SHIFT_LIMIT = 1500;
 
 /* ============================================================
    MAIN COMPONENT
@@ -307,17 +316,10 @@ const NewRostersPage: React.FC = () => {
   });
 
   // ==================== LOCK STATUS ====================
-  // Fetch Rosters for Lock Status
-  const { data: rosters = [] } = useRostersByDateRange(
-    startDate || '',
-    endDate || '',
-    selectedDepartmentIds[0] || '',
-    selectedOrganizationId || undefined,
-    selectedSubDepartmentIds[0] || undefined
-  );
-
-  // Derive lock status from fetched rosters
-  // LOCK FEATURE REMOVED - Always editable if permission allows
+  // LOCK FEATURE REMOVED - Always editable if permission allows.
+  // The previous useRostersByDateRange fetch fed nothing (isLocked is hardcoded
+  // false and the fetched rosters had no consumers) — removed to drop a wasted
+  // network round-trip on every roster view.
   const isLocked = false;
   const canEdit = hasPermission('update');
 
@@ -352,6 +354,10 @@ const NewRostersPage: React.FC = () => {
 
   // Bucket View summary fetching — powers the default summary cells for the
   // 3-Day / Week / Month grids. Day view uses the timeline, so it's excluded.
+  // Only Group mode (all views) and Roles mode (non-day) consume summaryMap, so
+  // gate the fetch off in People/Events modes (and Roles day view) to avoid a
+  // wasted network round-trip.
+  const summaryEnabled = activeMode === 'group' || (activeMode === 'roles' && viewType !== 'day');
   const {
     summaryMap,
     isLoading: isSummaryLoading,
@@ -359,7 +365,18 @@ const NewRostersPage: React.FC = () => {
     selectedOrganizationId,
     startDate,
     endDate,
-    queryFilters
+    queryFilters,
+    summaryEnabled
+  );
+
+  // Server-sourced planner stats — single source of truth for the footer numbers
+  // across ALL modes/views (replaces the old bucket-vs-projection branch which
+  // showed inconsistent totals and counted cancelled shifts in bucket view).
+  const { stats: plannerStats } = useRosterPlannerStats(
+    selectedOrganizationId,
+    startDate,
+    endDate,
+    queryFilters,
   );
 
 
@@ -457,6 +474,38 @@ const NewRostersPage: React.FC = () => {
     // For day/3day, no change needed to selectedDate
     setViewType(nextView);
   };
+
+  // ==================== AUTO-NARROW HEAVY MONTH ON INTERACTIVE ENTRY ====================
+  // Month view defaults to the lightweight bucket grid (no raw shift fetch). The
+  // instant the user flips into an interactive mode (DnD or Bulk), the heavy
+  // per-shift fetch + card grid kicks in. For a busy month that means thousands
+  // of shifts across ~36 columns — the melt-down path. Pre-empt it: while in an
+  // interactive mode, if the (server-counted) month is over the limit, narrow to
+  // a week ONCE per interactive session. The flag (a) lets us still fire when the
+  // count arrives after the user entered the mode, and (b) stops us fighting a
+  // user who then deliberately re-selects Month within the same session. It
+  // resets when they leave interactive mode.
+  const isInteractiveMode = isDnDModeActive || bulkModeActive;
+  const autoNarrowedRef = useRef(false);
+  React.useEffect(() => {
+    if (!isInteractiveMode) {
+      autoNarrowedRef.current = false;
+      return;
+    }
+    if (
+      !autoNarrowedRef.current &&
+      viewType === 'month' &&
+      plannerStats.totalShifts > MONTH_INTERACTIVE_SHIFT_LIMIT
+    ) {
+      autoNarrowedRef.current = true;
+      setSelectedDate(startOfWeek(selectedDate, { weekStartsOn: 1 }));
+      setViewType('week');
+      toast({
+        title: 'Narrowed to Week view',
+        description: `This month has ${plannerStats.totalShifts.toLocaleString()} shifts — switched to a week so the interactive grid stays responsive. Switch back to Month anytime.`,
+      });
+    }
+  }, [isInteractiveMode, viewType, plannerStats.totalShifts, selectedDate, setSelectedDate, setViewType, toast]);
 
   // ==================== MODAL HANDLERS ====================
   const handleAddShift = () => {
@@ -885,15 +934,27 @@ const NewRostersPage: React.FC = () => {
     }
   };
 
-  // ==================== COMPUTED STATS (from projection engine) ====================
+  // ==================== COMPUTED STATS (server-sourced) ====================
+  // Footer numbers read from the single server-sourced planner-stats hook so
+  // every mode/view shows identical, correct totals (cancelled shifts excluded).
   const {
-    assignedShifts: totalAssignedShifts,
-    openShifts: totalUnfilledShifts,
+    totalAssignedShifts,
+    totalUnfilledShifts,
     totalShifts,
     estimatedCost,
-  } = projection.stats;
-  const budget = 15000;
+  } = useMemo(() => ({
+    totalShifts: plannerStats.totalShifts,
+    totalAssignedShifts: plannerStats.assignedShifts,
+    totalUnfilledShifts: plannerStats.openShifts,
+    estimatedCost: plannerStats.estimatedCost,
+  }), [plannerStats]);
+
+  // Budget now comes from `department_budgets` (pro-rated to the visible window
+  // by the stats RPC). When no budget row overlaps the range, `budget` is 0 and
+  // we hide the Budget/Remaining UI entirely rather than show a fake number.
+  const budget = plannerStats.budget;
   const remainingBudget = budget - estimatedCost;
+  const showBudget = budget > 0;
 
   // ==================== SINGLE SHIFT HANDLERS (via mutation hooks) ====================
   const handleBidShift = async (shiftId: string) => {
@@ -1169,6 +1230,15 @@ const NewRostersPage: React.FC = () => {
               isShiftsLoading={isLoading}
               showLegend={true}
               projection={projection.group ?? undefined}
+              footerStats={{
+                totalShifts,
+                assignedShifts: totalAssignedShifts,
+                unfilledShifts: totalUnfilledShifts,
+                estimatedCost,
+                budget,
+                remainingBudget,
+              }}
+              showBudget={showBudget}
               // Centralized DnD assignment (employee → shift card)
               onAssignShift={handleDndAssignToShift}
               // Bucket View summary + drill-down — default for Day / 3-Day / Week / Month
@@ -1329,110 +1399,6 @@ const NewRostersPage: React.FC = () => {
         rosterId={selectedRosterId || undefined}
       />
 
-      {/* Footer Summary */}
-      <div className="border-t border-slate-200 dark:border-white/5 bg-white dark:bg-black/20 backdrop-blur-md px-6 py-3 flex-shrink-0">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between text-sm gap-3">
-          <div className="flex items-center gap-6">
-            <div>
-              <span className="text-muted-foreground/60">Total Shifts:</span>
-              <span className="ml-2 font-medium text-foreground">{totalShifts}</span>
-            </div>
-            <Separator orientation="vertical" className="h-4 hidden md:block bg-slate-200 dark:bg-white/10" />
-            <div>
-              <span className="text-muted-foreground/60">Assigned:</span>
-              <span className="ml-2 font-medium text-emerald-400">{totalAssignedShifts}</span>
-            </div>
-            <Separator orientation="vertical" className="h-4 hidden md:block bg-slate-200 dark:bg-white/10" />
-            <div>
-              <span className="text-muted-foreground/60">Unfilled:</span>
-              <span className="ml-2 font-medium text-amber-400">{totalUnfilledShifts}</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-6">
-            {/* Redundant Auto-Schedule button removed (now in Function Bar) */}
-            <div>
-              <span className="text-muted-foreground/60">Est. Cost:</span>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="ml-2 font-medium text-foreground cursor-help hover:text-primary transition-colors underline decoration-dotted decoration-muted-foreground/30 underline-offset-4">
-                      ${estimatedCost.toFixed(2)}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent className="w-64 p-4 bg-zinc-900 border-white/10 shadow-2xl" side="top" sideOffset={10}>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                        <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Global Labour Estimate</p>
-                        <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Award Compliant</Badge>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-white/50">Ordinary Base Pay</span>
-                          <span className="text-white font-mono">{formatCost(projection.stats.costBreakdown.base)}</span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-white/50">Weekend & Night Penalties</span>
-                          <span className="text-emerald-400 font-mono">+{formatCost(projection.stats.costBreakdown.penalty)}</span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-white/50">Overtime Loadings</span>
-                          <span className="text-amber-400 font-mono">+{formatCost(projection.stats.costBreakdown.overtime)}</span>
-                        </div>
-                        {projection.stats.costBreakdown.allowance > 0 && (
-                          <div className="flex justify-between text-xs">
-                            <span className="text-white/50">Meal & Industry Allowances</span>
-                            <span className="text-blue-400 font-mono">+{formatCost(projection.stats.costBreakdown.allowance)}</span>
-                          </div>
-                        )}
-                        {projection.stats.costBreakdown.leave > 0 && (
-                          <div className="flex justify-between text-xs">
-                            <span className="text-white/50">Annual Leave Loading (17.5%)</span>
-                            <span className="text-purple-400 font-mono">+{formatCost(projection.stats.costBreakdown.leave)}</span>
-                          </div>
-                        )}
-                        <div className="pt-2 border-t border-white/10 flex justify-between text-sm font-bold">
-                          <span className="text-white">Total Roster Cost</span>
-                          <span className="text-white font-mono">{formatCost(estimatedCost)}</span>
-                        </div>
-                      </div>
-                      <div className="pt-1">
-                        <div className="flex justify-between text-[10px]">
-                          <span className="text-white/30 italic">Target Budget</span>
-                          <span className="text-white/40 font-mono">{formatCost(budget)}</span>
-                        </div>
-                        <div className="flex justify-between text-[10px] mt-0.5">
-                          <span className="text-white/30 italic">Variance</span>
-                          <span className={cn("font-mono", remainingBudget >= 0 ? "text-emerald-500/60" : "text-red-500/60")}>
-                            {remainingBudget >= 0 ? '-' : '+'}{formatCost(Math.abs(remainingBudget))}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <Separator orientation="vertical" className="h-4 hidden md:block bg-slate-200 dark:bg-white/10" />
-            <div>
-              <span className="text-muted-foreground/60">Budget:</span>
-              <span className="ml-2 font-medium text-foreground">${budget.toFixed(2)}</span>
-            </div>
-            <Separator orientation="vertical" className="h-4 hidden md:block bg-slate-200 dark:bg-white/10" />
-            <div>
-              <span className="text-muted-foreground/60">Remaining:</span>
-              <span
-                className={cn(
-                  'ml-2 font-medium',
-                  remainingBudget >= 0 ? 'text-emerald-400' : 'text-red-400'
-                )}
-              >
-                ${remainingBudget.toFixed(2)}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
     </ShiftEditingPresenceProvider>
   );

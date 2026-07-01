@@ -842,11 +842,14 @@ export const EmployeeBidsPage: React.FC = () => {
                         <p className="text-xs text-muted-foreground/60 uppercase tracking-widest font-black animate-pulse">Scanning Compliance...</p>
                     </div>
                 ) : viewMode === 'card' ? (
-                <div className="flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none">
+                <div className={cn(
+                    "flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none",
+                    filteredBidOpportunities.length === 0 && "flex flex-col items-center justify-center p-0"
+                )}>
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={`${startDate.toISOString()}-${endDate.toISOString()}`}
-                            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4"
+                            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 w-full h-full"
                             variants={pageVariants}
                             initial="hidden"
                             animate="show"
@@ -854,8 +857,8 @@ export const EmployeeBidsPage: React.FC = () => {
                         >
                         {filteredBidOpportunities.map(opp => renderOpportunityCard(opp))}
                         {filteredBidOpportunities.length === 0 && (
-                            <motion.div variants={itemVariants} className="col-span-full">
-                                <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                            <motion.div variants={itemVariants} className="col-span-full w-full h-full flex items-center justify-center">
+                                <div className="flex flex-col items-center justify-center text-center gap-3">
                                     <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
                                         <Calendar className="h-6 w-6 text-muted-foreground/40" />
                                     </div>
@@ -870,20 +873,26 @@ export const EmployeeBidsPage: React.FC = () => {
                     </AnimatePresence>
                 </div>
                 ) : (
-                    <div className="flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none">
+                    <div className={cn(
+                        "flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none",
+                        filteredBidOpportunities.length === 0 && "md:block flex flex-col items-center justify-center p-0 md:p-6"
+                    )}>
                         {/* Mobile: vertical list rows, tap → bottom drawer. Group-by chips live in header. */}
-                        <div className="md:hidden">
+                        <div className={cn("md:hidden w-full", filteredBidOpportunities.length === 0 && "h-full")}>
                             <AnimatePresence mode="wait">
                                 <motion.div
                                     key={`list-${groupBy}-${startDate.toISOString()}-${endDate.toISOString()}`}
-                                    className="border border-border/40 rounded-xl overflow-hidden bg-background/40"
+                                    className={cn(
+                                        "border border-border/40 rounded-xl overflow-hidden bg-background/40",
+                                        filteredBidOpportunities.length === 0 && "h-full flex flex-col items-center justify-center w-full"
+                                    )}
                                     variants={pageVariants}
                                     initial="hidden"
                                     animate="show"
                                     exit={{ opacity: 0, transition: { duration: 0.12 } }}
                                 >
                                     {filteredBidOpportunities.length === 0 ? (
-                                        <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                                        <div className="flex flex-col items-center justify-center text-center gap-3">
                                             <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
                                                 <Calendar className="h-6 w-6 text-muted-foreground/40" />
                                             </div>

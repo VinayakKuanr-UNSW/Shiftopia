@@ -297,7 +297,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
                     return parts[0] * 60 + parts[1];
                 }
-                return (parseInt(entry.netLength, 10) || 0) * 60;
+                return parseInt(entry.netLength, 10) || 0;
             })()}
             paidBreak={parseInt(entry.paidBreak) || 0}
             unpaidBreak={parseInt(entry.unpaidBreak) || 0}

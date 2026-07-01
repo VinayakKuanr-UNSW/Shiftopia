@@ -1,1 +1,8 @@
 project_id = "srfozdlphoempdattvtx"
+
+[api]
+# The `hr` schema MUST be exposed for the app's `.schema('hr')` Data API calls to work.
+# NOTE: for the PROD project this must also be set in the Dashboard
+# (Settings > API > Exposed schemas) — config.toml alone does not change a linked remote project.
+schemas = ["public", "graphql_public", "hr"]
+extra_search_path = ["public", "extensions"]

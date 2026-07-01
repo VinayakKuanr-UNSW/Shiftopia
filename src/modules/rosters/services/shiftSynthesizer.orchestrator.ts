@@ -224,7 +224,7 @@ async function mapRowsToTensors(rows: DemandTensorInsertRow[]): Promise<DemandTe
   const { data: fmap, error: fErr } = await supabase.from('function_map').select('*');
   // TODO: 'employment_type' does not exist on the roles table in the generated types (schema drift).
   // Cast as any to access the column until the generated types are regenerated.
-  const { data: roles, error: rErr } = await (supabase as any).from('roles').select('id, level, sub_department_id, employment_type') as { data: any[] | null; error: any };
+  const { data: roles, error: rErr } = await (supabase as any).schema('hr').from('roles').select('id, remuneration_level, subdepartment_id, employment_type') as { data: any[] | null; error: any };
 
   if (fErr || rErr) {
     logger.error('Failed to fetch taxonomy for demand mapping', { fErr, rErr, operation: 'mapRowsToTensors' });
@@ -241,8 +241,8 @@ async function mapRowsToTensors(rows: DemandTensorInsertRow[]): Promise<DemandTe
     for (const m of matches) {
       // Find the specific role matching this sub-department and level
       const targetRole = (roles ?? []).find(r =>
-        r.sub_department_id === m.sub_department_id &&
-        r.level === row.level
+        r.subdepartment_id === m.sub_department_id &&
+        r.remuneration_level === row.level
       );
 
       if (!targetRole) {

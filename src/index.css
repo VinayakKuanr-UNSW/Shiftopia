@@ -483,6 +483,15 @@ body {
   @apply bg-red-500/10 border-red-400/30 text-red-200 font-medium;
 }
 
+/* -- Badge: The Cutaway (Amber/Yellow) -- */
+.light .dept-badge-cutaway {
+  @apply bg-amber-50 border-amber-200 text-amber-700 font-medium;
+}
+
+.dark .dept-badge-cutaway {
+  @apply bg-amber-500/10 border-amber-400/30 text-amber-200 font-medium;
+}
+
 /* -- Badge: Default -- */
 .light .dept-badge-default {
   @apply bg-slate-50 border-slate-200 text-slate-600 font-medium;
@@ -629,6 +638,18 @@ body {
 .dark .dept-card-glass-theatre {
   @apply bg-rose-500/[0.15] border-rose-500/50 shadow-rose-500/20 !important;
   background-image: radial-gradient(at 0% 0%, rgba(244, 63, 94, 0.25) 0px, transparent 50%), linear-gradient(135deg, rgba(244, 63, 94, 0.1) 0%, transparent 100%) !important;
+}
+
+
+/* -- Glass: The Cutaway (Amber/Yellow) -- */
+.light .dept-card-glass-cutaway {
+  @apply bg-amber-500/[0.08] border-amber-500/30 shadow-amber-500/10 !important;
+  background-image: radial-gradient(at 0% 0%, rgba(245, 158, 11, 0.15) 0px, transparent 50%), linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, transparent 100%) !important;
+}
+
+.dark .dept-card-glass-cutaway {
+  @apply bg-amber-500/[0.15] border-amber-500/50 shadow-amber-500/20 !important;
+  background-image: radial-gradient(at 0% 0%, rgba(245, 158, 11, 0.25) 0px, transparent 50%), linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, transparent 100%) !important;
 }
 
 

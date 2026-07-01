@@ -1,310 +1,308 @@
-// get-roster-view — BFF for the Rosters Planner page.
-// Runs the 5 roster-page queries in parallel using the caller's auth token,
-// so RLS continues to apply. Frontend caller: useRosterViewPrefetch.
+// @ts-ignore
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+// @ts-ignore
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
-// @ts-ignore - Supabase Deno Edge functions use npm specifiers that standard TS compilers don't natively resolve
-import { createClient, SupabaseClient } from 'npm:@supabase/supabase-js@2.50.0';
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
-};
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
+}
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
-
-if (!SUPABASE_URL) throw new Error('[FATAL] Missing SUPABASE_URL');
-if (!SUPABASE_ANON_KEY) throw new Error('[FATAL] Missing SUPABASE_ANON_KEY');
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const isUuid = (v: unknown): v is string => typeof v === 'string' && UUID_RE.test(v);
-
-interface RequestBody {
-  organization_id?: string | null;
-  department_ids?: string[];
-  sub_department_ids?: string[];
-  start_date?: string | null;
-  end_date?: string | null;
+function isValidUuid(id: string | null | undefined): boolean {
+  if (!id) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
 
 const SHIFT_SELECT = `
-  id,
-  organization_id,
-  department_id,
-  sub_department_id,
-  created_at,
-  updated_at,
-  version,
-  roster_id,
-  roster_date,
-  shift_date,
-  template_id,
-  template_group,
-  template_sub_group,
-  is_from_template,
-  template_instance_id,
-  group_type,
-  sub_group_name,
-  display_order,
-  shift_group_id,
-  shift_subgroup_id,
-  role_id,
-  role_level,
-  remuneration_level_id,
-  remuneration_rate,
-  actual_hourly_rate,
-  currency,
-  start_time,
-  end_time,
-  is_overnight,
-  scheduled_length_minutes,
-  break_minutes,
-  paid_break_minutes,
-  unpaid_break_minutes,
-  net_length_minutes,
-  total_hours,
-  timezone,
-  start_at,
-  end_at,
-  assigned_employee_id,
-  assigned_at,
-  lifecycle_status,
-  assignment_status,
-  assignment_outcome,
-  fulfillment_status,
-  is_draft,
-  is_cancelled,
-  is_on_bidding,
-  is_published,
-  is_locked,
-  bidding_status,
-  bidding_priority_text,
-  trade_requested_at,
-  trading_status,
-  attendance_status,
-  offer_expires_at,
-  event_ids,
-  tags,
-  required_skills,
-  required_licenses,
-  notes,
-  is_training,
-  published_at,
-  cancelled_at,
-  deleted_at,
-  last_modified_by,
-  target_employment_type,
+  *,
   organizations(id, name),
   departments(id, name),
   sub_departments(id, name),
-  roles(id, name),
+  roles!shifts_role_id_fkey(id, name),
   remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max),
-  assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
-  roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name)),
-  timesheets(status)
+  assigned_profiles:profiles!assigned_employee_id(first_name, last_name)
 `;
 
-// Supabase caps a single response at 1000 rows; for orgs with 5k+ shifts in
-// view we page through. `count: 'planned'` skips the expensive COUNT(*) — we
-// stop on the first short page rather than trusting the planner estimate
-// (which can be off by ~10–20%).
-const PAGE_SIZE = 1000;
-const MAX_PAGES = 100; // safety cap (100k rows)
+// ── In-memory TTL cache ───────────────────────────────────────────────────────────────────────────────────
+// Module-level maps persist for the lifetime of this Deno isolate.
+// Shift data: 15 s TTL  (delta sync on the client corrects stale data)
+// Lookup data: 5 min TTL (employees, roles, levels, events change rarely)
+//
+// Key strategy: different TTLs for mutable vs stable data so lookup caches
+// survive many shift-load cycles without re-querying the DB.
 
-async function fetchShifts(
-  supa: SupabaseClient,
-  orgId: string,
-  startDate: string,
-  endDate: string,
-  deptIds: string[],
-  subDeptIds: string[],
-) {
-  const buildQuery = () => {
-    let q = supa
-      .from('shifts')
-      .select(SHIFT_SELECT, { count: 'planned', head: false })
-      .eq('organization_id', orgId)
-      .gte('shift_date', startDate)
-      .lte('shift_date', endDate)
-      .is('deleted_at', null);
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
 
-    if (deptIds.length) q = q.in('department_id', deptIds);
-    if (subDeptIds.length) q = q.in('sub_department_id', subDeptIds);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const shiftCache  = new Map<string, CacheEntry<any>>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const lookupCache = new Map<string, CacheEntry<any>>();
 
-    return q.order('shift_date').order('display_order').order('start_time');
-  };
+const SHIFT_TTL_MS  = 15_000;       // 15 s
+const LOOKUP_TTL_MS = 5 * 60_000;   // 5 min
 
-  const all: unknown[] = [];
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const from = page * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-    const { data, error } = await buildQuery().range(from, to);
-    if (error) throw new Error(`shifts: ${error.message}`);
-    const rows = data ?? [];
-    all.push(...rows);
-    if (rows.length < PAGE_SIZE) break;
+function getCache<T>(map: Map<string, CacheEntry<T>>, key: string): T | null {
+  const entry = map.get(key);
+  if (!entry || Date.now() > entry.expiresAt) {
+    map.delete(key);
+    return null;
   }
-  return all;
+  return entry.data;
 }
 
-async function fetchEmployees(
-  supa: SupabaseClient,
-  orgId: string,
-  deptIds: string[],
-  subDeptIds: string[],
-) {
-  // Mirror EligibilityService's "employees in scope" cut. Detailed eligibility
-  // (role match, qualifications) is computed in the individual hook when needed.
-  let q = supa
-    .from('profiles')
-    .select(`
-      id,
-      first_name,
-      last_name,
-      department:departments(name),
-      sub_department:sub_departments(name)
-    `)
-    .eq('organization_id', orgId)
-    .eq('is_active', true)
-    .order('first_name');
-
-  if (deptIds.length) q = q.in('department_id', deptIds);
-  if (subDeptIds.length) q = q.in('sub_department_id', subDeptIds);
-
-  const { data, error } = await q;
-  if (error) throw new Error(`employees: ${error.message}`);
-
-  return (data ?? []).map((row: any) => ({
-    id: row.id,
-    first_name: row.first_name,
-    last_name: row.last_name,
-    department_name: row.department?.name ?? undefined,
-    sub_department_name: row.sub_department?.name ?? undefined,
-  }));
+function setCache<T>(map: Map<string, CacheEntry<T>>, key: string, data: T, ttlMs: number): void {
+  map.set(key, { data, expiresAt: Date.now() + ttlMs });
 }
 
-async function fetchRoles(
-  supa: SupabaseClient,
-  deptIds: string[],
-  subDeptIds: string[],
-) {
-  let q = supa
-    .from('roles')
-    .select('id, name, department_id, sub_department_id, remuneration_level_id')
-    .order('name');
-
-  // Frontend logic: roles tied to the sub-dept OR roles tied to the parent dept with null sub_dept.
-  // For BFF efficiency we union both sets via .or() once a sub-dept is given.
-  if (subDeptIds.length === 1 && deptIds.length === 1) {
-    q = q.or(
-      `sub_department_id.eq.${subDeptIds[0]},and(department_id.eq.${deptIds[0]},sub_department_id.is.null)`,
-    );
-  } else if (subDeptIds.length) {
-    q = q.in('sub_department_id', subDeptIds);
-  } else if (deptIds.length) {
-    q = q.in('department_id', deptIds);
-  }
-
-  const { data, error } = await q;
-  if (error) throw new Error(`roles: ${error.message}`);
-  return data ?? [];
-}
-
-async function fetchRemunerationLevels(supa: SupabaseClient) {
-  const { data, error } = await supa
-    .from('remuneration_levels')
-    .select('id, level_number, level_name, hourly_rate_min, hourly_rate_max, description')
-    .order('level_number');
-  if (error) throw new Error(`remuneration_levels: ${error.message}`);
-  return data ?? [];
-}
-
-async function fetchEvents(supa: SupabaseClient, orgId: string) {
-  const { data, error } = await supa
-    .from('events')
-    .select('id, name, description, event_type, venue, start_date, end_date, status')
-    .eq('is_active', true)
-    .eq('organization_id', orgId)
-    .order('start_date', { ascending: true });
-  if (error) throw new Error(`events: ${error.message}`);
-  return data ?? [];
-}
+// ── Helper ──────────────────────────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders() });
   }
-
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'method not allowed' }), {
-      status: 405,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader) {
-    return new Response(JSON.stringify({ error: 'missing Authorization header' }), {
-      status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-
-  let body: RequestBody;
-  try {
-    body = await req.json();
-  } catch {
-    return new Response(JSON.stringify({ error: 'invalid JSON body' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-
-  const orgId = body.organization_id;
-  const startDate = body.start_date;
-  const endDate = body.end_date;
-  if (!isUuid(orgId) || !startDate || !endDate) {
-    return new Response(
-      JSON.stringify({ error: 'organization_id (uuid), start_date, end_date are required' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
-  }
-
-  const deptIds = (body.department_ids ?? []).filter(isUuid);
-  const subDeptIds = (body.sub_department_ids ?? []).filter(isUuid);
-
-  // Caller-scoped client — RLS uses the user's JWT.
-  const supa = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
-    global: { headers: { Authorization: authHeader } },
-    auth: { persistSession: false },
-  });
 
   try {
-    const [shifts, employees, roles, remunerationLevels, events] = await Promise.all([
-      fetchShifts(supa, orgId, startDate, endDate, deptIds, subDeptIds),
-      fetchEmployees(supa, orgId, deptIds, subDeptIds),
-      fetchRoles(supa, deptIds, subDeptIds),
-      fetchRemunerationLevels(supa),
-      fetchEvents(supa, orgId),
+    const body = await req.json();
+    const {
+      organization_id,
+      department_ids = [],
+      sub_department_ids = [],
+      start_date,
+      end_date,
+    } = body as {
+      organization_id: string;
+      department_ids: string[];
+      sub_department_ids: string[];
+      start_date: string;
+      end_date: string;
+    };
+
+    if (!isValidUuid(organization_id) || !start_date || !end_date) {
+      return new Response(
+        JSON.stringify({ error: "Missing required fields: organization_id, start_date, end_date" }),
+        { status: 400, headers: { ...corsHeaders(), "Content-Type": "application/json" } }
+      );
+    }
+
+    const validDeptIds    = (department_ids as string[]).filter(isValidUuid);
+    const validSubDeptIds = (sub_department_ids as string[]).filter(isValidUuid);
+    const primaryDeptId   = validDeptIds[0] ?? null;
+    const primarySubDeptId = validSubDeptIds[0] ?? null;
+
+    // Cache keys
+    const shiftKey  = `${organization_id}:${validDeptIds.sort().join(",")}:${validSubDeptIds.sort().join(",")}:${start_date}:${end_date}`;
+    const lookupKey = `${organization_id}:${primaryDeptId ?? ""}:${primarySubDeptId ?? ""}`;
+
+    // ── Cache hit check ────────────────────────────────────────────────────────────────
+    const cachedShifts  = getCache(shiftCache,  shiftKey);
+    const cachedLookups = getCache(lookupCache, lookupKey);
+
+    if (cachedShifts && cachedLookups) {
+      return Response.json(
+        { ...cachedLookups, shifts: cachedShifts, _cached: true },
+        { headers: { ...corsHeaders(), "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // ── 1. Shifts query ────────────────────────────────────────────────────────
+    const shiftsPromise = cachedShifts
+      ? Promise.resolve(null)
+      : (() => {
+          let q = supabase
+            .from("shifts")
+            .select(SHIFT_SELECT)
+            .eq("organization_id", organization_id)
+            .gte("shift_date", start_date)
+            .lte("shift_date", end_date)
+            .is("deleted_at", null);
+
+          if (validDeptIds.length > 0)    q = q.in("department_id", validDeptIds) as typeof q;
+          if (validSubDeptIds.length > 0) q = q.in("sub_department_id", validSubDeptIds) as typeof q;
+
+          return q.order("shift_date").order("display_order").order("start_time");
+        })();
+
+    // ── 2. Employees ─────────────────────────────────────────────────────────────────
+    const employeesPromise = cachedLookups
+      ? Promise.resolve(null)
+      : (() => {
+          let q = supabase
+            .from("user_contracts")
+            .select(`
+              user_id,
+              status,
+              employment_status,
+              contracted_weekly_hours,
+              role_id,
+              profiles:profiles!user_contracts_user_id_profiles_fkey(id, first_name, last_name),
+              department:departments!user_contracts_department_id_fkey(name),
+              sub_department:sub_departments!user_contracts_sub_department_id_fkey(name)
+            `)
+            .eq("status", "Active")
+            .eq("organization_id", organization_id);
+
+          if (primarySubDeptId) {
+            if (primaryDeptId) q = q.eq("department_id", primaryDeptId) as typeof q;
+            q = q.or(`sub_department_id.eq.${primarySubDeptId},sub_department_id.is.null`) as typeof q;
+          } else if (primaryDeptId) {
+            q = q.eq("department_id", primaryDeptId) as typeof q;
+          }
+
+          return q;
+        })();
+
+    // ── 3. Roles (hr schema; every role is tied to a subdepartment) ──────────────
+    const rolesPromise = cachedLookups
+      ? Promise.resolve(null)
+      : (async () => {
+          // deno-lint-ignore no-explicit-any
+          const hr = (supabase as any).schema("hr");
+          let subDeptIds: string[] = [];
+          if (primarySubDeptId) {
+            subDeptIds = [primarySubDeptId];
+          } else if (primaryDeptId) {
+            const { data } = await hr.from("subdepartments").select("id").eq("department_id", primaryDeptId);
+            subDeptIds = ((data ?? []) as { id: string }[]).map((d) => d.id);
+          } else {
+            const { data: depts } = await hr.from("departments").select("id").eq("organization_id", organization_id);
+            const deptIds = ((depts ?? []) as { id: string }[]).map((d) => d.id);
+            if (deptIds.length > 0) {
+              const { data: sds } = await hr.from("subdepartments").select("id").in("department_id", deptIds);
+              subDeptIds = ((sds ?? []) as { id: string }[]).map((d) => d.id);
+            }
+          }
+          if (subDeptIds.length === 0) return { data: [], error: null };
+          return hr
+            .from("roles")
+            .select("id, name, sub_department_id:subdepartment_id, remuneration_level")
+            .in("subdepartment_id", subDeptIds)
+            .order("name");
+        })();
+
+    // ── 4. Remuneration levels ────────────────────────────────────────────────
+    const levelsPromise = cachedLookups
+      ? Promise.resolve(null)
+      : supabase
+          .from("remuneration_levels")
+          .select("id, level_number, level_name, hourly_rate_min, hourly_rate_max, description")
+          .order("level_number");
+
+    // ── 5. Events ───────────────────────────────────────────────────────────────
+    const eventsPromise = cachedLookups
+      ? Promise.resolve(null)
+      : supabase
+          .from("events")
+          .select("id, name, description, event_type, venue, start_date, end_date, status")
+          .eq("organization_id", organization_id)
+          .eq("is_active", true)
+          .order("start_date");
+
+    // Run all un-cached queries in parallel
+    const [shiftsRes, employeesRes, rolesRes, levelsRes, eventsRes] = await Promise.all([
+      shiftsPromise,
+      employeesPromise,
+      rolesPromise,
+      levelsPromise,
+      eventsPromise,
     ]);
 
-    return new Response(
-      JSON.stringify({
-        shifts,
+    // ── Build shift payload (or use cache) ─────────────────────────────────────────
+    let shifts: Record<string, unknown>[];
+    if (cachedShifts) {
+      shifts = cachedShifts;
+    } else {
+      shifts = (shiftsRes!.data ?? []).map((row: Record<string, unknown>) => ({
+        ...row,
+        is_trade_requested:
+          !!row["trade_requested_at"] || row["trading_status"] === "TradeRequested",
+      }));
+      setCache(shiftCache, shiftKey, shifts, SHIFT_TTL_MS);
+    }
+
+    // ── Build lookup payload (or use cache) ───────────────────────────────────────
+    let lookups: { employees: unknown[]; roles: unknown[]; remuneration_levels: unknown[]; events: unknown[] };
+    if (cachedLookups) {
+      lookups = cachedLookups;
+    } else {
+      // Deduplicate employees by user_id and build employee profiles with contracted role_ids
+      const empMap = new Map<string, Record<string, unknown>>();
+      for (const row of (employeesRes!.data ?? []) as Record<string, unknown>[]) {
+        const rawProfile = row.profiles as Record<string, unknown>[] | Record<string, unknown> | null;
+        const profile = Array.isArray(rawProfile) ? rawProfile[0] : rawProfile;
+        if (!profile || !profile.id) continue;
+
+        const profileId = profile.id as string;
+        const roleId = row.role_id as string | null;
+
+        let emp = empMap.get(profileId);
+        if (!emp) {
+          const empStatus = row.employment_status as string | null;
+          const contractType = empStatus === "Full-Time" ? "FT" :
+                               empStatus === "Part-Time" ? "PT" :
+                               empStatus === "Casual" ? "CASUAL" :
+                               empStatus === "Flexible Part-Time" ? "PT" : null;
+
+          const rawDept = row.department as Record<string, unknown>[] | Record<string, unknown> | null;
+          const dept = Array.isArray(rawDept) ? rawDept[0] : rawDept;
+          const rawSubDept = row.sub_department as Record<string, unknown>[] | Record<string, unknown> | null;
+          const subDept = Array.isArray(rawSubDept) ? rawSubDept[0] : rawSubDept;
+
+          emp = {
+            id: profileId,
+            first_name: profile.first_name,
+            last_name: profile.last_name,
+            department_name: dept?.name ?? undefined,
+            sub_department_name: subDept?.name ?? undefined,
+            contract_type: contractType,
+            contracted_weekly_hours: Number(row.contracted_weekly_hours ?? 38),
+            contracted_role_ids: [] as string[],
+          };
+          empMap.set(profileId, emp);
+        }
+
+        const roleIds = emp.contracted_role_ids as string[];
+        if (roleId && !roleIds.includes(roleId)) {
+          roleIds.push(roleId);
+        }
+      }
+      const employees = Array.from(empMap.values()).sort((a, b) =>
+        (a.last_name as string).localeCompare(b.last_name as string)
+      );
+
+      const roles = (rolesRes!.data ?? []).sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
+        (a.name as string).localeCompare(b.name as string)
+      );
+
+      lookups = {
         employees,
         roles,
-        remuneration_levels: remunerationLevels,
-        events,
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        remuneration_levels: levelsRes!.data ?? [],
+        events: eventsRes!.data ?? [],
+      };
+      setCache(lookupCache, lookupKey, lookups, LOOKUP_TTL_MS);
+    }
+
+    return Response.json(
+      { ...lookups, shifts },
+      { headers: { ...corsHeaders(), "Content-Type": "application/json" } }
     );
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'unknown error';
-    console.error('[get-roster-view] error:', message);
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Internal server error";
+    console.error("[get-roster-view] Error:", message);
+    return new Response(
+      JSON.stringify({ error: message }),
+      { status: 500, headers: { ...corsHeaders(), "Content-Type": "application/json" } }
+    );
   }
 });

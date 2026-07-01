@@ -47,6 +47,21 @@ CREATE OR REPLACE FUNCTION public.fn_enrich_shift_event()
     SET search_path TO 'pg_catalog', 'public'
     AS $$
 BEGIN
+    -- actor_id — fill only if the caller left it NULL.
+    IF NEW.actor_id IS NULL THEN
+        IF NEW.actor_role = 'employee' THEN
+            NEW.actor_id := NEW.employee_id;
+        ELSIF NEW.actor_role = 'manager' THEN
+            SELECT last_modified_by INTO NEW.actor_id
+            FROM public.shifts
+            WHERE id = NEW.shift_id;
+        END IF;
+
+        IF NEW.actor_id IS NULL THEN
+            NEW.actor_id := auth.uid();
+        END IF;
+    END IF;
+
     -- domain (deterministic) — fill only if the caller left it NULL.
     IF NEW.domain IS NULL THEN
         NEW.domain := CASE NEW.event_type

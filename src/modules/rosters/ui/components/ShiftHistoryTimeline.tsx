@@ -266,6 +266,82 @@ function eventLabel(row: ShiftEventTimelineRow): string {
   return humanizeToken(row.op || row.event_type || 'Event');
 }
 
+// ─── Source attribution (created-by mode + assigned-by) ──────────────────────
+// Surfaced on the single Create/Update record so the ledger reads as one row
+// with provenance instead of separate confusing assignment / emergency lines.
+
+/** creation_source (manual | template | synthesizer) → display label. */
+const CREATION_SOURCE_LABELS: Record<string, string> = {
+  manual:      'Manual',
+  template:    'Template',
+  synthesizer: 'Labor Engine',
+};
+
+/** assignment_source → display label (assigned-by). */
+const ASSIGNMENT_SOURCE_LABELS: Record<string, string> = {
+  direct:        'Manager',
+  manual:        'Manager',
+  autoscheduler: 'Autoscheduler',
+  bid:           'Bid won',
+  swap:          'Trade',
+  offer:         'Offer accepted',
+  emergency:     'Emergency',
+};
+
+/** Accent per assigned-by label (reuses the FSM hex palette — no new colours). */
+const ASSIGNED_BY_COLOR: Record<string, string> = {
+  Manager:           FSM_COLOR_HEX.blue,
+  Autoscheduler:     FSM_COLOR_HEX.violet,
+  'Bid won':         FSM_COLOR_HEX.amber,
+  Trade:             FSM_COLOR_HEX.orange,
+  'Offer accepted':  FSM_COLOR_HEX.emerald,
+  Emergency:         FSM_COLOR_HEX.red,
+};
+
+/** Created-by label for a `create` row, or null. */
+function creationSourceLabel(row: ShiftEventTimelineRow): string | null {
+  if (!row.creation_source) return null;
+  return CREATION_SOURCE_LABELS[row.creation_source] ?? humanizeToken(row.creation_source);
+}
+
+/** Assigned-by label, resolved from the strongest available signal. */
+function assignedByLabel(row: ShiftEventTimelineRow): string | null {
+  // Event/op signals beat the stored source string (the actor knows best).
+  if (row.event_type === 'EMERGENCY_ASSIGNED') return 'Emergency';
+  if (row.actor_role === 'autoscheduler') return 'Autoscheduler';
+  if (row.event_type === 'ACCEPTED') return 'Offer accepted';
+  if (row.op === 'select_winner') return 'Bid won';
+  if (row.op === 'approve_trade') return 'Trade';
+  if (row.assignment_source) {
+    return ASSIGNMENT_SOURCE_LABELS[row.assignment_source] ?? humanizeToken(row.assignment_source);
+  }
+  return null;
+}
+
+/** Does this row represent (or carry) an assignment worth showing inline? */
+function hasAssignmentContext(row: ShiftEventTimelineRow): boolean {
+  if (row.changes && Object.prototype.hasOwnProperty.call(row.changes, 'assignment')) return true;
+  if (row.op === 'create' && row.employee_id) return true;
+  if (['ASSIGNED', 'EMERGENCY_ASSIGNED', 'ACCEPTED'].includes(row.event_type)) return true;
+  if (['assign', 'select_winner', 'approve_trade'].includes(row.op ?? '')) return true;
+  return false;
+}
+
+/** Small provenance chip (created-via / assigned-by). */
+const SourceChip: React.FC<{ label: string; color: string; prefix?: string }> = ({
+  label,
+  color,
+  prefix,
+}) => (
+  <span
+    className="inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-semibold"
+    style={{ color, borderColor: `${color}55`, backgroundColor: `${color}14` }}
+  >
+    {prefix && <span className="font-normal opacity-70">{prefix}</span>}
+    {label}
+  </span>
+);
+
 /** Canonical FSM id (S1…S15) → the gapless display id (S1…S10) shown on cards. */
 function displayState(s: string | null): string | null {
   if (!s) return null;
@@ -292,6 +368,7 @@ function actorInitials(name: string): string {
 
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) return '—';
+  if (Array.isArray(value)) return value.length === 0 ? '∅' : value.join(', ');
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   if (typeof value === 'string') return value.length === 0 ? '∅' : value;
   if (typeof value === 'number') return String(value);
@@ -344,9 +421,9 @@ function formatClock(iso: string): string {
 
 // ─── Layout constant ─────────────────────────────────────────────────────────
 // Shared grid so the column header and every event row align like a table. The
-// details column (minmax) absorbs slack, so the table always fills its container
-// width. node | details & transition | actor | time
-const GRID_TEMPLATE = '36px minmax(0,1fr) 180px 88px';
+// action column (1fr) absorbs slack, so the table always fills its container
+// width — no clipped right edge. node | from | action | actor | to | time
+const GRID_TEMPLATE = '32px 52px minmax(0,1fr) 176px 52px 88px';
 
 // ─── State pill ──────────────────────────────────────────────────────────────
 // Monospace FSM-state chip. The "to" pill is accented with the event colour; the
@@ -408,43 +485,64 @@ const ActorCell: React.FC<{ row: ShiftEventTimelineRow }> = ({ row }) => {
   );
 };
 
-// ─── Action cell (label + inline transition + inline Original → New diff + reason) ─
+// ─── Action cell (label + inline Original → New diff + reason) ────────────────
 
-const ActionCell: React.FC<{
-  row: ShiftEventTimelineRow;
-  fromDisp: string | null;
-  toDisp: string | null;
-  color: string;
-}> = ({ row, fromDisp, toDisp, color }) => {
+const FIELD_LABELS: Record<string, string> = {
+  role_id: 'Role',
+  shift_group_id: 'Shift Group',
+  roster_subgroup_id: 'Roster Subgroup',
+  remuneration_level_id: 'Remuneration Level',
+  sub_department_id: 'Sub Department',
+  required_skills: 'Required Skills',
+  required_licenses: 'Required Certifications',
+  event_ids: 'Event Tags',
+};
+
+const ActionCell: React.FC<{ row: ShiftEventTimelineRow }> = ({ row }) => {
   const label = eventLabel(row);
+  // `assignment` is rendered specially (named worker + source), not as a raw
+  // uuid→uuid diff; `version` is internal bookkeeping.
   const entries = (row.changes ? Object.entries(row.changes) : []).filter(
-    ([field]) => field !== 'version' && field !== '_version',
+    ([field]) => field !== 'version' && field !== '_version' && field !== 'assignment',
   );
 
+  const createdBy = row.op === 'create' ? creationSourceLabel(row) : null;
+  const showAssignment = hasAssignmentContext(row);
+  const assignedBy = showAssignment ? assignedByLabel(row) : null;
+  const assigneeName = showAssignment ? row.assignee_name : null;
+  const hasProvenance = Boolean(createdBy || assignedBy || assigneeName);
+
   return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-semibold leading-tight text-foreground">{label}</span>
-        {(fromDisp || toDisp) && (
-          <div className="inline-flex items-center gap-1 rounded-md bg-muted/40 px-1 py-0.5 border border-border/40 scale-[0.92] origin-left">
-            <StatePill state={fromDisp} />
-            <ArrowRight className="h-2.5 w-2.5 text-muted-foreground/45 shrink-0" aria-hidden="true" />
-            <StatePill state={toDisp} color={color} />
-          </div>
-        )}
-      </div>
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="text-sm font-semibold leading-tight text-foreground">{label}</span>
+
+      {hasProvenance && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {assigneeName && (
+            <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-foreground/80">
+              <ArrowRight className="h-2.5 w-2.5 text-muted-foreground/50" aria-hidden="true" />
+              {assigneeName}
+            </span>
+          )}
+          {createdBy && <SourceChip label={createdBy} color={FSM_COLOR_HEX.slate} prefix="via" />}
+          {assignedBy && (
+            <SourceChip label={assignedBy} color={ASSIGNED_BY_COLOR[assignedBy] ?? FSM_COLOR_HEX.slate} />
+          )}
+        </div>
+      )}
 
       {entries.length > 0 && (
-        <div className="mt-1 flex flex-col gap-1 rounded-lg border border-border/50 bg-slate-50/50 dark:bg-slate-900/50 p-2 font-mono text-[11px] leading-relaxed max-w-md shadow-inner">
-          <div className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-wider mb-1 border-b border-border/30 pb-0.5">Field Changes</div>
+        <div className="flex flex-col gap-0.5">
           {entries.map(([field, diff]) => (
-            <div key={field} className="flex flex-wrap items-center gap-1.5 py-0.5">
-              <span className="font-semibold text-muted-foreground/80">{humanizeToken(field)}:</span>
-              <span className="rounded bg-rose-500/10 px-1.5 py-px text-rose-500/90 line-through decoration-rose-500/40">
+            <div key={field} className="flex flex-wrap items-center gap-1 text-[11px]">
+              <span className="font-medium text-muted-foreground/80">
+                {FIELD_LABELS[field] ?? humanizeToken(field)}
+              </span>
+              <span className="rounded bg-rose-500/10 px-1 py-px font-mono text-[10px] text-rose-500/90 line-through decoration-rose-500/40">
                 {formatValue(diff.old)}
               </span>
               <ArrowRight className="h-2.5 w-2.5 text-muted-foreground/40" aria-hidden="true" />
-              <span className="rounded bg-emerald-500/10 px-1.5 py-px font-medium text-emerald-600 dark:text-emerald-450">
+              <span className="rounded bg-emerald-500/10 px-1 py-px font-mono text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
                 {formatValue(diff.new)}
               </span>
             </div>
@@ -453,9 +551,7 @@ const ActionCell: React.FC<{
       )}
 
       {row.reason && (
-        <div className="mt-1 border-l-2 border-primary/20 pl-2.5 py-0.5 text-[11px] text-muted-foreground/90 italic bg-muted/10 rounded-r max-w-md">
-          “{row.reason}”
-        </div>
+        <span className="text-[11px] italic text-muted-foreground/80">“{row.reason}”</span>
       )}
     </div>
   );
@@ -481,7 +577,7 @@ const EventRow: React.FC<EventRowProps> = ({ row, index, isFirst, isLast }) => {
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28, delay: Math.min(index * 0.022, 0.4), ease: [0.22, 1, 0.36, 1] }}
-      className="group relative grid items-start transition-colors hover:bg-foreground/[0.015] dark:hover:bg-white/[0.015] py-2.5"
+      className="group relative grid items-start transition-colors hover:bg-foreground/[0.025] dark:hover:bg-white/[0.025]"
       style={{ gridTemplateColumns: GRID_TEMPLATE }}
     >
       {/* hover accent rail */}
@@ -492,30 +588,40 @@ const EventRow: React.FC<EventRowProps> = ({ row, index, isFirst, isLast }) => {
       />
 
       {/* spine + node */}
-      <div className="relative flex justify-center py-1">
-        {!isFirst && <span className="absolute left-1/2 top-0 h-[18px] w-px -translate-x-1/2 bg-border/60" aria-hidden="true" />}
-        {!isLast && <span className="absolute left-1/2 top-[18px] bottom-0 w-px -translate-x-1/2 bg-border/60" aria-hidden="true" />}
+      <div className="relative flex justify-center py-3">
+        {!isFirst && <span className="absolute left-1/2 top-0 h-[26px] w-px -translate-x-1/2 bg-border/70" aria-hidden="true" />}
+        {!isLast && <span className="absolute left-1/2 top-[26px] bottom-0 w-px -translate-x-1/2 bg-border/70" aria-hidden="true" />}
         <span
-          className="relative z-10 flex h-6 w-6 items-center justify-center rounded-full ring-2 ring-background transition-transform group-hover:scale-110 shadow-sm"
+          className="relative z-10 flex h-7 w-7 items-center justify-center rounded-full ring-2 ring-background"
           style={{ backgroundColor: `${color}1F`, boxShadow: `inset 0 0 0 1px ${color}40` }}
         >
           <Icon className="h-3.5 w-3.5" style={{ color }} aria-hidden="true" />
         </span>
       </div>
 
-      {/* details & inline transition */}
-      <div className="min-w-0 py-0.5 pr-3">
-        <ActionCell row={row} fromDisp={fromDisp} toDisp={toDisp} color={color} />
+      {/* from-state */}
+      <div className="flex justify-center py-3.5">
+        <StatePill state={fromDisp} />
+      </div>
+
+      {/* action + diffs */}
+      <div className="min-w-0 py-3 pr-2">
+        <ActionCell row={row} />
       </div>
 
       {/* actor */}
-      <div className="flex items-start py-0.5 pr-2">
+      <div className="flex items-center py-3 pr-2">
         <ActorCell row={row} />
       </div>
 
+      {/* to-state */}
+      <div className="flex justify-center py-3.5">
+        <StatePill state={toDisp} color={color} />
+      </div>
+
       {/* timestamp */}
-      <div className="flex items-start justify-end gap-1 py-1 pr-1 text-xs tabular-nums text-muted-foreground/80">
-        <Clock className="h-3.5 w-3.5 opacity-50" aria-hidden="true" />
+      <div className="flex items-center justify-end gap-1 py-3.5 pr-1 text-xs tabular-nums text-muted-foreground">
+        <Clock className="h-3 w-3 opacity-50" aria-hidden="true" />
         {formatClock(row.event_time)}
       </div>
     </motion.div>
@@ -548,9 +654,11 @@ const DayGroup: React.FC<DayGroupProps> = ({ day, rows, startIndex }) => (
           style={{ gridTemplateColumns: GRID_TEMPLATE }}
         >
           <span aria-hidden="true" />
-          <span className="py-2.5">Event Details & Transition</span>
-          <span className="py-2.5">Actor</span>
-          <span className="py-2.5 pr-1 text-right">Time</span>
+          <span className="py-2 text-center">From</span>
+          <span className="py-2">Action</span>
+          <span className="py-2">Actor</span>
+          <span className="py-2 text-center">To</span>
+          <span className="py-2 pr-1 text-right">Time</span>
         </div>
 
         {/* rows */}
@@ -577,12 +685,48 @@ const DayGroup: React.FC<DayGroupProps> = ({ day, rows, startIndex }) => (
  * assigned-at-creation shift emits BOTH; the create row already conveys it. The
  * ledger keeps both rows (metrics count ASSIGNED) — this de-dupes the DISPLAY.
  */
-function dedupeCreationAssign(rows: ShiftEventTimelineRow[]): ShiftEventTimelineRow[] {
-  const createTimes = new Set(rows.filter((r) => r.op === 'create').map((r) => r.event_time));
-  if (createTimes.size === 0) return rows;
-  return rows.filter(
-    (r) => !(r.op == null && r.event_type === 'ASSIGNED' && createTimes.has(r.event_time)),
+// One user action = one row. New DB data already writes a single record (the
+// gateway folds the assignment in), so this is a no-op there; it keeps HISTORICAL
+// multi-row data clean by absorbing a same-transaction ASSIGNED/UNASSIGNED sibling
+// into its create/edit/move parent (carrying the worker + source onto the parent).
+function foldShiftMutations(rows: ShiftEventTimelineRow[]): ShiftEventTimelineRow[] {
+  const PARENT_OPS = new Set(['create', 'edit', 'move']);
+  const parentTimes = new Set(
+    rows.filter((r) => r.op != null && PARENT_OPS.has(r.op)).map((r) => r.event_time),
   );
+  if (parentTimes.size === 0) return rows;
+
+  const isAssignSibling = (r: ShiftEventTimelineRow) =>
+    r.op == null &&
+    (r.event_type === 'ASSIGNED' || r.event_type === 'UNASSIGNED') &&
+    parentTimes.has(r.event_time);
+
+  // Capture the first sibling's assignment context per parent timestamp.
+  const foldCtx = new Map<string, ShiftEventTimelineRow>();
+  for (const r of rows) {
+    if (isAssignSibling(r) && !foldCtx.has(r.event_time)) foldCtx.set(r.event_time, r);
+  }
+
+  const out: ShiftEventTimelineRow[] = [];
+  for (const r of rows) {
+    if (isAssignSibling(r)) continue; // dropped — folded into the parent below
+    const ctx = r.op != null && PARENT_OPS.has(r.op) ? foldCtx.get(r.event_time) : undefined;
+    if (ctx) {
+      out.push({
+        ...r,
+        employee_id: r.employee_id ?? ctx.employee_id,
+        assignee_name: r.assignee_name ?? ctx.assignee_name,
+        assignment_source: r.assignment_source ?? ctx.assignment_source,
+        changes:
+          ctx.event_type === 'ASSIGNED'
+            ? { ...(r.changes ?? {}), assignment: { old: null, new: ctx.employee_id } }
+            : r.changes,
+      });
+      continue;
+    }
+    out.push(r);
+  }
+  return out;
 }
 
 /**
@@ -741,7 +885,7 @@ export function ShiftHistoryTimeline({ shiftId, className }: ShiftHistoryTimelin
       if (dt !== 0) return dt;
       return (a.op === 'create' ? 0 : 1) - (b.op === 'create' ? 0 : 1);
     });
-    return interpolateStateTransitions(dedupeCreationAssign(rows));
+    return interpolateStateTransitions(foldShiftMutations(rows));
   }, [query.data]);
 
   const domains = useMemo(() => {

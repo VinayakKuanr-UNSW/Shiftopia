@@ -959,6 +959,10 @@ export function useShiftFormOrchestrator({
                             is_training: basePayloadWithUtc.is_training ?? false,
                             // Text
                             notes: basePayloadWithUtc.notes ?? '',
+                            // Skills, certs, and events
+                            required_skills: basePayloadWithUtc.required_skills || [],
+                            required_licenses: basePayloadWithUtc.required_licenses || [],
+                            event_ids: basePayloadWithUtc.event_ids || [],
                         };
 
                         // Surface a gateway failure without closing the modal.

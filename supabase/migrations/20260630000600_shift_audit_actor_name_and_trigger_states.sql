@@ -101,7 +101,14 @@ BEGIN
         se.metadata->'changes'                      AS changes,
         se.metadata->>'reason'                      AS reason
     FROM public.shift_events se
-    LEFT JOIN public.profiles p ON p.id = se.actor_id
+    LEFT JOIN public.shifts s ON s.id = se.shift_id
+    LEFT JOIN public.profiles p ON p.id = COALESCE(
+        se.actor_id,
+        CASE
+            WHEN se.actor_role = 'employee' THEN se.employee_id
+            WHEN se.actor_role = 'manager' THEN s.last_modified_by
+        END
+    )
     WHERE se.shift_id = p_shift_id
     ORDER BY se.event_time ASC, se.created_at ASC;
 END;
@@ -213,6 +220,22 @@ BEGIN
             VALUES (NEW.id, NEW.assigned_employee_id, 'OP_APPLIED', now(),
                 jsonb_build_object(
                     'op', 'complete',
+                    'domain', 'lifecycle',
+                    'from_state', v_from,
+                    'to_state',   v_to,
+                    'source', 'fn_capture_shift_event'
+                ),
+                'lifecycle');
+        END IF;
+    END IF;
+
+    -- 4c. PUBLISHED — lifecycle -> Published.
+    IF (TG_OP = 'UPDATE') THEN
+        IF (NEW.lifecycle_status = 'Published' AND OLD.lifecycle_status IS DISTINCT FROM 'Published') THEN
+            INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time, metadata, domain)
+            VALUES (NEW.id, NEW.assigned_employee_id, 'OP_APPLIED', now(),
+                jsonb_build_object(
+                    'op', 'publish',
                     'domain', 'lifecycle',
                     'from_state', v_from,
                     'to_state',   v_to,

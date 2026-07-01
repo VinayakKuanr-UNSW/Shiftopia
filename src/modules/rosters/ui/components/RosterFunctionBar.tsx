@@ -33,6 +33,7 @@ import {
   Activity,
   Hand,
   Camera,
+  FolderPlus,
 } from 'lucide-react';
 import { format, addDays, startOfMonth, endOfMonth, addMonths } from 'date-fns';
 import { cn } from '@/modules/core/lib/utils';
@@ -57,6 +58,11 @@ const ApplyTemplateDialog = lazy(() =>
 const PlanRosterPeriodDialog = lazy(() =>
   import('@/modules/rosters/ui/dialogs/PlanRosterPeriodDialog').then((m) => ({
     default: m.PlanRosterPeriodDialog,
+  })),
+);
+const CentralAddSubGroupDialog = lazy(() =>
+  import('@/modules/rosters/ui/dialogs/CentralAddSubGroupDialog').then((m) => ({
+    default: m.CentralAddSubGroupDialog,
   })),
 );
 const SnapFromRosterDialog = lazy(() =>
@@ -261,6 +267,7 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
   const [isPlanPeriodDialogOpen, setIsPlanPeriodDialogOpen] = useState(false);
   const [isApplyTemplateDialogOpen, setIsApplyTemplateDialogOpen] = useState(false);
   const [isSnapDialogOpen, setIsSnapDialogOpen] = useState(false);
+  const [isAddSubGroupOpen, setIsAddSubGroupOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
   const { scopeTree } = useScopeFilter('managerial');
@@ -440,6 +447,15 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
               variant="success"
               disabled={!selectedDepartmentId}
             />
+            {activeMode === 'group' && (
+              <IconButton
+                icon={<FolderPlus className="h-4 w-4" />}
+                tooltip={selectedDepartmentId ? "Add Subgroup" : "Add Subgroup — select a department first"}
+                onClick={() => setIsAddSubGroupOpen(true)}
+                variant="success"
+                disabled={!selectedDepartmentId || !canEdit}
+              />
+            )}
             <IconButton
               icon={<Wand2 className="h-4 w-4" />}
               tooltip={selectedDepartmentId ? "Auto-Schedule" : "Auto-Schedule — select a department first"}
@@ -556,6 +572,20 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
             subDepartmentName={subDepartmentName}
             defaultStartDate={format(selectedDate, 'yyyy-MM-dd')}
             defaultEndDate={format(addDays(selectedDate, 6), 'yyyy-MM-dd')}
+          />
+        </Suspense>
+      )}
+
+      {/* Centralized Add Subgroup Dialog */}
+      {isAddSubGroupOpen && selectedOrganizationId && selectedDepartmentId && (
+        <Suspense fallback={null}>
+          <CentralAddSubGroupDialog
+            open={isAddSubGroupOpen}
+            onOpenChange={setIsAddSubGroupOpen}
+            organizationId={selectedOrganizationId}
+            departmentId={selectedDepartmentId}
+            subDepartmentId={selectedSubDepartmentId || null}
+            selectedDate={selectedDate}
           />
         </Suspense>
       )}

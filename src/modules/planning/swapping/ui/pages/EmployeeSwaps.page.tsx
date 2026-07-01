@@ -678,10 +678,11 @@ export const EmployeeSwapsPage: React.FC = () => {
         const isTerminalRequest = swap.status === 'APPROVED' || swap.status === 'REJECTED' || swap.status === 'CANCELLED' || swap.status === 'MANAGER_PENDING';
         const timerDisplay = isTerminalRequest ? null : timerText;
 
-        const groupVariant: 'convention' | 'exhibition' | 'theatre' | 'default' = 
+        const groupVariant: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'default' = 
             (shift?.group_type === 'convention_centre' || (shift?.departments?.name || '').toLowerCase().includes('convention')) ? 'convention' :
             (shift?.group_type === 'exhibition_centre' || (shift?.departments?.name || '').toLowerCase().includes('exhibition')) ? 'exhibition' :
-            (shift?.group_type === 'theatre' || (shift?.departments?.name || '').toLowerCase().includes('theatre')) ? 'theatre' : 'default';
+            (shift?.group_type === 'theatre' || (shift?.departments?.name || '').toLowerCase().includes('theatre')) ? 'theatre' :
+            (shift?.group_type === 'the_cutaway' || (shift?.departments?.name || '').toLowerCase().includes('cutaway')) ? 'cutaway' : 'default';
 
         return (
             <motion.div key={swap.id} {...listItemSpring} whileHover={{ y: -2, transition: { duration: 0.15 } }} whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}>
@@ -784,10 +785,11 @@ export const EmployeeSwapsPage: React.FC = () => {
         const hasOffered = myActiveOfferSwapIds.has(swap.id);
         const priority = getSwapPriority(now, shift?.shift_date, shift?.start_time, shift?.start_at, shift?.tz_identifier);
 
-        const groupVariant: 'convention' | 'exhibition' | 'theatre' | 'default' = 
+        const groupVariant: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'default' = 
             (shift?.group_type === 'convention_centre' || (shift?.departments?.name || '').toLowerCase().includes('convention')) ? 'convention' :
             (shift?.group_type === 'exhibition_centre' || (shift?.departments?.name || '').toLowerCase().includes('exhibition')) ? 'exhibition' :
-            (shift?.group_type === 'theatre' || (shift?.departments?.name || '').toLowerCase().includes('theatre')) ? 'theatre' : 'default';
+            (shift?.group_type === 'theatre' || (shift?.departments?.name || '').toLowerCase().includes('theatre')) ? 'theatre' :
+            (shift?.group_type === 'the_cutaway' || (shift?.departments?.name || '').toLowerCase().includes('cutaway')) ? 'cutaway' : 'default';
 
         return (
             <motion.div key={swap.id} {...listItemSpring} whileHover={{ y: -2, transition: { duration: 0.15 } }} whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}>
@@ -859,10 +861,11 @@ export const EmployeeSwapsPage: React.FC = () => {
 
         const priority = getSwapPriority(now, shift?.shift_date, shift?.start_time, shift?.start_at, shift?.tz_identifier);
         
-        const groupVariant: 'convention' | 'exhibition' | 'theatre' | 'default' = 
+        const groupVariant: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'default' = 
             (shift?.group_type === 'convention_centre' || (shift?.departments?.name || '').toLowerCase().includes('convention')) ? 'convention' :
             (shift?.group_type === 'exhibition_centre' || (shift?.departments?.name || '').toLowerCase().includes('exhibition')) ? 'exhibition' :
-            (shift?.group_type === 'theatre' || (shift?.departments?.name || '').toLowerCase().includes('theatre')) ? 'theatre' : 'default';
+            (shift?.group_type === 'theatre' || (shift?.departments?.name || '').toLowerCase().includes('theatre')) ? 'theatre' :
+            (shift?.group_type === 'the_cutaway' || (shift?.departments?.name || '').toLowerCase().includes('cutaway')) ? 'cutaway' : 'default';
 
         const isSelected = selectedSwapIds.includes(swap.id);
 
@@ -1102,19 +1105,25 @@ export const EmployeeSwapsPage: React.FC = () => {
                 </div>
             ) : activeTab === 'available-swaps' ? (
                 viewMode === 'card' ? (
-                    <div className="flex-1 overflow-y-auto px-4 lg:px-6 py-4 scrollbar-none">
+                    <div className={cn(
+                        "flex-1 overflow-y-auto px-4 lg:px-6 py-4 scrollbar-none",
+                        filteredAvailableSwaps.length === 0 && "flex flex-col items-center justify-center py-4"
+                    )}>
                         <AnimatePresence mode="wait">
                             <motion.div
                                 key={`available-card-${priorityFilter}`}
-                                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4"
+                                className={cn(
+                                    "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4",
+                                    filteredAvailableSwaps.length === 0 && "w-full flex items-center justify-center"
+                                )}
                                 variants={pageVariants}
                                 initial="hidden"
                                 animate="show"
                                 exit={{ opacity: 0, transition: { duration: 0.15 } }}
                             >
                                 {filteredAvailableSwaps.length === 0 ? (
-                                    <motion.div variants={itemVariants} className="col-span-full">
-                                        <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                                    <motion.div variants={itemVariants} className="col-span-full w-full flex items-center justify-center">
+                                        <div className="flex flex-col items-center justify-center text-center gap-3">
                                             <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
                                                 <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
                                             </div>
@@ -1133,29 +1142,37 @@ export const EmployeeSwapsPage: React.FC = () => {
                         </AnimatePresence>
                     </div>
                 ) : (
-                    <div className="flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none">
+                    <div className={cn(
+                        "flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none",
+                        filteredAvailableSwaps.length === 0 && "md:block flex flex-col items-center justify-center p-0 md:p-6"
+                    )}>
                         {/* Mobile: list row view */}
-                        <AnimatePresence mode="wait">
-                            <motion.div
-                                key={`available-list-${priorityFilter}`}
-                                className="md:hidden border border-border/40 rounded-xl overflow-hidden"
-                                variants={pageVariants}
-                                initial="hidden"
-                                animate="show"
-                                exit={{ opacity: 0, transition: { duration: 0.12 } }}
-                            >
-                                {filteredAvailableSwaps.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-                                        <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
-                                            <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
+                        <div className={cn("md:hidden w-full", filteredAvailableSwaps.length === 0 && "h-full")}>
+                            <AnimatePresence mode="wait">
+                                <motion.div
+                                    key={`available-list-${priorityFilter}`}
+                                    className={cn(
+                                        "md:hidden border border-border/40 rounded-xl overflow-hidden bg-background/40",
+                                        filteredAvailableSwaps.length === 0 && "h-full flex flex-col items-center justify-center w-full"
+                                    )}
+                                    variants={pageVariants}
+                                    initial="hidden"
+                                    animate="show"
+                                    exit={{ opacity: 0, transition: { duration: 0.12 } }}
+                                >
+                                    {filteredAvailableSwaps.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center text-center gap-3">
+                                            <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
+                                                <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
+                                            </div>
+                                            <p className="text-sm font-semibold text-foreground/60">No available swaps</p>
                                         </div>
-                                        <p className="text-sm font-semibold text-foreground/60">No available swaps</p>
-                                    </div>
-                                ) : (
-                                    filteredAvailableSwaps.map(swap => renderSwapListItem(swap, 'available-swaps'))
-                                )}
-                            </motion.div>
-                        </AnimatePresence>
+                                    ) : (
+                                        filteredAvailableSwaps.map(swap => renderSwapListItem(swap, 'available-swaps'))
+                                    )}
+                                </motion.div>
+                            </AnimatePresence>
+                        </div>
 
                         {/* Desktop: traditional sortable table */}
                         <div className="hidden md:block overflow-x-auto border border-border rounded-lg">
@@ -1277,19 +1294,25 @@ export const EmployeeSwapsPage: React.FC = () => {
                 )
             ) : activeTab === 'my-offers' ? (
                 viewMode === 'card' ? (
-                    <div className="flex-1 overflow-y-auto px-4 lg:px-6 py-4 scrollbar-none">
+                    <div className={cn(
+                        "flex-1 overflow-y-auto px-4 lg:px-6 py-4 scrollbar-none",
+                        filteredMyOffers.length === 0 && "flex flex-col items-center justify-center py-4"
+                    )}>
                         <AnimatePresence mode="wait">
                             <motion.div
                                 key={`my-offers-card-${priorityFilter}`}
-                                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+                                className={cn(
+                                    "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
+                                    filteredMyOffers.length === 0 && "w-full flex items-center justify-center"
+                                )}
                                 variants={pageVariants}
                                 initial="hidden"
                                 animate="show"
                                 exit={{ opacity: 0, transition: { duration: 0.15 } }}
                             >
                                 {filteredMyOffers.length === 0 ? (
-                                    <motion.div variants={itemVariants} className="col-span-full">
-                                        <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                                    <motion.div variants={itemVariants} className="col-span-full w-full flex items-center justify-center">
+                                        <div className="flex flex-col items-center justify-center text-center gap-3">
                                             <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
                                                 <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
                                             </div>
@@ -1306,29 +1329,37 @@ export const EmployeeSwapsPage: React.FC = () => {
                         </AnimatePresence>
                     </div>
                 ) : (
-                    <div className="flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none">
+                    <div className={cn(
+                        "flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none",
+                        filteredMyOffers.length === 0 && "md:block flex flex-col items-center justify-center p-0 md:p-6"
+                    )}>
                         {/* Mobile: list row view */}
-                        <AnimatePresence mode="wait">
-                            <motion.div
-                                key={`my-offers-list-${priorityFilter}`}
-                                className="md:hidden border border-border/40 rounded-xl overflow-hidden"
-                                variants={pageVariants}
-                                initial="hidden"
-                                animate="show"
-                                exit={{ opacity: 0, transition: { duration: 0.12 } }}
-                            >
-                                {filteredMyOffers.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-                                        <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
-                                            <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
+                        <div className={cn("md:hidden w-full", filteredMyOffers.length === 0 && "h-full")}>
+                            <AnimatePresence mode="wait">
+                                <motion.div
+                                    key={`my-offers-list-${priorityFilter}`}
+                                    className={cn(
+                                        "md:hidden border border-border/40 rounded-xl overflow-hidden bg-background/40",
+                                        filteredMyOffers.length === 0 && "h-full flex flex-col items-center justify-center w-full"
+                                    )}
+                                    variants={pageVariants}
+                                    initial="hidden"
+                                    animate="show"
+                                    exit={{ opacity: 0, transition: { duration: 0.12 } }}
+                                >
+                                    {filteredMyOffers.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center text-center gap-3">
+                                            <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
+                                                <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
+                                            </div>
+                                            <p className="text-sm font-semibold text-foreground/60">No swap offers yet</p>
                                         </div>
-                                        <p className="text-sm font-semibold text-foreground/60">No swap offers yet</p>
-                                    </div>
-                                ) : (
-                                    filteredMyOffers.map(swap => renderSwapListItem(swap, 'my-offers'))
-                                )}
-                            </motion.div>
-                        </AnimatePresence>
+                                    ) : (
+                                        filteredMyOffers.map(swap => renderSwapListItem(swap, 'my-offers'))
+                                    )}
+                                </motion.div>
+                            </AnimatePresence>
+                        </div>
 
                         {/* Desktop: traditional sortable table */}
                         <div className="hidden md:block overflow-x-auto border border-border rounded-lg">
@@ -1465,19 +1496,25 @@ export const EmployeeSwapsPage: React.FC = () => {
                 )
             ) : (
                 viewMode === 'card' ? (
-                    <div className="flex-1 overflow-y-auto px-4 lg:px-6 py-4 scrollbar-none">
+                    <div className={cn(
+                        "flex-1 overflow-y-auto px-4 lg:px-6 py-4 scrollbar-none",
+                        filteredMySwaps.length === 0 && "flex flex-col items-center justify-center py-4"
+                    )}>
                         <AnimatePresence mode="wait">
                             <motion.div
                                 key={`my-swaps-card-${priorityFilter}`}
-                                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+                                className={cn(
+                                    "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
+                                    filteredMySwaps.length === 0 && "w-full flex items-center justify-center"
+                                )}
                                 variants={pageVariants}
                                 initial="hidden"
                                 animate="show"
                                 exit={{ opacity: 0, transition: { duration: 0.15 } }}
                             >
                                 {filteredMySwaps.length === 0 ? (
-                                    <motion.div variants={itemVariants} className="col-span-full">
-                                        <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                                    <motion.div variants={itemVariants} className="col-span-full w-full flex items-center justify-center">
+                                        <div className="flex flex-col items-center justify-center text-center gap-3">
                                             <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
                                                 <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
                                             </div>
@@ -1496,29 +1533,37 @@ export const EmployeeSwapsPage: React.FC = () => {
                         </AnimatePresence>
                     </div>
                 ) : (
-                    <div className="flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none">
+                    <div className={cn(
+                        "flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-none",
+                        filteredMySwaps.length === 0 && "md:block flex flex-col items-center justify-center p-0 md:p-6"
+                    )}>
                         {/* Mobile: list row view */}
-                        <AnimatePresence mode="wait">
-                            <motion.div
-                                key={`my-swaps-list-${priorityFilter}`}
-                                className="md:hidden border border-border/40 rounded-xl overflow-hidden"
-                                variants={pageVariants}
-                                initial="hidden"
-                                animate="show"
-                                exit={{ opacity: 0, transition: { duration: 0.12 } }}
-                            >
-                                {filteredMySwaps.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-                                        <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
-                                            <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
+                        <div className={cn("md:hidden w-full", filteredMySwaps.length === 0 && "h-full")}>
+                            <AnimatePresence mode="wait">
+                                <motion.div
+                                    key={`my-swaps-list-${priorityFilter}`}
+                                    className={cn(
+                                        "md:hidden border border-border/40 rounded-xl overflow-hidden bg-background/40",
+                                        filteredMySwaps.length === 0 && "h-full flex flex-col items-center justify-center w-full"
+                                    )}
+                                    variants={pageVariants}
+                                    initial="hidden"
+                                    animate="show"
+                                    exit={{ opacity: 0, transition: { duration: 0.12 } }}
+                                >
+                                    {filteredMySwaps.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center text-center gap-3">
+                                            <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center">
+                                                <ArrowLeftRight className="h-6 w-6 text-muted-foreground/40" />
+                                            </div>
+                                            <p className="text-sm font-semibold text-foreground/60">No swap requests</p>
                                         </div>
-                                        <p className="text-sm font-semibold text-foreground/60">No swap requests</p>
-                                    </div>
-                                ) : (
-                                    filteredMySwaps.map(swap => renderSwapListItem(swap, 'my-swaps'))
-                                )}
-                            </motion.div>
-                        </AnimatePresence>
+                                    ) : (
+                                        filteredMySwaps.map(swap => renderSwapListItem(swap, 'my-swaps'))
+                                    )}
+                                </motion.div>
+                            </AnimatePresence>
+                        </div>
 
                         {/* Desktop: traditional sortable table */}
                         <div className="hidden md:block overflow-x-auto border border-border rounded-lg">

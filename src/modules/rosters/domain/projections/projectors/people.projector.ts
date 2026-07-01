@@ -168,14 +168,8 @@ export function projectPeople(
           dicebearUrl('unassigned', 'shapes'),
         ));
       } else {
-        const firstName = shift.employeeFirstName ?? 'Assigned';
-        const lastName  = shift.employeeLastName  ?? '';
-        empMap.set(targetId, makeEmployee(
-          targetId,
-          `${firstName} ${lastName}`.trim(),
-          contractedHoursMap[targetId] ?? 0,
-          dicebearUrl(targetId),
-        ));
+        // Skip shifts for employees not in the current paginated/filtered employee list
+        return;
       }
     }
 

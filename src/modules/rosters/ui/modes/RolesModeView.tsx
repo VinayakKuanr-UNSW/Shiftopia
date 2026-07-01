@@ -176,7 +176,7 @@ const RoleShiftCardView: React.FC<RoleShiftCardProps & { isDragging?: boolean }>
         roles: (shift as any).roles || { id: (shift as any).role_id || '', name: (shift as any).role_name || (shift as any).roles?.name || 'Shift' },
         assigned_profiles: (shift as any).assigned_profiles || (shift as any).profiles,
       } as any}
-      onClick={() => isBulkMode ? onToggleSelection(shift.id) : onEdit(shift)}
+      onClick={() => isBulkMode ? onToggleSelection(shift.id) : isPast ? undefined : onEdit(shift)}
       isDragging={isDragging}
       isLocked={isLocked}
       isPast={isPast}
@@ -406,51 +406,63 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
     }
   };
 
-  const buildShiftMenu = (shift: any) => (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
-        <button
-          className="h-4 w-4 flex items-center justify-center hover:bg-muted dark:hover:bg-white/20 rounded transition-colors"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground opacity-60" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="bg-popover border-border min-w-[160px] z-50">
-        <DropdownMenuItem
-          onClick={() => onEditShift?.(shift)}
-          className="text-popover-foreground hover:bg-accent cursor-pointer"
-        >
-          <Edit2 className="h-4 w-4 mr-2" />
-          Edit Shift
-        </DropdownMenuItem>
+  const buildShiftMenu = (shift: any) => {
+    const { isPast } = resolveShiftStatus(shift);
 
-        <DropdownMenuItem
-          onClick={() => handleCloneShift(shift)}
-          className="text-popover-foreground hover:bg-accent cursor-pointer"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Clone Shift
-        </DropdownMenuItem>
+    return (
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="h-4 w-4 flex items-center justify-center hover:bg-muted dark:hover:bg-white/20 rounded transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground opacity-60" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="bg-popover border-border min-w-[160px] z-50">
+          <DropdownMenuItem
+            disabled={isPast}
+            onClick={() => onEditShift?.(shift)}
+            className={cn(
+              "text-popover-foreground hover:bg-accent cursor-pointer",
+              isPast && "text-muted-foreground/50 cursor-not-allowed"
+            )}
+          >
+            <Edit2 className="h-4 w-4 mr-2" />
+            Edit Shift {isPast && '(Locked)'}
+          </DropdownMenuItem>
 
-        {shift.lifecycle_status === 'Published' && (
-          <>
-            <DropdownMenuSeparator className="bg-border" />
-            <DropdownMenuItem
-              onClick={() => {
-                setConfirmV8ShiftId(shift.id);
-                setIsConfirmOpen(true);
-              }}
-              className="text-amber-400 hover:bg-amber-500/10 cursor-pointer"
-            >
-              <Undo2 className="h-4 w-4 mr-2" />
-              Unpublish Shift
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+          <DropdownMenuItem
+            disabled={isPast}
+            onClick={() => handleCloneShift(shift)}
+            className={cn(
+              "text-popover-foreground hover:bg-accent cursor-pointer",
+              isPast && "text-muted-foreground/50 cursor-not-allowed"
+            )}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Clone Shift {isPast && '(Locked)'}
+          </DropdownMenuItem>
+
+          {shift.lifecycle_status === 'Published' && !isPast && (
+            <>
+              <DropdownMenuSeparator className="bg-border" />
+              <DropdownMenuItem
+                onClick={() => {
+                  setConfirmV8ShiftId(shift.id);
+                  setIsConfirmOpen(true);
+                }}
+                className="text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+              >
+                <Undo2 className="h-4 w-4 mr-2" />
+                Unpublish Shift
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
 
   const dates = useMemo(() => {
     // Derive the column count from the actual start/end window (month is now
@@ -496,9 +508,9 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
     }
 
     roles.forEach(r => {
-      const lInfo = r.remuneration_level_id ? levelMap.get(r.remuneration_level_id) : null;
-      const ln = lInfo?.num ?? 0;
-      if (!groups[ln]) groups[ln] = { levelNumber: ln, levelLabel: lInfo?.label || `Level ${ln}`, roles: [] };
+      const ln = (r as any).remuneration_level ?? 0;
+      const lInfo = levels.find(l => l.level_number === ln);
+      if (!groups[ln]) groups[ln] = { levelNumber: ln, levelLabel: lInfo?.level_name || `Level ${ln}`, roles: [] };
       groups[ln].roles.push({
         id: r.id,
         name: r.name,

@@ -186,7 +186,7 @@ export const TimesheetPage: React.FC = () => {
                     clockInVarianceMin: s.clockInVarianceMinutes,
                     clockOutVarianceMin: s.clockOutVarianceMinutes,
                     attendanceStatus: s.attendanceStatus,
-                    hasEnded: s.lifecycleStatus === 'Completed' || endMs < now,
+                    hasEnded: s.lifecycleStatus === 'Completed' || endMs < now || !!s.clockOut,
                 };
             });
         return computeAttendanceMetrics(inputs);

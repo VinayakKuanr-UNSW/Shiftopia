@@ -96,6 +96,13 @@ export const shiftKeys = {
     filters?: ShiftFilters | null,
   ) => ['shifts', 'summary', orgId, startDate, endDate, filters ?? null] as const,
 
+  plannerStats: (
+    orgId: string,
+    startDate: string,
+    endDate: string,
+    filters?: ShiftFilters | null,
+  ) => ['shifts', 'plannerStats', orgId, startDate, endDate, filters ?? null] as const,
+
   byEmployee: (empId: string, startDate: string, endDate: string) =>
     ['shifts', 'list', 'byEmployee', empId, startDate, endDate] as const,
 

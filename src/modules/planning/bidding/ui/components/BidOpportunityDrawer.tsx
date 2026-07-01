@@ -156,7 +156,8 @@ export const BidOpportunityDrawer: React.FC<Props> = ({
                                     groupVariant={
                                         opp.groupType === 'convention_centre' ? 'convention' :
                                         opp.groupType === 'exhibition_centre' ? 'exhibition' :
-                                        opp.groupType === 'theatre' ? 'theatre' : 'default'
+                                        opp.groupType === 'theatre' ? 'theatre' :
+                                        opp.groupType === 'the_cutaway' ? 'cutaway' : 'default'
                                     }
                                     footerActions={footerActions}
                                     isFlat={false}

@@ -60,16 +60,30 @@ export async function executeCreateShift(
     let finalRemunerationLevelId = remunerationLevelId;
 
     try {
-        // If roleId is provided but remunerationLevelId is not, fetch it from the role
         if (roleId && !finalRemunerationLevelId) {
-            const { data: roleData } = await supabase
+            const { data: roleData } = await (supabase as any)
+                .schema('hr')
                 .from('roles')
-                .select('remuneration_level_id')
+                .select('remuneration_level')
                 .eq('id', roleId)
                 .single();
 
-            if (roleData?.remuneration_level_id) {
-                finalRemunerationLevelId = roleData.remuneration_level_id;
+            if (roleData?.remuneration_level != null) {
+                finalRemunerationLevelId = String(roleData.remuneration_level);
+            }
+        }
+
+        // If finalRemunerationLevelId is a simple number (from UI or the role lookup above),
+        // we must map it back to the public UUID to insert into public.shifts.
+        if (finalRemunerationLevelId && !finalRemunerationLevelId.includes('-')) {
+            const { data: levelData } = await supabase
+                .from('remuneration_levels')
+                .select('id')
+                .eq('level_number', parseInt(finalRemunerationLevelId))
+                .single();
+            
+            if (levelData?.id) {
+                finalRemunerationLevelId = levelData.id;
             }
         }
 

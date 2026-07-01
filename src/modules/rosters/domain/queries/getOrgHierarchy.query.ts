@@ -32,7 +32,8 @@ export interface OrgHierarchyOutput {
  * Fetch all organizations
  */
 export async function getOrganizations(): Promise<Organization[]> {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
+        .schema('hr')
         .from('organizations')
         .select('id, name')
         .order('name');
@@ -51,7 +52,8 @@ export async function getOrganizations(): Promise<Organization[]> {
 export async function getDepartments(organizationId: string): Promise<Department[]> {
     if (!organizationId) return [];
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
+        .schema('hr')
         .from('departments')
         .select('id, name, organization_id')
         .eq('organization_id', organizationId)
@@ -62,7 +64,7 @@ export async function getDepartments(organizationId: string): Promise<Department
         return [];
     }
 
-    return (data || []).map((d) => ({
+    return (data || []).map((d: any) => ({
         id: d.id,
         name: d.name,
         organizationId: d.organization_id,
@@ -75,8 +77,9 @@ export async function getDepartments(organizationId: string): Promise<Department
 export async function getSubDepartments(departmentId: string): Promise<SubDepartment[]> {
     if (!departmentId) return [];
 
-    const { data, error } = await supabase
-        .from('sub_departments')
+    const { data, error } = await (supabase as any)
+        .schema('hr')
+        .from('subdepartments')
         .select('id, name, department_id')
         .eq('department_id', departmentId)
         .order('name');
@@ -86,7 +89,7 @@ export async function getSubDepartments(departmentId: string): Promise<SubDepart
         return [];
     }
 
-    return (data || []).map((d) => ({
+    return (data || []).map((d: any) => ({
         id: d.id,
         name: d.name,
         departmentId: d.department_id,
@@ -98,19 +101,19 @@ export async function getSubDepartments(departmentId: string): Promise<SubDepart
  */
 export async function getFullOrgHierarchy(): Promise<OrgHierarchyOutput> {
     const [orgs, depts, subDepts] = await Promise.all([
-        supabase.from('organizations').select('id, name').order('name'),
-        supabase.from('departments').select('id, name, organization_id').order('name'),
-        supabase.from('sub_departments').select('id, name, department_id').order('name'),
+        (supabase as any).schema('hr').from('organizations').select('id, name').order('name'),
+        (supabase as any).schema('hr').from('departments').select('id, name, organization_id').order('name'),
+        (supabase as any).schema('hr').from('subdepartments').select('id, name, department_id').order('name'),
     ]);
 
     return {
         organizations: orgs.data || [],
-        departments: (depts.data || []).map((d) => ({
+        departments: (depts.data || []).map((d: any) => ({
             id: d.id,
             name: d.name,
             organizationId: d.organization_id,
         })),
-        subDepartments: (subDepts.data || []).map((d) => ({
+        subDepartments: (subDepts.data || []).map((d: any) => ({
             id: d.id,
             name: d.name,
             departmentId: d.department_id,

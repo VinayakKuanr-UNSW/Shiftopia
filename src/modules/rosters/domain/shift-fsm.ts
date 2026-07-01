@@ -89,7 +89,7 @@ export const FSM_COLOR_HEX: Record<ShiftFSMStateInfo['color'], string> = {
 
 /** Display descriptor for a shift's State badge/row. */
 export interface ShiftStateDisplay {
-    /** Gapless UI id (S1…S10) plus the runtime emergent `*` suffix (S3/S5 only). */
+    /** Gapless UI id (S1…S10). */
     id: string;
     label: string;
     /** Hex colour for inline styling, matching the card's Time/Live rule rows. */
@@ -98,18 +98,17 @@ export interface ShiftStateDisplay {
 
 /**
  * Resolve the user-facing State descriptor for a card. Uses the gapless
- * {@link ShiftFSMStateInfo.displayId}, appends the runtime emergent `*` marker
- * for S3/S5 (Offered/Bidding within 4h of start), and maps the colour token to a
- * hex value so it can sit alongside the Time Rules / Live Rules rows.
+ * {@link ShiftFSMStateInfo.displayId} and maps the colour token to a hex value so
+ * it can sit alongside the Time Rules / Live Rules rows.
+ *
+ * There is no emergent `*` suffix: S3 (Offered) and S5 (Bidding) auto-expire at
+ * TTS = 4h (S3 → S2, S5 → S1) before they can enter the emergent window, so an
+ * emergent S3/S5 is not a representable state.
  */
-export function getShiftStateDisplay(
-    state: ShiftStateID,
-    opts?: { emergent?: boolean },
-): ShiftStateDisplay {
+export function getShiftStateDisplay(state: ShiftStateID): ShiftStateDisplay {
     const meta = FSM_STATE_META[state];
-    const emergentSuffix = opts?.emergent && (state === 'S3' || state === 'S5') ? '*' : '';
     return {
-        id: meta.displayId + emergentSuffix,
+        id: meta.displayId,
         label: meta.label,
         color: FSM_COLOR_HEX[meta.color],
     };

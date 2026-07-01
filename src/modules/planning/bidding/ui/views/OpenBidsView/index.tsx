@@ -57,7 +57,7 @@ import type { UseCompliancePanelReturn, PanelStatus, PanelResult } from '@/modul
 // All class strings are written statically so Tailwind can scan them.
 // =============================================================================
 
-type GroupVariant = 'convention' | 'exhibition' | 'theatre' | 'default';
+type GroupVariant = 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'default';
 
 const GROUP_THEME: Record<GroupVariant, {
   bar: string;       // left stripe color
@@ -95,6 +95,15 @@ const GROUP_THEME: Record<GroupVariant, {
     badge: 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20',
     dot:   'bg-rose-500',
   },
+  cutaway: {
+    bar:   'bg-amber-500',
+    tint:  'bg-amber-500/[0.05]',
+    ring:  'ring-amber-500/30',
+    text:  'text-amber-600 dark:text-amber-400',
+    boost: 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/25',
+    badge: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20',
+    dot:   'bg-amber-500',
+  },
   default: {
     bar:   'bg-violet-500',
     tint:  'bg-violet-500/[0.05]',
@@ -112,6 +121,7 @@ function getGroupVariant(groupType?: string | null, dept?: string): GroupVariant
   if (g.includes('convention') || d.includes('convention')) return 'convention';
   if (g.includes('exhibition') || d.includes('exhibition')) return 'exhibition';
   if (g.includes('theatre') || g.includes('theater') || d.includes('theatre') || d.includes('theater')) return 'theatre';
+  if (g.includes('cutaway') || d.includes('cutaway')) return 'cutaway';
   return 'default';
 }
 

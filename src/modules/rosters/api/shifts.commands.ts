@@ -1,4 +1,5 @@
 import { supabase } from '@/platform/supabase/client';
+import { getSydneyNow, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { processInChunks } from '../domain/bulk-action-engine';
 import { Shift, isValidUuid, safeUuid, calculateMinutesBetweenTimes } from '../domain/shift.entity';
 import { CreateShiftData, UpdateShiftData } from './shifts.dto';
@@ -140,6 +141,7 @@ export const shiftsCommands = {
             display_order: shiftData.display_order || 0,
             shift_group_id: safeUuid(shiftData.shift_group_id),
             shift_subgroup_id: safeUuid(shiftData.shift_subgroup_id),
+            roster_subgroup_id: safeUuid(shiftData.shift_subgroup_id),
             role_id: safeUuid(shiftData.role_id),
             remuneration_level_id: safeUuid(shiftData.remuneration_level_id),
             paid_break_minutes: shiftData.paid_break_minutes || 0,
@@ -187,24 +189,35 @@ export const shiftsCommands = {
     async updateShift(shiftId: string, updates: UpdateShiftData): Promise<Shift> {
         const user = await requireUser();
 
+        // Prevent modification if the shift is in the past
+        const currentShift = await shiftsQueries.getShiftById(shiftId);
+        if (currentShift) {
+            const now = getSydneyNow();
+            const shiftStartAt = parseZonedDateTime(currentShift.shift_date, currentShift.start_time, SYDNEY_TZ);
+            if (now >= shiftStartAt) {
+                throw new Error('Cannot edit a shift that is in the past.');
+            }
+        }
+
         // ── Split the incoming patch into two buckets ──────────────────────────
         //
-        //  (1) editPayload — schedule + grouping fields that the audited gateway
-        //      'edit' op WHITELISTS. These now flow through sm_apply_shift_op so
-        //      every field edit lands in the shift_events ledger.
+        //  (1) editPayload — schedule + grouping fields (and, on a DRAFT shift,
+        //      the assignment) that the audited gateway 'edit' op WHITELISTS.
+        //      These flow through sm_apply_shift_op so the action lands in the
+        //      shift_events ledger as a SINGLE record (state + field diff +
+        //      folded assignment).
         //
         //  (2) excludedPayload — fields the gateway 'edit' op DELIBERATELY does
-        //      NOT own (assignment, structural/RLS-scoping moves, canonical
-        //      timestamps, jsonb eligibility arrays, cancellation reason). These
-        //      keep their existing direct-update behaviour so nothing regresses.
-        //      Assignment changes additionally carry assignment_source, exactly
-        //      as before.
+        //      NOT own (structural/RLS-scoping moves, canonical timestamps, jsonb
+        //      eligibility arrays, cancellation reason). These keep their existing
+        //      direct-update behaviour so nothing regresses.
         //
-        // Gateway 'edit' whitelist (payload keys, per 20260621100200_sm_apply_shift_op):
+        // Gateway 'edit' whitelist (payload keys, per 20260630001100):
         //   start_time, end_time, shift_date, paid_break_minutes,
         //   unpaid_break_minutes, notes, role_id, sub_department_id,
         //   remuneration_level_id, group_type, sub_group_name, display_order,
-        //   shift_group_id, shift_subgroup_id, timezone, is_training
+        //   shift_group_id, shift_subgroup_id, timezone, is_training,
+        //   assigned_employee_id, assignment_source
         const editPayload: Record<string, unknown> = {};
 
         if (updates.start_time !== undefined) editPayload.start_time = updates.start_time;
@@ -244,11 +257,27 @@ export const shiftsCommands = {
         if (updates.timezone !== undefined) editPayload.timezone = updates.timezone;
         if (updates.is_training !== undefined) editPayload.is_training = updates.is_training;
 
+        // Assignment is FOLDED into the single audited `edit` op so an
+        // edit-and-reassign on a DRAFT shift produces ONE shift_events record
+        // (the gateway gates the fold on assign/unassign FSM legality and its
+        // via_gateway guard suppresses the duplicate trigger ASSIGNED row).
+        // Pass an explicit `null` (not undefined) when clearing so the key
+        // survives JSON serialization and the gateway sees the unassign intent.
+        // Published-shift assignment changes are gated out server-side and keep
+        // their dedicated assign/emergency path.
+        if (updates.assigned_employee_id !== undefined) {
+            const empId = safeUuid(updates.assigned_employee_id);
+            editPayload.assigned_employee_id = empId ?? null;
+            editPayload.assignment_source = empId
+                ? (updates.assignment_source ?? 'manual')
+                : null;
+        }
+
         // ── Non-whitelist fields: preserve the existing direct-update path ─────
-        // These are NOT silently dropped. assigned_employee_id keeps its existing
-        // assignment_source behaviour; roster_id/department_id/organization_id are
-        // structural moves; start_at/end_at are canonical timestamps; the jsonb
-        // arrays + cancellation_reason are owned by other pipelines.
+        // These are NOT silently dropped. roster_id/department_id/organization_id
+        // are structural moves; start_at/end_at are canonical timestamps; the jsonb
+        // arrays + cancellation_reason are owned by other pipelines. (Assignment
+        // now flows through the audited `edit` op above, not here.)
         const excludedPayload: Record<string, unknown> = {};
 
         if (updates.roster_id !== undefined)
@@ -259,20 +288,12 @@ export const shiftsCommands = {
             excludedPayload.organization_id = safeUuid(updates.organization_id);
         if (updates.start_at !== undefined) excludedPayload.start_at = updates.start_at;
         if (updates.end_at !== undefined) excludedPayload.end_at = updates.end_at;
-        if (updates.assigned_employee_id !== undefined) {
-            excludedPayload.assigned_employee_id = safeUuid(updates.assigned_employee_id);
-            if (updates.assigned_employee_id) {
-                excludedPayload.assignment_source = updates.assignment_source ?? 'manual';
-            } else {
-                excludedPayload.assignment_source = null;
-            }
-        }
         if (updates.required_skills !== undefined)
-            excludedPayload.required_skills = updates.required_skills;
+            editPayload.required_skills = updates.required_skills;
         if (updates.required_licenses !== undefined)
-            excludedPayload.required_licenses = updates.required_licenses;
+            editPayload.required_licenses = updates.required_licenses;
         if (updates.event_ids !== undefined)
-            excludedPayload.event_ids = updates.event_ids;
+            editPayload.event_ids = updates.event_ids;
         if (updates.tags !== undefined) excludedPayload.tags = updates.tags;
         if (updates.cancellation_reason !== undefined)
             excludedPayload.cancellation_reason = updates.cancellation_reason;
@@ -521,6 +542,14 @@ export const shiftsCommands = {
         // Publish is a lifecycle transition only — compliance is checked at assignment time.
         const shift = await shiftsQueries.getShiftById(shiftId);
 
+        if (shift) {
+            const now = getSydneyNow();
+            const shiftStartAt = parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ);
+            if (now >= shiftStartAt) {
+                throw new Error('Cannot publish a shift that is in the past.');
+            }
+        }
+
         const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
         const ttsMs = shift?.start_at
             ? new Date(shift.start_at).getTime() - Date.now()
@@ -745,6 +774,15 @@ export const shiftsCommands = {
     },
 
     async unpublishShift(shiftId: string, reason?: string) {
+        const shift = await shiftsQueries.getShiftById(shiftId);
+        if (shift) {
+            const now = getSydneyNow();
+            const shiftStartAt = parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ);
+            if (now >= shiftStartAt) {
+                throw new Error('Cannot unpublish a shift that is in the past.');
+            }
+        }
+
         const result = await callAuthenticatedRpc(
             'sm_unpublish_shift',
             (userId) => ({ p_shift_id: shiftId, p_user_id: userId, p_reason: reason ?? 'Unpublished' }),

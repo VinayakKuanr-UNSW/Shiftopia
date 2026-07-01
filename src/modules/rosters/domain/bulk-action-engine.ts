@@ -11,6 +11,7 @@
  */
 
 import type { Shift } from './shift.entity';
+import { getSydneyNow, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 // ============================================================
 // TYPES
@@ -52,8 +53,15 @@ export function preflightPublish(shifts: Shift[]): BulkPreflightSummary {
     const blocked: Array<{ id: string; reason: string }> = [];
     const warned: Array<{ id: string; reason: string }> = [];
 
+    const now = getSydneyNow();
+
     for (const s of shifts) {
-        if (s.is_cancelled || s.lifecycle_status === 'Cancelled') {
+        const shiftStartAt = parseZonedDateTime(s.shift_date, s.start_time, SYDNEY_TZ);
+        const isPast = now >= shiftStartAt;
+
+        if (isPast) {
+            blocked.push({ id: s.id, reason: 'Shift is in the past' });
+        } else if (s.is_cancelled || s.lifecycle_status === 'Cancelled') {
             blocked.push({ id: s.id, reason: 'Cancelled' });
         } else if (s.lifecycle_status === 'Published') {
             blocked.push({ id: s.id, reason: 'Already published' });
@@ -80,8 +88,15 @@ export function preflightUnpublish(shifts: Shift[]): BulkPreflightSummary {
     const blocked: Array<{ id: string; reason: string }> = [];
     const warned: Array<{ id: string; reason: string }> = [];
 
+    const now = getSydneyNow();
+
     for (const s of shifts) {
-        if (s.lifecycle_status !== 'Published') {
+        const shiftStartAt = parseZonedDateTime(s.shift_date, s.start_time, SYDNEY_TZ);
+        const isPast = now >= shiftStartAt;
+
+        if (isPast) {
+            blocked.push({ id: s.id, reason: 'Shift is in the past' });
+        } else if (s.lifecycle_status !== 'Published') {
             blocked.push({ id: s.id, reason: 'Not published' });
         } else if (s.bidding_status !== 'not_on_bidding') {
             blocked.push({ id: s.id, reason: 'In bidding — withdraw first' });
@@ -128,8 +143,15 @@ export function preflightUnassign(shifts: Shift[]): BulkPreflightSummary {
     const eligibleIds: string[] = [];
     const blocked: Array<{ id: string; reason: string }> = [];
 
+    const now = getSydneyNow();
+
     for (const s of shifts) {
-        if (s.bidding_status !== 'not_on_bidding') {
+        const shiftStartAt = parseZonedDateTime(s.shift_date, s.start_time, SYDNEY_TZ);
+        const isPast = now >= shiftStartAt;
+
+        if (isPast) {
+            blocked.push({ id: s.id, reason: 'Shift is in the past' });
+        } else if (s.bidding_status !== 'not_on_bidding') {
             blocked.push({ id: s.id, reason: 'In bidding' });
         } else if (s.is_cancelled || s.lifecycle_status === 'Cancelled') {
             blocked.push({ id: s.id, reason: 'Cancelled' });

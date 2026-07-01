@@ -8,7 +8,7 @@ import { OfferActionResponseSchema } from './contracts';
 export interface OrgSummary { id: string; name: string }
 export interface DeptSummary { id: string; name: string; organization_id: string }
 export interface SubDeptSummary { id: string; name: string; department_id: string }
-export interface RoleSummary { id: string; name: string; department_id: string | null; sub_department_id: string | null; remuneration_level_id: string | null }
+export interface RoleSummary { id: string; name: string; sub_department_id: string; remuneration_level: number; }
 export interface RemunerationLevel { id: string; level_number: number; level_name: string; hourly_rate_min: number; hourly_rate_max: number; description: string | null }
 export interface SkillSummary { id: string; name: string; description: string | null; category: string | null }
 export interface LicenseSummary { id: string; name: string; description: string | null; category: string | null; issuing_authority: string | null }
@@ -143,12 +143,15 @@ const PAGE_SIZE = 1000;
 // absolute backstop for pathological queries that somehow slip past the cap.
 const MAX_PAGES = 25;
 // Bounds the working set loaded into the interactive roster grid.
-// Loading >20k shifts at once causes measurable jank / memory pressure in the
-// virtualised grid. The root fix is a narrower default date window (handled in
-// the query layer / UI defaults); this cap prevents a full melt-down in the
-// interim. Rows beyond the cap are silently truncated — a console.warn is
-// emitted so it is visible during development and in Sentry breadcrumbs.
-const INTERACTIVE_ROW_CAP = 20_000;
+// Loading many thousands of shifts at once causes measurable jank / memory
+// pressure in the virtualised grid (fat ~60-col SHIFT_SELECT + per-shift
+// projection + DOM). Lowered 20k → 8k: the interactive card grid is only ever
+// reached in DnD / Bulk / Day modes (the default bucket view fetches no raw
+// shifts at all), and the planner now AUTO-NARROWS a heavy month to a week
+// before entering those modes, so 8k is ample headroom while halving the
+// worst-case payload. Rows beyond the cap are silently truncated — a
+// console.warn is emitted so it is visible in dev and in Sentry breadcrumbs.
+const INTERACTIVE_ROW_CAP = 8_000;
 
 /** Normalise a raw supabase row into our Shift interface shape */
 export function normalizeShiftRow(row: Record<string, any>): Shift {
@@ -564,62 +567,38 @@ export const shiftsQueries = {
 
     async getRoles(organizationId?: string, departmentId?: string, subDepartmentId?: string): Promise<RoleSummary[]> {
         try {
-            let query = supabase
+            let query = (supabase as any)
+                .schema('hr')
                 .from('roles')
-                .select('id, name, department_id, sub_department_id, remuneration_level_id')
+                .select('id, name, subdepartment_id, remuneration_level')
+                .eq('is_active', true)
                 .order('name');
 
             if (subDepartmentId && isValidUuid(subDepartmentId)) {
-                // To avoid complex nested OR/AND string parsing issues in Supabase JS:
-                // Fetch roles that match the explicit sub_department_id
-                // PLUS roles that match the parent department_id AND have is.null sub_department_id
-                // PLUS global roles that have is.null department_id
-
-                // We execute two queries and merge to ensure correct hierarchy mapping
-                const [explicitSubDeptRes, parentDeptAndGlobalRes] = await Promise.all([
-                    supabase
-                        .from('roles')
-                        .select('id, name, department_id, sub_department_id, remuneration_level_id')
-                        .eq('sub_department_id', subDepartmentId), // Explicit to this node
-                    supabase
-                        .from('roles')
-                        .select('id, name, department_id, sub_department_id, remuneration_level_id')
-                        .is('sub_department_id', null)             // Must NOT be mapped to another subdept
-                        .or(`department_id.eq.${departmentId},department_id.is.null`) // Parent dept OR Global
-                ]);
-
-                if (explicitSubDeptRes.error) console.error(explicitSubDeptRes.error);
-                if (parentDeptAndGlobalRes.error) console.error(parentDeptAndGlobalRes.error);
-
-                const mergedRoles = [
-                    ...(explicitSubDeptRes.data || []),
-                    ...(parentDeptAndGlobalRes.data || [])
-                ];
-
-                // Sort and return early since we bypassed the single query flow
-                return mergedRoles.sort((a, b) => a.name.localeCompare(b.name)) as RoleSummary[];
-
+                query = query.eq('subdepartment_id', subDepartmentId);
             } else if (departmentId && isValidUuid(departmentId)) {
-                // Dept level:
-                // 1. Roles explicitly mapped to this Dept with NO SubDept
-                // 2. Global roles (NO Dept AND NO SubDept)
-                query = query
-                    .is('sub_department_id', null)
-                    .or(`department_id.eq.${departmentId},department_id.is.null`);
-            } else if (organizationId && isValidUuid(organizationId)) {
-                // Org level: all roles for this Org (not mapped to a sub-dept)
-                const { data: orgDepts } = await supabase
-                    .from('departments')
-                    .select('id')
-                    .eq('organization_id', organizationId);
-
-                const deptIds = orgDepts?.map(d => d.id) || [];
-                query = query.is('sub_department_id', null);
-
-                if (deptIds.length > 0) {
-                    query = query.or(`department_id.in.(${deptIds.join(',')}),department_id.is.null`);
+                // Fetch subdepartments for this department
+                const { data: subDepts } = await (supabase as any).schema('hr').from('subdepartments').select('id').eq('department_id', departmentId);
+                const subDeptIds = subDepts?.map((sd: any) => sd.id) || [];
+                if (subDeptIds.length > 0) {
+                    query = query.in('subdepartment_id', subDeptIds);
                 } else {
-                    query = query.is('department_id', null);
+                    return []; // No subdepartments, so no roles
+                }
+            } else if (organizationId && isValidUuid(organizationId)) {
+                // Fetch departments for this org
+                const { data: depts } = await (supabase as any).schema('hr').from('departments').select('id').eq('organization_id', organizationId);
+                const deptIds = depts?.map((d: any) => d.id) || [];
+                if (deptIds.length > 0) {
+                    const { data: subDepts } = await (supabase as any).schema('hr').from('subdepartments').select('id').in('department_id', deptIds);
+                    const subDeptIds = subDepts?.map((sd: any) => sd.id) || [];
+                    if (subDeptIds.length > 0) {
+                        query = query.in('subdepartment_id', subDeptIds);
+                    } else {
+                        return [];
+                    }
+                } else {
+                    return [];
                 }
             }
 
@@ -630,7 +609,12 @@ export const shiftsQueries = {
                 return [];
             }
 
-            return (data || []) as RoleSummary[];
+            return (data || []).map(r => ({
+                id: r.id,
+                name: r.name,
+                sub_department_id: r.subdepartment_id,
+                remuneration_level: r.remuneration_level,
+            })) as RoleSummary[];
         } catch (error) {
             console.error('Exception in getRoles:', error);
             return [];
@@ -676,9 +660,10 @@ export const shiftsQueries = {
 
     async getRemunerationLevels(): Promise<RemunerationLevel[]> {
         try {
-            const { data, error } = await supabase
+            const { data, error } = await (supabase as any)
+                .schema('hr')
                 .from('remuneration_levels')
-                .select('id, level_number, level_name, hourly_rate_min, hourly_rate_max, description')
+                .select('id:level_number, level_number, level_name, hourly_rate_min, hourly_rate_max, description')
                 .order('level_number');
 
             if (error) {
@@ -1511,11 +1496,17 @@ export interface ShiftEventTimelineRow {
     /** Human-readable actor display name; null for system/cron events. */
     actor_name: string | null;
     employee_id: string | null;
+    /** Display name of the worker the event is ABOUT (the folded assignee). */
+    assignee_name: string | null;
     from_state: string | null;
     to_state: string | null;
     from_version: string | null;
     to_version: string | null;
     changes: Record<string, ShiftEventFieldChange> | null;
     reason: string | null;
+    /** Creation mode for a `create` event: manual | template | synthesizer. */
+    creation_source: string | null;
+    /** How the worker was assigned: direct | manual | offer | bid | swap | … */
+    assignment_source: string | null;
 }
 
