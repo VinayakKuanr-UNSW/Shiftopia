@@ -20,6 +20,19 @@ CREATE EXTENSION IF NOT EXISTS "pg_cron" WITH SCHEMA "pg_catalog";
 
 
 
+CREATE SCHEMA IF NOT EXISTS "hr";
+
+
+ALTER SCHEMA "hr" OWNER TO "postgres";
+
+
+CREATE EXTENSION IF NOT EXISTS "pg_net" WITH SCHEMA "extensions";
+
+
+
+
+
+
 COMMENT ON SCHEMA "public" IS 'standard public schema';
 
 
@@ -393,7 +406,8 @@ CREATE TYPE "public"."shift_event_type" AS ENUM (
     'CHECKED_IN',
     'LATE_IN',
     'EARLY_OUT',
-    'NO_SHOW'
+    'NO_SHOW',
+    'OP_APPLIED'
 );
 
 
@@ -469,6 +483,16 @@ CREATE TYPE "public"."shift_validation_result" AS (
 ALTER TYPE "public"."shift_validation_result" OWNER TO "postgres";
 
 
+CREATE TYPE "public"."swap_auto_decision_kind" AS ENUM (
+    'AUTO_APPROVE',
+    'MANUAL_REVIEW',
+    'AUTO_REJECT'
+);
+
+
+ALTER TYPE "public"."swap_auto_decision_kind" OWNER TO "postgres";
+
+
 CREATE TYPE "public"."swap_offer_status" AS ENUM (
     'SUBMITTED',
     'SELECTED',
@@ -479,6 +503,17 @@ CREATE TYPE "public"."swap_offer_status" AS ENUM (
 
 
 ALTER TYPE "public"."swap_offer_status" OWNER TO "postgres";
+
+
+CREATE TYPE "public"."swap_queue_status" AS ENUM (
+    'PENDING',
+    'CLAIMED',
+    'DONE',
+    'DLQ'
+);
+
+
+ALTER TYPE "public"."swap_queue_status" OWNER TO "postgres";
 
 
 CREATE TYPE "public"."swap_request_status" AS ENUM (
@@ -534,7 +569,8 @@ ALTER TYPE "public"."system_role" OWNER TO "postgres";
 CREATE TYPE "public"."template_group_type" AS ENUM (
     'convention_centre',
     'exhibition_centre',
-    'theatre'
+    'theatre',
+    'the_cutaway'
 );
 
 
@@ -561,6 +597,338 @@ CREATE TYPE "public"."timesheet_status" AS ENUM (
 
 
 ALTER TYPE "public"."timesheet_status" OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "hr"."seed_subdepartment_roles"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+begin
+  insert into hr.roles (subdepartment_id, remuneration_level, name)
+  select new.id, rl.level_number, new.name || ' - ' || rl.level_name
+  from hr.remuneration_levels rl;
+  return new;
+end $$;
+
+
+ALTER FUNCTION "hr"."seed_subdepartment_roles"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."_apply_shift_op_write"("p_shift_id" "uuid", "p_op" "text", "p_payload" "jsonb", "p_actor" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_cur        RECORD;
+  v_winner     uuid;
+  v_emp        uuid;
+  v_swap       public.shift_swaps%ROWTYPE;
+  v_edit_state text;
+  v_new_emp    uuid;
+  v_do_assign   boolean := false;
+  v_do_unassign boolean := false;
+  v_assign_src  text;
+BEGIN
+  SELECT * INTO v_cur FROM public.shifts WHERE id = p_shift_id;
+
+  IF p_op = 'assign' THEN
+    v_emp := NULLIF(p_payload->>'employee_id', '')::uuid;
+    IF v_emp IS NULL THEN
+      RETURN jsonb_build_object('applied', false, 'note', 'MISSING_EMPLOYEE_ID');
+    END IF;
+
+    UPDATE public.shifts SET
+      assigned_employee_id = v_emp,
+      assigned_at          = NOW(),
+      assignment_status    = 'assigned'::public.shift_assignment_status,
+      assignment_outcome   = CASE WHEN lifecycle_status = 'Published'
+                                  THEN 'confirmed'::public.shift_assignment_outcome
+                                  ELSE assignment_outcome END,
+      confirmed_at         = CASE WHEN lifecycle_status = 'Published'
+                                  THEN NOW() ELSE confirmed_at END,
+      bidding_status       = CASE WHEN lifecycle_status = 'Published'
+                                  THEN 'not_on_bidding'::public.shift_bidding_status
+                                  ELSE bidding_status END,
+      is_on_bidding        = CASE WHEN lifecycle_status = 'Published'
+                                  THEN FALSE ELSE is_on_bidding END,
+      last_modified_by     = p_actor,
+      updated_at           = NOW()
+    WHERE id = p_shift_id;
+    RETURN jsonb_build_object('applied', true);
+
+  ELSIF p_op = 'unassign' THEN
+    IF v_cur.assigned_employee_id IS NULL THEN
+      RETURN jsonb_build_object('applied', false, 'note', 'ALREADY_UNASSIGNED');
+    END IF;
+
+    UPDATE public.shifts SET
+      assigned_employee_id = NULL,
+      assigned_at          = NULL,
+      assignment_status    = 'unassigned'::public.shift_assignment_status,
+      assignment_outcome   = NULL,
+      confirmed_at         = NULL,
+      fulfillment_status   = 'none'::public.shift_fulfillment_status,
+      last_modified_by     = p_actor,
+      last_modified_reason = COALESCE(p_payload->>'reason', 'Unassigned via shift gateway'),
+      updated_at           = NOW()
+    WHERE id = p_shift_id;
+    RETURN jsonb_build_object('applied', true);
+
+  ELSIF p_op = 'publish' THEN
+    IF v_cur.assigned_employee_id IS NOT NULL THEN
+      INSERT INTO public.shift_offers (shift_id, employee_id, status)
+      VALUES (p_shift_id, v_cur.assigned_employee_id, 'Pending')
+      ON CONFLICT (shift_id, employee_id) DO NOTHING;
+
+      UPDATE public.shifts SET
+        lifecycle_status     = 'Published'::public.shift_lifecycle,
+        fulfillment_status   = 'scheduled'::public.shift_fulfillment_status,
+        assignment_outcome   = 'offered'::public.shift_assignment_outcome,
+        published_at         = NOW(),
+        published_by_user_id = p_actor,
+        last_modified_by     = p_actor,
+        updated_at           = NOW()
+      WHERE id = p_shift_id;
+    ELSE
+      IF ((v_cur.shift_date::text || ' ' || v_cur.start_time::text)::timestamp
+            AT TIME ZONE 'Australia/Sydney') - INTERVAL '4 hours' <= NOW() THEN
+        RETURN jsonb_build_object('applied', false, 'note', 'PUBLISH_TOO_LATE');
+      END IF;
+
+      UPDATE public.shifts SET
+        lifecycle_status     = 'Published'::public.shift_lifecycle,
+        fulfillment_status   = 'bidding'::public.shift_fulfillment_status,
+        bidding_status       = 'on_bidding'::public.shift_bidding_status,
+        published_at         = NOW(),
+        published_by_user_id = p_actor,
+        is_on_bidding        = TRUE,
+        bidding_enabled      = TRUE,
+        bidding_open_at      = NOW(),
+        bidding_close_at     = ((v_cur.shift_date::text || ' ' || v_cur.start_time::text)::timestamp
+                                  AT TIME ZONE 'Australia/Sydney') - INTERVAL '4 hours',
+        last_modified_by     = p_actor,
+        updated_at           = NOW()
+      WHERE id = p_shift_id;
+    END IF;
+    RETURN jsonb_build_object('applied', true);
+
+  ELSIF p_op = 'unpublish' THEN
+    IF v_cur.trading_status IN ('TradeRequested', 'TradeAccepted') THEN
+      UPDATE public.shift_swaps SET
+        status = 'CANCELLED',
+        updated_at = NOW()
+      WHERE (requester_shift_id = p_shift_id OR target_shift_id = p_shift_id)
+        AND status IN ('OPEN', 'MANAGER_PENDING', 'OFFER_SELECTED');
+
+      UPDATE public.shifts SET
+        trading_status = 'NoTrade'::public.shift_trading,
+        trade_requested_at = NULL,
+        last_modified_by = p_actor,
+        updated_at = NOW()
+      WHERE id IN (
+        SELECT CASE WHEN requester_shift_id = p_shift_id THEN target_shift_id ELSE requester_shift_id END
+        FROM public.shift_swaps
+        WHERE (requester_shift_id = p_shift_id OR target_shift_id = p_shift_id)
+      ) AND id <> p_shift_id;
+
+      UPDATE public.swap_requests SET
+        status = 'cancelled',
+        updated_at = NOW()
+      WHERE (original_shift_id = p_shift_id OR offered_shift_id = p_shift_id)
+        AND status IN ('pending_employee', 'pending_manager');
+
+      UPDATE public.shifts SET
+        trading_status = 'NoTrade'::public.shift_trading,
+        trade_requested_at = NULL,
+        last_modified_by = p_actor,
+        updated_at = NOW()
+      WHERE id IN (
+        SELECT CASE WHEN original_shift_id = p_shift_id THEN offered_shift_id ELSE original_shift_id END
+        FROM public.swap_requests
+        WHERE (original_shift_id = p_shift_id OR offered_shift_id = p_shift_id)
+      ) AND id <> p_shift_id;
+
+      UPDATE public.shifts SET
+        trading_status = 'NoTrade'::public.shift_trading,
+        trade_requested_at = NULL
+      WHERE id = p_shift_id;
+    END IF;
+
+    IF v_cur.assigned_employee_id IS NOT NULL THEN
+      UPDATE public.shifts SET
+        lifecycle_status   = 'Draft'::public.shift_lifecycle,
+        assignment_outcome = NULL,
+        bidding_status     = 'not_on_bidding'::public.shift_bidding_status,
+        is_on_bidding      = FALSE,
+        fulfillment_status = 'none'::public.shift_fulfillment_status,
+        last_modified_by   = p_actor,
+        updated_at         = NOW()
+      WHERE id = p_shift_id;
+    ELSE
+      UPDATE public.shifts SET
+        lifecycle_status   = 'Draft'::public.shift_lifecycle,
+        bidding_status     = 'not_on_bidding'::public.shift_bidding_status,
+        is_on_bidding      = FALSE,
+        fulfillment_status = 'none'::public.shift_fulfillment_status,
+        last_modified_by   = p_actor,
+        updated_at         = NOW()
+      WHERE id = p_shift_id;
+    END IF;
+    RETURN jsonb_build_object('applied', true);
+
+  ELSIF p_op = 'select_winner' THEN
+    v_winner := COALESCE(NULLIF(p_payload->>'winner_id', ''), NULLIF(p_payload->>'employee_id', ''))::uuid;
+    IF v_winner IS NULL THEN
+      RETURN jsonb_build_object('applied', false, 'note', 'MISSING_WINNER_ID');
+    END IF;
+
+    UPDATE public.shift_bids SET status = 'accepted', updated_at = NOW()
+    WHERE shift_id = p_shift_id AND employee_id = v_winner;
+
+    UPDATE public.shift_bids SET status = 'rejected', updated_at = NOW()
+    WHERE shift_id = p_shift_id AND employee_id <> v_winner
+      AND status = 'pending';
+
+    UPDATE public.shifts SET
+      assigned_employee_id = v_winner,
+      assigned_at          = NOW(),
+      assignment_status    = 'assigned'::public.shift_assignment_status,
+      assignment_outcome   = 'confirmed'::public.shift_assignment_outcome,
+      bidding_status       = 'not_on_bidding'::public.shift_bidding_status,
+      is_on_bidding        = FALSE,
+      fulfillment_status   = 'scheduled'::public.shift_fulfillment_status,
+      confirmed_at         = NOW(),
+      last_modified_by     = p_actor,
+      updated_at           = NOW()
+    WHERE id = p_shift_id;
+    RETURN jsonb_build_object('applied', true);
+
+  ELSIF p_op = 'edit' THEN
+    IF NOT (p_payload ?| ARRAY[
+      'start_time','end_time','shift_date','break_minutes','paid_break_minutes',
+      'unpaid_break_minutes','notes','role_id','sub_department_id',
+      'remuneration_level','group_type','sub_group_name','display_order',
+      'shift_group_id','shift_subgroup_id','timezone','is_training',
+      'assigned_employee_id','assignment_source','required_skills','required_licenses','event_ids'
+    ]) THEN
+      RETURN jsonb_build_object('applied', false, 'note', 'NO_EDITABLE_FIELDS');
+    END IF;
+
+    IF p_payload ? 'assigned_employee_id' THEN
+      v_edit_state := public.get_shift_fsm_state(
+        v_cur.lifecycle_status, v_cur.assignment_status, v_cur.assignment_outcome,
+        v_cur.trading_status, v_cur.is_cancelled, v_cur.bidding_status);
+      v_new_emp := NULLIF(p_payload->>'assigned_employee_id', '')::uuid;
+
+      IF v_new_emp IS NOT NULL
+         AND v_new_emp IS DISTINCT FROM v_cur.assigned_employee_id
+         AND public.fsm_op_is_legal(v_edit_state, 'assign') THEN
+        v_do_assign  := true;
+        v_assign_src := COALESCE(NULLIF(p_payload->>'assignment_source', ''), 'manual');
+      ELSIF v_new_emp IS NULL
+         AND v_cur.assigned_employee_id IS NOT NULL
+         AND public.fsm_op_is_legal(v_edit_state, 'unassign') THEN
+        v_do_unassign := true;
+      END IF;
+    END IF;
+
+    UPDATE public.shifts SET
+      start_time            = COALESCE(NULLIF(p_payload->>'start_time','')::time, start_time),
+      end_time              = COALESCE(NULLIF(p_payload->>'end_time','')::time, end_time),
+      shift_date            = COALESCE(NULLIF(p_payload->>'shift_date','')::date, shift_date),
+      paid_break_minutes    = COALESCE((p_payload->>'paid_break_minutes')::int, paid_break_minutes),
+      unpaid_break_minutes  = COALESCE((p_payload->>'unpaid_break_minutes')::int, unpaid_break_minutes),
+      break_minutes         = COALESCE((p_payload->>'paid_break_minutes')::int, paid_break_minutes)
+                            + COALESCE((p_payload->>'unpaid_break_minutes')::int, unpaid_break_minutes),
+      notes                 = CASE WHEN p_payload ? 'notes' THEN p_payload->>'notes' ELSE notes END,
+      role_id               = COALESCE(NULLIF(p_payload->>'role_id','')::uuid, role_id),
+      sub_department_id     = COALESCE(NULLIF(p_payload->>'sub_department_id','')::uuid, sub_department_id),
+      remuneration_level    = COALESCE(NULLIF(p_payload->>'remuneration_level','')::smallint, remuneration_level),
+      shift_group_id        = COALESCE(NULLIF(p_payload->>'shift_group_id','')::uuid, shift_group_id),
+      roster_subgroup_id    = COALESCE(NULLIF(p_payload->>'shift_subgroup_id','')::uuid, roster_subgroup_id),
+      group_type            = COALESCE(NULLIF(p_payload->>'group_type','')::template_group_type, group_type),
+      sub_group_name        = CASE WHEN p_payload ? 'sub_group_name' THEN p_payload->>'sub_group_name' ELSE sub_group_name END,
+      display_order         = COALESCE((p_payload->>'display_order')::int, display_order),
+      timezone              = COALESCE(NULLIF(p_payload->>'timezone',''), timezone),
+      is_training           = COALESCE((p_payload->>'is_training')::boolean, is_training),
+      required_skills       = CASE WHEN p_payload ? 'required_skills' THEN COALESCE(p_payload->'required_skills', '[]'::jsonb) ELSE required_skills END,
+      required_licenses     = CASE WHEN p_payload ? 'required_licenses' THEN COALESCE(p_payload->'required_licenses', '[]'::jsonb) ELSE required_licenses END,
+      event_ids             = CASE WHEN p_payload ? 'event_ids' THEN COALESCE(p_payload->'event_ids', '[]'::jsonb) ELSE event_ids END,
+      assigned_employee_id  = CASE WHEN v_do_assign   THEN v_new_emp
+                                   WHEN v_do_unassign THEN NULL
+                                   ELSE assigned_employee_id END,
+      assigned_at           = CASE WHEN v_do_assign   THEN NOW()
+                                   WHEN v_do_unassign THEN NULL
+                                   ELSE assigned_at END,
+      assignment_status     = CASE WHEN v_do_assign   THEN 'assigned'::public.shift_assignment_status
+                                   WHEN v_do_unassign THEN 'unassigned'::public.shift_assignment_status
+                                   ELSE assignment_status END,
+      assignment_source     = CASE WHEN v_do_assign   THEN v_assign_src
+                                   WHEN v_do_unassign THEN NULL
+                                   ELSE assignment_source END,
+      assignment_outcome    = CASE WHEN v_do_unassign THEN NULL ELSE assignment_outcome END,
+      confirmed_at          = CASE WHEN v_do_unassign THEN NULL ELSE confirmed_at END,
+      fulfillment_status    = CASE WHEN v_do_unassign THEN 'none'::public.shift_fulfillment_status
+                                   ELSE fulfillment_status END,
+      last_modified_by      = p_actor,
+      last_modified_reason  = COALESCE(p_payload->>'reason', last_modified_reason),
+      updated_at            = NOW()
+    WHERE id = p_shift_id;
+    RETURN jsonb_build_object('applied', true);
+
+  ELSIF p_op = 'delete' THEN
+    UPDATE public.shifts SET
+      deleted_at           = NOW(),
+      deleted_by           = p_actor,
+      last_modified_by     = p_actor,
+      last_modified_reason = COALESCE(p_payload->>'reason', 'Deleted via shift gateway'),
+      updated_at           = NOW()
+    WHERE id = p_shift_id;
+    RETURN jsonb_build_object('applied', true);
+
+  ELSIF p_op = 'reject_trade' THEN
+    SELECT * INTO v_swap
+    FROM public.shift_swaps
+    WHERE (requester_shift_id = p_shift_id OR target_shift_id = p_shift_id)
+      AND status = 'MANAGER_PENDING'
+    ORDER BY created_at DESC
+    LIMIT 1;
+
+    IF NOT FOUND THEN
+      RETURN jsonb_build_object('applied', false, 'note', 'NO_MANAGER_PENDING_SWAP');
+    END IF;
+
+    UPDATE public.shift_swaps SET
+      status            = 'REJECTED'::public.swap_request_status,
+      reason            = COALESCE(NULLIF(p_payload->>'reason',''), 'Rejected by manager'),
+      rejection_reason  = COALESCE(NULLIF(p_payload->>'reason',''), 'Rejected by manager'),
+      status_changed_at = NOW(),
+      updated_at        = NOW()
+    WHERE id = v_swap.id AND status = 'MANAGER_PENDING';
+
+    UPDATE public.shifts SET
+      trading_status     = 'NoTrade'::public.shift_trading,
+      trade_requested_at = NULL,
+      last_modified_by   = p_actor,
+      updated_at         = NOW()
+    WHERE id IN (
+      SELECT CASE WHEN requester_shift_id = p_shift_id THEN target_shift_id ELSE requester_shift_id END
+      FROM public.shift_swaps
+      WHERE (requester_shift_id = p_shift_id OR target_shift_id = p_shift_id)
+    ) AND id <> p_shift_id;
+
+    UPDATE public.shifts SET
+      trading_status = 'NoTrade'::public.shift_trading,
+      trade_requested_at = NULL
+    WHERE id = p_shift_id;
+    RETURN jsonb_build_object('applied', true);
+  ELSE
+    RETURN jsonb_build_object('applied', false, 'note', 'UNSUPPORTED_OP');
+  END IF;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."_apply_shift_op_write"("p_shift_id" "uuid", "p_op" "text", "p_payload" "jsonb", "p_actor" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."_sync_compliance_snapshot"() RETURNS "trigger"
@@ -661,6 +1029,23 @@ $$;
 
 
 ALTER FUNCTION "public"."_sync_payroll_record"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."aa_user_manages_org"("p_user" "uuid", "p_org" "uuid") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_catalog'
+    AS $$
+  SELECT public.is_admin()
+      OR EXISTS (
+        SELECT 1 FROM public.app_access_certificates c
+        WHERE c.user_id = p_user AND c.is_active = true
+          AND c.access_level IN ('gamma','delta','epsilon','zeta')
+          AND (c.organization_id = p_org OR c.organization_id IS NULL)
+      );
+$$;
+
+
+ALTER FUNCTION "public"."aa_user_manages_org"("p_user" "uuid", "p_org" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."accept_swap_offer"("p_offer_id" "uuid") RETURNS "void"
@@ -864,6 +1249,9 @@ BEGIN
         WHEN 'theatre' THEN
             v_group_name := 'Theatre';
             v_sort_order := 2;
+        WHEN 'the_cutaway' THEN
+            v_group_name := 'The Cutaway';
+            v_sort_order := 3;
         ELSE
             RAISE EXCEPTION 'Invalid group external_id: %', p_group_external_id;
     END CASE;
@@ -948,6 +1336,9 @@ BEGIN
         WHEN 'theatre' THEN
             v_group_name := 'Theatre';
             v_sort_order := 2;
+        WHEN 'the_cutaway' THEN
+            v_group_name := 'The Cutaway';
+            v_sort_order := 3;
         ELSE
             RAISE EXCEPTION 'Invalid group external_id: %', p_group_external_id;
     END CASE;
@@ -2048,65 +2439,6 @@ $$;
 ALTER FUNCTION "public"."assert_shift_state"("p_shift_id" "uuid", "p_expected_state" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."assign_employee"("p_profile_id" "uuid", "p_department_name" "text", "p_sub_department_name" "text" DEFAULT NULL::"text", "p_role_name" "text" DEFAULT NULL::"text", "p_is_primary" boolean DEFAULT true) RETURNS "uuid"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'pg_catalog', 'public'
-    AS $$
-DECLARE
-  v_org_id UUID := '00000000-0000-0000-0000-000000000001';
-  v_dept_id UUID;
-  v_sub_dept_id UUID;
-  v_role_id UUID;
-  v_remun_id UUID;
-  v_assignment_id UUID;
-BEGIN
-  -- Get department
-  SELECT id INTO v_dept_id FROM public.departments WHERE name = p_department_name;
-  IF v_dept_id IS NULL THEN
-    RAISE EXCEPTION 'Department not found: %', p_department_name;
-  END IF;
-  
-  -- Get sub-department if specified
-  IF p_sub_department_name IS NOT NULL THEN
-    SELECT id INTO v_sub_dept_id 
-    FROM public.sub_departments 
-    WHERE department_id = v_dept_id AND name = p_sub_department_name;
-  END IF;
-  
-  -- Get role if specified
-  IF p_role_name IS NOT NULL THEN
-    SELECT r.id, r.remuneration_level_id 
-    INTO v_role_id, v_remun_id
-    FROM public.roles r
-    WHERE r.name = p_role_name
-    AND (r.sub_department_id = v_sub_dept_id OR r.sub_department_id IS NULL);
-  END IF;
-  
-  -- If setting as primary, unset other primary assignments
-  IF p_is_primary THEN
-    UPDATE public.employee_assignments
-    SET is_primary = false
-    WHERE profile_id = p_profile_id AND is_primary = true;
-  END IF;
-  
-  -- Create assignment
-  INSERT INTO public.employee_assignments (
-    profile_id, organization_id, department_id, sub_department_id,
-    role_id, remuneration_level_id, is_primary, start_date
-  ) VALUES (
-    p_profile_id, v_org_id, v_dept_id, v_sub_dept_id,
-    v_role_id, v_remun_id, p_is_primary, CURRENT_DATE
-  )
-  RETURNING id INTO v_assignment_id;
-  
-  RETURN v_assignment_id;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."assign_employee"("p_profile_id" "uuid", "p_department_name" "text", "p_sub_department_name" "text", "p_role_name" "text", "p_is_primary" boolean) OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."assign_employee_to_shift"("p_roster_shift_id" "uuid", "p_employee_id" "uuid", "p_user_id" "uuid") RETURNS TABLE("success" boolean, "assignment_id" "uuid", "error_message" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
@@ -2509,104 +2841,6 @@ $$;
 ALTER FUNCTION "public"."bulk_publish_shifts"("p_shift_ids" "uuid"[], "p_actor_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."calculate_employee_metrics"("p_employee_id" "uuid", "p_start_date" "date", "p_end_date" "date") RETURNS TABLE("shifts_offered" integer, "shifts_accepted" integer, "shifts_rejected" integer, "shifts_assigned" integer, "emergency_assignments" integer, "shifts_worked" integer, "shifts_swapped" integer, "standard_cancellations" integer, "late_cancellations" integer, "no_shows" integer, "offer_expirations" integer, "early_clock_outs" integer, "late_clock_ins" integer, "acceptance_rate" numeric, "rejection_rate" numeric, "offer_expiration_rate" numeric, "cancellation_rate_standard" numeric, "cancellation_rate_late" numeric, "swap_ratio" numeric, "late_clock_in_rate" numeric, "early_clock_out_rate" numeric, "no_show_rate" numeric, "reliability_score" numeric)
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'pg_catalog', 'public'
-    AS $$
-DECLARE
-    v_offered       integer := 0;
-    v_accepted      integer := 0;
-    v_rejected      integer := 0;
-    v_expired       integer := 0;
-    v_assigned      integer := 0;
-    v_completed     integer := 0;
-    v_swapped       integer := 0;
-    v_swap_in       integer := 0;
-    v_cancelled     integer := 0;
-    v_cancelled_late integer := 0;
-    v_no_shows      integer := 0;
-    v_late_clock_in integer := 0;
-    v_early_clock_out integer := 0;
-    v_emergency_assignments integer := 0;
-    -- net shifts the employee was actually responsible for attending
-    v_net_assigned  integer := 0;
-BEGIN
-    SELECT
-        COALESCE(COUNT(*) FILTER (WHERE event_type = 'offer_sent'),     0),
-        COALESCE(COUNT(*) FILTER (WHERE event_type = 'offer_accepted'), 0),
-        COALESCE(COUNT(*) FILTER (WHERE event_type = 'offer_rejected'), 0),
-        COALESCE(COUNT(*) FILTER (WHERE event_type = 'offer_expired'),  0),
-        COALESCE(COUNT(*) FILTER (WHERE event_type = 'assigned'),       0),
-        COALESCE(COUNT(*) FILTER (WHERE event_type = 'completed'),      0),
-        COALESCE(COUNT(*) FILTER (WHERE event_type = 'swap_out'),       0),
-        COALESCE(COUNT(*) FILTER (WHERE event_type = 'swap_in'),        0),
-        COALESCE(COUNT(*) FILTER (WHERE event_type = 'cancelled'),      0),
-        COALESCE(COUNT(*) FILTER (WHERE event_type = 'cancelled_late'), 0),
-        COALESCE(COUNT(*) FILTER (WHERE event_type = 'no_show'),        0),
-        COALESCE(COUNT(*) FILTER (WHERE event_type = 'late_checkin'),   0),
-        COALESCE(COUNT(*) FILTER (WHERE event_type = 'early_clockout'), 0)
-    INTO
-        v_offered, v_accepted, v_rejected, v_expired,
-        v_assigned, v_completed, v_swapped, v_swap_in,
-        v_cancelled, v_cancelled_late, v_no_shows,
-        v_late_clock_in, v_early_clock_out
-    FROM public.v_employee_metric_events
-    WHERE employee_id = p_employee_id
-      AND event_time::date BETWEEN p_start_date AND p_end_date;
-
-    v_emergency_assignments := GREATEST(0, v_assigned - v_accepted - v_swap_in);
-
-    -- Net assigned = shifts employee was actually responsible for showing up to
-    -- (assigned shifts minus those legitimately swapped out to someone else)
-    v_net_assigned := GREATEST(0, v_assigned - v_swapped);
-
-    RETURN QUERY SELECT
-        -- Raw counts
-        v_offered,
-        v_accepted,
-        v_rejected,
-        v_assigned,
-        v_emergency_assignments,
-        v_completed,
-        v_swapped,
-        v_cancelled,
-        v_cancelled_late,
-        v_no_shows,
-        v_expired,
-        v_early_clock_out,
-        v_late_clock_in,
-
-        -- Offer Behaviour rates (denominator = offers sent)
-        CASE WHEN v_offered > 0 THEN ROUND((v_accepted::numeric  / v_offered) * 100, 2) ELSE 0.00 END,
-        CASE WHEN v_offered > 0 THEN ROUND((v_rejected::numeric  / v_offered) * 100, 2) ELSE 0.00 END,
-        CASE WHEN v_offered > 0 THEN ROUND((v_expired::numeric   / v_offered) * 100, 2) ELSE 0.00 END,
-
-        -- Reliability rates (denominator = assigned)
-        CASE WHEN v_assigned > 0 THEN ROUND((v_cancelled::numeric      / v_assigned) * 100, 2) ELSE 0.00 END,
-        CASE WHEN v_assigned > 0 THEN ROUND((v_cancelled_late::numeric / v_assigned) * 100, 2) ELSE 0.00 END,
-        CASE WHEN v_assigned > 0 THEN ROUND((v_swapped::numeric        / v_assigned) * 100, 2) ELSE 0.00 END,
-
-        -- Attendance rates (denominator = net_assigned, excludes swapped-out shifts)
-        CASE WHEN v_net_assigned > 0 THEN ROUND((v_late_clock_in::numeric   / v_net_assigned) * 100, 2) ELSE 0.00 END,
-        CASE WHEN v_net_assigned > 0 THEN ROUND((v_early_clock_out::numeric / v_net_assigned) * 100, 2) ELSE 0.00 END,
-        CASE WHEN v_net_assigned > 0 THEN ROUND((v_no_shows::numeric        / v_net_assigned) * 100, 2) ELSE 0.00 END,
-
-        -- Reliability Score: % of net-assigned shifts that were not missed/cancelled
-        -- Uses v_net_assigned (not v_assigned) so swapped-out shifts don't inflate the score
-        CASE
-            WHEN v_net_assigned > 0
-                THEN GREATEST(0.00, ROUND(
-                    (1.0 - ((v_cancelled + v_cancelled_late + v_no_shows)::numeric / v_net_assigned)) * 100,
-                2))
-            ELSE 100.00
-        END;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."calculate_employee_metrics"("p_employee_id" "uuid", "p_start_date" "date", "p_end_date" "date") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."calculate_net_hours"("p_start_time" time without time zone, "p_end_time" time without time zone, "p_unpaid_break_minutes" integer) RETURNS numeric
     LANGUAGE "plpgsql" IMMUTABLE
     SET "search_path" TO 'pg_catalog', 'public'
@@ -2769,61 +3003,6 @@ $$;
 ALTER FUNCTION "public"."can_edit_roster_shift"("p_roster_shift_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."cancel_shift"("p_shift_id" "uuid", "p_reason" "text") RETURNS "jsonb"
-    LANGUAGE "plpgsql"
-    SET "search_path" TO 'pg_catalog', 'public'
-    AS $$
-DECLARE
-    v_shift RECORD;
-    v_diff_hours NUMERIC;
-    v_cancelled_at TIMESTAMPTZ;
-    v_cancel_type TEXT;
-    v_prev_status TEXT;
-    v_new_status TEXT;
-    v_closes_at TIMESTAMPTZ;
-    v_window_id UUID;
-    v_shift_start TIMESTAMPTZ;
-BEGIN
-    SELECT * INTO v_shift FROM public.shifts WHERE id = p_shift_id;
-    IF NOT FOUND THEN RAISE EXCEPTION 'Shift not found'; END IF;
-    v_shift_start := (v_shift.shift_date || ' ' || v_shift.start_time)::TIMESTAMPTZ;
-    IF v_shift_start < NOW() THEN RAISE EXCEPTION 'Cannot cancel a shift that has already started'; END IF;
-    v_cancelled_at := NOW();
-    v_diff_hours := EXTRACT(EPOCH FROM (v_shift_start - v_cancelled_at)) / 3600;
-    v_prev_status := v_shift.status;
-    
-    UPDATE public.shifts SET 
-        is_cancelled = FALSE, assigned_employee_id = NULL, updated_at = NOW(),
-        assignment_status_text = 'unassigned', assignment_method_text = NULL,
-        assigned_at = NULL, cancellation_reason_text = p_reason, cancelled_at = v_cancelled_at, cancelled_by = auth.uid()
-    WHERE id = p_shift_id;
-
-    IF v_diff_hours > 24 THEN
-        v_cancel_type := 'EARLY'; v_new_status := 'draft';
-        UPDATE public.shifts SET status = 'draft', lifecycle_status = 'Draft', cancellation_type_text = 'standard' WHERE id = p_shift_id;
-        PERFORM log_shift_event(p_shift_id, 'SHIFT_CANCELLED_EARLY', v_prev_status, 'draft', jsonb_build_object('reason', p_reason, 'diff_hours', v_diff_hours));
-    ELSIF v_diff_hours > 4 THEN
-        v_cancel_type := 'LATE_AUTO_BID'; v_new_status := 'open';
-        v_closes_at := v_shift_start - INTERVAL '4 hours';
-        INSERT INTO public.shift_bid_windows (shift_id, opens_at, closes_at, status) VALUES (p_shift_id, NOW(), v_closes_at, 'open') RETURNING id INTO v_window_id;
-        UPDATE public.shifts SET bidding_enabled = TRUE, status = 'open', cancellation_type_text = 'late', bidding_priority_text = 'urgent' WHERE id = p_shift_id;
-        PERFORM log_shift_event(p_shift_id, 'SHIFT_CANCELLED_LATE', v_prev_status, 'open', jsonb_build_object('reason', p_reason, 'diff_hours', v_diff_hours, 'urgency', 'URGENT'));
-        PERFORM log_shift_event(p_shift_id, 'SHIFT_PUSHED_TO_BIDDING_URGENT', v_prev_status, 'open', NULL);
-    ELSE
-        v_cancel_type := 'MANAGER_REVIEW'; v_new_status := 'pending';
-        UPDATE public.shifts SET status = 'pending', cancellation_type_text = 'critical' WHERE id = p_shift_id;
-        PERFORM log_shift_event(p_shift_id, 'SHIFT_CANCELLED_CRITICAL', v_prev_status, 'pending', jsonb_build_object('reason', p_reason, 'diff_hours', v_diff_hours));
-        PERFORM log_shift_event(p_shift_id, 'SHIFT_REQUIRES_MANAGER_REVIEW', v_prev_status, 'pending', NULL);
-    END IF;
-    
-    RETURN jsonb_build_object('success', true, 'cancellation_type', v_cancel_type, 'new_status', v_new_status, 'window_id', v_window_id, 'final_shift_state', (SELECT to_jsonb(s) FROM public.shifts s WHERE id = p_shift_id));
-END;
-$$;
-
-
-ALTER FUNCTION "public"."cancel_shift"("p_shift_id" "uuid", "p_reason" "text") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."cancel_shift"("p_shift_id" "uuid", "p_cancelled_by" "uuid" DEFAULT "auth"."uid"(), "p_reason" "text" DEFAULT 'Shift cancelled'::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
@@ -2951,10 +3130,8 @@ BEGIN
       AND (aac.organization_id = d.organization_id OR aac.organization_id IS NULL)
       AND (
         aac.sub_department_id = p_sub_department_id
-        OR (aac.sub_department_id IS NULL
-            AND aac.department_id = sd.department_id)
-        OR (aac.sub_department_id IS NULL
-            AND aac.department_id IS NULL)
+        OR (aac.sub_department_id IS NULL AND aac.department_id = sd.department_id)
+        OR (aac.sub_department_id IS NULL AND aac.department_id IS NULL)
       )
   ) THEN
     DECLARE
@@ -2965,26 +3142,17 @@ BEGIN
       SELECT organization_id, id INTO v_diag_org_id, v_diag_dept_id
       FROM departments
       WHERE id = (SELECT department_id FROM sub_departments WHERE id = p_sub_department_id);
-
       SELECT COUNT(*) INTO v_cert_count FROM app_access_certificates WHERE user_id = v_user_id AND is_active = true;
-
       RAISE EXCEPTION 'UNAUTHORIZED: User % lacks required cert. sd: %, d_org: %, certs_found: %',
         v_user_id, p_sub_department_id, v_diag_org_id, v_cert_count;
     END;
   END IF;
 
-  IF p_end_date < p_start_date THEN
-    RAISE EXCEPTION 'INVALID_DATE_RANGE';
-  END IF;
-
-  IF (p_end_date - p_start_date) > 35 THEN
-    RAISE EXCEPTION 'DATE_RANGE_TOO_LARGE';
-  END IF;
+  IF p_end_date < p_start_date THEN RAISE EXCEPTION 'INVALID_DATE_RANGE'; END IF;
+  IF (p_end_date - p_start_date) > 35 THEN RAISE EXCEPTION 'DATE_RANGE_TOO_LARGE'; END IF;
 
   v_name_len := char_length(trim(p_template_name));
-  IF v_name_len < 3 OR v_name_len > 100 THEN
-    RAISE EXCEPTION 'INVALID_NAME';
-  END IF;
+  IF v_name_len < 3 OR v_name_len > 100 THEN RAISE EXCEPTION 'INVALID_NAME'; END IF;
 
   SELECT COUNT(*) INTO v_dupe_count
   FROM roster_templates
@@ -2992,10 +3160,7 @@ BEGIN
     AND name = trim(p_template_name)
     AND status != 'archived'
     AND (is_active IS NULL OR is_active = true);
-
-  IF v_dupe_count > 0 THEN
-    RAISE EXCEPTION 'DUPLICATE_TEMPLATE_NAME';
-  END IF;
+  IF v_dupe_count > 0 THEN RAISE EXCEPTION 'DUPLICATE_TEMPLATE_NAME'; END IF;
 
   DROP TABLE IF EXISTS _capture_shifts;
   CREATE TEMP TABLE _capture_shifts ON COMMIT DROP AS
@@ -3011,7 +3176,7 @@ BEGIN
     s.required_skills, s.required_licenses, s.tags, s.event_tags, s.notes,
     s.group_type::text AS group_type
   FROM shifts s
-  LEFT JOIN roles r ON r.id = s.role_id
+  LEFT JOIN hr.roles r ON r.id = s.role_id
   WHERE s.sub_department_id = p_sub_department_id
     AND s.shift_date BETWEEN p_start_date AND p_end_date
     AND s.deleted_at IS NULL
@@ -3019,16 +3184,9 @@ BEGIN
   ORDER BY s.shift_date, s.start_time;
 
   SELECT COUNT(*) INTO v_shift_count FROM _capture_shifts;
+  IF v_shift_count = 0 THEN RAISE EXCEPTION 'NO_SHIFTS_IN_RANGE'; END IF;
 
-  IF v_shift_count = 0 THEN
-    RAISE EXCEPTION 'NO_SHIFTS_IN_RANGE';
-  END IF;
-
-  SELECT organization_id, department_id
-  INTO v_org_id, v_dept_id
-  FROM _capture_shifts
-  LIMIT 1;
-
+  SELECT organization_id, department_id INTO v_org_id, v_dept_id FROM _capture_shifts LIMIT 1;
   IF v_org_id IS NULL OR v_dept_id IS NULL THEN
     RAISE EXCEPTION 'ORG_DEPT_MISSING_IN_SHIFTS: Shift % has org: %, dept: %',
       (SELECT id FROM _capture_shifts LIMIT 1), v_org_id, v_dept_id;
@@ -3045,91 +3203,60 @@ BEGIN
   )
   RETURNING id INTO v_template_id;
 
-  SELECT ARRAY_AGG(DISTINCT COALESCE(group_type, 'default')
-                   ORDER BY COALESCE(group_type, 'default'))
-  INTO v_group_types
-  FROM _capture_shifts;
+  SELECT ARRAY_AGG(DISTINCT COALESCE(group_type, 'default') ORDER BY COALESCE(group_type, 'default'))
+  INTO v_group_types FROM _capture_shifts;
 
   v_group_idx := 0;
   FOREACH v_group_type IN ARRAY v_group_types LOOP
     v_group_color := '#64748b';
-
     INSERT INTO template_groups (template_id, name, color, sort_order)
     VALUES (v_template_id, v_group_type, v_group_color, v_group_idx)
     RETURNING id INTO v_group_id;
-
     v_group_idx := v_group_idx + 1;
 
     SELECT ARRAY_AGG(DISTINCT COALESCE(roster_subgroup_id::text, 'default_' || v_group_type)
                      ORDER BY COALESCE(roster_subgroup_id::text, 'default_' || v_group_type))
-    INTO v_subgroup_keys
-    FROM _capture_shifts
-    WHERE COALESCE(group_type, 'default') = v_group_type;
+    INTO v_subgroup_keys FROM _capture_shifts WHERE COALESCE(group_type, 'default') = v_group_type;
 
     v_subgroup_idx := 0;
     FOREACH v_subgroup_key IN ARRAY v_subgroup_keys LOOP
-      v_rsg_id := NULL;
-      v_subgroup_name := 'Default';
-
+      v_rsg_id := NULL; v_subgroup_name := 'Default';
       IF v_subgroup_key NOT LIKE 'default_%' THEN
-        BEGIN
-          v_rsg_id := v_subgroup_key::uuid;
-        EXCEPTION WHEN others THEN
-          v_rsg_id := NULL;
-        END;
+        BEGIN v_rsg_id := v_subgroup_key::uuid; EXCEPTION WHEN others THEN v_rsg_id := NULL; END;
       END IF;
-
       IF v_rsg_id IS NOT NULL THEN
-        SELECT name INTO v_subgroup_name
-        FROM roster_subgroups WHERE id = v_rsg_id LIMIT 1;
+        SELECT name INTO v_subgroup_name FROM roster_subgroups WHERE id = v_rsg_id LIMIT 1;
         IF NOT FOUND THEN v_subgroup_name := 'Default'; END IF;
       END IF;
 
       INSERT INTO template_subgroups (group_id, name, sort_order)
       VALUES (v_group_id, v_subgroup_name, v_subgroup_idx)
       RETURNING id INTO v_subgroup_id;
-
       v_subgroup_idx := v_subgroup_idx + 1;
 
       INSERT INTO template_shifts (
-        subgroup_id, name, role_id, role_name,
-        start_time, end_time,
-        paid_break_minutes, unpaid_break_minutes,
-        net_length_hours,
+        subgroup_id, name, role_id, role_name, start_time, end_time,
+        paid_break_minutes, unpaid_break_minutes, net_length_hours,
         required_skills, required_licenses, site_tags, event_tags,
-        notes, day_of_week,
-        assigned_employee_id, assigned_employee_name, sort_order
+        notes, day_of_week, assigned_employee_id, assigned_employee_name, sort_order
       )
       SELECT
-        v_subgroup_id,
-        NULL,
-        cs.role_id,
-        cs.role_name,
-        cs.start_time,
-        cs.end_time,
-        COALESCE(cs.paid_break_minutes, 0),
-        COALESCE(cs.unpaid_break_minutes, 0),
+        v_subgroup_id, NULL, cs.role_id, cs.role_name, cs.start_time, cs.end_time,
+        COALESCE(cs.paid_break_minutes, 0), COALESCE(cs.unpaid_break_minutes, 0),
         ROUND(COALESCE(cs.net_length_minutes, 0)::numeric / 60.0, 2),
         (SELECT ARRAY(SELECT jsonb_array_elements_text(COALESCE(cs.required_skills, '[]'::jsonb)))),
         (SELECT ARRAY(SELECT jsonb_array_elements_text(COALESCE(cs.required_licenses, '[]'::jsonb)))),
         (SELECT ARRAY(SELECT jsonb_array_elements_text(COALESCE(cs.tags, '[]'::jsonb)))),
         (SELECT ARRAY(SELECT jsonb_array_elements_text(COALESCE(cs.event_tags, '[]'::jsonb)))),
-        cs.notes,
-        EXTRACT(DOW FROM cs.shift_date)::int,
-        NULL,
-        NULL,
+        cs.notes, EXTRACT(DOW FROM cs.shift_date)::int, NULL, NULL,
         ROW_NUMBER() OVER (ORDER BY cs.shift_date, cs.start_time) - 1
       FROM _capture_shifts cs
       WHERE COALESCE(cs.group_type, 'default') = v_group_type
         AND COALESCE(cs.roster_subgroup_id::text, 'default_' || v_group_type) = v_subgroup_key;
-
     END LOOP;
   END LOOP;
 
-  RETURN jsonb_build_object(
-    'template_id', v_template_id,
-    'shifts_captured', v_shift_count
-  );
+  RETURN jsonb_build_object('template_id', v_template_id, 'shifts_captured', v_shift_count);
 END;
 $$;
 
@@ -3401,14 +3528,12 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'Already clocked in for this shift');
   END IF;
 
-  -- Effective start: use start_at if set, else derive from shift_date + start_time (Sydney TZ)
   IF v_shift.start_at IS NOT NULL THEN
     v_effective_start := v_shift.start_at;
   ELSE
     v_effective_start := (v_shift.shift_date::text || ' ' || v_shift.start_time::text || ' Australia/Sydney')::TIMESTAMPTZ;
   END IF;
 
-  -- Clock-in window: [start - 1 h,  start + 12.5 h (750 min)]
   IF v_now < v_effective_start - INTERVAL '1 hour' THEN
     RETURN jsonb_build_object('success', false, 'error', 'Clock-in window not open yet');
   END IF;
@@ -3420,12 +3545,10 @@ BEGIN
     );
   END IF;
 
-  -- Geolocation required
   IF p_lat IS NULL OR p_lon IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'GPS location is required to clock in');
   END IF;
 
-  -- Multi-geofence check against allowed_locations
   v_min_distance_m := NULL;
   v_inside := false;
   FOR v_loc IN
@@ -3458,7 +3581,6 @@ BEGIN
     );
   END IF;
 
-  -- Fallback: no allowed_locations → check org.venue_lat/venue_lon
   IF NOT v_any_location THEN
     SELECT * INTO v_org FROM organizations WHERE id = v_shift.organization_id;
     IF v_org.venue_lat IS NOT NULL AND v_org.venue_lon IS NOT NULL THEN
@@ -3476,10 +3598,8 @@ BEGIN
         );
       END IF;
     END IF;
-    -- No geofence configured → allow clock-in
   END IF;
 
-  -- Status: at/before start → checked_in, after start → late
   IF v_now <= v_effective_start THEN
     v_new_status := 'checked_in';
   ELSE
@@ -3489,6 +3609,7 @@ BEGIN
   UPDATE shifts SET
     attendance_status = v_new_status,
     actual_start      = v_now,
+    lifecycle_status  = 'InProgress',
     updated_at        = v_now
   WHERE id = p_shift_id;
 
@@ -4585,91 +4706,6 @@ $$;
 ALTER FUNCTION "public"."clone_roster_subgroup_v2"("p_org_id" "uuid", "p_dept_id" "uuid", "p_group_external_id" "text", "p_source_name" "text", "p_new_name" "text", "p_start_date" "date", "p_end_date" "date") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."close_bidding_no_winner"("p_shift_id" "uuid") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'pg_catalog', 'public'
-    AS $$
-DECLARE
-    v_shift RECORD;
-BEGIN
-    -- 1. Lock Shift
-    SELECT * INTO v_shift FROM shifts WHERE id = p_shift_id FOR UPDATE;
-    
-    IF v_shift IS NULL THEN RAISE EXCEPTION 'Shift not found'; END IF;
-
-    -- 2. Update to S8 (Published, Unassigned, BiddingClosedNoWinner)
-    UPDATE shifts
-    SET 
-        bidding_status = 'bidding_closed_no_winner',
-        is_on_bidding = FALSE,
-        bidding_enabled = FALSE,
-        updated_at = NOW()
-    WHERE id = p_shift_id;
-
-    -- 3. Reject All Pending Bids
-    UPDATE shift_bids 
-    SET status = 'rejected', reviewed_at = NOW(), reviewed_by = auth.uid()
-    WHERE shift_id = p_shift_id AND status = 'pending';
-
-    RETURN jsonb_build_object(
-        'success', true,
-        'shift_id', p_shift_id,
-        'status', 'bidding_closed_no_winner'
-    );
-END;
-$$;
-
-
-ALTER FUNCTION "public"."close_bidding_no_winner"("p_shift_id" "uuid") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."close_bidding_no_winner"("p_shift_id" "uuid", "p_closed_by" "uuid" DEFAULT "auth"."uid"(), "p_reason" "text" DEFAULT 'No suitable candidates'::"text") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'pg_catalog', 'public'
-    AS $$
-DECLARE
-    v_shift RECORD;
-BEGIN
-    -- Get current shift state
-    SELECT * INTO v_shift
-    FROM shifts
-    WHERE id = p_shift_id
-    AND deleted_at IS NULL;
-    
-    IF NOT FOUND THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Shift not found');
-    END IF;
-    
-    -- Validate: Must be in S5 or S6 (OnBidding)
-    IF v_shift.bidding_status NOT IN ('on_bidding_normal', 'on_bidding_urgent') THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Shift is not on bidding');
-    END IF;
-    
-    -- Transition S5/S6 → S8: Close bidding with no winner
-    UPDATE shifts
-    SET 
-        is_on_bidding = FALSE,
-        bidding_status = 'bidding_closed_no_winner'::shift_bidding_status,
-        updated_at = NOW(),
-        last_modified_by = p_closed_by,
-        last_modified_reason = p_reason
-    WHERE id = p_shift_id;
-    
-    -- Trigger will sync to roster_shifts automatically
-    
-    RETURN jsonb_build_object(
-        'success', true,
-        'shift_id', p_shift_id,
-        'transition', 'S5/S6 → S8',
-        'new_state', 'bidding_closed_no_winner'
-    );
-END;
-$$;
-
-
-ALTER FUNCTION "public"."close_bidding_no_winner"("p_shift_id" "uuid", "p_closed_by" "uuid", "p_reason" "text") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."compute_employee_quarter_metrics"("p_employee_id" "uuid", "p_quarter_year" "text") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
@@ -4681,6 +4717,10 @@ DECLARE
     v_assigned    int := 0; v_emergency int := 0; v_worked   int := 0; v_swapped  int := 0;
     v_std_cancel  int := 0; v_late_cancel int := 0; v_no_show int := 0;
     v_late_in     int := 0; v_early_out int := 0;
+    v_early_in    int := 0; v_late_out  int := 0;
+    v_on_time_in  int := 0; v_on_time_out int := 0;
+    v_auto_clock_out int := 0;
+    v_held        int := 0;
 BEGIN
     IF p_quarter_year = 'ALL_TIME' THEN
         v_start := '2000-01-01'; v_end := '2099-12-31';
@@ -4690,28 +4730,41 @@ BEGIN
         SELECT qdr.v_start, qdr.v_end INTO v_start, v_end FROM quarter_date_range(v_year, v_quarter) qdr;
     END IF;
 
-    SELECT COUNT(*), COUNT(*) FILTER (WHERE status = 'accepted'), COUNT(*) FILTER (WHERE status = 'rejected'), COUNT(*) FILTER (WHERE status IN ('pending','withdrawn'))
+    SELECT
+        COUNT(*),
+        COUNT(*) FILTER (WHERE ep.had_accept),
+        COUNT(*) FILTER (WHERE ep.terminal_outcome = 'rejected'),
+        COUNT(*) FILTER (WHERE ep.terminal_outcome = 'ignored')
     INTO v_offered, v_accepted, v_rejected, v_expired
-    FROM shift_bids sb JOIN shifts s ON s.id = sb.shift_id
-    WHERE sb.employee_id = p_employee_id AND s.shift_date BETWEEN v_start AND v_end;
+    FROM v_shift_assignment_episodes ep
+    WHERE ep.employee_id = p_employee_id
+      AND ep.shift_date BETWEEN v_start AND v_end
+      AND ep.terminal_outcome != 'shift_deleted'
+      AND ep.had_offer;
 
-    SELECT COUNT(*) FILTER (WHERE assignment_source = 'offer'),
-           COUNT(*) FILTER (WHERE assignment_source = 'direct'),
-           COUNT(*) FILTER (WHERE lifecycle_status = 'Completed'),
-           COUNT(*) FILTER (WHERE is_cancelled AND cancelled_at IS NOT NULL AND scheduled_start IS NOT NULL AND (scheduled_start - cancelled_at) > interval '24 hours'),
-           COUNT(*) FILTER (WHERE is_cancelled AND cancelled_at IS NOT NULL AND scheduled_start IS NOT NULL AND (scheduled_start - cancelled_at) <= interval '24 hours'),
-           COUNT(*) FILTER (WHERE attendance_status = 'no_show' OR assignment_outcome = 'no_show')
-    INTO v_assigned, v_emergency, v_worked, v_std_cancel, v_late_cancel, v_no_show
-    FROM shifts WHERE assigned_employee_id = p_employee_id AND shift_date BETWEEN v_start AND v_end AND lifecycle_status != 'Draft';
-
-    SELECT COUNT(*) INTO v_swapped FROM shift_swaps ss JOIN shifts s ON s.id = ss.requester_shift_id
-    WHERE ss.requester_id = p_employee_id AND s.shift_date BETWEEN v_start AND v_end AND ss.status IN ('OPEN','OFFER_SELECTED','MANAGER_PENDING','APPROVED');
-
-    SELECT COUNT(*) FILTER (WHERE t.clock_in  > s.scheduled_start + interval '5 minutes'),
-           COUNT(*) FILTER (WHERE t.clock_out < s.scheduled_end   - interval '5 minutes')
-    INTO v_late_in, v_early_out
-    FROM timesheets t JOIN shifts s ON s.id = t.shift_id
-    WHERE t.employee_id = p_employee_id AND s.shift_date BETWEEN v_start AND v_end AND t.clock_in IS NOT NULL AND t.clock_out IS NOT NULL;
+    SELECT
+        COUNT(*) FILTER (WHERE snap.source != 'emergency'),
+        COUNT(*) FILTER (WHERE snap.source = 'emergency'),
+        COUNT(*) FILTER (WHERE snap.end_reason = 'worked'),
+        COUNT(*) FILTER (WHERE snap.end_reason = 'traded_out'),
+        COUNT(*) FILTER (WHERE snap.end_reason = 'dropped_std'),
+        COUNT(*) FILTER (WHERE snap.end_reason = 'dropped_late'),
+        COUNT(*) FILTER (WHERE snap.end_reason = 'no_show'),
+        COUNT(*) FILTER (WHERE snap.late_in AND snap.end_reason = 'worked'),
+        COUNT(*) FILTER (WHERE snap.early_out AND snap.end_reason = 'worked'),
+        COUNT(*) FILTER (WHERE snap.early_in AND snap.end_reason = 'worked'),
+        COUNT(*) FILTER (WHERE snap.late_out AND snap.end_reason = 'worked'),
+        COUNT(*) FILTER (WHERE snap.on_time_in AND snap.end_reason = 'worked'),
+        COUNT(*) FILTER (WHERE snap.on_time_out AND snap.end_reason = 'worked'),
+        COUNT(*) FILTER (WHERE snap.auto_clock_out AND snap.end_reason = 'worked'),
+        COUNT(*)
+    INTO v_assigned, v_emergency, v_worked, v_swapped,
+         v_std_cancel, v_late_cancel, v_no_show,
+         v_late_in, v_early_out, v_early_in, v_late_out,
+         v_on_time_in, v_on_time_out, v_auto_clock_out, v_held
+    FROM assignment_snapshots snap
+    WHERE snap.employee_id = p_employee_id
+      AND snap.shift_date BETWEEN v_start AND v_end;
 
     INSERT INTO employee_performance_metrics (
         employee_id, period_start, period_end, quarter_year,
@@ -4720,7 +4773,10 @@ BEGIN
         standard_cancellations, late_cancellations, no_shows, late_clock_ins, early_clock_outs,
         acceptance_rate, rejection_rate, offer_expiration_rate,
         cancellation_rate_standard, cancellation_rate_late, swap_ratio, reliability_score,
-        late_clock_in_rate, early_clock_out_rate, no_show_rate, calculated_at
+        late_clock_in_rate, early_clock_out_rate, no_show_rate, calculated_at,
+        early_clock_ins, late_clock_outs, early_clock_in_rate, late_clock_out_rate,
+        on_time_in, on_time_out, on_time_in_rate, on_time_out_rate,
+        auto_clock_outs, auto_clock_out_rate
     ) VALUES (
         p_employee_id, v_start, v_end, p_quarter_year,
         v_offered, v_accepted, v_rejected, v_expired,
@@ -4729,20 +4785,30 @@ BEGIN
         CASE WHEN v_offered=0 THEN 0 ELSE ROUND(v_accepted::numeric/v_offered*100,2) END,
         CASE WHEN v_offered=0 THEN 0 ELSE ROUND(v_rejected::numeric/v_offered*100,2) END,
         CASE WHEN v_offered=0 THEN 0 ELSE ROUND(v_expired::numeric /v_offered*100,2) END,
-        CASE WHEN (v_assigned + v_emergency)=0 THEN 0 ELSE ROUND(v_std_cancel::numeric /(v_assigned + v_emergency)*100,2) END,
-        CASE WHEN (v_assigned + v_emergency)=0 THEN 0 ELSE ROUND(v_late_cancel::numeric/(v_assigned + v_emergency)*100,2) END,
-        CASE WHEN (v_assigned + v_emergency)=0 THEN 0 ELSE ROUND(v_swapped::numeric   /(v_assigned + v_emergency)*100,2) END,
+        CASE WHEN v_held=0 THEN 0 ELSE ROUND(v_std_cancel::numeric /v_held*100,2) END,
+        CASE WHEN v_held=0 THEN 0 ELSE ROUND(v_late_cancel::numeric/v_held*100,2) END,
+        CASE WHEN v_held=0 THEN 0 ELSE ROUND(v_swapped::numeric   /v_held*100,2) END,
         GREATEST(0,LEAST(100,ROUND(100
-            - CASE WHEN (v_assigned + v_emergency)=0 THEN 0 ELSE (v_std_cancel+v_late_cancel)::numeric/(v_assigned + v_emergency)*30 END
-            - CASE WHEN (v_assigned + v_emergency)=0 THEN 0 ELSE v_late_cancel::numeric/(v_assigned + v_emergency)*20 END
-            - CASE WHEN (v_assigned + v_emergency)=0 THEN 0 ELSE v_no_show::numeric   /(v_assigned + v_emergency)*40 END
-            - CASE WHEN v_worked=0   THEN 0 ELSE v_late_in::numeric   /v_worked  *5  END
-            - CASE WHEN v_worked=0   THEN 0 ELSE v_early_out::numeric /v_worked  *5  END
+            - CASE WHEN v_held=0   THEN 0 ELSE (v_std_cancel+v_late_cancel)::numeric/v_held*30 END
+            - CASE WHEN v_held=0   THEN 0 ELSE v_late_cancel::numeric/v_held*20 END
+            - CASE WHEN v_held=0   THEN 0 ELSE v_no_show::numeric   /v_held*40 END
+            - CASE WHEN v_worked=0 THEN 0 ELSE v_late_in::numeric   /v_worked  *5  END
+            - CASE WHEN v_worked=0 THEN 0 ELSE v_early_out::numeric /v_worked  *5  END
         ,2))),
-        CASE WHEN v_worked=0   THEN 0 ELSE ROUND(v_late_in::numeric   /v_worked  *100,2) END,
-        CASE WHEN v_worked=0   THEN 0 ELSE ROUND(v_early_out::numeric /v_worked  *100,2) END,
-        CASE WHEN (v_assigned + v_emergency)=0 THEN 0 ELSE ROUND(v_no_show::numeric   /(v_assigned + v_emergency)*100,2) END,
-        now()
+        CASE WHEN v_worked=0 THEN 0 ELSE ROUND(v_late_in::numeric   /v_worked  *100,2) END,
+        CASE WHEN v_worked=0 THEN 0 ELSE ROUND(v_early_out::numeric /v_worked  *100,2) END,
+        CASE WHEN v_held=0   THEN 0 ELSE ROUND(v_no_show::numeric   /v_held*100,2) END,
+        now(),
+        v_early_in,
+        v_late_out,
+        CASE WHEN v_worked=0 THEN 0 ELSE ROUND(v_early_in::numeric /v_worked  *100,2) END,
+        CASE WHEN v_worked=0 THEN 0 ELSE ROUND(v_late_out::numeric /v_worked  *100,2) END,
+        v_on_time_in,
+        v_on_time_out,
+        CASE WHEN v_worked=0 THEN 0 ELSE ROUND(v_on_time_in::numeric /v_worked  *100,2) END,
+        CASE WHEN v_worked=0 THEN 0 ELSE ROUND(v_on_time_out::numeric /v_worked  *100,2) END,
+        v_auto_clock_out,
+        CASE WHEN v_worked=0 THEN 0 ELSE ROUND(v_auto_clock_out::numeric /v_worked  *100,2) END
     ) ON CONFLICT (employee_id, quarter_year) DO UPDATE SET
         period_start=EXCLUDED.period_start, period_end=EXCLUDED.period_end,
         shifts_offered=EXCLUDED.shifts_offered, shifts_accepted=EXCLUDED.shifts_accepted,
@@ -4755,7 +4821,12 @@ BEGIN
         offer_expiration_rate=EXCLUDED.offer_expiration_rate, cancellation_rate_standard=EXCLUDED.cancellation_rate_standard,
         cancellation_rate_late=EXCLUDED.cancellation_rate_late, swap_ratio=EXCLUDED.swap_ratio, reliability_score=EXCLUDED.reliability_score,
         late_clock_in_rate=EXCLUDED.late_clock_in_rate, early_clock_out_rate=EXCLUDED.early_clock_out_rate,
-        no_show_rate=EXCLUDED.no_show_rate, calculated_at=now()
+        no_show_rate=EXCLUDED.no_show_rate, calculated_at=now(),
+        early_clock_ins=EXCLUDED.early_clock_ins, late_clock_outs=EXCLUDED.late_clock_outs,
+        early_clock_in_rate=EXCLUDED.early_clock_in_rate, late_clock_out_rate=EXCLUDED.late_clock_out_rate,
+        on_time_in=EXCLUDED.on_time_in, on_time_out=EXCLUDED.on_time_out,
+        on_time_in_rate=EXCLUDED.on_time_in_rate, on_time_out_rate=EXCLUDED.on_time_out_rate,
+        auto_clock_outs=EXCLUDED.auto_clock_outs, auto_clock_out_rate=EXCLUDED.auto_clock_out_rate
     WHERE NOT employee_performance_metrics.is_locked;
 END;
 $$;
@@ -5218,7 +5289,7 @@ BEGIN
     IF p_employee_id IS NULL THEN SELECT id INTO v_emp_id FROM profiles LIMIT 1; ELSE v_emp_id := p_employee_id; END IF;
     v_scheduled_start := (CURRENT_DATE + p_days_ahead + TIME '09:00')::TIMESTAMPTZ;
     v_scheduled_end := (CURRENT_DATE + p_days_ahead + TIME '17:00')::TIMESTAMPTZ;
-    
+
     CASE p_state
         WHEN 'S1' THEN
             INSERT INTO shifts (id, roster_id, organization_id, department_id, shift_date, roster_date, start_time, end_time, scheduled_start, scheduled_end, lifecycle_status, assignment_status, bidding_status, trading_status, created_at, updated_at)
@@ -5234,16 +5305,10 @@ BEGIN
             VALUES (v_shift_id, v_roster_id, v_org_id, v_dept_id, CURRENT_DATE + p_days_ahead, CURRENT_DATE + p_days_ahead, '09:00', '17:00', v_scheduled_start, v_scheduled_end, 'Published', 'assigned', 'confirmed', 'not_on_bidding', 'NoTrade', v_emp_id, NOW(), NOW(), NOW(), NOW(), NOW());
         WHEN 'S5' THEN
             INSERT INTO shifts (id, roster_id, organization_id, department_id, shift_date, roster_date, start_time, end_time, scheduled_start, scheduled_end, lifecycle_status, assignment_status, bidding_status, trading_status, is_on_bidding, bidding_open_at, published_at, created_at, updated_at)
-            VALUES (v_shift_id, v_roster_id, v_org_id, v_dept_id, CURRENT_DATE + p_days_ahead, CURRENT_DATE + p_days_ahead, '09:00', '17:00', v_scheduled_start, v_scheduled_end, 'Published', 'unassigned', 'on_bidding_normal', 'NoTrade', TRUE, NOW(), NOW(), NOW(), NOW());
-        WHEN 'S6' THEN
-            INSERT INTO shifts (id, roster_id, organization_id, department_id, shift_date, roster_date, start_time, end_time, scheduled_start, scheduled_end, lifecycle_status, assignment_status, bidding_status, trading_status, is_on_bidding, bidding_open_at, is_urgent, published_at, created_at, updated_at)
-            VALUES (v_shift_id, v_roster_id, v_org_id, v_dept_id, CURRENT_DATE + p_days_ahead, CURRENT_DATE + p_days_ahead, '09:00', '17:00', v_scheduled_start, v_scheduled_end, 'Published', 'unassigned', 'on_bidding_urgent', 'NoTrade', TRUE, NOW(), TRUE, NOW(), NOW(), NOW());
+            VALUES (v_shift_id, v_roster_id, v_org_id, v_dept_id, CURRENT_DATE + p_days_ahead, CURRENT_DATE + p_days_ahead, '09:00', '17:00', v_scheduled_start, v_scheduled_end, 'Published', 'unassigned', 'on_bidding', 'NoTrade', TRUE, NOW(), NOW(), NOW(), NOW());
         WHEN 'S7' THEN
             INSERT INTO shifts (id, roster_id, organization_id, department_id, shift_date, roster_date, start_time, end_time, scheduled_start, scheduled_end, lifecycle_status, assignment_status, assignment_outcome, bidding_status, trading_status, assigned_employee_id, assigned_at, confirmed_at, published_at, created_at, updated_at)
             VALUES (v_shift_id, v_roster_id, v_org_id, v_dept_id, CURRENT_DATE + p_days_ahead, CURRENT_DATE + p_days_ahead, '09:00', '17:00', v_scheduled_start, v_scheduled_end, 'Published', 'assigned', 'emergency_assigned', 'not_on_bidding', 'NoTrade', v_emp_id, NOW(), NOW(), NOW(), NOW(), NOW());
-        WHEN 'S8' THEN
-            INSERT INTO shifts (id, roster_id, organization_id, department_id, shift_date, roster_date, start_time, end_time, scheduled_start, scheduled_end, lifecycle_status, assignment_status, bidding_status, trading_status, published_at, created_at, updated_at)
-            VALUES (v_shift_id, v_roster_id, v_org_id, v_dept_id, CURRENT_DATE + p_days_ahead, CURRENT_DATE + p_days_ahead, '09:00', '17:00', v_scheduled_start, v_scheduled_end, 'Published', 'unassigned', 'bidding_closed_no_winner', 'NoTrade', NOW(), NOW(), NOW());
         WHEN 'S9' THEN
             INSERT INTO shifts (id, roster_id, organization_id, department_id, shift_date, roster_date, start_time, end_time, scheduled_start, scheduled_end, lifecycle_status, assignment_status, assignment_outcome, bidding_status, trading_status, assigned_employee_id, assigned_at, confirmed_at, trade_requested_at, published_at, created_at, updated_at)
             VALUES (v_shift_id, v_roster_id, v_org_id, v_dept_id, CURRENT_DATE + p_days_ahead, CURRENT_DATE + p_days_ahead, '09:00', '17:00', v_scheduled_start, v_scheduled_end, 'Published', 'assigned', 'confirmed', 'not_on_bidding', 'TradeRequested', v_emp_id, NOW(), NOW(), NOW(), NOW(), NOW(), NOW());
@@ -5561,13 +5626,12 @@ BEGIN
         assigned_employee_id = p_employee_id,
         assigned_at = NOW(),
         assignment_status = 'assigned'::shift_assignment_status,
-        assignment_outcome = 'emergency_assigned'::shift_assignment_outcome,
+        assignment_outcome = 'confirmed'::shift_assignment_outcome,
         fulfillment_status = 'fulfilled'::shift_fulfillment_status,
         confirmed_at = NOW(),
+        emergency_assigned_at = NOW(),
         is_on_bidding = FALSE,
         bidding_status = 'not_on_bidding'::shift_bidding_status,
-        emergency_assigned_by = p_assigned_by,
-        emergency_assigned_at = NOW(),
         locked_at = COALESCE(locked_at, NOW()),
         offer_expires_at = NULL,
         offer_sent_at = NULL,
@@ -5578,17 +5642,16 @@ BEGIN
         last_modified_reason = p_reason
     WHERE id = p_shift_id;
 
-    -- Expire any pending offers
     UPDATE public.shift_offers
-    SET status = 'Expired', responded_at = NOW(), response_notes = 'Superseded by emergency assignment'
+    SET status = 'Expired', responded_at = NOW(), response_notes = 'Superseded by direct assignment'
     WHERE shift_id = p_shift_id AND status = 'Pending';
 
     RETURN jsonb_build_object(
         'success', true,
         'shift_id', p_shift_id,
         'employee_id', p_employee_id,
-        'transition', 'S5/S6/S8 → S7',
-        'new_state', 'emergency_assigned'
+        'transition', 'S5 -> S4',
+        'new_state', 'confirmed'
     );
 END;
 $$;
@@ -5606,88 +5669,50 @@ DECLARE
     v_hours_until_start NUMERIC;
     v_new_state TEXT;
 BEGIN
-    -- Get current shift state
-    SELECT * INTO v_shift
-    FROM shifts
-    WHERE id = p_shift_id
-    AND deleted_at IS NULL;
-    
+    SELECT * INTO v_shift FROM shifts WHERE id = p_shift_id AND deleted_at IS NULL;
+
     IF NOT FOUND THEN
         RETURN jsonb_build_object('success', false, 'error', 'Shift not found');
     END IF;
-    
-    -- Validate: Must be in S4 (Confirmed) and assigned to this employee
-    IF v_shift.lifecycle_status != 'Published' 
-       OR v_shift.assignment_outcome != 'confirmed' THEN
+
+    IF v_shift.lifecycle_status != 'Published' OR v_shift.assignment_outcome != 'confirmed' THEN
         RETURN jsonb_build_object('success', false, 'error', 'Shift is not confirmed');
     END IF;
-    
+
     IF v_shift.assigned_employee_id != p_employee_id THEN
         RETURN jsonb_build_object('success', false, 'error', 'Not assigned to this employee');
     END IF;
-    
-    -- Calculate hours until start
+
     v_hours_until_start := EXTRACT(EPOCH FROM (v_shift.scheduled_start - NOW())) / 3600;
-    
-    -- Per state machine Section 3.4:
-    -- > 24h → S5 (Normal bidding)
-    -- 24h–4h → S6 (Urgent bidding)
-    -- < 4h → Need emergency assign (cannot auto-transition)
-    
+
     IF v_hours_until_start < 4 THEN
-        -- Too late to cancel, needs manager intervention
         RETURN jsonb_build_object(
-            'success', false, 
+            'success', false,
             'error', 'Too late to cancel. Contact manager for emergency replacement.',
             'hours_until_start', v_hours_until_start
         );
     END IF;
-    
-    IF v_hours_until_start < 24 THEN
-        v_new_state := 'S6';
-        -- S4 → S6: Urgent bidding
-        UPDATE shifts
-        SET 
-            assigned_employee_id = NULL,
-            assigned_at = NULL,
-            assignment_status = 'unassigned'::shift_assignment_status,
-            assignment_outcome = NULL,
-            fulfillment_status = 'none'::shift_fulfillment_status,
-            confirmed_at = NULL,
-            is_on_bidding = TRUE,
-            bidding_status = 'on_bidding_urgent'::shift_bidding_status,
-            bidding_open_at = NOW(),
-            is_urgent = TRUE,
-            updated_at = NOW(),
-            last_modified_by = p_employee_id,
-            last_modified_reason = COALESCE(p_reason, 'Employee cancelled (urgent)')
-        WHERE id = p_shift_id;
-    ELSE
-        v_new_state := 'S5';
-        -- S4 → S5: Normal bidding
-        UPDATE shifts
-        SET 
-            assigned_employee_id = NULL,
-            assigned_at = NULL,
-            assignment_status = 'unassigned'::shift_assignment_status,
-            assignment_outcome = NULL,
-            fulfillment_status = 'none'::shift_fulfillment_status,
-            confirmed_at = NULL,
-            is_on_bidding = TRUE,
-            bidding_status = 'on_bidding_normal'::shift_bidding_status,
-            bidding_open_at = NOW(),
-            updated_at = NOW(),
-            last_modified_by = p_employee_id,
-            last_modified_reason = COALESCE(p_reason, 'Employee cancelled')
-        WHERE id = p_shift_id;
-    END IF;
-    
-    -- Trigger will sync to roster_shifts automatically
-    
+
+    v_new_state := 'S5';
+    UPDATE shifts
+    SET
+        assigned_employee_id = NULL,
+        assigned_at = NULL,
+        assignment_status = 'unassigned'::shift_assignment_status,
+        assignment_outcome = NULL,
+        fulfillment_status = 'none'::shift_fulfillment_status,
+        confirmed_at = NULL,
+        is_on_bidding = TRUE,
+        bidding_status = 'on_bidding'::shift_bidding_status,
+        bidding_open_at = NOW(),
+        updated_at = NOW(),
+        last_modified_by = p_employee_id,
+        last_modified_reason = COALESCE(p_reason, 'Employee cancelled')
+    WHERE id = p_shift_id;
+
     RETURN jsonb_build_object(
-        'success', true,
-        'shift_id', p_shift_id,
-        'transition', format('S4 → %s', v_new_state),
+        'success', true, 'shift_id', p_shift_id,
+        'transition', format('S4 -> %s', v_new_state),
         'hours_until_start', v_hours_until_start
     );
 END;
@@ -5702,9 +5727,8 @@ CREATE OR REPLACE FUNCTION "public"."enforce_exactly_three_groups"() RETURNS "tr
     SET "search_path" TO 'pg_catalog', 'public'
     AS $$
 BEGIN
-    -- Permit only the 3 standard group types
-    IF NEW.external_id NOT IN ('convention_centre', 'exhibition_centre', 'theatre') OR NEW.external_id IS NULL THEN
-        RAISE EXCEPTION 'Only standard ICC Sydney groups (Convention, Exhibition, Theatre) are allowed. Attempted to add: %', NEW.name;
+    IF NEW.external_id NOT IN ('convention_centre', 'exhibition_centre', 'theatre', 'the_cutaway') OR NEW.external_id IS NULL THEN
+        RAISE EXCEPTION 'Only standard ICC Sydney groups (Convention, Exhibition, Theatre, The Cutaway) are allowed. Attempted to add: %', NEW.name;
     END IF;
     RETURN NEW;
 END;
@@ -5712,6 +5736,102 @@ $$;
 
 
 ALTER FUNCTION "public"."enforce_exactly_three_groups"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."enforce_timesheet_review_gate"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+  v_is_decision      boolean;
+  v_is_billable_edit boolean;
+  v_reviewable       boolean;
+BEGIN
+  v_is_decision := NEW.status IN ('approved', 'rejected')
+                   AND (TG_OP = 'INSERT' OR NEW.status IS DISTINCT FROM OLD.status);
+
+  v_is_billable_edit := TG_OP = 'UPDATE'
+                        AND (NEW.start_time IS DISTINCT FROM OLD.start_time
+                             OR NEW.end_time IS DISTINCT FROM OLD.end_time);
+
+  IF NOT (v_is_decision OR v_is_billable_edit) THEN
+    RETURN NEW;
+  END IF;
+
+  v_reviewable := (NEW.clock_out IS NOT NULL)
+                  OR public.is_shift_timesheet_reviewable(NEW.shift_id);
+
+  IF NOT v_reviewable THEN
+    RAISE EXCEPTION
+      'Timesheet review blocked: shift % has not reached a final attendance state.', NEW.shift_id
+      USING ERRCODE = 'check_violation',
+            HINT = 'Approve, reject, or edit billable times only after the employee clocks out, is auto-clocked-out, or is a no-show.';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."enforce_timesheet_review_gate"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."enqueue_swap_auto_decision"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_catalog'
+    AS $$
+DECLARE
+  v_req_ver int; v_off_ver int; v_org uuid; v_dept uuid;
+  v_pol_ver int; v_enabled boolean; v_idem text;
+BEGIN
+  IF NEW.status <> 'MANAGER_PENDING'
+     OR (TG_OP='UPDATE' AND OLD.status='MANAGER_PENDING') THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT version, organization_id, department_id
+    INTO v_req_ver, v_org, v_dept
+  FROM public.shifts WHERE id = NEW.requester_shift_id;
+
+  -- GATE: only enqueue if an ENABLED policy exists for this scope (dept beats org).
+  -- No policy / disabled = pipeline off = inert (zero rows on live traffic).
+  SELECT version, enabled INTO v_pol_ver, v_enabled
+  FROM public.swap_approval_rules
+  WHERE organization_id = v_org
+    AND (department_id = v_dept OR department_id IS NULL)
+  ORDER BY department_id NULLS LAST
+  LIMIT 1;
+
+  IF v_pol_ver IS NULL OR v_enabled IS NOT TRUE THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.target_shift_id IS NOT NULL THEN
+    SELECT version INTO v_off_ver FROM public.shifts WHERE id = NEW.target_shift_id;
+  ELSE
+    v_off_ver := 0;
+  END IF;
+
+  v_idem := encode(
+    extensions.digest(NEW.id::text || ':' || COALESCE(v_req_ver,0)::text || ':' ||
+           COALESCE(v_off_ver,0)::text || ':' || v_pol_ver::text, 'sha256'), 'hex');
+
+  INSERT INTO public.swap_review_queue (swap_id, idempotency_key)
+  VALUES (NEW.id, v_idem) ON CONFLICT (swap_id, idempotency_key) DO NOTHING;
+
+  INSERT INTO public.swap_audit_log (swap_id, event_type, actor, detail)
+  VALUES (NEW.id, 'ENQUEUED', 'system',
+          jsonb_build_object('idempotency_key', v_idem, 'policy_version', v_pol_ver));
+
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  -- Enqueue is a best-effort side effect: NEVER block the parent swap transaction.
+  RAISE WARNING 'enqueue_swap_auto_decision swallowed error (swap=%): %', NEW.id, SQLERRM;
+  RETURN NEW;
+END; $$;
+
+
+ALTER FUNCTION "public"."enqueue_swap_auto_decision"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."expire_locked_swaps"() RETURNS TABLE("expired_id" "uuid", "requester_id" "uuid", "recipient_id" "uuid")
@@ -5762,6 +5882,21 @@ COMMENT ON FUNCTION "public"."expire_locked_swaps"() IS 'Automatically expires s
 
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_bump_swap_policy_version"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'public', 'pg_catalog'
+    AS $$
+BEGIN
+  IF NEW.* IS DISTINCT FROM OLD.* THEN
+    NEW.version := OLD.version + 1; NEW.updated_at := now();
+  END IF;
+  RETURN NEW;
+END; $$;
+
+
+ALTER FUNCTION "public"."fn_bump_swap_policy_version"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_calculate_performance_flag"("p_reliability_score" numeric, "p_no_show_rate" numeric, "p_late_cancel_rate" numeric) RETURNS "text"
     LANGUAGE "plpgsql" IMMUTABLE
     SET "search_path" TO 'pg_catalog', 'public'
@@ -5810,15 +5945,15 @@ CREATE OR REPLACE FUNCTION "public"."fn_capture_offer_event"() RETURNS "trigger"
     SET "search_path" TO 'pg_catalog', 'public'
     AS $$
 BEGIN
-    IF (NEW.status = 'accepted' AND OLD.status IS DISTINCT FROM 'accepted') THEN
+    IF (NEW.status = 'Accepted' AND OLD.status IS DISTINCT FROM 'Accepted') THEN
         INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time)
         VALUES (NEW.shift_id, NEW.employee_id, 'ACCEPTED', COALESCE(NEW.responded_at, now()));
-    ELSIF (NEW.status = 'rejected' AND OLD.status IS DISTINCT FROM 'rejected') THEN
+    ELSIF (NEW.status = 'Declined' AND OLD.status IS DISTINCT FROM 'Declined') THEN
         INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time)
         VALUES (NEW.shift_id, NEW.employee_id, 'REJECTED', COALESCE(NEW.responded_at, now()));
-    ELSIF (NEW.status = 'expired' AND OLD.status IS DISTINCT FROM 'expired') THEN
+    ELSIF (NEW.status = 'Expired' AND OLD.status IS DISTINCT FROM 'Expired') THEN
         INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time)
-        VALUES (NEW.shift_id, NEW.employee_id, 'IGNORED', now());
+        VALUES (NEW.shift_id, NEW.employee_id, 'IGNORED', COALESCE(NEW.responded_at, now()));
     END IF;
     RETURN NEW;
 END;
@@ -5833,54 +5968,128 @@ CREATE OR REPLACE FUNCTION "public"."fn_capture_shift_event"() RETURNS "trigger"
     SET "search_path" TO 'pg_catalog', 'public'
     AS $$
 DECLARE
-    v_event_type TEXT;
+    v_from  text;
+    v_to    text;
+    v_actor uuid;
+    v_auto  boolean;
 BEGIN
+    IF current_setting('app.audit.via_gateway', true) = '1' THEN
+        RETURN NEW;
+    END IF;
+
+    v_actor := auth.uid();
+    v_auto  := COALESCE(current_setting('app.audit.actor', true), '') = 'autoscheduler';
+    v_to := public.get_shift_fsm_state(NEW.lifecycle_status, NEW.assignment_status, NEW.assignment_outcome, NEW.trading_status, NEW.is_cancelled, NEW.bidding_status);
+    IF (TG_OP = 'UPDATE') THEN
+        v_from := public.get_shift_fsm_state(OLD.lifecycle_status, OLD.assignment_status, OLD.assignment_outcome, OLD.trading_status, OLD.is_cancelled, OLD.bidding_status);
+    END IF;
+
     -- 1. ASSIGNED / UNASSIGNED
     IF (TG_OP = 'UPDATE') THEN
         IF (NEW.assigned_employee_id IS NOT NULL AND OLD.assigned_employee_id IS NULL) THEN
-            INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time)
-            VALUES (NEW.id, NEW.assigned_employee_id, 'ASSIGNED', COALESCE(NEW.assigned_at, now()));
+            INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time, metadata, actor_role)
+            VALUES (NEW.id, NEW.assigned_employee_id, 'ASSIGNED', COALESCE(NEW.assigned_at, now()),
+                    jsonb_build_object('from_state', v_from, 'to_state', v_to)
+                      || CASE WHEN v_auto THEN jsonb_build_object('source', 'autoscheduler') ELSE '{}'::jsonb END,
+                    CASE WHEN v_auto THEN 'autoscheduler' ELSE NULL END);
         ELSIF (NEW.assigned_employee_id IS NULL AND OLD.assigned_employee_id IS NOT NULL) THEN
-            INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time)
-            VALUES (NEW.id, OLD.assigned_employee_id, 'UNASSIGNED', now());
+            INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time, metadata)
+            VALUES (NEW.id, OLD.assigned_employee_id, 'UNASSIGNED', now(),
+                    jsonb_build_object('from_state', v_from, 'to_state', v_to));
         END IF;
     ELSIF (TG_OP = 'INSERT') THEN
         IF (NEW.assigned_employee_id IS NOT NULL) THEN
-            INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time)
-            VALUES (NEW.id, NEW.assigned_employee_id, 'ASSIGNED', COALESCE(NEW.assigned_at, now()));
+            INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time, metadata, actor_role)
+            VALUES (NEW.id, NEW.assigned_employee_id, 'ASSIGNED', COALESCE(NEW.assigned_at, now()),
+                    jsonb_build_object('from_state', v_from, 'to_state', v_to)
+                      || CASE WHEN v_auto THEN jsonb_build_object('source', 'autoscheduler') ELSE '{}'::jsonb END,
+                    CASE WHEN v_auto THEN 'autoscheduler' ELSE NULL END);
         END IF;
     END IF;
 
     -- 2. OFFERED
     IF (TG_OP = 'UPDATE') THEN
         IF (NEW.fulfillment_status = 'offered' AND OLD.fulfillment_status IS DISTINCT FROM 'offered') THEN
-            INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time)
-            VALUES (NEW.id, NEW.assigned_employee_id, 'OFFERED', COALESCE(NEW.offer_sent_at, now()));
+            INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time, metadata)
+            VALUES (NEW.id, NEW.assigned_employee_id, 'OFFERED', COALESCE(NEW.offer_sent_at, now()),
+                    jsonb_build_object('from_state', v_from, 'to_state', v_to));
         END IF;
     END IF;
 
     -- 3. ACCEPTED / EMERGENCY_ASSIGNED
     IF (TG_OP = 'UPDATE') THEN
         IF (NEW.assignment_outcome = 'confirmed' AND OLD.assignment_outcome IS DISTINCT FROM 'confirmed') THEN
-            INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time)
-            VALUES (NEW.id, NEW.assigned_employee_id, 'ACCEPTED', COALESCE(NEW.confirmed_at, now()));
+            IF (NEW.emergency_assigned_at IS NOT NULL
+                AND OLD.emergency_assigned_at IS DISTINCT FROM NEW.emergency_assigned_at) THEN
+                INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time, metadata)
+                VALUES (NEW.id, NEW.assigned_employee_id, 'EMERGENCY_ASSIGNED', COALESCE(NEW.emergency_assigned_at, now()),
+                        jsonb_build_object('from_state', v_from, 'to_state', v_to));
+            ELSE
+                INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time, metadata)
+                VALUES (NEW.id, NEW.assigned_employee_id, 'ACCEPTED', COALESCE(NEW.confirmed_at, now()),
+                        jsonb_build_object('from_state', v_from, 'to_state', v_to));
+            END IF;
         ELSIF (NEW.assignment_outcome = 'emergency_assigned' AND OLD.assignment_outcome IS DISTINCT FROM 'emergency_assigned') THEN
-            INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time)
-            VALUES (NEW.id, NEW.assigned_employee_id, 'EMERGENCY_ASSIGNED', COALESCE(NEW.emergency_assigned_at, now()));
+            INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time, metadata)
+            VALUES (NEW.id, NEW.assigned_employee_id, 'EMERGENCY_ASSIGNED', COALESCE(NEW.emergency_assigned_at, now()),
+                    jsonb_build_object('from_state', v_from, 'to_state', v_to));
         END IF;
     END IF;
 
     -- 4. CANCELLED
     IF (TG_OP = 'UPDATE') THEN
         IF (NEW.lifecycle_status = 'Cancelled' AND OLD.lifecycle_status IS DISTINCT FROM 'Cancelled') THEN
-            -- Check if it's a late cancellation (< 12 hours before start)
             IF (NEW.start_at IS NOT NULL AND (NEW.start_at - now()) < interval '12 hours') THEN
-                INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time)
-                VALUES (NEW.id, NEW.assigned_employee_id, 'LATE_CANCELLED', now());
+                INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time, metadata)
+                VALUES (NEW.id, NEW.assigned_employee_id, 'LATE_CANCELLED', now(),
+                        jsonb_build_object('from_state', v_from, 'to_state', v_to));
             END IF;
-            
-            INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time)
-            VALUES (NEW.id, NEW.assigned_employee_id, 'CANCELLED', COALESCE(NEW.cancelled_at, now()));
+
+            INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time, metadata)
+            VALUES (NEW.id, NEW.assigned_employee_id, 'CANCELLED', COALESCE(NEW.cancelled_at, now()),
+                    jsonb_build_object('from_state', v_from, 'to_state', v_to));
+        END IF;
+    END IF;
+
+    -- 4a. PUBLISHED — skipped when this write is an emergency assignment.
+    IF (TG_OP = 'UPDATE') THEN
+        IF (NEW.lifecycle_status = 'Published' AND OLD.lifecycle_status IS DISTINCT FROM 'Published'
+            AND NOT (NEW.emergency_assigned_at IS NOT NULL
+                     AND OLD.emergency_assigned_at IS DISTINCT FROM NEW.emergency_assigned_at)) THEN
+            INSERT INTO public.shift_events (shift_id, employee_id, actor_id, event_type, event_time, metadata, actor_role, domain)
+            VALUES (NEW.id, NEW.assigned_employee_id, v_actor, 'OP_APPLIED', now(),
+                jsonb_build_object('op', 'publish', 'domain', 'lifecycle',
+                                   'from_state', v_from, 'to_state', v_to,
+                                   'source', 'fn_capture_shift_event'),
+                CASE WHEN v_actor IS NULL THEN 'system' ELSE 'manager' END, 'lifecycle');
+        END IF;
+    END IF;
+
+    -- 4b. COMPLETED — lifecycle -> Completed.
+    IF (TG_OP = 'UPDATE') THEN
+        IF (NEW.lifecycle_status = 'Completed' AND OLD.lifecycle_status IS DISTINCT FROM 'Completed') THEN
+            INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time, metadata, domain)
+            VALUES (NEW.id, NEW.assigned_employee_id, 'OP_APPLIED', now(),
+                jsonb_build_object(
+                    'op', 'complete',
+                    'domain', 'lifecycle',
+                    'from_state', v_from,
+                    'to_state',   v_to,
+                    'source', 'fn_capture_shift_event'
+                ),
+                'lifecycle');
+        END IF;
+    END IF;
+
+    -- 4c. IN PROGRESS — lifecycle -> InProgress (S4 -> S11).
+    IF (TG_OP = 'UPDATE') THEN
+        IF (NEW.lifecycle_status = 'InProgress' AND OLD.lifecycle_status IS DISTINCT FROM 'InProgress') THEN
+            INSERT INTO public.shift_events (shift_id, employee_id, actor_id, event_type, event_time, metadata, actor_role, domain)
+            VALUES (NEW.id, NEW.assigned_employee_id, v_actor, 'OP_APPLIED', COALESCE(NEW.actual_start, now()),
+                jsonb_build_object('op', 'in_progress', 'domain', 'lifecycle',
+                                   'from_state', v_from, 'to_state', v_to,
+                                   'source', 'fn_capture_shift_event'),
+                CASE WHEN v_actor IS NULL THEN 'system' ELSE 'employee' END, 'lifecycle');
         END IF;
     END IF;
 
@@ -5888,14 +6097,17 @@ BEGIN
     IF (TG_OP = 'UPDATE') THEN
         IF (NEW.attendance_status IS DISTINCT FROM OLD.attendance_status) THEN
             IF (NEW.attendance_status = 'checked_in') THEN
-                INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time)
-                VALUES (NEW.id, NEW.assigned_employee_id, 'CHECKED_IN', COALESCE(NEW.actual_start, now()));
+                INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time, metadata)
+                VALUES (NEW.id, NEW.assigned_employee_id, 'CHECKED_IN', COALESCE(NEW.actual_start, now()),
+                        jsonb_build_object('from_state', v_from, 'to_state', v_to));
             ELSIF (NEW.attendance_status = 'late') THEN
-                INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time)
-                VALUES (NEW.id, NEW.assigned_employee_id, 'LATE_IN', COALESCE(NEW.actual_start, now()));
+                INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time, metadata)
+                VALUES (NEW.id, NEW.assigned_employee_id, 'LATE_IN', COALESCE(NEW.actual_start, now()),
+                        jsonb_build_object('from_state', v_from, 'to_state', v_to));
             ELSIF (NEW.attendance_status = 'no_show') THEN
-                INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time)
-                VALUES (NEW.id, NEW.assigned_employee_id, 'NO_SHOW', now());
+                INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time, metadata)
+                VALUES (NEW.id, NEW.assigned_employee_id, 'NO_SHOW', now(),
+                        jsonb_build_object('from_state', v_from, 'to_state', v_to));
             END IF;
         END IF;
     END IF;
@@ -5939,6 +6151,148 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_capture_swap_event"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_capture_timesheet_event"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+BEGIN
+  IF NEW.shift_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF (NEW.status = 'approved' AND OLD.status IS DISTINCT FROM 'approved') THEN
+    INSERT INTO public.shift_events (shift_id, employee_id, actor_id, event_type, metadata, actor_role, domain)
+    VALUES (NEW.shift_id, NEW.employee_id, COALESCE(NEW.approved_by, v_actor), 'OP_APPLIED',
+      jsonb_build_object('op', 'timesheet_finalize', 'domain', 'payroll',
+                         'source', 'timesheets', 'net_hours', NEW.net_hours),
+      'manager', 'payroll');
+
+  ELSIF (OLD.status IN ('submitted', 'approved') AND (
+            NEW.clock_in   IS DISTINCT FROM OLD.clock_in
+         OR NEW.clock_out  IS DISTINCT FROM OLD.clock_out
+         OR NEW.start_time IS DISTINCT FROM OLD.start_time
+         OR NEW.end_time   IS DISTINCT FROM OLD.end_time
+         OR NEW.break_minutes IS DISTINCT FROM OLD.break_minutes)) THEN
+    INSERT INTO public.shift_events (shift_id, employee_id, actor_id, event_type, metadata, actor_role, domain)
+    VALUES (NEW.shift_id, NEW.employee_id, v_actor, 'OP_APPLIED',
+      jsonb_build_object('op', 'timesheet_adjust', 'domain', 'payroll', 'source', 'timesheets',
+        'changes', jsonb_strip_nulls(jsonb_build_object(
+          'clock_in',      CASE WHEN NEW.clock_in   IS DISTINCT FROM OLD.clock_in   THEN jsonb_build_object('old', OLD.clock_in,   'new', NEW.clock_in)   END,
+          'clock_out',     CASE WHEN NEW.clock_out  IS DISTINCT FROM OLD.clock_out  THEN jsonb_build_object('old', OLD.clock_out,  'new', NEW.clock_out)  END,
+          'break_minutes', CASE WHEN NEW.break_minutes IS DISTINCT FROM OLD.break_minutes THEN jsonb_build_object('old', OLD.break_minutes, 'new', NEW.break_minutes) END))),
+      'manager', 'payroll');
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_capture_timesheet_event"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_enrich_shift_event"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $_$
+BEGIN
+    -- actor_id — fill only if the caller left it NULL.
+    IF NEW.actor_id IS NULL THEN
+        IF NEW.actor_role = 'employee' THEN
+            NEW.actor_id := NEW.employee_id;
+        ELSIF NEW.actor_role = 'manager' THEN
+            SELECT last_modified_by INTO NEW.actor_id
+            FROM public.shifts
+            WHERE id = NEW.shift_id;
+        END IF;
+
+        IF NEW.actor_id IS NULL THEN
+            NEW.actor_id := auth.uid();
+        END IF;
+    END IF;
+
+    -- domain (deterministic) — fill only if the caller left it NULL.
+    IF NEW.domain IS NULL THEN
+        NEW.domain := CASE NEW.event_type
+            WHEN 'OFFERED'            THEN 'offer'
+            WHEN 'ACCEPTED'           THEN 'offer'
+            WHEN 'REJECTED'           THEN 'offer'
+            WHEN 'IGNORED'            THEN 'offer'
+            WHEN 'ASSIGNED'           THEN 'assignment'
+            WHEN 'UNASSIGNED'         THEN 'assignment'
+            WHEN 'EMERGENCY_ASSIGNED' THEN 'assignment'
+            WHEN 'CANCELLED'          THEN 'assignment'
+            WHEN 'LATE_CANCELLED'     THEN 'assignment'
+            WHEN 'NO_SHOW'            THEN 'assignment'
+            WHEN 'CHECKED_IN'         THEN 'assignment'
+            WHEN 'LATE_IN'            THEN 'assignment'
+            WHEN 'EARLY_OUT'          THEN 'assignment'
+            WHEN 'SWAPPED_IN'         THEN 'trade'
+            WHEN 'SWAPPED_OUT'        THEN 'trade'
+            ELSE 'shift'   -- OP_APPLIED + any future/unknown type
+        END;
+    END IF;
+
+    -- actor_role (APPROXIMATE HEURISTIC) — fill only if the caller left it NULL,
+    -- so an explicit, authoritative role from the write path always wins.
+    IF NEW.actor_role IS NULL THEN
+        NEW.actor_role := CASE NEW.event_type
+            WHEN 'ASSIGNED'           THEN 'manager'
+            WHEN 'EMERGENCY_ASSIGNED' THEN 'manager'
+            WHEN 'OFFERED'            THEN 'manager'
+            WHEN 'UNASSIGNED'         THEN 'manager'
+            WHEN 'ACCEPTED'           THEN 'employee'
+            WHEN 'REJECTED'           THEN 'employee'
+            WHEN 'CANCELLED'          THEN 'employee'
+            WHEN 'LATE_CANCELLED'     THEN 'employee'
+            WHEN 'SWAPPED_OUT'        THEN 'employee'
+            WHEN 'SWAPPED_IN'         THEN 'employee'
+            WHEN 'CHECKED_IN'         THEN 'employee'
+            WHEN 'LATE_IN'            THEN 'employee'
+            WHEN 'EARLY_OUT'          THEN 'employee'
+            WHEN 'IGNORED'            THEN 'system'
+            WHEN 'NO_SHOW'            THEN 'system'
+            ELSE 'system'   -- OP_APPLIED + any future/unknown type
+        END;
+    END IF;
+
+    -- idempotency_key <- metadata->>'idem' (gateway-stamped), fill-if-null.
+    -- Guard the cast so a malformed value can never abort the INSERT.
+    IF NEW.idempotency_key IS NULL
+       AND NEW.metadata ? 'idem'
+       AND NEW.metadata->>'idem' IS NOT NULL
+       AND NEW.metadata->>'idem' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    THEN
+        NEW.idempotency_key := (NEW.metadata->>'idem')::uuid;
+    END IF;
+
+    -- shift_version <- metadata->>'to_version' (gateway-stamped), fill-if-null.
+    -- Guard the cast so a non-integer value can never abort the INSERT.
+    IF NEW.shift_version IS NULL
+       AND NEW.metadata ? 'to_version'
+       AND NEW.metadata->>'to_version' IS NOT NULL
+       AND NEW.metadata->>'to_version' ~ '^-?[0-9]+$'
+    THEN
+        NEW.shift_version := (NEW.metadata->>'to_version')::int;
+    END IF;
+
+    -- NOTE: episode_seq, correlation_id, causation_id are intentionally left
+    -- untouched (see header). episode_seq requires per-shift history (backfill).
+
+    RETURN NEW;
+END;
+$_$;
+
+
+ALTER FUNCTION "public"."fn_enrich_shift_event"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_enrich_shift_event"() IS 'BEFORE INSERT on shift_events: fills-if-null the row-local envelope fields (domain, actor_role, idempotency_key, shift_version) from event_type/metadata. No-op when a field is already set, so explicit write-path values win. Does NOT compute episode_seq (needs per-shift history — owned by the backfill).';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_get_shift_lock_statuses"("p_shift_ids" "uuid"[]) RETURNS TABLE("shift_id" "uuid", "is_locked" boolean)
@@ -6076,8 +6430,9 @@ BEGIN
     FOR v_shift IN
         SELECT s.*
         FROM public.shifts s
-        WHERE s.lifecycle_status  = 'Published'
-          AND s.assignment_outcome = 'offered'
+        WHERE s.lifecycle_status   = 'Published'
+          AND s.assignment_status  = 'assigned'
+          AND s.assignment_outcome IS NULL
           AND s.deleted_at         IS NULL
           AND (
               (s.offer_expires_at IS NOT NULL AND s.offer_expires_at < NOW())
@@ -6126,6 +6481,24 @@ BEGIN
             END
         WHERE id = v_shift.id;
 
+        IF v_shift.assigned_employee_id IS NOT NULL THEN
+            INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time, metadata)
+            VALUES (
+                v_shift.id,
+                v_shift.assigned_employee_id,
+                'IGNORED',
+                COALESCE(v_shift.offer_expires_at, NOW()),
+                jsonb_build_object(
+                    'source', 'fn_process_offer_expirations',
+                    'reason', CASE
+                        WHEN v_shift.offer_expires_at IS NOT NULL AND v_shift.offer_expires_at < NOW()
+                            THEN 'offer_expired'
+                        ELSE 'pre_shift_lockout'
+                    END
+                )
+            );
+        END IF;
+
         res_shift_id := v_shift.id;
         from_state   := 'S3';
         to_state     := v_new_state;
@@ -6138,17 +6511,38 @@ $$;
 ALTER FUNCTION "public"."fn_process_offer_expirations"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."fn_refresh_snapshots_on_event"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+BEGIN
+    -- Some audit events (e.g. neutral OP_APPLIED rows) may carry a NULL shift_id in
+    -- principle; guard so the trigger is a no-op rather than an error in that case.
+    IF NEW.shift_id IS NOT NULL THEN
+        PERFORM public.sm_refresh_shift_snapshots(NEW.shift_id);
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."fn_refresh_snapshots_on_event"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fn_refresh_snapshots_on_event"() IS 'AFTER INSERT trigger fn on shift_events: re-projects assignment_snapshots for the affected shift (guards NULL shift_id). Per-shift refresh is cheap.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."fn_seed_fixed_template_groups"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
 BEGIN
-    -- Seed the three fixed groups for ICC Sydney
     INSERT INTO public.template_groups (template_id, name, color, icon, sort_order)
-    VALUES 
-        (NEW.id, 'Convention Centre', '#3b82f6', 'building', 1),
-        (NEW.id, 'Exhibition Centre', '#22c55e', 'layout-grid', 2),
-        (NEW.id, 'Theatre',           '#ef4444', 'theater',     3);
-    
+    VALUES
+        (NEW.id, 'Convention Centre', '#3b82f6', 'building',     1),
+        (NEW.id, 'Exhibition Centre', '#22c55e', 'layout-grid',  2),
+        (NEW.id, 'Theatre',           '#ef4444', 'theater',      3),
+        (NEW.id, 'The Cutaway',       '#f59e0b', 'film',         4);
     RETURN NEW;
 END;
 $$;
@@ -6182,39 +6576,31 @@ CREATE OR REPLACE FUNCTION "public"."fn_shift_state"("p_lifecycle_status" "text"
     SET "search_path" TO 'pg_catalog', 'public'
     AS $$
 BEGIN
-    IF p_lifecycle_status = 'Cancelled' OR COALESCE(p_is_cancelled, FALSE) THEN RETURN 'S15'; END IF;
-    IF p_lifecycle_status = 'Completed' THEN
-        IF p_assignment_outcome = 'emergency_assigned' THEN RETURN 'S14'; END IF;
-        RETURN 'S13';
-    END IF;
-    IF p_lifecycle_status = 'InProgress' THEN
-        IF p_assignment_outcome = 'emergency_assigned' THEN RETURN 'S12'; END IF;
-        RETURN 'S11';
-    END IF;
-    IF p_lifecycle_status = 'Published' THEN
-        IF p_assignment_outcome = 'confirmed' THEN
-            IF p_trading_status = 'TradeRequested' THEN RETURN 'S9'; END IF;
-            IF p_trading_status = 'TradeAccepted'  THEN RETURN 'S10'; END IF;
-            RETURN 'S4';
-        END IF;
-        IF p_assignment_outcome = 'offered'            THEN RETURN 'S3'; END IF;
-        IF p_assignment_outcome = 'emergency_assigned' THEN RETURN 'S7'; END IF;
-        IF p_assignment_outcome IS NULL OR p_assignment_status = 'unassigned' THEN
-            IF p_bidding_status = 'on_bidding_normal'        THEN RETURN 'S5'; END IF;
-            IF p_bidding_status = 'on_bidding_urgent'        THEN RETURN 'S6'; END IF;
-            IF p_bidding_status = 'bidding_closed_no_winner' THEN RETURN 'S8'; END IF;
-        END IF;
-    END IF;
-    IF p_lifecycle_status = 'Draft' THEN
-        IF p_assignment_status = 'assigned' THEN RETURN 'S2'; END IF;
-        RETURN 'S1';
-    END IF;
-    RETURN 'UNKNOWN';
+  RETURN public.get_shift_fsm_state(
+    p_lifecycle_status::shift_lifecycle,
+    p_assignment_status::shift_assignment_status,
+    NULLIF(p_assignment_outcome, '')::shift_assignment_outcome,
+    NULLIF(p_trading_status, '')::shift_trading,
+    COALESCE(p_is_cancelled, FALSE),
+    NULLIF(p_bidding_status, '')::shift_bidding_status
+  );
 END;
 $$;
 
 
 ALTER FUNCTION "public"."fn_shift_state"("p_lifecycle_status" "text", "p_assignment_status" "text", "p_assignment_outcome" "text", "p_bidding_status" "text", "p_trading_status" "text", "p_is_cancelled" boolean) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fn_swap_audit_immutable"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'public', 'pg_catalog'
+    AS $$
+BEGIN
+  RAISE EXCEPTION 'swap_audit_log is append-only (% blocked)', TG_OP;
+END; $$;
+
+
+ALTER FUNCTION "public"."fn_swap_audit_immutable"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_touch_swap_status_changed_at"() RETURNS "trigger"
@@ -6233,7 +6619,8 @@ CREATE OR REPLACE FUNCTION "public"."fn_validate_shift_event"() RETURNS "trigger
     SET "search_path" TO 'pg_catalog', 'public'
     AS $$
 BEGIN
-    IF NEW.employee_id IS NULL AND NEW.event_type NOT IN ('UNASSIGNED') THEN
+    IF NEW.employee_id IS NULL
+       AND NEW.event_type NOT IN ('UNASSIGNED', 'OP_APPLIED') THEN
         RAISE EXCEPTION 'employee_id is required for event type %', NEW.event_type;
     END IF;
     RETURN NEW;
@@ -6242,6 +6629,39 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_validate_shift_event"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."fsm_op_is_legal"("p_state" "text", "p_op" "text") RETURNS boolean
+    LANGUAGE "sql" IMMUTABLE
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+  SELECT CASE p_op
+    WHEN 'select_winner' THEN p_state IN ('S5', 'S6')
+    WHEN 'publish' THEN p_state IN ('S1', 'S2')
+    WHEN 'unpublish' THEN p_state IN ('S3', 'S4', 'S5', 'S9', 'S10')
+
+    -- assign: unassigned (S1/S5/S6/S8) OR reassign on assigned-but-pre-start (S2/S3/S4/S7).
+    WHEN 'assign' THEN p_state IN ('S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8')
+
+    -- unassign: inverse of assign, DRAFT-only. S2 (Draft+assigned) → S1. A published
+    -- assigned shift (S3/S4) must be unpublished first (no defined unassigned-published
+    -- FSM state), so it is NOT admitted here.
+    WHEN 'unassign' THEN p_state IN ('S2')
+
+    WHEN 'approve_trade' THEN p_state IN ('S10')
+    WHEN 'reject_trade'  THEN p_state IN ('S9', 'S10')
+    WHEN 'delete' THEN p_state IN ('S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10')
+    WHEN 'edit' THEN p_state IN ('S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S9', 'S10')
+    ELSE false
+  END;
+$$;
+
+
+ALTER FUNCTION "public"."fsm_op_is_legal"("p_state" "text", "p_op" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."fsm_op_is_legal"("p_state" "text", "p_op" "text") IS 'Op x canonical-FSM-state legality matrix for the shift mutation gateway. p_state must be a get_shift_fsm_state(...) label. Unknown op/state => false.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."generate_availability_slots"() RETURNS "trigger"
@@ -6322,6 +6742,95 @@ $$;
 
 
 ALTER FUNCTION "public"."generate_availability_slots"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_bidding_kpis"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[] DEFAULT NULL::"uuid"[], "p_dept_ids" "uuid"[] DEFAULT NULL::"uuid"[], "p_subdept_ids" "uuid"[] DEFAULT NULL::"uuid"[]) RETURNS TABLE("open_bidding_shifts" integer, "total_bids" integer, "winners_selected" integer, "unfilled_open_shifts" integer, "avg_bids_per_open_shift" numeric, "open_shift_fill_rate" numeric, "bid_success_rate" numeric, "unfilled_open_shift_rate" numeric)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+BEGIN
+    RETURN QUERY
+    WITH
+    -- ── Open bidding-shift universe ───────────────────────────────────
+    -- Every non-deleted shift in [p_from, p_to] + org/dept/subdept scope
+    -- that ENTERED bidding. A shift entered bidding if it has a
+    -- bidding_open_at timestamp OR at least one shift_bids row exists for
+    -- it (covers the case where the open timestamp was never stamped but a
+    -- bid was still recorded). Shifts with zero bids that WERE posted to
+    -- bidding (bidding_open_at IS NOT NULL) remain in scope.
+    open_shifts AS (
+        SELECT
+            s.id,
+            s.assigned_employee_id
+        FROM shifts s
+        WHERE s.deleted_at IS NULL
+          AND s.shift_date BETWEEN p_from AND p_to
+          AND (p_org_ids     IS NULL OR s.organization_id   = ANY(p_org_ids))
+          AND (p_dept_ids    IS NULL OR s.department_id     = ANY(p_dept_ids))
+          AND (p_subdept_ids IS NULL OR s.sub_department_id = ANY(p_subdept_ids))
+          AND (
+                s.bidding_open_at IS NOT NULL
+                OR EXISTS (SELECT 1 FROM shift_bids b WHERE b.shift_id = s.id)
+              )
+    ),
+
+    -- ── Bids placed on the open bidding shifts ────────────────────────
+    -- total_bids counts shift_bids rows (any status) ONLY for shifts that
+    -- are in the open-bidding universe above, keeping every metric over a
+    -- single consistent scope.
+    bid_counts AS (
+        SELECT COUNT(b.id)::int AS total_bids
+        FROM shift_bids b
+        JOIN open_shifts os ON os.id = b.shift_id
+    ),
+
+    -- ── Single-row shift-grain aggregate ──────────────────────────────
+    shift_metrics AS (
+        SELECT
+            COUNT(*)::int AS open_bidding_shifts,
+            COUNT(*) FILTER (WHERE assigned_employee_id IS NOT NULL)::int
+                AS winners_selected,
+            COUNT(*) FILTER (WHERE assigned_employee_id IS NULL)::int
+                AS unfilled_open_shifts
+        FROM open_shifts
+    )
+
+    -- ── Single-row assembly with guarded divides + ROUND(...,2) ───────
+    SELECT
+        sm.open_bidding_shifts,
+        bc.total_bids,
+        sm.winners_selected,
+        sm.unfilled_open_shifts,
+        -- avg bids per open shift (plain ratio, not a percentage)
+        CASE WHEN sm.open_bidding_shifts = 0 THEN 0
+             ELSE ROUND(bc.total_bids::numeric / sm.open_bidding_shifts, 2)
+        END AS avg_bids_per_open_shift,
+        -- fill rate: winners / open shifts * 100
+        CASE WHEN sm.open_bidding_shifts = 0 THEN 0
+             ELSE ROUND(sm.winners_selected::numeric
+                        / sm.open_bidding_shifts * 100, 2)
+        END AS open_shift_fill_rate,
+        -- bid success rate: winners (winning bids) / all bids placed * 100
+        CASE WHEN bc.total_bids = 0 THEN 0
+             ELSE ROUND(sm.winners_selected::numeric
+                        / bc.total_bids * 100, 2)
+        END AS bid_success_rate,
+        -- unfilled open-shift rate: unfilled / open shifts * 100
+        CASE WHEN sm.open_bidding_shifts = 0 THEN 0
+             ELSE ROUND(sm.unfilled_open_shifts::numeric
+                        / sm.open_bidding_shifts * 100, 2)
+        END AS unfilled_open_shift_rate
+    FROM shift_metrics sm
+    CROSS JOIN bid_counts bc;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_bidding_kpis"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[], "p_subdept_ids" "uuid"[]) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."get_bidding_kpis"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[], "p_subdept_ids" "uuid"[]) IS 'Single-row bidding-funnel KPIs (open bidding shifts / total bids / winners / unfilled, plus avg_bids_per_open_shift, open_shift_fill_rate, bid_success_rate, unfilled_open_shift_rate) for a [p_from,p_to] shift_date window, optionally scoped by org/dept/subdept arrays (NULL = no filter). An "open bidding shift" entered bidding (bidding_open_at IS NOT NULL OR has a shift_bids row); total_bids is counted only over those shifts. All divides guarded; rates are percentages ROUND(...,2). SECURITY DEFINER / STABLE.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."get_broadcast_ack_stats"("broadcast_uuid" "uuid") RETURNS TABLE("total_recipients" bigint, "acknowledged_count" bigint, "pending_count" bigint, "ack_percentage" integer)
@@ -6913,6 +7422,457 @@ $$;
 ALTER FUNCTION "public"."get_insights_trend"("p_start_date" "date", "p_end_date" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[]) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."get_manager_scorecard"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[] DEFAULT NULL::"uuid"[], "p_dept_ids" "uuid"[] DEFAULT NULL::"uuid"[], "p_subdept_ids" "uuid"[] DEFAULT NULL::"uuid"[]) RETURNS TABLE("managed_published_shifts" integer, "filled_shifts" integer, "fill_rate" numeric, "open_shifts" integer, "covered_open_shifts" integer, "open_coverage_rate" numeric, "published_snapshots" integer, "distinct_shifts" integer, "churn_rate" numeric, "emergency_fill_count" integer, "emergency_fill_rate" numeric, "reassignment_count" integer, "avg_publish_lead_time_hours" numeric, "manager_actions" integer, "employee_actions" integer, "system_actions" integer)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+BEGIN
+    RETURN QUERY
+    WITH
+    -- ── Scoped published shift universe ───────────────────────────────
+    -- Every shift-grain metric (fill, coverage, publish lead time) is
+    -- anchored here. Window: shift_date in [p_from, p_to]; org/dept/subdept
+    -- ANDed. "Published" = lifecycle_status <> 'Draft' AND not soft-deleted.
+    pub_shifts AS (
+        SELECT
+            s.id,
+            s.assigned_employee_id,
+            s.scheduled_start,
+            s.published_at,
+            s.bidding_open_at
+        FROM shifts s
+        WHERE s.deleted_at IS NULL
+          AND s.lifecycle_status <> 'Draft'
+          AND s.shift_date BETWEEN p_from AND p_to
+          AND (p_org_ids     IS NULL OR s.organization_id   = ANY(p_org_ids))
+          AND (p_dept_ids    IS NULL OR s.department_id     = ANY(p_dept_ids))
+          AND (p_subdept_ids IS NULL OR s.sub_department_id = ANY(p_subdept_ids))
+    ),
+
+    -- ── Per-shift open flag ───────────────────────────────────────────
+    -- A shift is "open" (entered the marketplace as an unfilled posting) if
+    -- it had >=1 OFFERED event OR >=1 shift_bids row OR went on bidding
+    -- (bidding_open_at IS NOT NULL). "Covered" = open AND currently filled.
+    shift_flags AS (
+        SELECT
+            ps.id,
+            ps.assigned_employee_id,
+            ps.scheduled_start,
+            ps.published_at,
+            (
+                EXISTS (
+                    SELECT 1 FROM shift_events e
+                    WHERE e.shift_id = ps.id AND e.event_type = 'OFFERED'
+                )
+                OR EXISTS (
+                    SELECT 1 FROM shift_bids b WHERE b.shift_id = ps.id
+                )
+                OR ps.bidding_open_at IS NOT NULL
+            ) AS is_open
+        FROM pub_shifts ps
+    ),
+
+    -- ── Shift Fill Rate + Open Shift Coverage + Publish Lead Time ─────
+    -- avg_publish_lead_time_hours: average over published shifts of
+    -- (scheduled_start - published_at) in hours. Rows with NULL
+    -- scheduled_start / NULL published_at or a NEGATIVE delta (published
+    -- after the shift was due to start) are discarded via the FILTER so they
+    -- don't pollute the average. LOW lead time = manager-negative.
+    shift_metrics AS (
+        SELECT
+            COUNT(*)::int                                                AS managed_published_shifts,
+            COUNT(*) FILTER (WHERE assigned_employee_id IS NOT NULL)::int
+                                                                         AS filled_shifts,
+            COUNT(*) FILTER (WHERE is_open)::int                         AS open_shifts,
+            COUNT(*) FILTER (WHERE is_open AND assigned_employee_id IS NOT NULL)::int
+                                                                         AS covered_open_shifts,
+            AVG(
+                EXTRACT(EPOCH FROM (scheduled_start - published_at)) / 3600.0
+            ) FILTER (
+                WHERE scheduled_start IS NOT NULL
+                  AND published_at   IS NOT NULL
+                  AND scheduled_start >= published_at
+            )                                                            AS avg_publish_lead_time_hours
+        FROM shift_flags
+    ),
+
+    -- ── Snapshot universe (Churn + Emergency Fill + Reassignment) ─────
+    -- Snapshot-grain metrics are scoped by the snapshot's OWN denormalized
+    -- org/dept/subdept + shift_date (NOT by joining shifts), per spec.
+    -- One snapshot = one published-active assignment episode.
+    snaps AS (
+        SELECT
+            asnp.shift_id,
+            asnp.source,
+            asnp.end_reason
+        FROM assignment_snapshots asnp
+        WHERE asnp.shift_date BETWEEN p_from AND p_to
+          AND (p_org_ids     IS NULL OR asnp.organization_id   = ANY(p_org_ids))
+          AND (p_dept_ids    IS NULL OR asnp.department_id     = ANY(p_dept_ids))
+          AND (p_subdept_ids IS NULL OR asnp.sub_department_id = ANY(p_subdept_ids))
+    ),
+
+    snapshot_metrics AS (
+        SELECT
+            COUNT(*)::int                                                AS published_snapshots,
+            COUNT(DISTINCT shift_id)::int                               AS distinct_shifts,
+            COUNT(*) FILTER (WHERE source = 'emergency')::int           AS emergency_fill_count,
+            COUNT(*) FILTER (WHERE end_reason = 'reassigned')::int      AS reassignment_count
+        FROM snaps
+    ),
+
+    -- ── Action split over enriched shift_events (event-grain) ─────────
+    -- Window each event by joining its shift (shift_date + org/dept/subdept
+    -- scope). actor_role is the manager/employee/system attribution added by
+    -- migration 20260626090000. Events whose actor_role is NULL/other fall
+    -- into none of the three buckets (the three counts need not sum to the
+    -- total event count). Soft-deleted shifts are excluded.
+    action_metrics AS (
+        SELECT
+            COUNT(*) FILTER (WHERE e.actor_role = 'manager')::int        AS manager_actions,
+            COUNT(*) FILTER (WHERE e.actor_role = 'employee')::int       AS employee_actions,
+            COUNT(*) FILTER (WHERE e.actor_role = 'system')::int         AS system_actions
+        FROM shift_events e
+        JOIN shifts s ON s.id = e.shift_id
+        WHERE s.deleted_at IS NULL
+          AND s.lifecycle_status <> 'Draft'
+          AND s.shift_date BETWEEN p_from AND p_to
+          AND (p_org_ids     IS NULL OR s.organization_id   = ANY(p_org_ids))
+          AND (p_dept_ids    IS NULL OR s.department_id     = ANY(p_dept_ids))
+          AND (p_subdept_ids IS NULL OR s.sub_department_id = ANY(p_subdept_ids))
+    )
+
+    -- ── Single-row assembly with guarded divides + ROUND(...,2) ───────
+    SELECT
+        -- Shift Fill Rate
+        sm.managed_published_shifts,
+        sm.filled_shifts,
+        CASE WHEN sm.managed_published_shifts = 0 THEN 0
+             ELSE ROUND(sm.filled_shifts::numeric / sm.managed_published_shifts * 100, 2) END
+                                                                         AS fill_rate,
+        -- Open Shift Coverage Rate
+        sm.open_shifts,
+        sm.covered_open_shifts,
+        CASE WHEN sm.open_shifts = 0 THEN 0
+             ELSE ROUND(sm.covered_open_shifts::numeric / sm.open_shifts * 100, 2) END
+                                                                         AS open_coverage_rate,
+        -- Assignment Churn Rate, as a PERCENTAGE: extra owners per 100 shifts
+        -- = (snapshots - distinct shifts) / distinct shifts * 100. (Can exceed
+        -- 100 if shifts average >2 owners.)
+        spm.published_snapshots,
+        spm.distinct_shifts,
+        CASE WHEN spm.distinct_shifts = 0 THEN 0
+             ELSE ROUND(
+                 (spm.published_snapshots - spm.distinct_shifts)::numeric
+                 / spm.distinct_shifts * 100, 2) END                    AS churn_rate,
+        -- Emergency Fill: count + rate over all snapshots in scope. HIGH rate =
+        -- poor planning / short lead time (manager-negative).
+        spm.emergency_fill_count,
+        CASE WHEN spm.published_snapshots = 0 THEN 0
+             ELSE ROUND(spm.emergency_fill_count::numeric
+                        / spm.published_snapshots * 100, 2) END          AS emergency_fill_rate,
+        -- Reassignment volume (snapshots ended by a manager reassignment)
+        spm.reassignment_count,
+        -- Average publish lead time (hours); NULL -> 0 when no resolvable shifts
+        ROUND(COALESCE(sm.avg_publish_lead_time_hours, 0), 2)            AS avg_publish_lead_time_hours,
+        -- Action split (event-grain, by actor_role)
+        am.manager_actions,
+        am.employee_actions,
+        am.system_actions
+    FROM shift_metrics     sm
+    CROSS JOIN snapshot_metrics spm
+    CROSS JOIN action_metrics   am;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_manager_scorecard"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[], "p_subdept_ids" "uuid"[]) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."get_manager_scorecard"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[], "p_subdept_ids" "uuid"[]) IS 'Single-row manager / roster-quality scorecard (fill / open-coverage / assignment-churn / emergency-fill / reassignment / publish-lead-time / manager-employee-system action split) for a [p_from,p_to] shift_date window, optionally scoped by org/dept/subdept arrays (NULL = no filter). Shift-grain metrics scope via shifts; churn/emergency/reassignment are snapshot-grain over assignment_snapshots; the action split is event-grain over shift_events.actor_role joined to shifts. emergency_fill_rate and a LOW avg_publish_lead_time_hours are manager-NEGATIVE (worse planning). SECURITY DEFINER / STABLE.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."get_marketplace_kpis"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[] DEFAULT NULL::"uuid"[], "p_dept_ids" "uuid"[] DEFAULT NULL::"uuid"[], "p_subdept_ids" "uuid"[] DEFAULT NULL::"uuid"[]) RETURNS TABLE("published_shifts" integer, "filled_shifts" integer, "fill_rate" numeric, "open_shifts" integer, "covered_open_shifts" integer, "open_coverage_rate" numeric, "published_snapshots" integer, "distinct_filled_shifts" integer, "churn_rate" numeric, "avg_time_to_fill_hours" numeric, "marketplace_eligible_shifts" integer, "marketplace_used_shifts" integer, "marketplace_utilization_rate" numeric, "offers_resolved" integer, "offer_accept_rate" numeric, "offer_reject_rate" numeric, "offer_ignore_rate" numeric, "trades_initiated" integer, "trade_completion_rate" numeric, "trade_rejection_rate" numeric, "trade_cancellation_rate" numeric, "trade_expiry_rate" numeric)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+BEGIN
+    RETURN QUERY
+    WITH
+    -- ── Scoped published shift universe ───────────────────────────────
+    -- Every shift-grain metric (fill, coverage, marketplace utilization,
+    -- and the per-shift inputs to time-to-fill) is anchored here.
+    -- Window: shift_date in [p_from, p_to]; org/dept/subdept ANDed.
+    -- "Published" = lifecycle_status <> 'Draft' AND not soft-deleted.
+    pub_shifts AS (
+        SELECT
+            s.id,
+            s.assigned_employee_id,
+            s.scheduled_start,
+            s.shift_date,
+            s.bidding_open_at,
+            s.published_at,
+            s.created_at,
+            s.organization_id,
+            s.department_id,
+            s.sub_department_id
+        FROM shifts s
+        WHERE s.deleted_at IS NULL
+          -- "published" = EVER published (published_at is set on first publish and
+          -- survives a revert-to-Draft from offer-expiry / bidding-expiry). Using
+          -- lifecycle_status <> 'Draft' would wrongly DROP shifts that were published,
+          -- failed to fill, and reverted (e.g. a bidding shift that expired unfilled),
+          -- inflating the fill rate. published_at IS NOT NULL keeps them in scope.
+          AND s.published_at IS NOT NULL
+          AND s.shift_date BETWEEN p_from AND p_to
+          AND (p_org_ids     IS NULL OR s.organization_id   = ANY(p_org_ids))
+          AND (p_dept_ids    IS NULL OR s.department_id     = ANY(p_dept_ids))
+          AND (p_subdept_ids IS NULL OR s.sub_department_id = ANY(p_subdept_ids))
+    ),
+
+    -- ── Per-shift marketplace touch flags ─────────────────────────────
+    -- A shift "used the marketplace" if it had >=1 OFFERED event OR >=1
+    -- shift_bids row OR >=1 shift_swaps row. A shift is "open" (entered the
+    -- marketplace as an unfilled posting) if it had >=1 OFFERED event OR
+    -- >=1 shift_bids row OR went on bidding (bidding_open_at IS NOT NULL).
+    -- Trades alone do NOT make a shift "open" (a trade is a hand-off of an
+    -- already-filled shift), but DO count toward marketplace utilization.
+    shift_flags AS (
+        SELECT
+            ps.id,
+            ps.assigned_employee_id,
+            -- had an OFFERED event in the ledger
+            EXISTS (
+                SELECT 1 FROM shift_events e
+                WHERE e.shift_id = ps.id AND e.event_type = 'OFFERED'
+            ) AS had_offer,
+            -- had at least one bid (any status)
+            EXISTS (
+                SELECT 1 FROM shift_bids b WHERE b.shift_id = ps.id
+            ) AS had_bid,
+            -- had at least one swap initiated against it as the requester's shift
+            EXISTS (
+                SELECT 1 FROM shift_swaps sw WHERE sw.requester_shift_id = ps.id
+            ) AS had_swap,
+            -- ever went on bidding (column set when a shift is posted to bidding)
+            (ps.bidding_open_at IS NOT NULL) AS went_on_bidding
+        FROM pub_shifts ps
+    ),
+
+    -- ── Shift Fill Rate + Open Shift Coverage Rate + Marketplace Util ──
+    shift_metrics AS (
+        SELECT
+            COUNT(*)::int                                              AS published_shifts,
+            COUNT(*) FILTER (WHERE assigned_employee_id IS NOT NULL)::int
+                                                                       AS filled_shifts,
+            -- open = entered marketplace as a posting
+            COUNT(*) FILTER (WHERE had_offer OR had_bid OR went_on_bidding)::int
+                                                                       AS open_shifts,
+            -- covered = open AND currently filled
+            COUNT(*) FILTER (
+                WHERE (had_offer OR had_bid OR went_on_bidding)
+                  AND assigned_employee_id IS NOT NULL
+            )::int                                                     AS covered_open_shifts,
+            -- marketplace-eligible = all published shifts in scope
+            COUNT(*)::int                                              AS marketplace_eligible_shifts,
+            -- marketplace-used = touched offer / bid / swap
+            COUNT(*) FILTER (WHERE had_offer OR had_bid OR had_swap)::int
+                                                                       AS marketplace_used_shifts
+        FROM shift_flags
+    ),
+
+    -- ── Snapshot universe (Assignment Churn + Average Time To Fill) ───
+    -- Snapshot-grain metrics are scoped by the snapshot's OWN denormalized
+    -- org/dept/subdept + shift_date (NOT by joining shifts), per spec.
+    -- One snapshot = one published-active assignment episode.
+    snaps AS (
+        SELECT
+            asnp.shift_id,
+            asnp.became_active_at,
+            asnp.scheduled_start
+        FROM assignment_snapshots asnp
+        WHERE asnp.shift_date BETWEEN p_from AND p_to
+          AND (p_org_ids     IS NULL OR asnp.organization_id   = ANY(p_org_ids))
+          AND (p_dept_ids    IS NULL OR asnp.department_id     = ANY(p_dept_ids))
+          AND (p_subdept_ids IS NULL OR asnp.sub_department_id = ANY(p_subdept_ids))
+    ),
+
+    -- Per-snapshot time-to-fill: hours from the marketplace-open moment to the
+    -- moment the assignment became active.
+    --   open_started_at := the latest shift_events.event_time STRICTLY BEFORE
+    --                      became_active_at among OFFERED events for that shift
+    --                      (the most recent preceding "posted/offered" signal).
+    --   Fallbacks (when no preceding OFFERED event exists): the shift's
+    --   bidding_open_at, then published_at, then created_at. All read from the
+    --   `shifts` row (no org/dept scope needed — we already have the snapshot).
+    -- Negative / NULL deltas are discarded (NULLIF guard) so a snapshot whose
+    -- open moment can't be established does not pollute the average.
+    ttf AS (
+        SELECT
+            sn.shift_id,
+            sn.became_active_at,
+            COALESCE(
+                (
+                    SELECT MAX(e.event_time)
+                    FROM shift_events e
+                    WHERE e.shift_id   = sn.shift_id
+                      AND e.event_type = 'OFFERED'
+                      AND e.event_time < sn.became_active_at
+                ),
+                sh.bidding_open_at,
+                sh.published_at,
+                sh.created_at
+            ) AS open_started_at
+        FROM snaps sn
+        LEFT JOIN shifts sh ON sh.id = sn.shift_id
+    ),
+
+    snapshot_metrics AS (
+        SELECT
+            COUNT(*)::int                          AS published_snapshots,
+            COUNT(DISTINCT shift_id)::int          AS distinct_filled_shifts
+        FROM snaps
+    ),
+
+    ttf_metrics AS (
+        SELECT
+            -- average over snapshots with a resolvable, non-negative open->active gap
+            AVG(
+                EXTRACT(EPOCH FROM (became_active_at - open_started_at)) / 3600.0
+            ) FILTER (
+                WHERE open_started_at IS NOT NULL
+                  AND became_active_at IS NOT NULL
+                  AND became_active_at >= open_started_at
+            ) AS avg_time_to_fill_hours
+        FROM ttf
+    ),
+
+    -- ── Offer funnel over RESOLVED offers (event-sourced) ─────────────
+    -- Resolved = ACCEPTED + REJECTED + IGNORED (an OFFERED with no terminal
+    -- event is still pending and is excluded). Scoped by joining shifts for
+    -- the window + org/dept/subdept. The three rates sum to 100.
+    -- ── Offer funnel — EPISODE-sourced (an offer = an S3 OFFERED in an episode) ──
+    -- IMPORTANT: a raw ACCEPTED event is emitted for offer-accepts AND for bid-wins
+    -- (select_winner sets assignment_outcome='confirmed') AND for trade-confirms.
+    -- Counting raw ACCEPTED events therefore OVER-counts the acceptance rate. The
+    -- offer funnel must count only episodes that carried a real S3 offer (had_offer):
+    --   accepted = had_offer AND had_accept       (the offer was accepted — even if
+    --                                               later dropped/swapped; that's a
+    --                                               separate cancellation event)
+    --   ignored  = had_offer AND not accepted AND terminal_outcome='ignored'
+    --   rejected = had_offer AND not accepted AND terminal_outcome NOT IN ('ignored','open')
+    --   resolved = accepted + rejected + ignored  (a still-outstanding offer with
+    --              terminal_outcome='open' is pending and excluded)
+    offer_metrics AS (
+        SELECT
+            COUNT(*) FILTER (WHERE ep.had_offer AND ep.had_accept)::int AS accepted,
+            COUNT(*) FILTER (WHERE ep.had_offer AND NOT ep.had_accept
+                                   AND ep.terminal_outcome NOT IN ('ignored','open'))::int AS rejected,
+            COUNT(*) FILTER (WHERE ep.had_offer AND NOT ep.had_accept
+                                   AND ep.terminal_outcome = 'ignored')::int AS ignored,
+            COUNT(*) FILTER (WHERE ep.had_offer
+                                   AND (ep.had_accept OR ep.terminal_outcome <> 'open'))::int AS resolved
+        FROM v_shift_assignment_episodes ep
+        WHERE ep.shift_date BETWEEN p_from AND p_to
+          AND ep.terminal_outcome <> 'shift_deleted'
+          AND (p_org_ids     IS NULL OR ep.organization_id   = ANY(p_org_ids))
+          AND (p_dept_ids    IS NULL OR ep.department_id     = ANY(p_dept_ids))
+          AND (p_subdept_ids IS NULL OR ep.sub_department_id = ANY(p_subdept_ids))
+    ),
+
+    -- ── Trade funnel over shift_swaps in window ───────────────────────
+    -- Scoped by joining the requester's shift (requester_shift_id) for the
+    -- window + org/dept/subdept. Bucket mapping over swap_request_status:
+    --   completed   := APPROVED    (the trade went through)
+    --   rejected    := REJECTED    (the manager rejected the trade)
+    --   cancelled   := CANCELLED   (the requester withdrew the trade)
+    --   expired     := EXPIRED
+    --   (OPEN / OFFER_SELECTED / MANAGER_PENDING are still in-flight: counted
+    --    in the denominator `total` but in none of the four terminal buckets,
+    --    so the four rates need not sum to 100.)
+    trade_metrics AS (
+        SELECT
+            COUNT(*)::int                                                  AS total,
+            COUNT(*) FILTER (WHERE ss.status = 'APPROVED')::int            AS completed,
+            COUNT(*) FILTER (WHERE ss.status = 'REJECTED')::int            AS rejected,
+            COUNT(*) FILTER (WHERE ss.status = 'CANCELLED')::int           AS cancelled,
+            COUNT(*) FILTER (WHERE ss.status = 'EXPIRED')::int             AS expired
+        FROM shift_swaps ss
+        JOIN shifts s ON s.id = ss.requester_shift_id
+        WHERE s.deleted_at IS NULL
+          AND s.shift_date BETWEEN p_from AND p_to
+          AND (p_org_ids     IS NULL OR s.organization_id   = ANY(p_org_ids))
+          AND (p_dept_ids    IS NULL OR s.department_id     = ANY(p_dept_ids))
+          AND (p_subdept_ids IS NULL OR s.sub_department_id = ANY(p_subdept_ids))
+    )
+
+    -- ── Single-row assembly with guarded divides + ROUND(...,2) ───────
+    SELECT
+        -- Fill Rate
+        sm.published_shifts,
+        sm.filled_shifts,
+        CASE WHEN sm.published_shifts = 0 THEN 0
+             ELSE ROUND(sm.filled_shifts::numeric / sm.published_shifts * 100, 2) END
+                                                                       AS fill_rate,
+        -- Open Shift Coverage Rate
+        sm.open_shifts,
+        sm.covered_open_shifts,
+        CASE WHEN sm.open_shifts = 0 THEN 0
+             ELSE ROUND(sm.covered_open_shifts::numeric / sm.open_shifts * 100, 2) END
+                                                                       AS open_coverage_rate,
+        -- Assignment Churn Rate, as a PERCENTAGE: extra owners per 100 published
+        -- shifts = (snapshots - distinct shifts) / distinct shifts * 100. (Expressed
+        -- as a % so it aligns with the UI formatting + thresholds; can exceed 100 if
+        -- shifts average >2 owners.)
+        spm.published_snapshots,
+        spm.distinct_filled_shifts,
+        CASE WHEN spm.distinct_filled_shifts = 0 THEN 0
+             ELSE ROUND(
+                 (spm.published_snapshots - spm.distinct_filled_shifts)::numeric
+                 / spm.distinct_filled_shifts * 100, 2) END           AS churn_rate,
+        -- Average Time To Fill (hours); NULL -> 0 when no resolvable snapshots
+        ROUND(COALESCE(tm.avg_time_to_fill_hours, 0), 2)              AS avg_time_to_fill_hours,
+        -- Marketplace Utilization Rate
+        sm.marketplace_eligible_shifts,
+        sm.marketplace_used_shifts,
+        CASE WHEN sm.marketplace_eligible_shifts = 0 THEN 0
+             ELSE ROUND(sm.marketplace_used_shifts::numeric
+                        / sm.marketplace_eligible_shifts * 100, 2) END AS marketplace_utilization_rate,
+        -- Offer funnel (resolved)
+        om.resolved                                                   AS offers_resolved,
+        CASE WHEN om.resolved = 0 THEN 0
+             ELSE ROUND(om.accepted::numeric / om.resolved * 100, 2) END AS offer_accept_rate,
+        CASE WHEN om.resolved = 0 THEN 0
+             ELSE ROUND(om.rejected::numeric / om.resolved * 100, 2) END AS offer_reject_rate,
+        CASE WHEN om.resolved = 0 THEN 0
+             ELSE ROUND(om.ignored::numeric  / om.resolved * 100, 2) END AS offer_ignore_rate,
+        -- Trade funnel
+        trm.total                                                     AS trades_initiated,
+        CASE WHEN trm.total = 0 THEN 0
+             ELSE ROUND(trm.completed::numeric / trm.total * 100, 2) END AS trade_completion_rate,
+        CASE WHEN trm.total = 0 THEN 0
+             ELSE ROUND(trm.rejected::numeric / trm.total * 100, 2) END AS trade_rejection_rate,
+        CASE WHEN trm.total = 0 THEN 0
+             ELSE ROUND(trm.cancelled::numeric / trm.total * 100, 2) END AS trade_cancellation_rate,
+        CASE WHEN trm.total = 0 THEN 0
+             ELSE ROUND(trm.expired::numeric / trm.total * 100, 2) END AS trade_expiry_rate
+    FROM shift_metrics    sm
+    CROSS JOIN snapshot_metrics spm
+    CROSS JOIN ttf_metrics      tm
+    CROSS JOIN offer_metrics    om
+    CROSS JOIN trade_metrics    trm;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_marketplace_kpis"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[], "p_subdept_ids" "uuid"[]) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."get_marketplace_kpis"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[], "p_subdept_ids" "uuid"[]) IS 'Single-row marketplace KPIs (fill / open-coverage / churn / time-to-fill / utilization / offer funnel / trade funnel) for a [p_from,p_to] shift_date window, optionally scoped by org/dept/subdept arrays (NULL = no filter). Offer behaviour is event-sourced from shift_events; churn & time-to-fill are snapshot-grain over assignment_snapshots; trades over shift_swaps (APPROVED=completed, REJECTED=rejected [manager rejected], CANCELLED=cancelled [requester withdrew], EXPIRED=expired). SECURITY DEFINER / STABLE.';
+
+
+
 CREATE OR REPLACE FUNCTION "public"."get_metric_detailed_analysis"("p_metric_id" "text", "p_start_date" "date", "p_end_date" "date", "p_org_ids" "uuid"[] DEFAULT NULL::"uuid"[], "p_dept_ids" "uuid"[] DEFAULT NULL::"uuid"[]) RETURNS json
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
@@ -7132,45 +8092,22 @@ CREATE OR REPLACE FUNCTION "public"."get_publish_target_state"("p_has_assignment
 BEGIN
     IF p_has_assignment THEN
         IF p_is_confirmed THEN
-            -- S4: Published + Assigned + Confirmed
-            RETURN QUERY SELECT 
-                'S4'::TEXT,
-                'Published'::shift_lifecycle,
-                'assigned'::shift_assignment_status,
-                'confirmed'::shift_assignment_outcome,
-                'not_on_bidding'::shift_bidding_status,
+            RETURN QUERY SELECT
+                'S4'::TEXT, 'Published'::shift_lifecycle, 'assigned'::shift_assignment_status,
+                'confirmed'::shift_assignment_outcome, 'not_on_bidding'::shift_bidding_status,
                 'fulfilled'::shift_fulfillment_status;
         ELSE
-            -- S3: Published + Assigned + Offered
-            RETURN QUERY SELECT 
-                'S3'::TEXT,
-                'Published'::shift_lifecycle,
-                'assigned'::shift_assignment_status,
-                'offered'::shift_assignment_outcome,
-                'not_on_bidding'::shift_bidding_status,
+            RETURN QUERY SELECT
+                'S3'::TEXT, 'Published'::shift_lifecycle, 'assigned'::shift_assignment_status,
+                'offered'::shift_assignment_outcome, 'not_on_bidding'::shift_bidding_status,
                 'pending'::shift_fulfillment_status;
         END IF;
     ELSE
-        -- Unassigned → Bidding
-        IF p_hours_until_start IS NOT NULL AND p_hours_until_start < 24 THEN
-            -- S6: Published + OnBiddingUrgent
-            RETURN QUERY SELECT 
-                'S6'::TEXT,
-                'Published'::shift_lifecycle,
-                'unassigned'::shift_assignment_status,
-                NULL::shift_assignment_outcome,
-                'on_bidding_urgent'::shift_bidding_status,
-                'none'::shift_fulfillment_status;
-        ELSE
-            -- S5: Published + OnBiddingNormal
-            RETURN QUERY SELECT 
-                'S5'::TEXT,
-                'Published'::shift_lifecycle,
-                'unassigned'::shift_assignment_status,
-                NULL::shift_assignment_outcome,
-                'on_bidding_normal'::shift_bidding_status,
-                'none'::shift_fulfillment_status;
-        END IF;
+        -- Unassigned -> Bidding (unified on_bidding; urgency derived from TTS at read time)
+        RETURN QUERY SELECT
+            'S5'::TEXT, 'Published'::shift_lifecycle, 'unassigned'::shift_assignment_status,
+            NULL::shift_assignment_outcome, 'on_bidding'::shift_bidding_status,
+            'none'::shift_fulfillment_status;
     END IF;
 END;
 $$;
@@ -7179,7 +8116,7 @@ $$;
 ALTER FUNCTION "public"."get_publish_target_state"("p_has_assignment" boolean, "p_is_confirmed" boolean, "p_hours_until_start" numeric) OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_quarterly_performance_report"("p_year" integer, "p_quarter" integer, "p_org_ids" "uuid"[] DEFAULT NULL::"uuid"[], "p_dept_ids" "uuid"[] DEFAULT NULL::"uuid"[], "p_subdept_ids" "uuid"[] DEFAULT NULL::"uuid"[]) RETURNS TABLE("employee_id" "uuid", "employee_name" "text", "total_offers" integer, "accepted" integer, "rejected" integer, "expired" integer, "assigned" integer, "emergency_assigned" integer, "cancel_standard" integer, "cancel_late" integer, "swap_out" integer, "late_clock_in" integer, "early_clock_out" integer, "no_show" integer, "completed" integer, "acceptance_rate" numeric, "rejection_rate" numeric, "ignorance_rate" numeric, "cancel_rate" numeric, "late_cancel_rate" numeric, "swap_rate" numeric, "reliability_score" numeric, "late_clock_in_rate" numeric, "early_clock_out_rate" numeric, "no_show_rate" numeric, "drop_rate" numeric, "total_bids" integer, "bids_accepted" integer, "bid_success_rate" numeric)
+CREATE OR REPLACE FUNCTION "public"."get_quarterly_performance_report"("p_year" integer, "p_quarter" integer, "p_org_ids" "uuid"[] DEFAULT NULL::"uuid"[], "p_dept_ids" "uuid"[] DEFAULT NULL::"uuid"[], "p_subdept_ids" "uuid"[] DEFAULT NULL::"uuid"[]) RETURNS TABLE("employee_id" "uuid", "employee_name" "text", "total_offers" integer, "accepted" integer, "rejected" integer, "expired" integer, "assigned" integer, "emergency_assigned" integer, "cancel_standard" integer, "cancel_late" integer, "swap_out" integer, "late_clock_in" integer, "early_clock_out" integer, "no_show" integer, "completed" integer, "acceptance_rate" numeric, "rejection_rate" numeric, "ignorance_rate" numeric, "cancel_rate" numeric, "late_cancel_rate" numeric, "swap_rate" numeric, "reliability_score" numeric, "late_clock_in_rate" numeric, "early_clock_out_rate" numeric, "no_show_rate" numeric, "drop_rate" numeric, "total_bids" integer, "bids_accepted" integer, "bid_success_rate" numeric, "assignment_changes" integer, "trade_requests" integer, "trade_completion_rate" numeric, "trade_cancellation_rate" numeric, "attendance_compliance_rate" numeric, "performance_score" numeric, "engagement_score" numeric, "standard_drop_rate" numeric, "urgent_drop_rate" numeric, "early_clock_in" integer, "late_clock_out" integer, "early_clock_in_rate" numeric, "late_clock_out_rate" numeric, "on_time_in" integer, "on_time_out" integer, "on_time_in_rate" numeric, "on_time_out_rate" numeric, "auto_clock_out" integer, "auto_clock_out_rate" numeric)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
     AS $$
@@ -7192,251 +8129,275 @@ BEGIN
 
     RETURN QUERY
     WITH
-    -- ── Activity CTEs ──────────────────────────────────────────────────────
-    
-    -- Potential assignments (Current + Dropped)
-    assignment_events AS (
-        -- (1) Current assignments
+    -- Offer behaviour from episodes view
+    offer_agg AS (
         SELECT
-            s.assigned_employee_id          AS emp_id,
-            s.id                            AS shift_id,
-            s.lifecycle_status,
-            s.attendance_status,
-            s.assignment_outcome,
-            s.assignment_source,
-            s.is_cancelled,
-            s.cancelled_at,
-            s.scheduled_start,
-            s.scheduled_end,
-            COALESCE(t.clock_in, s.actual_start) AS clock_in_time,
-            COALESCE(t.clock_out, s.actual_end)  AS clock_out_time,
-            s.emergency_assigned_at,
-            s.organization_id,
-            s.department_id,
-            s.sub_department_id,
-            FALSE                           AS is_drop,
-            NULL::timestamp                 AS dropped_at
-        FROM shifts s
-        LEFT JOIN timesheets t ON t.shift_id = s.id
-        WHERE s.assigned_employee_id IS NOT NULL
-          AND s.shift_date BETWEEN v_start AND v_end
-          AND s.lifecycle_status != 'Draft'
-          AND (p_org_ids     IS NULL OR s.organization_id    = ANY(p_org_ids))
-          AND (p_dept_ids    IS NULL OR s.department_id      = ANY(p_dept_ids))
-          AND (p_subdept_ids IS NULL OR s.sub_department_id  = ANY(p_subdept_ids))
-
-        UNION ALL
-
-        -- (2) Dropped shifts
-        SELECT
-            s.last_dropped_by               AS emp_id,
-            s.id                            AS shift_id,
-            s.lifecycle_status,
-            s.attendance_status,
-            s.assignment_outcome,
-            s.assignment_source,
-            s.is_cancelled,
-            s.cancelled_at,
-            s.scheduled_start,
-            s.scheduled_end,
-            NULL::timestamp                 AS clock_in_time,
-            NULL::timestamp                 AS clock_out_time,
-            s.emergency_assigned_at,
-            s.organization_id,
-            s.department_id,
-            s.sub_department_id,
-            TRUE                            AS is_drop,
-            s.updated_at                    AS dropped_at
-        FROM shifts s
-        WHERE s.last_dropped_by IS NOT NULL
-          AND s.shift_date BETWEEN v_start AND v_end
-          AND (p_org_ids     IS NULL OR s.organization_id    = ANY(p_org_ids))
-          AND (p_dept_ids    IS NULL OR s.department_id      = ANY(p_dept_ids))
-          AND (p_subdept_ids IS NULL OR s.sub_department_id  = ANY(p_subdept_ids))
+            ep.employee_id AS emp_id,
+            COUNT(*) FILTER (WHERE ep.had_offer AND ep.terminal_outcome <> 'unassigned')::int                           AS total_offers_sent,
+            COUNT(*) FILTER (WHERE ep.had_offer AND ep.had_accept AND ep.terminal_outcome <> 'unassigned')::int          AS total_accepted,
+            COUNT(*) FILTER (WHERE ep.had_offer AND ep.terminal_outcome = 'rejected')::int AS total_rejected,
+            COUNT(*) FILTER (WHERE ep.had_offer AND ep.terminal_outcome = 'ignored')::int  AS total_expired,
+            COUNT(*) FILTER (WHERE ep.had_offer AND ep.had_accept AND ep.terminal_outcome IN ('cancelled_standard','cancelled_late','no_show'))::int AS dropped_count
+        FROM v_shift_assignment_episodes ep
+        WHERE ep.shift_date BETWEEN v_start AND v_end
+          AND ep.terminal_outcome != 'shift_deleted'
+          AND (p_org_ids     IS NULL OR ep.organization_id    = ANY(p_org_ids))
+          AND (p_dept_ids    IS NULL OR ep.department_id      = ANY(p_dept_ids))
+          AND (p_subdept_ids IS NULL OR ep.sub_department_id  = ANY(p_subdept_ids))
+        GROUP BY ep.employee_id
     ),
 
-    asgn_agg AS (
+    -- Assignment, Reliability, Attendance from assignment_snapshots
+    snap_agg AS (
         SELECT
-            emp_id,
-            COUNT(*)                                                                    AS total_assigned_shifts,
-            COUNT(*) FILTER (
-                WHERE is_drop = FALSE 
-                  AND is_cancelled = FALSE 
-                  AND (assignment_source IS DISTINCT FROM 'direct' AND emergency_assigned_at IS NULL)
-            )                                                                           AS current_assigned,
-            COUNT(*) FILTER (
-                WHERE is_drop = FALSE 
-                  AND is_cancelled = FALSE 
-                  AND (assignment_source = 'direct' OR emergency_assigned_at IS NOT NULL)
-            )                                                                           AS emergency_count,
-            COUNT(*) FILTER (WHERE is_drop = TRUE)                                      AS dropped_count,
-            COUNT(*) FILTER (
-                WHERE is_cancelled = true AND cancelled_at IS NOT NULL AND scheduled_start IS NOT NULL AND (scheduled_start - cancelled_at) > interval '24 hours'
-            )                                                                           AS cancel_standard_count,
-            COUNT(*) FILTER (
-                WHERE is_cancelled = true AND cancelled_at IS NOT NULL AND scheduled_start IS NOT NULL AND (scheduled_start - cancelled_at) <= interval '24 hours'
-            )                                                                           AS cancel_late_count,
-            COUNT(*) FILTER (
-                WHERE attendance_status = 'no_show' OR assignment_outcome = 'no_show'
-            )                                                                           AS no_show_agg_count,
-            COUNT(*) FILTER (WHERE lifecycle_status = 'Completed')                      AS completed_agg_count,
-            COUNT(*) FILTER (WHERE lifecycle_status IN ('InProgress', 'Completed'))    AS started_agg_count,
-            COUNT(*) FILTER (
-                WHERE clock_in_time IS NOT NULL AND scheduled_start IS NOT NULL
-                  AND clock_in_time > scheduled_start + interval '5 minutes'
-            )                                                                           AS late_clock_in_count,
-            COUNT(*) FILTER (
-                WHERE clock_out_time IS NOT NULL AND scheduled_end IS NOT NULL
-                  AND clock_out_time < scheduled_end - interval '5 minutes'
-            )                                                                           AS early_clock_out_count
-        FROM assignment_events
-        GROUP BY emp_id
+            snap.employee_id AS emp_id,
+            COUNT(*) FILTER (WHERE snap.source != 'emergency')::int                  AS assigned_count,
+            COUNT(*) FILTER (WHERE snap.source = 'emergency')::int                    AS emergency_count,
+            COUNT(*) FILTER (WHERE snap.end_reason = 'worked')::int                   AS completed_count,
+            COUNT(*) FILTER (WHERE snap.end_reason = 'dropped_std')::int              AS cancel_standard_count,
+            COUNT(*) FILTER (WHERE snap.end_reason = 'dropped_late')::int             AS cancel_late_count,
+            COUNT(*) FILTER (WHERE snap.end_reason = 'traded_out')::int               AS swap_out_count,
+            COUNT(*) FILTER (WHERE snap.end_reason = 'no_show')::int                  AS no_show_count,
+            COUNT(*) FILTER (WHERE snap.late_in AND snap.end_reason = 'worked')::int  AS late_clock_in_count,
+            COUNT(*) FILTER (WHERE snap.early_out AND snap.end_reason = 'worked')::int AS early_clock_out_count,
+            COUNT(*) FILTER (WHERE snap.early_in AND snap.end_reason = 'worked')::int  AS early_clock_in_count,
+            COUNT(*) FILTER (WHERE snap.late_out AND snap.end_reason = 'worked')::int  AS late_clock_out_count,
+            COUNT(*) FILTER (WHERE snap.on_time_in AND snap.end_reason = 'worked')::int AS on_time_in_count,
+            COUNT(*) FILTER (WHERE snap.on_time_out AND snap.end_reason = 'worked')::int AS on_time_out_count,
+            COUNT(*) FILTER (WHERE snap.auto_clock_out AND snap.end_reason = 'worked')::int AS auto_clock_out_count,
+            COUNT(*)::int                                                             AS held_count,
+
+            -- Assignment Changes: standard cancel, late cancel, no show, traded out, reassigned
+            COUNT(*) FILTER (WHERE snap.end_reason IS NOT NULL AND snap.end_reason != 'worked')::int AS assignment_changes,
+            -- Compliant count (for Attendance percentage): completed/worked AND neither late check-in nor early check-out
+            COUNT(*) FILTER (WHERE snap.end_reason = 'worked' AND NOT snap.late_in AND NOT snap.early_out)::int AS compliant_count,
+
+            -- Standard drops (TTS > 24 hours)
+            COUNT(*) FILTER (WHERE snap.end_reason = 'dropped_std' AND (snap.scheduled_start - snap.ended_at) > interval '24 hours')::int AS standard_drop_count,
+            -- Urgent drops (4 hours < TTS <= 24 hours)
+            COUNT(*) FILTER (WHERE snap.end_reason = 'dropped_std' AND (snap.scheduled_start - snap.ended_at) <= interval '24 hours')::int AS urgent_drop_count
+        FROM assignment_snapshots snap
+        WHERE snap.shift_date BETWEEN v_start AND v_end
+          AND (p_org_ids     IS NULL OR snap.organization_id    = ANY(p_org_ids))
+          AND (p_dept_ids    IS NULL OR snap.department_id      = ANY(p_dept_ids))
+          AND (p_subdept_ids IS NULL OR snap.sub_department_id  = ANY(p_subdept_ids))
+        GROUP BY snap.employee_id
     ),
 
+    -- Bidding metrics
     bid_agg AS (
         SELECT
-            combined.emp_id,
-            SUM(combined.s_offers_sent)::int AS total_offers_sent,
-            SUM(combined.s_accepted)::int    AS total_accepted,
-            SUM(combined.s_rejected)::int    AS total_rejected,
-            SUM(combined.s_expired)::int     AS total_expired,
-            SUM(combined.is_actual_bid)::int AS total_bids,
-            SUM(CASE WHEN combined.is_actual_bid = 1 AND combined.s_accepted = 1 THEN 1 ELSE 0 END)::int AS bids_accepted
-        FROM (
-            SELECT
-                sb.employee_id                                               AS emp_id,
-                COUNT(*)                                                     AS s_offers_sent,
-                COUNT(*) FILTER (WHERE sb.status = 'accepted')              AS s_accepted,
-                COUNT(*) FILTER (WHERE sb.status = 'rejected')              AS s_rejected,
-                COUNT(*) FILTER (
-                    WHERE sb.status IN ('pending','withdrawn')
-                      AND (s.shift_date < CURRENT_DATE OR (s.shift_date + s.start_time) - interval '4 hours' < (now() AT TIME ZONE 'Australia/Sydney'))
-                ) AS s_expired,
-                1 AS is_actual_bid
-            FROM shift_bids sb
-            JOIN shifts s ON s.id = sb.shift_id
-            WHERE s.shift_date BETWEEN v_start AND v_end
-            GROUP BY sb.employee_id, sb.id
-
-            UNION ALL
-
-            SELECT
-                s.last_rejected_by  AS emp_id,
-                COUNT(*)            AS s_offers_sent,
-                0                   AS s_accepted,
-                COUNT(*)            AS s_rejected,
-                0                   AS s_expired,
-                0                   AS is_actual_bid
-            FROM shifts s
-            WHERE s.last_rejected_by IS NOT NULL
-              AND s.shift_date BETWEEN v_start AND v_end
-            GROUP BY s.last_rejected_by
-
-            UNION ALL
-
-            SELECT
-                COALESCE(s.assigned_employee_id, s.last_dropped_by) AS emp_id,
-                COUNT(*)               AS s_offers_sent,
-                COUNT(*) FILTER (WHERE s.assignment_outcome = 'confirmed' OR s.last_dropped_by IS NOT NULL) AS s_accepted,
-                0                      AS s_rejected,
-                COUNT(*) FILTER (
-                    WHERE s.assignment_outcome IS NULL AND s.last_dropped_by IS NULL
-                      AND (s.shift_date < CURRENT_DATE OR (s.shift_date + s.start_time) - interval '4 hours' < (now() AT TIME ZONE 'Australia/Sydney'))
-                ) AS s_expired,
-                0 AS is_actual_bid
-            FROM shifts s
-            LEFT JOIN shift_bids sb ON sb.shift_id = s.id AND sb.employee_id = COALESCE(s.assigned_employee_id, s.last_dropped_by)
-            WHERE (s.assigned_employee_id IS NOT NULL OR s.last_dropped_by IS NOT NULL)
-              AND s.lifecycle_status != 'Draft'
-              AND sb.id IS NULL
-              AND s.shift_date BETWEEN v_start AND v_end
-            GROUP BY COALESCE(s.assigned_employee_id, s.last_dropped_by)
-        ) combined
-        GROUP BY combined.emp_id
+            sb.employee_id AS emp_id,
+            COUNT(*)::int                                       AS total_bids,
+            COUNT(*) FILTER (WHERE sb.status = 'accepted')::int AS bids_accepted
+        FROM shift_bids sb
+        JOIN shifts s ON s.id = sb.shift_id
+        WHERE s.shift_date BETWEEN v_start AND v_end
+          AND (p_org_ids     IS NULL OR s.organization_id    = ANY(p_org_ids))
+          AND (p_dept_ids    IS NULL OR s.department_id      = ANY(p_dept_ids))
+          AND (p_subdept_ids IS NULL OR s.sub_department_id  = ANY(p_subdept_ids))
+        GROUP BY sb.employee_id
     ),
 
-    swap_agg AS (
+    -- Trading metrics
+    trade_agg AS (
         SELECT
-            ss.requester_id AS emp_id,
-            COUNT(*)        AS total_swap_out
-        FROM shift_swaps ss
-        JOIN shifts s ON s.id = ss.requester_shift_id
+            sr.requested_by_employee_id AS emp_id,
+            COUNT(*)::int AS trade_requests,
+            COUNT(*) FILTER (WHERE sr.status = 'approved')::int AS trades_approved,
+            COUNT(*) FILTER (WHERE sr.status = 'cancelled')::int AS trades_cancelled
+        FROM swap_requests sr
+        JOIN shifts s ON s.id = sr.original_shift_id
         WHERE s.shift_date BETWEEN v_start AND v_end
-          AND ss.status IN ('OPEN','OFFER_SELECTED','MANAGER_PENDING','APPROVED')
-        GROUP BY ss.requester_id
+          AND (p_org_ids     IS NULL OR s.organization_id    = ANY(p_org_ids))
+          AND (p_dept_ids    IS NULL OR s.department_id      = ANY(p_dept_ids))
+          AND (p_subdept_ids IS NULL OR s.sub_department_id  = ANY(p_subdept_ids))
+        GROUP BY sr.requested_by_employee_id
     ),
 
     all_emps AS (
-        SELECT emp_id FROM asgn_agg
+        SELECT emp_id FROM offer_agg
+        UNION
+        SELECT emp_id FROM snap_agg
         UNION
         SELECT emp_id FROM bid_agg
         UNION
-        SELECT emp_id FROM swap_agg
+        SELECT emp_id FROM trade_agg
+    ),
+
+    raw_metrics AS (
+        SELECT
+            ae.emp_id                                               AS employee_id,
+            COALESCE(prof.full_name, ae.emp_id::text)::text        AS employee_name,
+            COALESCE(oa.total_offers_sent,    0)::int              AS total_offers,
+            COALESCE(oa.total_accepted,       0)::int              AS accepted,
+            COALESCE(oa.total_rejected,       0)::int              AS rejected,
+            COALESCE(oa.total_expired,        0)::int              AS expired,
+            COALESCE(sa.assigned_count,       0)::int              AS assigned,
+            COALESCE(sa.emergency_count,      0)::int              AS emergency_assigned,
+            COALESCE(sa.cancel_standard_count,0)::int              AS cancel_standard,
+            COALESCE(sa.cancel_late_count,    0)::int              AS cancel_late,
+            COALESCE(sa.swap_out_count,       0)::int              AS swap_out,
+            COALESCE(sa.late_clock_in_count,  0)::int              AS late_clock_in,
+            COALESCE(sa.early_clock_out_count,0)::int              AS early_clock_out,
+            COALESCE(sa.no_show_count,        0)::int              AS no_show,
+            COALESCE(sa.completed_count,      0)::int              AS completed,
+
+            -- Offer rates
+            ROUND(CASE WHEN COALESCE(oa.total_offers_sent,0)=0 THEN 0
+                  ELSE oa.total_accepted::numeric/oa.total_offers_sent*100 END,2)::numeric AS acceptance_rate,
+            ROUND(CASE WHEN COALESCE(oa.total_offers_sent,0)=0 THEN 0
+                  ELSE oa.total_rejected::numeric/oa.total_offers_sent*100 END,2)::numeric AS rejection_rate,
+            ROUND(CASE WHEN COALESCE(oa.total_offers_sent,0)=0 THEN 0
+                  ELSE oa.total_expired::numeric/oa.total_offers_sent*100 END,2)::numeric  AS ignorance_rate,
+
+            -- Assignment/cancellation rates
+            ROUND(CASE WHEN COALESCE(sa.held_count,0)=0 THEN 0
+                  ELSE COALESCE(sa.cancel_standard_count,0)::numeric/sa.held_count*100 END,2)::numeric AS cancel_rate,
+            ROUND(CASE WHEN COALESCE(sa.held_count,0)=0 THEN 0
+                  ELSE COALESCE(sa.cancel_late_count,0)::numeric/sa.held_count*100 END,2)::numeric AS late_cancel_rate,
+            ROUND(CASE WHEN COALESCE(sa.held_count,0)=0 THEN 0
+                  ELSE COALESCE(sa.swap_out_count,0)::numeric/sa.held_count*100 END,2)::numeric AS swap_rate,
+
+            -- Reliability
+            GREATEST(0,LEAST(100,ROUND(
+                100
+                -CASE WHEN COALESCE(sa.held_count,0)=0 THEN 0
+                      ELSE (COALESCE(sa.cancel_standard_count,0)+COALESCE(sa.cancel_late_count,0))::numeric/sa.held_count*30 END
+                -CASE WHEN COALESCE(sa.held_count,0)=0 THEN 0
+                      ELSE COALESCE(sa.cancel_late_count,0)::numeric/sa.held_count*20 END
+                -CASE WHEN COALESCE(sa.held_count,0)=0 THEN 0 ELSE COALESCE(sa.no_show_count,0)::numeric/sa.held_count*40 END
+                -CASE WHEN COALESCE(sa.completed_count,0)=0 THEN 0
+                      ELSE COALESCE(sa.late_clock_in_count,0)::numeric/sa.completed_count*5 END
+                -CASE WHEN COALESCE(sa.completed_count,0)=0 THEN 0
+                      ELSE COALESCE(sa.early_clock_out_count,0)::numeric/sa.completed_count*5 END
+            ,2)))::numeric AS reliability_score,
+
+            ROUND(CASE WHEN COALESCE(sa.completed_count,0)=0 THEN 0
+                  ELSE COALESCE(sa.late_clock_in_count,0)::numeric/sa.completed_count*100 END,2)::numeric AS late_clock_in_rate,
+            ROUND(CASE WHEN COALESCE(sa.completed_count,0)=0 THEN 0
+                  ELSE COALESCE(sa.early_clock_out_count,0)::numeric/sa.completed_count*100 END,2)::numeric AS early_clock_out_rate,
+            ROUND(CASE WHEN COALESCE(sa.held_count,0)=0 THEN 0
+                  ELSE COALESCE(sa.no_show_count,0)::numeric/sa.held_count*100 END,2)::numeric AS no_show_rate,
+            ROUND(CASE WHEN COALESCE(oa.total_accepted,0)=0 THEN 0
+                  ELSE COALESCE(oa.dropped_count,0)::numeric/oa.total_accepted*100 END,2)::numeric AS drop_rate,
+
+            COALESCE(ba.total_bids, 0)::int AS total_bids,
+            COALESCE(ba.bids_accepted, 0)::int AS bids_accepted,
+            ROUND(CASE WHEN COALESCE(ba.total_bids,0)=0 THEN 0
+                  ELSE ba.bids_accepted::numeric/ba.total_bids*100 END, 2)::numeric AS bid_success_rate,
+
+            COALESCE(sa.assignment_changes, 0)::int AS assignment_changes,
+            COALESCE(ta.trade_requests, 0)::int AS trade_requests,
+            ROUND(CASE WHEN COALESCE(ta.trade_requests,0)=0 THEN 0
+                  ELSE ta.trades_approved::numeric/ta.trade_requests*100 END, 2)::numeric AS trade_completion_rate,
+            ROUND(CASE WHEN COALESCE(ta.trade_requests,0)=0 THEN 0
+                  ELSE ta.trades_cancelled::numeric/ta.trade_requests*100 END, 2)::numeric AS trade_cancellation_rate,
+            ROUND(CASE WHEN COALESCE(sa.completed_count,0)=0 THEN 0
+                  ELSE sa.compliant_count::numeric/sa.completed_count*100 END, 2)::numeric AS attendance_compliance_rate,
+
+            -- Standard and Urgent Drop rates
+            ROUND(CASE WHEN COALESCE(sa.held_count,0)=0 THEN 0
+                  ELSE sa.standard_drop_count::numeric/sa.held_count*100 END,2)::numeric AS standard_drop_rate,
+            ROUND(CASE WHEN COALESCE(sa.held_count,0)=0 THEN 0
+                  ELSE sa.urgent_drop_count::numeric/sa.held_count*100 END,2)::numeric AS urgent_drop_rate,
+
+            COALESCE(sa.early_clock_in_count, 0)::int AS early_clock_in,
+            COALESCE(sa.late_clock_out_count, 0)::int AS late_clock_out,
+            ROUND(CASE WHEN COALESCE(sa.completed_count,0)=0 THEN 0
+                  ELSE COALESCE(sa.early_clock_in_count,0)::numeric/sa.completed_count*100 END,2)::numeric AS early_clock_in_rate,
+            ROUND(CASE WHEN COALESCE(sa.completed_count,0)=0 THEN 0
+                  ELSE COALESCE(sa.late_clock_out_count,0)::numeric/sa.completed_count*100 END,2)::numeric AS late_clock_out_rate,
+
+            -- New attendance fields
+            COALESCE(sa.on_time_in_count, 0)::int AS on_time_in,
+            COALESCE(sa.on_time_out_count, 0)::int AS on_time_out,
+            ROUND(CASE WHEN COALESCE(sa.completed_count,0)=0 THEN 0
+                  ELSE COALESCE(sa.on_time_in_count,0)::numeric/sa.completed_count*100 END,2)::numeric AS on_time_in_rate,
+            ROUND(CASE WHEN COALESCE(sa.completed_count,0)=0 THEN 0
+                  ELSE COALESCE(sa.on_time_out_count,0)::numeric/sa.completed_count*100 END,2)::numeric AS on_time_out_rate,
+
+            -- Auto clock-out: denominator = worked snapshots
+            COALESCE(sa.auto_clock_out_count, 0)::int AS auto_clock_out,
+            ROUND(CASE WHEN COALESCE(sa.completed_count,0)=0 THEN 0
+                  ELSE COALESCE(sa.auto_clock_out_count,0)::numeric/sa.completed_count*100 END,2)::numeric AS auto_clock_out_rate
+        FROM all_emps ae
+        LEFT JOIN profiles      prof ON prof.id   = ae.emp_id
+        LEFT JOIN offer_agg     oa   ON oa.emp_id = ae.emp_id
+        LEFT JOIN snap_agg      sa   ON sa.emp_id = ae.emp_id
+        LEFT JOIN bid_agg       ba   ON ba.emp_id = ae.emp_id
+        LEFT JOIN trade_agg     ta   ON ta.emp_id = ae.emp_id
     )
-
     SELECT
-        ae.emp_id                                               AS employee_id,
-        COALESCE(prof.full_name, ae.emp_id::text)               AS employee_name,
-        COALESCE(ba.total_offers_sent,    0)::int              AS total_offers,
-        COALESCE(ba.total_accepted,       0)::int              AS accepted,
-        COALESCE(ba.total_rejected,       0)::int              AS rejected,
-        COALESCE(ba.total_expired,        0)::int              AS expired,
-        COALESCE(aa.current_assigned,     0)::int              AS assigned,
-        COALESCE(aa.emergency_count,0)::int                    AS emergency_assigned,
-        COALESCE(aa.cancel_standard_count,0)::int              AS cancel_standard,
-        COALESCE(aa.cancel_late_count,    0)::int              AS cancel_late,
-        COALESCE(sa.total_swap_out,       0)::int              AS swap_out,
-        COALESCE(aa.late_clock_in_count,  0)::int              AS late_clock_in,
-        COALESCE(aa.early_clock_out_count,0)::int              AS early_clock_out,
-        COALESCE(aa.no_show_agg_count,    0)::int              AS no_show,
-        COALESCE(aa.completed_agg_count,  0)::int              AS completed,
+        rm.employee_id,
+        rm.employee_name,
+        rm.total_offers,
+        rm.accepted,
+        rm.rejected,
+        rm.expired,
+        rm.assigned,
+        rm.emergency_assigned,
+        rm.cancel_standard,
+        rm.cancel_late,
+        rm.swap_out,
+        rm.late_clock_in,
+        rm.early_clock_out,
+        rm.no_show,
+        rm.completed,
+        rm.acceptance_rate,
+        rm.rejection_rate,
+        rm.ignorance_rate,
+        rm.cancel_rate,
+        rm.late_cancel_rate,
+        rm.swap_rate,
+        rm.reliability_score,
+        rm.late_clock_in_rate,
+        rm.early_clock_out_rate,
+        rm.no_show_rate,
+        rm.drop_rate,
+        rm.total_bids,
+        rm.bids_accepted,
+        rm.bid_success_rate,
 
-        ROUND(CASE WHEN COALESCE(ba.total_offers_sent,0)=0 THEN 0
-              ELSE ba.total_accepted::numeric/ba.total_offers_sent*100 END,1) AS acceptance_rate,
-        ROUND(CASE WHEN COALESCE(ba.total_offers_sent,0)=0 THEN 0
-              ELSE ba.total_rejected::numeric/ba.total_offers_sent*100 END,1) AS rejection_rate,
-        ROUND(CASE WHEN COALESCE(ba.total_offers_sent,0)=0 THEN 0
-              ELSE ba.total_expired::numeric/ba.total_offers_sent*100 END,1)  AS ignorance_rate,
+        rm.assignment_changes,
+        rm.trade_requests,
+        rm.trade_completion_rate,
+        rm.trade_cancellation_rate,
+        rm.attendance_compliance_rate,
+        -- performance_score: weighted sum of Reliability, Acceptance, Attendance, Bid Success
+        ROUND(
+            (rm.reliability_score * 0.35) +
+            (rm.acceptance_rate * 0.25) +
+            (rm.attendance_compliance_rate * 0.20) +
+            (rm.bid_success_rate * 0.20),
+            2
+        )::numeric AS performance_score,
+        -- engagement_score: marketplace activity
+        GREATEST(0, LEAST(100, ROUND(
+            (rm.total_bids * 8) +
+            (rm.trade_requests * 12) +
+            (rm.total_offers * 10),
+            2
+        )))::numeric AS engagement_score,
 
-        ROUND(CASE WHEN COALESCE(aa.total_assigned_shifts,0)=0 THEN 0
-              ELSE COALESCE(aa.cancel_standard_count,0)::numeric/aa.total_assigned_shifts*100 END,1) AS cancel_rate,
-        ROUND(CASE WHEN COALESCE(aa.total_assigned_shifts,0)=0 THEN 0
-              ELSE COALESCE(aa.cancel_late_count,0)::numeric/aa.total_assigned_shifts*100 END,1) AS late_cancel_rate,
-        ROUND(CASE WHEN COALESCE(aa.total_assigned_shifts,0)=0 THEN 0
-              ELSE COALESCE(sa.total_swap_out,0)::numeric/aa.total_assigned_shifts*100 END,1) AS swap_rate,
+        rm.standard_drop_rate,
+        rm.urgent_drop_rate,
 
-        GREATEST(0,LEAST(100,ROUND(
-            100
-            -CASE WHEN COALESCE(aa.total_assigned_shifts,0)=0 THEN 0
-                  ELSE (COALESCE(aa.cancel_standard_count,0)+COALESCE(aa.cancel_late_count,0))::numeric/aa.total_assigned_shifts*30 END
-            -CASE WHEN COALESCE(aa.total_assigned_shifts,0)=0 THEN 0
-                  ELSE COALESCE(aa.cancel_late_count,0)::numeric/aa.total_assigned_shifts*20 END
-            -CASE WHEN COALESCE(aa.total_assigned_shifts,0)=0 THEN 0
-                  ELSE COALESCE(aa.no_show_agg_count,0)::numeric/aa.total_assigned_shifts*40 END
-            -CASE WHEN COALESCE(aa.started_agg_count,0)=0 THEN 0
-                  ELSE COALESCE(aa.late_clock_in_count,0)::numeric/aa.started_agg_count*5 END
-            -CASE WHEN COALESCE(aa.started_agg_count,0)=0 THEN 0
-                  ELSE COALESCE(aa.early_clock_out_count,0)::numeric/aa.started_agg_count*5 END
-        ,1))) AS reliability_score,
+        rm.early_clock_in,
+        rm.late_clock_out,
+        rm.early_clock_in_rate,
+        rm.late_clock_out_rate,
 
-        ROUND(CASE WHEN COALESCE(aa.started_agg_count,0)=0 THEN 0
-              ELSE COALESCE(aa.late_clock_in_count,0)::numeric/aa.started_agg_count*100 END,1) AS late_clock_in_rate,
-        ROUND(CASE WHEN COALESCE(aa.started_agg_count,0)=0 THEN 0
-              ELSE COALESCE(aa.early_clock_out_count,0)::numeric/aa.started_agg_count*100 END,1) AS early_clock_out_rate,
-        ROUND(CASE WHEN COALESCE(aa.total_assigned_shifts,0)=0 THEN 0
-              ELSE COALESCE(aa.no_show_agg_count,0)::numeric/aa.total_assigned_shifts*100 END,1) AS no_show_rate,
-        ROUND(CASE WHEN COALESCE(ba.total_accepted,0)=0 THEN 0
-              ELSE COALESCE(aa.dropped_count,0)::numeric/ba.total_accepted*100 END,1) AS drop_rate,
-        
-        COALESCE(ba.total_bids, 0)::int AS total_bids,
-        COALESCE(ba.bids_accepted, 0)::int AS bids_accepted,
-        ROUND(CASE WHEN COALESCE(ba.total_bids,0)=0 THEN 0
-              ELSE ba.bids_accepted::numeric/ba.total_bids*100 END, 1) AS bid_success_rate
-    FROM all_emps ae
-    LEFT JOIN profiles      prof ON prof.id   = ae.emp_id
-    LEFT JOIN bid_agg       ba   ON ba.emp_id = ae.emp_id
-    LEFT JOIN asgn_agg      aa   ON aa.emp_id = ae.emp_id
-    LEFT JOIN swap_agg      sa   ON sa.emp_id = ae.emp_id
+        -- New attendance fields
+        rm.on_time_in,
+        rm.on_time_out,
+        rm.on_time_in_rate,
+        rm.on_time_out_rate,
+
+        -- Auto clock-out
+        rm.auto_clock_out,
+        rm.auto_clock_out_rate
+    FROM raw_metrics rm
     ORDER BY employee_name;
 END;
 $$;
@@ -7598,6 +8559,45 @@ $$;
 ALTER FUNCTION "public"."get_roster_days_in_range"("p_organization_id" "uuid", "p_department_id" "uuid", "p_sub_department_id" "uuid", "p_start_date" "date", "p_end_date" "date") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."get_roster_planner_stats"("p_organization_id" "uuid", "p_start_date" "date", "p_end_date" "date", "p_department_ids" "uuid"[] DEFAULT NULL::"uuid"[], "p_sub_department_ids" "uuid"[] DEFAULT NULL::"uuid"[]) RETURNS TABLE("total_shifts" integer, "assigned_shifts" integer, "open_shifts" integer, "published_shifts" integer, "cancelled_shifts" integer, "total_net_minutes" bigint, "unique_employees" integer, "est_cost" numeric, "budget_cost" numeric)
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO 'public'
+    AS $$
+  SELECT
+    COUNT(*) FILTER (WHERE NOT s.is_cancelled)::int AS total_shifts,
+    COUNT(*) FILTER (WHERE NOT s.is_cancelled AND s.assigned_employee_id IS NOT NULL)::int AS assigned_shifts,
+    COUNT(*) FILTER (WHERE NOT s.is_cancelled AND s.assigned_employee_id IS NULL)::int AS open_shifts,
+    COUNT(*) FILTER (WHERE s.lifecycle_status IN ('Published','InProgress','Completed'))::int AS published_shifts,
+    COUNT(*) FILTER (WHERE s.is_cancelled)::int AS cancelled_shifts,
+    COALESCE(SUM(s.net_length_minutes) FILTER (WHERE NOT s.is_cancelled), 0)::bigint AS total_net_minutes,
+    COUNT(DISTINCT s.assigned_employee_id) FILTER (WHERE NOT s.is_cancelled)::int AS unique_employees,
+    COALESCE(SUM( (s.net_length_minutes/60.0) * COALESCE(s.actual_hourly_rate, s.remuneration_rate, rl.hourly_rate_min, 0) )
+             FILTER (WHERE NOT s.is_cancelled AND s.assigned_employee_id IS NOT NULL), 0)::numeric AS est_cost,
+    (
+      SELECT COALESCE(SUM(
+        db.budgeted_cost
+        * ( (LEAST(db.period_end, p_end_date) - GREATEST(db.period_start, p_start_date) + 1)::numeric
+            / NULLIF((db.period_end - db.period_start + 1), 0) )
+      ), 0)::numeric
+      FROM public.department_budgets db
+      JOIN public.departments d ON d.id = db.dept_id AND d.organization_id = p_organization_id
+      WHERE db.period_start <= p_end_date AND db.period_end >= p_start_date
+        AND (p_department_ids IS NULL OR db.dept_id = ANY(p_department_ids))
+    ) AS budget_cost
+  FROM shifts s
+  LEFT JOIN hr.roles r              ON r.id = s.role_id
+  LEFT JOIN hr.remuneration_levels rl ON rl.level_number = r.remuneration_level
+  WHERE s.organization_id = p_organization_id
+    AND s.shift_date BETWEEN p_start_date AND p_end_date
+    AND s.deleted_at IS NULL
+    AND (p_department_ids IS NULL OR s.department_id = ANY(p_department_ids))
+    AND (p_sub_department_ids IS NULL OR s.sub_department_id = ANY(p_sub_department_ids));
+$$;
+
+
+ALTER FUNCTION "public"."get_roster_planner_stats"("p_organization_id" "uuid", "p_start_date" "date", "p_end_date" "date", "p_department_ids" "uuid"[], "p_sub_department_ids" "uuid"[]) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_roster_shift_state"("p_lifecycle" "text", "p_has_assignment" boolean, "p_assignment_confirmed" boolean) RETURNS "text"
     LANGUAGE "plpgsql" IMMUTABLE
     SET "search_path" TO 'pg_catalog', 'public'
@@ -7618,6 +8618,35 @@ $$;
 
 
 ALTER FUNCTION "public"."get_roster_shift_state"("p_lifecycle" "text", "p_has_assignment" boolean, "p_assignment_confirmed" boolean) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_roster_summary"("p_organization_id" "uuid", "p_start_date" "date", "p_end_date" "date", "p_department_ids" "uuid"[] DEFAULT NULL::"uuid"[], "p_sub_department_ids" "uuid"[] DEFAULT NULL::"uuid"[]) RETURNS TABLE("shift_date" "date", "group_type" "text", "sub_group_name" "text", "total_shifts" integer, "assigned_shifts" integer, "open_shifts" integer, "published_shifts" integer, "draft_shifts" integer, "cancelled_shifts" integer, "total_net_minutes" bigint, "unique_employees" integer)
+    LANGUAGE "sql" STABLE
+    AS $$
+  SELECT
+    s.shift_date,
+    s.group_type::text,
+    s.sub_group_name::text,
+    COUNT(*)::int                                            AS total_shifts,
+    COUNT(*) FILTER (WHERE s.assigned_employee_id IS NOT NULL)::int AS assigned_shifts,
+    COUNT(*) FILTER (WHERE s.assigned_employee_id IS NULL)::int    AS open_shifts,
+    COUNT(*) FILTER (WHERE s.lifecycle_status IN ('Published', 'InProgress', 'Completed'))::int  AS published_shifts,
+    COUNT(*) FILTER (WHERE s.lifecycle_status = 'Draft')::int      AS draft_shifts,
+    COUNT(*) FILTER (WHERE s.is_cancelled)::int                    AS cancelled_shifts,
+    COALESCE(SUM(s.net_length_minutes), 0)::bigint                 AS total_net_minutes,
+    COUNT(DISTINCT s.assigned_employee_id)::int                    AS unique_employees
+  FROM shifts s
+  WHERE s.organization_id = p_organization_id
+    AND s.shift_date BETWEEN p_start_date AND p_end_date
+    AND s.deleted_at IS NULL
+    AND (p_department_ids IS NULL OR s.department_id = ANY(p_department_ids))
+    AND (p_sub_department_ids IS NULL OR s.sub_department_id = ANY(p_sub_department_ids))
+  GROUP BY s.shift_date, s.group_type, s.sub_group_name
+  ORDER BY s.shift_date, s.group_type, s.sub_group_name;
+$$;
+
+
+ALTER FUNCTION "public"."get_roster_summary"("p_organization_id" "uuid", "p_start_date" "date", "p_end_date" "date", "p_department_ids" "uuid"[], "p_sub_department_ids" "uuid"[]) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_shift_delta"("p_org_id" "uuid", "p_since" timestamp with time zone, "p_dept_ids" "uuid"[] DEFAULT NULL::"uuid"[], "p_start_date" "date" DEFAULT NULL::"date", "p_end_date" "date" DEFAULT NULL::"date") RETURNS TABLE("id" "uuid", "updated_at" timestamp with time zone, "deleted_at" timestamp with time zone, "shift_date" "date", "start_time" time without time zone, "end_time" time without time zone, "lifecycle_status" "public"."shift_lifecycle", "assignment_status" "public"."shift_assignment_status", "assigned_employee_id" "uuid", "version" integer, "department_id" "uuid", "sub_department_id" "uuid", "role_id" "uuid")
@@ -7657,6 +8686,81 @@ COMMENT ON FUNCTION "public"."get_shift_delta"("p_org_id" "uuid", "p_since" time
 
 
 
+CREATE OR REPLACE FUNCTION "public"."get_shift_event_timeline"("p_shift_id" "uuid") RETURNS TABLE("event_id" "uuid", "event_time" timestamp with time zone, "domain" "text", "event_type" "public"."shift_event_type", "op" "text", "actor_id" "uuid", "actor_role" "text", "actor_name" "text", "employee_id" "uuid", "assignee_name" "text", "from_state" "text", "to_state" "text", "from_version" "text", "to_version" "text", "changes" "jsonb", "reason" "text", "creation_source" "text", "assignment_source" "text")
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+    IF NOT (
+        EXISTS (
+            SELECT 1
+            FROM public.user_contracts uc
+            WHERE uc.user_id = (SELECT auth.uid())
+              AND uc.access_level = ANY (ARRAY[
+                    'alpha'::public.access_level,
+                    'beta'::public.access_level,
+                    'gamma'::public.access_level,
+                    'delta'::public.access_level,
+                    'epsilon'::public.access_level,
+                    'zeta'::public.access_level])
+              AND uc.status = 'Active'
+        )
+        OR public.user_has_delta_access((SELECT auth.uid()))
+        OR EXISTS (
+            SELECT 1
+            FROM public.shift_events se_auth
+            WHERE se_auth.shift_id = p_shift_id
+              AND se_auth.employee_id = (SELECT auth.uid())
+        )
+    ) THEN
+        RETURN;
+    END IF;
+
+    RETURN QUERY
+    SELECT
+        se.id                                       AS event_id,
+        se.event_time                               AS event_time,
+        COALESCE(se.domain, se.metadata->>'domain') AS domain,
+        se.event_type                               AS event_type,
+        se.metadata->>'op'                          AS op,
+        se.actor_id                                 AS actor_id,
+        se.actor_role                               AS actor_role,
+        COALESCE(
+            p.full_name,
+            NULLIF(TRIM(COALESCE(p.first_name, '') || ' ' || COALESCE(p.last_name, '')), '')
+        )                                           AS actor_name,
+        se.employee_id                              AS employee_id,
+        COALESCE(
+            pe.full_name,
+            NULLIF(TRIM(COALESCE(pe.first_name, '') || ' ' || COALESCE(pe.last_name, '')), '')
+        )                                           AS assignee_name,
+        se.metadata->>'from_state'                  AS from_state,
+        se.metadata->>'to_state'                    AS to_state,
+        se.metadata->>'from_version'                AS from_version,
+        se.metadata->>'to_version'                  AS to_version,
+        public.resolve_changes_jsonb(se.metadata->'changes') AS changes,
+        se.metadata->>'reason'                      AS reason,
+        se.metadata->>'creation_source'             AS creation_source,
+        se.metadata->>'assignment_source'           AS assignment_source
+    FROM public.shift_events se
+    LEFT JOIN public.shifts s ON s.id = se.shift_id
+    LEFT JOIN public.profiles p ON p.id = COALESCE(
+        se.actor_id,
+        CASE
+            WHEN se.actor_role = 'employee' THEN se.employee_id
+            WHEN se.actor_role = 'manager' THEN s.last_modified_by
+        END
+    )
+    LEFT JOIN public.profiles pe ON pe.id = se.employee_id
+    WHERE se.shift_id = p_shift_id
+    ORDER BY se.event_time ASC, se.created_at ASC;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_shift_event_timeline"("p_shift_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."get_shift_flags"("p_shift_id" "uuid") RETURNS "text"[]
     LANGUAGE "sql" STABLE
     SET "search_path" TO 'pg_catalog', 'public'
@@ -7670,30 +8774,142 @@ $$;
 ALTER FUNCTION "public"."get_shift_flags"("p_shift_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_shift_fsm_state"("p_lifecycle_status" "public"."shift_lifecycle", "p_assignment_status" "public"."shift_assignment_status", "p_assignment_outcome" "public"."shift_assignment_outcome", "p_trading_status" "public"."shift_trading", "p_is_cancelled" boolean) RETURNS "text"
+CREATE OR REPLACE FUNCTION "public"."get_shift_fsm_state"("p_lifecycle_status" "public"."shift_lifecycle", "p_assignment_status" "public"."shift_assignment_status", "p_assignment_outcome" "public"."shift_assignment_outcome", "p_trading_status" "public"."shift_trading", "p_is_cancelled" boolean, "p_bidding_status" "public"."shift_bidding_status" DEFAULT NULL::"public"."shift_bidding_status") RETURNS "text"
     LANGUAGE "plpgsql" IMMUTABLE
     SET "search_path" TO 'pg_catalog', 'public'
     AS $$
 BEGIN
-  IF p_is_cancelled = true THEN RETURN 'S15'; END IF;
-  IF p_lifecycle_status = 'Completed' THEN RETURN 'S13'; END IF;
-  IF p_lifecycle_status = 'InProgress' THEN RETURN 'S11'; END IF;
+  IF COALESCE(p_is_cancelled, FALSE) OR p_lifecycle_status = 'Cancelled' THEN RETURN 'S15'; END IF;
+
+  IF p_lifecycle_status = 'Completed' THEN
+    RETURN CASE WHEN p_assignment_outcome = 'emergency_assigned' THEN 'S14' ELSE 'S13' END;
+  END IF;
+
+  IF p_lifecycle_status = 'InProgress' THEN
+    RETURN CASE WHEN p_assignment_outcome = 'emergency_assigned' THEN 'S12' ELSE 'S11' END;
+  END IF;
+
   IF p_lifecycle_status = 'Published' THEN
-    IF p_trading_status = 'TradeRequested' THEN RETURN 'S9'; END IF;
-    IF p_trading_status = 'TradeAccepted' THEN RETURN 'S10'; END IF;
-    IF p_assignment_status = 'assigned' AND p_assignment_outcome IS NULL THEN RETURN 'S3'; END IF;
-    IF p_assignment_status = 'assigned' AND p_assignment_outcome = 'confirmed' THEN RETURN 'S4'; END IF;
-    IF p_assignment_status = 'unassigned' THEN RETURN 'S5'; END IF;
+    IF p_trading_status = 'TradeRequested' THEN RETURN 'S9';  END IF;
+    IF p_trading_status = 'TradeAccepted'  THEN RETURN 'S10'; END IF;
+    IF p_assignment_outcome = 'emergency_assigned' THEN RETURN 'S7'; END IF;
+
+    IF p_assignment_status = 'assigned' THEN
+      IF p_assignment_outcome = 'confirmed' THEN RETURN 'S4'; END IF;
+      RETURN 'S3';   -- NULL / pending / offered → awaiting decision
+    END IF;
+
+    -- Unassigned + published = bidding lifecycle
+    IF p_bidding_status = 'bidding_closed_no_winner' THEN RETURN 'S8'; END IF;
+    IF p_bidding_status = 'on_bidding_urgent'        THEN RETURN 'S6'; END IF;
+    RETURN 'S5';   -- on_bidding / on_bidding_normal / not_on_bidding / NULL
   END IF;
+
   IF p_lifecycle_status = 'Draft' THEN
-    IF p_assignment_status = 'assigned' THEN RETURN 'S2'; ELSE RETURN 'S1'; END IF;
+    RETURN CASE WHEN p_assignment_status = 'assigned' THEN 'S2' ELSE 'S1' END;
   END IF;
-  RAISE EXCEPTION '[v3] get_shift_fsm_state: unrecognised — lifecycle=% assignment=% outcome=%',
-    p_lifecycle_status, p_assignment_status, p_assignment_outcome;
-END; $$;
+
+  RETURN 'UNKNOWN';
+END;
+$$;
 
 
-ALTER FUNCTION "public"."get_shift_fsm_state"("p_lifecycle_status" "public"."shift_lifecycle", "p_assignment_status" "public"."shift_assignment_status", "p_assignment_outcome" "public"."shift_assignment_outcome", "p_trading_status" "public"."shift_trading", "p_is_cancelled" boolean) OWNER TO "postgres";
+ALTER FUNCTION "public"."get_shift_fsm_state"("p_lifecycle_status" "public"."shift_lifecycle", "p_assignment_status" "public"."shift_assignment_status", "p_assignment_outcome" "public"."shift_assignment_outcome", "p_trading_status" "public"."shift_trading", "p_is_cancelled" boolean, "p_bidding_status" "public"."shift_bidding_status") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_shift_lifecycle"("p_shift_id" "uuid") RETURNS TABLE("event_id" "uuid", "event_type" "public"."shift_event_type", "event_time" timestamp with time zone, "employee_id" "uuid", "employee_name" "text", "metadata" "jsonb")
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+    v_scheduled_start timestamptz;
+    v_scheduled_end   timestamptz;
+BEGIN
+    SELECT s.scheduled_start, s.scheduled_end
+      INTO v_scheduled_start, v_scheduled_end
+    FROM public.shifts s
+    WHERE s.id = p_shift_id;
+
+    RETURN QUERY
+    WITH ledger AS (
+        SELECT se.id AS event_id, se.event_type, se.event_time, se.employee_id, se.metadata
+        FROM public.shift_events se
+        WHERE se.shift_id = p_shift_id
+    ),
+    -- One clock span per employee on this shift (collapse multiple timesheets).
+    ts AS (
+        SELECT t.employee_id,
+               MIN(t.clock_in)  AS clock_in,
+               MAX(t.clock_out) AS clock_out
+        FROM public.timesheets t
+        WHERE t.shift_id = p_shift_id
+          AND t.clock_in IS NOT NULL
+          AND t.employee_id IS NOT NULL
+        GROUP BY t.employee_id
+    ),
+    -- Synthesise attendance events ONLY where the ledger lacks them.
+    synth AS (
+        -- Arrival: LATE_IN if clocked in >7.5m after scheduled start, else CHECKED_IN.
+        SELECT
+            md5('attn-in:'  || p_shift_id::text || ':' || ts.employee_id::text)::uuid AS event_id,
+            CASE WHEN v_scheduled_start IS NOT NULL
+                      AND ts.clock_in > v_scheduled_start + interval '7.5 minutes'
+                 THEN 'LATE_IN'::public.shift_event_type
+                 ELSE 'CHECKED_IN'::public.shift_event_type
+            END                                                                       AS event_type,
+            ts.clock_in                                                               AS event_time,
+            ts.employee_id                                                            AS employee_id,
+            jsonb_build_object('source','timesheet','synthetic',true)                 AS metadata
+        FROM ts
+        WHERE NOT EXISTS (
+            SELECT 1 FROM ledger l
+            WHERE l.employee_id = ts.employee_id
+              AND l.event_type IN ('CHECKED_IN','LATE_IN')
+        )
+
+        UNION ALL
+
+        -- Early departure: clocked out >7.5m before scheduled end.
+        SELECT
+            md5('attn-out:' || p_shift_id::text || ':' || ts.employee_id::text)::uuid,
+            'EARLY_OUT'::public.shift_event_type,
+            ts.clock_out,
+            ts.employee_id,
+            jsonb_build_object('source','timesheet','synthetic',true)
+        FROM ts
+        WHERE ts.clock_out IS NOT NULL
+          AND v_scheduled_end IS NOT NULL
+          AND ts.clock_out < v_scheduled_end - interval '7.5 minutes'
+          AND NOT EXISTS (
+              SELECT 1 FROM ledger l
+              WHERE l.employee_id = ts.employee_id
+                AND l.event_type = 'EARLY_OUT'
+          )
+    ),
+    combined AS (
+        SELECT event_id, event_type, event_time, employee_id, metadata FROM ledger
+        UNION ALL
+        SELECT event_id, event_type, event_time, employee_id, metadata FROM synth
+    )
+    SELECT
+        c.event_id,
+        c.event_type,
+        c.event_time,
+        c.employee_id,
+        COALESCE(
+            p.full_name,
+            p.first_name || ' ' || COALESCE(p.last_name, ''),
+            c.employee_id::text
+        )            AS employee_name,
+        c.metadata   AS metadata
+    FROM combined c
+    LEFT JOIN public.profiles p ON p.id = c.employee_id
+    ORDER BY c.event_time, c.event_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_shift_lifecycle"("p_shift_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_shift_start_time"("p_shift_id" "uuid") RETURNS timestamp with time zone
@@ -7733,67 +8949,36 @@ CREATE OR REPLACE FUNCTION "public"."get_shift_state_id"("p_shift_id" "uuid") RE
 DECLARE
     v_shift RECORD;
 BEGIN
-    SELECT 
-        lifecycle_status::TEXT as lifecycle,
+    SELECT
+        lifecycle_status::TEXT  as lifecycle,
         assignment_status::TEXT as assignment,
         assignment_outcome::TEXT as outcome,
-        bidding_status::TEXT as bidding,
-        trading_status::TEXT as trading
+        bidding_status::TEXT    as bidding,
+        trading_status::TEXT    as trading
     INTO v_shift
     FROM shifts
     WHERE id = p_shift_id AND deleted_at IS NULL;
-    
+
     IF NOT FOUND THEN
         RETURN NULL;
     END IF;
-    
-    -- Match to state ID
-    RETURN CASE 
-        -- S1: Draft + Unassigned
+
+    RETURN CASE
         WHEN v_shift.lifecycle = 'Draft' AND v_shift.assignment = 'unassigned' THEN 'S1'
-        
-        -- S2: Draft + Assigned (outcome is null or 'pending' in draft)
         WHEN v_shift.lifecycle = 'Draft' AND v_shift.assignment = 'assigned' THEN 'S2'
-        
-        -- S3: Published + Offered (awaiting decision: outcome is NULL or 'offered')
         WHEN v_shift.lifecycle = 'Published' AND v_shift.assignment = 'assigned' AND (v_shift.outcome IS NULL OR v_shift.outcome = 'offered') THEN 'S3'
-        
-        -- S4: Published + Confirmed + NoTrade
         WHEN v_shift.lifecycle = 'Published' AND v_shift.outcome = 'confirmed' AND v_shift.trading = 'NoTrade' THEN 'S4'
-        
-        -- S5: Published + OnBiddingNormal
-        WHEN v_shift.lifecycle = 'Published' AND v_shift.bidding = 'on_bidding_normal' THEN 'S5'
-        
-        -- S6: Published + OnBiddingUrgent
+        WHEN v_shift.lifecycle = 'Published' AND v_shift.bidding IN ('on_bidding', 'on_bidding_normal') THEN 'S5'
         WHEN v_shift.lifecycle = 'Published' AND v_shift.bidding = 'on_bidding_urgent' THEN 'S6'
-        
-        -- S7: Published + EmergencyAssigned
         WHEN v_shift.lifecycle = 'Published' AND v_shift.outcome = 'emergency_assigned' THEN 'S7'
-        
-        -- S8: Published + BiddingClosedNoWinner
         WHEN v_shift.lifecycle = 'Published' AND v_shift.bidding = 'bidding_closed_no_winner' THEN 'S8'
-        
-        -- S9: Published + Confirmed + TradeRequested
         WHEN v_shift.lifecycle = 'Published' AND v_shift.outcome = 'confirmed' AND v_shift.trading = 'TradeRequested' THEN 'S9'
-        
-        -- S10: Published + Confirmed + TradeAccepted
         WHEN v_shift.lifecycle = 'Published' AND v_shift.outcome = 'confirmed' AND v_shift.trading = 'TradeAccepted' THEN 'S10'
-        
-        -- S11: InProgress + Confirmed
         WHEN v_shift.lifecycle = 'InProgress' AND v_shift.outcome = 'confirmed' THEN 'S11'
-        
-        -- S12: InProgress + EmergencyAssigned
         WHEN v_shift.lifecycle = 'InProgress' AND v_shift.outcome = 'emergency_assigned' THEN 'S12'
-        
-        -- S13: Completed + Confirmed
         WHEN v_shift.lifecycle = 'Completed' AND v_shift.outcome = 'confirmed' THEN 'S13'
-        
-        -- S14: Completed + EmergencyAssigned
         WHEN v_shift.lifecycle = 'Completed' AND v_shift.outcome = 'emergency_assigned' THEN 'S14'
-        
-        -- S15: Cancelled
         WHEN v_shift.lifecycle = 'Cancelled' THEN 'S15'
-        
         ELSE 'INVALID'
     END;
 END;
@@ -7809,65 +8994,50 @@ CREATE OR REPLACE FUNCTION "public"."get_shift_state_id"("p_lifecycle" "public".
     AS $$
 BEGIN
   RETURN CASE
-    -- S1: Draft + Unassigned
-    WHEN p_lifecycle = 'Draft' AND p_assignment = 'unassigned' 
-         AND p_outcome IS NULL AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade' 
+    WHEN p_lifecycle = 'Draft' AND p_assignment = 'unassigned'
+         AND p_outcome IS NULL AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade'
          THEN 'S1'
-    -- S2: Draft + Assigned + Pending (outcome is null or 'pending' in draft)
-    WHEN p_lifecycle = 'Draft' AND p_assignment = 'assigned' 
-         AND (p_outcome IS NULL OR p_outcome = 'pending') AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade' 
+    WHEN p_lifecycle = 'Draft' AND p_assignment = 'assigned'
+         AND (p_outcome IS NULL OR p_outcome = 'pending') AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade'
          THEN 'S2'
-    -- S3: Published + Assigned + Offered
-    WHEN p_lifecycle = 'Published' AND p_assignment = 'assigned' 
-         AND (p_outcome IS NULL OR p_outcome = 'offered') AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade' 
+    WHEN p_lifecycle = 'Published' AND p_assignment = 'assigned'
+         AND (p_outcome IS NULL OR p_outcome = 'offered') AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade'
          THEN 'S3'
-    -- S4: Published + Assigned + Confirmed
-    WHEN p_lifecycle = 'Published' AND p_assignment = 'assigned' 
-         AND p_outcome = 'confirmed' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade' 
+    WHEN p_lifecycle = 'Published' AND p_assignment = 'assigned'
+         AND p_outcome = 'confirmed' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade'
          THEN 'S4'
-    -- S5: Published + Unassigned + OnBiddingNormal
-    WHEN p_lifecycle = 'Published' AND p_assignment = 'unassigned' 
-         AND p_outcome IS NULL AND p_bidding = 'on_bidding_normal' AND p_trading = 'NoTrade' 
+    WHEN p_lifecycle = 'Published' AND p_assignment = 'unassigned'
+         AND p_outcome IS NULL AND p_bidding IN ('on_bidding', 'on_bidding_normal') AND p_trading = 'NoTrade'
          THEN 'S5'
-    -- S6: Published + Unassigned + OnBiddingUrgent
-    WHEN p_lifecycle = 'Published' AND p_assignment = 'unassigned' 
-         AND p_outcome IS NULL AND p_bidding = 'on_bidding_urgent' AND p_trading = 'NoTrade' 
+    WHEN p_lifecycle = 'Published' AND p_assignment = 'unassigned'
+         AND p_outcome IS NULL AND p_bidding = 'on_bidding_urgent' AND p_trading = 'NoTrade'
          THEN 'S6'
-    -- S7: Published + Assigned + EmergencyAssigned
-    WHEN p_lifecycle = 'Published' AND p_assignment = 'assigned' 
-         AND p_outcome = 'emergency_assigned' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade' 
+    WHEN p_lifecycle = 'Published' AND p_assignment = 'assigned'
+         AND p_outcome = 'emergency_assigned' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade'
          THEN 'S7'
-    -- S8: Published + Unassigned + BiddingClosedNoWinner
-    WHEN p_lifecycle = 'Published' AND p_assignment = 'unassigned' 
-         AND p_outcome IS NULL AND p_bidding = 'bidding_closed_no_winner' AND p_trading = 'NoTrade' 
+    WHEN p_lifecycle = 'Published' AND p_assignment = 'unassigned'
+         AND p_outcome IS NULL AND p_bidding = 'bidding_closed_no_winner' AND p_trading = 'NoTrade'
          THEN 'S8'
-    -- S9: Published + Confirmed + TradeRequested
-    WHEN p_lifecycle = 'Published' AND p_assignment = 'assigned' 
-         AND p_outcome = 'confirmed' AND p_bidding = 'not_on_bidding' AND p_trading = 'TradeRequested' 
+    WHEN p_lifecycle = 'Published' AND p_assignment = 'assigned'
+         AND p_outcome = 'confirmed' AND p_bidding = 'not_on_bidding' AND p_trading = 'TradeRequested'
          THEN 'S9'
-    -- S10: Published + Confirmed + TradeAccepted
-    WHEN p_lifecycle = 'Published' AND p_assignment = 'assigned' 
-         AND p_outcome = 'confirmed' AND p_bidding = 'not_on_bidding' AND p_trading = 'TradeAccepted' 
+    WHEN p_lifecycle = 'Published' AND p_assignment = 'assigned'
+         AND p_outcome = 'confirmed' AND p_bidding = 'not_on_bidding' AND p_trading = 'TradeAccepted'
          THEN 'S10'
-    -- S11: InProgress + Assigned + Confirmed
-    WHEN p_lifecycle = 'InProgress' AND p_assignment = 'assigned' 
-         AND p_outcome = 'confirmed' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade' 
+    WHEN p_lifecycle = 'InProgress' AND p_assignment = 'assigned'
+         AND p_outcome = 'confirmed' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade'
          THEN 'S11'
-    -- S12: InProgress + Assigned + EmergencyAssigned
-    WHEN p_lifecycle = 'InProgress' AND p_assignment = 'assigned' 
-         AND p_outcome = 'emergency_assigned' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade' 
+    WHEN p_lifecycle = 'InProgress' AND p_assignment = 'assigned'
+         AND p_outcome = 'emergency_assigned' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade'
          THEN 'S12'
-    -- S13: Completed + Assigned + Confirmed
-    WHEN p_lifecycle = 'Completed' AND p_assignment = 'assigned' 
-         AND p_outcome = 'confirmed' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade' 
+    WHEN p_lifecycle = 'Completed' AND p_assignment = 'assigned'
+         AND p_outcome = 'confirmed' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade'
          THEN 'S13'
-    -- S14: Completed + Assigned + EmergencyAssigned
-    WHEN p_lifecycle = 'Completed' AND p_assignment = 'assigned' 
-         AND p_outcome = 'emergency_assigned' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade' 
+    WHEN p_lifecycle = 'Completed' AND p_assignment = 'assigned'
+         AND p_outcome = 'emergency_assigned' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade'
          THEN 'S14'
-    -- S15: Cancelled
-    WHEN p_lifecycle = 'Cancelled' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade' 
-         AND p_outcome IS NULL 
+    WHEN p_lifecycle = 'Cancelled' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade'
+         AND p_outcome IS NULL
          THEN 'S15'
     ELSE 'INVALID'
   END;
@@ -8053,145 +9223,6 @@ $$;
 
 
 ALTER FUNCTION "public"."get_user_access_levels"("_user_id" "uuid") OWNER TO "postgres";
-
-SET default_tablespace = '';
-
-SET default_table_access_method = "heap";
-
-
-CREATE TABLE IF NOT EXISTS "public"."user_contracts" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "user_id" "uuid" NOT NULL,
-    "organization_id" "uuid",
-    "department_id" "uuid",
-    "sub_department_id" "uuid",
-    "role_id" "uuid" NOT NULL,
-    "rem_level_id" "uuid" NOT NULL,
-    "status" "text" DEFAULT 'Active'::"text" NOT NULL,
-    "start_date" "date" DEFAULT CURRENT_DATE,
-    "end_date" "date",
-    "custom_hourly_rate" numeric(10,2),
-    "notes" "text",
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"(),
-    "created_by" "uuid",
-    "access_level" "public"."access_level",
-    "employment_status" "public"."employment_status" DEFAULT 'Full-Time'::"public"."employment_status",
-    "contracted_weekly_hours" numeric DEFAULT 38,
-    "is_apprentice" boolean DEFAULT false,
-    "apprentice_type" "text",
-    "apprentice_year" integer,
-    "has_completed_year_12" boolean DEFAULT false,
-    "is_trainee" boolean DEFAULT false,
-    "trainee_category" "text",
-    "trainee_level" "text",
-    "trainee_exit_year" integer,
-    "trainee_years_out" integer,
-    "trainee_aqf_level" integer,
-    "trainee_year" integer,
-    "is_training_on_job" boolean DEFAULT false,
-    "prefers_sba_loading" boolean DEFAULT false,
-    "is_sws" boolean DEFAULT false,
-    "sws_capacity_percentage" integer,
-    "is_sws_trial" boolean DEFAULT false,
-    "sws_trial_start_date" "date",
-    "annual_guaranteed_hours" integer,
-    CONSTRAINT "user_contracts_apprentice_type_check" CHECK (("apprentice_type" = ANY (ARRAY['standard'::"text", 'adult'::"text", 'school_based'::"text"]))),
-    CONSTRAINT "user_contracts_apprentice_year_check" CHECK ((("apprentice_year" >= 1) AND ("apprentice_year" <= 4))),
-    CONSTRAINT "user_contracts_status_check" CHECK (("status" = ANY (ARRAY['Active'::"text", 'Inactive'::"text", 'Terminated'::"text"]))),
-    CONSTRAINT "user_contracts_sws_capacity_percentage_check" CHECK ((("sws_capacity_percentage" >= 10) AND ("sws_capacity_percentage" <= 90))),
-    CONSTRAINT "user_contracts_trainee_aqf_level_check" CHECK ((("trainee_aqf_level" >= 1) AND ("trainee_aqf_level" <= 4))),
-    CONSTRAINT "user_contracts_trainee_category_check" CHECK (("trainee_category" = ANY (ARRAY['junior'::"text", 'adult'::"text", 'school_based'::"text"]))),
-    CONSTRAINT "user_contracts_trainee_exit_year_check" CHECK (("trainee_exit_year" = ANY (ARRAY[10, 11, 12]))),
-    CONSTRAINT "user_contracts_trainee_level_check" CHECK (("trainee_level" = ANY (ARRAY['A'::"text", 'B'::"text"]))),
-    CONSTRAINT "user_contracts_trainee_year_check" CHECK ((("trainee_year" >= 1) AND ("trainee_year" <= 3))),
-    CONSTRAINT "user_contracts_trainee_years_out_check" CHECK ((("trainee_years_out" >= 0) AND ("trainee_years_out" <= 5)))
-);
-
-
-ALTER TABLE "public"."user_contracts" OWNER TO "postgres";
-
-
-COMMENT ON TABLE "public"."user_contracts" IS 'Defines user access. NULL dept/subdept = Org/Dept-level access (cascading).';
-
-
-
-COMMENT ON COLUMN "public"."user_contracts"."contracted_weekly_hours" IS 'Base contracted hours per week. Used by the AutoScheduler for workload averaging (7/14/21/28 days).';
-
-
-
-COMMENT ON COLUMN "public"."user_contracts"."is_apprentice" IS 'Indicates if the contract is for an apprentice under Schedule 4';
-
-
-
-COMMENT ON COLUMN "public"."user_contracts"."apprentice_type" IS 'Category of apprenticeship: standard, adult (21+), or school_based (SBA)';
-
-
-
-COMMENT ON COLUMN "public"."user_contracts"."apprentice_year" IS 'Current year of apprenticeship (1-4)';
-
-
-
-COMMENT ON COLUMN "public"."user_contracts"."has_completed_year_12" IS 'Relevant for standard apprentice wage percentages';
-
-
-
-COMMENT ON COLUMN "public"."user_contracts"."is_trainee" IS 'Indicates if the contract is for a trainee under Schedule 5';
-
-
-
-COMMENT ON COLUMN "public"."user_contracts"."trainee_category" IS 'junior, adult, or school_based';
-
-
-
-COMMENT ON COLUMN "public"."user_contracts"."trainee_level" IS 'Wage Level A or B based on industry/package (Point 50)';
-
-
-
-COMMENT ON COLUMN "public"."user_contracts"."trainee_exit_year" IS 'Year level when the trainee left school (10, 11, or 12)';
-
-
-
-COMMENT ON COLUMN "public"."user_contracts"."is_training_on_job" IS 'If true, applies 20% pay deduction for PT trainees (Point 43)';
-
-
-
-COMMENT ON COLUMN "public"."user_contracts"."prefers_sba_loading" IS '25% loading in lieu of leave for school-based trainees (Point 48)';
-
-
-
-COMMENT ON COLUMN "public"."user_contracts"."is_sws" IS 'Indicates if the contract is under the Supported Wage System (Schedule 6)';
-
-
-
-COMMENT ON COLUMN "public"."user_contracts"."sws_capacity_percentage" IS 'Assessed productive capacity (10% to 90%)';
-
-
-
-COMMENT ON COLUMN "public"."user_contracts"."is_sws_trial" IS 'If true, the Team Member is in a trial period (Point 46)';
-
-
-
-COMMENT ON COLUMN "public"."user_contracts"."sws_trial_start_date" IS 'Start date of the trial period (max 12-16 weeks)';
-
-
-
-COMMENT ON COLUMN "public"."user_contracts"."annual_guaranteed_hours" IS 'Minimum hours guaranteed per year (Clause 12 - 624 for FPT)';
-
-
-
-CREATE OR REPLACE FUNCTION "public"."get_user_contracts"() RETURNS SETOF "public"."user_contracts"
-    LANGUAGE "sql" STABLE SECURITY DEFINER
-    SET "search_path" TO 'pg_catalog', 'public'
-    AS $$
-    SELECT *
-    FROM user_contracts
-    WHERE user_id = auth.uid()
-      AND status = 'Active';
-$$;
-
-
-ALTER FUNCTION "public"."get_user_contracts"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_user_department_ids"() RETURNS "uuid"[]
@@ -8460,18 +9491,52 @@ CREATE OR REPLACE FUNCTION "public"."is_manager_or_above"() RETURNS boolean
     SET "search_path" TO 'pg_catalog', 'public'
     AS $$
 BEGIN
-  RETURN (
-    SELECT system_role IN ('admin', 'manager')
-    FROM public.profiles
-    WHERE id = auth.uid()
-  );
+    RETURN EXISTS (
+        SELECT 1
+        FROM public.profiles p
+        WHERE p.id = auth.uid()
+          AND p.legacy_system_role IN ('admin', 'manager')
+    ) OR EXISTS (
+        SELECT 1
+        FROM public.app_access_certificates c
+        WHERE c.user_id = auth.uid()
+          AND c.is_active = true
+          AND c.access_level IN ('gamma', 'delta', 'epsilon', 'zeta')
+    );
 EXCEPTION WHEN OTHERS THEN
-  RETURN FALSE;
+    RETURN FALSE;
 END;
 $$;
 
 
 ALTER FUNCTION "public"."is_manager_or_above"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."is_shift_timesheet_reviewable"("p_shift_id" "uuid") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.shifts s
+    WHERE s.id = p_shift_id
+      AND (
+        s.attendance_status IN ('no_show', 'auto_clock_out')
+        OR s.actual_end IS NOT NULL
+        OR (
+              s.actual_start IS NULL
+              AND now() > COALESCE(s.end_at, s.start_at + interval '12.5 hours')
+           )
+      )
+  );
+$$;
+
+
+ALTER FUNCTION "public"."is_shift_timesheet_reviewable"("p_shift_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."is_shift_timesheet_reviewable"("p_shift_id" "uuid") IS 'Terminal-attendance gate for manager timesheet review (approve/reject/edit). Mirrors client isTimesheetReviewable() in shift-ui.ts.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."is_valid_uuid"("str" "text") RETURNS boolean
@@ -8792,24 +9857,26 @@ DECLARE
     v_count INT := 0;
     v_rec   RECORD;
 BEGIN
-    -- 1. Expire pending offers S3 → S2
+    -- 1. Expire pending offers S3 -> S2
     FOR v_rec IN SELECT * FROM public.fn_process_offer_expirations() LOOP
         v_count := v_count + 1;
     END LOOP;
     IF v_count > 0 THEN operation:='OFFER_EXPIRED'; affected:=v_count; RETURN NEXT; END IF;
     v_count := 0;
 
-    -- 2a. Bidding timeout S5/S6 → S8  (triggers BIDDING_TIMEOUT in fn_audit_shift_update)
+    -- 2. Bidding timeout S5/S6 -> S1 (direct; no S8 hop). Single UPDATE so
+    --    trg_bidding_expired_notification_fn fires the manager notification.
     WITH timed_out AS (
         UPDATE public.shifts SET
-            bidding_status       = 'bidding_closed_no_winner'::shift_bidding_status,
+            lifecycle_status     = 'Draft',
+            bidding_status       = 'not_on_bidding'::shift_bidding_status,
             is_on_bidding        = FALSE,
-            is_urgent            = FALSE,
-            locked_at            = NOW(),
+            locked_at            = NULL,
             updated_at           = NOW(),
-            last_modified_reason = 'Bidding timeout: T-4h passed, no winner selected'
+            last_modified_reason = 'Bidding timeout: T-4h passed, no winner — reverted to draft'
         WHERE lifecycle_status = 'Published'
           AND bidding_status IN (
+              'on_bidding'::shift_bidding_status,
               'on_bidding_normal'::shift_bidding_status,
               'on_bidding_urgent'::shift_bidding_status
           )
@@ -8826,27 +9893,10 @@ BEGIN
         RETURNING id
     )
     SELECT COUNT(*) INTO v_count FROM timed_out;
-
-    -- 2b. S8 → S1: revert ALL bidding_closed_no_winner shifts to Draft+Unassigned.
-    --     This second statement fires fn_audit_shift_update with OLD=S8, NEW=S1
-    --     (logs UNPUBLISH). Catches newly timed-out shifts AND any stuck S8 shifts.
-    UPDATE public.shifts SET
-        lifecycle_status     = 'Draft',
-        bidding_status       = 'not_on_bidding'::shift_bidding_status,
-        is_on_bidding        = FALSE,
-        is_urgent            = FALSE,
-        locked_at            = NULL,
-        updated_at           = NOW(),
-        last_modified_reason = 'Auto-reverted to draft after bidding closed with no winner'
-    WHERE lifecycle_status  = 'Published'
-      AND bidding_status    = 'bidding_closed_no_winner'::shift_bidding_status
-      AND assignment_status = 'unassigned'
-      AND deleted_at IS NULL;
-
     IF v_count > 0 THEN operation:='BIDDING_TIMEOUT'; affected:=v_count; RETURN NEXT; END IF;
     v_count := 0;
 
-    -- 3. Auto-start S4/S7 → S11/S12
+    -- 3. Auto-start S4/S7 -> S11/S12
     WITH started AS (
         UPDATE public.shifts SET
             lifecycle_status     = 'InProgress',
@@ -8869,7 +9919,7 @@ BEGIN
     IF v_count > 0 THEN operation:='AUTO_START'; affected:=v_count; RETURN NEXT; END IF;
     v_count := 0;
 
-    -- 4. Auto-complete S11/S12 → S13/S14
+    -- 4. Auto-complete S11/S12 -> S13/S14
     WITH completed AS (
         UPDATE public.shifts SET
             lifecycle_status     = 'Completed',
@@ -8885,27 +9935,43 @@ BEGIN
                <= NOW())
           )
           AND deleted_at IS NULL
+          -- Exclude currently clocked-in employees (they must clock out or hit 12.5h)
+          AND NOT (attendance_status IN ('checked_in', 'late') AND actual_end IS NULL)
         RETURNING id
     )
     SELECT COUNT(*) INTO v_count FROM completed;
     IF v_count > 0 THEN operation:='AUTO_COMPLETE'; affected:=v_count; RETURN NEXT; END IF;
     v_count := 0;
 
-    -- 5. Expire open swap requests S9 → S4
+    -- 5. Expire in-flight swap requests S9/S10 -> S4 at T-4h.
     WITH expired_swaps AS (
-        UPDATE public.shift_swaps SET status='EXPIRED', updated_at=NOW()
-        WHERE status='OPEN' AND expires_at IS NOT NULL AND expires_at < NOW()
-        RETURNING id, requester_shift_id
+        UPDATE public.shift_swaps sw SET
+            status     = 'EXPIRED',
+            updated_at = NOW()
+        FROM public.shifts rs
+        WHERE rs.id = sw.requester_shift_id
+          AND sw.status IN ('OPEN', 'MANAGER_PENDING', 'OFFER_SELECTED')
+          AND (
+              (sw.expires_at IS NOT NULL AND sw.expires_at < NOW())
+              OR
+              (rs.start_at IS NOT NULL AND rs.start_at < NOW() + INTERVAL '4 hours')
+              OR
+              (rs.start_at IS NULL AND
+               (rs.shift_date::TEXT || ' ' || rs.start_time::TEXT)::TIMESTAMP
+                   AT TIME ZONE COALESCE(rs.timezone, 'UTC')
+               < NOW() + INTERVAL '4 hours')
+          )
+        RETURNING sw.id, sw.requester_shift_id, sw.target_shift_id
     ),
     reverted AS (
         UPDATE public.shifts s SET
             trading_status       = 'NoTrade',
             trade_requested_at   = NULL,
             updated_at           = NOW(),
-            last_modified_reason = 'Swap request expired: no peer accepted in time'
+            last_modified_reason = 'Swap request expired: not concluded before T-4h — reverted to confirmed (S4)'
         FROM expired_swaps e
-        WHERE s.id = e.requester_shift_id
-          AND s.trading_status = 'TradeRequested'
+        WHERE s.id IN (e.requester_shift_id, e.target_shift_id)
+          AND s.trading_status IN ('TradeRequested', 'TradeAccepted')
         RETURNING s.id
     )
     SELECT COUNT(*) INTO v_count FROM expired_swaps;
@@ -8922,11 +9988,10 @@ CREATE OR REPLACE FUNCTION "public"."protect_fixed_roster_groups"() RETURNS "tri
     SET "search_path" TO 'pg_catalog', 'public'
     AS $$
 BEGIN
-    IF OLD.name IN ('Convention Centre', 'Exhibition Centre', 'Theatre') THEN
+    IF OLD.name IN ('Convention Centre', 'Exhibition Centre', 'Theatre', 'The Cutaway') THEN
         IF TG_OP = 'UPDATE' AND NEW.name != OLD.name THEN
             RAISE EXCEPTION 'Renaming of fixed group "%" is not allowed.', OLD.name;
         END IF;
-        -- Allow DELETE (cascade)
     END IF;
     RETURN NEW;
 END;
@@ -8954,7 +10019,7 @@ BEGIN
         IF OLD.start_time != NEW.start_time OR
            OLD.end_time != NEW.end_time OR
            OLD.role_id IS DISTINCT FROM NEW.role_id OR
-           OLD.remuneration_level_id IS DISTINCT FROM NEW.remuneration_level_id THEN
+           OLD.remuneration_level IS DISTINCT FROM NEW.remuneration_level THEN
             RAISE EXCEPTION 'Cannot edit published roster shift core fields. Unpublish first.';
         END IF;
     END IF;
@@ -9204,30 +10269,26 @@ DECLARE
     v_rest_period_ok BOOLEAN;
     v_shift_start TIMESTAMPTZ;
     v_bidding_close_at TIMESTAMPTZ;
-    v_is_urgent BOOLEAN;
     v_bidding_status shift_bidding_status;
 BEGIN
-    -- 1. Lock and Get Shift
     SELECT * INTO v_shift FROM shifts WHERE id = p_shift_id FOR UPDATE;
-    
+
     IF v_shift IS NULL THEN
         RAISE EXCEPTION 'Shift not found: %', p_shift_id;
     END IF;
 
-    -- 2. Validate Current State
     IF v_shift.lifecycle_status::text != 'Draft' AND v_shift.lifecycle_status::text != 'Published' THEN
          RAISE EXCEPTION 'Shift must be in Draft state to publish (current: %)', v_shift.lifecycle_status;
     END IF;
 
-    -- 3. Compliance Check (Only for Assigned shifts)
     IF v_shift.assigned_employee_id IS NOT NULL THEN
         v_new_fulfillment_status := 'scheduled';
-        
+
         INSERT INTO shift_offers (shift_id, employee_id, status)
         VALUES (p_shift_id, v_shift.assigned_employee_id, 'Pending')
         ON CONFLICT (shift_id, employee_id) DO NOTHING;
-        
-        UPDATE shifts SET 
+
+        UPDATE shifts SET
             lifecycle_status = 'Published',
             fulfillment_status = v_new_fulfillment_status,
             assignment_outcome = 'offered',
@@ -9236,26 +10297,18 @@ BEGIN
         WHERE id = p_shift_id;
 
     ELSE
-        -- Draft + Unassigned -> Bidding
         v_new_fulfillment_status := 'bidding';
-        
+
         v_shift_start := (v_shift.shift_date::TEXT || ' ' || v_shift.start_time::TEXT)::TIMESTAMP AT TIME ZONE 'Australia/Sydney';
         v_bidding_close_at := v_shift_start - INTERVAL '4 hours';
-        
-        -- Improved Error Message
+
         IF v_bidding_close_at <= NOW() THEN
             RAISE EXCEPTION 'Cannot publish unassigned shift less than 4 hours before start. Please assign an employee manually.';
         END IF;
-        
-        v_is_urgent := (v_bidding_close_at - NOW()) < INTERVAL '24 hours';
-        
-        IF v_is_urgent THEN
-             v_bidding_status := 'on_bidding_urgent';
-        ELSE
-             v_bidding_status := 'on_bidding_normal';
-        END IF;
-        
-        UPDATE shifts SET 
+
+        v_bidding_status := 'on_bidding';
+
+        UPDATE shifts SET
             lifecycle_status = 'Published',
             fulfillment_status = v_new_fulfillment_status,
             bidding_status = v_bidding_status,
@@ -9264,16 +10317,11 @@ BEGIN
             is_on_bidding = TRUE,
             bidding_enabled = TRUE,
             bidding_open_at = NOW(),
-            bidding_close_at = v_bidding_close_at,
-            is_urgent = v_is_urgent
+            bidding_close_at = v_bidding_close_at
         WHERE id = p_shift_id;
     END IF;
 
-    RETURN jsonb_build_object(
-        'success', true,
-        'shift_id', p_shift_id,
-        'new_status', 'Published'
-    );
+    RETURN jsonb_build_object('success', true, 'shift_id', p_shift_id, 'new_status', 'Published');
 END;
 $$;
 
@@ -9365,7 +10413,6 @@ DECLARE
     v_shift RECORD;
     v_shift_start TIMESTAMPTZ;
     v_bidding_close_at TIMESTAMPTZ;
-    v_is_urgent BOOLEAN;
 BEGIN
     SELECT * INTO v_shift FROM shifts WHERE id = p_shift_id FOR UPDATE;
     IF v_shift IS NULL THEN RETURN jsonb_build_object('success', false, 'error', 'Shift not found'); END IF;
@@ -9373,8 +10420,7 @@ BEGIN
     IF v_shift_start < NOW() THEN RETURN jsonb_build_object('success', false, 'error', 'Shift is in the past'); END IF;
     v_bidding_close_at := v_shift_start - INTERVAL '4 hours';
     IF v_bidding_close_at <= NOW() THEN RETURN jsonb_build_object('success', false, 'error', 'WINDOW_EXPIRED', 'message', 'Too late to open bidding (less than 4h). Emergency cover required.'); END IF;
-    v_is_urgent := (v_shift_start - NOW()) < INTERVAL '24 hours';
-    
+
     UPDATE shifts SET
         lifecycle_status = 'Published',
         assigned_employee_id = NULL,
@@ -9384,12 +10430,11 @@ BEGIN
         bidding_enabled = TRUE,
         bidding_open_at = NOW(),
         bidding_close_at = v_bidding_close_at,
-        is_urgent = v_is_urgent,
         cancellation_reason = p_reason,
         updated_at = NOW()
     WHERE id = p_shift_id;
-    
-    RETURN jsonb_build_object('success', true, 'shift_id', p_shift_id, 'bidding_close_at', v_bidding_close_at, 'is_urgent', v_is_urgent);
+
+    RETURN jsonb_build_object('success', true, 'shift_id', p_shift_id, 'bidding_close_at', v_bidding_close_at);
 END;
 $$;
 
@@ -9443,38 +10488,6 @@ $$;
 ALTER FUNCTION "public"."recalc_shift_utc_timestamps"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."recalculate_shift_urgency"("p_shift_id" "uuid") RETURNS boolean
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'pg_catalog', 'public'
-    AS $$
-DECLARE
-    v_shift RECORD;
-    v_shift_start TIMESTAMP;
-    v_bidding_close_at TIMESTAMP;
-    v_is_urgent BOOLEAN;
-BEGIN
-    SELECT * INTO v_shift FROM shifts WHERE id = p_shift_id;
-    
-    IF v_shift IS NULL OR v_shift.bidding_close_at IS NULL THEN
-        RETURN FALSE;
-    END IF;
-    
-    -- Calculate urgency based on current time
-    v_is_urgent := (v_shift.bidding_close_at - NOW()) < INTERVAL '24 hours';
-    
-    -- Update if changed
-    IF v_shift.is_urgent IS DISTINCT FROM v_is_urgent THEN
-        UPDATE shifts SET is_urgent = v_is_urgent WHERE id = p_shift_id;
-    END IF;
-    
-    RETURN v_is_urgent;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."recalculate_shift_urgency"("p_shift_id" "uuid") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."refresh_all_performance_metrics"() RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
@@ -9483,8 +10496,15 @@ DECLARE v_qy text; v_emp record;
 BEGIN
     v_qy := 'Q'||date_part('quarter',now())::int||'_'||date_part('year',now())::int;
     FOR v_emp IN
-        SELECT DISTINCT assigned_employee_id AS id FROM shifts
-        WHERE assigned_employee_id IS NOT NULL AND lifecycle_status != 'Draft'
+        SELECT DISTINCT id FROM (
+            -- Include everyone with episode activity
+            SELECT employee_id AS id FROM v_shift_assignment_episodes
+            WHERE terminal_outcome != 'shift_deleted'
+            UNION
+            -- Fallback: also include anyone with raw events (covers edge cases)
+            SELECT employee_id AS id FROM shift_events WHERE employee_id IS NOT NULL
+        ) q
+        WHERE id IS NOT NULL
     LOOP
         PERFORM compute_employee_quarter_metrics(v_emp.id, v_qy);
     END LOOP;
@@ -9493,6 +10513,21 @@ $$;
 
 
 ALTER FUNCTION "public"."refresh_all_performance_metrics"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."refresh_employee_performance_metrics"("p_employee_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE v_qy text;
+BEGIN
+    v_qy := 'Q'||date_part('quarter',now())::int||'_'||date_part('year',now())::int;
+    PERFORM public.compute_employee_quarter_metrics(p_employee_id, v_qy);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."refresh_employee_performance_metrics"("p_employee_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."refresh_performance_materialized_view"() RETURNS "void"
@@ -9562,63 +10597,37 @@ CREATE OR REPLACE FUNCTION "public"."reject_shift_offer"("p_shift_id" "uuid", "p
     AS $$
 DECLARE
     v_shift RECORD;
-    v_hours_until_start NUMERIC;
-    v_new_bidding_status shift_bidding_status;
 BEGIN
-    -- Get current shift state
-    SELECT * INTO v_shift
-    FROM shifts
-    WHERE id = p_shift_id
-    AND deleted_at IS NULL;
-    
+    SELECT * INTO v_shift FROM shifts WHERE id = p_shift_id AND deleted_at IS NULL;
+
     IF NOT FOUND THEN
         RETURN jsonb_build_object('success', false, 'error', 'Shift not found');
     END IF;
-    
-    -- Validate: Must be in S3 (Published + Offered)
-    IF v_shift.lifecycle_status != 'Published' 
-       OR v_shift.assignment_outcome != 'offered' THEN
+
+    IF v_shift.lifecycle_status != 'Published' OR v_shift.assignment_outcome != 'offered' THEN
         RETURN jsonb_build_object('success', false, 'error', 'Shift is not in Offered state');
     END IF;
-    
-    -- Validate: Must be assigned to this employee
+
     IF v_shift.assigned_employee_id != p_employee_id THEN
         RETURN jsonb_build_object('success', false, 'error', 'Offer not for this employee');
     END IF;
-    
-    -- Calculate hours until start for urgent vs normal bidding
-    v_hours_until_start := EXTRACT(EPOCH FROM (v_shift.scheduled_start - NOW())) / 3600;
-    
-    IF v_hours_until_start < 24 THEN
-        v_new_bidding_status := 'on_bidding_urgent'::shift_bidding_status;
-    ELSE
-        v_new_bidding_status := 'on_bidding_normal'::shift_bidding_status;
-    END IF;
-    
-    -- Transition S3 → S5/S6: Clear assignment, open bidding
+
     UPDATE shifts
-    SET 
+    SET
         assigned_employee_id = NULL,
         assigned_at = NULL,
         assignment_status = 'unassigned'::shift_assignment_status,
         assignment_outcome = NULL,
         fulfillment_status = 'none'::shift_fulfillment_status,
         is_on_bidding = TRUE,
-        bidding_status = v_new_bidding_status,
+        bidding_status = 'on_bidding'::shift_bidding_status,
         bidding_open_at = NOW(),
         updated_at = NOW(),
         last_modified_by = p_employee_id,
         last_modified_reason = COALESCE(p_reason, 'Employee rejected offer')
     WHERE id = p_shift_id;
-    
-    -- Trigger will sync to roster_shifts automatically
-    
-    RETURN jsonb_build_object(
-        'success', true,
-        'shift_id', p_shift_id,
-        'transition', format('S3 → %s', CASE WHEN v_hours_until_start < 24 THEN 'S6' ELSE 'S5' END),
-        'new_state', v_new_bidding_status::TEXT
-    );
+
+    RETURN jsonb_build_object('success', true, 'shift_id', p_shift_id, 'transition', 'S3 -> S5', 'new_state', 'on_bidding');
 END;
 $$;
 
@@ -9797,82 +10806,109 @@ $$;
 ALTER FUNCTION "public"."request_trade"("p_shift_id" "uuid", "p_target_employee_id" "uuid", "p_actor_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."resolve_shift_state"("p_lifecycle" "public"."shift_lifecycle", "p_assignment" "public"."shift_assignment_status", "p_outcome" "public"."shift_assignment_outcome", "p_bidding" "public"."shift_bidding_status", "p_trading" "public"."shift_trading") RETURNS "text"
-    LANGUAGE "plpgsql" IMMUTABLE STRICT PARALLEL SAFE
-    SET "search_path" TO 'pg_catalog', 'public'
+CREATE OR REPLACE FUNCTION "public"."resolve_audit_uuid_array"("p_field" "text", "p_arr" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE
     AS $$
+DECLARE
+    v_id text;
+    v_name text;
+    v_res jsonb := '[]'::jsonb;
 BEGIN
-    -- S15: Cancelled
-    IF p_lifecycle = 'Cancelled' THEN
-        IF p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade' THEN
-            RETURN 'S15';
-        END IF;
-        RETURN 'UNKNOWN';
+    IF p_arr IS NULL OR jsonb_typeof(p_arr) <> 'array' THEN
+        RETURN p_arr;
     END IF;
 
-    -- S13 / S14: Completed
-    IF p_lifecycle = 'Completed' THEN
-        IF p_assignment = 'assigned' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade' THEN
-            IF p_outcome = 'confirmed'           THEN RETURN 'S13'; END IF;
-            IF p_outcome = 'emergency_assigned'  THEN RETURN 'S14'; END IF;
-        END IF;
-        RETURN 'UNKNOWN';
-    END IF;
+    FOR v_id IN SELECT jsonb_array_elements_text(p_arr)
+    LOOP
+        CASE p_field
+            WHEN 'required_skills' THEN
+                SELECT name INTO v_name FROM public.skills WHERE id = v_id::uuid;
+            WHEN 'required_licenses' THEN
+                SELECT name INTO v_name FROM public.licenses WHERE id = v_id::uuid;
+            WHEN 'event_ids' THEN
+                SELECT name INTO v_name FROM public.events WHERE id = v_id::uuid;
+            ELSE
+                v_name := NULL;
+        END CASE;
 
-    -- S11 / S12: InProgress
-    IF p_lifecycle = 'InProgress' THEN
-        IF p_assignment = 'assigned' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade' THEN
-            IF p_outcome = 'confirmed'           THEN RETURN 'S11'; END IF;
-            IF p_outcome = 'emergency_assigned'  THEN RETURN 'S12'; END IF;
-        END IF;
-        RETURN 'UNKNOWN';
-    END IF;
+        v_res := v_res || to_jsonb(COALESCE(v_name, v_id));
+    END LOOP;
 
-    -- Published states
-    IF p_lifecycle = 'Published' THEN
-        -- S9 / S10: Trade states (only from Confirmed)
-        IF p_assignment = 'assigned' AND p_outcome = 'confirmed' AND p_bidding = 'not_on_bidding' THEN
-            IF p_trading = 'TradeRequested'  THEN RETURN 'S9';  END IF;
-            IF p_trading = 'TradeAccepted'   THEN RETURN 'S10'; END IF;
-            IF p_trading = 'NoTrade'         THEN RETURN 'S4';  END IF;
-        END IF;
-        -- S3: Offered
-        IF p_assignment = 'assigned' AND p_outcome = 'offered' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade' THEN
-            RETURN 'S3';
-        END IF;
-        -- S7: Emergency assigned
-        IF p_assignment = 'assigned' AND p_outcome = 'emergency_assigned' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade' THEN
-            RETURN 'S7';
-        END IF;
-        -- S5 / S6 / S8: Unassigned + bidding
-        IF p_assignment = 'unassigned' AND p_trading = 'NoTrade' THEN
-            IF p_bidding = 'on_bidding_normal'          THEN RETURN 'S5'; END IF;
-            IF p_bidding = 'on_bidding_urgent'          THEN RETURN 'S6'; END IF;
-            IF p_bidding = 'bidding_closed_no_winner'   THEN RETURN 'S8'; END IF;
-        END IF;
-        RETURN 'UNKNOWN';
-    END IF;
-
-    -- Draft states
-    IF p_lifecycle = 'Draft' THEN
-        IF p_assignment = 'assigned' AND p_outcome = 'pending' AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade' THEN
-            RETURN 'S2';
-        END IF;
-        IF p_assignment = 'unassigned' AND p_outcome IS NULL AND p_bidding = 'not_on_bidding' AND p_trading = 'NoTrade' THEN
-            RETURN 'S1';
-        END IF;
-    END IF;
-
-    RETURN 'UNKNOWN';
+    RETURN v_res;
 END;
 $$;
 
 
-ALTER FUNCTION "public"."resolve_shift_state"("p_lifecycle" "public"."shift_lifecycle", "p_assignment" "public"."shift_assignment_status", "p_outcome" "public"."shift_assignment_outcome", "p_bidding" "public"."shift_bidding_status", "p_trading" "public"."shift_trading") OWNER TO "postgres";
+ALTER FUNCTION "public"."resolve_audit_uuid_array"("p_field" "text", "p_arr" "jsonb") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."resolve_shift_state"("p_lifecycle" "public"."shift_lifecycle", "p_assignment" "public"."shift_assignment_status", "p_outcome" "public"."shift_assignment_outcome", "p_bidding" "public"."shift_bidding_status", "p_trading" "public"."shift_trading") IS 'Canonical shift state resolver. Returns S1-S15 or UNKNOWN. Mirrors TypeScript shiftStateMachine.determineShiftState(). Phase 3 will add a CHECK constraint using this function.';
+CREATE OR REPLACE FUNCTION "public"."resolve_audit_uuid_name"("p_field" "text", "p_uuid" "uuid") RETURNS "text"
+    LANGUAGE "plpgsql" STABLE
+    AS $$
+DECLARE
+    v_name text;
+BEGIN
+    IF p_uuid IS NULL THEN
+        RETURN NULL;
+    END IF;
+    CASE p_field
+        WHEN 'role_id' THEN
+            SELECT name INTO v_name FROM hr.roles WHERE id = p_uuid;
+        WHEN 'remuneration_level_id' THEN
+            -- Old UUIDs are no longer resolvable since remuneration_levels view uses level_number.
+            v_name := p_uuid::text;
+        WHEN 'shift_group_id' THEN
+            SELECT name INTO v_name FROM public.roster_groups WHERE id = p_uuid;
+        WHEN 'roster_subgroup_id' THEN
+            SELECT name INTO v_name FROM public.roster_subgroups WHERE id = p_uuid;
+        WHEN 'sub_department_id' THEN
+            SELECT name INTO v_name FROM public.sub_departments WHERE id = p_uuid;
+        ELSE
+            v_name := NULL;
+    END CASE;
+    RETURN COALESCE(v_name, p_uuid::text);
+END;
+$$;
 
+
+ALTER FUNCTION "public"."resolve_audit_uuid_name"("p_field" "text", "p_uuid" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."resolve_changes_jsonb"("p_changes" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE
+    AS $$
+DECLARE
+    v_key text;
+    v_val jsonb;
+    v_old jsonb;
+    v_new jsonb;
+    v_res jsonb := '{}'::jsonb;
+BEGIN
+    IF p_changes IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    FOR v_key, v_val IN SELECT * FROM jsonb_each(p_changes)
+    LOOP
+        IF v_key IN ('role_id', 'remuneration_level_id', 'shift_group_id', 'roster_subgroup_id', 'sub_department_id') THEN
+            v_old := to_jsonb(public.resolve_audit_uuid_name(v_key, (v_val->>'old')::uuid));
+            v_new := to_jsonb(public.resolve_audit_uuid_name(v_key, (v_val->>'new')::uuid));
+            v_res := v_res || jsonb_build_object(v_key, jsonb_build_object('old', v_old, 'new', v_new));
+        ELSIF v_key IN ('required_skills', 'required_licenses', 'event_ids') THEN
+            v_old := public.resolve_audit_uuid_array(v_key, v_val->'old');
+            v_new := public.resolve_audit_uuid_array(v_key, v_val->'new');
+            v_res := v_res || jsonb_build_object(v_key, jsonb_build_object('old', v_old, 'new', v_new));
+        ELSE
+            v_res := v_res || jsonb_build_object(v_key, v_val);
+        END IF;
+    END LOOP;
+
+    RETURN v_res;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."resolve_changes_jsonb"("p_changes" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."resolve_user_permissions"() RETURNS "jsonb"
@@ -10135,7 +11171,7 @@ $$;
 ALTER FUNCTION "public"."roster_update_timestamp"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."rpc_shift_coverage_stats"("p_org_id" "uuid", "p_date_from" "date", "p_date_to" "date") RETURNS TABLE("shift_date" "date", "group_type" "text", "sub_group_name" "text", "role_id" "uuid", "remuneration_level_id" "uuid", "total_shifts" bigint, "assigned_shifts" bigint, "published_shifts" bigint, "total_net_minutes" bigint, "estimated_cost" numeric)
+CREATE OR REPLACE FUNCTION "public"."rpc_shift_coverage_stats"("p_org_id" "uuid", "p_date_from" "date", "p_date_to" "date") RETURNS TABLE("shift_date" "date", "group_type" "text", "sub_group_name" "text", "role_id" "uuid", "remuneration_level" smallint, "total_shifts" bigint, "assigned_shifts" bigint, "published_shifts" bigint, "total_net_minutes" bigint, "estimated_cost" numeric)
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
     AS $$
@@ -10144,7 +11180,7 @@ CREATE OR REPLACE FUNCTION "public"."rpc_shift_coverage_stats"("p_org_id" "uuid"
     s.group_type,
     s.sub_group_name,
     s.role_id,
-    s.remuneration_level_id,
+    s.remuneration_level,
     COUNT(*)                                                           AS total_shifts,
     COUNT(*) FILTER (WHERE s.assigned_employee_id IS NOT NULL)         AS assigned_shifts,
     COUNT(*) FILTER (WHERE s.lifecycle_status = 'Published')           AS published_shifts,
@@ -10329,8 +11365,8 @@ BEGIN
                                 name = v_shift->>'name',
                                 role_id = NULLIF(v_shift->>'roleId', '')::uuid,
                                 role_name = v_shift->>'roleName',
-                                remuneration_level_id = NULLIF(v_shift->>'remunerationLevelId', '')::uuid,
-                                remuneration_level = v_shift->>'remunerationLevel',
+                                remuneration_level = NULLIF(v_shift->>'remunerationLevel', '')::smallint,
+                                remuneration_level_name = v_shift->>'remunerationLevelName',
                                 start_time = (v_shift->>'startTime')::time,
                                 end_time = (v_shift->>'endTime')::time,
                                 paid_break_minutes = COALESCE((v_shift->>'paidBreakDuration')::integer, 0),
@@ -10366,8 +11402,8 @@ BEGIN
                                 name,
                                 role_id,
                                 role_name,
-                                remuneration_level_id,
                                 remuneration_level,
+                                remuneration_level_name,
                                 start_time,
                                 end_time,
                                 paid_break_minutes,
@@ -10387,8 +11423,8 @@ BEGIN
                                 v_shift->>'name',
                                 NULLIF(v_shift->>'roleId', '')::uuid,
                                 v_shift->>'roleName',
-                                NULLIF(v_shift->>'remunerationLevelId', '')::uuid,
-                                v_shift->>'remunerationLevel',
+                                NULLIF(v_shift->>'remunerationLevel', '')::smallint,
+                                v_shift->>'remunerationLevelName',
                                 (v_shift->>'startTime')::time,
                                 (v_shift->>'endTime')::time,
                                 COALESCE((v_shift->>'paidBreakDuration')::integer, 0),
@@ -10473,11 +11509,11 @@ CREATE OR REPLACE FUNCTION "public"."seed_fixed_template_groups"() RETURNS "trig
     AS $$
 BEGIN
     INSERT INTO template_groups (template_id, name, color, icon, sort_order)
-    VALUES 
-        (NEW.id, 'Convention Centre', '#3b82f6', 'building', 1),
+    VALUES
+        (NEW.id, 'Convention Centre', '#3b82f6', 'building',    1),
         (NEW.id, 'Exhibition Centre', '#10b981', 'layout-grid', 2),
-        (NEW.id, 'Theatre', '#8b5cf6', 'theater', 3);
-    
+        (NEW.id, 'Theatre',           '#8b5cf6', 'theater',     3),
+        (NEW.id, 'The Cutaway',       '#f59e0b', 'film',        4);
     RETURN NEW;
 END;
 $$;
@@ -10665,22 +11701,6 @@ $$;
 ALTER FUNCTION "public"."set_batch_id"("batch_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."set_emergency_source"("p_action" "text", "p_time_to_start_sec" integer, "p_current" "text") RETURNS "text"
-    LANGUAGE "plpgsql" IMMUTABLE
-    SET "search_path" TO 'pg_catalog', 'public'
-    AS $$
-BEGIN
-  IF p_current IS NOT NULL THEN RETURN p_current; END IF;
-  IF p_action = 'EMERGENCY_ASSIGN' THEN RETURN 'manual'; END IF;
-  IF p_time_to_start_sec < 4 * 60 * 60 THEN RETURN 'auto'; END IF;
-  RETURN NULL;
-END;
-$$;
-
-
-ALTER FUNCTION "public"."set_emergency_source"("p_action" "text", "p_time_to_start_sec" integer, "p_current" "text") OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."set_roster_day_status"("p_roster_day_id" "uuid", "p_status" "public"."roster_day_status", "p_user_id" "uuid") RETURNS TABLE("success" boolean, "error_message" "text")
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
@@ -10733,6 +11753,19 @@ $$;
 
 
 ALTER FUNCTION "public"."set_skill_expiration"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."set_updated_at"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."set_updated_at"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."sm_accept_offer"("p_shift_id" "uuid", "p_user_id" "uuid" DEFAULT "auth"."uid"()) RETURNS "jsonb"
@@ -10860,6 +11893,272 @@ $$;
 ALTER FUNCTION "public"."sm_accept_trade"("p_swap_id" "uuid", "p_offer_id" "uuid", "p_offerer_id" "uuid", "p_offer_shift_id" "uuid", "p_compliance_snapshot" "jsonb") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."sm_apply_shift_op"("p_shift_id" "uuid", "p_expected_version" integer, "p_op" "text", "p_payload" "jsonb" DEFAULT '{}'::"jsonb", "p_idempotency_key" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_caller     uuid := auth.uid();
+  v_pre        RECORD;
+  v_cur        RECORD;
+  v_state      text;
+  v_to_state   text;
+  v_write      jsonb;
+  v_event      public.shift_event_type;
+  v_actor_role text;
+  v_domain     text;
+  v_changes    jsonb := '{}'::jsonb;
+BEGIN
+  IF v_caller IS NOT NULL AND NOT (
+       public.is_admin()
+       OR EXISTS (
+            SELECT 1 FROM public.app_access_certificates c
+            WHERE c.user_id = v_caller
+              AND c.is_active = true
+              AND c.access_level IN ('gamma', 'delta', 'epsilon', 'zeta')
+          )
+     ) THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'FORBIDDEN');
+  END IF;
+
+  SELECT * INTO v_pre
+  FROM public.shifts
+  WHERE id = p_shift_id AND deleted_at IS NULL
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'GONE');
+  END IF;
+
+  IF p_idempotency_key IS NOT NULL AND EXISTS (
+       SELECT 1 FROM public.shift_events e
+       WHERE e.shift_id = p_shift_id
+         AND e.metadata->>'idem' = p_idempotency_key::text
+     ) THEN
+    RETURN jsonb_build_object(
+      'ok', true, 'code', 'IDEMPOTENT_REPLAY', 'version', v_pre.version
+    );
+  END IF;
+
+  IF v_pre.version <> p_expected_version THEN
+    RETURN jsonb_build_object(
+      'ok', false,
+      'code', 'VERSION_CONFLICT',
+      'current_version', v_pre.version,
+      'current_state', public.get_shift_fsm_state(
+        v_pre.lifecycle_status, v_pre.assignment_status, v_pre.assignment_outcome,
+        v_pre.trading_status, v_pre.is_cancelled, v_pre.bidding_status),
+      'last_modified_by', v_pre.last_modified_by,
+      'updated_at', v_pre.updated_at,
+      'server_row', to_jsonb(v_pre)
+    );
+  END IF;
+
+  v_state := public.get_shift_fsm_state(
+    v_pre.lifecycle_status, v_pre.assignment_status, v_pre.assignment_outcome,
+    v_pre.trading_status, v_pre.is_cancelled, v_pre.bidding_status);
+
+  IF NOT public.fsm_op_is_legal(v_state, p_op) THEN
+    RETURN jsonb_build_object(
+      'ok', false,
+      'code', 'ILLEGAL_TRANSITION',
+      'current_state', v_state,
+      'attempted', p_op
+    );
+  END IF;
+
+  PERFORM set_config('app.audit.via_gateway', '1', true);
+  v_write := public._apply_shift_op_write(p_shift_id, p_op, p_payload, v_caller);
+  PERFORM set_config('app.audit.via_gateway', '0', true);
+
+  SELECT * INTO v_cur FROM public.shifts WHERE id = p_shift_id;
+
+  IF COALESCE((v_write->>'applied')::boolean, false) IS NOT TRUE THEN
+    RETURN jsonb_build_object(
+      'ok', false,
+      'code', 'WRITE_REJECTED',
+      'note', v_write->>'note',
+      'version', v_cur.version,
+      'state', public.get_shift_fsm_state(
+        v_cur.lifecycle_status, v_cur.assignment_status, v_cur.assignment_outcome,
+        v_cur.trading_status, v_cur.is_cancelled, v_cur.bidding_status)
+    );
+  END IF;
+
+  v_to_state := public.get_shift_fsm_state(
+    v_cur.lifecycle_status, v_cur.assignment_status, v_cur.assignment_outcome,
+    v_cur.trading_status, v_cur.is_cancelled, v_cur.bidding_status);
+
+  IF p_op IN ('edit', 'move') THEN
+    IF v_pre.start_time IS DISTINCT FROM v_cur.start_time THEN
+      v_changes := v_changes || jsonb_build_object('start_time',
+        jsonb_build_object('old', to_jsonb(v_pre.start_time), 'new', to_jsonb(v_cur.start_time)));
+    END IF;
+    IF v_pre.end_time IS DISTINCT FROM v_cur.end_time THEN
+      v_changes := v_changes || jsonb_build_object('end_time',
+        jsonb_build_object('old', to_jsonb(v_pre.end_time), 'new', to_jsonb(v_cur.end_time)));
+    END IF;
+    IF v_pre.shift_date IS DISTINCT FROM v_cur.shift_date THEN
+      v_changes := v_changes || jsonb_build_object('shift_date',
+        jsonb_build_object('old', to_jsonb(v_pre.shift_date), 'new', to_jsonb(v_cur.shift_date)));
+    END IF;
+    IF v_pre.paid_break_minutes IS DISTINCT FROM v_cur.paid_break_minutes THEN
+      v_changes := v_changes || jsonb_build_object('paid_break_minutes',
+        jsonb_build_object('old', to_jsonb(v_pre.paid_break_minutes), 'new', to_jsonb(v_cur.paid_break_minutes)));
+    END IF;
+    IF v_pre.unpaid_break_minutes IS DISTINCT FROM v_cur.unpaid_break_minutes THEN
+      v_changes := v_changes || jsonb_build_object('unpaid_break_minutes',
+        jsonb_build_object('old', to_jsonb(v_pre.unpaid_break_minutes), 'new', to_jsonb(v_cur.unpaid_break_minutes)));
+    END IF;
+    IF v_pre.notes IS DISTINCT FROM v_cur.notes THEN
+      v_changes := v_changes || jsonb_build_object('notes',
+        jsonb_build_object('old', to_jsonb(v_pre.notes), 'new', to_jsonb(v_cur.notes)));
+    END IF;
+    IF v_pre.role_id IS DISTINCT FROM v_cur.role_id THEN
+      v_changes := v_changes || jsonb_build_object('role_id',
+        jsonb_build_object('old', to_jsonb(v_pre.role_id), 'new', to_jsonb(v_cur.role_id)));
+    END IF;
+    IF v_pre.sub_department_id IS DISTINCT FROM v_cur.sub_department_id THEN
+      v_changes := v_changes || jsonb_build_object('sub_department_id',
+        jsonb_build_object('old', to_jsonb(v_pre.sub_department_id), 'new', to_jsonb(v_cur.sub_department_id)));
+    END IF;
+    IF v_pre.remuneration_level IS DISTINCT FROM v_cur.remuneration_level THEN
+      v_changes := v_changes || jsonb_build_object('remuneration_level',
+        jsonb_build_object('old', to_jsonb(v_pre.remuneration_level), 'new', to_jsonb(v_cur.remuneration_level)));
+    END IF;
+    IF v_pre.group_type IS DISTINCT FROM v_cur.group_type THEN
+      v_changes := v_changes || jsonb_build_object('group_type',
+        jsonb_build_object('old', to_jsonb(v_pre.group_type), 'new', to_jsonb(v_cur.group_type)));
+    END IF;
+    IF v_pre.sub_group_name IS DISTINCT FROM v_cur.sub_group_name THEN
+      v_changes := v_changes || jsonb_build_object('sub_group_name',
+        jsonb_build_object('old', to_jsonb(v_pre.sub_group_name), 'new', to_jsonb(v_cur.sub_group_name)));
+    END IF;
+    IF v_pre.display_order IS DISTINCT FROM v_cur.display_order THEN
+      v_changes := v_changes || jsonb_build_object('display_order',
+        jsonb_build_object('old', to_jsonb(v_pre.display_order), 'new', to_jsonb(v_cur.display_order)));
+    END IF;
+    IF v_pre.shift_group_id IS DISTINCT FROM v_cur.shift_group_id THEN
+      v_changes := v_changes || jsonb_build_object('shift_group_id',
+        jsonb_build_object('old', to_jsonb(v_pre.shift_group_id), 'new', to_jsonb(v_cur.shift_group_id)));
+    END IF;
+    IF v_pre.roster_subgroup_id IS DISTINCT FROM v_cur.roster_subgroup_id THEN
+      v_changes := v_changes || jsonb_build_object('roster_subgroup_id',
+        jsonb_build_object('old', to_jsonb(v_pre.roster_subgroup_id), 'new', to_jsonb(v_cur.roster_subgroup_id)));
+    END IF;
+    IF v_pre.timezone IS DISTINCT FROM v_cur.timezone THEN
+      v_changes := v_changes || jsonb_build_object('timezone',
+        jsonb_build_object('old', to_jsonb(v_pre.timezone), 'new', to_jsonb(v_cur.timezone)));
+    END IF;
+    IF v_pre.is_training IS DISTINCT FROM v_cur.is_training THEN
+      v_changes := v_changes || jsonb_build_object('is_training',
+        jsonb_build_object('old', to_jsonb(v_pre.is_training), 'new', to_jsonb(v_cur.is_training)));
+    END IF;
+    IF v_pre.required_skills IS DISTINCT FROM v_cur.required_skills THEN
+      v_changes := v_changes || jsonb_build_object('required_skills',
+        jsonb_build_object('old', to_jsonb(v_pre.required_skills), 'new', to_jsonb(v_cur.required_skills)));
+    END IF;
+    IF v_pre.required_licenses IS DISTINCT FROM v_cur.required_licenses THEN
+      v_changes := v_changes || jsonb_build_object('required_licenses',
+        jsonb_build_object('old', to_jsonb(v_pre.required_licenses), 'new', to_jsonb(v_cur.required_licenses)));
+    END IF;
+    IF v_pre.event_ids IS DISTINCT FROM v_cur.event_ids THEN
+      v_changes := v_changes || jsonb_build_object('event_ids',
+        jsonb_build_object('old', to_jsonb(v_pre.event_ids), 'new', to_jsonb(v_cur.event_ids)));
+    END IF;
+    IF v_pre.assigned_employee_id IS DISTINCT FROM v_cur.assigned_employee_id THEN
+      v_changes := v_changes || jsonb_build_object('assignment',
+        jsonb_build_object('old', to_jsonb(v_pre.assigned_employee_id), 'new', to_jsonb(v_cur.assigned_employee_id)));
+    END IF;
+  END IF;
+
+  IF v_caller IS NULL THEN
+    v_actor_role := 'system';
+  ELSIF public.is_admin()
+     OR EXISTS (
+          SELECT 1 FROM public.app_access_certificates c
+          WHERE c.user_id = v_caller
+            AND c.is_active = true
+            AND c.access_level IN ('gamma', 'delta', 'epsilon', 'zeta')
+        ) THEN
+    v_actor_role := 'manager';
+  ELSE
+    v_actor_role := 'employee';
+  END IF;
+
+  v_domain := CASE p_op
+                WHEN 'create'        THEN 'lifecycle'
+                WHEN 'publish'        THEN 'lifecycle'
+                WHEN 'unpublish'      THEN 'lifecycle'
+                WHEN 'delete'         THEN 'lifecycle'
+                WHEN 'assign'         THEN 'assignment'
+                WHEN 'unassign'       THEN 'assignment'
+                WHEN 'select_winner'  THEN 'marketplace'
+                WHEN 'edit'           THEN 'schedule'
+                WHEN 'move'           THEN 'schedule'
+                WHEN 'approve_trade'  THEN 'trade'
+                WHEN 'reject_trade'   THEN 'trade'
+                ELSE 'lifecycle'
+              END;
+
+  v_event := CASE
+               WHEN p_op = 'assign'        THEN 'ASSIGNED'
+               WHEN p_op = 'select_winner' THEN 'ASSIGNED'
+               WHEN p_op = 'unpublish'     THEN 'UNASSIGNED'
+               WHEN p_op = 'delete' AND v_cur.assigned_employee_id IS NOT NULL
+                                           THEN 'CANCELLED'
+               ELSE 'OP_APPLIED'
+             END::public.shift_event_type;
+
+  INSERT INTO public.shift_events (
+    shift_id, employee_id, actor_id, event_type, metadata,
+    actor_role, domain, shift_version, idempotency_key
+  )
+  VALUES (
+    p_shift_id,
+    v_cur.assigned_employee_id,
+    v_caller,
+    v_event,
+    jsonb_build_object(
+      'op',                p_op,
+      'reason',            p_payload->>'reason',
+      'from_state',        v_state,
+      'to_state',          v_to_state,
+      'from_version',      p_expected_version,
+      'to_version',        v_cur.version,
+      'idem',              p_idempotency_key,
+      'source',            'sm_apply_shift_op',
+      'assignment_source', v_cur.assignment_source,
+      'payload',           p_payload,
+      'write',             v_write
+    )
+    || CASE WHEN p_op IN ('edit', 'move')
+            THEN jsonb_build_object('changes', v_changes)
+            ELSE '{}'::jsonb
+       END,
+    v_actor_role,
+    v_domain,
+    v_cur.version,
+    p_idempotency_key
+  );
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'code', 'APPLIED',
+    'version', v_cur.version,
+    'state', v_to_state
+  );
+
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'Error in sm_apply_shift_op (shift=%, op=%): %', p_shift_id, p_op, SQLERRM;
+  RETURN jsonb_build_object('ok', false, 'code', 'ERROR', 'error', SQLERRM);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."sm_apply_shift_op"("p_shift_id" "uuid", "p_expected_version" integer, "p_op" "text", "p_payload" "jsonb", "p_idempotency_key" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."sm_approve_peer_swap"("p_requester_shift_id" "uuid", "p_offered_shift_id" "uuid", "p_requester_id" "uuid", "p_offerer_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
@@ -10970,18 +12269,193 @@ $$;
 ALTER FUNCTION "public"."sm_approve_trade"("p_shift_id" "uuid", "p_new_employee_id" "uuid", "p_user_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."sm_assignment_run_finish"("p_run_id" "uuid", "p_status" "text", "p_summary" "jsonb" DEFAULT NULL::"jsonb", "p_error" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_catalog'
+    AS $$
+DECLARE
+  v_caller uuid := auth.uid();
+  v_run    public.assignment_runs%ROWTYPE;
+BEGIN
+  IF p_status NOT IN ('COMPLETED','PARTIALLY_FAILED','ABORTED') THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'BAD_STATUS');
+  END IF;
+  SELECT * INTO v_run FROM public.assignment_runs WHERE id = p_run_id FOR UPDATE;
+  IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'code', 'NO_RUN'); END IF;
+  IF v_caller IS NOT NULL AND NOT public.aa_user_manages_org(v_caller, v_run.organization_id) THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'FORBIDDEN');
+  END IF;
+  UPDATE public.assignment_runs
+     SET status = p_status, summary = COALESCE(p_summary, summary), error = p_error, finished_at = now()
+   WHERE id = p_run_id;
+  INSERT INTO public.assignment_events (run_id, event_type, actor_id, metadata)
+  VALUES (p_run_id, 'RUN_FINISHED', v_caller,
+          jsonb_build_object('status', p_status, 'summary', p_summary, 'error', p_error));
+  RETURN jsonb_build_object('ok', true, 'run_id', p_run_id, 'status', p_status);
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'sm_assignment_run_finish error: %', SQLERRM;
+  RETURN jsonb_build_object('ok', false, 'code', 'ERROR', 'error', SQLERRM);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."sm_assignment_run_finish"("p_run_id" "uuid", "p_status" "text", "p_summary" "jsonb", "p_error" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."sm_assignment_run_rollback"("p_run_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_catalog'
+    AS $$
+DECLARE
+  v_caller uuid := auth.uid();
+  v_run    public.assignment_runs%ROWTYPE;
+  v_dec    RECORD;
+  v_shift  public.shifts%ROWTYPE;
+  v_state  text;
+  v_reverted jsonb := '[]'::jsonb;
+  v_skipped  jsonb := '[]'::jsonb;
+  v_skip   text;
+BEGIN
+  SELECT * INTO v_run FROM public.assignment_runs WHERE id = p_run_id FOR UPDATE;
+  IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'code', 'NO_RUN'); END IF;
+  IF v_caller IS NOT NULL AND NOT public.aa_user_manages_org(v_caller, v_run.organization_id) THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'FORBIDDEN');
+  END IF;
+  IF v_run.status NOT IN ('COMPLETED','PARTIALLY_FAILED') THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'NOT_ROLLBACKABLE', 'status', v_run.status);
+  END IF;
+  IF v_run.dry_run THEN RETURN jsonb_build_object('ok', false, 'code', 'DRY_RUN_HAS_NO_EFFECT'); END IF;
+
+  FOR v_dec IN
+    SELECT * FROM public.assignment_decisions
+    WHERE run_id = p_run_id AND outcome = 'ASSIGNED' AND committed = true AND version_after IS NOT NULL
+    ORDER BY shift_id ASC
+  LOOP
+    v_skip := NULL;
+    SELECT * INTO v_shift FROM public.shifts WHERE id = v_dec.shift_id FOR UPDATE;
+    IF NOT FOUND OR v_shift.deleted_at IS NOT NULL OR v_shift.is_cancelled THEN v_skip := 'GONE';
+    ELSIF v_shift.version <> v_dec.version_after THEN v_skip := 'EDITED_SINCE';
+    ELSIF v_shift.trading_status <> 'NoTrade' THEN v_skip := 'TRADED_SINCE';
+    ELSIF EXTRACT(EPOCH FROM (v_shift.scheduled_start - now())) < 4 * 3600 THEN v_skip := 'TTS_LOCKED';
+    END IF;
+    IF v_skip IS NOT NULL THEN
+      v_skipped := v_skipped || jsonb_build_object('shift_id', v_dec.shift_id, 'reason', v_skip);
+      CONTINUE;
+    END IF;
+    v_state := public.get_shift_fsm_state(
+      v_shift.lifecycle_status, v_shift.assignment_status, v_shift.assignment_outcome,
+      v_shift.trading_status, v_shift.is_cancelled, v_shift.bidding_status);
+    IF v_state <> 'S4' THEN
+      v_skipped := v_skipped || jsonb_build_object('shift_id', v_dec.shift_id, 'reason', 'STATE_' || v_state);
+      CONTINUE;
+    END IF;
+    UPDATE public.shift_bids SET status = 'pending', updated_at = now()
+     WHERE shift_id = v_dec.shift_id AND employee_id = v_dec.winner_employee_id AND status = 'accepted';
+    UPDATE public.shifts SET
+      assigned_employee_id = NULL, assigned_at = NULL,
+      assignment_status = 'unassigned'::public.shift_assignment_status,
+      assignment_outcome = NULL, confirmed_at = NULL,
+      bidding_status = 'on_bidding'::public.shift_bidding_status,
+      is_on_bidding = TRUE, bidding_enabled = TRUE,
+      fulfillment_status = 'bidding'::public.shift_fulfillment_status,
+      last_modified_by = v_caller,
+      last_modified_reason = 'Auto-assign run rollback ' || p_run_id::text,
+      updated_at = now()
+    WHERE id = v_dec.shift_id;
+    INSERT INTO public.shift_events (shift_id, employee_id, actor_id, event_type, metadata)
+    VALUES (v_dec.shift_id, v_dec.winner_employee_id, v_caller, 'UNASSIGNED',
+      jsonb_build_object('op', 'run_rollback', 'run_id', p_run_id, 'from_version', v_dec.version_after,
+        'idem', extensions.uuid_generate_v5('00000000-0000-0000-0000-0000000000aa'::uuid,
+                  p_run_id::text || ':rb:' || v_dec.shift_id::text)));
+    INSERT INTO public.assignment_events (run_id, shift_id, event_type, actor_id, metadata)
+    VALUES (p_run_id, v_dec.shift_id, 'SHIFT_ROLLBACK', v_caller,
+            jsonb_build_object('version_before', v_dec.version_after));
+    v_reverted := v_reverted || jsonb_build_object('shift_id', v_dec.shift_id);
+  END LOOP;
+
+  UPDATE public.assignment_runs SET status = 'ROLLED_BACK', finished_at = now() WHERE id = p_run_id;
+  INSERT INTO public.assignment_events (run_id, event_type, actor_id, metadata)
+  VALUES (p_run_id, 'RUN_ROLLED_BACK', v_caller,
+          jsonb_build_object('reverted', v_reverted, 'skipped', v_skipped));
+  RETURN jsonb_build_object('ok', true, 'run_id', p_run_id, 'status', 'ROLLED_BACK',
+                            'reverted', v_reverted, 'skipped', v_skipped);
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'sm_assignment_run_rollback error: %', SQLERRM;
+  RETURN jsonb_build_object('ok', false, 'code', 'ERROR', 'error', SQLERRM);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."sm_assignment_run_rollback"("p_run_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."sm_assignment_run_start"("p_scope" "jsonb", "p_engine_version" "text", "p_policy_version" integer DEFAULT 1, "p_options" "jsonb" DEFAULT '{}'::"jsonb", "p_dry_run" boolean DEFAULT false) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_catalog'
+    AS $$
+DECLARE
+  v_caller uuid := auth.uid();
+  v_org    uuid := NULLIF(p_scope->>'organization_id','')::uuid;
+  v_run    public.assignment_runs%ROWTYPE;
+BEGIN
+  IF v_org IS NULL THEN RETURN jsonb_build_object('ok', false, 'code', 'MISSING_ORG'); END IF;
+  IF v_caller IS NOT NULL AND NOT public.aa_user_manages_org(v_caller, v_org) THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'FORBIDDEN');
+  END IF;
+  INSERT INTO public.assignment_runs (
+    organization_id, department_id, sub_department_id, actor_id, scope,
+    dry_run, status, engine_version, policy_version, options, started_at
+  ) VALUES (
+    v_org, NULLIF(p_scope->>'department_id','')::uuid, NULLIF(p_scope->>'sub_department_id','')::uuid,
+    COALESCE(v_caller, '00000000-0000-0000-0000-000000000000'::uuid),
+    p_scope, p_dry_run, 'RUNNING', p_engine_version, p_policy_version, p_options, now()
+  ) RETURNING * INTO v_run;
+  INSERT INTO public.assignment_events (run_id, event_type, actor_id, metadata)
+  VALUES (v_run.id, 'RUN_STARTED', v_caller,
+          jsonb_build_object('scope', p_scope, 'dry_run', p_dry_run, 'options', p_options));
+  RETURN jsonb_build_object('ok', true, 'run_id', v_run.id, 'status', 'RUNNING');
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'sm_assignment_run_start error: %', SQLERRM;
+  RETURN jsonb_build_object('ok', false, 'code', 'ERROR', 'error', SQLERRM);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."sm_assignment_run_start"("p_scope" "jsonb", "p_engine_version" "text", "p_policy_version" integer, "p_options" "jsonb", "p_dry_run" boolean) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."sm_bulk_assign"("p_shift_ids" "uuid"[], "p_employee_id" "uuid", "p_user_id" "uuid" DEFAULT "auth"."uid"()) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'pg_catalog', 'public'
+    SET "search_path" TO 'public'
     AS $$
 DECLARE
   v_total_count   int;
   v_success_count int;
   v_user_name     text;
   v_user_role     text;
-  v_audit_role    text;
+  v_caller        uuid := auth.uid();
 BEGIN
   v_total_count := array_length(p_shift_ids, 1);
+
+  -- ── Authorization (audit fix C1) ─────────────────────────────────────────
+  IF v_caller IS NOT NULL AND NOT (
+       public.is_manager_or_above()
+       OR public.is_admin()
+       OR EXISTS (
+            SELECT 1 FROM public.app_access_certificates c
+            WHERE c.user_id = v_caller
+              AND c.is_active = true
+              AND c.access_level IN ('gamma', 'delta', 'epsilon', 'zeta')
+          )
+     ) THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Not authorized to assign shifts',
+      'total_requested', COALESCE(v_total_count, 0),
+      'success_count', 0,
+      'failure_count', COALESCE(v_total_count, 0)
+    );
+  END IF;
 
   IF p_user_id IS NOT NULL THEN
     SELECT COALESCE(first_name || ' ' || COALESCE(last_name, ''), email),
@@ -10998,15 +12472,15 @@ BEGIN
       assignment_outcome   = CASE WHEN s.lifecycle_status = 'Published'
                                 THEN 'confirmed'::public.shift_assignment_outcome
                                 ELSE s.assignment_outcome END,
-      emergency_source     = CASE WHEN s.lifecycle_status = 'Published'
-                                THEN public.set_emergency_source('NORMAL_ASSIGN',
-                                       EXTRACT(EPOCH FROM (s.scheduled_start - NOW()))::int,
-                                       s.emergency_source)
-                                ELSE s.emergency_source END,
       confirmed_at         = CASE WHEN s.lifecycle_status = 'Published' THEN NOW() ELSE s.confirmed_at END,
       updated_at           = NOW(),
       last_modified_by     = p_user_id
-    WHERE s.id = ANY(p_shift_ids) AND s.deleted_at IS NULL
+    WHERE s.id = ANY(p_shift_ids)
+      AND s.deleted_at IS NULL
+      -- Lost-update guard: never overwrite a shift already held by a different
+      -- employee. Re-checked after row-lock under READ COMMITTED, so two
+      -- concurrent callers cannot both claim the same open shift.
+      AND (s.assigned_employee_id IS NULL OR s.assigned_employee_id = p_employee_id)
     RETURNING s.id, s.lifecycle_status
   )
   SELECT count(*) INTO v_success_count FROM updated_rows;
@@ -11022,6 +12496,173 @@ END; $$;
 
 
 ALTER FUNCTION "public"."sm_bulk_assign"("p_shift_ids" "uuid"[], "p_employee_id" "uuid", "p_user_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."sm_bulk_assign_atomic"("p_assignments" "jsonb", "p_user_id" "uuid" DEFAULT "auth"."uid"(), "p_idempotency_key" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+DECLARE
+    v_caller        uuid := auth.uid();
+    v_user_name     text;
+    v_user_role     text;
+    v_pair          jsonb;
+    v_employee_id   uuid;
+    v_shift_ids     uuid[];
+    v_pair_total    int;
+    v_pair_success  int;
+    v_pair_conflicts jsonb;
+    v_total_requested   int := 0;
+    v_total_success     int := 0;
+    v_total_conflict    int := 0;
+    v_per_employee      jsonb := '[]'::jsonb;
+    v_all_conflicts     jsonb := '[]'::jsonb;
+    v_updated_ids       uuid[];
+    v_shift_id          uuid;
+    v_final_result      jsonb;
+    v_stored_result     jsonb;
+BEGIN
+    PERFORM set_config('app.audit.actor', 'autoscheduler', true);
+
+    IF p_idempotency_key IS NOT NULL THEN
+        SELECT result INTO v_stored_result
+        FROM public.bulk_assign_idempotency
+        WHERE key = p_idempotency_key;
+        IF FOUND THEN
+            RETURN v_stored_result;
+        END IF;
+    END IF;
+
+    IF v_caller IS NOT NULL AND NOT (
+           public.is_manager_or_above()
+           OR public.is_admin()
+           OR EXISTS (
+                SELECT 1 FROM public.app_access_certificates c
+                WHERE c.user_id = v_caller
+                  AND c.is_active = true
+                  AND c.access_level IN ('gamma', 'delta', 'epsilon', 'zeta')
+              )
+         ) THEN
+        RETURN jsonb_build_object(
+            'success', false,
+            'error', 'Not authorized to assign shifts',
+            'total_requested', 0,
+            'success_count', 0,
+            'conflict_count', 0,
+            'conflicts', '[]'::jsonb,
+            'per_employee', '[]'::jsonb
+        );
+    END IF;
+
+    IF p_user_id IS NOT NULL THEN
+        SELECT COALESCE(first_name || ' ' || COALESCE(last_name, ''), email),
+               left(lower(legacy_system_role::text), 50)
+        INTO v_user_name, v_user_role
+        FROM public.profiles
+        WHERE id = p_user_id;
+    ELSE
+        v_user_name := 'System';
+        v_user_role := 'system_automation';
+    END IF;
+
+    FOR v_pair IN SELECT * FROM jsonb_array_elements(p_assignments)
+    LOOP
+        v_employee_id := (v_pair->>'employee_id')::uuid;
+        v_shift_ids   := ARRAY(
+            SELECT (elem::text)::uuid
+            FROM jsonb_array_elements_text(v_pair->'shift_ids') AS elem
+        );
+        v_pair_total    := array_length(v_shift_ids, 1);
+        v_pair_success  := 0;
+        v_pair_conflicts := '[]'::jsonb;
+        v_updated_ids   := '{}';
+
+        IF v_pair_total IS NULL OR v_pair_total = 0 THEN
+            CONTINUE;
+        END IF;
+
+        v_total_requested := v_total_requested + v_pair_total;
+
+        WITH updated_rows AS (
+            UPDATE public.shifts s SET
+                assigned_employee_id = v_employee_id,
+                assignment_status    = 'assigned'::public.shift_assignment_status,
+                assignment_outcome   = CASE
+                                         WHEN s.lifecycle_status = 'Published'
+                                         THEN 'confirmed'::public.shift_assignment_outcome
+                                         ELSE s.assignment_outcome
+                                       END,
+                confirmed_at         = CASE
+                                         WHEN s.lifecycle_status = 'Published'
+                                         THEN NOW()
+                                         ELSE s.confirmed_at
+                                       END,
+                updated_at           = NOW(),
+                last_modified_by     = p_user_id
+            WHERE s.id = ANY(v_shift_ids)
+              AND s.deleted_at IS NULL
+              AND (s.assigned_employee_id IS NULL OR s.assigned_employee_id = v_employee_id)
+            RETURNING s.id
+        )
+        SELECT array_agg(id) INTO v_updated_ids FROM updated_rows;
+
+        IF v_updated_ids IS NULL THEN
+            v_updated_ids := '{}';
+        END IF;
+
+        v_pair_success := array_length(v_updated_ids, 1);
+        IF v_pair_success IS NULL THEN v_pair_success := 0; END IF;
+
+        FOREACH v_shift_id IN ARRAY v_shift_ids LOOP
+            IF NOT (v_shift_id = ANY(v_updated_ids)) THEN
+                v_pair_conflicts := v_pair_conflicts || to_jsonb(v_shift_id::text);
+                v_all_conflicts  := v_all_conflicts  || to_jsonb(v_shift_id::text);
+            END IF;
+        END LOOP;
+
+        v_total_success  := v_total_success  + v_pair_success;
+        v_total_conflict := v_total_conflict + (v_pair_total - v_pair_success);
+
+        v_per_employee := v_per_employee || jsonb_build_object(
+            'employee_id', v_employee_id,
+            'committed',   v_pair_success,
+            'conflicts',   v_pair_conflicts
+        );
+    END LOOP;
+
+    v_final_result := jsonb_build_object(
+        'success',         true,
+        'total_requested', v_total_requested,
+        'success_count',   v_total_success,
+        'conflict_count',  v_total_conflict,
+        'conflicts',       v_all_conflicts,
+        'per_employee',    v_per_employee
+    );
+
+    IF p_idempotency_key IS NOT NULL THEN
+        INSERT INTO public.bulk_assign_idempotency (key, result)
+        VALUES (p_idempotency_key, v_final_result)
+        ON CONFLICT (key) DO NOTHING;
+    END IF;
+
+    RETURN v_final_result;
+
+EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'Error in sm_bulk_assign_atomic: %', SQLERRM;
+    RETURN jsonb_build_object(
+        'success', false,
+        'error', SQLERRM,
+        'total_requested', v_total_requested,
+        'success_count', 0,
+        'conflict_count', 0,
+        'conflicts', '[]'::jsonb,
+        'per_employee', '[]'::jsonb
+    );
+END;
+$$;
+
+
+ALTER FUNCTION "public"."sm_bulk_assign_atomic"("p_assignments" "jsonb", "p_user_id" "uuid", "p_idempotency_key" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."sm_bulk_close_bidding"("p_shift_ids" "uuid"[], "p_reason" "text", "p_actor_id" "uuid" DEFAULT "auth"."uid"()) RETURNS "jsonb"
@@ -11239,11 +12880,11 @@ BEGIN
     v_total_count := array_length(p_shift_ids, 1);
 
     IF p_actor_id IS NOT NULL THEN
-        SELECT 
+        SELECT
             COALESCE(first_name || ' ' || COALESCE(last_name, ''), email),
             left(lower(legacy_system_role::text), 50)
         INTO v_actor_name, v_actor_role
-        FROM profiles 
+        FROM profiles
         WHERE id = p_actor_id;
     ELSE
         v_actor_name := 'System';
@@ -11251,93 +12892,80 @@ BEGIN
     END IF;
 
     WITH shift_calculations AS (
-        SELECT 
+        SELECT
             s.id,
             s.assigned_employee_id,
             get_shift_state_id(s.id) as current_state,
-            COALESCE(s.scheduled_start, s.start_at) as shift_start_tz, 
+            COALESCE(s.scheduled_start, s.start_at) as shift_start_tz,
             get_time_category(COALESCE(s.scheduled_start, s.start_at)) as time_cat
         FROM shifts s
         WHERE s.id = ANY(p_shift_ids)
           AND s.deleted_at IS NULL
     ),
     valid_transitions AS (
-        SELECT 
+        SELECT
             id,
             current_state,
             time_cat,
-            CASE 
-                WHEN current_state = 'S1' AND time_cat = 'URGENT' THEN 'S6'
-                WHEN current_state = 'S1' AND time_cat = 'NORMAL' THEN 'S5'
-                WHEN current_state = 'S2' AND time_cat = 'EMERGENCY' THEN 'S7'
-                WHEN current_state = 'S2' THEN 'S3' 
-                ELSE NULL 
+            CASE
+                WHEN current_state = 'S1' AND time_cat IN ('URGENT','NORMAL') THEN 'S5'
+                WHEN current_state = 'S2' AND time_cat = 'EMERGENCY' THEN 'S4'
+                WHEN current_state = 'S2' THEN 'S3'
+                ELSE NULL
             END as new_state_id,
-            
             CASE
                 WHEN EXTRACT(EPOCH FROM (shift_start_tz - NOW())) / 3600.0 <= 4 THEN NOW()
                 WHEN EXTRACT(EPOCH FROM (shift_start_tz - NOW())) / 3600.0 <= 24 THEN LEAST(NOW() + INTERVAL '4 hours', shift_start_tz - INTERVAL '4 hours')
                 WHEN EXTRACT(EPOCH FROM (shift_start_tz - NOW())) / 3600.0 <= 48 THEN NOW() + INTERVAL '8 hours'
                 ELSE NOW() + INTERVAL '12 hours'
             END as offer_deadline
-            
         FROM shift_calculations
-        WHERE current_state IN ('S1', 'S2') 
+        WHERE current_state IN ('S1', 'S2')
           AND time_cat != 'PAST'
           AND NOT (current_state = 'S1' AND time_cat = 'EMERGENCY')
     ),
     updated_rows AS (
         UPDATE shifts s
-        SET 
+        SET
             lifecycle_status = 'Published',
             published_at = NOW(),
             last_modified_by = p_actor_id,
             updated_at = NOW(),
-            
-            bidding_status = CASE 
-                WHEN vt.new_state_id = 'S6' THEN 'on_bidding_urgent'
-                WHEN vt.new_state_id = 'S5' THEN 'on_bidding_normal'
-                ELSE s.bidding_status 
+            bidding_status = CASE
+                WHEN vt.new_state_id = 'S5' THEN 'on_bidding'
+                ELSE s.bidding_status
             END,
-            
-            is_on_bidding = CASE 
-                WHEN vt.new_state_id IN ('S5', 'S6') THEN TRUE 
-                ELSE s.is_on_bidding 
+            is_on_bidding = CASE
+                WHEN vt.new_state_id = 'S5' THEN TRUE
+                ELSE s.is_on_bidding
             END,
-            
-            bidding_opened_at = CASE 
-                WHEN vt.new_state_id IN ('S5', 'S6') THEN NOW() 
-                ELSE s.bidding_opened_at 
+            bidding_open_at = CASE
+                WHEN vt.new_state_id = 'S5' THEN NOW()
+                ELSE s.bidding_open_at
             END,
-            
-            fulfillment_status = CASE 
-                WHEN vt.new_state_id IN ('S5', 'S6') THEN 'bidding'::shift_fulfillment_status
-                WHEN vt.new_state_id = 'S7' THEN 'scheduled'::shift_fulfillment_status
+            fulfillment_status = CASE
+                WHEN vt.new_state_id = 'S5' THEN 'bidding'::shift_fulfillment_status
+                WHEN vt.new_state_id = 'S4' THEN 'scheduled'::shift_fulfillment_status
                 WHEN vt.new_state_id = 'S3' THEN 'offered'::shift_fulfillment_status
                 ELSE s.fulfillment_status
             END,
-            
-            assignment_outcome = CASE 
-                WHEN vt.new_state_id = 'S7' THEN 'emergency_assigned'
-                WHEN vt.new_state_id = 'S3' THEN 'offered'
+            assignment_outcome = CASE
+                WHEN vt.new_state_id = 'S4' THEN 'confirmed'
+                WHEN vt.new_state_id = 'S3' THEN NULL
                 ELSE s.assignment_outcome
             END,
-
             confirmed_at = CASE
-                WHEN vt.new_state_id = 'S7' THEN NOW()
+                WHEN vt.new_state_id = 'S4' THEN NOW()
                 ELSE s.confirmed_at
             END,
-            
             offer_sent_at = CASE
                 WHEN vt.new_state_id = 'S3' THEN NOW()
                 ELSE s.offer_sent_at
             END,
-            
             offer_expires_at = CASE
                 WHEN vt.new_state_id = 'S3' THEN vt.offer_deadline
                 ELSE s.offer_expires_at
             END
-
         FROM valid_transitions vt
         WHERE s.id = vt.id AND vt.new_state_id IS NOT NULL
         RETURNING s.id, vt.current_state, vt.new_state_id, vt.offer_deadline
@@ -11346,7 +12974,7 @@ BEGIN
         UPDATE public.shift_offers so
         SET offer_expires_at = ur.offer_deadline
         FROM updated_rows ur
-        WHERE so.shift_id = ur.id 
+        WHERE so.shift_id = ur.id
           AND ur.new_state_id = 'S3'
           AND so.status = 'Pending'
         RETURNING so.id
@@ -11363,10 +12991,7 @@ BEGIN
 
 EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'Error in sm_bulk_publish_shifts: %', SQLERRM;
-    RETURN jsonb_build_object(
-        'success', false,
-        'error', SQLERRM
-    );
+    RETURN jsonb_build_object('success', false, 'error', SQLERRM);
 END;
 $$;
 
@@ -11500,23 +13125,22 @@ DECLARE
   v_dlat          DOUBLE PRECISION;
   v_dlon          DOUBLE PRECISION;
   v_a             DOUBLE PRECISION;
+  v_from_state    TEXT;
+  v_to_state      TEXT;
 BEGIN
   SELECT * INTO v_shift FROM shifts WHERE id = p_shift_id FOR UPDATE;
   IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'error', 'Shift not found');
   END IF;
 
-  -- Must be clocked in
   IF v_shift.attendance_status NOT IN ('checked_in', 'late') THEN
     RETURN jsonb_build_object('success', false, 'error', 'Must clock in before clocking out');
   END IF;
 
-  -- Already clocked out
   IF v_shift.actual_end IS NOT NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Already clocked out');
   END IF;
 
-  -- Geolocation check
   IF p_lat IS NULL OR p_lon IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Location required to clock out');
   END IF;
@@ -11541,17 +13165,53 @@ BEGIN
     v_distance_m := 0;
   END IF;
 
-  -- Net minutes worked
   v_net_minutes := EXTRACT(EPOCH FROM (v_now - v_shift.actual_start)) / 60.0;
 
-  -- Early out: left more than 5 min before scheduled end
   v_early_out := v_shift.end_at IS NOT NULL AND v_now < v_shift.end_at - INTERVAL '5 minutes';
 
+  v_from_state := public.get_shift_fsm_state(
+    v_shift.lifecycle_status, v_shift.assignment_status,
+    v_shift.assignment_outcome, v_shift.trading_status,
+    v_shift.is_cancelled, v_shift.bidding_status
+  );
+
   UPDATE shifts SET
-    actual_end        = v_now,
+    actual_end         = v_now,
     actual_net_minutes = round(v_net_minutes::NUMERIC, 0),
-    updated_at        = v_now
+    lifecycle_status   = 'Completed',
+    updated_at         = v_now
   WHERE id = p_shift_id;
+
+  v_to_state := public.get_shift_fsm_state(
+    'Completed', v_shift.assignment_status,
+    v_shift.assignment_outcome, v_shift.trading_status,
+    v_shift.is_cancelled, v_shift.bidding_status
+  );
+
+  INSERT INTO public.shift_events (
+    shift_id, employee_id, actor_id, event_type, event_time, metadata, actor_role, domain
+  ) VALUES (
+    p_shift_id,
+    v_shift.assigned_employee_id,
+    p_user_id,
+    CASE WHEN v_early_out THEN 'EARLY_OUT' ELSE 'OP_APPLIED' END::public.shift_event_type,
+    v_now,
+    jsonb_build_object(
+      'op', 'clock_out',
+      'domain', 'attendance',
+      'departure', CASE
+                     WHEN v_early_out THEN 'early'
+                     WHEN v_shift.end_at IS NOT NULL AND v_now > v_shift.end_at + INTERVAL '5 minutes' THEN 'late'
+                     ELSE 'on_time'
+                   END,
+      'net_minutes', round(v_net_minutes::NUMERIC, 0),
+      'from_state', v_from_state,
+      'to_state',   v_to_state,
+      'source', 'sm_clock_out_shift'
+    ),
+    'employee',
+    'attendance'
+  );
 
   RETURN jsonb_build_object(
     'success',          true,
@@ -11583,28 +13243,15 @@ BEGIN
         );
     END IF;
 
-    -- Step 1: S5/S6 → S8  (fn_audit_shift_update fires → BIDDING_TIMEOUT)
-    UPDATE public.shifts
-    SET
-        is_on_bidding        = FALSE,
-        bidding_status       = 'bidding_closed_no_winner',
-        updated_at           = NOW(),
-        last_modified_by     = p_user_id,
-        last_modified_reason = COALESCE(p_reason, 'Bidding closed manually')
-    WHERE id = p_shift_id
-      AND deleted_at IS NULL;
-
-    -- Step 2: S8 → S1  (fn_audit_shift_update fires → UNPUBLISH)
     UPDATE public.shifts
     SET
         lifecycle_status     = 'Draft',
         bidding_status       = 'not_on_bidding',
         is_on_bidding        = FALSE,
-        is_urgent            = FALSE,
         locked_at            = NULL,
         updated_at           = NOW(),
         last_modified_by     = p_user_id,
-        last_modified_reason = 'Reverted to draft after bidding closed with no winner'
+        last_modified_reason = COALESCE(p_reason, 'Bidding closed manually — reverted to draft')
     WHERE id = p_shift_id
       AND deleted_at IS NULL;
 
@@ -11664,13 +13311,11 @@ BEGIN
     v_shift_group_id     := (p_shift_data->>'shift_group_id')::uuid;
     v_sub_group_name     := p_shift_data->>'sub_group_name';
 
-    -- Derive creation source
     v_creation_source := COALESCE(
         p_shift_data->>'creation_source',
         CASE WHEN COALESCE((p_shift_data->>'is_from_template')::boolean, false) THEN 'template' ELSE 'manual' END
     );
 
-    -- Derive assignment source (only relevant if employee is assigned at creation)
     v_assignment_source := CASE
         WHEN (p_shift_data->>'assigned_employee_id') IS NOT NULL
         THEN COALESCE(p_shift_data->>'assignment_source', 'direct')
@@ -11688,12 +13333,32 @@ BEGIN
           AND (LOWER(name) = LOWER(v_sub_group_name)
                OR LOWER(name) = LOWER(REPLACE(v_sub_group_name, '_', ' ')))
         LIMIT 1;
+
+        -- Auto-create subgroup if missing from this roster group!
+        IF v_roster_subgroup_id IS NULL THEN
+            INSERT INTO public.roster_subgroups (
+                roster_group_id,
+                name,
+                sort_order
+            ) VALUES (
+                v_shift_group_id,
+                v_sub_group_name,
+                999
+            )
+            RETURNING id INTO v_roster_subgroup_id;
+        END IF;
     END IF;
+
+    -- AUDIT DE-DUP: while the guard is set, fn_capture_shift_event short-circuits,
+    -- so the INSERT-branch ASSIGNED is NOT written. The shift's origin (and any
+    -- pre-assignment) is recorded by the SINGLE `create` event below instead.
+    -- Transaction-local (is_local=true): auto-resets at txn end, never leaks.
+    PERFORM set_config('app.audit.via_gateway', '1', true);
 
     INSERT INTO shifts (
         roster_id, department_id, shift_date, roster_date, start_time, end_time,
         organization_id, sub_department_id, group_type, sub_group_name, display_order,
-        shift_group_id, roster_subgroup_id, role_id, remuneration_level_id,
+        shift_group_id, roster_subgroup_id, role_id, remuneration_level,
         paid_break_minutes, unpaid_break_minutes, break_minutes, timezone,
         assigned_employee_id, required_skills, required_licenses, event_ids, tags, notes,
         template_id, template_group, template_sub_group, is_from_template, template_instance_id,
@@ -11714,7 +13379,7 @@ BEGIN
         v_shift_group_id,
         v_roster_subgroup_id,
         (p_shift_data->>'role_id')::uuid,
-        (p_shift_data->>'remuneration_level_id')::uuid,
+        (p_shift_data->>'remuneration_level')::smallint,
         COALESCE((p_shift_data->>'paid_break_minutes')::integer, 0),
         COALESCE((p_shift_data->>'unpaid_break_minutes')::integer, 0),
         COALESCE((p_shift_data->>'break_minutes')::integer, 0),
@@ -11737,6 +13402,30 @@ BEGIN
         NOW(), NOW()
     )
     RETURNING id INTO v_shift_id;
+
+    PERFORM set_config('app.audit.via_gateway', '0', true);
+
+    -- AUDIT: record the shift's origin so the timeline has a CREATED anchor.
+    INSERT INTO public.shift_events (
+        shift_id, employee_id, actor_id, event_type, metadata, actor_role, domain
+    ) VALUES (
+        v_shift_id,
+        (p_shift_data->>'assigned_employee_id')::uuid,
+        p_user_id,
+        'OP_APPLIED'::public.shift_event_type,
+        jsonb_build_object(
+            'op', 'create',
+            'domain', 'lifecycle',
+            'from_state', NULL,
+            'to_state', CASE WHEN (p_shift_data->>'assigned_employee_id') IS NOT NULL THEN 'S2' ELSE 'S1' END,
+            'source', 'sm_create_shift',
+            'creation_source', v_creation_source,
+            'assigned_employee_id', (p_shift_data->>'assigned_employee_id')::uuid,
+            'assignment_source', v_assignment_source
+        ),
+        CASE WHEN p_user_id IS NULL THEN 'system' ELSE 'manager' END,
+        'lifecycle'
+    );
 
     RETURN v_shift_id;
 END;
@@ -11785,9 +13474,9 @@ BEGIN
         assigned_employee_id = NULL,
         assignment_status = 'unassigned',
         assignment_outcome = NULL,
-        bidding_status = 'on_bidding_normal',
+        bidding_status = 'on_bidding',
         is_on_bidding = true,
-        bidding_opened_at = NOW(),
+        bidding_open_at = NOW(),
         fulfillment_status = 'bidding',
         trading_status = 'NoTrade',
         bidding_iteration = v_new_iter,
@@ -11797,6 +13486,9 @@ BEGIN
         last_modified_by = p_user_id,
         last_modified_reason = 'Offer declined'
     WHERE id = p_shift_id;
+
+    INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time, metadata)
+    VALUES (p_shift_id, p_user_id, 'REJECTED', NOW(), jsonb_build_object('source', 'sm_decline_offer'));
 
     RETURN jsonb_build_object('success', true, 'from_state', 'S3', 'to_state', 'S5');
 END;
@@ -11876,95 +13568,44 @@ ALTER FUNCTION "public"."sm_delete_shift"("p_shift_id" "uuid", "p_user_id" "uuid
 
 CREATE OR REPLACE FUNCTION "public"."sm_emergency_assign"("p_shift_id" "uuid", "p_employee_id" "uuid", "p_reason" "text" DEFAULT 'Emergency assignment'::"text", "p_user_id" "uuid" DEFAULT "auth"."uid"()) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'pg_catalog', 'public'
+    SET "search_path" TO 'public'
     AS $$
-DECLARE v_shift RECORD; v_state text; v_tts int; v_name text; v_role text;
+DECLARE v_shift RECORD; v_state text; v_name text; v_role text;
 BEGIN
   SELECT * INTO v_shift FROM public.shifts WHERE id = p_shift_id AND deleted_at IS NULL FOR UPDATE;
   IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'error', 'Shift not found or deleted'); END IF;
-  
+
   SELECT COALESCE(first_name||' '||COALESCE(last_name,''), email), COALESCE(left(lower(legacy_system_role::text),50),'manager')
     INTO v_name, v_role FROM public.profiles WHERE id = p_user_id;
   v_name := COALESCE(v_name, 'System'); v_role := COALESCE(v_role, 'system');
-  
+
   v_state := public.get_shift_fsm_state(v_shift.lifecycle_status, v_shift.assignment_status, v_shift.assignment_outcome, v_shift.trading_status, v_shift.is_cancelled);
-  
-  IF v_state NOT IN ('S4', 'S5') THEN 
-    RETURN jsonb_build_object('success', false, 'error', format('sm_emergency_assign requires state S4 or S5, current state is %s', v_state)); 
+
+  IF v_state NOT IN ('S4', 'S5') THEN
+    RETURN jsonb_build_object('success', false, 'error', format('sm_emergency_assign requires state S4 or S5, current state is %s', v_state));
   END IF;
-  
-  v_tts := EXTRACT(EPOCH FROM (v_shift.scheduled_start - NOW()))::int;
-  
+
   UPDATE public.shifts SET
-    assigned_employee_id = p_employee_id, 
+    assigned_employee_id = p_employee_id,
     assigned_at = NOW(),
-    assignment_status = 'assigned'::public.shift_assignment_status, 
+    assignment_status = 'assigned'::public.shift_assignment_status,
     assignment_outcome = 'confirmed'::public.shift_assignment_outcome,
     assignment_source = 'direct',
-    emergency_source = public.set_emergency_source('EMERGENCY_ASSIGN', v_tts, v_shift.emergency_source),
-    bidding_status = 'not_on_bidding'::public.shift_bidding_status, 
+    bidding_status = 'not_on_bidding'::public.shift_bidding_status,
     is_on_bidding = FALSE,
-    fulfillment_status = 'scheduled'::public.shift_fulfillment_status, 
+    fulfillment_status = 'scheduled'::public.shift_fulfillment_status,
     confirmed_at = NOW(),
-    compliance_checked_at = NOW(), 
-    last_modified_by = p_user_id, 
+    emergency_assigned_at = NOW(),
+    compliance_checked_at = NOW(),
+    last_modified_by = p_user_id,
     updated_at = NOW()
   WHERE id = p_shift_id;
-  
+
   RETURN jsonb_build_object('success', true, 'from_state', v_state, 'to_state', 'S4', 'assigned_to', p_employee_id);
 END; $$;
 
 
 ALTER FUNCTION "public"."sm_emergency_assign"("p_shift_id" "uuid", "p_employee_id" "uuid", "p_reason" "text", "p_user_id" "uuid") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."sm_emergency_assign"("p_shift_id" "uuid", "p_employee_id" "uuid", "p_user_id" "uuid" DEFAULT "auth"."uid"(), "p_reason" "text" DEFAULT NULL::"text") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'pg_catalog', 'public'
-    AS $$
-DECLARE 
-    v_shift RECORD; 
-    v_state TEXT; 
-    v_compliance RECORD;
-BEGIN
-    SELECT * INTO v_shift FROM shifts WHERE id=p_shift_id AND deleted_at IS NULL FOR UPDATE;
-    v_state := get_shift_state_id(p_shift_id);
-    
-    IF v_state NOT IN ('S5', 'S6', 'S8', 'S15') THEN 
-        RETURN jsonb_build_object('success', false, 'error', format('Cannot from %s', v_state)); 
-    END IF;
-    
-    SELECT * INTO v_compliance FROM check_shift_compliance(v_shift.roster_shift_id, p_employee_id);
-    
-    IF v_compliance.compliance_status = 'blocked' THEN 
-        RETURN jsonb_build_object('success', false, 'error', 'Compliance blocked'); 
-    END IF;
-    
-    UPDATE shifts 
-    SET lifecycle_status='Published', 
-        is_published=TRUE, 
-        is_cancelled=FALSE,
-        assigned_employee_id=p_employee_id, 
-        assigned_at=NOW(), 
-        assignment_status='assigned',
-        assignment_outcome='emergency_assigned', 
-        assignment_source='direct',
-        fulfillment_status='fulfilled', 
-        confirmed_at=NOW(),
-        is_on_bidding=FALSE, 
-        bidding_status='not_on_bidding',
-        eligibility_snapshot=v_compliance.eligibility_snapshot, 
-        compliance_checked_at=NOW(),
-        updated_at=NOW(), 
-        last_modified_by=p_user_id 
-    WHERE id=p_shift_id;
-    
-    RETURN jsonb_build_object('success', true, 'from_state', v_state, 'to_state', 'S7');
-END; 
-$$;
-
-
-ALTER FUNCTION "public"."sm_emergency_assign"("p_shift_id" "uuid", "p_employee_id" "uuid", "p_user_id" "uuid", "p_reason" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."sm_employee_cancel"("p_shift_id" "uuid", "p_employee_id" "uuid") RETURNS "jsonb"
@@ -12011,23 +13652,6 @@ BEGIN
             updated_at = NOW(),
             last_modified_by = p_employee_id
         WHERE id = p_shift_id;
-    ELSIF v_time = 'URGENT' THEN
-        v_new := 'S6';
-        UPDATE shifts
-        SET assigned_employee_id = NULL,
-            assignment_status = 'unassigned',
-            assignment_outcome = NULL,
-            is_on_bidding = TRUE,
-            bidding_status = 'on_bidding_urgent',
-            bidding_open_at = NOW(),
-            is_urgent = TRUE,
-            fulfillment_status = 'bidding',
-            bidding_iteration = v_new_iter,
-            last_dropped_by = p_employee_id,
-            last_rejected_by = NULL,
-            updated_at = NOW(),
-            last_modified_by = p_employee_id
-        WHERE id = p_shift_id;
     ELSE
         v_new := 'S5';
         UPDATE shifts
@@ -12035,7 +13659,7 @@ BEGIN
             assignment_status = 'unassigned',
             assignment_outcome = NULL,
             is_on_bidding = TRUE,
-            bidding_status = 'on_bidding_normal',
+            bidding_status = 'on_bidding',
             bidding_open_at = NOW(),
             fulfillment_status = 'bidding',
             bidding_iteration = v_new_iter,
@@ -12058,69 +13682,56 @@ CREATE OR REPLACE FUNCTION "public"."sm_employee_cancel"("p_shift_id" "uuid", "p
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
     AS $$
-DECLARE 
-    v_shift RECORD; 
-    v_state TEXT; 
-    v_time TEXT; 
+DECLARE
+    v_shift RECORD;
+    v_state TEXT;
+    v_time TEXT;
     v_new TEXT;
 BEGIN
     SELECT * INTO v_shift FROM shifts WHERE id=p_shift_id AND deleted_at IS NULL FOR UPDATE;
     v_state := get_shift_state_id(p_shift_id);
     v_time := get_time_category(v_shift.scheduled_start);
-    
-    IF v_state != 'S4' THEN 
-        RETURN jsonb_build_object('success', false, 'error', 'Not S4'); 
+
+    IF v_state != 'S4' THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Not S4');
     END IF;
-    
-    IF v_shift.assigned_employee_id != p_employee_id THEN 
-        RETURN jsonb_build_object('success', false, 'error', 'Not your shift'); 
+
+    IF v_shift.assigned_employee_id != p_employee_id THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Not your shift');
     END IF;
-    
-    IF v_time = 'PAST' THEN 
-        RETURN jsonb_build_object('success', false, 'error', 'Already started'); 
+
+    IF v_time = 'PAST' THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Already started');
     END IF;
-    
+
     IF v_time = 'EMERGENCY' THEN
         v_new := 'S15';
-        UPDATE shifts 
-        SET lifecycle_status='Cancelled', 
-            is_cancelled=TRUE, 
+        UPDATE shifts
+        SET lifecycle_status='Cancelled',
+            is_cancelled=TRUE,
             cancelled_at=NOW(),
-            assigned_employee_id=NULL, 
-            assignment_status='unassigned', 
+            assigned_employee_id=NULL,
+            assignment_status='unassigned',
             assignment_outcome=NULL,
-            updated_at=NOW(), 
-            last_modified_by=p_employee_id 
-        WHERE id=p_shift_id;
-    ELSIF v_time = 'URGENT' THEN
-        v_new := 'S6';
-        UPDATE shifts 
-        SET assigned_employee_id=NULL, 
-            assignment_status='unassigned', 
-            assignment_outcome=NULL,
-            is_on_bidding=TRUE, 
-            bidding_status='on_bidding_urgent', 
-            bidding_opened_at=NOW(), 
-            is_urgent=TRUE,
-            updated_at=NOW(), 
-            last_modified_by=p_employee_id 
+            updated_at=NOW(),
+            last_modified_by=p_employee_id
         WHERE id=p_shift_id;
     ELSE
         v_new := 'S5';
-        UPDATE shifts 
-        SET assigned_employee_id=NULL, 
-            assignment_status='unassigned', 
+        UPDATE shifts
+        SET assigned_employee_id=NULL,
+            assignment_status='unassigned',
             assignment_outcome=NULL,
-            is_on_bidding=TRUE, 
-            bidding_status='on_bidding_normal', 
-            bidding_opened_at=NOW(),
-            updated_at=NOW(), 
-            last_modified_by=p_employee_id 
+            is_on_bidding=TRUE,
+            bidding_status='on_bidding',
+            bidding_open_at=NOW(),
+            updated_at=NOW(),
+            last_modified_by=p_employee_id
         WHERE id=p_shift_id;
     END IF;
-    
+
     RETURN jsonb_build_object('success', true, 'from_state', 'S4', 'to_state', v_new, 'time_category', v_time);
-END; 
+END;
 $$;
 
 
@@ -12190,14 +13801,11 @@ BEGIN
   UPDATE shifts SET
     lifecycle_status      = 'Draft',
     assignment_outcome    = NULL,
-    assignment_status     = 'unassigned',
-    assigned_employee_id  = NULL,
-    assigned_at           = NULL,
     bidding_status        = 'not_on_bidding',
     updated_at            = now()
   WHERE id = p_shift_id;
 
-  RETURN json_build_object('success', true, 'from_state', 'S3', 'to_state', 'S1');
+  RETURN json_build_object('success', true, 'from_state', 'S3', 'to_state', 'S2');
 END;
 $$;
 
@@ -12221,6 +13829,161 @@ END; $$;
 
 
 ALTER FUNCTION "public"."sm_expire_trade"("p_shift_id" "uuid", "p_user_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."sm_finalize_planning_request"("p_request_id" "uuid", "p_offer_id" "uuid", "p_manager_id" "uuid", "p_manager_notes" "text", "p_shift_updated_at" timestamp with time zone, "p_target_shift_updated_at" timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+DECLARE
+  v_request       planning_requests%ROWTYPE;
+  v_offer         planning_offers%ROWTYPE;
+  v_shift_updated timestamptz;
+  v_target_updated timestamptz;
+BEGIN
+
+  -- ===========================================================================
+  -- STEP 1: Lock the planning_request row for the duration of this transaction.
+  -- This prevents two concurrent approve calls from both proceeding.
+  -- ===========================================================================
+
+  SELECT *
+    INTO v_request
+    FROM planning_requests
+   WHERE id = p_request_id
+     FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Planning request % not found', p_request_id;
+  END IF;
+
+
+  -- ===========================================================================
+  -- STEP 2: Validate request status.
+  -- ===========================================================================
+
+  IF v_request.status <> 'MANAGER_PENDING' THEN
+    RAISE EXCEPTION 'WRONG_STATE: request % has status % (expected MANAGER_PENDING)',
+      p_request_id, v_request.status;
+  END IF;
+
+
+  -- ===========================================================================
+  -- STEP 3: Fetch and validate the selected offer.
+  -- ===========================================================================
+
+  SELECT *
+    INTO v_offer
+    FROM planning_offers
+   WHERE id         = p_offer_id
+     AND request_id = p_request_id
+     AND status     = 'SELECTED';
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'NO_SELECTED_OFFER: no SELECTED offer % for request %',
+      p_offer_id, p_request_id;
+  END IF;
+
+
+  -- ===========================================================================
+  -- STEP 4: Optimistic lock check — initiator's shift.
+  -- ===========================================================================
+
+  SELECT updated_at
+    INTO v_shift_updated
+    FROM shifts
+   WHERE id = v_request.shift_id;
+
+  IF v_shift_updated IS DISTINCT FROM p_shift_updated_at THEN
+    RAISE EXCEPTION 'SHIFT_MUTATED: shift_id=%', v_request.shift_id;
+  END IF;
+
+
+  -- ===========================================================================
+  -- STEP 5: Optimistic lock check — offerer's shift (SWAP only).
+  -- ===========================================================================
+
+  IF v_request.type = 'SWAP' AND v_offer.offered_shift_id IS NOT NULL THEN
+
+    IF p_target_shift_updated_at IS NULL THEN
+      RAISE EXCEPTION 'MISSING_TARGET_SHIFT_TIMESTAMP: SWAP request requires p_target_shift_updated_at';
+    END IF;
+
+    SELECT updated_at
+      INTO v_target_updated
+      FROM shifts
+     WHERE id = v_offer.offered_shift_id;
+
+    IF v_target_updated IS DISTINCT FROM p_target_shift_updated_at THEN
+      RAISE EXCEPTION 'SHIFT_MUTATED: target_shift_id=%', v_offer.offered_shift_id;
+    END IF;
+
+  END IF;
+
+
+  -- ===========================================================================
+  -- STEP 6 / 7: Perform the shift mutation.
+  -- BID  → assign initiator to the shift.
+  -- SWAP → atomic two-way assignment swap.
+  -- ===========================================================================
+
+  IF v_request.type = 'BID' THEN
+
+    -- Assign the winning bidder (the offer submitter) to the open shift.
+    UPDATE shifts
+       SET assigned_employee_id = v_offer.offered_by,
+           workflow_status      = 'IDLE',
+           updated_at           = now()
+     WHERE id = v_request.shift_id;
+
+  ELSIF v_request.type = 'SWAP' THEN
+
+    -- Two-way atomic swap: both employees exchange shifts simultaneously.
+    -- We capture the existing owners first to avoid ordering issues.
+    DECLARE
+      v_initiator_current_owner uuid;
+      v_offerer_current_owner   uuid;
+    BEGIN
+      SELECT assigned_employee_id INTO v_initiator_current_owner
+        FROM shifts WHERE id = v_request.shift_id;
+
+      SELECT assigned_employee_id INTO v_offerer_current_owner
+        FROM shifts WHERE id = v_offer.offered_shift_id;
+
+      -- Assign offerer to initiator's shift
+      UPDATE shifts
+         SET assigned_employee_id = v_offerer_current_owner,
+             workflow_status      = 'IDLE',
+             updated_at           = now()
+       WHERE id = v_request.shift_id;
+
+      -- Assign initiator to offerer's shift
+      UPDATE shifts
+         SET assigned_employee_id = v_initiator_current_owner,
+             workflow_status      = 'IDLE',
+             updated_at           = now()
+       WHERE id = v_offer.offered_shift_id;
+    END;
+
+  END IF;
+
+
+  -- ===========================================================================
+  -- STEP 8: Mark the planning_request as APPROVED.
+  -- ===========================================================================
+
+  UPDATE planning_requests
+     SET status       = 'APPROVED',
+         manager_id   = p_manager_id,
+         manager_notes = p_manager_notes,
+         decided_at   = now(),
+         updated_at   = now()
+   WHERE id = p_request_id;
+
+END;
+$$;
+
+
+ALTER FUNCTION "public"."sm_finalize_planning_request"("p_request_id" "uuid", "p_offer_id" "uuid", "p_manager_id" "uuid", "p_manager_notes" "text", "p_shift_updated_at" timestamp with time zone, "p_target_shift_updated_at" timestamp with time zone) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."sm_handle_auto_clock_out"() RETURNS TABLE("affected_shift_id" "uuid", "previous_status" "text")
@@ -12393,47 +14156,6 @@ $$;
 ALTER FUNCTION "public"."sm_move_shift"("p_shift_id" "uuid", "p_group_type" "text", "p_sub_group_name" "text", "p_shift_group_id" "uuid", "p_roster_subgroup_id" "uuid", "p_shift_date" "date", "p_user_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."sm_process_time_transitions"() RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'pg_catalog', 'public'
-    AS $$
-DECLARE
-    v_shift RECORD;
-    v_to_inprogress INT := 0;
-    v_to_completed INT := 0;
-    v_bidding_closed INT := 0;
-BEGIN
-    FOR v_shift IN SELECT id, assignment_outcome FROM shifts
-        WHERE lifecycle_status='Published' AND assigned_employee_id IS NOT NULL
-        AND scheduled_start <= NOW() AND deleted_at IS NULL FOR UPDATE
-    LOOP
-        UPDATE shifts SET lifecycle_status='InProgress', updated_at=NOW() WHERE id=v_shift.id;
-        v_to_inprogress := v_to_inprogress + 1;
-    END LOOP;
-    
-    FOR v_shift IN SELECT id, assignment_outcome FROM shifts
-        WHERE lifecycle_status='InProgress' AND scheduled_end <= NOW() AND deleted_at IS NULL FOR UPDATE
-    LOOP
-        UPDATE shifts SET lifecycle_status='Completed', updated_at=NOW() WHERE id=v_shift.id;
-        v_to_completed := v_to_completed + 1;
-    END LOOP;
-    
-    FOR v_shift IN SELECT id, bidding_status FROM shifts
-        WHERE lifecycle_status='Published' AND bidding_status IN ('on_bidding_normal', 'on_bidding_urgent')
-        AND scheduled_start <= NOW() + INTERVAL '4 hours' AND deleted_at IS NULL FOR UPDATE
-    LOOP
-        UPDATE shifts SET is_on_bidding=FALSE, bidding_status='bidding_closed_no_winner', updated_at=NOW() WHERE id=v_shift.id;
-        v_bidding_closed := v_bidding_closed + 1;
-    END LOOP;
-    
-    RETURN jsonb_build_object('to_inprogress', v_to_inprogress, 'to_completed', v_to_completed, 'bidding_closed', v_bidding_closed);
-END; 
-$$;
-
-
-ALTER FUNCTION "public"."sm_process_time_transitions"() OWNER TO "postgres";
-
-
 CREATE OR REPLACE FUNCTION "public"."sm_publish_shift"("p_shift_id" "uuid", "p_user_id" "uuid" DEFAULT "auth"."uid"()) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
@@ -12481,6 +14203,313 @@ END; $$;
 
 
 ALTER FUNCTION "public"."sm_publish_shift"("p_shift_id" "uuid", "p_user_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."sm_refresh_shift_snapshots"("p_shift_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+BEGIN
+    IF p_shift_id IS NULL THEN
+        RETURN;
+    END IF;
+
+    DELETE FROM public.assignment_snapshots WHERE shift_id = p_shift_id;
+
+    INSERT INTO public.assignment_snapshots (
+        shift_id, episode_seq, employee_id, source,
+        became_active_at, ended_at, end_reason,
+        attended, late_in, early_out, is_current,
+        organization_id, department_id, sub_department_id,
+        shift_date, scheduled_start, refreshed_at,
+        early_in, late_out, on_time_in, on_time_out, auto_clock_out
+    )
+    WITH
+    late_cancel_threshold AS (
+        SELECT interval '4 hours' AS val
+    ),
+    ordered_events AS (
+        SELECT
+            se.id           AS event_id,
+            se.shift_id,
+            se.employee_id,
+            se.event_type,
+            se.event_time,
+            se.metadata
+        FROM public.shift_events se
+        WHERE se.shift_id = p_shift_id
+          AND se.employee_id IS NOT NULL
+    ),
+    classified AS (
+        SELECT
+            oe.*,
+            (oe.event_type IN ('ASSIGNED','OFFERED','EMERGENCY_ASSIGNED','SWAPPED_IN')) AS is_opening_type,
+            (oe.event_type IN ('REJECTED','IGNORED','CANCELLED','LATE_CANCELLED',
+                               'SWAPPED_OUT','NO_SHOW','UNASSIGNED'))                    AS is_closing_type
+        FROM ordered_events oe
+    ),
+    boundary_events AS (
+        SELECT
+            c.shift_id,
+            c.event_id,
+            c.event_time,
+            c.employee_id,
+            c.is_opening_type,
+            LAG(c.is_closing_type) OVER w AS prev_boundary_was_closing,
+            LAG(c.employee_id)     OVER w AS prev_boundary_employee
+        FROM classified c
+        WHERE c.is_opening_type OR c.is_closing_type
+        WINDOW w AS (PARTITION BY c.shift_id ORDER BY c.event_time, c.event_id)
+    ),
+    boundary_starts AS (
+        SELECT
+            be.shift_id,
+            be.event_id,
+            CASE
+                WHEN be.is_opening_type AND (
+                         be.prev_boundary_employee IS NULL
+                      OR be.prev_boundary_was_closing
+                      OR be.employee_id IS DISTINCT FROM be.prev_boundary_employee
+                     )
+                THEN 1 ELSE 0
+            END AS starts_new_episode
+        FROM boundary_events be
+    ),
+    episode_assigned AS (
+        SELECT
+            c.*,
+            SUM(COALESCE(bs.starts_new_episode, 0))
+                OVER (PARTITION BY c.shift_id ORDER BY c.event_time, c.event_id
+                      ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS episode_seq
+        FROM classified c
+        LEFT JOIN boundary_starts bs
+               ON bs.shift_id = c.shift_id AND bs.event_id = c.event_id
+    ),
+    episode_agg AS (
+        SELECT
+            ea.shift_id,
+            ea.episode_seq,
+            (ARRAY_AGG(ea.employee_id ORDER BY ea.event_time, ea.event_id))[1] AS employee_id,
+            MIN(ea.event_time) AS opened_at,
+            MIN(ea.event_time) FILTER (
+                WHERE ea.event_type IN ('ACCEPTED','EMERGENCY_ASSIGNED','SWAPPED_IN')
+            ) AS became_active_at,
+            BOOL_OR(ea.event_type = 'OFFERED')              AS had_offer,
+            BOOL_OR(ea.event_type = 'ACCEPTED')             AS had_accept,
+            BOOL_OR(ea.event_type = 'ASSIGNED')             AS had_assign,
+            BOOL_OR(ea.event_type = 'EMERGENCY_ASSIGNED')    AS had_emergency,
+            BOOL_OR(ea.event_type = 'SWAPPED_IN')            AS had_swap_in,
+            BOOL_OR(ea.event_type = 'CHECKED_IN')            AS had_checked_in,
+            BOOL_OR(ea.event_type = 'LATE_IN')               AS had_late_in_event,
+            BOOL_OR(ea.event_type = 'EARLY_OUT')             AS had_early_out_event,
+            (ARRAY_AGG(ea.event_type ORDER BY (CASE WHEN ea.event_type = 'UNASSIGNED' THEN 0 ELSE 1 END) DESC, ea.event_time DESC, ea.event_id DESC)
+                FILTER (WHERE ea.event_type IN ('REJECTED','IGNORED','CANCELLED','LATE_CANCELLED',
+                                                 'SWAPPED_OUT','NO_SHOW','UNASSIGNED')))[1]
+                AS closing_event_type,
+            (ARRAY_AGG(ea.event_time ORDER BY (CASE WHEN ea.event_type = 'UNASSIGNED' THEN 0 ELSE 1 END) DESC, ea.event_time DESC, ea.event_id DESC)
+                FILTER (WHERE ea.event_type IN ('REJECTED','IGNORED','CANCELLED','LATE_CANCELLED',
+                                                 'SWAPPED_OUT','NO_SHOW','UNASSIGNED')))[1]
+                AS closing_event_time
+        FROM episode_assigned ea
+        WHERE ea.episode_seq > 0
+        GROUP BY ea.shift_id, ea.episode_seq
+    ),
+    episode_with_shift AS (
+        SELECT
+            ep.*,
+            MAX(ep.episode_seq) OVER (PARTITION BY ep.shift_id) AS max_episode_seq,
+            s.shift_date,
+            s.organization_id,
+            s.department_id,
+            s.sub_department_id,
+            s.lifecycle_status,
+            s.deleted_at,
+            s.scheduled_start,
+            s.scheduled_end,
+            s.attendance_status,
+            lct.val AS late_cancel_threshold
+        FROM episode_agg ep
+        JOIN public.shifts s ON s.id = ep.shift_id
+        CROSS JOIN late_cancel_threshold lct
+    ),
+    episode_final AS (
+        SELECT
+            ews.shift_id,
+            ews.episode_seq,
+            ews.employee_id,
+            ews.opened_at,
+            ews.became_active_at,
+            ews.closing_event_time AS closed_at,
+            CASE
+                WHEN ews.deleted_at IS NOT NULL THEN 'shift_deleted'
+                WHEN ews.closing_event_type = 'REJECTED'       THEN 'rejected'
+                WHEN ews.closing_event_type = 'IGNORED'        THEN 'ignored'
+                WHEN ews.closing_event_type = 'SWAPPED_OUT'    THEN 'swapped_out'
+                WHEN ews.closing_event_type = 'NO_SHOW'        THEN 'no_show'
+                WHEN ews.closing_event_type = 'UNASSIGNED'     THEN 'unassigned'
+                WHEN ews.closing_event_type IN ('CANCELLED', 'LATE_CANCELLED') THEN
+                    CASE
+                        WHEN ews.scheduled_start IS NOT NULL
+                             AND ews.closing_event_time IS NOT NULL
+                             AND (ews.scheduled_start - ews.closing_event_time) <= ews.late_cancel_threshold
+                        THEN 'cancelled_late'
+                        ELSE 'cancelled_standard'
+                    END
+                WHEN ews.closing_event_type IS NULL
+                     AND ews.lifecycle_status = 'Completed'
+                     AND ews.episode_seq = ews.max_episode_seq THEN 'fulfilled'
+                ELSE 'open'
+            END AS terminal_outcome,
+            ews.had_accept,
+            ews.had_emergency,
+            ews.had_swap_in,
+            COALESCE(ews.had_checked_in, FALSE) AS attended_from_events,
+            COALESCE(ews.had_late_in_event, FALSE) AS late_in_from_events,
+            COALESCE(ews.had_early_out_event, FALSE) AS early_out_from_events,
+            ews.shift_date,
+            ews.organization_id,
+            ews.department_id,
+            ews.sub_department_id,
+            ews.scheduled_start,
+            ews.scheduled_end,
+            ews.attendance_status
+        FROM episode_with_shift ews
+    ),
+    ts_agg AS (
+        SELECT
+            ts.shift_id,
+            ts.employee_id,
+            MIN(ts.clock_in)  AS clock_in,
+            MAX(ts.clock_out) AS clock_out,
+            MIN(
+                CASE
+                    WHEN ts.clock_in IS NOT NULL AND ts.clock_out IS NOT NULL THEN ts.clock_in
+                    ELSE (ts.work_date + ts.start_time) AT TIME ZONE COALESCE(s.timezone, 'Australia/Sydney')
+                END
+            ) AS effective_clock_in,
+            MAX(
+                CASE
+                    WHEN ts.clock_in IS NOT NULL AND ts.clock_out IS NOT NULL THEN ts.clock_out
+                    ELSE (CASE WHEN ts.end_time < ts.start_time THEN ts.work_date + interval '1 day' + ts.end_time ELSE ts.work_date + ts.end_time END) AT TIME ZONE COALESCE(s.timezone, 'Australia/Sydney')
+                END
+            ) AS effective_clock_out
+        FROM public.timesheets ts
+        JOIN public.shifts s ON s.id = ts.shift_id
+        WHERE ts.shift_id = p_shift_id
+        GROUP BY ts.shift_id, ts.employee_id
+    ),
+    episodes_for_shift AS (
+        SELECT
+            ef.shift_id,
+            ef.episode_seq,
+            ef.employee_id,
+            ef.opened_at,
+            ef.closed_at,
+            ef.terminal_outcome,
+            ef.had_accept,
+            ef.had_emergency,
+            ef.had_swap_in,
+            (ef.attended_from_events OR t.clock_in IS NOT NULL) AS attended,
+            (ef.late_in_from_events
+                OR (t.effective_clock_in IS NOT NULL AND ef.scheduled_start IS NOT NULL
+                    AND t.effective_clock_in > ef.scheduled_start + interval '7.5 minutes')
+            ) AS late_in,
+            (ef.early_out_from_events
+                OR (t.effective_clock_out IS NOT NULL AND ef.scheduled_end IS NOT NULL
+                    AND t.effective_clock_out < ef.scheduled_end - interval '7.5 minutes')
+            ) AS early_out,
+            ef.shift_date,
+            ef.organization_id,
+            ef.department_id,
+            ef.sub_department_id,
+            ef.became_active_at,
+            ef.scheduled_start,
+            -- Attendance additions
+            (t.effective_clock_in IS NOT NULL AND ef.scheduled_start IS NOT NULL
+             AND t.effective_clock_in < ef.scheduled_start - interval '7.5 minutes'
+            ) AS early_in,
+            (t.effective_clock_out IS NOT NULL AND ef.scheduled_end IS NOT NULL
+             AND t.effective_clock_out > ef.scheduled_end + interval '7.5 minutes'
+            ) AS late_out,
+            (t.effective_clock_in IS NOT NULL AND ef.scheduled_start IS NOT NULL
+             AND t.effective_clock_in >= ef.scheduled_start - interval '7.5 minutes'
+             AND t.effective_clock_in <= ef.scheduled_start + interval '7.5 minutes'
+            ) AS on_time_in,
+            (t.effective_clock_out IS NOT NULL AND ef.scheduled_end IS NOT NULL
+             AND t.effective_clock_out >= ef.scheduled_end - interval '7.5 minutes'
+             AND t.effective_clock_out <= ef.scheduled_end + interval '7.5 minutes'
+            ) AS on_time_out,
+            ef.attendance_status
+        FROM episode_final ef
+        LEFT JOIN ts_agg t
+            ON t.shift_id = ef.shift_id
+            AND t.employee_id = ef.employee_id
+            AND t.effective_clock_in >= ef.opened_at
+            AND (ef.closed_at IS NULL OR t.effective_clock_in <= ef.closed_at)
+    )
+    SELECT
+        ep.shift_id,
+        ep.episode_seq,
+        ep.employee_id,
+        CASE
+            WHEN ep.had_emergency THEN 'emergency'
+            WHEN ep.had_swap_in   THEN 'trade_approve'
+            WHEN EXISTS (
+                SELECT 1
+                FROM public.shift_events se
+                WHERE se.shift_id = ep.shift_id
+                  AND se.event_type = 'ASSIGNED'
+                  AND se.metadata->>'op' = 'select_winner'
+                  AND se.event_time >= ep.opened_at
+                  AND (ep.closed_at IS NULL OR se.event_time <= ep.closed_at)
+            ) THEN 'bid_win'
+            ELSE 'publish_confirm'
+        END AS source,
+        COALESCE(ep.became_active_at, ep.opened_at) AS became_active_at,
+        ep.closed_at AS ended_at,
+        CASE
+            WHEN ep.terminal_outcome = 'fulfilled'          THEN 'worked'
+            WHEN ep.terminal_outcome = 'cancelled_standard' THEN 'dropped_std'
+            WHEN ep.terminal_outcome = 'cancelled_late'     THEN 'dropped_late'
+            WHEN ep.terminal_outcome = 'no_show'            THEN 'no_show'
+            WHEN ep.terminal_outcome = 'swapped_out'        THEN 'traded_out'
+            WHEN ep.terminal_outcome = 'unassigned'         THEN 'reassigned'
+            WHEN ep.terminal_outcome = 'open'
+                 AND ep.episode_seq < MAX(ep.episode_seq) OVER (PARTITION BY ep.shift_id)
+                                                             THEN 'reassigned'
+            WHEN ep.terminal_outcome = 'open'               THEN NULL
+            ELSE NULL
+        END AS end_reason,
+        ep.attended,
+        ep.late_in,
+        ep.early_out,
+        (ep.terminal_outcome = 'open'
+            AND ep.episode_seq = MAX(ep.episode_seq) OVER (PARTITION BY ep.shift_id))
+                                                            AS is_current,
+        ep.organization_id,
+        ep.department_id,
+        ep.sub_department_id,
+        ep.shift_date,
+        ep.scheduled_start,
+        now() AS refreshed_at,
+        ep.early_in,
+        ep.late_out,
+        ep.on_time_in,
+        ep.on_time_out,
+        (ep.attendance_status = 'auto_clock_out') AS auto_clock_out
+    FROM episodes_for_shift ep
+    WHERE (ep.had_accept OR ep.had_emergency OR ep.had_swap_in)
+      AND ep.terminal_outcome <> 'shift_deleted'
+      AND ep.terminal_outcome <> 'unassigned';
+END;
+$$;
+
+
+ALTER FUNCTION "public"."sm_refresh_shift_snapshots"("p_shift_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."sm_refresh_shift_snapshots"("p_shift_id" "uuid") IS 'Re-projects public.assignment_snapshots for one shift from v_shift_assignment_episodes (published-active episodes only). Idempotent DELETE-then-INSERT; called on every shift_events insert via trg_refresh_snapshots and once per shift in the backfill.';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."sm_reject_offer"("p_shift_id" "uuid", "p_user_id" "uuid") RETURNS "jsonb"
@@ -12541,26 +14570,22 @@ CREATE OR REPLACE FUNCTION "public"."sm_reject_offer"("p_shift_id" "uuid", "p_us
     AS $$
 DECLARE v_shift RECORD; v_state text;
 BEGIN
-  -- 1. Get shift and lock it
   SELECT * INTO v_shift FROM public.shifts WHERE id = p_shift_id AND deleted_at IS NULL FOR UPDATE;
-  
-  IF NOT FOUND THEN 
-    RETURN jsonb_build_object('success', false, 'error', 'Shift not found or deleted'); 
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Shift not found or deleted');
   END IF;
-  
-  -- 2. Authorization check: Only the assigned employee can reject their own offer
+
   IF v_shift.assigned_employee_id IS DISTINCT FROM p_user_id THEN
     RETURN jsonb_build_object('success', false, 'error', 'Unauthorized: You can only reject shifts offered to you');
   END IF;
 
-  -- 3. State check: Must be in S3 (Published + Offered)
   v_state := public.get_shift_fsm_state(v_shift.lifecycle_status, v_shift.assignment_status, v_shift.assignment_outcome, v_shift.trading_status, v_shift.is_cancelled);
-  
+
   IF v_state != 'S3' THEN
     RETURN jsonb_build_object('success', false, 'error', format('sm_reject_offer requires state S3, current state is %s', v_state));
   END IF;
-  
-  -- 4. Transition S3 -> S5 (Bidding)
+
   UPDATE public.shifts SET
     assigned_employee_id = NULL,
     assigned_at          = NULL,
@@ -12574,9 +14599,12 @@ BEGIN
     last_modified_by     = p_user_id,
     updated_at           = NOW()
   WHERE id = p_shift_id;
-  
+
+  INSERT INTO public.shift_events (shift_id, employee_id, event_type, event_time, metadata)
+  VALUES (p_shift_id, p_user_id, 'REJECTED', NOW(), jsonb_build_object('source', 'sm_reject_offer', 'reason', p_reason));
+
   RETURN jsonb_build_object('success', true, 'from_state', v_state, 'to_state', 'S5');
-END; 
+END;
 $$;
 
 
@@ -12801,43 +14829,35 @@ BEGIN
         OR
         (end_at IS NULL
           AND (shift_date::text || ' ' || end_time::text || ' Australia/Sydney')::TIMESTAMPTZ <= now())
-      );
+      )
+      -- Exclude currently clocked-in employees (they must clock out or hit 12.5h)
+      AND NOT (attendance_status IN ('checked_in', 'late') AND actual_end IS NULL);
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING '[sm_run_state_processor] Pass 0b failed: %', SQLERRM;
   END;
 
-  -- ── Pass 1: Urgency escalation at TTS ≤ 24h ────────────────────────────────
-  BEGIN
-    UPDATE shifts SET bidding_status = 'on_bidding_urgent', updated_at = now()
-    WHERE lifecycle_status = 'Published'
-      AND bidding_status = 'on_bidding_normal'
-      AND start_at IS NOT NULL
-      AND start_at <= now() + INTERVAL '24 hours';
-  EXCEPTION WHEN OTHERS THEN
-    RAISE WARNING '[sm_run_state_processor] Pass 1 failed: %', SQLERRM;
-  END;
+  -- ── Pass 1 (REMOVED): urgency escalation at TTS ≤ 24h ─────────────────────
 
-  -- ── Pass 2: Offer expiry S3 → S1 at TTS ≤ 4h ──────────────────────────────
-  -- NOTE: is_draft and is_published are generated columns — omitted intentionally.
+  -- ── Pass 2: Offer expiry S3 → S2 at TTS ≤ 4h ──────────────────────────────
   BEGIN
     UPDATE shifts SET
       lifecycle_status      = 'Draft',
       assignment_outcome    = NULL,
-      assignment_status     = 'unassigned',
-      assigned_employee_id  = NULL,
-      assigned_at           = NULL,
       bidding_status        = 'not_on_bidding',
       updated_at            = now()
     WHERE lifecycle_status = 'Published'
       AND assignment_outcome = 'offered'
-      AND start_at IS NOT NULL
-      AND start_at <= now() + INTERVAL '4 hours';
+      AND (
+        (start_at IS NOT NULL AND start_at <= now() + INTERVAL '4 hours')
+        OR
+        (start_at IS NULL
+          AND (shift_date::text || ' ' || start_time::text || ' Australia/Sydney')::TIMESTAMPTZ <= now() + INTERVAL '4 hours')
+      );
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING '[sm_run_state_processor] Pass 2 failed: %', SQLERRM;
   END;
 
   -- ── Pass 3: Bidding expiry S5/S6 → S1 at TTS ≤ 4h ─────────────────────────
-  -- NOTE: is_draft and is_published are generated columns — omitted intentionally.
   BEGIN
     UPDATE shifts SET
       lifecycle_status  = 'Draft',
@@ -12846,69 +14866,35 @@ BEGIN
       assignment_status = 'unassigned',
       updated_at        = now()
     WHERE lifecycle_status = 'Published'
-      AND bidding_status IN ('on_bidding_normal', 'on_bidding_urgent')
-      AND start_at IS NOT NULL
-      AND start_at <= now() + INTERVAL '4 hours';
+      AND bidding_status IN ('on_bidding', 'on_bidding_normal', 'on_bidding_urgent')
+      AND (
+        (start_at IS NOT NULL AND start_at <= now() + INTERVAL '4 hours')
+        OR
+        (start_at IS NULL
+          AND (shift_date::text || ' ' || start_time::text || ' Australia/Sydney')::TIMESTAMPTZ <= now() + INTERVAL '4 hours')
+      );
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING '[sm_run_state_processor] Pass 3 failed: %', SQLERRM;
   END;
 
-  -- ── Pass 4: Auto no-show — InProgress with no clock-in after grace window ──
+  -- ── Pass 4: Auto no-show — shift has ENDED with no clock-in ────────────────
   BEGIN
     UPDATE shifts SET attendance_status = 'no_show', updated_at = now()
-    WHERE lifecycle_status = 'InProgress'
+    WHERE lifecycle_status IN ('InProgress', 'Completed')
       AND attendance_status = 'unknown'
       AND (
-        (start_at IS NOT NULL
-          AND start_at + MAKE_INTERVAL(mins => COALESCE(unpaid_break_minutes, 30)) <= now())
+        (end_at IS NOT NULL AND end_at <= now())
         OR
-        (start_at IS NULL
-          AND (shift_date::text || ' ' || start_time::text || ' Australia/Sydney')::TIMESTAMPTZ
-              + MAKE_INTERVAL(mins => COALESCE(unpaid_break_minutes, 30)) <= now())
+        (end_at IS NULL
+          AND (shift_date::text || ' ' || end_time::text || ' Australia/Sydney')::TIMESTAMPTZ <= now())
       );
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING '[sm_run_state_processor] Pass 4 failed: %', SQLERRM;
   END;
 
-  -- ── Pass 5: Auto clock-out — clocked-in shift past scheduled end ───────────
-  -- Records actual_end and net minutes for shifts that ended without manual
-  -- clock-out. lifecycle_status was already set to Completed by Pass 0b.
-  BEGIN
-    UPDATE shifts SET
-      actual_end         = COALESCE(
-        end_at,
-        (shift_date::text || ' ' || end_time::text || ' Australia/Sydney')::TIMESTAMPTZ
-      ),
-      actual_net_minutes = GREATEST(0,
-        EXTRACT(EPOCH FROM (
-          COALESCE(
-            end_at,
-            (shift_date::text || ' ' || end_time::text || ' Australia/Sydney')::TIMESTAMPTZ
-          ) - COALESCE(actual_start, start_at,
-            (shift_date::text || ' ' || start_time::text || ' Australia/Sydney')::TIMESTAMPTZ
-          )
-        )) / 60
-      )::INTEGER,
-      attendance_note    = 'auto_clocked_out',
-      updated_at         = now()
-    WHERE attendance_status IN ('checked_in', 'late')
-      AND actual_end IS NULL
-      AND (
-        (end_at IS NOT NULL
-          AND end_at + MAKE_INTERVAL(mins => COALESCE(unpaid_break_minutes, 30)) <= now())
-        OR
-        (end_at IS NULL
-          AND (shift_date::text || ' ' || end_time::text || ' Australia/Sydney')::TIMESTAMPTZ
-              + MAKE_INTERVAL(mins => COALESCE(unpaid_break_minutes, 30)) <= now())
-      );
-  EXCEPTION WHEN OTHERS THEN
-    RAISE WARNING '[sm_run_state_processor] Pass 5 failed: %', SQLERRM;
-  END;
+  -- ── Pass 5 (REMOVED): Auto clock-out past scheduled end — replaced by sm_handle_auto_clock_out ──
 
   -- ── Pass 6: 12.5h fallback safety net ───────────────────────────────────────
-  -- If a shift is still InProgress 12.5h after the employee clocked in (or
-  -- after the scheduled start if actual_start is unknown), force-complete it.
-  -- This fires AFTER pass 0b so it only catches genuine stragglers.
   BEGIN
     UPDATE shifts SET
       lifecycle_status   = 'Completed',
@@ -12940,39 +14926,310 @@ ALTER PROCEDURE "public"."sm_run_state_processor"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."sm_select_bid_winner"("p_shift_id" "uuid", "p_winner_id" "uuid", "p_user_id" "uuid" DEFAULT "auth"."uid"()) RETURNS "jsonb"
-    LANGUAGE "plpgsql"
-    SET "search_path" TO 'pg_catalog', 'public'
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_catalog'
     AS $$
 DECLARE
-  v_shift     RECORD;
-  v_tts       int;
+  v_shift  public.shifts%ROWTYPE;
+  v_state  text;
+  v_tts    int;
+  v_ver    int;
+  v_idem   uuid;
+  v_result jsonb;
 BEGIN
-  SELECT * INTO v_shift FROM public.shifts WHERE id = p_shift_id FOR UPDATE;
-  v_tts       := EXTRACT(EPOCH FROM (v_shift.scheduled_start - NOW()))::int;
-
-  UPDATE public.shift_bids SET status = 'accepted', updated_at = now()
-  WHERE shift_id = p_shift_id AND employee_id = p_winner_id;
-
-  UPDATE public.shift_bids SET status = 'rejected', updated_at = now()
-  WHERE shift_id = p_shift_id AND employee_id != p_winner_id
-    AND status = 'pending';
-
-  UPDATE public.shifts SET
-    assigned_employee_id = p_winner_id,
-    assignment_status    = 'assigned'::public.shift_assignment_status,
-    assignment_outcome   = 'confirmed'::public.shift_assignment_outcome,
-    emergency_source     = public.set_emergency_source('NORMAL_ASSIGN', v_tts, v_shift.emergency_source),
-    bidding_status       = 'not_on_bidding'::public.shift_bidding_status,
-    is_on_bidding        = FALSE,
-    fulfillment_status   = 'scheduled'::public.shift_fulfillment_status,
-    updated_at           = now()
-  WHERE id = p_shift_id;
-
-  RETURN jsonb_build_object('success', true);
-END; $$;
+  SELECT * INTO v_shift FROM public.shifts WHERE id = p_shift_id AND deleted_at IS NULL FOR SHARE;
+  IF NOT FOUND OR v_shift.is_cancelled THEN
+    RETURN jsonb_build_object('success', false, 'error', 'SHIFT_GONE');
+  END IF;
+  v_state := public.get_shift_fsm_state(
+    v_shift.lifecycle_status, v_shift.assignment_status, v_shift.assignment_outcome,
+    v_shift.trading_status, v_shift.is_cancelled, v_shift.bidding_status);
+  IF NOT public.fsm_op_is_legal(v_state, 'select_winner') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'ILLEGAL_STATE', 'state', v_state);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.shift_bids
+    WHERE shift_id = p_shift_id AND employee_id = p_winner_id AND status = 'pending'
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'WINNER_NOT_PENDING');
+  END IF;
+  v_tts := EXTRACT(EPOCH FROM (v_shift.scheduled_start - now()))::int;
+  IF v_tts < 4 * 3600 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'SHIFT_TIME_LOCKED', 'tts_seconds', v_tts);
+  END IF;
+  v_ver  := v_shift.version;
+  v_idem := extensions.uuid_generate_v5('00000000-0000-0000-0000-0000000000bb'::uuid,
+              p_shift_id::text || ':' || v_ver::text || ':' || p_winner_id::text);
+  v_result := public.sm_apply_shift_op(p_shift_id, v_ver, 'select_winner',
+                jsonb_build_object('winner_id', p_winner_id), v_idem);
+  IF COALESCE((v_result->>'ok')::boolean, false)
+     AND v_result->>'code' IN ('APPLIED', 'IDEMPOTENT_REPLAY') THEN
+    RETURN jsonb_build_object('success', true, 'version', v_result->>'version');
+  END IF;
+  RETURN jsonb_build_object('success', false,
+                            'error', COALESCE(v_result->>'code', 'GATEWAY_FAILURE'), 'detail', v_result);
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'sm_select_bid_winner error (shift=%): %', p_shift_id, SQLERRM;
+  RETURN jsonb_build_object('success', false, 'error', SQLERRM);
+END;
+$$;
 
 
 ALTER FUNCTION "public"."sm_select_bid_winner"("p_shift_id" "uuid", "p_winner_id" "uuid", "p_user_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."sm_select_bid_winner"("p_shift_id" "uuid", "p_winner_id" "uuid", "p_user_id" "uuid") IS 'DEPRECATED transitional wrapper. Hardened: FOUND/FSM/winner-pending/TTS guards, then DELEGATES to sm_apply_shift_op(select_winner) for the CAS+FSM+audit write. To be DROPPED once all call sites use sm_apply_shift_op directly.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."sm_swap_auto_decide"("p_swap_id" "uuid", "p_idempotency_key" "text", "p_payload" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_catalog'
+    AS $$
+DECLARE
+  v_caller uuid := auth.uid();
+  v_swap public.shift_swaps%ROWTYPE;
+  v_org uuid; v_dept uuid;
+  v_policy public.swap_approval_rules%ROWTYPE;
+  v_decision public.swap_auto_decision_kind;
+  v_req_ver int; v_shadow boolean := false;
+  v_gateway jsonb; v_decision_id uuid; v_existing uuid;
+BEGIN
+  IF v_caller IS NOT NULL AND NOT (
+       public.is_admin()
+       OR EXISTS (SELECT 1 FROM public.app_access_certificates c
+                  WHERE c.user_id=v_caller AND c.is_active=true
+                    AND c.access_level IN ('gamma','delta','epsilon','zeta'))
+     ) THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'FORBIDDEN');
+  END IF;
+
+  SELECT id INTO v_existing FROM public.swap_decisions WHERE idempotency_key = p_idempotency_key;
+  IF v_existing IS NOT NULL THEN
+    RETURN jsonb_build_object('ok', true, 'code', 'IDEMPOTENT_REPLAY', 'decision_id', v_existing);
+  END IF;
+
+  SELECT * INTO v_swap FROM public.shift_swaps WHERE id = p_swap_id;
+  IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'code', 'GONE'); END IF;
+  IF v_swap.status <> 'MANAGER_PENDING' THEN
+    INSERT INTO public.swap_audit_log (swap_id, event_type, actor, detail)
+    VALUES (p_swap_id, 'SKIPPED_NOT_PENDING', 'system', jsonb_build_object('status', v_swap.status));
+    RETURN jsonb_build_object('ok', true, 'code', 'NOT_PENDING', 'status', v_swap.status);
+  END IF;
+
+  SELECT organization_id, department_id INTO v_org, v_dept
+  FROM public.shifts WHERE id = v_swap.requester_shift_id;
+  SELECT * INTO v_policy FROM public.swap_approval_rules
+  WHERE organization_id = v_org AND (department_id = v_dept OR department_id IS NULL)
+  ORDER BY department_id NULLS LAST LIMIT 1;
+
+  IF NOT FOUND OR v_policy.enabled IS NOT TRUE THEN
+    INSERT INTO public.swap_audit_log (swap_id, event_type, actor, detail)
+    VALUES (p_swap_id, 'KILLSWITCH_OFF', 'system', jsonb_build_object('policy_found', FOUND));
+    RETURN jsonb_build_object('ok', true, 'code', 'DISABLED');
+  END IF;
+
+  v_shadow := COALESCE(v_policy.shadow_mode, true);
+  v_decision := (p_payload->>'decision')::public.swap_auto_decision_kind;
+
+  INSERT INTO public.swap_decisions(
+    swap_id, idempotency_key, decision, guard_result, eligibility_result,
+    solver_result, reason, policy_version, engine_version,
+    requester_shift_version, offered_shift_version, shadow, committed)
+  VALUES (
+    p_swap_id, p_idempotency_key, v_decision,
+    COALESCE(p_payload->'guard_result','{}'::jsonb),
+    COALESCE(p_payload->'eligibility_result','{}'::jsonb),
+    COALESCE(p_payload->'solver_result','{}'::jsonb),
+    p_payload->>'reason',
+    COALESCE((p_payload->>'policy_version')::int, v_policy.version),
+    COALESCE(p_payload->>'engine_version','unknown'),
+    (p_payload->>'requester_shift_version')::int,
+    (p_payload->>'offered_shift_version')::int,
+    v_shadow, false)
+  RETURNING id INTO v_decision_id;
+
+  IF v_shadow THEN
+    INSERT INTO public.swap_audit_log (swap_id, decision_id, event_type, actor, detail)
+    VALUES (p_swap_id, v_decision_id, 'SHADOW_SUPPRESSED', 'system', jsonb_build_object('would_be', v_decision));
+    RETURN jsonb_build_object('ok', true, 'code', 'SHADOW', 'decision', v_decision, 'decision_id', v_decision_id);
+  END IF;
+
+  v_req_ver := (p_payload->>'requester_shift_version')::int;
+
+  IF v_decision = 'AUTO_APPROVE' THEN
+    v_gateway := public.sm_apply_shift_op(v_swap.requester_shift_id, v_req_ver, 'approve_trade',
+                   jsonb_build_object('compliance_ok', true), NULL);
+  ELSIF v_decision = 'AUTO_REJECT' THEN
+    v_gateway := public.sm_apply_shift_op(v_swap.requester_shift_id, v_req_ver, 'reject_trade',
+                   jsonb_build_object('reason', COALESCE(p_payload->>'reason','Auto-rejected')), NULL);
+  ELSE
+    UPDATE public.shift_swaps SET review_flag = true, auto_decision_id = v_decision_id, updated_at = now()
+      WHERE id = p_swap_id;
+    INSERT INTO public.swap_audit_log (swap_id, decision_id, event_type, actor, detail)
+    VALUES (p_swap_id, v_decision_id, 'DECIDED_MANUAL_REVIEW', 'system', jsonb_build_object('reason', p_payload->>'reason'));
+    RETURN jsonb_build_object('ok', true, 'code', 'MANUAL_REVIEW', 'decision_id', v_decision_id);
+  END IF;
+
+  IF COALESCE((v_gateway->>'ok')::boolean, false) THEN
+    UPDATE public.swap_decisions SET committed = true WHERE id = v_decision_id;
+    UPDATE public.shift_swaps SET auto_decision_id = v_decision_id, updated_at = now() WHERE id = p_swap_id;
+    INSERT INTO public.swap_audit_log (swap_id, decision_id, event_type, actor, detail)
+    VALUES (p_swap_id, v_decision_id, 'COMMITTED', 'system', jsonb_build_object('decision', v_decision, 'gateway', v_gateway));
+    RETURN jsonb_build_object('ok', true, 'code', 'COMMITTED', 'decision', v_decision, 'decision_id', v_decision_id);
+  ELSE
+    INSERT INTO public.swap_audit_log (swap_id, decision_id, event_type, actor, detail)
+    VALUES (p_swap_id, v_decision_id, 'GATEWAY_REFUSED', 'system', jsonb_build_object('gateway', v_gateway));
+    RETURN jsonb_build_object('ok', false, 'code', COALESCE(v_gateway->>'code','GATEWAY_REFUSED'),
+                              'decision_id', v_decision_id, 'gateway', v_gateway);
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'sm_swap_auto_decide failed (swap=%, key=%): %', p_swap_id, p_idempotency_key, SQLERRM;
+  RETURN jsonb_build_object('ok', false, 'code', 'ERROR', 'error', SQLERRM);
+END; $$;
+
+
+ALTER FUNCTION "public"."sm_swap_auto_decide"("p_swap_id" "uuid", "p_idempotency_key" "text", "p_payload" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."sm_swap_auto_revert"("p_decision_id" "uuid", "p_actor" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_catalog'
+    AS $$
+DECLARE
+  v_caller uuid := auth.uid();
+  v_dec public.swap_decisions%ROWTYPE;
+  v_swap public.shift_swaps%ROWTYPE;
+  v_req_ver int;
+BEGIN
+  IF v_caller IS NOT NULL AND NOT (
+       public.is_admin()
+       OR EXISTS (SELECT 1 FROM public.app_access_certificates c
+                  WHERE c.user_id=v_caller AND c.is_active=true
+                    AND c.access_level IN ('gamma','delta','epsilon','zeta'))
+     ) THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'FORBIDDEN');
+  END IF;
+
+  SELECT * INTO v_dec FROM public.swap_decisions WHERE id = p_decision_id;
+  IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'code', 'NOT_FOUND'); END IF;
+  IF v_dec.decision <> 'AUTO_APPROVE' OR v_dec.committed IS NOT TRUE THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'NOT_REVERTABLE', 'note', 'Only a committed AUTO_APPROVE can be reverted');
+  END IF;
+  IF v_dec.reverted_at IS NOT NULL THEN
+    RETURN jsonb_build_object('ok', true, 'code', 'ALREADY_REVERTED');
+  END IF;
+
+  SELECT * INTO v_swap FROM public.shift_swaps WHERE id = v_dec.swap_id;
+  SELECT version INTO v_req_ver FROM public.shifts WHERE id = v_swap.requester_shift_id;
+
+  PERFORM public.sm_approve_peer_swap(
+    v_swap.target_shift_id, v_swap.requester_shift_id, v_swap.target_id, v_swap.requester_id);
+
+  UPDATE public.swap_decisions SET reverted_at = now(), reverted_by = p_actor WHERE id = p_decision_id;
+  INSERT INTO public.swap_audit_log (swap_id, decision_id, event_type, actor, detail)
+  VALUES (v_swap.id, p_decision_id, 'REVERTED', p_actor::text, jsonb_build_object('by', p_actor));
+  RETURN jsonb_build_object('ok', true, 'code', 'REVERTED', 'decision_id', p_decision_id);
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'sm_swap_auto_revert failed (decision=%): %', p_decision_id, SQLERRM;
+  RETURN jsonb_build_object('ok', false, 'code', 'ERROR', 'error', SQLERRM);
+END; $$;
+
+
+ALTER FUNCTION "public"."sm_swap_auto_revert"("p_decision_id" "uuid", "p_actor" "uuid") OWNER TO "postgres";
+
+SET default_tablespace = '';
+
+SET default_table_access_method = "heap";
+
+
+CREATE TABLE IF NOT EXISTS "public"."swap_review_queue" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "swap_id" "uuid" NOT NULL,
+    "idempotency_key" "text" NOT NULL,
+    "status" "public"."swap_queue_status" DEFAULT 'PENDING'::"public"."swap_queue_status" NOT NULL,
+    "attempts" integer DEFAULT 0 NOT NULL,
+    "max_attempts" integer DEFAULT 5 NOT NULL,
+    "next_attempt_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "locked_by" "text",
+    "locked_at" timestamp with time zone,
+    "last_error" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."swap_review_queue" OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."sm_swap_queue_claim"("p_worker" "text", "p_limit" integer DEFAULT 10) RETURNS SETOF "public"."swap_review_queue"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_catalog'
+    AS $$
+BEGIN
+  RETURN QUERY
+  UPDATE public.swap_review_queue q
+     SET status = 'CLAIMED', locked_by = p_worker, locked_at = now(),
+         attempts = q.attempts + 1, updated_at = now()
+   WHERE q.id IN (
+     SELECT id FROM public.swap_review_queue
+      WHERE (status = 'PENDING' AND next_attempt_at <= now())
+         OR (status = 'CLAIMED' AND locked_at < now() - interval '5 minutes')
+      ORDER BY next_attempt_at
+      FOR UPDATE SKIP LOCKED
+      LIMIT GREATEST(p_limit, 0)
+   )
+  RETURNING q.*;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."sm_swap_queue_claim"("p_worker" "text", "p_limit" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."sm_swap_queue_complete"("p_id" "uuid", "p_status" "text", "p_error" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'pg_catalog'
+    AS $$
+DECLARE
+  v_row public.swap_review_queue%ROWTYPE;
+BEGIN
+  SELECT * INTO v_row FROM public.swap_review_queue WHERE id = p_id FOR UPDATE;
+  IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'code', 'NOT_FOUND'); END IF;
+
+  IF p_status = 'DONE' THEN
+    UPDATE public.swap_review_queue
+       SET status='DONE', last_error=p_error, locked_by=NULL, locked_at=NULL, updated_at=now()
+     WHERE id = p_id;
+    RETURN jsonb_build_object('ok', true, 'code', 'DONE');
+
+  ELSIF p_status = 'RETRY' THEN
+    IF v_row.attempts >= v_row.max_attempts THEN
+      UPDATE public.swap_review_queue
+         SET status='DLQ', last_error=p_error, locked_by=NULL, locked_at=NULL, updated_at=now()
+       WHERE id = p_id;
+      RETURN jsonb_build_object('ok', true, 'code', 'DLQ');
+    END IF;
+    UPDATE public.swap_review_queue
+       SET status='PENDING', last_error=p_error, locked_by=NULL, locked_at=NULL,
+           next_attempt_at = now() + make_interval(mins => LEAST(POWER(2, v_row.attempts)::int, 60)),
+           updated_at=now()
+     WHERE id = p_id;
+    RETURN jsonb_build_object('ok', true, 'code', 'RETRY_SCHEDULED');
+
+  ELSIF p_status = 'DLQ' THEN
+    UPDATE public.swap_review_queue
+       SET status='DLQ', last_error=p_error, locked_by=NULL, locked_at=NULL, updated_at=now()
+     WHERE id = p_id;
+    RETURN jsonb_build_object('ok', true, 'code', 'DLQ');
+  END IF;
+
+  RETURN jsonb_build_object('ok', false, 'code', 'BAD_STATUS');
+END;
+$$;
+
+
+ALTER FUNCTION "public"."sm_swap_queue_complete"("p_id" "uuid", "p_status" "text", "p_error" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."sm_unassign_shift"("p_shift_id" "uuid", "p_user_id" "uuid" DEFAULT "auth"."uid"()) RETURNS "jsonb"
@@ -12989,14 +15246,13 @@ BEGIN
   IF v_state NOT IN ('S2', 'S3', 'S4') THEN
     RETURN jsonb_build_object('success', false, 'error', format('Cannot unassign from state %s (requires S2, S3, or S4)', v_state));
   END IF;
-  
+
   v_to_state := CASE WHEN v_shift.lifecycle_status = 'Published' THEN 'S5' ELSE 'S1' END;
   UPDATE public.shifts SET
     assigned_employee_id = NULL,
     assigned_at          = NULL,
     assignment_status    = 'unassigned'::public.shift_assignment_status,
     assignment_outcome   = NULL,
-    emergency_source     = NULL,
     bidding_status       = CASE WHEN v_shift.lifecycle_status = 'Published'
                                 THEN 'on_bidding'::public.shift_bidding_status
                                 ELSE 'not_on_bidding'::public.shift_bidding_status END,
@@ -13008,7 +15264,7 @@ BEGIN
     last_modified_by     = p_user_id,
     updated_at           = NOW()
   WHERE id = p_shift_id;
-  
+
   RETURN jsonb_build_object('success', true, 'from_state', v_state, 'to_state', v_to_state);
 END; $$;
 
@@ -13020,17 +15276,62 @@ CREATE OR REPLACE FUNCTION "public"."sm_unpublish_shift"("p_shift_id" "uuid", "p
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
     AS $$
-DECLARE v_shift RECORD; v_state text; v_to_state text; v_name text; v_role text;
+DECLARE 
+  v_shift RECORD; 
+  v_state text; 
+  v_to_state text;
 BEGIN
   SELECT * INTO v_shift FROM public.shifts WHERE id = p_shift_id AND deleted_at IS NULL FOR UPDATE;
   IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'error', 'Shift not found or deleted'); END IF;
   
   v_state := public.get_shift_fsm_state(v_shift.lifecycle_status, v_shift.assignment_status, v_shift.assignment_outcome, v_shift.trading_status, v_shift.is_cancelled);
-  IF v_state NOT IN ('S3', 'S4', 'S5') THEN
-    RETURN jsonb_build_object('success', false, 'error', format('sm_unpublish_shift requires a Published state (S3/S4/S5), current state is %s', v_state));
+  IF v_state NOT IN ('S3', 'S4', 'S5', 'S9', 'S10') THEN
+    RETURN jsonb_build_object('success', false, 'error', format('sm_unpublish_shift requires a Published state (S3/S4/S5/S9/S10), current state is %s', v_state));
+  END IF;
+
+  -- Cancel active trade/swap requests if unpublishing a trade-pending shift (S9/S10)
+  IF v_shift.trading_status IN ('TradeRequested', 'TradeAccepted') THEN
+    UPDATE public.shift_swaps SET
+      status = 'CANCELLED',
+      updated_at = NOW()
+    WHERE (requester_shift_id = p_shift_id OR target_shift_id = p_shift_id)
+      AND status IN ('OPEN', 'MANAGER_PENDING', 'OFFER_SELECTED');
+
+    UPDATE public.shifts SET
+      trading_status = 'NoTrade'::public.shift_trading,
+      trade_requested_at = NULL,
+      last_modified_by = p_user_id,
+      updated_at = NOW()
+    WHERE id IN (
+      SELECT CASE WHEN requester_shift_id = p_shift_id THEN target_shift_id ELSE requester_shift_id END
+      FROM public.shift_swaps
+      WHERE (requester_shift_id = p_shift_id OR target_shift_id = p_shift_id)
+    ) AND id <> p_shift_id;
+
+    UPDATE public.swap_requests SET
+      status = 'cancelled',
+      updated_at = NOW()
+    WHERE (original_shift_id = p_shift_id OR offered_shift_id = p_shift_id)
+      AND status IN ('pending_employee', 'pending_manager');
+
+    UPDATE public.shifts SET
+      trading_status = 'NoTrade'::public.shift_trading,
+      trade_requested_at = NULL,
+      last_modified_by = p_user_id,
+      updated_at = NOW()
+    WHERE id IN (
+      SELECT CASE WHEN original_shift_id = p_shift_id THEN offered_shift_id ELSE original_shift_id END
+      FROM public.swap_requests
+      WHERE (original_shift_id = p_shift_id OR offered_shift_id = p_shift_id)
+    ) AND id <> p_shift_id;
+
+    UPDATE public.shifts SET
+      trading_status = 'NoTrade'::public.shift_trading,
+      trade_requested_at = NULL
+    WHERE id = p_shift_id;
   END IF;
   
-  IF v_state IN ('S3', 'S4') THEN
+  IF v_state IN ('S3', 'S4', 'S9', 'S10') THEN
     v_to_state := 'S2';
     UPDATE public.shifts SET
       lifecycle_status   = 'Draft'::public.shift_lifecycle,
@@ -13054,7 +15355,8 @@ BEGIN
   END IF;
   
   RETURN jsonb_build_object('success', true, 'from_state', v_state, 'to_state', v_to_state);
-END; $$;
+END;
+$$;
 
 
 ALTER FUNCTION "public"."sm_unpublish_shift"("p_shift_id" "uuid", "p_user_id" "uuid", "p_reason" "text") OWNER TO "postgres";
@@ -15981,6 +18283,287 @@ CREATE OR REPLACE FUNCTION "public"."withdraw_shift_from_bidding"("p_shift_id" "
 ALTER FUNCTION "public"."withdraw_shift_from_bidding"("p_shift_id" "uuid", "p_actor_id" "uuid") OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "hr"."departments" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "organization_id" "uuid" NOT NULL,
+    "name" "text" NOT NULL,
+    "code" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "hr"."departments" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "hr"."employee_assignments" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "employee_id" "uuid" NOT NULL,
+    "role_id" "uuid" NOT NULL,
+    "effective_from" "date" DEFAULT CURRENT_DATE NOT NULL,
+    "effective_to" "date",
+    "change_reason" "text" DEFAULT 'hire'::"text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "employee_assignments_check" CHECK ((("effective_to" IS NULL) OR ("effective_to" >= "effective_from")))
+);
+
+
+ALTER TABLE "hr"."employee_assignments" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "hr"."employees" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "organization_id" "uuid" NOT NULL,
+    "full_name" "text" NOT NULL,
+    "email" "text",
+    "employment_type" "text",
+    "hire_date" "date" DEFAULT CURRENT_DATE NOT NULL,
+    "is_active" boolean DEFAULT true NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "hr"."employees" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "hr"."organizations" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "name" "text" NOT NULL,
+    "slug" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "hr"."organizations" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "hr"."remuneration_levels" (
+    "level_number" smallint NOT NULL,
+    "level_name" "text" NOT NULL,
+    "hourly_rate_min" numeric(10,2) NOT NULL,
+    "hourly_rate_max" numeric(10,2) NOT NULL,
+    "salary_min" numeric(12,2),
+    "salary_max" numeric(12,2),
+    "description" "text",
+    CONSTRAINT "remuneration_levels_check" CHECK (("hourly_rate_max" >= "hourly_rate_min")),
+    CONSTRAINT "remuneration_levels_check1" CHECK ((("salary_min" IS NULL) OR ("salary_max" IS NULL) OR ("salary_max" >= "salary_min"))),
+    CONSTRAINT "remuneration_levels_level_number_check" CHECK ((("level_number" >= 0) AND ("level_number" <= 7)))
+);
+
+
+ALTER TABLE "hr"."remuneration_levels" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "hr"."roles" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "subdepartment_id" "uuid" NOT NULL,
+    "remuneration_level" smallint NOT NULL,
+    "name" "text" NOT NULL,
+    "code" "text",
+    "is_active" boolean DEFAULT true NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "description" "text",
+    "responsibilities" "text"[],
+    "forecasting_bucket" "text",
+    "supervision_ratio_min" integer,
+    "supervision_ratio_max" integer,
+    "is_baseline_eligible" boolean DEFAULT false,
+    "employment_type" "text",
+    CONSTRAINT "roles_remuneration_level_check" CHECK ((("remuneration_level" >= 0) AND ("remuneration_level" <= 7)))
+);
+
+
+ALTER TABLE "hr"."roles" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "hr"."subdepartments" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "department_id" "uuid" NOT NULL,
+    "name" "text" NOT NULL,
+    "code" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "hr"."subdepartments" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "hr"."user_contracts" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "organization_id" "uuid",
+    "department_id" "uuid",
+    "sub_department_id" "uuid",
+    "role_id" "uuid" NOT NULL,
+    "status" "text" DEFAULT 'Active'::"text" NOT NULL,
+    "start_date" "date" DEFAULT CURRENT_DATE,
+    "end_date" "date",
+    "custom_hourly_rate" numeric(10,2),
+    "notes" "text",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"(),
+    "created_by" "uuid",
+    "access_level" "public"."access_level",
+    "employment_status" "public"."employment_status" DEFAULT 'Full-Time'::"public"."employment_status",
+    "contracted_weekly_hours" numeric DEFAULT 38,
+    "is_apprentice" boolean DEFAULT false,
+    "apprentice_type" "text",
+    "apprentice_year" integer,
+    "has_completed_year_12" boolean DEFAULT false,
+    "is_trainee" boolean DEFAULT false,
+    "trainee_category" "text",
+    "trainee_level" "text",
+    "trainee_exit_year" integer,
+    "trainee_years_out" integer,
+    "trainee_aqf_level" integer,
+    "trainee_year" integer,
+    "is_training_on_job" boolean DEFAULT false,
+    "prefers_sba_loading" boolean DEFAULT false,
+    "is_sws" boolean DEFAULT false,
+    "sws_capacity_percentage" integer,
+    "is_sws_trial" boolean DEFAULT false,
+    "sws_trial_start_date" "date",
+    "annual_guaranteed_hours" integer,
+    "remuneration_level" smallint,
+    CONSTRAINT "user_contracts_apprentice_type_check" CHECK (("apprentice_type" = ANY (ARRAY['standard'::"text", 'adult'::"text", 'school_based'::"text"]))),
+    CONSTRAINT "user_contracts_apprentice_year_check" CHECK ((("apprentice_year" >= 1) AND ("apprentice_year" <= 4))),
+    CONSTRAINT "user_contracts_status_check" CHECK (("status" = ANY (ARRAY['Active'::"text", 'Inactive'::"text", 'Terminated'::"text"]))),
+    CONSTRAINT "user_contracts_sws_capacity_percentage_check" CHECK ((("sws_capacity_percentage" >= 10) AND ("sws_capacity_percentage" <= 90))),
+    CONSTRAINT "user_contracts_trainee_aqf_level_check" CHECK ((("trainee_aqf_level" >= 1) AND ("trainee_aqf_level" <= 4))),
+    CONSTRAINT "user_contracts_trainee_category_check" CHECK (("trainee_category" = ANY (ARRAY['junior'::"text", 'adult'::"text", 'school_based'::"text"]))),
+    CONSTRAINT "user_contracts_trainee_exit_year_check" CHECK (("trainee_exit_year" = ANY (ARRAY[10, 11, 12]))),
+    CONSTRAINT "user_contracts_trainee_level_check" CHECK (("trainee_level" = ANY (ARRAY['A'::"text", 'B'::"text"]))),
+    CONSTRAINT "user_contracts_trainee_year_check" CHECK ((("trainee_year" >= 1) AND ("trainee_year" <= 3))),
+    CONSTRAINT "user_contracts_trainee_years_out_check" CHECK ((("trainee_years_out" >= 0) AND ("trainee_years_out" <= 5)))
+);
+
+
+ALTER TABLE "hr"."user_contracts" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "hr"."user_contracts"."contracted_weekly_hours" IS 'Base contracted hours per week. Used by the AutoScheduler for workload averaging (7/14/21/28 days).';
+
+
+
+COMMENT ON COLUMN "hr"."user_contracts"."is_apprentice" IS 'Indicates if the contract is for an apprentice under Schedule 4';
+
+
+
+COMMENT ON COLUMN "hr"."user_contracts"."apprentice_type" IS 'Category of apprenticeship: standard, adult (21+), or school_based (SBA)';
+
+
+
+COMMENT ON COLUMN "hr"."user_contracts"."apprentice_year" IS 'Current year of apprenticeship (1-4)';
+
+
+
+COMMENT ON COLUMN "hr"."user_contracts"."has_completed_year_12" IS 'Relevant for standard apprentice wage percentages';
+
+
+
+COMMENT ON COLUMN "hr"."user_contracts"."is_trainee" IS 'Indicates if the contract is for a trainee under Schedule 5';
+
+
+
+COMMENT ON COLUMN "hr"."user_contracts"."trainee_category" IS 'junior, adult, or school_based';
+
+
+
+COMMENT ON COLUMN "hr"."user_contracts"."trainee_level" IS 'Wage Level A or B based on industry/package (Point 50)';
+
+
+
+COMMENT ON COLUMN "hr"."user_contracts"."trainee_exit_year" IS 'Year level when the trainee left school (10, 11, or 12)';
+
+
+
+COMMENT ON COLUMN "hr"."user_contracts"."is_training_on_job" IS 'If true, applies 20% pay deduction for PT trainees (Point 43)';
+
+
+
+COMMENT ON COLUMN "hr"."user_contracts"."prefers_sba_loading" IS '25% loading in lieu of leave for school-based trainees (Point 48)';
+
+
+
+COMMENT ON COLUMN "hr"."user_contracts"."is_sws" IS 'Indicates if the contract is under the Supported Wage System (Schedule 6)';
+
+
+
+COMMENT ON COLUMN "hr"."user_contracts"."sws_capacity_percentage" IS 'Assessed productive capacity (10% to 90%)';
+
+
+
+COMMENT ON COLUMN "hr"."user_contracts"."is_sws_trial" IS 'If true, the Team Member is in a trial period (Point 46)';
+
+
+
+COMMENT ON COLUMN "hr"."user_contracts"."sws_trial_start_date" IS 'Start date of the trial period (max 12-16 weeks)';
+
+
+
+COMMENT ON COLUMN "hr"."user_contracts"."annual_guaranteed_hours" IS 'Minimum hours guaranteed per year (Clause 12 - 624 for FPT)';
+
+
+
+CREATE OR REPLACE VIEW "hr"."v_headcount_by_level" AS
+ SELECT "rl"."level_number",
+    "rl"."level_name",
+    "count"("ea"."id") AS "current_headcount"
+   FROM (("hr"."remuneration_levels" "rl"
+     LEFT JOIN "hr"."roles" "r" ON (("r"."remuneration_level" = "rl"."level_number")))
+     LEFT JOIN "hr"."employee_assignments" "ea" ON ((("ea"."role_id" = "r"."id") AND ("ea"."effective_to" IS NULL))))
+  GROUP BY "rl"."level_number", "rl"."level_name"
+  ORDER BY "rl"."level_number";
+
+
+ALTER VIEW "hr"."v_headcount_by_level" OWNER TO "postgres";
+
+
+CREATE OR REPLACE VIEW "hr"."v_org_chart" AS
+ SELECT "o"."name" AS "organization",
+    "d"."name" AS "department",
+    "s"."name" AS "subdepartment",
+    "r"."remuneration_level" AS "level",
+    "r"."name" AS "role",
+    "r"."is_active",
+    "o"."id" AS "org_id",
+    "d"."id" AS "dept_id",
+    "s"."id" AS "subdept_id",
+    "r"."id" AS "role_id"
+   FROM ((("hr"."organizations" "o"
+     JOIN "hr"."departments" "d" ON (("d"."organization_id" = "o"."id")))
+     JOIN "hr"."subdepartments" "s" ON (("s"."department_id" = "d"."id")))
+     JOIN "hr"."roles" "r" ON (("r"."subdepartment_id" = "s"."id")));
+
+
+ALTER VIEW "hr"."v_org_chart" OWNER TO "postgres";
+
+
+CREATE OR REPLACE VIEW "hr"."v_promotion_ladder" AS
+ SELECT "d"."name" AS "department",
+    "s"."name" AS "subdepartment",
+    "r"."remuneration_level" AS "level",
+    "rl"."level_name",
+    "r"."name" AS "role",
+    "rl"."hourly_rate_min",
+    "rl"."hourly_rate_max",
+    "rl"."salary_min",
+    "rl"."salary_max",
+    "lead"("r"."name") OVER (PARTITION BY "s"."id" ORDER BY "r"."remuneration_level") AS "next_role",
+    "s"."id" AS "subdepartment_id"
+   FROM ((("hr"."subdepartments" "s"
+     JOIN "hr"."departments" "d" ON (("d"."id" = "s"."department_id")))
+     JOIN "hr"."roles" "r" ON (("r"."subdepartment_id" = "s"."id")))
+     JOIN "hr"."remuneration_levels" "rl" ON (("rl"."level_number" = "r"."remuneration_level")));
+
+
+ALTER VIEW "hr"."v_promotion_ladder" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."actual_labor_attendance" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "event_id" "text" NOT NULL,
@@ -16039,6 +18622,122 @@ END)
 
 
 ALTER TABLE "public"."app_access_certificates" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."assignment_decisions" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "run_id" "uuid" NOT NULL,
+    "shift_id" "uuid" NOT NULL,
+    "winner_employee_id" "uuid",
+    "runners_up" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
+    "reason" "text" NOT NULL,
+    "rule_hits" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
+    "composite_score" numeric,
+    "outcome" "text" NOT NULL,
+    "engine_version" "text" NOT NULL,
+    "policy_version" integer DEFAULT 1 NOT NULL,
+    "version_before" integer,
+    "version_after" integer,
+    "committed" boolean DEFAULT true NOT NULL,
+    "idempotency_key" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "assignment_decisions_composite_score_check" CHECK ((("composite_score" IS NULL) OR (("composite_score" >= (0)::numeric) AND ("composite_score" <= (100)::numeric)))),
+    CONSTRAINT "assignment_decisions_outcome_check" CHECK (("outcome" = ANY (ARRAY['ASSIGNED'::"text", 'SKIPPED_NO_ELIGIBLE'::"text", 'SKIPPED_BLOCKED'::"text", 'SKIPPED_LOCKED'::"text", 'CONFLICT_RETRY'::"text", 'ERROR'::"text"]))),
+    CONSTRAINT "ck_assignment_decision_version_monotone" CHECK ((("version_before" IS NULL) OR ("version_after" IS NULL) OR ("version_before" <= "version_after")))
+);
+
+
+ALTER TABLE "public"."assignment_decisions" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."assignment_events" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "run_id" "uuid" NOT NULL,
+    "shift_id" "uuid",
+    "event_type" "text" NOT NULL,
+    "actor_id" "uuid",
+    "metadata" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "assignment_events_event_type_check" CHECK (("event_type" = ANY (ARRAY['RUN_STARTED'::"text", 'RUN_FINISHED'::"text", 'RUN_ROLLED_BACK'::"text", 'SHIFT_ASSIGNED'::"text", 'SHIFT_SKIPPED'::"text", 'SHIFT_CONFLICT'::"text", 'SHIFT_ROLLBACK'::"text"])))
+);
+
+
+ALTER TABLE "public"."assignment_events" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."assignment_runs" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "organization_id" "uuid" NOT NULL,
+    "department_id" "uuid",
+    "sub_department_id" "uuid",
+    "actor_id" "uuid" NOT NULL,
+    "scope" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "dry_run" boolean DEFAULT false NOT NULL,
+    "status" "text" DEFAULT 'PENDING'::"text" NOT NULL,
+    "engine_version" "text" NOT NULL,
+    "policy_version" integer DEFAULT 1 NOT NULL,
+    "options" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "cursor" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "summary" "jsonb",
+    "error" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "started_at" timestamp with time zone,
+    "finished_at" timestamp with time zone,
+    CONSTRAINT "assignment_runs_status_check" CHECK (("status" = ANY (ARRAY['PENDING'::"text", 'RUNNING'::"text", 'COMPLETED'::"text", 'PARTIALLY_FAILED'::"text", 'ROLLED_BACK'::"text", 'ABORTED'::"text"])))
+);
+
+
+ALTER TABLE "public"."assignment_runs" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."assignment_snapshots" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "shift_id" "uuid" NOT NULL,
+    "episode_seq" integer NOT NULL,
+    "employee_id" "uuid" NOT NULL,
+    "source" "text" NOT NULL,
+    "became_active_at" timestamp with time zone NOT NULL,
+    "ended_at" timestamp with time zone,
+    "end_reason" "text",
+    "attended" boolean DEFAULT false NOT NULL,
+    "late_in" boolean DEFAULT false NOT NULL,
+    "early_out" boolean DEFAULT false NOT NULL,
+    "is_current" boolean DEFAULT false NOT NULL,
+    "organization_id" "uuid",
+    "department_id" "uuid",
+    "sub_department_id" "uuid",
+    "shift_date" "date",
+    "scheduled_start" timestamp with time zone,
+    "refreshed_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "early_in" boolean DEFAULT false NOT NULL,
+    "late_out" boolean DEFAULT false NOT NULL,
+    "on_time_in" boolean DEFAULT false NOT NULL,
+    "on_time_out" boolean DEFAULT false NOT NULL,
+    "auto_clock_out" boolean DEFAULT false NOT NULL
+);
+
+
+ALTER TABLE "public"."assignment_snapshots" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."assignment_snapshots" IS 'AssignmentSnapshot KPI spine: one row per PUBLISHED-ACTIVE assignment episode (had_accept OR had_emergency OR had_swap_in) projected from v_shift_assignment_episodes. Draft (S2) edits and offer-only / rejected / ignored episodes are intentionally excluded. Refreshed per-shift by sm_refresh_shift_snapshots() on every shift_events insert.';
+
+
+
+COMMENT ON COLUMN "public"."assignment_snapshots"."source" IS 'How the holder became confirmed: publish_confirm | bid_win | trade_approve | emergency.';
+
+
+
+COMMENT ON COLUMN "public"."assignment_snapshots"."became_active_at" IS 'Confirmation moment: first ACCEPTED / EMERGENCY_ASSIGNED / SWAPPED_IN in the episode (falls back to opened_at if the view yields NULL — see projection function).';
+
+
+
+COMMENT ON COLUMN "public"."assignment_snapshots"."end_reason" IS 'worked | dropped_std | dropped_late | no_show | traded_out | reassigned | NULL(open).';
+
+
+
+COMMENT ON COLUMN "public"."assignment_snapshots"."is_current" IS 'TRUE for the still-open owner (terminal_outcome = open); enforced unique per shift.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."attendance_records" (
@@ -16283,6 +18982,16 @@ CREATE TABLE IF NOT EXISTS "public"."broadcasts" (
 ALTER TABLE "public"."broadcasts" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."bulk_assign_idempotency" (
+    "key" "uuid" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "result" "jsonb" NOT NULL
+);
+
+
+ALTER TABLE "public"."bulk_assign_idempotency" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."bulk_operations" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "operation_type" "text" NOT NULL,
@@ -16460,6 +19169,9 @@ CREATE TABLE IF NOT EXISTS "public"."demand_tensor" (
     "feedback_multiplier_used" numeric DEFAULT 1.0 NOT NULL,
     "rule_version_id" "uuid",
     "execution_timestamp" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "service_level" numeric,
+    "demand_buffer" integer,
+    "coverage_confidence" numeric,
     CONSTRAINT "demand_tensor_function_code_chk" CHECK (("function_code" = ANY (ARRAY['F&B'::"text", 'Logistics'::"text", 'AV'::"text", 'FOH'::"text", 'Security'::"text"]))),
     CONSTRAINT "demand_tensor_headcount_chk" CHECK ((("headcount" >= 0) AND ("baseline" >= 0))),
     CONSTRAINT "demand_tensor_level_chk" CHECK ((("level" >= 0) AND ("level" <= 7))),
@@ -16483,6 +19195,18 @@ COMMENT ON COLUMN "public"."demand_tensor"."feedback_multiplier_used" IS 'Canoni
 
 
 COMMENT ON COLUMN "public"."demand_tensor"."rule_version_id" IS 'Link to the specific version of rules used (future proofing).';
+
+
+
+COMMENT ON COLUMN "public"."demand_tensor"."service_level" IS 'C2: target coverage confidence used to buffer this cell (0..1). NULL = no buffer applied (median).';
+
+
+
+COMMENT ON COLUMN "public"."demand_tensor"."demand_buffer" IS 'C2: extra headcount added above the point estimate to hit service_level. NULL/0 = none.';
+
+
+
+COMMENT ON COLUMN "public"."demand_tensor"."coverage_confidence" IS 'C2: modelled probability that the staffed headcount covers demand (0..1).';
 
 
 
@@ -16534,11 +19258,51 @@ CREATE TABLE IF NOT EXISTS "public"."shift_events" (
     "event_type" "public"."shift_event_type" NOT NULL,
     "event_time" timestamp with time zone DEFAULT "now"() NOT NULL,
     "metadata" "jsonb" DEFAULT '{}'::"jsonb",
-    "created_at" timestamp with time zone DEFAULT "now"()
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "actor_id" "uuid",
+    "actor_role" "text",
+    "domain" "text",
+    "episode_seq" integer,
+    "correlation_id" "uuid",
+    "causation_id" "uuid",
+    "idempotency_key" "uuid",
+    "shift_version" integer
 );
 
 
 ALTER TABLE "public"."shift_events" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."shift_events"."actor_id" IS 'The profile that PERFORMED this event (manager/admin/service). Distinct from employee_id, which is the worker the event is ABOUT.';
+
+
+
+COMMENT ON COLUMN "public"."shift_events"."actor_role" IS 'Role of the actor who performed this event: ''manager'' | ''employee'' | ''system''. BACKFILL HEURISTIC — derived from event_type for historical rows; new write paths should set it explicitly. Approximate, not authoritative provenance.';
+
+
+
+COMMENT ON COLUMN "public"."shift_events"."domain" IS 'Event domain bucket: ''shift'' | ''assignment'' | ''offer'' | ''trade''. Deterministically mapped from event_type (offer<-OFFERED/ACCEPTED/REJECTED/IGNORED; trade<-SWAPPED_IN/SWAPPED_OUT; assignment<-ASSIGNED/UNASSIGNED/EMERGENCY_ASSIGNED/CANCELLED/LATE_CANCELLED/NO_SHOW/CHECKED_IN/LATE_IN/EARLY_OUT; shift<-OP_APPLIED and anything else).';
+
+
+
+COMMENT ON COLUMN "public"."shift_events"."episode_seq" IS 'Per-shift assignment-attempt sequence (1-based) this event belongs to, mirroring v_shift_assignment_episodes gaps-and-islands boundary logic. NULL for events that precede the first opening event (episode_seq 0 in the view). Populated by the one-time backfill; NOT computed in the enrich trigger (a single-row trigger cannot see the per-shift event history needed for the cumulative boundary sum).';
+
+
+
+COMMENT ON COLUMN "public"."shift_events"."correlation_id" IS 'Saga / workflow correlation id grouping all events produced by one logical operation (e.g. a bid-selection run or a swap approval). Nullable; reserved for future write paths — not backfilled (no reliable historical signal).';
+
+
+
+COMMENT ON COLUMN "public"."shift_events"."causation_id" IS 'Id of the event that directly caused this one (event-causation chain). Nullable; reserved for future write paths — not backfilled.';
+
+
+
+COMMENT ON COLUMN "public"."shift_events"."idempotency_key" IS 'Idempotency uuid that produced this event. Backfilled from metadata->>''idem'' (the gateway sm_apply_shift_op stamps it). NULL when the producing path did not supply one.';
+
+
+
+COMMENT ON COLUMN "public"."shift_events"."shift_version" IS 'Optimistic-concurrency shift.version AFTER the op that produced this event. Backfilled from metadata->>''to_version'' (stamped by the gateway). NULL when the producing path did not carry a version.';
+
 
 
 CREATE MATERIALIZED VIEW "public"."employee_daily_metrics" AS
@@ -16639,7 +19403,17 @@ CREATE TABLE IF NOT EXISTS "public"."employee_performance_metrics" (
     "rejection_rate" numeric DEFAULT 0,
     "early_clock_out_rate" numeric DEFAULT 0,
     "late_clock_in_rate" numeric DEFAULT 0,
-    "emergency_assignments" integer DEFAULT 0
+    "emergency_assignments" integer DEFAULT 0,
+    "early_clock_ins" integer DEFAULT 0 NOT NULL,
+    "late_clock_outs" integer DEFAULT 0 NOT NULL,
+    "early_clock_in_rate" numeric DEFAULT 0 NOT NULL,
+    "late_clock_out_rate" numeric DEFAULT 0 NOT NULL,
+    "on_time_in" integer DEFAULT 0 NOT NULL,
+    "on_time_out" integer DEFAULT 0 NOT NULL,
+    "on_time_in_rate" numeric DEFAULT 0 NOT NULL,
+    "on_time_out_rate" numeric DEFAULT 0 NOT NULL,
+    "auto_clock_outs" integer DEFAULT 0 NOT NULL,
+    "auto_clock_out_rate" numeric DEFAULT 0 NOT NULL
 );
 
 
@@ -16759,6 +19533,28 @@ CREATE TABLE IF NOT EXISTS "public"."events" (
 
 
 ALTER TABLE "public"."events" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."fairness_ledger" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "organization_id" "uuid" NOT NULL,
+    "employee_id" "uuid" NOT NULL,
+    "metric" "text" NOT NULL,
+    "window_start" "date" NOT NULL,
+    "window_end" "date" NOT NULL,
+    "rolling_value" numeric DEFAULT 0 NOT NULL,
+    "team_average" numeric DEFAULT 0 NOT NULL,
+    "debt" numeric DEFAULT 0 NOT NULL,
+    "last_updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_by_run" "uuid"
+);
+
+
+ALTER TABLE "public"."fairness_ledger" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."fairness_ledger" IS 'F1: Longitudinal fairness ledger — cumulative per-employee fairness metrics over a rolling window.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."function_map" (
@@ -17006,6 +19802,25 @@ CREATE TABLE IF NOT EXISTS "public"."pay_periods" (
 ALTER TABLE "public"."pay_periods" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."planning_offers" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "request_id" "uuid" NOT NULL,
+    "offered_by" "uuid" NOT NULL,
+    "offered_shift_id" "uuid",
+    "status" "text" DEFAULT 'SUBMITTED'::"text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "planning_offers_status_check" CHECK (("status" = ANY (ARRAY['SUBMITTED'::"text", 'SELECTED'::"text", 'REJECTED'::"text", 'WITHDRAWN'::"text"])))
+);
+
+
+ALTER TABLE "public"."planning_offers" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."planning_offers" IS 'One row per employee who responds to a planning_request. For BID: just a claim (offered_shift_id is NULL). For SWAP: offered_shift_id is the shift the responder trades away.';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."planning_periods" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "organization_id" "uuid" NOT NULL,
@@ -17026,6 +19841,42 @@ CREATE TABLE IF NOT EXISTS "public"."planning_periods" (
 
 
 ALTER TABLE "public"."planning_periods" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."planning_requests" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "type" "text" NOT NULL,
+    "status" "text" DEFAULT 'OPEN'::"text" NOT NULL,
+    "shift_id" "uuid" NOT NULL,
+    "initiated_by" "uuid" NOT NULL,
+    "target_employee_id" "uuid",
+    "reason" "text",
+    "compliance_snapshot" "jsonb",
+    "compliance_evaluated_at" timestamp with time zone,
+    "manager_id" "uuid",
+    "manager_notes" "text",
+    "decided_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "chk_bid_no_target_shift" CHECK ((("type" <> 'BID'::"text") OR true)),
+    CONSTRAINT "planning_requests_status_check" CHECK (("status" = ANY (ARRAY['OPEN'::"text", 'MANAGER_PENDING'::"text", 'APPROVED'::"text", 'REJECTED'::"text", 'BLOCKED'::"text", 'CANCELLED'::"text", 'EXPIRED'::"text"]))),
+    CONSTRAINT "planning_requests_type_check" CHECK (("type" = ANY (ARRAY['BID'::"text", 'SWAP'::"text"])))
+);
+
+
+ALTER TABLE "public"."planning_requests" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."planning_requests" IS 'Unified planning requests for both BID and SWAP workflows. One request per shift per lifecycle. Compliance snapshot stored at selection time.';
+
+
+
+COMMENT ON COLUMN "public"."planning_requests"."type" IS 'BID = employee requests an open shift; SWAP = employee offers to trade their shift.';
+
+
+
+COMMENT ON COLUMN "public"."planning_requests"."compliance_snapshot" IS 'JSON blob: BidComplianceSnapshot or SwapComplianceSnapshot depending on type. Populated at the moment an offer is selected, before manager decision.';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."predicted_labor_demand" (
@@ -17137,28 +19988,18 @@ CREATE TABLE IF NOT EXISTS "public"."rbac_permissions" (
 ALTER TABLE "public"."rbac_permissions" OWNER TO "postgres";
 
 
-CREATE TABLE IF NOT EXISTS "public"."remuneration_levels" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "level_number" integer NOT NULL,
-    "level_name" "text" NOT NULL,
-    "hourly_rate_min" numeric(10,2),
-    "hourly_rate_max" numeric(10,2),
-    "annual_salary_min" numeric(12,2),
-    "annual_salary_max" numeric(12,2),
-    "description" "text",
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"(),
-    CONSTRAINT "remuneration_levels_level_number_check" CHECK ((("level_number" >= 0) AND ("level_number" <= 7)))
-);
-
-ALTER TABLE ONLY "public"."remuneration_levels" FORCE ROW LEVEL SECURITY;
+CREATE OR REPLACE VIEW "public"."remuneration_levels" AS
+ SELECT "level_number",
+    "level_name",
+    "hourly_rate_min",
+    "hourly_rate_max",
+    "salary_min",
+    "salary_max",
+    "description"
+   FROM "hr"."remuneration_levels";
 
 
-ALTER TABLE "public"."remuneration_levels" OWNER TO "postgres";
-
-
-COMMENT ON TABLE "public"."remuneration_levels" IS 'Pay grades mapped to role levels';
-
+ALTER VIEW "public"."remuneration_levels" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."rest_period_violations" (
@@ -17181,7 +20022,7 @@ CREATE TABLE IF NOT EXISTS "public"."role_levels" (
     "role_id" "uuid" NOT NULL,
     "level_code" "text" NOT NULL,
     "hierarchy_rank" integer NOT NULL,
-    "remuneration_level_id" "uuid" NOT NULL,
+    "remuneration_level" smallint,
     CONSTRAINT "role_levels_hierarchy_rank_check" CHECK ((("hierarchy_rank" >= 0) AND ("hierarchy_rank" <= 7))),
     CONSTRAINT "role_levels_level_code_check" CHECK (("level_code" = ANY (ARRAY['L0'::"text", 'L1'::"text", 'L2'::"text", 'L3'::"text", 'L4'::"text", 'L5'::"text", 'L6'::"text", 'L7'::"text"])))
 );
@@ -17216,36 +20057,26 @@ COMMENT ON COLUMN "public"."role_ml_class_map"."source" IS 'auto_regex = seeded 
 
 
 
-CREATE TABLE IF NOT EXISTS "public"."roles" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "sub_department_id" "uuid",
-    "name" "text" NOT NULL,
-    "code" "text",
-    "level" integer NOT NULL,
-    "remuneration_level_id" "uuid",
-    "description" "text",
-    "responsibilities" "text"[],
-    "is_active" boolean DEFAULT true,
-    "created_at" timestamp with time zone DEFAULT "now"(),
-    "updated_at" timestamp with time zone DEFAULT "now"(),
-    "department_id" "uuid",
-    "forecasting_bucket" "text",
-    "supervision_ratio_min" integer,
-    "supervision_ratio_max" integer,
-    "is_baseline_eligible" boolean DEFAULT false,
-    "employment_type" "text",
-    CONSTRAINT "roles_forecasting_bucket_check" CHECK (("forecasting_bucket" = ANY (ARRAY['static'::"text", 'semi_dynamic'::"text", 'dynamic'::"text"]))),
-    CONSTRAINT "roles_level_check" CHECK ((("level" >= 0) AND ("level" <= 7)))
-);
-
-ALTER TABLE ONLY "public"."roles" FORCE ROW LEVEL SECURITY;
+CREATE OR REPLACE VIEW "public"."roles" AS
+ SELECT "id",
+    "subdepartment_id",
+    "remuneration_level",
+    "name",
+    "code",
+    "is_active",
+    "created_at",
+    "updated_at",
+    "description",
+    "responsibilities",
+    "forecasting_bucket",
+    "supervision_ratio_min",
+    "supervision_ratio_max",
+    "is_baseline_eligible",
+    "employment_type"
+   FROM "hr"."roles";
 
 
-ALTER TABLE "public"."roles" OWNER TO "postgres";
-
-
-COMMENT ON TABLE "public"."roles" IS 'Job roles within sub-departments';
-
+ALTER VIEW "public"."roles" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."roster_groups" (
@@ -17574,6 +20405,8 @@ CREATE TABLE IF NOT EXISTS "public"."shift_swaps" (
     "status" "public"."swap_request_status" DEFAULT 'OPEN'::"public"."swap_request_status",
     "expires_at" timestamp with time zone,
     "status_changed_at" timestamp with time zone DEFAULT "now"(),
+    "review_flag" boolean DEFAULT false,
+    "auto_decision_id" "uuid",
     CONSTRAINT "shift_swaps_swap_type_check" CHECK (("swap_type" = ANY (ARRAY['swap'::"text", 'giveaway'::"text"])))
 );
 
@@ -17618,9 +20451,7 @@ CREATE TABLE IF NOT EXISTS "public"."shifts" (
     "confirmed_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
-    "assignment_id" "uuid",
     "organization_id" "uuid",
-    "remuneration_level_id" "uuid",
     "actual_hourly_rate" numeric,
     "bidding_close_at" timestamp with time zone,
     "bidding_enabled" boolean DEFAULT false,
@@ -17641,7 +20472,6 @@ CREATE TABLE IF NOT EXISTS "public"."shifts" (
     "group_type" "public"."template_group_type",
     "sub_group_name" character varying(100),
     "display_order" integer DEFAULT 0,
-    "role_level" integer,
     "remuneration_rate" numeric(10,2),
     "currency" character varying(3) DEFAULT 'AUD'::character varying,
     "cost_center_id" "uuid",
@@ -17660,7 +20490,6 @@ CREATE TABLE IF NOT EXISTS "public"."shifts" (
     "cancelled_by_user_id" "uuid",
     "cancellation_reason" "text",
     "is_on_bidding" boolean DEFAULT false,
-    "bidding_priority_text" "text" DEFAULT 'normal'::"text",
     "trade_requested_at" timestamp with time zone,
     "required_skills" "jsonb" DEFAULT '[]'::"jsonb",
     "required_licenses" "jsonb" DEFAULT '[]'::"jsonb",
@@ -17680,21 +20509,18 @@ CREATE TABLE IF NOT EXISTS "public"."shifts" (
     "actual_end" timestamp with time zone,
     "actual_net_minutes" integer,
     "payroll_exported" boolean DEFAULT false,
-    "cancelled_by" "uuid",
     "required_certifications" "jsonb" DEFAULT '[]'::"jsonb",
     "event_tags" "jsonb" DEFAULT '[]'::"jsonb",
     "user_contract_id" "uuid",
     "assignment_status" "public"."shift_assignment_status" DEFAULT 'unassigned'::"public"."shift_assignment_status" NOT NULL,
     "fulfillment_status" "public"."shift_fulfillment_status" DEFAULT 'none'::"public"."shift_fulfillment_status" NOT NULL,
     "offer_expires_at" timestamp with time zone,
-    "is_urgent" boolean DEFAULT false,
     "attendance_status" "public"."shift_attendance_status" DEFAULT 'unknown'::"public"."shift_attendance_status" NOT NULL,
     "assignment_outcome" "public"."shift_assignment_outcome",
     "bidding_status" "public"."shift_bidding_status" DEFAULT 'not_on_bidding'::"public"."shift_bidding_status" NOT NULL,
     "trading_status" "public"."shift_trading" DEFAULT 'NoTrade'::"public"."shift_trading" NOT NULL,
     "lifecycle_status" "public"."shift_lifecycle" DEFAULT 'Draft'::"public"."shift_lifecycle" NOT NULL,
     "roster_shift_id" "uuid",
-    "bidding_opened_at" timestamp with time zone,
     "roster_template_id" "uuid",
     "roster_subgroup_id" "uuid" NOT NULL,
     "total_hours" numeric(5,2) GENERATED ALWAYS AS ("round"((((EXTRACT(epoch FROM ("end_time" - "start_time")) + (
@@ -17717,19 +20543,19 @@ END)::numeric) / 3600.0) - ((COALESCE("unpaid_break_minutes", 0))::numeric / 60.
     "dropped_by_id" "uuid",
     "attendance_note" "text",
     "last_dropped_by" "uuid",
-    "emergency_source" "text",
-    "final_call_sent_at" timestamp with time zone,
     "last_rejected_by" "uuid",
     "synthesis_run_id" "uuid",
     "is_training" boolean DEFAULT false,
     "demand_source" "text",
     "target_employment_type" "text",
     "demand_group_id" "uuid",
+    "workflow_status" "text" DEFAULT 'IDLE'::"text" NOT NULL,
+    "remuneration_level" smallint,
     CONSTRAINT "check_bidding_time_range" CHECK (("bidding_open_at" < "bidding_close_at")),
     CONSTRAINT "chk_bidding_requires_unassigned" CHECK ((NOT (("is_on_bidding" = true) AND ("assigned_employee_id" IS NOT NULL)))),
     CONSTRAINT "shifts_demand_source_check" CHECK (("demand_source" = ANY (ARRAY['baseline'::"text", 'ml_predicted'::"text", 'derived'::"text"]))),
-    CONSTRAINT "shifts_emergency_source_check" CHECK (("emergency_source" = ANY (ARRAY['manual'::"text", 'auto'::"text"]))),
     CONSTRAINT "shifts_target_employment_type_check" CHECK (("target_employment_type" = ANY (ARRAY['FT'::"text", 'PT'::"text", 'Casual'::"text"]))),
+    CONSTRAINT "shifts_workflow_status_check" CHECK (("workflow_status" = ANY (ARRAY['IDLE'::"text", 'OPEN_FOR_BIDS'::"text", 'OPEN_FOR_TRADE'::"text", 'PENDING_APPROVAL'::"text", 'LOCKED'::"text"]))),
     CONSTRAINT "valid_assignment_outcome" CHECK ((("assignment_outcome" IS NULL) OR ("assignment_outcome" = ANY (ARRAY['confirmed'::"public"."shift_assignment_outcome", 'no_show'::"public"."shift_assignment_outcome"]))))
 );
 
@@ -17750,10 +20576,6 @@ COMMENT ON COLUMN "public"."shifts"."start_time" IS '[DEPRECATED] Use start_at (
 
 
 COMMENT ON COLUMN "public"."shifts"."end_time" IS '[DEPRECATED] Use end_at (timestamptz) instead. Retained for RPC backward-compat. Drop in Phase 3.';
-
-
-
-COMMENT ON COLUMN "public"."shifts"."assignment_id" IS '[DEPRECATED] Redundant with assigned_employee_id. Retained for legacy join queries. Drop in Phase 3.';
 
 
 
@@ -17889,6 +20711,29 @@ COMMENT ON TABLE "public"."supervisor_feedback" IS 'Demand engine L5: structured
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."swap_approval_rules" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "organization_id" "uuid" NOT NULL,
+    "department_id" "uuid",
+    "enabled" boolean DEFAULT false NOT NULL,
+    "shadow_mode" boolean DEFAULT true NOT NULL,
+    "auto_approve_warnings" boolean DEFAULT false NOT NULL,
+    "confidence_min" numeric DEFAULT 1.0 NOT NULL,
+    "max_auto_per_employee_per_week" integer DEFAULT 3 NOT NULL,
+    "rules" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "version" integer DEFAULT 1 NOT NULL,
+    "updated_by" "uuid",
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "swap_approval_rules_confidence_min_check" CHECK ((("confidence_min" >= (0)::numeric) AND ("confidence_min" <= (1)::numeric))),
+    CONSTRAINT "swap_approval_rules_max_auto_per_employee_per_week_check" CHECK (("max_auto_per_employee_per_week" >= 0)),
+    CONSTRAINT "swap_approval_rules_rules_is_object" CHECK (("jsonb_typeof"("rules") = 'object'::"text"))
+);
+
+
+ALTER TABLE "public"."swap_approval_rules" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."swap_approvals" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "swap_request_id" "uuid" NOT NULL,
@@ -17901,6 +20746,44 @@ CREATE TABLE IF NOT EXISTS "public"."swap_approvals" (
 
 
 ALTER TABLE "public"."swap_approvals" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."swap_audit_log" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "swap_id" "uuid" NOT NULL,
+    "decision_id" "uuid",
+    "event_type" "text" NOT NULL,
+    "actor" "text" DEFAULT 'system'::"text" NOT NULL,
+    "detail" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."swap_audit_log" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."swap_decisions" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "swap_id" "uuid" NOT NULL,
+    "idempotency_key" "text" NOT NULL,
+    "decision" "public"."swap_auto_decision_kind" NOT NULL,
+    "guard_result" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "eligibility_result" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "solver_result" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "reason" "text",
+    "policy_version" integer NOT NULL,
+    "engine_version" "text" NOT NULL,
+    "requester_shift_version" integer,
+    "offered_shift_version" integer,
+    "shadow" boolean DEFAULT false NOT NULL,
+    "committed" boolean DEFAULT false NOT NULL,
+    "reverted_at" timestamp with time zone,
+    "reverted_by" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."swap_decisions" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."swap_notifications" (
@@ -18044,8 +20927,7 @@ CREATE TABLE IF NOT EXISTS "public"."template_shifts" (
     "name" "text",
     "role_id" "uuid",
     "role_name" "text",
-    "remuneration_level_id" "uuid",
-    "remuneration_level" "text",
+    "remuneration_level_name" "text",
     "start_time" time without time zone,
     "end_time" time without time zone,
     "paid_break_minutes" integer DEFAULT 0,
@@ -18061,7 +20943,8 @@ CREATE TABLE IF NOT EXISTS "public"."template_shifts" (
     "assigned_employee_name" "text",
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"(),
-    "day_of_week" integer DEFAULT 0
+    "day_of_week" integer DEFAULT 0,
+    "remuneration_level" smallint
 );
 
 
@@ -18119,28 +21002,47 @@ COMMENT ON TABLE "public"."timesheets" IS 'Employee timesheet entries';
 
 
 
-CREATE OR REPLACE VIEW "public"."v_broadcast_groups_with_stats" AS
-SELECT
-    NULL::"uuid" AS "id",
-    NULL::"text" AS "name",
-    NULL::"text" AS "description",
-    NULL::"uuid" AS "department_id",
-    NULL::"uuid" AS "sub_department_id",
-    NULL::"uuid" AS "organization_id",
-    NULL::"uuid" AS "created_by",
-    NULL::boolean AS "is_active",
-    NULL::"text" AS "icon",
-    NULL::"text" AS "color",
-    NULL::timestamp with time zone AS "created_at",
-    NULL::timestamp with time zone AS "updated_at",
-    NULL::bigint AS "channel_count",
-    NULL::bigint AS "participant_count",
-    NULL::numeric AS "active_broadcast_count",
-    NULL::numeric AS "total_broadcast_count",
-    NULL::timestamp with time zone AS "last_broadcast_at";
+CREATE OR REPLACE VIEW "public"."user_contracts" WITH ("security_invoker"='true') AS
+ SELECT "id",
+    "user_id",
+    "organization_id",
+    "department_id",
+    "sub_department_id",
+    "role_id",
+    "status",
+    "start_date",
+    "end_date",
+    "custom_hourly_rate",
+    "notes",
+    "created_at",
+    "updated_at",
+    "created_by",
+    "access_level",
+    "employment_status",
+    "contracted_weekly_hours",
+    "is_apprentice",
+    "apprentice_type",
+    "apprentice_year",
+    "has_completed_year_12",
+    "is_trainee",
+    "trainee_category",
+    "trainee_level",
+    "trainee_exit_year",
+    "trainee_years_out",
+    "trainee_aqf_level",
+    "trainee_year",
+    "is_training_on_job",
+    "prefers_sba_loading",
+    "is_sws",
+    "sws_capacity_percentage",
+    "is_sws_trial",
+    "sws_trial_start_date",
+    "annual_guaranteed_hours",
+    "remuneration_level"
+   FROM "hr"."user_contracts";
 
 
-ALTER VIEW "public"."v_broadcast_groups_with_stats" OWNER TO "postgres";
+ALTER VIEW "public"."user_contracts" OWNER TO "postgres";
 
 
 CREATE OR REPLACE VIEW "public"."v_channels_with_stats" WITH ("security_invoker"='true') AS
@@ -18164,27 +21066,6 @@ CREATE OR REPLACE VIEW "public"."v_channels_with_stats" WITH ("security_invoker"
 
 
 ALTER VIEW "public"."v_channels_with_stats" OWNER TO "postgres";
-
-
-CREATE OR REPLACE VIEW "public"."v_group_all_participants" AS
- SELECT "group_participants"."group_id",
-    "group_participants"."employee_id",
-    "group_participants"."role",
-    true AS "is_explicit"
-   FROM "public"."group_participants"
-UNION
- SELECT "bg"."id" AS "group_id",
-    "uc"."user_id" AS "employee_id",
-    'member'::"text" AS "role",
-    false AS "is_explicit"
-   FROM ("public"."broadcast_groups" "bg"
-     JOIN "public"."user_contracts" "uc" ON (("uc"."status" = 'Active'::"text")))
-  WHERE ((NOT (EXISTS ( SELECT 1
-           FROM "public"."group_participants" "gp"
-          WHERE (("gp"."group_id" = "bg"."id") AND ("gp"."employee_id" = "uc"."user_id"))))) AND ((("bg"."sub_department_id" IS NOT NULL) AND ("uc"."sub_department_id" = "bg"."sub_department_id")) OR (("bg"."sub_department_id" IS NULL) AND ("bg"."department_id" IS NOT NULL) AND ("uc"."department_id" = "bg"."department_id")) OR (("bg"."sub_department_id" IS NULL) AND ("bg"."department_id" IS NULL) AND ("bg"."organization_id" IS NOT NULL) AND ("uc"."organization_id" = "bg"."organization_id"))));
-
-
-ALTER VIEW "public"."v_group_all_participants" OWNER TO "postgres";
 
 
 CREATE OR REPLACE VIEW "public"."v_performance_data_quality_alerts" WITH ("security_invoker"='true') AS
@@ -18211,7 +21092,226 @@ UNION ALL
 ALTER VIEW "public"."v_performance_data_quality_alerts" OWNER TO "postgres";
 
 
-CREATE OR REPLACE VIEW "public"."v_shifts_grouped" WITH ("security_invoker"='true') AS
+CREATE OR REPLACE VIEW "public"."v_shift_assignment_episodes" AS
+ WITH "late_cancel_threshold" AS (
+         SELECT '04:00:00'::interval AS "val"
+        ), "ordered_events" AS (
+         SELECT "se"."id" AS "event_id",
+            "se"."shift_id",
+            "se"."employee_id",
+            "se"."event_type",
+            "se"."event_time",
+            "se"."metadata",
+            "row_number"() OVER (PARTITION BY "se"."shift_id" ORDER BY "se"."event_time", "se"."id") AS "rn"
+           FROM "public"."shift_events" "se"
+          WHERE ("se"."employee_id" IS NOT NULL)
+        ), "classified" AS (
+         SELECT "oe"."event_id",
+            "oe"."shift_id",
+            "oe"."employee_id",
+            "oe"."event_type",
+            "oe"."event_time",
+            "oe"."metadata",
+            "oe"."rn",
+            ("oe"."event_type" = ANY (ARRAY['ASSIGNED'::"public"."shift_event_type", 'OFFERED'::"public"."shift_event_type", 'EMERGENCY_ASSIGNED'::"public"."shift_event_type", 'SWAPPED_IN'::"public"."shift_event_type"])) AS "is_opening_type",
+            ("oe"."event_type" = ANY (ARRAY['REJECTED'::"public"."shift_event_type", 'IGNORED'::"public"."shift_event_type", 'CANCELLED'::"public"."shift_event_type", 'LATE_CANCELLED'::"public"."shift_event_type", 'SWAPPED_OUT'::"public"."shift_event_type", 'NO_SHOW'::"public"."shift_event_type", 'UNASSIGNED'::"public"."shift_event_type"])) AS "is_closing_type"
+           FROM "ordered_events" "oe"
+        ), "boundary_events" AS (
+         SELECT "c"."shift_id",
+            "c"."event_id",
+            "c"."event_time",
+            "c"."employee_id",
+            "c"."is_opening_type",
+            "lag"("c"."is_closing_type") OVER "w" AS "prev_boundary_was_closing",
+            "lag"("c"."employee_id") OVER "w" AS "prev_boundary_employee"
+           FROM "classified" "c"
+          WHERE ("c"."is_opening_type" OR "c"."is_closing_type")
+          WINDOW "w" AS (PARTITION BY "c"."shift_id" ORDER BY "c"."event_time", "c"."event_id")
+        ), "boundary_starts" AS (
+         SELECT "be"."shift_id",
+            "be"."event_id",
+                CASE
+                    WHEN ("be"."is_opening_type" AND (("be"."prev_boundary_employee" IS NULL) OR "be"."prev_boundary_was_closing" OR ("be"."employee_id" IS DISTINCT FROM "be"."prev_boundary_employee"))) THEN 1
+                    ELSE 0
+                END AS "starts_new_episode"
+           FROM "boundary_events" "be"
+        ), "episode_assigned" AS (
+         SELECT "c"."event_id",
+            "c"."shift_id",
+            "c"."employee_id",
+            "c"."event_type",
+            "c"."event_time",
+            "c"."metadata",
+            "c"."rn",
+            "c"."is_opening_type",
+            "c"."is_closing_type",
+            "sum"(COALESCE("bs"."starts_new_episode", 0)) OVER (PARTITION BY "c"."shift_id" ORDER BY "c"."event_time", "c"."event_id" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS "episode_seq"
+           FROM ("classified" "c"
+             LEFT JOIN "boundary_starts" "bs" ON ((("bs"."shift_id" = "c"."shift_id") AND ("bs"."event_id" = "c"."event_id"))))
+        ), "episode_agg" AS (
+         SELECT "ea"."shift_id",
+            "ea"."episode_seq",
+            ("array_agg"("ea"."employee_id" ORDER BY "ea"."event_time", "ea"."event_id"))[1] AS "employee_id",
+            "min"("ea"."event_time") AS "opened_at",
+            "min"("ea"."event_time") FILTER (WHERE ("ea"."event_type" = ANY (ARRAY['ACCEPTED'::"public"."shift_event_type", 'EMERGENCY_ASSIGNED'::"public"."shift_event_type", 'SWAPPED_IN'::"public"."shift_event_type"]))) AS "became_active_at",
+            "bool_or"(("ea"."event_type" = 'OFFERED'::"public"."shift_event_type")) AS "had_offer",
+            "bool_or"(("ea"."event_type" = 'ACCEPTED'::"public"."shift_event_type")) AS "had_accept",
+            "bool_or"(("ea"."event_type" = 'ASSIGNED'::"public"."shift_event_type")) AS "had_assign",
+            "bool_or"(("ea"."event_type" = 'EMERGENCY_ASSIGNED'::"public"."shift_event_type")) AS "had_emergency",
+            "bool_or"(("ea"."event_type" = 'SWAPPED_IN'::"public"."shift_event_type")) AS "had_swap_in",
+            "bool_or"(("ea"."event_type" = 'CHECKED_IN'::"public"."shift_event_type")) AS "had_checked_in",
+            "bool_or"(("ea"."event_type" = 'LATE_IN'::"public"."shift_event_type")) AS "had_late_in_event",
+            "bool_or"(("ea"."event_type" = 'EARLY_OUT'::"public"."shift_event_type")) AS "had_early_out_event",
+            ("array_agg"("ea"."event_type" ORDER BY
+                CASE
+                    WHEN ("ea"."event_type" = 'UNASSIGNED'::"public"."shift_event_type") THEN 0
+                    ELSE 1
+                END DESC, "ea"."event_time" DESC, "ea"."event_id" DESC) FILTER (WHERE ("ea"."event_type" = ANY (ARRAY['REJECTED'::"public"."shift_event_type", 'IGNORED'::"public"."shift_event_type", 'CANCELLED'::"public"."shift_event_type", 'LATE_CANCELLED'::"public"."shift_event_type", 'SWAPPED_OUT'::"public"."shift_event_type", 'NO_SHOW'::"public"."shift_event_type", 'UNASSIGNED'::"public"."shift_event_type"]))))[1] AS "closing_event_type",
+            ("array_agg"("ea"."event_time" ORDER BY
+                CASE
+                    WHEN ("ea"."event_type" = 'UNASSIGNED'::"public"."shift_event_type") THEN 0
+                    ELSE 1
+                END DESC, "ea"."event_time" DESC, "ea"."event_id" DESC) FILTER (WHERE ("ea"."event_type" = ANY (ARRAY['REJECTED'::"public"."shift_event_type", 'IGNORED'::"public"."shift_event_type", 'CANCELLED'::"public"."shift_event_type", 'LATE_CANCELLED'::"public"."shift_event_type", 'SWAPPED_OUT'::"public"."shift_event_type", 'NO_SHOW'::"public"."shift_event_type", 'UNASSIGNED'::"public"."shift_event_type"]))))[1] AS "closing_event_time"
+           FROM "episode_assigned" "ea"
+          WHERE ("ea"."episode_seq" > 0)
+          GROUP BY "ea"."shift_id", "ea"."episode_seq"
+        ), "episode_with_shift" AS (
+         SELECT "ep"."shift_id",
+            "ep"."episode_seq",
+            "ep"."employee_id",
+            "ep"."opened_at",
+            "ep"."became_active_at",
+            "ep"."had_offer",
+            "ep"."had_accept",
+            "ep"."had_assign",
+            "ep"."had_emergency",
+            "ep"."had_swap_in",
+            "ep"."had_checked_in",
+            "ep"."had_late_in_event",
+            "ep"."had_early_out_event",
+            "ep"."closing_event_type",
+            "ep"."closing_event_time",
+            "max"("ep"."episode_seq") OVER (PARTITION BY "ep"."shift_id") AS "max_episode_seq",
+            "s"."shift_date",
+            "s"."organization_id",
+            "s"."department_id",
+            "s"."sub_department_id",
+            "s"."lifecycle_status",
+            "s"."deleted_at",
+            "s"."scheduled_start",
+            "s"."scheduled_end",
+            "s"."attendance_status",
+            "lct"."val" AS "late_cancel_threshold"
+           FROM (("episode_agg" "ep"
+             JOIN "public"."shifts" "s" ON (("s"."id" = "ep"."shift_id")))
+             CROSS JOIN "late_cancel_threshold" "lct")
+        ), "episode_final" AS (
+         SELECT "ews"."shift_id",
+            "ews"."episode_seq",
+            "ews"."employee_id",
+            "ews"."opened_at",
+            "ews"."became_active_at",
+            "ews"."closing_event_time" AS "closed_at",
+                CASE
+                    WHEN "ews"."had_emergency" THEN 'EMERGENCY_ASSIGNED'::"text"
+                    WHEN "ews"."had_swap_in" THEN 'SWAPPED_IN'::"text"
+                    WHEN "ews"."had_assign" THEN 'ASSIGNED'::"text"
+                    WHEN "ews"."had_offer" THEN 'OFFERED'::"text"
+                    ELSE 'ASSIGNED'::"text"
+                END AS "opening_event",
+                CASE
+                    WHEN ("ews"."deleted_at" IS NOT NULL) THEN 'shift_deleted'::"text"
+                    WHEN ("ews"."closing_event_type" = 'REJECTED'::"public"."shift_event_type") THEN 'rejected'::"text"
+                    WHEN ("ews"."closing_event_type" = 'IGNORED'::"public"."shift_event_type") THEN 'ignored'::"text"
+                    WHEN ("ews"."closing_event_type" = 'SWAPPED_OUT'::"public"."shift_event_type") THEN 'swapped_out'::"text"
+                    WHEN ("ews"."closing_event_type" = 'NO_SHOW'::"public"."shift_event_type") THEN 'no_show'::"text"
+                    WHEN ("ews"."closing_event_type" = 'UNASSIGNED'::"public"."shift_event_type") THEN 'unassigned'::"text"
+                    WHEN ("ews"."closing_event_type" = ANY (ARRAY['CANCELLED'::"public"."shift_event_type", 'LATE_CANCELLED'::"public"."shift_event_type"])) THEN
+                    CASE
+                        WHEN (("ews"."scheduled_start" IS NOT NULL) AND ("ews"."closing_event_time" IS NOT NULL) AND (("ews"."scheduled_start" - "ews"."closing_event_time") <= "ews"."late_cancel_threshold")) THEN 'cancelled_late'::"text"
+                        ELSE 'cancelled_standard'::"text"
+                    END
+                    WHEN (("ews"."closing_event_type" IS NULL) AND ("ews"."lifecycle_status" = 'Completed'::"public"."shift_lifecycle") AND ("ews"."episode_seq" = "ews"."max_episode_seq")) THEN 'fulfilled'::"text"
+                    ELSE 'open'::"text"
+                END AS "terminal_outcome",
+            "ews"."had_offer",
+            "ews"."had_accept",
+            "ews"."had_assign",
+            "ews"."had_emergency",
+            "ews"."had_swap_in",
+            COALESCE("ews"."had_checked_in", false) AS "attended_from_events",
+            COALESCE("ews"."had_late_in_event", false) AS "late_in_from_events",
+            COALESCE("ews"."had_early_out_event", false) AS "early_out_from_events",
+            "ews"."shift_date",
+            "ews"."organization_id",
+            "ews"."department_id",
+            "ews"."sub_department_id",
+            "ews"."scheduled_start",
+            "ews"."scheduled_end",
+            "ews"."lifecycle_status",
+            "ews"."attendance_status"
+           FROM "episode_with_shift" "ews"
+        ), "ts_agg" AS (
+         SELECT "ts"."shift_id",
+            "ts"."employee_id",
+            "min"("ts"."clock_in") AS "clock_in",
+            "max"("ts"."clock_out") AS "clock_out",
+            "min"(
+                CASE
+                    WHEN (("ts"."clock_in" IS NOT NULL) AND ("ts"."clock_out" IS NOT NULL)) THEN "ts"."clock_in"
+                    ELSE (("ts"."work_date" + "ts"."start_time") AT TIME ZONE COALESCE("s"."timezone", 'Australia/Sydney'::character varying))
+                END) AS "effective_clock_in",
+            "max"(
+                CASE
+                    WHEN (("ts"."clock_in" IS NOT NULL) AND ("ts"."clock_out" IS NOT NULL)) THEN "ts"."clock_out"
+                    ELSE (
+                    CASE
+                        WHEN ("ts"."end_time" < "ts"."start_time") THEN (("ts"."work_date" + '1 day'::interval) + ("ts"."end_time")::interval)
+                        ELSE ("ts"."work_date" + "ts"."end_time")
+                    END AT TIME ZONE COALESCE("s"."timezone", 'Australia/Sydney'::character varying))
+                END) AS "effective_clock_out"
+           FROM ("public"."timesheets" "ts"
+             JOIN "public"."shifts" "s" ON (("s"."id" = "ts"."shift_id")))
+          GROUP BY "ts"."shift_id", "ts"."employee_id"
+        )
+ SELECT "ef"."shift_id",
+    "ef"."episode_seq",
+    "ef"."employee_id",
+    "ef"."opened_at",
+    "ef"."closed_at",
+    "ef"."opening_event",
+    "ef"."terminal_outcome",
+    "ef"."had_offer",
+    "ef"."had_accept",
+    "ef"."had_assign",
+    "ef"."had_emergency",
+    "ef"."had_swap_in",
+    ("ef"."attended_from_events" OR ("t"."clock_in" IS NOT NULL)) AS "attended",
+    ("ef"."late_in_from_events" OR (("t"."effective_clock_in" IS NOT NULL) AND ("ef"."scheduled_start" IS NOT NULL) AND ("t"."effective_clock_in" > ("ef"."scheduled_start" + '00:07:30'::interval)))) AS "late_in",
+    ("ef"."early_out_from_events" OR (("t"."effective_clock_out" IS NOT NULL) AND ("ef"."scheduled_end" IS NOT NULL) AND ("t"."effective_clock_out" < ("ef"."scheduled_end" - '00:07:30'::interval)))) AS "early_out",
+    "ef"."shift_date",
+    "ef"."organization_id",
+    "ef"."department_id",
+    "ef"."sub_department_id",
+    "ef"."became_active_at",
+    "ef"."scheduled_start",
+    (("t"."effective_clock_in" IS NOT NULL) AND ("ef"."scheduled_start" IS NOT NULL) AND ("t"."effective_clock_in" < ("ef"."scheduled_start" - '00:07:30'::interval))) AS "early_in",
+    (("t"."effective_clock_out" IS NOT NULL) AND ("ef"."scheduled_end" IS NOT NULL) AND ("t"."effective_clock_out" > ("ef"."scheduled_end" + '00:07:30'::interval))) AS "late_out",
+    (("t"."effective_clock_in" IS NOT NULL) AND ("ef"."scheduled_start" IS NOT NULL) AND ("t"."effective_clock_in" >= ("ef"."scheduled_start" - '00:07:30'::interval)) AND ("t"."effective_clock_in" <= ("ef"."scheduled_start" + '00:07:30'::interval))) AS "on_time_in",
+    (("t"."effective_clock_out" IS NOT NULL) AND ("ef"."scheduled_end" IS NOT NULL) AND ("t"."effective_clock_out" >= ("ef"."scheduled_end" - '00:07:30'::interval)) AND ("t"."effective_clock_out" <= ("ef"."scheduled_end" + '00:07:30'::interval))) AS "on_time_out",
+    ("ef"."attendance_status" = 'auto_clock_out'::"public"."shift_attendance_status") AS "auto_clock_out"
+   FROM ("episode_final" "ef"
+     LEFT JOIN "ts_agg" "t" ON ((("t"."shift_id" = "ef"."shift_id") AND ("t"."employee_id" = "ef"."employee_id") AND ("t"."effective_clock_in" >= "ef"."opened_at") AND (("ef"."closed_at" IS NULL) OR ("t"."effective_clock_in" <= "ef"."closed_at")))));
+
+
+ALTER VIEW "public"."v_shift_assignment_episodes" OWNER TO "postgres";
+
+
+COMMENT ON VIEW "public"."v_shift_assignment_episodes" IS 'Derives per-(shift, employee, attempt) assignment episodes from the immutable shift_events ledger using gaps-and-islands. Each episode represents one contiguous span where a single employee held or was offered a shift. Metrics aggregate over episodes, not over current shift rows.';
+
+
+
+CREATE OR REPLACE VIEW "public"."v_shifts_grouped" AS
  SELECT "id",
     "roster_id",
     "department_id",
@@ -18227,9 +21327,8 @@ CREATE OR REPLACE VIEW "public"."v_shifts_grouped" WITH ("security_invoker"='tru
     "confirmed_at",
     "created_at",
     "updated_at",
-    "assignment_id",
     "organization_id",
-    "remuneration_level_id",
+    "remuneration_level",
     "actual_hourly_rate",
     "bidding_close_at",
     "bidding_enabled",
@@ -18250,7 +21349,6 @@ CREATE OR REPLACE VIEW "public"."v_shifts_grouped" WITH ("security_invoker"='tru
     "group_type",
     "sub_group_name",
     "display_order",
-    "role_level",
     "remuneration_rate",
     "currency",
     "cost_center_id",
@@ -18269,7 +21367,6 @@ CREATE OR REPLACE VIEW "public"."v_shifts_grouped" WITH ("security_invoker"='tru
     "cancelled_by_user_id",
     "cancellation_reason",
     "is_on_bidding",
-    "bidding_priority_text",
     "trade_requested_at",
     "required_skills",
     "required_licenses",
@@ -18289,21 +21386,18 @@ CREATE OR REPLACE VIEW "public"."v_shifts_grouped" WITH ("security_invoker"='tru
     "actual_end",
     "actual_net_minutes",
     "payroll_exported",
-    "cancelled_by",
     "required_certifications",
     "event_tags",
     "user_contract_id",
     "assignment_status",
     "fulfillment_status",
     "offer_expires_at",
-    "is_urgent",
     "attendance_status",
     "assignment_outcome",
     "bidding_status",
     "trading_status",
     "lifecycle_status",
     "roster_shift_id",
-    "bidding_opened_at",
     "roster_template_id",
     "roster_subgroup_id",
     "total_hours",
@@ -18314,58 +21408,6 @@ CREATE OR REPLACE VIEW "public"."v_shifts_grouped" WITH ("security_invoker"='tru
 
 
 ALTER VIEW "public"."v_shifts_grouped" OWNER TO "postgres";
-
-
-CREATE OR REPLACE VIEW "public"."v_template_full" WITH ("security_invoker"='true') AS
- SELECT "id",
-    "name",
-    "description",
-    "status",
-    "organization_id",
-    "published_month",
-    "published_at",
-    "published_by",
-    "start_date",
-    "end_date",
-    "created_by",
-    "last_edited_by",
-    "version",
-    "created_at",
-    "updated_at",
-    "is_base_template",
-    "department_id",
-    "sub_department_id",
-    ( SELECT "count"(*) AS "count"
-           FROM "public"."roster_template_batches" "rtb"
-          WHERE ("rtb"."template_id" = "t"."id")) AS "applied_count",
-    COALESCE(( SELECT "json_agg"("json_build_object"('id', "tg"."id", 'name', "tg"."name", 'description', "tg"."description", 'color', "tg"."color", 'icon', "tg"."icon", 'sortOrder', "tg"."sort_order", 'subGroups', ( SELECT COALESCE("json_agg"("json_build_object"('id', "tsg"."id", 'name', "tsg"."name", 'description', "tsg"."description", 'sortOrder', "tsg"."sort_order", 'shifts', ( SELECT COALESCE("json_agg"("json_build_object"('id', "s"."id", 'name', COALESCE("s"."name", "s"."role_name"), 'roleId', "s"."role_id", 'roleName', "s"."role_name", 'remunerationLevelId', "s"."remuneration_level_id", 'remunerationLevel', "s"."remuneration_level", 'startTime', "to_char"(("s"."start_time")::interval, 'HH24:MI'::"text"), 'endTime', "to_char"(("s"."end_time")::interval, 'HH24:MI'::"text"), 'paidBreakDuration', COALESCE("s"."paid_break_minutes", 0), 'unpaidBreakDuration', COALESCE("s"."unpaid_break_minutes", 0), 'skills', COALESCE("s"."required_skills", ARRAY[]::"text"[]), 'licenses', COALESCE("s"."required_licenses", ARRAY[]::"text"[]), 'siteTags', COALESCE("s"."site_tags", ARRAY[]::"text"[]), 'eventTags', COALESCE("s"."event_tags", ARRAY[]::"text"[]), 'notes', "s"."notes", 'assignedEmployeeId', "s"."assigned_employee_id", 'assignedEmployeeName', "s"."assigned_employee_name", 'netLength', "s"."net_length_hours", 'sortOrder', "s"."sort_order", 'dayOfWeek', "s"."day_of_week") ORDER BY "s"."sort_order", "s"."start_time"), '[]'::json) AS "coalesce"
-                           FROM "public"."template_shifts" "s"
-                          WHERE ("s"."subgroup_id" = "tsg"."id"))) ORDER BY "tsg"."sort_order"), '[]'::json) AS "coalesce"
-                   FROM "public"."template_subgroups" "tsg"
-                  WHERE ("tsg"."group_id" = "tg"."id"))) ORDER BY "tg"."sort_order") AS "json_agg"
-           FROM "public"."template_groups" "tg"
-          WHERE ("tg"."template_id" = "t"."id")), '[]'::json) AS "groups"
-   FROM "public"."roster_templates" "t";
-
-
-ALTER VIEW "public"."v_template_full" OWNER TO "postgres";
-
-
-CREATE OR REPLACE VIEW "public"."v_unread_broadcasts_by_group" AS
- SELECT "gap"."group_id",
-    "gap"."employee_id",
-    "count"(DISTINCT "b"."id") FILTER (WHERE ("brs"."read_at" IS NULL)) AS "unread_count",
-    "bool_or"((("b"."priority" = 'urgent'::"text") AND ("brs"."read_at" IS NULL))) AS "has_urgent_unread",
-    "bool_or"((("b"."requires_acknowledgement" = true) AND ("ba"."acknowledged_at" IS NULL))) AS "has_pending_ack"
-   FROM (((("public"."v_group_all_participants" "gap"
-     JOIN "public"."broadcast_channels" "c" ON (("c"."group_id" = "gap"."group_id")))
-     JOIN "public"."broadcasts" "b" ON ((("b"."channel_id" = "c"."id") AND ("b"."is_archived" = false))))
-     LEFT JOIN "public"."broadcast_read_status" "brs" ON ((("brs"."broadcast_id" = "b"."id") AND ("brs"."employee_id" = "gap"."employee_id"))))
-     LEFT JOIN "public"."broadcast_acknowledgements" "ba" ON ((("ba"."broadcast_id" = "b"."id") AND ("ba"."employee_id" = "gap"."employee_id"))))
-  GROUP BY "gap"."group_id", "gap"."employee_id";
-
-
-ALTER VIEW "public"."v_unread_broadcasts_by_group" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."venueops_booked_spaces" (
@@ -18634,6 +21676,86 @@ CREATE TABLE IF NOT EXISTS "public"."work_rules" (
 ALTER TABLE "public"."work_rules" OWNER TO "postgres";
 
 
+ALTER TABLE ONLY "hr"."departments"
+    ADD CONSTRAINT "departments_organization_id_name_key" UNIQUE ("organization_id", "name");
+
+
+
+ALTER TABLE ONLY "hr"."departments"
+    ADD CONSTRAINT "departments_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "hr"."employee_assignments"
+    ADD CONSTRAINT "employee_assignments_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "hr"."employees"
+    ADD CONSTRAINT "employees_email_key" UNIQUE ("email");
+
+
+
+ALTER TABLE ONLY "hr"."employees"
+    ADD CONSTRAINT "employees_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "hr"."organizations"
+    ADD CONSTRAINT "organizations_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "hr"."organizations"
+    ADD CONSTRAINT "organizations_slug_key" UNIQUE ("slug");
+
+
+
+ALTER TABLE ONLY "hr"."remuneration_levels"
+    ADD CONSTRAINT "remuneration_levels_level_name_key" UNIQUE ("level_name");
+
+
+
+ALTER TABLE ONLY "hr"."remuneration_levels"
+    ADD CONSTRAINT "remuneration_levels_pkey" PRIMARY KEY ("level_number");
+
+
+
+ALTER TABLE ONLY "hr"."roles"
+    ADD CONSTRAINT "roles_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "hr"."roles"
+    ADD CONSTRAINT "roles_subdepartment_id_name_key" UNIQUE ("subdepartment_id", "name");
+
+
+
+ALTER TABLE ONLY "hr"."roles"
+    ADD CONSTRAINT "roles_subdepartment_id_remuneration_level_key" UNIQUE ("subdepartment_id", "remuneration_level");
+
+
+
+ALTER TABLE ONLY "hr"."subdepartments"
+    ADD CONSTRAINT "subdepartments_department_id_name_key" UNIQUE ("department_id", "name");
+
+
+
+ALTER TABLE ONLY "hr"."subdepartments"
+    ADD CONSTRAINT "subdepartments_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "hr"."user_contracts"
+    ADD CONSTRAINT "user_contracts_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "hr"."user_contracts"
+    ADD CONSTRAINT "user_contracts_user_id_organization_id_department_id_sub_de_key" UNIQUE ("user_id", "organization_id", "department_id", "sub_department_id", "role_id");
+
+
+
 ALTER TABLE ONLY "public"."actual_labor_attendance"
     ADD CONSTRAINT "actual_labor_attendance_pkey" PRIMARY KEY ("id");
 
@@ -18646,6 +21768,31 @@ ALTER TABLE ONLY "public"."allowed_locations"
 
 ALTER TABLE ONLY "public"."app_access_certificates"
     ADD CONSTRAINT "app_access_certificates_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."assignment_decisions"
+    ADD CONSTRAINT "assignment_decisions_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."assignment_events"
+    ADD CONSTRAINT "assignment_events_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."assignment_runs"
+    ADD CONSTRAINT "assignment_runs_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."assignment_snapshots"
+    ADD CONSTRAINT "assignment_snapshots_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."assignment_snapshots"
+    ADD CONSTRAINT "assignment_snapshots_shift_id_episode_seq_key" UNIQUE ("shift_id", "episode_seq");
 
 
 
@@ -18789,8 +21936,23 @@ ALTER TABLE ONLY "public"."demand_templates"
 
 
 
+ALTER TABLE "public"."demand_tensor"
+    ADD CONSTRAINT "demand_tensor_coverage_conf_chk" CHECK ((("coverage_confidence" IS NULL) OR (("coverage_confidence" >= (0)::numeric) AND ("coverage_confidence" <= (1)::numeric)))) NOT VALID;
+
+
+
+ALTER TABLE "public"."demand_tensor"
+    ADD CONSTRAINT "demand_tensor_demand_buffer_chk" CHECK ((("demand_buffer" IS NULL) OR ("demand_buffer" >= 0))) NOT VALID;
+
+
+
 ALTER TABLE ONLY "public"."demand_tensor"
     ADD CONSTRAINT "demand_tensor_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE "public"."demand_tensor"
+    ADD CONSTRAINT "demand_tensor_service_level_chk" CHECK ((("service_level" IS NULL) OR (("service_level" >= (0)::numeric) AND ("service_level" <= (1)::numeric)))) NOT VALID;
 
 
 
@@ -18899,6 +22061,11 @@ ALTER TABLE ONLY "public"."events"
 
 
 
+ALTER TABLE ONLY "public"."fairness_ledger"
+    ADD CONSTRAINT "fairness_ledger_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."function_map"
     ADD CONSTRAINT "function_map_pkey" PRIMARY KEY ("function_code", "sub_department_id");
 
@@ -18989,8 +22156,23 @@ ALTER TABLE ONLY "public"."pay_periods"
 
 
 
+ALTER TABLE ONLY "public"."bulk_assign_idempotency"
+    ADD CONSTRAINT "pk_bulk_assign_idempotency" PRIMARY KEY ("key");
+
+
+
+ALTER TABLE ONLY "public"."planning_offers"
+    ADD CONSTRAINT "planning_offers_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."planning_periods"
     ADD CONSTRAINT "planning_periods_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."planning_requests"
+    ADD CONSTRAINT "planning_requests_pkey" PRIMARY KEY ("id");
 
 
 
@@ -19034,21 +22216,6 @@ ALTER TABLE ONLY "public"."rbac_permissions"
 
 
 
-ALTER TABLE ONLY "public"."remuneration_levels"
-    ADD CONSTRAINT "remuneration_levels_level_name_key" UNIQUE ("level_name");
-
-
-
-ALTER TABLE ONLY "public"."remuneration_levels"
-    ADD CONSTRAINT "remuneration_levels_level_number_key" UNIQUE ("level_number");
-
-
-
-ALTER TABLE ONLY "public"."remuneration_levels"
-    ADD CONSTRAINT "remuneration_levels_pkey" PRIMARY KEY ("id");
-
-
-
 ALTER TABLE ONLY "public"."rest_period_violations"
     ADD CONSTRAINT "rest_period_violations_pkey" PRIMARY KEY ("id");
 
@@ -19071,11 +22238,6 @@ ALTER TABLE ONLY "public"."role_levels"
 
 ALTER TABLE ONLY "public"."role_ml_class_map"
     ADD CONSTRAINT "role_ml_class_map_pkey" PRIMARY KEY ("role_id");
-
-
-
-ALTER TABLE ONLY "public"."roles"
-    ADD CONSTRAINT "roles_pkey" PRIMARY KEY ("id");
 
 
 
@@ -19274,8 +22436,28 @@ ALTER TABLE ONLY "public"."supervisor_feedback"
 
 
 
+ALTER TABLE ONLY "public"."swap_approval_rules"
+    ADD CONSTRAINT "swap_approval_rules_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."swap_approvals"
     ADD CONSTRAINT "swap_approvals_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."swap_audit_log"
+    ADD CONSTRAINT "swap_audit_log_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."swap_decisions"
+    ADD CONSTRAINT "swap_decisions_idempotency_key_key" UNIQUE ("idempotency_key");
+
+
+
+ALTER TABLE ONLY "public"."swap_decisions"
+    ADD CONSTRAINT "swap_decisions_pkey" PRIMARY KEY ("id");
 
 
 
@@ -19291,6 +22473,16 @@ ALTER TABLE ONLY "public"."swap_offers"
 
 ALTER TABLE ONLY "public"."swap_requests"
     ADD CONSTRAINT "swap_requests_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."swap_review_queue"
+    ADD CONSTRAINT "swap_review_queue_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."swap_review_queue"
+    ADD CONSTRAINT "swap_review_queue_swap_key_uniq" UNIQUE ("swap_id", "idempotency_key");
 
 
 
@@ -19339,13 +22531,8 @@ ALTER TABLE ONLY "public"."shift_events"
 
 
 
-ALTER TABLE ONLY "public"."user_contracts"
-    ADD CONSTRAINT "user_contracts_pkey" PRIMARY KEY ("id");
-
-
-
-ALTER TABLE ONLY "public"."user_contracts"
-    ADD CONSTRAINT "user_contracts_user_id_organization_id_department_id_sub_de_key" UNIQUE ("user_id", "organization_id", "department_id", "sub_department_id", "role_id");
+ALTER TABLE ONLY "public"."assignment_decisions"
+    ADD CONSTRAINT "uq_assignment_decision_run_shift" UNIQUE ("run_id", "shift_id");
 
 
 
@@ -19404,11 +22591,79 @@ ALTER TABLE ONLY "public"."work_rules"
 
 
 
+CREATE INDEX "idx_hr_assignments_employee" ON "hr"."employee_assignments" USING "btree" ("employee_id");
+
+
+
+CREATE INDEX "idx_hr_assignments_role" ON "hr"."employee_assignments" USING "btree" ("role_id");
+
+
+
+CREATE INDEX "idx_hr_employees_org" ON "hr"."employees" USING "btree" ("organization_id");
+
+
+
+CREATE INDEX "idx_hr_roles_level" ON "hr"."roles" USING "btree" ("remuneration_level");
+
+
+
+CREATE UNIQUE INDEX "uq_hr_current_assignment" ON "hr"."employee_assignments" USING "btree" ("employee_id") WHERE ("effective_to" IS NULL);
+
+
+
+CREATE INDEX "user_contracts_access_level_idx" ON "hr"."user_contracts" USING "btree" ("access_level");
+
+
+
+CREATE INDEX "user_contracts_created_by_idx" ON "hr"."user_contracts" USING "btree" ("created_by");
+
+
+
+CREATE INDEX "user_contracts_department_id_idx" ON "hr"."user_contracts" USING "btree" ("department_id");
+
+
+
+CREATE INDEX "user_contracts_organization_id_department_id_sub_department_idx" ON "hr"."user_contracts" USING "btree" ("organization_id", "department_id", "sub_department_id");
+
+
+
+CREATE INDEX "user_contracts_organization_id_idx" ON "hr"."user_contracts" USING "btree" ("organization_id");
+
+
+
+CREATE INDEX "user_contracts_role_id_idx" ON "hr"."user_contracts" USING "btree" ("role_id");
+
+
+
+CREATE INDEX "user_contracts_status_idx" ON "hr"."user_contracts" USING "btree" ("status") WHERE ("status" = 'Active'::"text");
+
+
+
+CREATE INDEX "user_contracts_sub_department_id_idx" ON "hr"."user_contracts" USING "btree" ("sub_department_id");
+
+
+
+CREATE INDEX "user_contracts_user_id_idx" ON "hr"."user_contracts" USING "btree" ("user_id");
+
+
+
+CREATE UNIQUE INDEX "user_contracts_user_id_organization_id_coalesce_coalesce1_r_idx" ON "hr"."user_contracts" USING "btree" ("user_id", "organization_id", COALESCE("department_id", '00000000-0000-0000-0000-000000000000'::"uuid"), COALESCE("sub_department_id", '00000000-0000-0000-0000-000000000000'::"uuid"), "role_id");
+
+
+
 CREATE INDEX "actual_labor_attendance_event_id_idx" ON "public"."actual_labor_attendance" USING "btree" ("event_id");
 
 
 
 CREATE INDEX "allowed_locations_org_idx" ON "public"."allowed_locations" USING "btree" ("org_id");
+
+
+
+CREATE INDEX "asnap_emp_idx" ON "public"."assignment_snapshots" USING "btree" ("employee_id", "became_active_at");
+
+
+
+CREATE INDEX "asnap_scope_idx" ON "public"."assignment_snapshots" USING "btree" ("organization_id", "department_id", "sub_department_id", "shift_date");
 
 
 
@@ -19465,6 +22720,30 @@ CREATE INDEX "idx_access_certs_user_id" ON "public"."app_access_certificates" US
 
 
 CREATE INDEX "idx_app_access_certificates_created_by" ON "public"."app_access_certificates" USING "btree" ("created_by");
+
+
+
+CREATE INDEX "idx_assignment_decisions_idem" ON "public"."assignment_decisions" USING "btree" ("idempotency_key");
+
+
+
+CREATE INDEX "idx_assignment_decisions_run" ON "public"."assignment_decisions" USING "btree" ("run_id");
+
+
+
+CREATE INDEX "idx_assignment_decisions_shift" ON "public"."assignment_decisions" USING "btree" ("shift_id", "created_at" DESC);
+
+
+
+CREATE INDEX "idx_assignment_events_run" ON "public"."assignment_events" USING "btree" ("run_id", "created_at");
+
+
+
+CREATE INDEX "idx_assignment_runs_org_created" ON "public"."assignment_runs" USING "btree" ("organization_id", "created_at" DESC);
+
+
+
+CREATE INDEX "idx_assignment_runs_status" ON "public"."assignment_runs" USING "btree" ("status") WHERE ("status" = ANY (ARRAY['PENDING'::"text", 'RUNNING'::"text"]));
 
 
 
@@ -19612,6 +22891,10 @@ CREATE INDEX "idx_broadcasts_created_by" ON "public"."broadcasts" USING "btree" 
 
 
 
+CREATE INDEX "idx_bulk_assign_idempotency_created_at" ON "public"."bulk_assign_idempotency" USING "btree" ("created_at");
+
+
+
 CREATE INDEX "idx_bulk_operations_actor_id" ON "public"."bulk_operations" USING "btree" ("actor_id");
 
 
@@ -19685,6 +22968,18 @@ CREATE INDEX "idx_event_tags_organization" ON "public"."event_tags" USING "btree
 
 
 CREATE INDEX "idx_events_emp_time_type" ON "public"."shift_events" USING "btree" ("employee_id", "event_time", "event_type");
+
+
+
+CREATE INDEX "idx_fairness_ledger_employee" ON "public"."fairness_ledger" USING "btree" ("employee_id", "metric");
+
+
+
+CREATE INDEX "idx_fairness_ledger_lookup" ON "public"."fairness_ledger" USING "btree" ("organization_id", "metric", "window_end");
+
+
+
+CREATE UNIQUE INDEX "idx_fairness_ledger_unique" ON "public"."fairness_ledger" USING "btree" ("organization_id", "employee_id", "metric", "window_end");
 
 
 
@@ -19768,11 +23063,27 @@ CREATE INDEX "idx_perf_metrics_quarter" ON "public"."employee_performance_metric
 
 
 
+CREATE INDEX "idx_planning_offers_request_id" ON "public"."planning_offers" USING "btree" ("request_id");
+
+
+
+CREATE UNIQUE INDEX "idx_planning_offers_selected" ON "public"."planning_offers" USING "btree" ("request_id") WHERE ("status" = 'SELECTED'::"text");
+
+
+
 CREATE INDEX "idx_planning_periods_created_by" ON "public"."planning_periods" USING "btree" ("created_by");
 
 
 
 CREATE INDEX "idx_planning_periods_template_id" ON "public"."planning_periods" USING "btree" ("template_id");
+
+
+
+CREATE INDEX "idx_planning_requests_initiated_by" ON "public"."planning_requests" USING "btree" ("initiated_by");
+
+
+
+CREATE INDEX "idx_planning_requests_status" ON "public"."planning_requests" USING "btree" ("status") WHERE ("status" = ANY (ARRAY['OPEN'::"text", 'MANAGER_PENDING'::"text"]));
 
 
 
@@ -19817,26 +23128,6 @@ CREATE INDEX "idx_rest_violations_first_shift" ON "public"."rest_period_violatio
 
 
 CREATE INDEX "idx_rest_violations_second_shift" ON "public"."rest_period_violations" USING "btree" ("second_shift_id");
-
-
-
-CREATE INDEX "idx_role_levels_remuneration_level_id" ON "public"."role_levels" USING "btree" ("remuneration_level_id");
-
-
-
-CREATE INDEX "idx_roles_department_id" ON "public"."roles" USING "btree" ("department_id");
-
-
-
-CREATE INDEX "idx_roles_level" ON "public"."roles" USING "btree" ("level");
-
-
-
-CREATE INDEX "idx_roles_remuneration_level_id" ON "public"."roles" USING "btree" ("remuneration_level_id");
-
-
-
-CREATE INDEX "idx_roles_sub_dept" ON "public"."roles" USING "btree" ("sub_department_id");
 
 
 
@@ -19984,6 +23275,26 @@ CREATE INDEX "idx_shift_event_tags_shift_id" ON "public"."shift_event_tags" USIN
 
 
 
+CREATE INDEX "idx_shift_events_actor_id_event_time_desc" ON "public"."shift_events" USING "btree" ("actor_id", "event_time" DESC);
+
+
+
+CREATE INDEX "idx_shift_events_actor_time" ON "public"."shift_events" USING "btree" ("actor_id", "event_time");
+
+
+
+CREATE INDEX "idx_shift_events_domain" ON "public"."shift_events" USING "btree" ("domain");
+
+
+
+CREATE INDEX "idx_shift_events_domain_type_time" ON "public"."shift_events" USING "btree" ("domain", "event_type", "event_time");
+
+
+
+CREATE INDEX "idx_shift_events_employee_id_event_time_desc" ON "public"."shift_events" USING "btree" ("employee_id", "event_time" DESC);
+
+
+
 CREATE INDEX "idx_shift_events_employee_id_time" ON "public"."shift_events" USING "btree" ("employee_id", "event_time" DESC);
 
 
@@ -19992,7 +23303,27 @@ CREATE INDEX "idx_shift_events_event_type" ON "public"."shift_events" USING "btr
 
 
 
+CREATE INDEX "idx_shift_events_metadata_idem" ON "public"."shift_events" USING "btree" ((("metadata" ->> 'idem'::"text"))) WHERE ("metadata" ? 'idem'::"text");
+
+
+
+CREATE INDEX "idx_shift_events_shift_employee_time" ON "public"."shift_events" USING "btree" ("shift_id", "employee_id", "event_time", "id");
+
+
+
+CREATE INDEX "idx_shift_events_shift_episode" ON "public"."shift_events" USING "btree" ("shift_id", "episode_seq");
+
+
+
 CREATE INDEX "idx_shift_events_shift_id" ON "public"."shift_events" USING "btree" ("shift_id");
+
+
+
+CREATE INDEX "idx_shift_events_shift_id_event_time" ON "public"."shift_events" USING "btree" ("shift_id", "event_time");
+
+
+
+CREATE INDEX "idx_shift_events_shift_id_event_time_desc" ON "public"."shift_events" USING "btree" ("shift_id", "event_time" DESC);
 
 
 
@@ -20072,15 +23403,7 @@ CREATE INDEX "idx_shifts_assigned_employee" ON "public"."shifts" USING "btree" (
 
 
 
-CREATE INDEX "idx_shifts_assignment" ON "public"."shifts" USING "btree" ("assignment_id");
-
-
-
 CREATE INDEX "idx_shifts_bidding" ON "public"."shifts" USING "btree" ("bidding_enabled", "bidding_close_at") WHERE ("bidding_enabled" = true);
-
-
-
-CREATE INDEX "idx_shifts_cancelled_by" ON "public"."shifts" USING "btree" ("cancelled_by");
 
 
 
@@ -20144,10 +23467,6 @@ CREATE INDEX "idx_shifts_organization_id" ON "public"."shifts" USING "btree" ("o
 
 
 
-CREATE INDEX "idx_shifts_remuneration_level_id" ON "public"."shifts" USING "btree" ("remuneration_level_id");
-
-
-
 CREATE INDEX "idx_shifts_required_certifications" ON "public"."shifts" USING "gin" ("required_certifications");
 
 
@@ -20197,6 +23516,10 @@ CREATE INDEX "idx_shifts_start_at" ON "public"."shifts" USING "btree" ("start_at
 
 
 CREATE INDEX "idx_shifts_sub_department_id" ON "public"."shifts" USING "btree" ("sub_department_id");
+
+
+
+CREATE INDEX "idx_shifts_summary_covering" ON "public"."shifts" USING "btree" ("organization_id", "shift_date", "group_type", "sub_group_name") INCLUDE ("assigned_employee_id", "lifecycle_status", "is_cancelled", "net_length_minutes", "deleted_at") WHERE ("deleted_at" IS NULL);
 
 
 
@@ -20348,10 +23671,6 @@ CREATE INDEX "idx_template_shifts_assigned_employee_id" ON "public"."template_sh
 
 
 
-CREATE INDEX "idx_template_shifts_remuneration_level_id" ON "public"."template_shifts" USING "btree" ("remuneration_level_id");
-
-
-
 CREATE INDEX "idx_template_shifts_role_id" ON "public"."template_shifts" USING "btree" ("role_id");
 
 
@@ -20393,50 +23712,6 @@ CREATE INDEX "idx_timesheets_status" ON "public"."timesheets" USING "btree" ("st
 
 
 CREATE UNIQUE INDEX "idx_unique_type_y_per_user" ON "public"."app_access_certificates" USING "btree" ("user_id") WHERE ((("certificate_type")::"text" = 'Y'::"text") AND ("is_active" = true));
-
-
-
-CREATE INDEX "idx_user_contracts_access_level" ON "public"."user_contracts" USING "btree" ("access_level");
-
-
-
-CREATE INDEX "idx_user_contracts_active" ON "public"."user_contracts" USING "btree" ("status") WHERE ("status" = 'Active'::"text");
-
-
-
-CREATE INDEX "idx_user_contracts_created_by" ON "public"."user_contracts" USING "btree" ("created_by");
-
-
-
-CREATE INDEX "idx_user_contracts_dept" ON "public"."user_contracts" USING "btree" ("department_id");
-
-
-
-CREATE INDEX "idx_user_contracts_org" ON "public"."user_contracts" USING "btree" ("organization_id");
-
-
-
-CREATE INDEX "idx_user_contracts_org_dept_subdept" ON "public"."user_contracts" USING "btree" ("organization_id", "department_id", "sub_department_id");
-
-
-
-CREATE INDEX "idx_user_contracts_rem_level_id" ON "public"."user_contracts" USING "btree" ("rem_level_id");
-
-
-
-CREATE INDEX "idx_user_contracts_role" ON "public"."user_contracts" USING "btree" ("role_id");
-
-
-
-CREATE INDEX "idx_user_contracts_sub_dept" ON "public"."user_contracts" USING "btree" ("sub_department_id");
-
-
-
-CREATE UNIQUE INDEX "idx_user_contracts_unique_assignment" ON "public"."user_contracts" USING "btree" ("user_id", "organization_id", COALESCE("department_id", '00000000-0000-0000-0000-000000000000'::"uuid"), COALESCE("sub_department_id", '00000000-0000-0000-0000-000000000000'::"uuid"), "role_id");
-
-
-
-CREATE INDEX "idx_user_contracts_user_id" ON "public"."user_contracts" USING "btree" ("user_id");
 
 
 
@@ -20488,6 +23763,10 @@ CREATE UNIQUE INDEX "notifications_dedup_key_idx" ON "public"."notifications" US
 
 
 
+CREATE UNIQUE INDEX "one_current_owner_per_shift" ON "public"."assignment_snapshots" USING "btree" ("shift_id") WHERE "is_current";
+
+
+
 CREATE INDEX "planning_periods_dept_idx" ON "public"."planning_periods" USING "btree" ("department_id", "start_date", "end_date");
 
 
@@ -20532,6 +23811,38 @@ CREATE INDEX "supervisor_feedback_supervisor_idx" ON "public"."supervisor_feedba
 
 
 
+CREATE UNIQUE INDEX "swap_approval_rules_org_default_uniq" ON "public"."swap_approval_rules" USING "btree" ("organization_id") WHERE ("department_id" IS NULL);
+
+
+
+CREATE UNIQUE INDEX "swap_approval_rules_org_dept_uniq" ON "public"."swap_approval_rules" USING "btree" ("organization_id", "department_id") WHERE ("department_id" IS NOT NULL);
+
+
+
+CREATE INDEX "swap_audit_log_decision_idx" ON "public"."swap_audit_log" USING "btree" ("decision_id");
+
+
+
+CREATE INDEX "swap_audit_log_swap_id_idx" ON "public"."swap_audit_log" USING "btree" ("swap_id", "created_at");
+
+
+
+CREATE INDEX "swap_decisions_created_at_idx" ON "public"."swap_decisions" USING "btree" ("created_at" DESC);
+
+
+
+CREATE INDEX "swap_decisions_decision_idx" ON "public"."swap_decisions" USING "btree" ("decision");
+
+
+
+CREATE INDEX "swap_decisions_swap_id_idx" ON "public"."swap_decisions" USING "btree" ("swap_id");
+
+
+
+CREATE INDEX "swap_review_queue_claimable_idx" ON "public"."swap_review_queue" USING "btree" ("status", "next_attempt_at") WHERE ("status" = 'PENDING'::"public"."swap_queue_status");
+
+
+
 CREATE INDEX "synthesis_runs_org_date_idx" ON "public"."synthesis_runs" USING "btree" ("organization_id", "shift_date" DESC);
 
 
@@ -20549,6 +23860,14 @@ CREATE UNIQUE INDEX "unique_active_swap_request" ON "public"."swap_requests" USI
 
 
 CREATE UNIQUE INDEX "unique_selected_offer_per_request" ON "public"."swap_offers" USING "btree" ("swap_request_id") WHERE ("status" = 'SELECTED'::"public"."swap_offer_status");
+
+
+
+CREATE UNIQUE INDEX "uq_active_offer_per_offered_shift" ON "public"."planning_offers" USING "btree" ("offered_shift_id") WHERE (("offered_shift_id" IS NOT NULL) AND ("status" = ANY (ARRAY['SUBMITTED'::"text", 'SELECTED'::"text"])));
+
+
+
+CREATE UNIQUE INDEX "uq_active_request_per_shift" ON "public"."planning_requests" USING "btree" ("shift_id") WHERE ("status" <> ALL (ARRAY['APPROVED'::"text", 'REJECTED'::"text", 'BLOCKED'::"text", 'CANCELLED'::"text", 'EXPIRED'::"text"]));
 
 
 
@@ -20644,31 +23963,7 @@ CREATE INDEX "venueops_tasks_is_completed_idx" ON "public"."venueops_tasks" USIN
 
 
 
-CREATE OR REPLACE VIEW "public"."v_broadcast_groups_with_stats" AS
- SELECT "g"."id",
-    "g"."name",
-    "g"."description",
-    "g"."department_id",
-    "g"."sub_department_id",
-    "g"."organization_id",
-    "g"."created_by",
-    "g"."is_active",
-    "g"."icon",
-    "g"."color",
-    "g"."created_at",
-    "g"."updated_at",
-    ( SELECT "count"(*) AS "count"
-           FROM "public"."broadcast_channels" "c"
-          WHERE (("c"."group_id" = "g"."id") AND ("c"."is_active" = true))) AS "channel_count",
-    ( SELECT "count"(*) AS "count"
-           FROM "public"."v_group_all_participants" "gap"
-          WHERE ("gap"."group_id" = "g"."id")) AS "participant_count",
-    COALESCE("sum"("c_stats"."active_broadcast_count"), (0)::numeric) AS "active_broadcast_count",
-    COALESCE("sum"("c_stats"."total_broadcast_count"), (0)::numeric) AS "total_broadcast_count",
-    "max"("c_stats"."last_broadcast_at") AS "last_broadcast_at"
-   FROM ("public"."broadcast_groups" "g"
-     LEFT JOIN "public"."v_channels_with_stats" "c_stats" ON (("c_stats"."group_id" = "g"."id")))
-  GROUP BY "g"."id";
+CREATE OR REPLACE TRIGGER "trg_hr_seed_subdept_roles" AFTER INSERT ON "hr"."subdepartments" FOR EACH ROW EXECUTE FUNCTION "hr"."seed_subdepartment_roles"();
 
 
 
@@ -20704,10 +23999,6 @@ CREATE OR REPLACE TRIGGER "roster_assignments_lock_check" BEFORE DELETE OR UPDAT
 
 
 
-CREATE OR REPLACE TRIGGER "set_timestamp_user_contracts" BEFORE UPDATE ON "public"."user_contracts" FOR EACH ROW EXECUTE FUNCTION "public"."trigger_set_timestamp"();
-
-
-
 CREATE OR REPLACE TRIGGER "shift_compute_trigger" BEFORE INSERT OR UPDATE ON "public"."shifts" FOR EACH ROW EXECUTE FUNCTION "public"."compute_shift_fields"();
 
 
@@ -20740,6 +24031,10 @@ CREATE OR REPLACE TRIGGER "trg_bidding_expired_notification" AFTER UPDATE ON "pu
 
 
 
+CREATE OR REPLACE TRIGGER "trg_bump_swap_policy_version" BEFORE UPDATE ON "public"."swap_approval_rules" FOR EACH ROW EXECUTE FUNCTION "public"."fn_bump_swap_policy_version"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_cancel_swaps_on_offer" AFTER UPDATE ON "public"."shifts" FOR EACH ROW EXECUTE FUNCTION "public"."trg_cancel_swaps_on_offer_fn"();
 
 
@@ -20756,6 +24051,10 @@ CREATE OR REPLACE TRIGGER "trg_capture_swap_event" AFTER UPDATE ON "public"."shi
 
 
 
+CREATE OR REPLACE TRIGGER "trg_capture_timesheet_event" AFTER UPDATE ON "public"."timesheets" FOR EACH ROW EXECUTE FUNCTION "public"."fn_capture_timesheet_event"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_cleanup_offers_on_unassign" BEFORE UPDATE ON "public"."shifts" FOR EACH ROW EXECUTE FUNCTION "public"."cleanup_offers_on_unassign"();
 
 
@@ -20765,6 +24064,18 @@ CREATE OR REPLACE TRIGGER "trg_emergency_assignment_notification" AFTER UPDATE O
 
 
 CREATE OR REPLACE TRIGGER "trg_employee_drop_notification" AFTER UPDATE ON "public"."shifts" FOR EACH ROW EXECUTE FUNCTION "public"."trg_employee_drop_notification"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_enforce_timesheet_review_gate" BEFORE INSERT OR UPDATE ON "public"."timesheets" FOR EACH ROW EXECUTE FUNCTION "public"."enforce_timesheet_review_gate"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_enqueue_swap_auto_decision" AFTER INSERT OR UPDATE OF "status" ON "public"."shift_swaps" FOR EACH ROW EXECUTE FUNCTION "public"."enqueue_swap_auto_decision"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_enrich_shift_event" BEFORE INSERT ON "public"."shift_events" FOR EACH ROW EXECUTE FUNCTION "public"."fn_enrich_shift_event"();
 
 
 
@@ -20784,7 +24095,19 @@ CREATE OR REPLACE TRIGGER "trg_offer_expired_notification" AFTER UPDATE ON "publ
 
 
 
+CREATE OR REPLACE TRIGGER "trg_planning_offers_updated_at" BEFORE UPDATE ON "public"."planning_offers" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_planning_requests_updated_at" BEFORE UPDATE ON "public"."planning_requests" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
+
+
+
 CREATE OR REPLACE TRIGGER "trg_recalc_shift_utc_timestamps" BEFORE INSERT OR UPDATE OF "shift_date", "start_time", "end_time", "timezone" ON "public"."shifts" FOR EACH ROW EXECUTE FUNCTION "public"."recalc_shift_utc_timestamps"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_refresh_snapshots" AFTER INSERT ON "public"."shift_events" FOR EACH ROW WHEN (("new"."event_type" = ANY (ARRAY['ASSIGNED'::"public"."shift_event_type", 'EMERGENCY_ASSIGNED'::"public"."shift_event_type", 'ACCEPTED'::"public"."shift_event_type", 'SWAPPED_IN'::"public"."shift_event_type", 'SWAPPED_OUT'::"public"."shift_event_type", 'UNASSIGNED'::"public"."shift_event_type", 'CANCELLED'::"public"."shift_event_type", 'LATE_CANCELLED'::"public"."shift_event_type", 'NO_SHOW'::"public"."shift_event_type", 'CHECKED_IN'::"public"."shift_event_type", 'LATE_IN'::"public"."shift_event_type", 'EARLY_OUT'::"public"."shift_event_type"]))) EXECUTE FUNCTION "public"."fn_refresh_snapshots_on_event"();
 
 
 
@@ -20805,6 +24128,10 @@ CREATE OR REPLACE TRIGGER "trg_shifts_notify" AFTER UPDATE ON "public"."shifts" 
 
 
 CREATE OR REPLACE TRIGGER "trg_spr_updated_at" BEFORE UPDATE ON "public"."shift_payroll_records" FOR EACH ROW EXECUTE FUNCTION "public"."touch_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "trg_swap_audit_no_update" BEFORE DELETE OR UPDATE ON "public"."swap_audit_log" FOR EACH ROW EXECUTE FUNCTION "public"."fn_swap_audit_immutable"();
 
 
 
@@ -20884,14 +24211,6 @@ CREATE OR REPLACE TRIGGER "update_profiles_updated_at" BEFORE UPDATE ON "public"
 
 
 
-CREATE OR REPLACE TRIGGER "update_remuneration_levels_updated_at" BEFORE UPDATE ON "public"."remuneration_levels" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
-
-
-
-CREATE OR REPLACE TRIGGER "update_roles_updated_at" BEFORE UPDATE ON "public"."roles" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
-
-
-
 CREATE OR REPLACE TRIGGER "update_roster_templates_updated_at" BEFORE UPDATE ON "public"."roster_templates" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at"();
 
 
@@ -20928,6 +24247,71 @@ CREATE OR REPLACE TRIGGER "warn_published_roster_conflict" AFTER INSERT OR UPDAT
 
 
 
+ALTER TABLE ONLY "hr"."departments"
+    ADD CONSTRAINT "departments_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "hr"."organizations"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "hr"."employee_assignments"
+    ADD CONSTRAINT "employee_assignments_employee_id_fkey" FOREIGN KEY ("employee_id") REFERENCES "hr"."employees"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "hr"."employee_assignments"
+    ADD CONSTRAINT "employee_assignments_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "hr"."roles"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "hr"."employees"
+    ADD CONSTRAINT "employees_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "hr"."organizations"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "hr"."user_contracts"
+    ADD CONSTRAINT "hr_user_contracts_department_id_fkey" FOREIGN KEY ("department_id") REFERENCES "public"."departments"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "hr"."user_contracts"
+    ADD CONSTRAINT "hr_user_contracts_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "hr"."user_contracts"
+    ADD CONSTRAINT "hr_user_contracts_remuneration_level_fkey" FOREIGN KEY ("remuneration_level") REFERENCES "hr"."remuneration_levels"("level_number") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "hr"."user_contracts"
+    ADD CONSTRAINT "hr_user_contracts_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "hr"."roles"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "hr"."user_contracts"
+    ADD CONSTRAINT "hr_user_contracts_sub_department_id_fkey" FOREIGN KEY ("sub_department_id") REFERENCES "public"."sub_departments"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "hr"."user_contracts"
+    ADD CONSTRAINT "hr_user_contracts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "hr"."roles"
+    ADD CONSTRAINT "roles_remuneration_level_fkey" FOREIGN KEY ("remuneration_level") REFERENCES "hr"."remuneration_levels"("level_number");
+
+
+
+ALTER TABLE ONLY "hr"."roles"
+    ADD CONSTRAINT "roles_subdepartment_id_fkey" FOREIGN KEY ("subdepartment_id") REFERENCES "hr"."subdepartments"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "hr"."subdepartments"
+    ADD CONSTRAINT "subdepartments_department_id_fkey" FOREIGN KEY ("department_id") REFERENCES "hr"."departments"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."allowed_locations"
     ADD CONSTRAINT "allowed_locations_org_id_fkey" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE CASCADE;
 
@@ -20955,6 +24339,46 @@ ALTER TABLE ONLY "public"."app_access_certificates"
 
 ALTER TABLE ONLY "public"."app_access_certificates"
     ADD CONSTRAINT "app_access_certificates_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id");
+
+
+
+ALTER TABLE ONLY "public"."assignment_decisions"
+    ADD CONSTRAINT "assignment_decisions_run_id_fkey" FOREIGN KEY ("run_id") REFERENCES "public"."assignment_runs"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."assignment_decisions"
+    ADD CONSTRAINT "assignment_decisions_shift_id_fkey" FOREIGN KEY ("shift_id") REFERENCES "public"."shifts"("id");
+
+
+
+ALTER TABLE ONLY "public"."assignment_events"
+    ADD CONSTRAINT "assignment_events_run_id_fkey" FOREIGN KEY ("run_id") REFERENCES "public"."assignment_runs"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."assignment_events"
+    ADD CONSTRAINT "assignment_events_shift_id_fkey" FOREIGN KEY ("shift_id") REFERENCES "public"."shifts"("id");
+
+
+
+ALTER TABLE ONLY "public"."assignment_runs"
+    ADD CONSTRAINT "assignment_runs_department_id_fkey" FOREIGN KEY ("department_id") REFERENCES "public"."departments"("id");
+
+
+
+ALTER TABLE ONLY "public"."assignment_runs"
+    ADD CONSTRAINT "assignment_runs_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id");
+
+
+
+ALTER TABLE ONLY "public"."assignment_runs"
+    ADD CONSTRAINT "assignment_runs_sub_department_id_fkey" FOREIGN KEY ("sub_department_id") REFERENCES "public"."sub_departments"("id");
+
+
+
+ALTER TABLE ONLY "public"."assignment_snapshots"
+    ADD CONSTRAINT "assignment_snapshots_shift_id_fkey" FOREIGN KEY ("shift_id") REFERENCES "public"."shifts"("id") ON DELETE CASCADE;
 
 
 
@@ -21094,7 +24518,7 @@ ALTER TABLE ONLY "public"."demand_forecasts"
 
 
 ALTER TABLE ONLY "public"."demand_forecasts"
-    ADD CONSTRAINT "demand_forecasts_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "public"."roles"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "demand_forecasts_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "hr"."roles"("id") ON DELETE CASCADE;
 
 
 
@@ -21178,11 +24602,6 @@ ALTER TABLE ONLY "public"."shifts"
 
 
 
-ALTER TABLE ONLY "public"."shifts"
-    ADD CONSTRAINT "fk_shifts_remuneration" FOREIGN KEY ("remuneration_level_id") REFERENCES "public"."remuneration_levels"("id") ON DELETE SET NULL;
-
-
-
 ALTER TABLE ONLY "public"."function_map"
     ADD CONSTRAINT "function_map_sub_department_id_fkey" FOREIGN KEY ("sub_department_id") REFERENCES "public"."sub_departments"("id") ON DELETE CASCADE;
 
@@ -21228,6 +24647,21 @@ ALTER TABLE ONLY "public"."pay_periods"
 
 
 
+ALTER TABLE ONLY "public"."planning_offers"
+    ADD CONSTRAINT "planning_offers_offered_by_fkey" FOREIGN KEY ("offered_by") REFERENCES "public"."profiles"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."planning_offers"
+    ADD CONSTRAINT "planning_offers_offered_shift_id_fkey" FOREIGN KEY ("offered_shift_id") REFERENCES "public"."shifts"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."planning_offers"
+    ADD CONSTRAINT "planning_offers_request_id_fkey" FOREIGN KEY ("request_id") REFERENCES "public"."planning_requests"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."planning_periods"
     ADD CONSTRAINT "planning_periods_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
 
@@ -21245,6 +24679,26 @@ ALTER TABLE ONLY "public"."planning_periods"
 
 ALTER TABLE ONLY "public"."planning_periods"
     ADD CONSTRAINT "planning_periods_template_id_fkey" FOREIGN KEY ("template_id") REFERENCES "public"."roster_templates"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."planning_requests"
+    ADD CONSTRAINT "planning_requests_initiated_by_fkey" FOREIGN KEY ("initiated_by") REFERENCES "public"."profiles"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."planning_requests"
+    ADD CONSTRAINT "planning_requests_manager_id_fkey" FOREIGN KEY ("manager_id") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."planning_requests"
+    ADD CONSTRAINT "planning_requests_shift_id_fkey" FOREIGN KEY ("shift_id") REFERENCES "public"."shifts"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."planning_requests"
+    ADD CONSTRAINT "planning_requests_target_employee_id_fkey" FOREIGN KEY ("target_employee_id") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
 
 
 
@@ -21274,32 +24728,17 @@ ALTER TABLE ONLY "public"."rest_period_violations"
 
 
 ALTER TABLE ONLY "public"."role_levels"
-    ADD CONSTRAINT "role_levels_remuneration_level_id_fkey" FOREIGN KEY ("remuneration_level_id") REFERENCES "public"."remuneration_levels"("id");
+    ADD CONSTRAINT "role_levels_remuneration_level_fkey" FOREIGN KEY ("remuneration_level") REFERENCES "hr"."remuneration_levels"("level_number") ON DELETE SET NULL;
 
 
 
 ALTER TABLE ONLY "public"."role_levels"
-    ADD CONSTRAINT "role_levels_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "public"."roles"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "role_levels_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "hr"."roles"("id") ON DELETE CASCADE;
 
 
 
 ALTER TABLE ONLY "public"."role_ml_class_map"
-    ADD CONSTRAINT "role_ml_class_map_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "public"."roles"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."roles"
-    ADD CONSTRAINT "roles_department_id_fkey" FOREIGN KEY ("department_id") REFERENCES "public"."departments"("id") ON DELETE SET NULL;
-
-
-
-ALTER TABLE ONLY "public"."roles"
-    ADD CONSTRAINT "roles_remuneration_level_id_fkey" FOREIGN KEY ("remuneration_level_id") REFERENCES "public"."remuneration_levels"("id") ON DELETE SET NULL;
-
-
-
-ALTER TABLE ONLY "public"."roles"
-    ADD CONSTRAINT "roles_sub_department_id_fkey" FOREIGN KEY ("sub_department_id") REFERENCES "public"."sub_departments"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "role_ml_class_map_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "hr"."roles"("id") ON DELETE CASCADE;
 
 
 
@@ -21454,6 +24893,11 @@ ALTER TABLE ONLY "public"."shift_event_tags"
 
 
 ALTER TABLE ONLY "public"."shift_events"
+    ADD CONSTRAINT "shift_events_actor_id_fkey" FOREIGN KEY ("actor_id") REFERENCES "public"."profiles"("id");
+
+
+
+ALTER TABLE ONLY "public"."shift_events"
     ADD CONSTRAINT "shift_events_employee_id_fkey" FOREIGN KEY ("employee_id") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
 
 
@@ -21519,6 +24963,11 @@ ALTER TABLE ONLY "public"."shift_swaps"
 
 
 ALTER TABLE ONLY "public"."shift_swaps"
+    ADD CONSTRAINT "shift_swaps_auto_decision_id_fkey" FOREIGN KEY ("auto_decision_id") REFERENCES "public"."swap_decisions"("id");
+
+
+
+ALTER TABLE ONLY "public"."shift_swaps"
     ADD CONSTRAINT "shift_swaps_requester_id_fkey" FOREIGN KEY ("requester_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
 
 
@@ -21549,11 +24998,6 @@ ALTER TABLE ONLY "public"."shift_templates"
 
 
 ALTER TABLE ONLY "public"."shifts"
-    ADD CONSTRAINT "shifts_cancelled_by_fkey" FOREIGN KEY ("cancelled_by") REFERENCES "auth"."users"("id");
-
-
-
-ALTER TABLE ONLY "public"."shifts"
     ADD CONSTRAINT "shifts_department_id_fkey" FOREIGN KEY ("department_id") REFERENCES "public"."departments"("id") ON DELETE CASCADE;
 
 
@@ -21579,7 +25023,12 @@ ALTER TABLE ONLY "public"."shifts"
 
 
 ALTER TABLE ONLY "public"."shifts"
-    ADD CONSTRAINT "shifts_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "public"."roles"("id") ON DELETE SET NULL;
+    ADD CONSTRAINT "shifts_remuneration_level_fkey" FOREIGN KEY ("remuneration_level") REFERENCES "hr"."remuneration_levels"("level_number") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."shifts"
+    ADD CONSTRAINT "shifts_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "hr"."roles"("id") ON DELETE SET NULL;
 
 
 
@@ -21619,7 +25068,7 @@ ALTER TABLE ONLY "public"."shifts"
 
 
 ALTER TABLE ONLY "public"."shifts"
-    ADD CONSTRAINT "shifts_user_contract_id_fkey" FOREIGN KEY ("user_contract_id") REFERENCES "public"."user_contracts"("id") ON DELETE SET NULL;
+    ADD CONSTRAINT "shifts_user_contract_id_fkey" FOREIGN KEY ("user_contract_id") REFERENCES "hr"."user_contracts"("id") ON DELETE SET NULL;
 
 
 
@@ -21638,6 +25087,21 @@ ALTER TABLE ONLY "public"."supervisor_feedback"
 
 
 
+ALTER TABLE ONLY "public"."swap_approval_rules"
+    ADD CONSTRAINT "swap_approval_rules_department_id_fkey" FOREIGN KEY ("department_id") REFERENCES "public"."departments"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."swap_approval_rules"
+    ADD CONSTRAINT "swap_approval_rules_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."swap_approval_rules"
+    ADD CONSTRAINT "swap_approval_rules_updated_by_fkey" FOREIGN KEY ("updated_by") REFERENCES "public"."profiles"("id");
+
+
+
 ALTER TABLE ONLY "public"."swap_approvals"
     ADD CONSTRAINT "swap_approvals_approver_id_fkey" FOREIGN KEY ("approver_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
@@ -21645,6 +25109,26 @@ ALTER TABLE ONLY "public"."swap_approvals"
 
 ALTER TABLE ONLY "public"."swap_approvals"
     ADD CONSTRAINT "swap_approvals_swap_request_id_fkey" FOREIGN KEY ("swap_request_id") REFERENCES "public"."swap_requests"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."swap_audit_log"
+    ADD CONSTRAINT "swap_audit_log_decision_id_fkey" FOREIGN KEY ("decision_id") REFERENCES "public"."swap_decisions"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."swap_audit_log"
+    ADD CONSTRAINT "swap_audit_log_swap_id_fkey" FOREIGN KEY ("swap_id") REFERENCES "public"."shift_swaps"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."swap_decisions"
+    ADD CONSTRAINT "swap_decisions_reverted_by_fkey" FOREIGN KEY ("reverted_by") REFERENCES "public"."profiles"("id");
+
+
+
+ALTER TABLE ONLY "public"."swap_decisions"
+    ADD CONSTRAINT "swap_decisions_swap_id_fkey" FOREIGN KEY ("swap_id") REFERENCES "public"."shift_swaps"("id") ON DELETE CASCADE;
 
 
 
@@ -21693,6 +25177,11 @@ ALTER TABLE ONLY "public"."swap_requests"
 
 
 
+ALTER TABLE ONLY "public"."swap_review_queue"
+    ADD CONSTRAINT "swap_review_queue_swap_id_fkey" FOREIGN KEY ("swap_id") REFERENCES "public"."shift_swaps"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."swap_validations"
     ADD CONSTRAINT "swap_validations_swap_request_id_fkey" FOREIGN KEY ("swap_request_id") REFERENCES "public"."swap_requests"("id") ON DELETE CASCADE;
 
@@ -21714,12 +25203,12 @@ ALTER TABLE ONLY "public"."template_shifts"
 
 
 ALTER TABLE ONLY "public"."template_shifts"
-    ADD CONSTRAINT "template_shifts_remuneration_level_id_fkey" FOREIGN KEY ("remuneration_level_id") REFERENCES "public"."remuneration_levels"("id");
+    ADD CONSTRAINT "template_shifts_remuneration_level_fkey" FOREIGN KEY ("remuneration_level") REFERENCES "hr"."remuneration_levels"("level_number") ON DELETE SET NULL;
 
 
 
 ALTER TABLE ONLY "public"."template_shifts"
-    ADD CONSTRAINT "template_shifts_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "public"."roles"("id");
+    ADD CONSTRAINT "template_shifts_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "hr"."roles"("id");
 
 
 
@@ -21745,46 +25234,6 @@ ALTER TABLE ONLY "public"."timesheets"
 
 ALTER TABLE ONLY "public"."timesheets"
     ADD CONSTRAINT "timesheets_shift_id_fkey" FOREIGN KEY ("shift_id") REFERENCES "public"."shifts"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."user_contracts"
-    ADD CONSTRAINT "user_contracts_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "auth"."users"("id");
-
-
-
-ALTER TABLE ONLY "public"."user_contracts"
-    ADD CONSTRAINT "user_contracts_department_id_fkey" FOREIGN KEY ("department_id") REFERENCES "public"."departments"("id");
-
-
-
-ALTER TABLE ONLY "public"."user_contracts"
-    ADD CONSTRAINT "user_contracts_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id");
-
-
-
-ALTER TABLE ONLY "public"."user_contracts"
-    ADD CONSTRAINT "user_contracts_rem_level_id_fkey" FOREIGN KEY ("rem_level_id") REFERENCES "public"."remuneration_levels"("id");
-
-
-
-ALTER TABLE ONLY "public"."user_contracts"
-    ADD CONSTRAINT "user_contracts_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "public"."roles"("id");
-
-
-
-ALTER TABLE ONLY "public"."user_contracts"
-    ADD CONSTRAINT "user_contracts_sub_department_id_fkey" FOREIGN KEY ("sub_department_id") REFERENCES "public"."sub_departments"("id");
-
-
-
-ALTER TABLE ONLY "public"."user_contracts"
-    ADD CONSTRAINT "user_contracts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."user_contracts"
-    ADD CONSTRAINT "user_contracts_user_id_profiles_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
 
 
 
@@ -21836,6 +25285,70 @@ ALTER TABLE ONLY "public"."venueops_ml_features"
 ALTER TABLE ONLY "public"."venueops_tasks"
     ADD CONSTRAINT "venueops_tasks_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "public"."venueops_events"("event_id") ON DELETE SET NULL;
 
+
+
+CREATE POLICY "contracts_manage_delta" ON "hr"."user_contracts" TO "authenticated" USING ("public"."user_has_delta_access"(( SELECT "auth"."uid"() AS "uid")));
+
+
+
+CREATE POLICY "contracts_select_delta" ON "hr"."user_contracts" FOR SELECT TO "authenticated" USING ("public"."user_has_delta_access"(( SELECT "auth"."uid"() AS "uid")));
+
+
+
+CREATE POLICY "contracts_select_own" ON "hr"."user_contracts" FOR SELECT TO "authenticated" USING (("user_id" = ( SELECT "auth"."uid"() AS "uid")));
+
+
+
+ALTER TABLE "hr"."departments" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "departments_auth_read" ON "hr"."departments" FOR SELECT TO "authenticated" USING (true);
+
+
+
+ALTER TABLE "hr"."employee_assignments" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "employee_assignments_auth_read" ON "hr"."employee_assignments" FOR SELECT TO "authenticated" USING (true);
+
+
+
+ALTER TABLE "hr"."employees" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "employees_auth_read" ON "hr"."employees" FOR SELECT TO "authenticated" USING (true);
+
+
+
+ALTER TABLE "hr"."organizations" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "organizations_auth_read" ON "hr"."organizations" FOR SELECT TO "authenticated" USING (true);
+
+
+
+ALTER TABLE "hr"."remuneration_levels" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "remuneration_levels_auth_read" ON "hr"."remuneration_levels" FOR SELECT TO "authenticated" USING (true);
+
+
+
+ALTER TABLE "hr"."roles" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "roles_auth_read" ON "hr"."roles" FOR SELECT TO "authenticated" USING (true);
+
+
+
+ALTER TABLE "hr"."subdepartments" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "subdepartments_auth_read" ON "hr"."subdepartments" FOR SELECT TO "authenticated" USING (true);
+
+
+
+ALTER TABLE "hr"."user_contracts" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "Admins can manage certificates" ON "public"."app_access_certificates" USING ("public"."auth_can_manage_certificates"()) WITH CHECK ("public"."auth_can_manage_certificates"());
@@ -21986,14 +25499,6 @@ CREATE POLICY "Authenticated users can manage employee skills" ON "public"."empl
 
 
 
-CREATE POLICY "Authenticated users can manage remuneration_levels" ON "public"."remuneration_levels" FOR INSERT TO "authenticated" WITH CHECK (true);
-
-
-
-CREATE POLICY "Authenticated users can manage roles" ON "public"."roles" FOR INSERT TO "authenticated" WITH CHECK (true);
-
-
-
 CREATE POLICY "Authenticated users can manage shift event tags" ON "public"."shift_event_tags" FOR INSERT TO "authenticated" WITH CHECK (true);
 
 
@@ -22050,14 +25555,6 @@ CREATE POLICY "Authenticated users can update organizations" ON "public"."organi
 
 
 
-CREATE POLICY "Authenticated users can update remuneration_levels" ON "public"."remuneration_levels" FOR UPDATE TO "authenticated" USING (true) WITH CHECK (true);
-
-
-
-CREATE POLICY "Authenticated users can update roles" ON "public"."roles" FOR UPDATE TO "authenticated" USING (true) WITH CHECK (true);
-
-
-
 CREATE POLICY "Authenticated users can update shift_subgroups" ON "public"."shift_subgroups" FOR UPDATE TO "authenticated" USING (true) WITH CHECK (true);
 
 
@@ -22083,6 +25580,12 @@ CREATE POLICY "Authenticated users can view all suitability scores" ON "public".
 
 
 CREATE POLICY "Authenticated users can view approvals" ON "public"."swap_approvals" FOR SELECT TO "authenticated" USING (true);
+
+
+
+CREATE POLICY "Authenticated users can view assignment snapshots" ON "public"."assignment_snapshots" FOR SELECT TO "authenticated" USING ((("employee_id" = "auth"."uid"()) OR (EXISTS ( SELECT 1
+   FROM "public"."shifts" "s"
+  WHERE ("s"."id" = "assignment_snapshots"."shift_id")))));
 
 
 
@@ -22123,10 +25626,6 @@ CREATE POLICY "Authenticated users can view performance metrics" ON "public"."em
 
 
 CREATE POLICY "Authenticated users can view reliability metrics" ON "public"."employee_reliability_metrics" FOR SELECT TO "authenticated" USING (true);
-
-
-
-CREATE POLICY "Authenticated users can view remuneration_levels" ON "public"."remuneration_levels" FOR SELECT TO "authenticated" USING (true);
 
 
 
@@ -22290,13 +25789,23 @@ CREATE POLICY "Everyone can view work rules" ON "public"."work_rules" FOR SELECT
 
 
 
+CREATE POLICY "Initiator can delete their own planning requests" ON "public"."planning_requests" FOR DELETE TO "authenticated" USING (("auth"."uid"() = "initiated_by"));
+
+
+
+CREATE POLICY "Initiator or manager can update planning requests" ON "public"."planning_requests" FOR UPDATE TO "authenticated" USING ((("auth"."uid"() = "initiated_by") OR ("auth"."uid"() = "manager_id")));
+
+
+
 CREATE POLICY "Managers can create approvals" ON "public"."swap_approvals" FOR INSERT TO "authenticated" WITH CHECK (true);
 
 
 
-CREATE POLICY "Managers can manage allowed_locations" ON "public"."allowed_locations" USING ((EXISTS ( SELECT 1
-   FROM "public"."user_contracts" "uc"
-  WHERE (("uc"."user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("uc"."organization_id" = "allowed_locations"."org_id") AND ("uc"."access_level" = ANY (ARRAY['gamma'::"public"."access_level", 'delta'::"public"."access_level", 'epsilon'::"public"."access_level", 'zeta'::"public"."access_level"])) AND (("uc"."end_date" IS NULL) OR ("uc"."end_date" >= CURRENT_DATE))))));
+CREATE POLICY "Managers can delete bulk assign idempotency" ON "public"."bulk_assign_idempotency" FOR DELETE TO "authenticated" USING ("public"."is_manager_or_above"());
+
+
+
+CREATE POLICY "Managers can insert bulk assign idempotency" ON "public"."bulk_assign_idempotency" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_manager_or_above"());
 
 
 
@@ -22304,9 +25813,11 @@ CREATE POLICY "Managers can manage budgets" ON "public"."department_budgets" TO 
 
 
 
-CREATE POLICY "Managers can view all shift events" ON "public"."shift_events" FOR SELECT TO "authenticated" USING (((EXISTS ( SELECT 1
-   FROM "public"."user_contracts"
-  WHERE (("user_contracts"."user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("user_contracts"."access_level" = ANY (ARRAY['alpha'::"public"."access_level", 'beta'::"public"."access_level", 'gamma'::"public"."access_level", 'delta'::"public"."access_level", 'epsilon'::"public"."access_level", 'zeta'::"public"."access_level"])) AND ("user_contracts"."status" = 'Active'::"text")))) OR "public"."user_has_delta_access"(( SELECT "auth"."uid"() AS "uid"))));
+CREATE POLICY "Managers can update bulk assign idempotency" ON "public"."bulk_assign_idempotency" FOR UPDATE TO "authenticated" USING ("public"."is_manager_or_above"());
+
+
+
+CREATE POLICY "Managers can view bulk assign idempotency" ON "public"."bulk_assign_idempotency" FOR SELECT TO "authenticated" USING ("public"."is_manager_or_above"());
 
 
 
@@ -22356,6 +25867,14 @@ CREATE POLICY "System can create validations" ON "public"."swap_validations" FOR
 
 
 
+CREATE POLICY "System can delete assignment snapshots" ON "public"."assignment_snapshots" FOR DELETE TO "authenticated" USING (true);
+
+
+
+CREATE POLICY "System can insert assignment snapshots" ON "public"."assignment_snapshots" FOR INSERT TO "authenticated" WITH CHECK (true);
+
+
+
 CREATE POLICY "System can manage performance metrics" ON "public"."employee_performance_metrics" FOR INSERT TO "authenticated" WITH CHECK (true);
 
 
@@ -22365,6 +25884,10 @@ CREATE POLICY "System can manage reliability metrics" ON "public"."employee_reli
 
 
 CREATE POLICY "System can manage suitability scores" ON "public"."employee_suitability_scores" FOR INSERT TO "authenticated" WITH CHECK (true);
+
+
+
+CREATE POLICY "System can update assignment snapshots" ON "public"."assignment_snapshots" FOR UPDATE TO "authenticated" USING (true) WITH CHECK (true);
 
 
 
@@ -22384,11 +25907,23 @@ CREATE POLICY "Users can create bulk operations" ON "public"."bulk_operations" F
 
 
 
+CREATE POLICY "Users can create their own planning offers" ON "public"."planning_offers" FOR INSERT TO "authenticated" WITH CHECK (("auth"."uid"() = "offered_by"));
+
+
+
+CREATE POLICY "Users can create their own planning requests" ON "public"."planning_requests" FOR INSERT TO "authenticated" WITH CHECK (("auth"."uid"() = "initiated_by"));
+
+
+
 CREATE POLICY "Users can delete own notifications" ON "public"."notifications" FOR DELETE TO "authenticated" USING (("user_id" = ( SELECT "auth"."uid"() AS "uid")));
 
 
 
 CREATE POLICY "Users can delete their own draft templates" ON "public"."shift_templates" FOR DELETE TO "authenticated" USING ((("is_draft" = true) AND ("created_by" = ( SELECT "auth"."uid"() AS "uid"))));
+
+
+
+CREATE POLICY "Users can delete their own planning offers" ON "public"."planning_offers" FOR DELETE TO "authenticated" USING (("auth"."uid"() = "offered_by"));
 
 
 
@@ -22408,10 +25943,7 @@ CREATE POLICY "Users can update their own notifications" ON "public"."swap_notif
 
 
 
-CREATE POLICY "Users can view batches in their organization" ON "public"."roster_template_batches" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
-   FROM ("public"."roster_templates" "rt"
-     JOIN "public"."user_contracts" "uc" ON (("uc"."organization_id" = "rt"."organization_id")))
-  WHERE (("rt"."id" = "roster_template_batches"."template_id") AND ("uc"."user_id" = ( SELECT "auth"."uid"() AS "uid"))))));
+CREATE POLICY "Users can update their own planning offers" ON "public"."planning_offers" FOR UPDATE TO "authenticated" USING (("auth"."uid"() = "offered_by"));
 
 
 
@@ -22424,6 +25956,16 @@ CREATE POLICY "Users can view own certificates" ON "public"."app_access_certific
 
 
 CREATE POLICY "Users can view own notifications" ON "public"."notifications" FOR SELECT TO "authenticated" USING (("user_id" = ( SELECT "auth"."uid"() AS "uid")));
+
+
+
+CREATE POLICY "Users can view relevant planning offers" ON "public"."planning_offers" FOR SELECT TO "authenticated" USING ((("auth"."uid"() = "offered_by") OR ("auth"."uid"() IN ( SELECT "planning_requests"."initiated_by"
+   FROM "public"."planning_requests"
+  WHERE ("planning_requests"."id" = "planning_offers"."request_id"))) OR "public"."is_manager_or_above"()));
+
+
+
+CREATE POLICY "Users can view relevant planning requests" ON "public"."planning_requests" FOR SELECT TO "authenticated" USING ((("auth"."uid"() = "initiated_by") OR ("auth"."uid"() = "manager_id") OR ("auth"."uid"() = "target_employee_id") OR "public"."is_manager_or_above"()));
 
 
 
@@ -22446,6 +25988,18 @@ CREATE POLICY "anon_read_venueops_ml_features" ON "public"."venueops_ml_features
 
 
 ALTER TABLE "public"."app_access_certificates" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."assignment_decisions" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."assignment_events" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."assignment_runs" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."assignment_snapshots" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."attendance_records" ENABLE ROW LEVEL SECURITY;
@@ -22558,10 +26112,12 @@ CREATE POLICY "authenticated_update_labor_correction_factors" ON "public"."labor
 
 
 CREATE POLICY "authenticated_update_role_ml_class_map" ON "public"."role_ml_class_map" FOR UPDATE TO "authenticated" USING ((EXISTS ( SELECT 1
-   FROM "public"."roles" "r"
-  WHERE (("r"."id" = "role_ml_class_map"."role_id") AND "public"."user_has_action_in_scope"('shift.edit'::"text", NULL::"uuid", "r"."department_id", "r"."sub_department_id"))))) WITH CHECK ((EXISTS ( SELECT 1
-   FROM "public"."roles" "r"
-  WHERE (("r"."id" = "role_ml_class_map"."role_id") AND "public"."user_has_action_in_scope"('shift.edit'::"text", NULL::"uuid", "r"."department_id", "r"."sub_department_id")))));
+   FROM ("hr"."roles" "r"
+     JOIN "hr"."subdepartments" "sd" ON (("sd"."id" = "r"."subdepartment_id")))
+  WHERE (("r"."id" = "role_ml_class_map"."role_id") AND "public"."user_has_action_in_scope"('shift.edit'::"text", NULL::"uuid", "sd"."department_id", "r"."subdepartment_id"))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM ("hr"."roles" "r"
+     JOIN "hr"."subdepartments" "sd" ON (("sd"."id" = "r"."subdepartment_id")))
+  WHERE (("r"."id" = "role_ml_class_map"."role_id") AND "public"."user_has_action_in_scope"('shift.edit'::"text", NULL::"uuid", "sd"."department_id", "r"."subdepartment_id")))));
 
 
 
@@ -22576,8 +26132,9 @@ CREATE POLICY "authenticated_write_cancellation_history" ON "public"."cancellati
 
 
 CREATE POLICY "authenticated_write_role_ml_class_map" ON "public"."role_ml_class_map" FOR INSERT TO "authenticated" WITH CHECK ((EXISTS ( SELECT 1
-   FROM "public"."roles" "r"
-  WHERE (("r"."id" = "role_ml_class_map"."role_id") AND "public"."user_has_action_in_scope"('shift.edit'::"text", NULL::"uuid", "r"."department_id", "r"."sub_department_id")))));
+   FROM ("hr"."roles" "r"
+     JOIN "hr"."subdepartments" "sd" ON (("sd"."id" = "r"."subdepartment_id")))
+  WHERE (("r"."id" = "role_ml_class_map"."role_id") AND "public"."user_has_action_in_scope"('shift.edit'::"text", NULL::"uuid", "sd"."department_id", "r"."subdepartment_id")))));
 
 
 
@@ -22748,6 +26305,9 @@ CREATE POLICY "broadcasts_update" ON "public"."broadcasts" FOR UPDATE TO "authen
 
 
 
+ALTER TABLE "public"."bulk_assign_idempotency" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."bulk_operations" ENABLE ROW LEVEL SECURITY;
 
 
@@ -22773,18 +26333,6 @@ CREATE POLICY "compliance_snapshots_select" ON "public"."shift_compliance_snapsh
 
 
 CREATE POLICY "compliance_snapshots_update" ON "public"."shift_compliance_snapshots" FOR UPDATE USING ((( SELECT "auth"."role"() AS "role") = 'service_role'::"text"));
-
-
-
-CREATE POLICY "contracts_manage_delta" ON "public"."user_contracts" TO "authenticated" USING ("public"."user_has_delta_access"(( SELECT "auth"."uid"() AS "uid")));
-
-
-
-CREATE POLICY "contracts_select_delta" ON "public"."user_contracts" FOR SELECT TO "authenticated" USING ("public"."user_has_delta_access"(( SELECT "auth"."uid"() AS "uid")));
-
-
-
-CREATE POLICY "contracts_select_own" ON "public"."user_contracts" FOR SELECT TO "authenticated" USING (("user_id" = ( SELECT "auth"."uid"() AS "uid")));
 
 
 
@@ -22852,9 +26400,22 @@ ALTER TABLE "public"."event_tags" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."events" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "events_select_org_scoped" ON "public"."events" FOR SELECT TO "authenticated" USING (("public"."is_admin"() OR ("organization_id" IS NULL) OR ("organization_id" IN ( SELECT "uc"."organization_id"
-   FROM "public"."user_contracts" "uc"
-  WHERE ("uc"."user_id" = ( SELECT ( SELECT "auth"."uid"() AS "uid") AS "uid"))))));
+ALTER TABLE "public"."fairness_ledger" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "fairness_ledger_org_scoped" ON "public"."fairness_ledger" TO "authenticated" USING (((EXISTS ( SELECT 1
+   FROM "public"."profiles" "p"
+  WHERE (("p"."id" = "auth"."uid"()) AND ("p"."legacy_system_role" = 'admin'::"public"."system_role")))) OR (EXISTS ( SELECT 1
+   FROM "public"."app_access_certificates" "c"
+  WHERE (("c"."user_id" = "auth"."uid"()) AND ("c"."is_active" = true) AND ("c"."organization_id" = "fairness_ledger"."organization_id") AND ("c"."access_level" = ANY (ARRAY['gamma'::"public"."access_level", 'delta'::"public"."access_level", 'epsilon'::"public"."access_level", 'zeta'::"public"."access_level"]))))))) WITH CHECK (((EXISTS ( SELECT 1
+   FROM "public"."profiles" "p"
+  WHERE (("p"."id" = "auth"."uid"()) AND ("p"."legacy_system_role" = 'admin'::"public"."system_role")))) OR (EXISTS ( SELECT 1
+   FROM "public"."app_access_certificates" "c"
+  WHERE (("c"."user_id" = "auth"."uid"()) AND ("c"."is_active" = true) AND ("c"."organization_id" = "fairness_ledger"."organization_id") AND ("c"."access_level" = ANY (ARRAY['gamma'::"public"."access_level", 'delta'::"public"."access_level", 'epsilon'::"public"."access_level", 'zeta'::"public"."access_level"])))))));
+
+
+
+COMMENT ON POLICY "fairness_ledger_org_scoped" ON "public"."fairness_ledger" IS 'F1: legacy admins have cross-org oversight; managers are restricted to organizations where they hold an active manager-level (gamma+) app_access_certificate. service_role bypasses RLS.';
 
 
 
@@ -22998,6 +26559,22 @@ CREATE POLICY "organizations_update" ON "public"."organizations" FOR UPDATE TO "
 
 
 
+CREATE POLICY "p_assignment_decisions_read" ON "public"."assignment_decisions" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM "public"."assignment_runs" "r"
+  WHERE (("r"."id" = "assignment_decisions"."run_id") AND "public"."aa_user_manages_org"("auth"."uid"(), "r"."organization_id")))));
+
+
+
+CREATE POLICY "p_assignment_events_read" ON "public"."assignment_events" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM "public"."assignment_runs" "r"
+  WHERE (("r"."id" = "assignment_events"."run_id") AND "public"."aa_user_manages_org"("auth"."uid"(), "r"."organization_id")))));
+
+
+
+CREATE POLICY "p_assignment_runs_read" ON "public"."assignment_runs" FOR SELECT TO "authenticated" USING ("public"."aa_user_manages_org"("auth"."uid"(), "organization_id"));
+
+
+
 ALTER TABLE "public"."pay_periods" ENABLE ROW LEVEL SECURITY;
 
 
@@ -23017,6 +26594,9 @@ CREATE POLICY "payroll_records_update" ON "public"."shift_payroll_records" FOR U
 
 
 
+ALTER TABLE "public"."planning_offers" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."planning_periods" ENABLE ROW LEVEL SECURITY;
 
 
@@ -23034,6 +26614,9 @@ CREATE POLICY "planning_periods_select" ON "public"."planning_periods" FOR SELEC
 
 CREATE POLICY "planning_periods_update" ON "public"."planning_periods" FOR UPDATE USING ("public"."user_has_action_in_scope"('roster.edit'::"text", "organization_id", "department_id", NULL::"uuid"));
 
+
+
+ALTER TABLE "public"."planning_requests" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."predicted_labor_demand" ENABLE ROW LEVEL SECURITY;
@@ -23069,14 +26652,6 @@ CREATE POLICY "public_read" ON "public"."organizations" FOR SELECT USING (true);
 
 
 
-CREATE POLICY "public_read" ON "public"."remuneration_levels" FOR SELECT USING (true);
-
-
-
-CREATE POLICY "public_read" ON "public"."roles" FOR SELECT USING (true);
-
-
-
 CREATE POLICY "public_read" ON "public"."sub_departments" FOR SELECT USING (true);
 
 
@@ -23095,17 +26670,6 @@ CREATE POLICY "rbac_permissions_select_all" ON "public"."rbac_permissions" FOR S
 
 
 
-ALTER TABLE "public"."remuneration_levels" ENABLE ROW LEVEL SECURITY;
-
-
-CREATE POLICY "remuneration_levels_admin" ON "public"."remuneration_levels" TO "authenticated" USING ("public"."is_admin"());
-
-
-
-CREATE POLICY "remuneration_levels_select" ON "public"."remuneration_levels" FOR SELECT TO "authenticated" USING ("public"."is_manager_or_above"());
-
-
-
 ALTER TABLE "public"."rest_period_violations" ENABLE ROW LEVEL SECURITY;
 
 
@@ -23117,17 +26681,6 @@ CREATE POLICY "role_levels_select_authenticated" ON "public"."role_levels" FOR S
 
 
 ALTER TABLE "public"."role_ml_class_map" ENABLE ROW LEVEL SECURITY;
-
-
-ALTER TABLE "public"."roles" ENABLE ROW LEVEL SECURITY;
-
-
-CREATE POLICY "roles_admin" ON "public"."roles" TO "authenticated" USING ("public"."is_admin"());
-
-
-
-CREATE POLICY "roles_select" ON "public"."roles" FOR SELECT TO "authenticated" USING (true);
-
 
 
 CREATE POLICY "roster_assignments_delete" ON "public"."roster_shift_assignments" FOR DELETE USING ("public"."auth_can_manage_rosters"());
@@ -23265,22 +26818,6 @@ CREATE POLICY "shifts_insert_rbac" ON "public"."shifts" FOR INSERT WITH CHECK ("
 
 
 
-CREATE POLICY "shifts_select_bidding" ON "public"."shifts" FOR SELECT TO "authenticated" USING ((("bidding_status" = ANY (ARRAY['on_bidding'::"public"."shift_bidding_status", 'on_bidding_normal'::"public"."shift_bidding_status", 'on_bidding_urgent'::"public"."shift_bidding_status"])) AND (EXISTS ( SELECT 1
-   FROM "public"."user_contracts"
-  WHERE (("user_contracts"."user_id" = "auth"."uid"()) AND ("user_contracts"."status" = 'Active'::"text") AND ("user_contracts"."organization_id" = "shifts"."organization_id"))))));
-
-
-
-CREATE POLICY "shifts_select_managers" ON "public"."shifts" FOR SELECT USING (((EXISTS ( SELECT 1
-   FROM "public"."user_contracts" "uc"
-  WHERE (("uc"."user_id" = "auth"."uid"()) AND ("uc"."status" = 'Active'::"text") AND ("uc"."access_level" = ANY (ARRAY['gamma'::"public"."access_level", 'delta'::"public"."access_level", 'epsilon'::"public"."access_level", 'zeta'::"public"."access_level"])) AND ((("uc"."access_level" = 'epsilon'::"public"."access_level") AND ("uc"."organization_id" = "shifts"."organization_id")) OR (("uc"."access_level" = 'delta'::"public"."access_level") AND ("uc"."organization_id" = "shifts"."organization_id") AND ("uc"."department_id" = "shifts"."department_id")) OR ("uc"."sub_department_id" = "shifts"."sub_department_id") OR (("uc"."department_id" = "shifts"."department_id") AND ("uc"."sub_department_id" IS NULL)) OR (("uc"."organization_id" = "shifts"."organization_id") AND ("uc"."department_id" IS NULL) AND ("uc"."sub_department_id" IS NULL)))))) OR (EXISTS ( SELECT 1
-   FROM "public"."app_access_certificates" "ac"
-  WHERE (("ac"."user_id" = "auth"."uid"()) AND ("ac"."is_active" = true) AND ("ac"."access_level" = ANY (ARRAY['gamma'::"public"."access_level", 'delta'::"public"."access_level", 'epsilon'::"public"."access_level", 'zeta'::"public"."access_level"])) AND (("ac"."access_level" = 'zeta'::"public"."access_level") OR (("ac"."access_level" = 'epsilon'::"public"."access_level") AND ("ac"."organization_id" = "shifts"."organization_id")) OR (("ac"."access_level" = 'delta'::"public"."access_level") AND ("ac"."organization_id" = "shifts"."organization_id") AND ("ac"."department_id" = "shifts"."department_id")) OR ("ac"."sub_department_id" = "shifts"."sub_department_id"))))) OR (EXISTS ( SELECT 1
-   FROM "public"."profiles"
-  WHERE (("profiles"."id" = "auth"."uid"()) AND ("profiles"."legacy_system_role" = ANY (ARRAY['admin'::"public"."system_role", 'manager'::"public"."system_role"])))))));
-
-
-
 CREATE POLICY "shifts_select_offered_swaps" ON "public"."shifts" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."shift_swaps"
   WHERE (("shift_swaps"."target_shift_id" = "shifts"."id") AND ("shift_swaps"."status" = ANY (ARRAY['OPEN'::"public"."swap_request_status", 'MANAGER_PENDING'::"public"."swap_request_status"]))))));
@@ -23290,18 +26827,6 @@ CREATE POLICY "shifts_select_offered_swaps" ON "public"."shifts" FOR SELECT TO "
 CREATE POLICY "shifts_select_open_swaps" ON "public"."shifts" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."shift_swaps"
   WHERE (("shift_swaps"."requester_shift_id" = "shifts"."id") AND ("shift_swaps"."status" = 'OPEN'::"public"."swap_request_status")))));
-
-
-
-CREATE POLICY "shifts_select_rbac" ON "public"."shifts" FOR SELECT USING (((EXISTS ( SELECT 1
-   FROM ("public"."app_access_certificates" "ac"
-     JOIN "public"."rbac_permissions" "rp" ON (("rp"."access_level" = "ac"."access_level")))
-  WHERE (("ac"."user_id" = "auth"."uid"()) AND ("ac"."is_active" = true) AND ("rp"."action_code" = 'shift.view'::"text") AND (("ac"."access_level" = 'zeta'::"public"."access_level") OR (("ac"."organization_id" = "shifts"."organization_id") AND (("rp"."scope" = 'ORG'::"public"."rbac_scope") OR (("rp"."scope" = 'DEPT'::"public"."rbac_scope") AND ("ac"."department_id" = "shifts"."department_id")) OR (("rp"."scope" = 'SUB_DEPT'::"public"."rbac_scope") AND ("ac"."sub_department_id" = "shifts"."sub_department_id")))))))) OR (EXISTS ( SELECT 1
-   FROM ("public"."user_contracts" "uc"
-     JOIN "public"."rbac_permissions" "rp" ON (("rp"."access_level" = "uc"."access_level")))
-  WHERE (("uc"."user_id" = "auth"."uid"()) AND ("uc"."status" = 'Active'::"text") AND ("rp"."action_code" = 'shift.view'::"text") AND ("uc"."organization_id" = "shifts"."organization_id") AND (("rp"."scope" = 'ORG'::"public"."rbac_scope") OR (("rp"."scope" = 'DEPT'::"public"."rbac_scope") AND ("uc"."department_id" = "shifts"."department_id")) OR (("rp"."scope" = 'SUB_DEPT'::"public"."rbac_scope") AND ("uc"."sub_department_id" = "shifts"."sub_department_id")))))) OR ((("assigned_employee_id" = "auth"."uid"()) OR ("last_rejected_by" = "auth"."uid"())) AND (EXISTS ( SELECT 1
-   FROM "public"."user_contracts"
-  WHERE (("user_contracts"."user_id" = "auth"."uid"()) AND ("user_contracts"."status" = 'Active'::"text")))))));
 
 
 
@@ -23353,7 +26878,28 @@ CREATE POLICY "sub_departments_update" ON "public"."sub_departments" FOR UPDATE 
 ALTER TABLE "public"."supervisor_feedback" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."swap_approval_rules" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."swap_approvals" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."swap_audit_log" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "swap_audit_read" ON "public"."swap_audit_log" FOR SELECT USING (("public"."is_admin"() OR (EXISTS ( SELECT 1
+   FROM "public"."app_access_certificates" "c"
+  WHERE (("c"."user_id" = "auth"."uid"()) AND ("c"."is_active" = true) AND ("c"."access_level" = ANY (ARRAY['gamma'::"public"."access_level", 'delta'::"public"."access_level", 'epsilon'::"public"."access_level", 'zeta'::"public"."access_level"])))))));
+
+
+
+ALTER TABLE "public"."swap_decisions" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "swap_decisions_read" ON "public"."swap_decisions" FOR SELECT USING (("public"."is_admin"() OR (EXISTS ( SELECT 1
+   FROM "public"."app_access_certificates" "c"
+  WHERE (("c"."user_id" = "auth"."uid"()) AND ("c"."is_active" = true) AND ("c"."access_level" = ANY (ARRAY['gamma'::"public"."access_level", 'delta'::"public"."access_level", 'epsilon'::"public"."access_level", 'zeta'::"public"."access_level"])))))));
+
 
 
 ALTER TABLE "public"."swap_notifications" ENABLE ROW LEVEL SECURITY;
@@ -23363,6 +26909,17 @@ ALTER TABLE "public"."swap_offers" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."swap_requests" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."swap_review_queue" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "swap_rules_admin_all" ON "public"."swap_approval_rules" USING (("public"."is_admin"() OR (EXISTS ( SELECT 1
+   FROM "public"."app_access_certificates" "c"
+  WHERE (("c"."user_id" = "auth"."uid"()) AND ("c"."is_active" = true) AND ("c"."access_level" = ANY (ARRAY['gamma'::"public"."access_level", 'delta'::"public"."access_level", 'epsilon'::"public"."access_level", 'zeta'::"public"."access_level"])) AND ("c"."organization_id" = "swap_approval_rules"."organization_id")))))) WITH CHECK (("public"."is_admin"() OR (EXISTS ( SELECT 1
+   FROM "public"."app_access_certificates" "c"
+  WHERE (("c"."user_id" = "auth"."uid"()) AND ("c"."is_active" = true) AND ("c"."access_level" = ANY (ARRAY['gamma'::"public"."access_level", 'delta'::"public"."access_level", 'epsilon'::"public"."access_level", 'zeta'::"public"."access_level"])) AND ("c"."organization_id" = "swap_approval_rules"."organization_id"))))));
+
 
 
 ALTER TABLE "public"."swap_validations" ENABLE ROW LEVEL SECURITY;
@@ -23426,9 +26983,6 @@ CREATE POLICY "timesheets_member_update" ON "public"."timesheets" FOR UPDATE TO 
 
 
 
-ALTER TABLE "public"."user_contracts" ENABLE ROW LEVEL SECURITY;
-
-
 CREATE POLICY "users_insert_own_compliance_rejection" ON "public"."compliance_rejections" FOR INSERT WITH CHECK ((("auth"."uid"() = "user_id") OR ("user_id" IS NULL)));
 
 
@@ -23473,6 +27027,15 @@ ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
 
 
 ALTER PUBLICATION "supabase_realtime" ADD TABLE ONLY "public"."notifications";
+
+
+
+
+
+
+GRANT USAGE ON SCHEMA "hr" TO "anon";
+GRANT USAGE ON SCHEMA "hr" TO "authenticated";
+GRANT USAGE ON SCHEMA "hr" TO "service_role";
 
 
 
@@ -23654,6 +27217,13 @@ GRANT USAGE ON SCHEMA "public" TO "service_role";
 
 
 
+REVOKE ALL ON FUNCTION "public"."_apply_shift_op_write"("p_shift_id" "uuid", "p_op" "text", "p_payload" "jsonb", "p_actor" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."_apply_shift_op_write"("p_shift_id" "uuid", "p_op" "text", "p_payload" "jsonb", "p_actor" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."_apply_shift_op_write"("p_shift_id" "uuid", "p_op" "text", "p_payload" "jsonb", "p_actor" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."_apply_shift_op_write"("p_shift_id" "uuid", "p_op" "text", "p_payload" "jsonb", "p_actor" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."_sync_compliance_snapshot"() TO "anon";
 GRANT ALL ON FUNCTION "public"."_sync_compliance_snapshot"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."_sync_compliance_snapshot"() TO "service_role";
@@ -23663,6 +27233,12 @@ GRANT ALL ON FUNCTION "public"."_sync_compliance_snapshot"() TO "service_role";
 GRANT ALL ON FUNCTION "public"."_sync_payroll_record"() TO "anon";
 GRANT ALL ON FUNCTION "public"."_sync_payroll_record"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."_sync_payroll_record"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."aa_user_manages_org"("p_user" "uuid", "p_org" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."aa_user_manages_org"("p_user" "uuid", "p_org" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."aa_user_manages_org"("p_user" "uuid", "p_org" "uuid") TO "service_role";
 
 
 
@@ -23762,12 +27338,6 @@ GRANT ALL ON FUNCTION "public"."assert_shift_state"("p_shift_id" "uuid", "p_expe
 
 
 
-REVOKE ALL ON FUNCTION "public"."assign_employee"("p_profile_id" "uuid", "p_department_name" "text", "p_sub_department_name" "text", "p_role_name" "text", "p_is_primary" boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."assign_employee"("p_profile_id" "uuid", "p_department_name" "text", "p_sub_department_name" "text", "p_role_name" "text", "p_is_primary" boolean) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."assign_employee"("p_profile_id" "uuid", "p_department_name" "text", "p_sub_department_name" "text", "p_role_name" "text", "p_is_primary" boolean) TO "service_role";
-
-
-
 REVOKE ALL ON FUNCTION "public"."assign_employee_to_shift"("p_roster_shift_id" "uuid", "p_employee_id" "uuid", "p_user_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."assign_employee_to_shift"("p_roster_shift_id" "uuid", "p_employee_id" "uuid", "p_user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."assign_employee_to_shift"("p_roster_shift_id" "uuid", "p_employee_id" "uuid", "p_user_id" "uuid") TO "service_role";
@@ -23792,9 +27362,9 @@ GRANT ALL ON FUNCTION "public"."auth_can_create_template"("p_organization_id" "u
 
 
 
-REVOKE ALL ON FUNCTION "public"."auth_can_manage_certificates"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."auth_can_manage_certificates"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."auth_can_manage_certificates"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."auth_can_manage_certificates"() TO "anon";
 
 
 
@@ -23834,12 +27404,6 @@ GRANT ALL ON FUNCTION "public"."bulk_publish_shifts"("p_shift_ids" "uuid"[], "p_
 
 
 
-REVOKE ALL ON FUNCTION "public"."calculate_employee_metrics"("p_employee_id" "uuid", "p_start_date" "date", "p_end_date" "date") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."calculate_employee_metrics"("p_employee_id" "uuid", "p_start_date" "date", "p_end_date" "date") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."calculate_employee_metrics"("p_employee_id" "uuid", "p_start_date" "date", "p_end_date" "date") TO "service_role";
-
-
-
 GRANT ALL ON FUNCTION "public"."calculate_net_hours"("p_start_time" time without time zone, "p_end_time" time without time zone, "p_unpaid_break_minutes" integer) TO "anon";
 GRANT ALL ON FUNCTION "public"."calculate_net_hours"("p_start_time" time without time zone, "p_end_time" time without time zone, "p_unpaid_break_minutes" integer) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."calculate_net_hours"("p_start_time" time without time zone, "p_end_time" time without time zone, "p_unpaid_break_minutes" integer) TO "service_role";
@@ -23873,12 +27437,6 @@ GRANT ALL ON FUNCTION "public"."calculate_weekly_hours"("p_employee_id" "uuid", 
 REVOKE ALL ON FUNCTION "public"."can_edit_roster_shift"("p_roster_shift_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."can_edit_roster_shift"("p_roster_shift_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."can_edit_roster_shift"("p_roster_shift_id" "uuid") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."cancel_shift"("p_shift_id" "uuid", "p_reason" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."cancel_shift"("p_shift_id" "uuid", "p_reason" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."cancel_shift"("p_shift_id" "uuid", "p_reason" "text") TO "service_role";
 
 
 
@@ -24002,18 +27560,6 @@ GRANT ALL ON FUNCTION "public"."clone_roster_subgroup_v2"("p_org_id" "uuid", "p_
 
 
 
-REVOKE ALL ON FUNCTION "public"."close_bidding_no_winner"("p_shift_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."close_bidding_no_winner"("p_shift_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."close_bidding_no_winner"("p_shift_id" "uuid") TO "service_role";
-
-
-
-REVOKE ALL ON FUNCTION "public"."close_bidding_no_winner"("p_shift_id" "uuid", "p_closed_by" "uuid", "p_reason" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."close_bidding_no_winner"("p_shift_id" "uuid", "p_closed_by" "uuid", "p_reason" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."close_bidding_no_winner"("p_shift_id" "uuid", "p_closed_by" "uuid", "p_reason" "text") TO "service_role";
-
-
-
 REVOKE ALL ON FUNCTION "public"."compute_employee_quarter_metrics"("p_employee_id" "uuid", "p_quarter_year" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."compute_employee_quarter_metrics"("p_employee_id" "uuid", "p_quarter_year" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."compute_employee_quarter_metrics"("p_employee_id" "uuid", "p_quarter_year" "text") TO "service_role";
@@ -24129,9 +27675,27 @@ GRANT ALL ON FUNCTION "public"."enforce_exactly_three_groups"() TO "service_role
 
 
 
+GRANT ALL ON FUNCTION "public"."enforce_timesheet_review_gate"() TO "anon";
+GRANT ALL ON FUNCTION "public"."enforce_timesheet_review_gate"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."enforce_timesheet_review_gate"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."enqueue_swap_auto_decision"() TO "anon";
+GRANT ALL ON FUNCTION "public"."enqueue_swap_auto_decision"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."enqueue_swap_auto_decision"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."expire_locked_swaps"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."expire_locked_swaps"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."expire_locked_swaps"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."fn_bump_swap_policy_version"() TO "anon";
+GRANT ALL ON FUNCTION "public"."fn_bump_swap_policy_version"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."fn_bump_swap_policy_version"() TO "service_role";
 
 
 
@@ -24165,6 +27729,18 @@ GRANT ALL ON FUNCTION "public"."fn_capture_swap_event"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."fn_capture_timesheet_event"() TO "anon";
+GRANT ALL ON FUNCTION "public"."fn_capture_timesheet_event"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."fn_capture_timesheet_event"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."fn_enrich_shift_event"() TO "anon";
+GRANT ALL ON FUNCTION "public"."fn_enrich_shift_event"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."fn_enrich_shift_event"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."fn_get_shift_lock_statuses"("p_shift_ids" "uuid"[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."fn_get_shift_lock_statuses"("p_shift_ids" "uuid"[]) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_get_shift_lock_statuses"("p_shift_ids" "uuid"[]) TO "service_role";
@@ -24195,6 +27771,13 @@ GRANT ALL ON FUNCTION "public"."fn_process_offer_expirations"() TO "service_role
 
 
 
+REVOKE ALL ON FUNCTION "public"."fn_refresh_snapshots_on_event"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."fn_refresh_snapshots_on_event"() TO "anon";
+GRANT ALL ON FUNCTION "public"."fn_refresh_snapshots_on_event"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."fn_refresh_snapshots_on_event"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."fn_seed_fixed_template_groups"() TO "anon";
 GRANT ALL ON FUNCTION "public"."fn_seed_fixed_template_groups"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_seed_fixed_template_groups"() TO "service_role";
@@ -24213,6 +27796,12 @@ GRANT ALL ON FUNCTION "public"."fn_shift_state"("p_lifecycle_status" "text", "p_
 
 
 
+GRANT ALL ON FUNCTION "public"."fn_swap_audit_immutable"() TO "anon";
+GRANT ALL ON FUNCTION "public"."fn_swap_audit_immutable"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."fn_swap_audit_immutable"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."fn_touch_swap_status_changed_at"() TO "anon";
 GRANT ALL ON FUNCTION "public"."fn_touch_swap_status_changed_at"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."fn_touch_swap_status_changed_at"() TO "service_role";
@@ -24225,9 +27814,21 @@ GRANT ALL ON FUNCTION "public"."fn_validate_shift_event"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."fsm_op_is_legal"("p_state" "text", "p_op" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."fsm_op_is_legal"("p_state" "text", "p_op" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."fsm_op_is_legal"("p_state" "text", "p_op" "text") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."generate_availability_slots"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."generate_availability_slots"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."generate_availability_slots"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."get_bidding_kpis"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[], "p_subdept_ids" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_bidding_kpis"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[], "p_subdept_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_bidding_kpis"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[], "p_subdept_ids" "uuid"[]) TO "service_role";
 
 
 
@@ -24309,6 +27910,18 @@ GRANT ALL ON FUNCTION "public"."get_insights_trend"("p_start_date" "date", "p_en
 
 
 
+REVOKE ALL ON FUNCTION "public"."get_manager_scorecard"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[], "p_subdept_ids" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_manager_scorecard"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[], "p_subdept_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_manager_scorecard"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[], "p_subdept_ids" "uuid"[]) TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."get_marketplace_kpis"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[], "p_subdept_ids" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_marketplace_kpis"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[], "p_subdept_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_marketplace_kpis"("p_from" "date", "p_to" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[], "p_subdept_ids" "uuid"[]) TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."get_metric_detailed_analysis"("p_metric_id" "text", "p_start_date" "date", "p_end_date" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."get_metric_detailed_analysis"("p_metric_id" "text", "p_start_date" "date", "p_end_date" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[]) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_metric_detailed_analysis"("p_metric_id" "text", "p_start_date" "date", "p_end_date" "date", "p_org_ids" "uuid"[], "p_dept_ids" "uuid"[]) TO "service_role";
@@ -24375,9 +27988,21 @@ GRANT ALL ON FUNCTION "public"."get_roster_days_in_range"("p_organization_id" "u
 
 
 
+GRANT ALL ON FUNCTION "public"."get_roster_planner_stats"("p_organization_id" "uuid", "p_start_date" "date", "p_end_date" "date", "p_department_ids" "uuid"[], "p_sub_department_ids" "uuid"[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."get_roster_planner_stats"("p_organization_id" "uuid", "p_start_date" "date", "p_end_date" "date", "p_department_ids" "uuid"[], "p_sub_department_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_roster_planner_stats"("p_organization_id" "uuid", "p_start_date" "date", "p_end_date" "date", "p_department_ids" "uuid"[], "p_sub_department_ids" "uuid"[]) TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."get_roster_shift_state"("p_lifecycle" "text", "p_has_assignment" boolean, "p_assignment_confirmed" boolean) TO "anon";
 GRANT ALL ON FUNCTION "public"."get_roster_shift_state"("p_lifecycle" "text", "p_has_assignment" boolean, "p_assignment_confirmed" boolean) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_roster_shift_state"("p_lifecycle" "text", "p_has_assignment" boolean, "p_assignment_confirmed" boolean) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_roster_summary"("p_organization_id" "uuid", "p_start_date" "date", "p_end_date" "date", "p_department_ids" "uuid"[], "p_sub_department_ids" "uuid"[]) TO "anon";
+GRANT ALL ON FUNCTION "public"."get_roster_summary"("p_organization_id" "uuid", "p_start_date" "date", "p_end_date" "date", "p_department_ids" "uuid"[], "p_sub_department_ids" "uuid"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_roster_summary"("p_organization_id" "uuid", "p_start_date" "date", "p_end_date" "date", "p_department_ids" "uuid"[], "p_sub_department_ids" "uuid"[]) TO "service_role";
 
 
 
@@ -24387,15 +28012,27 @@ GRANT ALL ON FUNCTION "public"."get_shift_delta"("p_org_id" "uuid", "p_since" ti
 
 
 
+GRANT ALL ON FUNCTION "public"."get_shift_event_timeline"("p_shift_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_shift_event_timeline"("p_shift_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_shift_event_timeline"("p_shift_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."get_shift_flags"("p_shift_id" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "public"."get_shift_flags"("p_shift_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_shift_flags"("p_shift_id" "uuid") TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."get_shift_fsm_state"("p_lifecycle_status" "public"."shift_lifecycle", "p_assignment_status" "public"."shift_assignment_status", "p_assignment_outcome" "public"."shift_assignment_outcome", "p_trading_status" "public"."shift_trading", "p_is_cancelled" boolean) TO "anon";
-GRANT ALL ON FUNCTION "public"."get_shift_fsm_state"("p_lifecycle_status" "public"."shift_lifecycle", "p_assignment_status" "public"."shift_assignment_status", "p_assignment_outcome" "public"."shift_assignment_outcome", "p_trading_status" "public"."shift_trading", "p_is_cancelled" boolean) TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_shift_fsm_state"("p_lifecycle_status" "public"."shift_lifecycle", "p_assignment_status" "public"."shift_assignment_status", "p_assignment_outcome" "public"."shift_assignment_outcome", "p_trading_status" "public"."shift_trading", "p_is_cancelled" boolean) TO "service_role";
+GRANT ALL ON FUNCTION "public"."get_shift_fsm_state"("p_lifecycle_status" "public"."shift_lifecycle", "p_assignment_status" "public"."shift_assignment_status", "p_assignment_outcome" "public"."shift_assignment_outcome", "p_trading_status" "public"."shift_trading", "p_is_cancelled" boolean, "p_bidding_status" "public"."shift_bidding_status") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_shift_fsm_state"("p_lifecycle_status" "public"."shift_lifecycle", "p_assignment_status" "public"."shift_assignment_status", "p_assignment_outcome" "public"."shift_assignment_outcome", "p_trading_status" "public"."shift_trading", "p_is_cancelled" boolean, "p_bidding_status" "public"."shift_bidding_status") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_shift_fsm_state"("p_lifecycle_status" "public"."shift_lifecycle", "p_assignment_status" "public"."shift_assignment_status", "p_assignment_outcome" "public"."shift_assignment_outcome", "p_trading_status" "public"."shift_trading", "p_is_cancelled" boolean, "p_bidding_status" "public"."shift_bidding_status") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."get_shift_lifecycle"("p_shift_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."get_shift_lifecycle"("p_shift_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_shift_lifecycle"("p_shift_id" "uuid") TO "service_role";
 
 
 
@@ -24444,18 +28081,6 @@ GRANT ALL ON FUNCTION "public"."get_user_access_levels"() TO "service_role";
 REVOKE ALL ON FUNCTION "public"."get_user_access_levels"("_user_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."get_user_access_levels"("_user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_user_access_levels"("_user_id" "uuid") TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."user_contracts" TO "anon";
-GRANT ALL ON TABLE "public"."user_contracts" TO "authenticated";
-GRANT ALL ON TABLE "public"."user_contracts" TO "service_role";
-
-
-
-REVOKE ALL ON FUNCTION "public"."get_user_contracts"() FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."get_user_contracts"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_user_contracts"() TO "service_role";
 
 
 
@@ -24510,6 +28135,12 @@ GRANT ALL ON FUNCTION "public"."is_broadcast_system_manager"() TO "service_role"
 REVOKE ALL ON FUNCTION "public"."is_manager_or_above"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."is_manager_or_above"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."is_manager_or_above"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."is_shift_timesheet_reviewable"("p_shift_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."is_shift_timesheet_reviewable"("p_shift_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."is_shift_timesheet_reviewable"("p_shift_id" "uuid") TO "service_role";
 
 
 
@@ -24657,15 +28288,16 @@ GRANT ALL ON FUNCTION "public"."recalc_shift_utc_timestamps"() TO "service_role"
 
 
 
-REVOKE ALL ON FUNCTION "public"."recalculate_shift_urgency"("p_shift_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."recalculate_shift_urgency"("p_shift_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."recalculate_shift_urgency"("p_shift_id" "uuid") TO "service_role";
-
-
-
 REVOKE ALL ON FUNCTION "public"."refresh_all_performance_metrics"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."refresh_all_performance_metrics"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."refresh_all_performance_metrics"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."refresh_employee_performance_metrics"("p_employee_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."refresh_employee_performance_metrics"("p_employee_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."refresh_employee_performance_metrics"("p_employee_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."refresh_employee_performance_metrics"("p_employee_id" "uuid") TO "service_role";
 
 
 
@@ -24723,9 +28355,21 @@ GRANT ALL ON FUNCTION "public"."request_trade"("p_shift_id" "uuid", "p_target_em
 
 
 
-GRANT ALL ON FUNCTION "public"."resolve_shift_state"("p_lifecycle" "public"."shift_lifecycle", "p_assignment" "public"."shift_assignment_status", "p_outcome" "public"."shift_assignment_outcome", "p_bidding" "public"."shift_bidding_status", "p_trading" "public"."shift_trading") TO "anon";
-GRANT ALL ON FUNCTION "public"."resolve_shift_state"("p_lifecycle" "public"."shift_lifecycle", "p_assignment" "public"."shift_assignment_status", "p_outcome" "public"."shift_assignment_outcome", "p_bidding" "public"."shift_bidding_status", "p_trading" "public"."shift_trading") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."resolve_shift_state"("p_lifecycle" "public"."shift_lifecycle", "p_assignment" "public"."shift_assignment_status", "p_outcome" "public"."shift_assignment_outcome", "p_bidding" "public"."shift_bidding_status", "p_trading" "public"."shift_trading") TO "service_role";
+GRANT ALL ON FUNCTION "public"."resolve_audit_uuid_array"("p_field" "text", "p_arr" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."resolve_audit_uuid_array"("p_field" "text", "p_arr" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."resolve_audit_uuid_array"("p_field" "text", "p_arr" "jsonb") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."resolve_audit_uuid_name"("p_field" "text", "p_uuid" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."resolve_audit_uuid_name"("p_field" "text", "p_uuid" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."resolve_audit_uuid_name"("p_field" "text", "p_uuid" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."resolve_changes_jsonb"("p_changes" "jsonb") TO "anon";
+GRANT ALL ON FUNCTION "public"."resolve_changes_jsonb"("p_changes" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."resolve_changes_jsonb"("p_changes" "jsonb") TO "service_role";
 
 
 
@@ -24747,7 +28391,7 @@ GRANT ALL ON FUNCTION "public"."roster_update_timestamp"() TO "service_role";
 
 
 
-REVOKE ALL ON FUNCTION "public"."rpc_shift_coverage_stats"("p_org_id" "uuid", "p_date_from" "date", "p_date_to" "date") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."rpc_shift_coverage_stats"("p_org_id" "uuid", "p_date_from" "date", "p_date_to" "date") TO "anon";
 GRANT ALL ON FUNCTION "public"."rpc_shift_coverage_stats"("p_org_id" "uuid", "p_date_from" "date", "p_date_to" "date") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."rpc_shift_coverage_stats"("p_org_id" "uuid", "p_date_from" "date", "p_date_to" "date") TO "service_role";
 
@@ -24801,12 +28445,6 @@ GRANT ALL ON FUNCTION "public"."set_batch_id"("batch_id" "uuid") TO "service_rol
 
 
 
-GRANT ALL ON FUNCTION "public"."set_emergency_source"("p_action" "text", "p_time_to_start_sec" integer, "p_current" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."set_emergency_source"("p_action" "text", "p_time_to_start_sec" integer, "p_current" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."set_emergency_source"("p_action" "text", "p_time_to_start_sec" integer, "p_current" "text") TO "service_role";
-
-
-
 REVOKE ALL ON FUNCTION "public"."set_roster_day_status"("p_roster_day_id" "uuid", "p_status" "public"."roster_day_status", "p_user_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."set_roster_day_status"("p_roster_day_id" "uuid", "p_status" "public"."roster_day_status", "p_user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."set_roster_day_status"("p_roster_day_id" "uuid", "p_status" "public"."roster_day_status", "p_user_id" "uuid") TO "service_role";
@@ -24816,6 +28454,12 @@ GRANT ALL ON FUNCTION "public"."set_roster_day_status"("p_roster_day_id" "uuid",
 GRANT ALL ON FUNCTION "public"."set_skill_expiration"() TO "anon";
 GRANT ALL ON FUNCTION "public"."set_skill_expiration"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."set_skill_expiration"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."set_updated_at"() TO "anon";
+GRANT ALL ON FUNCTION "public"."set_updated_at"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."set_updated_at"() TO "service_role";
 
 
 
@@ -24837,6 +28481,12 @@ GRANT ALL ON FUNCTION "public"."sm_accept_trade"("p_swap_id" "uuid", "p_offer_id
 
 
 
+GRANT ALL ON FUNCTION "public"."sm_apply_shift_op"("p_shift_id" "uuid", "p_expected_version" integer, "p_op" "text", "p_payload" "jsonb", "p_idempotency_key" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."sm_apply_shift_op"("p_shift_id" "uuid", "p_expected_version" integer, "p_op" "text", "p_payload" "jsonb", "p_idempotency_key" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."sm_apply_shift_op"("p_shift_id" "uuid", "p_expected_version" integer, "p_op" "text", "p_payload" "jsonb", "p_idempotency_key" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."sm_approve_peer_swap"("p_requester_shift_id" "uuid", "p_offered_shift_id" "uuid", "p_requester_id" "uuid", "p_offerer_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."sm_approve_peer_swap"("p_requester_shift_id" "uuid", "p_offered_shift_id" "uuid", "p_requester_id" "uuid", "p_offerer_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."sm_approve_peer_swap"("p_requester_shift_id" "uuid", "p_offered_shift_id" "uuid", "p_requester_id" "uuid", "p_offerer_id" "uuid") TO "service_role";
@@ -24849,9 +28499,34 @@ GRANT ALL ON FUNCTION "public"."sm_approve_trade"("p_shift_id" "uuid", "p_new_em
 
 
 
+REVOKE ALL ON FUNCTION "public"."sm_assignment_run_finish"("p_run_id" "uuid", "p_status" "text", "p_summary" "jsonb", "p_error" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."sm_assignment_run_finish"("p_run_id" "uuid", "p_status" "text", "p_summary" "jsonb", "p_error" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."sm_assignment_run_finish"("p_run_id" "uuid", "p_status" "text", "p_summary" "jsonb", "p_error" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."sm_assignment_run_rollback"("p_run_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."sm_assignment_run_rollback"("p_run_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."sm_assignment_run_rollback"("p_run_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."sm_assignment_run_start"("p_scope" "jsonb", "p_engine_version" "text", "p_policy_version" integer, "p_options" "jsonb", "p_dry_run" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."sm_assignment_run_start"("p_scope" "jsonb", "p_engine_version" "text", "p_policy_version" integer, "p_options" "jsonb", "p_dry_run" boolean) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."sm_assignment_run_start"("p_scope" "jsonb", "p_engine_version" "text", "p_policy_version" integer, "p_options" "jsonb", "p_dry_run" boolean) TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."sm_bulk_assign"("p_shift_ids" "uuid"[], "p_employee_id" "uuid", "p_user_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."sm_bulk_assign"("p_shift_ids" "uuid"[], "p_employee_id" "uuid", "p_user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."sm_bulk_assign"("p_shift_ids" "uuid"[], "p_employee_id" "uuid", "p_user_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."sm_bulk_assign_atomic"("p_assignments" "jsonb", "p_user_id" "uuid", "p_idempotency_key" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."sm_bulk_assign_atomic"("p_assignments" "jsonb", "p_user_id" "uuid", "p_idempotency_key" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."sm_bulk_assign_atomic"("p_assignments" "jsonb", "p_user_id" "uuid", "p_idempotency_key" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."sm_bulk_assign_atomic"("p_assignments" "jsonb", "p_user_id" "uuid", "p_idempotency_key" "uuid") TO "service_role";
 
 
 
@@ -24951,12 +28626,6 @@ GRANT ALL ON FUNCTION "public"."sm_emergency_assign"("p_shift_id" "uuid", "p_emp
 
 
 
-REVOKE ALL ON FUNCTION "public"."sm_emergency_assign"("p_shift_id" "uuid", "p_employee_id" "uuid", "p_user_id" "uuid", "p_reason" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."sm_emergency_assign"("p_shift_id" "uuid", "p_employee_id" "uuid", "p_user_id" "uuid", "p_reason" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."sm_emergency_assign"("p_shift_id" "uuid", "p_employee_id" "uuid", "p_user_id" "uuid", "p_reason" "text") TO "service_role";
-
-
-
 REVOKE ALL ON FUNCTION "public"."sm_employee_cancel"("p_shift_id" "uuid", "p_employee_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."sm_employee_cancel"("p_shift_id" "uuid", "p_employee_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."sm_employee_cancel"("p_shift_id" "uuid", "p_employee_id" "uuid") TO "service_role";
@@ -24987,6 +28656,12 @@ GRANT ALL ON FUNCTION "public"."sm_expire_trade"("p_shift_id" "uuid", "p_user_id
 
 
 
+GRANT ALL ON FUNCTION "public"."sm_finalize_planning_request"("p_request_id" "uuid", "p_offer_id" "uuid", "p_manager_id" "uuid", "p_manager_notes" "text", "p_shift_updated_at" timestamp with time zone, "p_target_shift_updated_at" timestamp with time zone) TO "anon";
+GRANT ALL ON FUNCTION "public"."sm_finalize_planning_request"("p_request_id" "uuid", "p_offer_id" "uuid", "p_manager_id" "uuid", "p_manager_notes" "text", "p_shift_updated_at" timestamp with time zone, "p_target_shift_updated_at" timestamp with time zone) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."sm_finalize_planning_request"("p_request_id" "uuid", "p_offer_id" "uuid", "p_manager_id" "uuid", "p_manager_notes" "text", "p_shift_updated_at" timestamp with time zone, "p_target_shift_updated_at" timestamp with time zone) TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."sm_handle_auto_clock_out"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."sm_handle_auto_clock_out"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."sm_handle_auto_clock_out"() TO "service_role";
@@ -25011,15 +28686,14 @@ GRANT ALL ON FUNCTION "public"."sm_move_shift"("p_shift_id" "uuid", "p_group_typ
 
 
 
-REVOKE ALL ON FUNCTION "public"."sm_process_time_transitions"() FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."sm_process_time_transitions"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."sm_process_time_transitions"() TO "service_role";
-
-
-
 REVOKE ALL ON FUNCTION "public"."sm_publish_shift"("p_shift_id" "uuid", "p_user_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."sm_publish_shift"("p_shift_id" "uuid", "p_user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."sm_publish_shift"("p_shift_id" "uuid", "p_user_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."sm_refresh_shift_snapshots"("p_shift_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."sm_refresh_shift_snapshots"("p_shift_id" "uuid") TO "service_role";
 
 
 
@@ -25059,9 +28733,37 @@ GRANT ALL ON PROCEDURE "public"."sm_run_state_processor"() TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."sm_select_bid_winner"("p_shift_id" "uuid", "p_winner_id" "uuid", "p_user_id" "uuid") TO "anon";
+REVOKE ALL ON FUNCTION "public"."sm_select_bid_winner"("p_shift_id" "uuid", "p_winner_id" "uuid", "p_user_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."sm_select_bid_winner"("p_shift_id" "uuid", "p_winner_id" "uuid", "p_user_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."sm_select_bid_winner"("p_shift_id" "uuid", "p_winner_id" "uuid", "p_user_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."sm_swap_auto_decide"("p_swap_id" "uuid", "p_idempotency_key" "text", "p_payload" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."sm_swap_auto_decide"("p_swap_id" "uuid", "p_idempotency_key" "text", "p_payload" "jsonb") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."sm_swap_auto_decide"("p_swap_id" "uuid", "p_idempotency_key" "text", "p_payload" "jsonb") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."sm_swap_auto_revert"("p_decision_id" "uuid", "p_actor" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."sm_swap_auto_revert"("p_decision_id" "uuid", "p_actor" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."sm_swap_auto_revert"("p_decision_id" "uuid", "p_actor" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."swap_review_queue" TO "anon";
+GRANT ALL ON TABLE "public"."swap_review_queue" TO "authenticated";
+GRANT ALL ON TABLE "public"."swap_review_queue" TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."sm_swap_queue_claim"("p_worker" "text", "p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."sm_swap_queue_claim"("p_worker" "text", "p_limit" integer) TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."sm_swap_queue_complete"("p_id" "uuid", "p_status" "text", "p_error" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."sm_swap_queue_complete"("p_id" "uuid", "p_status" "text", "p_error" "text") TO "service_role";
 
 
 
@@ -25470,6 +29172,72 @@ GRANT ALL ON FUNCTION "public"."withdraw_shift_from_bidding"("p_shift_id" "uuid"
 
 
 
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."departments" TO "anon";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."departments" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."departments" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."employee_assignments" TO "anon";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."employee_assignments" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."employee_assignments" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."employees" TO "anon";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."employees" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."employees" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."organizations" TO "anon";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."organizations" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."organizations" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."remuneration_levels" TO "anon";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."remuneration_levels" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."remuneration_levels" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."roles" TO "anon";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."roles" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."roles" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."subdepartments" TO "anon";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."subdepartments" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."subdepartments" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."user_contracts" TO "anon";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."user_contracts" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."user_contracts" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."v_headcount_by_level" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."v_headcount_by_level" TO "anon";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."v_headcount_by_level" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."v_org_chart" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."v_org_chart" TO "anon";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."v_org_chart" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."v_promotion_ladder" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."v_promotion_ladder" TO "anon";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "hr"."v_promotion_ladder" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."actual_labor_attendance" TO "anon";
 GRANT ALL ON TABLE "public"."actual_labor_attendance" TO "authenticated";
 GRANT ALL ON TABLE "public"."actual_labor_attendance" TO "service_role";
@@ -25485,6 +29253,30 @@ GRANT ALL ON TABLE "public"."allowed_locations" TO "service_role";
 GRANT ALL ON TABLE "public"."app_access_certificates" TO "anon";
 GRANT ALL ON TABLE "public"."app_access_certificates" TO "authenticated";
 GRANT ALL ON TABLE "public"."app_access_certificates" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."assignment_decisions" TO "anon";
+GRANT ALL ON TABLE "public"."assignment_decisions" TO "authenticated";
+GRANT ALL ON TABLE "public"."assignment_decisions" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."assignment_events" TO "anon";
+GRANT ALL ON TABLE "public"."assignment_events" TO "authenticated";
+GRANT ALL ON TABLE "public"."assignment_events" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."assignment_runs" TO "anon";
+GRANT ALL ON TABLE "public"."assignment_runs" TO "authenticated";
+GRANT ALL ON TABLE "public"."assignment_runs" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."assignment_snapshots" TO "anon";
+GRANT ALL ON TABLE "public"."assignment_snapshots" TO "authenticated";
+GRANT ALL ON TABLE "public"."assignment_snapshots" TO "service_role";
 
 
 
@@ -25569,6 +29361,12 @@ GRANT ALL ON TABLE "public"."broadcast_read_status" TO "service_role";
 GRANT ALL ON TABLE "public"."broadcasts" TO "anon";
 GRANT ALL ON TABLE "public"."broadcasts" TO "authenticated";
 GRANT ALL ON TABLE "public"."broadcasts" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."bulk_assign_idempotency" TO "anon";
+GRANT ALL ON TABLE "public"."bulk_assign_idempotency" TO "authenticated";
+GRANT ALL ON TABLE "public"."bulk_assign_idempotency" TO "service_role";
 
 
 
@@ -25702,6 +29500,12 @@ GRANT ALL ON TABLE "public"."events" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."fairness_ledger" TO "anon";
+GRANT ALL ON TABLE "public"."fairness_ledger" TO "authenticated";
+GRANT ALL ON TABLE "public"."fairness_ledger" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."function_map" TO "anon";
 GRANT ALL ON TABLE "public"."function_map" TO "authenticated";
 GRANT ALL ON TABLE "public"."function_map" TO "service_role";
@@ -25768,9 +29572,21 @@ GRANT ALL ON TABLE "public"."pay_periods" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."planning_offers" TO "anon";
+GRANT ALL ON TABLE "public"."planning_offers" TO "authenticated";
+GRANT ALL ON TABLE "public"."planning_offers" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."planning_periods" TO "anon";
 GRANT ALL ON TABLE "public"."planning_periods" TO "authenticated";
 GRANT ALL ON TABLE "public"."planning_periods" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."planning_requests" TO "anon";
+GRANT ALL ON TABLE "public"."planning_requests" TO "authenticated";
+GRANT ALL ON TABLE "public"."planning_requests" TO "service_role";
 
 
 
@@ -25972,9 +29788,27 @@ GRANT ALL ON TABLE "public"."supervisor_feedback" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."swap_approval_rules" TO "anon";
+GRANT ALL ON TABLE "public"."swap_approval_rules" TO "authenticated";
+GRANT ALL ON TABLE "public"."swap_approval_rules" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."swap_approvals" TO "anon";
 GRANT ALL ON TABLE "public"."swap_approvals" TO "authenticated";
 GRANT ALL ON TABLE "public"."swap_approvals" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."swap_audit_log" TO "anon";
+GRANT ALL ON TABLE "public"."swap_audit_log" TO "authenticated";
+GRANT ALL ON TABLE "public"."swap_audit_log" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."swap_decisions" TO "anon";
+GRANT ALL ON TABLE "public"."swap_decisions" TO "authenticated";
+GRANT ALL ON TABLE "public"."swap_decisions" TO "service_role";
 
 
 
@@ -26038,9 +29872,9 @@ GRANT ALL ON TABLE "public"."timesheets" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."v_broadcast_groups_with_stats" TO "anon";
-GRANT ALL ON TABLE "public"."v_broadcast_groups_with_stats" TO "authenticated";
-GRANT ALL ON TABLE "public"."v_broadcast_groups_with_stats" TO "service_role";
+GRANT ALL ON TABLE "public"."user_contracts" TO "anon";
+GRANT ALL ON TABLE "public"."user_contracts" TO "authenticated";
+GRANT ALL ON TABLE "public"."user_contracts" TO "service_role";
 
 
 
@@ -26050,33 +29884,21 @@ GRANT ALL ON TABLE "public"."v_channels_with_stats" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."v_group_all_participants" TO "anon";
-GRANT ALL ON TABLE "public"."v_group_all_participants" TO "authenticated";
-GRANT ALL ON TABLE "public"."v_group_all_participants" TO "service_role";
-
-
-
 GRANT ALL ON TABLE "public"."v_performance_data_quality_alerts" TO "anon";
 GRANT ALL ON TABLE "public"."v_performance_data_quality_alerts" TO "authenticated";
 GRANT ALL ON TABLE "public"."v_performance_data_quality_alerts" TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."v_shift_assignment_episodes" TO "anon";
+GRANT ALL ON TABLE "public"."v_shift_assignment_episodes" TO "authenticated";
+GRANT ALL ON TABLE "public"."v_shift_assignment_episodes" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."v_shifts_grouped" TO "anon";
 GRANT ALL ON TABLE "public"."v_shifts_grouped" TO "authenticated";
 GRANT ALL ON TABLE "public"."v_shifts_grouped" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."v_template_full" TO "anon";
-GRANT ALL ON TABLE "public"."v_template_full" TO "authenticated";
-GRANT ALL ON TABLE "public"."v_template_full" TO "service_role";
-
-
-
-GRANT ALL ON TABLE "public"."v_unread_broadcasts_by_group" TO "anon";
-GRANT ALL ON TABLE "public"."v_unread_broadcasts_by_group" TO "authenticated";
-GRANT ALL ON TABLE "public"."v_unread_broadcasts_by_group" TO "service_role";
 
 
 
@@ -26143,6 +29965,12 @@ GRANT ALL ON TABLE "public"."work_rules" TO "service_role";
 
 
 
+
+
+
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "hr" GRANT SELECT,INSERT,DELETE,UPDATE ON TABLES TO "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "hr" GRANT SELECT,INSERT,DELETE,UPDATE ON TABLES TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "hr" GRANT SELECT,INSERT,DELETE,UPDATE ON TABLES TO "service_role";
 
 
 

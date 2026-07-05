@@ -380,7 +380,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
         shift_group_id: (shift as any).shift_group_id,
         shift_subgroup_id: (shift as any).shift_subgroup_id || (shift as any).roster_subgroup_id,
         role_id: shift.role_id,
-        remuneration_level_id: shift.remuneration_level_id,
+        remuneration_level: shift.remuneration_level,
         paid_break_minutes: shift.paid_break_minutes,
         unpaid_break_minutes: shift.unpaid_break_minutes,
         timezone: shift.timezone,
@@ -474,7 +474,6 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
   }, [startDate, endDate]);
 
   const levelGroups = useMemo((): LevelGroup[] => {
-    const levelMap = new Map<string, { num: number; label: string }>(levels.map(l => [l.id, { num: l.level_number ?? 0, label: l.level_name || `Level ${l.level_number}` }]));
     const shiftsByRoleAndDate: Record<string, Record<string, Shift[]>> = {};
     
     if (projection) {

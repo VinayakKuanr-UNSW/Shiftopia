@@ -13,7 +13,8 @@ export interface TemplateShift {
     name: string;
     roleId?: string;
     roleName?: string;
-    remunerationLevel?: string;
+    remunerationLevel?: number;
+    remunerationLevelName?: string;
     startTime: string;
     endTime: string;
     netLength?: number;

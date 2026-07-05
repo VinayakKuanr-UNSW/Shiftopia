@@ -36,154 +36,14 @@ import {
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
-
-// ── Types ──────────────────────────────────────────────────────────────
-
-interface ShiftPillData {
-    id: string;
-    netHours: number;
-    orgName?: string;
-    deptName?: string;
-    subDeptName?: string;
-    roleName?: string;
-    isDraft: boolean;
-}
-
-// ── Compliance types ──────────────────────────────────────────────────────────
-
-type CompV8Severity = 'violation' | 'warning' | 'ok';
-
-interface WindowViolation {
-    weeks: 2 | 3 | 4;
-    hours: number;
-    limit: number;
-    severity: CompV8Severity;
-}
-
-interface WeekComp {
-    weekHours: number;
-    windows: WindowViolation[];
-    worstV8Severity: CompV8Severity;
-}
-
-interface EmpComp {
-    overallV8Severity: CompV8Severity;
-    worstDesc: string;
-    weeks: Record<number, WeekComp>;
-    dailyViolations: Set<string>;
-    dailyWarnings: Set<string>;
-}
-
-// ── EBA constants ─────────────────────────────────────────────────────────────
-
-const EBA_WEEKLY_LIMIT  = 38;   // h/week hard cap
-const DAILY_CAP_HARD    = 12;   // h — violation
-const DAILY_CAP_SOFT    = 10;   // h — warning
-const NEAR_LIMIT_RATIO  = 0.90; // 90 % of limit triggers warning badge
-
-const ROLLING_WINDOWS = [
-    { weeks: 2 as const, days: 14 },
-    { weeks: 3 as const, days: 21 },
-    { weeks: 4 as const, days: 28 },
-] as const;
-
-// ── computeEmpComp ────────────────────────────────────────────────────────────
-
-function computeEmpComp(
-    byWeek: Record<number, number>,
-    byDate: Record<string, ShiftPillData[]>,
-    sortedWeekNums: number[],
-): EmpComp {
-    // 1. Daily cap checks
-    const dailyViolations = new Set<string>();
-    const dailyWarnings   = new Set<string>();
-    for (const [date, shifts] of Object.entries(byDate)) {
-        const hours = shifts.reduce((sum, s) => sum + s.netHours, 0);
-        if (hours > DAILY_CAP_HARD)       dailyViolations.add(date);
-        else if (hours > DAILY_CAP_SOFT)  dailyWarnings.add(date);
-    }
-
-    // 2. Per-week entries
-    const weekComps: Record<number, WeekComp> = {};
-    for (const wn of sortedWeekNums) {
-        weekComps[wn] = { weekHours: byWeek[wn] || 0, windows: [], worstV8Severity: 'ok' };
-    }
-
-    // 3. Bubble daily cap severity into week
-    for (const date of dailyViolations) {
-        const wn = getISOWeek(new Date(date));
-        if (weekComps[wn]) weekComps[wn].worstV8Severity = 'violation';
-    }
-    for (const date of dailyWarnings) {
-        const wn = getISOWeek(new Date(date));
-        if (weekComps[wn] && weekComps[wn].worstV8Severity === 'ok')
-            weekComps[wn].worstV8Severity = 'warning';
-    }
-
-    // 4. Rolling-window checks (prefix-sum sweep over sorted week indices)
-    for (const win of ROLLING_WINDOWS) {
-        const limit     = EBA_WEEKLY_LIMIT * win.weeks;
-        const warnLimit = limit * NEAR_LIMIT_RATIO;
-
-        for (let endIdx = win.weeks - 1; endIdx < sortedWeekNums.length; endIdx++) {
-            let sum = 0;
-            for (let i = endIdx - win.weeks + 1; i <= endIdx; i++) {
-                sum += byWeek[sortedWeekNums[i]] || 0;
-            }
-            if (sum <= warnLimit) continue;
-
-            const severity: CompV8Severity = sum > limit ? 'violation' : 'warning';
-            const endWn = sortedWeekNums[endIdx];
-            if (!weekComps[endWn]) continue;
-
-            const existing = weekComps[endWn].windows.find(w => w.weeks === win.weeks);
-            if (existing) {
-                if (sum > existing.hours) {
-                    existing.hours    = parseFloat(sum.toFixed(1));
-                    existing.severity = severity;
-                }
-            } else {
-                weekComps[endWn].windows.push({
-                    weeks: win.weeks,
-                    hours: parseFloat(sum.toFixed(1)),
-                    limit,
-                    severity,
-                });
-            }
-
-            if (severity === 'violation') {
-                weekComps[endWn].worstV8Severity = 'violation';
-            } else if (severity === 'warning' && weekComps[endWn].worstV8Severity === 'ok') {
-                weekComps[endWn].worstV8Severity = 'warning';
-            }
-        }
-    }
-
-    // 5. Derive overall severity + description
-    let overallV8Severity: CompV8Severity = 'ok';
-    let worstDesc = 'All checks passed';
-
-    for (const comp of Object.values(weekComps)) {
-        for (const win of comp.windows) {
-            if (win.severity === 'violation' && overallV8Severity !== 'violation') {
-                overallV8Severity = 'violation';
-                worstDesc = `${win.hours}h in ${win.weeks}w window (limit ${win.limit}h)`;
-            } else if (win.severity === 'warning' && overallV8Severity === 'ok') {
-                overallV8Severity = 'warning';
-                worstDesc = `Near limit: ${win.hours}h in ${win.weeks}w window`;
-            }
-        }
-    }
-    if (dailyViolations.size > 0 && overallV8Severity !== 'violation') {
-        overallV8Severity = 'violation';
-        worstDesc = `Daily cap exceeded on ${dailyViolations.size} day(s) (>${DAILY_CAP_HARD}h)`;
-    } else if (dailyWarnings.size > 0 && overallV8Severity === 'ok') {
-        overallV8Severity = 'warning';
-        worstDesc = `Near daily cap on ${dailyWarnings.size} day(s) (>${DAILY_CAP_SOFT}h)`;
-    }
-
-    return { overallV8Severity, worstDesc, weeks: weekComps, dailyViolations, dailyWarnings };
-}
+import {
+    computeEmpComp,
+    EBA_WEEKLY_LIMIT,
+    type ShiftPillData,
+    type CompV8Severity,
+    type EmpComp,
+    type GridContractType,
+} from '@/modules/insights/model/grid-compliance';
 
 // ── Cell class helpers ────────────────────────────────────────────────────────
 
@@ -289,13 +149,21 @@ const GridPage: React.FC = () => {
             byWeek: Record<number, number>;
             draftDates: Set<string>;
         }> = {};
-        const empMap = new Map<string, { id: string; first_name: string; last_name: string }>();
+        const empMap = new Map<string, { 
+            id: string; 
+            first_name: string; 
+            last_name: string;
+            contract_type?: GridContractType;
+            contracted_weekly_hours?: number;
+        }>();
 
         employeesByContract.forEach(emp => {
             empMap.set(emp.id, { 
                 id: emp.id, 
                 first_name: emp.first_name, 
                 last_name: emp.last_name,
+                contract_type: (emp as any).contract_type,
+                contracted_weekly_hours: (emp as any).contracted_weekly_hours,
             });
             data[emp.id] = { byDate: {}, byWeek: {}, draftDates: new Set() };
         });
@@ -406,7 +274,7 @@ const GridPage: React.FC = () => {
         const map: Record<string, EmpComp> = {};
         for (const emp of paginatedEmployees) {
             const d = aggregatedData[emp.id];
-            if (d) map[emp.id] = computeEmpComp(d.byWeek, d.byDate, sortedWeekNums);
+            if (d) map[emp.id] = computeEmpComp(d.byWeek, d.byDate, sortedWeekNums, emp.contract_type, emp.contracted_weekly_hours);
         }
         return map;
     }, [paginatedEmployees, aggregatedData, sortedWeekNums]);

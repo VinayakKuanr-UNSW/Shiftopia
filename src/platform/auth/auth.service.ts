@@ -21,7 +21,15 @@ export const authService = {
             }
 
             // 2. Fetch Contracts
-            const { data: contractsData, error: contractsErr } = await supabase
+            // NOTE: scalar columns only. hr.user_contracts has cross-schema FKs
+            // (organization_id/department_id/sub_department_id → public.*, while
+            // role_id/remuneration_level → hr.*), and same-named hr.organizations
+            // / hr.departments tables shadow the FK targets — so PostgREST cannot
+            // auto-embed `organizations(name)` etc. (PGRST200). The joined names
+            // are not consumed anywhere (org/dept names come from the certificate
+            // scope tree), so we skip the embeds entirely.
+            const { data: contractsData, error: contractsErr } = await (supabase as any)
+                .schema('hr')
                 .from('user_contracts')
                 .select(`
                     id,
@@ -30,14 +38,10 @@ export const authService = {
                     department_id,
                     sub_department_id,
                     role_id,
-                    rem_level_id,
+                    remuneration_level,
                     employment_status,
                     status,
-                    access_level,
-                    organizations (name),
-                    departments (name),
-                    sub_departments (name),
-                    roles (name)
+                    access_level
                 `)
                 .eq('user_id', userId)
                 .eq('status', 'Active');
@@ -51,14 +55,10 @@ export const authService = {
                 departmentId: c.department_id,
                 subDepartmentId: c.sub_department_id,
                 roleId: c.role_id,
-                remLevelId: c.rem_level_id,
+                remLevelId: c.remuneration_level,
                 accessLevel: (c.access_level as AccessLevel) || 'alpha',
                 employmentStatus: c.employment_status,
                 status: c.status,
-                organizationName: c.organizations ? (c.organizations as any).name : undefined,
-                departmentName: c.departments ? (c.departments as any).name : undefined,
-                subDepartmentName: c.sub_departments ? (c.sub_departments as any).name : undefined,
-                roleName: c.roles ? (c.roles as any).name : undefined,
             }));
 
             // 3. Fetch Certificates with related names (including certificate_type and is_active)

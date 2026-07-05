@@ -57,6 +57,7 @@ interface ShiftData {
     unpaid_break_minutes?: number;
     role_name?: string;
     department_name?: string;
+    group_type?: string | null;
 }
 
 interface RosterShift {
@@ -635,6 +636,15 @@ function ShiftCard({ shift, label, color }: { shift: ShiftData; label: string; c
                 netLength={calcNetMinutes(shift)}
                 paidBreak={0}
                 unpaidBreak={shift.unpaid_break_minutes ?? 0}
+                groupVariant={(() => {
+                    const g = (shift.group_type || '').toLowerCase();
+                    const d = (shift.department_name || '').toLowerCase();
+                    if (g.includes('convention') || d.includes('convention')) return 'convention' as const;
+                    if (g.includes('exhibition') || d.includes('exhibition')) return 'exhibition' as const;
+                    if (g.includes('theatre') || d.includes('theatre')) return 'theatre' as const;
+                    if (g.includes('cutaway') || d.includes('cutaway')) return 'cutaway' as const;
+                    return 'default' as const;
+                })()}
             />
         </div>
     );

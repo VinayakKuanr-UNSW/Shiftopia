@@ -104,7 +104,7 @@ function toProjectedShift(shift: WorkerShiftDTO): ProjectedShiftResult {
     roleId: shift.roleId,
     levelName: shift.levelName ?? '',
     levelNumber: shift.levelNumber ?? 0,
-    levelId: shift.remunerationLevelId,
+    levelId: shift.remunerationLevel !== null && shift.remunerationLevel !== undefined ? shift.remunerationLevel.toString() : null,
     groupType,
     subGroupName: shift.subGroupName ?? shift.rosterSubgroupName ?? null,
     groupColorKey: groupType ?? 'unassigned',

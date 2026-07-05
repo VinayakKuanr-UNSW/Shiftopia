@@ -34,7 +34,7 @@ function makeShift(overrides: Partial<Shift> = {}): Shift {
     shift_subgroup_id: null,
     role_id: null,
     role_level: null,
-    remuneration_level_id: null,
+    remuneration_level: null,
     remuneration_rate: null,
     actual_hourly_rate: null,
     currency: 'AUD',

@@ -32,7 +32,7 @@ export const useReferenceData = (shouldLoad: boolean = false) => {
                 (supabase as any).schema('hr').from('departments').select('id, name, organization_id').order('name'),
                 (supabase as any).schema('hr').from('subdepartments').select('id, name, department_id').order('name'),
                 (supabase as any).schema('hr').from('roles').select('id, name, subdepartment_id, remuneration_level').order('name'),
-                (supabase as any).schema('hr').from('remuneration_levels').select('id:level_number, level_number, level_name, hourly_rate_min').order('level_number'),
+                (supabase as any).schema('hr').from('remuneration_levels').select('level_number, level_name, hourly_rate_min').order('level_number'),
             ]);
 
             setData({

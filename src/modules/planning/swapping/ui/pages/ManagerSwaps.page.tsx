@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
-import { Check, X, ChevronRight, ArrowLeftRight, Clock, CheckCircle, XCircle, Calendar, AlertTriangle, Shield, Gavel, RefreshCw, ShieldCheck, ShieldAlert, ShieldX, ScanSearch, Megaphone, UserCheck as LucideUserCheck, Circle, Minus } from 'lucide-react';
+import { Check, X, ChevronRight, ArrowLeftRight, Clock, CheckCircle, XCircle, Calendar, AlertTriangle, Shield, Gavel, RefreshCw, ShieldCheck, ShieldAlert, ShieldX, ScanSearch, Megaphone, UserCheck as LucideUserCheck, Circle, Minus, Undo2 } from 'lucide-react';
 import { ManagerComplianceApprovalModal } from '../components/ManagerComplianceApprovalModal';
+import { AutoApproveSwapsControl, AutoDecisionChip } from '../components/AutoApproveSwapsControl';
+import { swapPolicyApi, isDecisionRevertable, type SwapAutoDecision } from '../../api/swapPolicy.api';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
@@ -495,7 +497,7 @@ const deriveStateIds = (status: string): { shiftStateId: string; combinedStateId
 
 export const ManagerSwapsPage: React.FC = () => {
     const { toast } = useToast();
-    const { activeContract } = useAuth();
+    const { user, activeContract } = useAuth();
     const isMobile = useIsMobile();
     const orgSelection = useOrgSelection();
     const { scope, setScope, scopeKey, isGammaLocked } = useScopeFilter('managerial');
@@ -516,6 +518,7 @@ export const ManagerSwapsPage: React.FC = () => {
     // Single-item compliance approval modal (replaces simple confirm for single approvals)
     const [complianceApprovalTarget, setComplianceApprovalTarget] = useState<SwapRequestManagement | null>(null);
     const [swapRequests, setSwapRequests] = useState<SwapRequestManagement[]>([]);
+    const [autoDecisions, setAutoDecisions] = useState<Map<string, SwapAutoDecision>>(new Map());
     const [isLoading, setIsLoading] = useState(true);
     const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
     const [searchQuery, setSearchQuery] = useState('');
@@ -533,6 +536,13 @@ export const ManagerSwapsPage: React.FC = () => {
             });
             const uiData = apiData.map(mapToUIModel);
             setSwapRequests(uiData);
+
+            // Latest bot decision per swap (auto-approve chips + undo); non-fatal if unavailable
+            try {
+                setAutoDecisions(await swapPolicyApi.getDecisionsForSwaps(uiData.map(r => r.id)));
+            } catch (decisionError) {
+                console.error('[ManagerSwaps] Failed to load auto-approve decisions:', decisionError);
+            }
         } catch (error) {
             console.error(error);
             toast({
@@ -627,6 +637,22 @@ export const ManagerSwapsPage: React.FC = () => {
         setActionConfirm(null);
     };
 
+    const handleUndoAutoApproval = async (decision: SwapAutoDecision) => {
+        if (!user?.id) return;
+        try {
+            await swapPolicyApi.revertAutoDecision(decision.id, user.id);
+            toast({ title: 'Auto-approval undone', description: 'The swap was reverted via the gateway.' });
+            fetchData();
+        } catch (error) {
+            console.error('Failed to undo auto-approval:', error);
+            toast({
+                title: 'Undo failed',
+                description: error instanceof Error ? error.message : 'Could not revert the auto-approval.',
+                variant: 'destructive',
+            });
+        }
+    };
+
     const toggleSelection = (id: string) => {
         setSelectedIds((prev) => {
             const newSet = new Set(prev);
@@ -662,6 +688,12 @@ export const ManagerSwapsPage: React.FC = () => {
                 onRefresh={fetchData}
                 isLoading={isLoading}
                 functionBarChildren={
+                    <>
+                    <AutoApproveSwapsControl
+                        organizationId={currentOrgId}
+                        userId={user?.id}
+                        onChanged={fetchData}
+                    />
                     <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/30 border border-border flex-nowrap overflow-x-auto scrollbar-hide">
                         {STATUS_TABS.map(tab => {
                             const isActive = statusFilter === tab.id;
@@ -697,6 +729,7 @@ export const ManagerSwapsPage: React.FC = () => {
                             );
                         })}
                     </div>
+                    </>
                 }
             />
 
@@ -883,7 +916,7 @@ export const ManagerSwapsPage: React.FC = () => {
                                                             </div>
                                                         </td>
                                                         <td className="py-3 px-4">
-                                                            <div className="flex justify-center">
+                                                            <div className="flex flex-col items-center gap-1.5">
                                                                 {request.complianceStatus ? (() => {
                                                                     const cStyle = COMPLIANCE_STYLES[request.complianceStatus];
                                                                     return (
@@ -906,6 +939,10 @@ export const ManagerSwapsPage: React.FC = () => {
                                                                 })() : (
                                                                     <span className="text-muted-foreground/30 font-mono text-[11px]">—</span>
                                                                 )}
+                                                                {(() => {
+                                                                    const botDecision = autoDecisions.get(request.id);
+                                                                    return botDecision ? <AutoDecisionChip decision={botDecision} /> : null;
+                                                                })()}
                                                             </div>
                                                         </td>
                                                         <td className="py-3 px-4 text-right">
@@ -955,6 +992,21 @@ export const ManagerSwapsPage: React.FC = () => {
                                                                         {request.status}
                                                                     </div>
                                                                 )}
+                                                                {(() => {
+                                                                    const botDecision = autoDecisions.get(request.id);
+                                                                    return botDecision && isDecisionRevertable(botDecision) ? (
+                                                                        <Button
+                                                                            onClick={() => handleUndoAutoApproval(botDecision)}
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            className="h-8 px-2 rounded-lg border-border/60 text-muted-foreground hover:bg-muted/50 hover:text-foreground text-[9px] font-black uppercase tracking-wider transition-all"
+                                                                            title="Undo the bot's auto-approval (reverts the swap)"
+                                                                        >
+                                                                            <Undo2 className="h-3 w-3 mr-1" />
+                                                                            Undo
+                                                                        </Button>
+                                                                    ) : null;
+                                                                })()}
                                                             </div>
                                                         </td>
                                                     </motion.tr>
@@ -1063,6 +1115,10 @@ export const ManagerSwapsPage: React.FC = () => {
                                                                 </span>
                                                             );
                                                         })()}
+                                                        {(() => {
+                                                            const botDecision = autoDecisions.get(request.id);
+                                                            return botDecision ? <AutoDecisionChip decision={botDecision} /> : null;
+                                                        })()}
                                                     </div>
                                                 </div>
 
@@ -1089,17 +1145,34 @@ export const ManagerSwapsPage: React.FC = () => {
                                                         </Button>
                                                     </div>
                                                 ) : (
-                                                    <div className={cn(
-                                                        "flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border",
-                                                        request.status === 'APPROVED'
-                                                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
-                                                            : request.status === 'REJECTED'
-                                                                ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
-                                                                : "bg-muted text-muted-foreground/50 border-border"
-                                                    )}>
-                                                        {request.status === 'APPROVED' && <CheckCircle className="h-3.5 w-3.5" />}
-                                                        {request.status === 'REJECTED' && <XCircle className="h-3.5 w-3.5" />}
-                                                        {request.status}
+                                                    <div className="flex flex-col items-stretch gap-2">
+                                                        <div className={cn(
+                                                            "flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider border",
+                                                            request.status === 'APPROVED'
+                                                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                                                                : request.status === 'REJECTED'
+                                                                    ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+                                                                    : "bg-muted text-muted-foreground/50 border-border"
+                                                        )}>
+                                                            {request.status === 'APPROVED' && <CheckCircle className="h-3.5 w-3.5" />}
+                                                            {request.status === 'REJECTED' && <XCircle className="h-3.5 w-3.5" />}
+                                                            {request.status}
+                                                        </div>
+                                                        {(() => {
+                                                            const botDecision = autoDecisions.get(request.id);
+                                                            return botDecision && isDecisionRevertable(botDecision) ? (
+                                                                <Button
+                                                                    onClick={() => handleUndoAutoApproval(botDecision)}
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="h-8 rounded-xl border-border/60 text-muted-foreground hover:bg-muted/50 hover:text-foreground text-[9px] font-black uppercase tracking-wider transition-all"
+                                                                    title="Undo the bot's auto-approval (reverts the swap)"
+                                                                >
+                                                                    <Undo2 className="h-3 w-3 mr-1" />
+                                                                    Undo Auto-Approval
+                                                                </Button>
+                                                            ) : null;
+                                                        })()}
                                                     </div>
                                                 )}
                                             </div>

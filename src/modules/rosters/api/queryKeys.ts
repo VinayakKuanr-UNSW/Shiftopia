@@ -78,6 +78,17 @@ export const shiftKeys = {
   // Does NOT touch lookups, detail views, or other query families.
   lists: ['shifts', 'list'] as const,
 
+  // ── Level 1: summaries — group-mode bucket aggregate queries ──────────────
+  // Matches every shiftKeys.summary(...) variant regardless of org/date/filters.
+  // Invalidate after any mutation that changes lifecycle_status, assignment, or
+  // deletes rows so the "N/M pub" bucket cells reflect the new state.
+  summaries: ['shifts', 'summary'] as const,
+
+  // ── Level 1: plannerStats — Roster Planner stats footer aggregates ────────
+  // Matches every shiftKeys.plannerStats(...) variant regardless of scope.
+  // Invalidate alongside summaries so the footer totals stay consistent.
+  plannerStatsRoot: ['shifts', 'plannerStats'] as const,
+
   // ── Level 2: named lists — narrow to a single query shape ────────────────
   byDate: (orgId: string, date: string, filters?: ShiftFilters | null) =>
     ['shifts', 'list', 'byDate', orgId, date, filters ?? null] as const,

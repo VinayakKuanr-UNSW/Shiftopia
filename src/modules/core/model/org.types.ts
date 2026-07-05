@@ -30,7 +30,6 @@ export interface Role {
 }
 
 export interface RemunerationLevel {
-    id: string;
     level: number;
     description?: string;
     hourlyRate: number;

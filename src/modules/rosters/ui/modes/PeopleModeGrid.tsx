@@ -327,7 +327,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
         shift_group_id: rawShift.shift_group_id,
         shift_subgroup_id: rawShift.shift_subgroup_id || (rawShift as any).roster_subgroup_id,
         role_id: rawShift.role_id,
-        remuneration_level_id: rawShift.remuneration_level_id,
+        remuneration_level: rawShift.remuneration_level,
         paid_break_minutes: rawShift.paid_break_minutes,
         unpaid_break_minutes: rawShift.unpaid_break_minutes,
         timezone: rawShift.timezone,

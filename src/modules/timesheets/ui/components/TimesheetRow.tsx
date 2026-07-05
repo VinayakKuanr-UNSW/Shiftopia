@@ -14,6 +14,7 @@ import {
     Lock,
     ShieldCheck,
     RotateCcw,
+    Pencil,
 } from "lucide-react";
 import { TimesheetStatusBadge } from "./TimesheetStatusBadge";
 
@@ -520,81 +521,63 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                 ) : (
                     <>
                         <td className={cn(
-                            editableCellClass,
+                            cellClass,
+                            "font-medium text-foreground/80",
                             (!entry.adjustedStart || entry.adjustedStart === '-') && "bg-muted/5"
-                        )} onClick={handleAdjustedCellClick}>
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <div className="flex flex-col">
-                                            <div className="flex items-center gap-1">
-                                                {readOnly && <Lock className="h-2.5 w-2.5 text-muted-foreground/30 shrink-0" />}
-                                                <span className={cn(
-                                                    "font-bold",
-                                                    entry.adjustedStartSource === 'manual' ? "text-indigo-600 dark:text-indigo-400" :
-                                                    entry.adjustedStartSource === 'snapped' ? "text-sky-600 dark:text-sky-400 font-bold" :
-                                                    "text-muted-foreground/30 italic font-medium"
-                                                )}>
-                                                    {entry.adjustedStart || '-'}
-                                                </span>
-                                            </div>
-                                            {entry.adjustedStartSource === 'snapped' && entry.adjustedStart && (
-                                                <span className="text-[8px] font-black uppercase text-muted-foreground/30 tracking-widest leading-none">
-                                                    snapped
-                                                </span>
-                                            )}
-                                        </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        {readOnly ? 'Read-only timesheet' : 
-                                         entry.liveStatus === 'Cancelled' ? 'Cancelled shift — cannot edit billable times' : 
-                                         'Click to edit billable times'}
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
+                        )}>
+                            <div className="flex flex-col">
+                                <div className="flex items-center gap-1">
+                                    {readOnly && <Lock className="h-2.5 w-2.5 text-muted-foreground/30 shrink-0" />}
+                                    <span className={cn(
+                                        "font-bold",
+                                        entry.adjustedStartSource === 'manual' ? "text-indigo-600 dark:text-indigo-400" :
+                                        entry.adjustedStartSource === 'snapped' ? "text-sky-600 dark:text-sky-400 font-bold" :
+                                        "text-muted-foreground/30 italic font-medium"
+                                    )}>
+                                        {entry.adjustedStart || '-'}
+                                        {entry.adjustedStartSource === 'manual' && entry.adjustedStart && ' *'}
+                                    </span>
+                                </div>
+                                {entry.adjustedStartSource === 'snapped' && entry.adjustedStart && (
+                                    <span className="text-[8px] font-black uppercase text-muted-foreground/30 tracking-widest leading-none">
+                                        snapped
+                                    </span>
+                                )}
+                            </div>
                         </td>
                         {/* Adjusted End — color coded by source */}
                         <td className={cn(
-                            editableCellClass,
+                            cellClass,
+                            "font-medium text-foreground/80",
                             (!entry.adjustedEnd || entry.adjustedEnd === '-') && "bg-muted/5"
-                        )} onClick={handleAdjustedCellClick}>
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <div className="flex flex-col">
-                                            <div className="flex items-center gap-1">
-                                                {readOnly && <Lock className="h-2.5 w-2.5 text-muted-foreground/30 shrink-0" />}
-                                                <span className={cn(
-                                                    "font-bold",
-                                                    entry.adjustedEndSource === 'manual' ? "text-indigo-600 dark:text-indigo-400" :
-                                                    entry.adjustedEndSource === 'snapped' ? "text-sky-600 dark:text-sky-400 font-bold" :
-                                                    "text-muted-foreground/30 italic font-medium"
-                                                )}>
-                                                    {entry.adjustedEnd || '-'}
-                                                </span>
-                                            </div>
-                                            {entry.adjustedEndSource === 'snapped' && entry.adjustedEnd && (
-                                                <span className="text-[8px] font-black uppercase text-muted-foreground/30 tracking-widest leading-none">
-                                                    snapped
-                                                </span>
-                                            )}
-                                        </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        {readOnly ? 'Read-only timesheet' : 
-                                         entry.liveStatus === 'Cancelled' ? 'Cancelled shift — cannot edit billable times' : 
-                                         'Click to edit billable times'}
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
+                        )}>
+                            <div className="flex flex-col">
+                                <div className="flex items-center gap-1">
+                                    {readOnly && <Lock className="h-2.5 w-2.5 text-muted-foreground/30 shrink-0" />}
+                                    <span className={cn(
+                                        "font-bold",
+                                        entry.adjustedEndSource === 'manual' ? "text-indigo-600 dark:text-indigo-400" :
+                                        entry.adjustedEndSource === 'snapped' ? "text-sky-600 dark:text-sky-400 font-bold" :
+                                        "text-muted-foreground/30 italic font-medium"
+                                    )}>
+                                        {entry.adjustedEnd || '-'}
+                                        {entry.adjustedEndSource === 'manual' && entry.adjustedEnd && ' *'}
+                                    </span>
+                                </div>
+                                {entry.adjustedEndSource === 'snapped' && entry.adjustedEnd && (
+                                    <span className="text-[8px] font-black uppercase text-muted-foreground/30 tracking-widest leading-none">
+                                        snapped
+                                    </span>
+                                )}
+                            </div>
                         </td>
                         <td className={`${cellClass} font-black text-foreground border-r border-border/30`}>
                             {displayValues.length}
                         </td>
-                        <td className={editableCellClass} onClick={handleAdjustedCellClick}>
+                        <td className={cn(cellClass, "font-medium text-foreground/80")}>
                             {entry.paidBreak || '0'}
                         </td>
-                        <td className={editableCellClass} onClick={handleAdjustedCellClick}>
+                        <td className={cn(cellClass, "font-medium text-foreground/80")}>
                             {entry.unpaidBreak || '0'}
                         </td>
                         <td className={`${cellClass} font-black text-foreground border-r border-border/30`}>
@@ -703,6 +686,33 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                             </>
                         ) : (
                             <>
+                                {/* Edit Adjusted Times */}
+                                {!readOnly && !isFinalized && entry.liveStatus !== 'Cancelled' && (
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={handleAdjustedCellClick}
+                                                    disabled={reviewLocked}
+                                                    className={cn(
+                                                        "h-8 w-8 rounded-xl",
+                                                        reviewLocked
+                                                            ? "text-muted-foreground/40 cursor-not-allowed"
+                                                            : "text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20"
+                                                    )}
+                                                >
+                                                    <Pencil size={16} />
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                {reviewLocked ? 'Locked — unlocks after clock-out, auto clock-out, or no-show' : 'Edit adjusted times'}
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                )}
+
                                 {/* Approve — blocked while InProgress or if No-Show */}
                                 {(entry.timesheetStatus?.toLowerCase() === 'submitted' || entry.timesheetStatus?.toLowerCase() === 'draft') && entry.attendanceStatus !== 'no_show' && !readOnly && (
                                     <TooltipProvider>

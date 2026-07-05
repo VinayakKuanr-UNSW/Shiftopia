@@ -251,7 +251,7 @@ export function deriveEpisodes(
           closedAt: null,
           terminalOutcome: 'open',
         };
-      } else {
+      } else if (currentEpisode) {
         // Same employee, episode still open → update flags
         if (eventType === 'OFFERED') currentEpisode.hadOffer = true;
         if (eventType === 'ASSIGNED') currentEpisode.hadAssign = true;

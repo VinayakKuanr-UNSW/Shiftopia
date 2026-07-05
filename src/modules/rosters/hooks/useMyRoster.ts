@@ -141,10 +141,12 @@ export const useMyRoster = (view: CalendarView, selectedDate: Date, scope?: Scop
             shift,
             groupName: shift.group_type === 'convention_centre' ? 'Convention' :
                 shift.group_type === 'exhibition_centre' ? 'Exhibition' :
-                    shift.group_type === 'theatre' ? 'Theatre' : 'General',
+                    shift.group_type === 'theatre' ? 'Theatre' :
+                        shift.group_type === 'the_cutaway' ? 'The Cutaway' : 'General',
             groupColor: (shift.group_type === 'convention_centre' ? 'convention' :
                 shift.group_type === 'exhibition_centre' ? 'exhibition' :
-                    shift.group_type === 'theatre' ? 'theatre' : 'default') as string,
+                    shift.group_type === 'theatre' ? 'theatre' :
+                        shift.group_type === 'the_cutaway' ? 'cutaway' : 'default') as string,
             subGroupName: shift.sub_group_name || ''
         }));
     };

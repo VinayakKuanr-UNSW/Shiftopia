@@ -52,6 +52,43 @@ logger = logging.getLogger(__name__)
 # INPUT / OUTPUT DATA TYPES
 # =============================================================================
 
+# The solver compares `employment_type` against a small canonical set
+# {'FT','PT','Casual'} at several sites (28-day/152h ordinary-hours cap,
+# consecutive-days streak, fairness over-coefficient, target-mix matching).
+# The wire, however, sends LONG forms ('Full-Time','Part-Time','Casual') from
+# the TS controller (see auto-scheduler.controller.ts). If the two drift, the
+# FT/PT constraints silently never attach — a class of bug this file already
+# warned about ("collapsed unassignable pools when employment_type strings
+# drifted"). Normalize ONCE, at the dataclass boundary, so every comparison
+# site sees canonical values regardless of wire form.
+_EMPLOYMENT_TYPE_ALIASES = {
+    # -> 'FT'
+    'ft': 'FT', 'full-time': 'FT', 'full_time': 'FT', 'fulltime': 'FT',
+    'full time': 'FT', 'full': 'FT',
+    # -> 'PT'
+    'pt': 'PT', 'part-time': 'PT', 'part_time': 'PT', 'parttime': 'PT',
+    'part time': 'PT', 'part': 'PT',
+    'flexible part-time': 'PT', 'flexible part_time': 'PT',
+    'flexible parttime': 'PT', 'flexible part time': 'PT',
+    # -> 'Casual'
+    'casual': 'Casual',
+}
+
+
+def normalize_employment_type(value: Optional[str]) -> str:
+    """Canonicalize any wire form of employment_type to the solver's set
+    {'FT','PT','Casual'}. Case-insensitive and whitespace-stripped.
+
+    None / empty / unrecognized values fall back to 'Casual' — matching the
+    existing EmployeeInput default and the safest legal posture (Casuals carry
+    no FT/PT ordinary-hours contract floor).
+    """
+    if not value:
+        return 'Casual'
+    key = str(value).strip().lower()
+    return _EMPLOYMENT_TYPE_ALIASES.get(key, 'Casual')
+
+
 @dataclass
 class ShiftInput:
     id: str
@@ -71,6 +108,14 @@ class ShiftInput:
     target_employment_type: Optional[str] = None
     is_training: bool = False
 
+    def __post_init__(self):
+        # Normalize the target so the SC-1 employment-isolation comparison
+        # (emp.employment_type != shift.target_employment_type) works no matter
+        # which wire form arrives. Leave None as None (no target = no penalty).
+        if self.target_employment_type is not None:
+            self.target_employment_type = normalize_employment_type(
+                self.target_employment_type
+            )
 
 
 @dataclass
@@ -147,6 +192,15 @@ class EmployeeInput:
     # applies only when `has_availability_data` is true (see employee_eligible).
     availability_slots: list[AvailabilitySlotInput] = field(default_factory=list)
     has_availability_data: bool = False
+
+    def __post_init__(self):
+        # Canonicalize the wire form ('Full-Time'/'Part-Time'/'Casual') to the
+        # solver's set ('FT'/'PT'/'Casual'). Without this, the FT/PT ordinary-
+        # hours 28-day/152h cap (a Tier-0 legal constraint) never attaches
+        # because 'Full-Time' != 'FT'. Both `_build_employee` copies in
+        # ortools_runner.py construct EmployeeInput(**...) via the constructor,
+        # so this single point covers the main and audit paths.
+        self.employment_type = normalize_employment_type(self.employment_type)
 
 
 @dataclass

@@ -169,13 +169,13 @@ export async function getShiftsForTimesheet(
                 department_id,
                 sub_department_id,
                 role_id,
-                remuneration_level_id,
+                remuneration_level,
                 assigned_employee_id,
                 organizations(id, name),
                 departments(id, name),
                 sub_departments(id, name),
                 roles(id, name),
-                remuneration_levels(id, level_name, hourly_rate_min),
+                remuneration_levels(level_number, level_name, hourly_rate_min),
                 roster_subgroups!roster_subgroup_id(name, roster_groups(name))
             `)
             .gte('shift_date', startDate)
@@ -309,7 +309,7 @@ export async function getShiftsForTimesheet(
 
                 roleId: shift.role_id,
                 roleName: role?.name || '',
-                remunerationLevelId: shift.remuneration_level_id,
+                remunerationLevelId: shift.remuneration_level ? shift.remuneration_level.toString() : null,
                 remunerationLevel: remLevel?.level_name || '',
 
                 shiftDate: shift.shift_date,
@@ -469,20 +469,18 @@ export async function updateTimesheetEntry(
             .eq('shift_id', shiftId)
             .maybeSingle();
 
+        // Always get shift details to determine default snapped/scheduled times and handle no_show status
+        const { data: shift } = await supabase
+            .from('shifts')
+            .select('attendance_status, start_time, end_time, actual_start, actual_end, shift_date')
+            .eq('id', shiftId)
+            .single();
+
         // 2. Safety Guard: If it's already Approved, Rejected, or No-Show
         // Block updates to finalized records, UNLESS manager is editing metrics.
         let currentStatus = (existing?.status || '').toLowerCase();
-        
-        // If no timesheet record yet, check the shift record for attendance_status
-        if (!currentStatus) {
-            const { data: shift } = await supabase
-                .from('shifts')
-                .select('attendance_status')
-                .eq('id', shiftId)
-                .single();
-            if (shift?.attendance_status === 'no_show') {
-                currentStatus = 'no_show';
-            }
+        if (!currentStatus && shift?.attendance_status === 'no_show') {
+            currentStatus = 'no_show';
         }
 
         const isEditingMetrics = 
@@ -507,7 +505,7 @@ export async function updateTimesheetEntry(
             const { error: shiftUpdateErr } = await supabase
                 .from('shifts')
                 .update({
-                    attendance_status: null,
+                    attendance_status: null as any,
                     attendance_note: 'No-Show overridden by manager',
                     updated_at: new Date().toISOString(),
                 })
@@ -538,11 +536,46 @@ export async function updateTimesheetEntry(
             return val;
         };
 
-        const adjStart = validTime(updates.adjustedStart);
-        if (adjStart !== undefined) payload.start_time = adjStart;
-        
-        const adjEnd = validTime(updates.adjustedEnd);
-        if (adjEnd !== undefined) payload.end_time = adjEnd;
+        const normalizeToHHMM = (timeStr: string | null | undefined): string | null => {
+            if (!timeStr || timeStr === '-' || timeStr === 'NIL') return null;
+            const match = timeStr.match(/^(\d{1,2}):(\d{2})/);
+            if (match) {
+                return `${match[1].padStart(2, '0')}:${match[2]}`;
+            }
+            return null;
+        };
+
+        if (updates.adjustedStart !== undefined) {
+            const adjStart = validTime(updates.adjustedStart);
+            const normAdjStart = normalizeToHHMM(adjStart);
+            const defaultStart = shift ? normalizeToHHMM(
+                (isShiftFinished(shift.shift_date, shift.start_time, shift.end_time, shift.actual_end)
+                    ? snapToQuarterHour(shift.actual_start)
+                    : shift.start_time) || shift.start_time
+            ) : null;
+
+            if (normAdjStart && normAdjStart !== defaultStart) {
+                payload.start_time = adjStart;
+            } else {
+                payload.start_time = null;
+            }
+        }
+
+        if (updates.adjustedEnd !== undefined) {
+            const adjEnd = validTime(updates.adjustedEnd);
+            const normAdjEnd = normalizeToHHMM(adjEnd);
+            const defaultEnd = shift ? normalizeToHHMM(
+                (isShiftFinished(shift.shift_date, shift.start_time, shift.end_time)
+                    ? snapToQuarterHour(shift.actual_end)
+                    : shift.end_time) || shift.end_time
+            ) : null;
+
+            if (normAdjEnd && normAdjEnd !== defaultEnd) {
+                payload.end_time = adjEnd;
+            } else {
+                payload.end_time = null;
+            }
+        }
 
         // Reset status to submitted if editing metrics on a finalized timesheet
         if (isEditingMetrics && ['approved', 'rejected', 'no_show'].includes(currentStatus)) {

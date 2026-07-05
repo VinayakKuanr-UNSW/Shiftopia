@@ -40,6 +40,9 @@ const getGradientClass = (color: string): string => {
     case 'red':
     case 'theatre':
       return 'dept-card-glass-base dept-card-glass-theatre';
+    case 'amber':
+    case 'cutaway':
+      return 'dept-card-glass-base dept-card-glass-cutaway';
     default:
       return 'dept-card-glass-base dept-card-glass-default';
   }

@@ -9,7 +9,7 @@ export interface OrgSummary { id: string; name: string }
 export interface DeptSummary { id: string; name: string; organization_id: string }
 export interface SubDeptSummary { id: string; name: string; department_id: string }
 export interface RoleSummary { id: string; name: string; sub_department_id: string; remuneration_level: number; }
-export interface RemunerationLevel { id: string; level_number: number; level_name: string; hourly_rate_min: number; hourly_rate_max: number; description: string | null }
+export interface RemunerationLevel { level_number: number; level_name: string; hourly_rate_min: number; hourly_rate_max: number; description: string | null }
 export interface SkillSummary { id: string; name: string; description: string | null; category: string | null }
 export interface LicenseSummary { id: string; name: string; description: string | null; category: string | null; issuing_authority: string | null }
 export interface ProfileSummary {
@@ -18,6 +18,8 @@ export interface ProfileSummary {
     last_name: string;
     department_name?: string;
     sub_department_name?: string;
+    contract_type?: 'FT' | 'PT' | 'CASUAL' | null;
+    contracted_weekly_hours?: number;
 }
 export interface TemplateSummary { id: string; name: string; description: string | null; department_id: string; sub_department_id: string | null; status: string; organization_id: string; applied_count: number | null }
 export interface RosterSlot { groupType: string; subGroupName: string }
@@ -37,7 +39,7 @@ const SHIFT_DETAIL_SELECT = `
   departments(id, name),
   sub_departments(id, name),
   roles(id, name),
-  remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max),
+  remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max),
   assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name)),
   timesheets(status, start_time, end_time)
@@ -75,7 +77,7 @@ const SHIFT_SELECT = `
   shift_group_id,
   roster_subgroup_id,
   role_id,
-  remuneration_level_id,
+  remuneration_level,
   remuneration_rate,
   actual_hourly_rate,
   currency,
@@ -125,7 +127,7 @@ const SHIFT_SELECT = `
   departments(id, name),
   sub_departments(id, name),
   roles(id, name),
-  remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max),
+  remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max),
   assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name)),
   timesheets(status, start_time, end_time)
@@ -176,6 +178,8 @@ export function normalizeShiftRow(row: Record<string, any>): Shift {
             shift.adjusted_start = ts.start_time ?? null;
             shift.adjusted_end = ts.end_time ?? null;
             shift.adjusted_is_manual = !!(ts.start_time || ts.end_time);
+            shift.adjusted_start_source = ts.start_time ? 'manual' : null;
+            shift.adjusted_end_source = ts.end_time ? 'manual' : null;
         }
     }
 
@@ -415,7 +419,7 @@ export const shiftsQueries = {
                   departments(id, name),
                   sub_departments(id, name),
                   roles(id, name),
-                  remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max),
+                  remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max),
                   assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
                   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name, external_id)),
                   timesheets(status, start_time, end_time)
@@ -463,7 +467,7 @@ export const shiftsQueries = {
                   departments(id, name),
                   sub_departments(id, name),
                   roles(id, name),
-                  remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max),
+                  remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max),
                   assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
                   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name, external_id)),
                   timesheets(status, notes, rejected_reason, start_time, end_time)
@@ -1023,7 +1027,7 @@ export const shiftsQueries = {
                 departments(id, name),
                 sub_departments(name),
                 organizations(id, name),
-                remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max)
+                remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max)
             `)
                 .eq('assigned_employee_id', employeeId)
                 .eq('lifecycle_status', 'Published')
@@ -1119,7 +1123,7 @@ export const shiftsQueries = {
                     departments(id, name),
                     sub_departments(name),
                     organizations(id, name),
-                    remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max)
+                    remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max)
                 `)
                 .is('deleted_at', null);
 

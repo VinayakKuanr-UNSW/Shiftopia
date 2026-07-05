@@ -3211,7 +3211,6 @@ export type Database = {
           description: string | null
           hourly_rate_max: number | null
           hourly_rate_min: number | null
-          id: string
           level_name: string
           level_number: number
           updated_at: string | null
@@ -3223,7 +3222,6 @@ export type Database = {
           description?: string | null
           hourly_rate_max?: number | null
           hourly_rate_min?: number | null
-          id?: string
           level_name: string
           level_number: number
           updated_at?: string | null
@@ -3235,7 +3233,6 @@ export type Database = {
           description?: string | null
           hourly_rate_max?: number | null
           hourly_rate_min?: number | null
-          id?: string
           level_name?: string
           level_number?: number
           updated_at?: string | null
@@ -3329,10 +3326,10 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "role_levels_remuneration_level_id_fkey"
-            columns: ["remuneration_level_id"]
+            columns: ["remuneration_level"]
             isOneToOne: false
             referencedRelation: "remuneration_levels"
-            referencedColumns: ["id"]
+            referencedColumns: ["level_number"]
           },
           {
             foreignKeyName: "role_levels_role_id_fkey"
@@ -3388,7 +3385,7 @@ export type Database = {
           is_baseline_eligible: boolean | null
           level: number
           name: string
-          remuneration_level_id: string | null
+          remuneration_level: number | null
           responsibilities: string[] | null
           sub_department_id: string | null
           supervision_ratio_max: number | null
@@ -3407,7 +3404,7 @@ export type Database = {
           is_baseline_eligible?: boolean | null
           level: number
           name: string
-          remuneration_level_id?: string | null
+          remuneration_level?: number | null
           responsibilities?: string[] | null
           sub_department_id?: string | null
           supervision_ratio_max?: number | null
@@ -3426,7 +3423,7 @@ export type Database = {
           is_baseline_eligible?: boolean | null
           level?: number
           name?: string
-          remuneration_level_id?: string | null
+          remuneration_level?: number | null
           responsibilities?: string[] | null
           sub_department_id?: string | null
           supervision_ratio_max?: number | null
@@ -3443,10 +3440,10 @@ export type Database = {
           },
           {
             foreignKeyName: "roles_remuneration_level_id_fkey"
-            columns: ["remuneration_level_id"]
+            columns: ["remuneration_level"]
             isOneToOne: false
             referencedRelation: "remuneration_levels"
-            referencedColumns: ["id"]
+            referencedColumns: ["level_number"]
           },
           {
             foreignKeyName: "roles_sub_department_id_fkey"
@@ -4767,7 +4764,7 @@ export type Database = {
           published_at: string | null
           published_by_user_id: string | null
           recurrence_rule: string | null
-          remuneration_level_id: string | null
+          remuneration_level: number | null
           remuneration_rate: number | null
           required_certifications: Json | null
           required_licenses: Json | null
@@ -4884,7 +4881,7 @@ export type Database = {
           published_at?: string | null
           published_by_user_id?: string | null
           recurrence_rule?: string | null
-          remuneration_level_id?: string | null
+          remuneration_level?: number | null
           remuneration_rate?: number | null
           required_certifications?: Json | null
           required_licenses?: Json | null
@@ -5001,7 +4998,7 @@ export type Database = {
           published_at?: string | null
           published_by_user_id?: string | null
           recurrence_rule?: string | null
-          remuneration_level_id?: string | null
+          remuneration_level?: number | null
           remuneration_rate?: number | null
           required_certifications?: Json | null
           required_licenses?: Json | null
@@ -5060,10 +5057,10 @@ export type Database = {
           },
           {
             foreignKeyName: "fk_shifts_remuneration"
-            columns: ["remuneration_level_id"]
+            columns: ["remuneration_level"]
             isOneToOne: false
             referencedRelation: "remuneration_levels"
-            referencedColumns: ["id"]
+            referencedColumns: ["level_number"]
           },
           {
             foreignKeyName: "shifts_department_id_fkey"
@@ -5991,8 +5988,8 @@ export type Database = {
           net_length_hours: number | null
           notes: string | null
           paid_break_minutes: number | null
-          remuneration_level: string | null
-          remuneration_level_id: string | null
+          remuneration_level: number | null
+          remuneration_level_name: string | null
           required_licenses: string[] | null
           required_skills: string[] | null
           role_id: string | null
@@ -6016,8 +6013,8 @@ export type Database = {
           net_length_hours?: number | null
           notes?: string | null
           paid_break_minutes?: number | null
-          remuneration_level?: string | null
-          remuneration_level_id?: string | null
+          remuneration_level?: number | null
+          remuneration_level_name?: string | null
           required_licenses?: string[] | null
           required_skills?: string[] | null
           role_id?: string | null
@@ -6041,8 +6038,8 @@ export type Database = {
           net_length_hours?: number | null
           notes?: string | null
           paid_break_minutes?: number | null
-          remuneration_level?: string | null
-          remuneration_level_id?: string | null
+          remuneration_level?: number | null
+          remuneration_level_name?: string | null
           required_licenses?: string[] | null
           required_skills?: string[] | null
           role_id?: string | null
@@ -6064,10 +6061,10 @@ export type Database = {
           },
           {
             foreignKeyName: "template_shifts_remuneration_level_id_fkey"
-            columns: ["remuneration_level_id"]
+            columns: ["remuneration_level"]
             isOneToOne: false
             referencedRelation: "remuneration_levels"
-            referencedColumns: ["id"]
+            referencedColumns: ["level_number"]
           },
           {
             foreignKeyName: "template_shifts_role_id_fkey"
@@ -6255,7 +6252,7 @@ export type Database = {
           notes: string | null
           organization_id: string | null
           prefers_sba_loading: boolean | null
-          rem_level_id: string
+          remuneration_level: number
           role_id: string
           start_date: string | null
           status: string
@@ -6295,7 +6292,7 @@ export type Database = {
           notes?: string | null
           organization_id?: string | null
           prefers_sba_loading?: boolean | null
-          rem_level_id: string
+          remuneration_level: number
           role_id: string
           start_date?: string | null
           status?: string
@@ -6335,7 +6332,7 @@ export type Database = {
           notes?: string | null
           organization_id?: string | null
           prefers_sba_loading?: boolean | null
-          rem_level_id?: string
+          remuneration_level?: number
           role_id?: string
           start_date?: string | null
           status?: string
@@ -6368,10 +6365,10 @@ export type Database = {
           },
           {
             foreignKeyName: "user_contracts_rem_level_id_fkey"
-            columns: ["rem_level_id"]
+            columns: ["remuneration_level"]
             isOneToOne: false
             referencedRelation: "remuneration_levels"
-            referencedColumns: ["id"]
+            referencedColumns: ["level_number"]
           },
           {
             foreignKeyName: "user_contracts_role_id_fkey"
@@ -7237,7 +7234,7 @@ export type Database = {
           published_at: string | null
           published_by_user_id: string | null
           recurrence_rule: string | null
-          remuneration_level_id: string | null
+          remuneration_level: number | null
           remuneration_rate: number | null
           required_certifications: Json | null
           required_licenses: Json | null
@@ -7345,7 +7342,7 @@ export type Database = {
           published_at?: string | null
           published_by_user_id?: string | null
           recurrence_rule?: string | null
-          remuneration_level_id?: string | null
+          remuneration_level?: number | null
           remuneration_rate?: number | null
           required_certifications?: Json | null
           required_licenses?: Json | null
@@ -7453,7 +7450,7 @@ export type Database = {
           published_at?: string | null
           published_by_user_id?: string | null
           recurrence_rule?: string | null
-          remuneration_level_id?: string | null
+          remuneration_level?: number | null
           remuneration_rate?: number | null
           required_certifications?: Json | null
           required_licenses?: Json | null
@@ -7507,10 +7504,10 @@ export type Database = {
           },
           {
             foreignKeyName: "fk_shifts_remuneration"
-            columns: ["remuneration_level_id"]
+            columns: ["remuneration_level"]
             isOneToOne: false
             referencedRelation: "remuneration_levels"
-            referencedColumns: ["id"]
+            referencedColumns: ["level_number"]
           },
           {
             foreignKeyName: "shifts_department_id_fkey"
@@ -8997,7 +8994,7 @@ export type Database = {
           estimated_cost: number
           group_type: string
           published_shifts: number
-          remuneration_level_id: string
+          remuneration_level: number
           role_id: string
           shift_date: string
           sub_group_name: string

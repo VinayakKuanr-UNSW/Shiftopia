@@ -136,6 +136,14 @@ interface BulkActionsToolbarProps {
    * When absent: sync preflight only (instant, no compliance pre-check).
    */
   onValidatePublish?: (shiftIds: string[]) => Promise<BulkPublishValidationResult>;
+  /**
+   * Called when a bulk action fully completes and the user is done with the session
+   * (clears selection AND exits bulk mode). When provided, replaces `onClearSelection`
+   * at the end of a completed action flow (delete success, full-success unpublish,
+   * dismiss result panel). Plain deselect controls (X button, Deselect All) always
+   * call `onClearSelection` regardless.
+   */
+  onActionComplete?: () => void;
 }
 
 // =============================================================================
@@ -166,6 +174,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
   allowedActions,
   totalVisibleCount,
   onValidatePublish,
+  onActionComplete,
 }) => {
   const [actionState, setActionState] = useState<ActionState>(IDLE);
   const { toast } = useToast();
@@ -270,6 +279,16 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
   // EXECUTION HANDLERS
   // ==========================================================================
 
+  /**
+   * End the bulk session after a completed action. onActionComplete (when
+   * provided) also exits bulk mode; other call sites fall back to a plain
+   * selection clear.
+   */
+  const completeAction = () => {
+    if (onActionComplete) onActionComplete();
+    else onClearSelection();
+  };
+
   const handleDelete = async () => {
     setActionState({ type: 'processing', action: 'delete' });
     try {
@@ -283,7 +302,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
         variant: result.failedCount > 0 ? 'destructive' : 'default',
       });
       setActionState(IDLE);
-      onClearSelection();
+      completeAction();
     } catch {
       toast({ title: 'Error', description: 'Failed to delete shifts.', variant: 'destructive' });
       setActionState(IDLE);
@@ -320,7 +339,7 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
           description: `${result.successCount} shift${result.successCount !== 1 ? 's' : ''} reverted to Draft.`,
         });
         setActionState(IDLE);
-        onClearSelection();
+        completeAction();
       } else {
         setActionState({ type: 'result', action: 'unpublish', result, attemptedIds: selectedV8ShiftIds });
       }
@@ -360,10 +379,13 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
 
   const dismissResult = () => {
     setActionState(IDLE);
-    onClearSelection();
+    completeAction();
   };
 
-  if (selectedCount === 0) return null;
+  // Allow the result panel to remain visible even if selection was cleared by the
+  // parent while the operation was in-flight. Only suppress the main toolbar when
+  // there is nothing selected and no result to display.
+  if (selectedCount === 0 && actionState.type !== 'result') return null;
 
   // ==========================================================================
   // RESULT PANEL

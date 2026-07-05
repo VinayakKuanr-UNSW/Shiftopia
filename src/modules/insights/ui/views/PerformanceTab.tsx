@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, Info, Search } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import {
     useQuarterlyReport,
@@ -15,7 +15,6 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/modules/core/ui/primitives/tooltip';
-import { Info } from 'lucide-react';
 
 /* ═══════════════════ TYPES ═══════════════════ */
 type SortKey = keyof QuarterlyReportRow;
@@ -33,6 +32,39 @@ const statusCellBg = {
     warn: 'bg-amber-500/5',
     critical: 'bg-red-500/5',
 } as const;
+
+const groupBgColorsLight: Record<string, string> = {
+    'Identity': 'bg-[#e2e8f0]',
+    'Offer Behaviour': 'bg-[#e0f2fe]',
+    'Assignment': 'bg-[#f3e8ff]',
+    'Trading': 'bg-[#fce7f3]',
+    'Reliability': 'bg-[#fef3c7]',
+    'Attendance': 'bg-[#dcfce7]',
+    'Bidding': 'bg-[#e0e7ff]',
+    'Overall': 'bg-[#e2e8f0]',
+};
+
+const groupBgColorsDark: Record<string, string> = {
+    'Identity': 'bg-[#101622]',
+    'Offer Behaviour': 'bg-[#131d2e]',
+    'Assignment': 'bg-[#1c142e]',
+    'Trading': 'bg-[#221223]',
+    'Reliability': 'bg-[#221810]',
+    'Attendance': 'bg-[#112217]',
+    'Bidding': 'bg-[#12192e]',
+    'Overall': 'bg-[#151c27]',
+};
+
+const groupTextColors: Record<string, string> = {
+    'Identity': 'text-muted-foreground',
+    'Offer Behaviour': 'text-blue-700 dark:text-blue-400',
+    'Assignment': 'text-purple-700 dark:text-purple-400',
+    'Trading': 'text-pink-700 dark:text-pink-400',
+    'Reliability': 'text-amber-700 dark:text-amber-400',
+    'Attendance': 'text-emerald-700 dark:text-emerald-400',
+    'Bidding': 'text-indigo-700 dark:text-indigo-400',
+    'Overall': 'text-primary',
+};
 
 /* ═══════════════════ COLUMN DEFINITIONS ═══════════════════ */
 interface ColumnDef {
@@ -52,8 +84,18 @@ interface PerformanceTabProps {
 export default function PerformanceTab({ scope, selectedYear, selectedQuarter }: PerformanceTabProps) {
     const [sortKey, setSortKey] = useState<SortKey>('employee_name');
     const [sortDir, setSortDir] = useState<SortDir>('asc');
+    const [searchTerm, setSearchTerm] = useState('');
     const { isDark } = useTheme();
     const { t } = useTranslation();
+
+    const row1Ref = React.useRef<HTMLTableRowElement>(null);
+    const [row1Height, setRow1Height] = useState(29);
+
+    React.useEffect(() => {
+        if (row1Ref.current) {
+            setRow1Height(row1Ref.current.offsetHeight);
+        }
+    }, [scope, selectedYear, selectedQuarter]);
 
     const columns: ColumnDef[] = [
         // Identity
@@ -95,9 +137,17 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
 
     const { data: rows = [], isLoading } = useQuarterlyReport(selectedYear, selectedQuarter, scope);
 
-    /* ─── Sorting ─── */
+    /* ─── Filtering & Sorting ─── */
+    const filteredRows = useMemo(() => {
+        if (!searchTerm.trim()) return rows;
+        const query = searchTerm.toLowerCase();
+        return rows.filter(r => 
+            (r.employee_name || '').toLowerCase().includes(query)
+        );
+    }, [rows, searchTerm]);
+
     const sortedRows = useMemo(() => {
-        const copy = [...rows];
+        const copy = [...filteredRows];
         copy.sort((a, b) => {
             const av = a[sortKey];
             const bv = b[sortKey];
@@ -109,7 +159,7 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
             return sortDir === 'asc' ? an - bn : bn - an;
         });
         return copy;
-    }, [rows, sortKey, sortDir]);
+    }, [filteredRows, sortKey, sortDir]);
 
     /* ─── Summary Row ─── */
     const summary = useMemo(() => {
@@ -165,17 +215,6 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
         if (c.group !== prev) { groups.push({ name: c.group, span: 1 }); prev = c.group; }
         else { groups[groups.length - 1].span++; }
     }
-
-    const groupColors: Record<string, string> = {
-        'Identity': 'bg-muted/30',
-        'Offer Behaviour': 'bg-blue-500/5 text-blue-600 dark:text-blue-400',
-        'Assignment': 'bg-purple-500/5 text-purple-600 dark:text-purple-400',
-        'Trading': 'bg-pink-500/5 text-pink-600 dark:text-pink-400',
-        'Reliability': 'bg-amber-500/5 text-amber-600 dark:text-amber-400',
-        'Attendance': 'bg-emerald-500/5 text-emerald-600 dark:text-emerald-400',
-        'Bidding': 'bg-indigo-500/5 text-indigo-600 dark:text-indigo-400',
-        'Overall': 'bg-primary/5 text-primary',
-    };
 
     return (
         <div className="flex flex-col space-y-4">
@@ -238,91 +277,135 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
 
             {/* ═══ TABLE ═══ */}
             <div className={cn(
-                "rounded-[32px] border transition-all overflow-hidden",
+                "rounded-[32px] border transition-all overflow-hidden flex flex-col",
                 isDark 
                     ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
                     : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
             )}>
-            {isLoading ? (
-                <div className="flex items-center justify-center h-48">
-                    <p className="text-muted-foreground text-sm animate-pulse">Loading report…</p>
-                </div>
-            ) : rows.length === 0 ? (
-                <div className="flex items-center justify-center h-48">
-                    <p className="text-muted-foreground text-sm">No data for this quarter. Click "Refresh All" to populate.</p>
-                </div>
-            ) : (
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="border-b border-border/50">
-                                {groups.map(g => (
-                                    <th
-                                        key={g.name}
-                                        colSpan={g.span}
-                                        className={cn(
-                                            'px-3 py-2 text-[9px] font-black uppercase tracking-widest text-center border-r border-border/30 last:border-r-0',
-                                            groupColors[g.name] || '',
-                                        )}
-                                    >
-                                        {g.name}
-                                    </th>
-                                ))}
-                            </tr>
-                            <tr className="border-b border-border bg-muted/20">
-                                <TooltipProvider>
-                                    {columns.map(col => (
+                {/* Search Bar */}
+                {!isLoading && rows.length > 0 && (
+                    <div className="p-4 border-b border-border/30 flex items-center bg-muted/5">
+                        <div className="relative w-full max-w-xs">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/75" />
+                            <input
+                                type="text"
+                                placeholder="Search users..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className={cn(
+                                    "w-full pl-9 pr-4 py-1.5 bg-background border border-border/40 rounded-xl text-xs transition-all",
+                                    "focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/40",
+                                    "placeholder:text-muted-foreground/50 font-medium"
+                                )}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {isLoading ? (
+                    <div className="flex items-center justify-center h-48">
+                        <p className="text-muted-foreground text-sm animate-pulse">Loading report…</p>
+                    </div>
+                ) : filteredRows.length === 0 ? (
+                    <div className="flex items-center justify-center h-48">
+                        <p className="text-muted-foreground text-sm">
+                            {rows.length === 0 
+                                ? 'No data for this quarter. Click "Refresh All" to populate.' 
+                                : 'No users match your search query.'}
+                        </p>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto overflow-y-auto max-h-[600px] custom-scrollbar">
+                        <table className="w-full text-sm border-collapse">
+                            <thead>
+                                <tr ref={row1Ref} className="border-b border-border/50">
+                                    {groups.map((g, index) => (
                                         <th
-                                            key={col.key}
-                                            onClick={() => handleSort(col.key)}
-                                            className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground cursor-pointer hover:text-foreground hover:bg-muted/40 transition-colors select-none whitespace-nowrap"
-                                        >
-                                            <div className="flex items-center gap-1">
-                                                {col.label}
-                                                {col.key === 'performance_score' && (
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Info className="h-3 w-3 text-muted-foreground/50 hover:text-foreground cursor-help ml-0.5" />
-                                                        </TooltipTrigger>
-                                                        <TooltipContent className="text-[11px] p-2">
-                                                            Weighted: Reliability (35%), Acceptance (25%), Attendance (20%), Bid Success (20%)
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                )}
-                                                <SortIcon col={col.key} />
-                                            </div>
-                                        </th>
-                                    ))}
-                                </TooltipProvider>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {sortedRows.map((row, idx) => (
-                                <tr
-                                    key={row.employee_id}
-                                    className={cn(
-                                        'border-b border-border/30 hover:bg-muted/20 transition-colors',
-                                        idx % 2 === 0 ? 'bg-transparent' : 'bg-muted/5',
-                                    )}
-                                >
-                                    {columns.map(col => (
-                                        <td
-                                            key={col.key}
+                                            key={g.name}
+                                            colSpan={g.span}
                                             className={cn(
-                                                'px-3 py-2.5 whitespace-nowrap tabular-nums font-semibold',
-                                                col.key === 'employee_name' ? 'font-bold text-foreground' : '',
-                                                cellClass(row, col),
+                                                'px-3 py-2 text-[9px] font-black uppercase tracking-widest text-center border-r border-border/30 last:border-r-0',
+                                                index === 0
+                                                    ? 'sticky left-0 top-0 z-30 border-r-2 border-r-border/80 border-b border-b-border/30 w-48 min-w-[12rem] px-4 text-left'
+                                                    : 'sticky top-0 z-20 border-b border-b-border/30',
+                                                isDark ? groupBgColorsDark[g.name] : groupBgColorsLight[g.name],
+                                                groupTextColors[g.name] || '',
                                             )}
                                         >
-                                            {cellValue(row, col)}
-                                        </td>
+                                            {g.name}
+                                        </th>
                                     ))}
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+                                <tr className="border-b border-border bg-muted/20">
+                                    <TooltipProvider>
+                                        {columns.map((col, cIdx) => (
+                                            <th
+                                                key={col.key}
+                                                onClick={() => handleSort(col.key)}
+                                                style={{ top: `${row1Height - 0.5}px` }}
+                                                className={cn(
+                                                    "px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground cursor-pointer hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors select-none whitespace-nowrap border-r border-border/20 last:border-r-0",
+                                                    isDark ? groupBgColorsDark[col.group] : groupBgColorsLight[col.group],
+                                                    cIdx === 0
+                                                        ? "sticky left-0 z-30 border-r-2 border-r-border/80 border-b-2 border-b-border/80 w-48 min-w-[12rem] px-4 text-left shadow-[4px_0_8px_-3px_rgba(0,0,0,0.15)]"
+                                                        : "sticky z-20 border-b-2 border-b-border/80"
+                                                )}
+                                            >
+                                                <div className="flex items-center gap-1">
+                                                    {col.label}
+                                                    {col.key === 'performance_score' && (
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Info className="h-3 w-3 text-muted-foreground/50 hover:text-foreground cursor-help ml-0.5" />
+                                                            </TooltipTrigger>
+                                                            <TooltipContent className="text-[11px] p-2">
+                                                                Weighted: Reliability (35%), Acceptance (25%), Attendance (20%), Bid Success (20%)
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    )}
+                                                    <SortIcon col={col.key} />
+                                                </div>
+                                            </th>
+                                        ))}
+                                    </TooltipProvider>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {sortedRows.map((row, idx) => (
+                                    <tr
+                                        key={row.employee_id}
+                                        className={cn(
+                                            'group/row border-b border-border/30 hover:bg-muted/20 transition-colors',
+                                            idx % 2 === 0 ? 'bg-transparent' : 'bg-muted/5',
+                                        )}
+                                    >
+                                        {columns.map((col, cIdx) => (
+                                            <td
+                                                key={col.key}
+                                                className={cn(
+                                                    'px-3 py-2.5 whitespace-nowrap tabular-nums font-semibold border-r border-border/10 last:border-r-0',
+                                                    col.key === 'employee_name' ? 'font-bold text-foreground' : '',
+                                                    cIdx === 0
+                                                        ? cn(
+                                                            'sticky left-0 z-10 border-r-2 border-r-border/80 transition-colors shadow-[4px_0_8px_-3px_rgba(0,0,0,0.12)] w-48 min-w-[12rem] px-4 text-left',
+                                                            isDark
+                                                                ? (idx % 2 === 0 ? 'bg-[#151c27]' : 'bg-[#121822]')
+                                                                : (idx % 2 === 0 ? 'bg-white' : 'bg-[#f8fafc]'),
+                                                            'group-hover/row:bg-slate-200/50 dark:group-hover/row:bg-[#1e2738]'
+                                                        )
+                                                        : '',
+                                                    cellClass(row, col),
+                                                )}
+                                            >
+                                                {cellValue(row, col)}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
 
             {/* ═══ FOOTER ═══ */}

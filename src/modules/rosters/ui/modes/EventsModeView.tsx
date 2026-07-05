@@ -181,7 +181,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
         shift_group_id: (shift as any).shift_group_id,
         shift_subgroup_id: (shift as any).shift_subgroup_id || (shift as any).roster_subgroup_id,
         role_id: shift.role_id,
-        remuneration_level_id: shift.remuneration_level_id,
+        remuneration_level: shift.remuneration_level,
         paid_break_minutes: shift.paid_break_minutes,
         unpaid_break_minutes: shift.unpaid_break_minutes,
         timezone: shift.timezone,

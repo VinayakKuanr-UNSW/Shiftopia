@@ -185,6 +185,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
         const isConvention = type === 'convention_centre' || group.includes('convention') || dept.includes('convention') || subDept.includes('convention') || org.includes('convention');
         const isExhibition = type === 'exhibition_centre' || group.includes('exhibition') || dept.includes('exhibition') || subDept.includes('exhibition') || org.includes('exhibition');
         const isTheatre = type === 'theatre' || group.includes('theatre') || dept.includes('theatre') || subDept.includes('theatre') || org.includes('theatre');
+        const isCutaway = type === 'the_cutaway' || group.includes('cutaway') || dept.includes('cutaway') || subDept.includes('cutaway') || org.includes('cutaway');
 
         if (isConvention) return { 
             color: '#2563eb', 
@@ -200,13 +201,20 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
             tint: 'rgba(16, 185, 129, 0.04)'
         };
         
-        if (isTheatre) return { 
-            color: '#ef4444', 
-            secondary: '#dc2626', 
+        if (isTheatre) return {
+            color: '#ef4444',
+            secondary: '#dc2626',
             atmosphere: ['#991b1b', '#ef4444', '#f87171'],
             tint: 'rgba(239, 68, 68, 0.04)'
         };
-        
+
+        if (isCutaway) return {
+            color: '#d97706',
+            secondary: '#f59e0b',
+            atmosphere: ['#b45309', '#d97706', '#fbbf24'],
+            tint: 'rgba(245, 158, 11, 0.04)'
+        };
+
         return { color: '#9333ea', secondary: '#a855f7', atmosphere: ['#7e22ce', '#9333ea', '#c084fc'], tint: 'transparent' };
     }, [entry.groupType, entry.group, entry.department, entry.subDepartment, entry.organization]);
 
@@ -309,13 +317,14 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 if (type === 'convention_centre' || group.includes('convention') || dept.includes('convention')) return 'convention';
                 if (type === 'exhibition_centre' || group.includes('exhibition') || dept.includes('exhibition')) return 'exhibition';
                 if (type === 'theatre' || group.includes('theatre') || dept.includes('theatre')) return 'theatre';
+                if (type === 'the_cutaway' || group.includes('cutaway') || dept.includes('cutaway')) return 'cutaway';
                 return 'default';
             })()}
             employeeName={entry.employee}
             clockIn={formatTime(entry.clockIn)}
             clockOut={formatTime(entry.clockOut)}
-            adjustedStart={formatTime(entry.adjustedStart)}
-            adjustedEnd={formatTime(entry.adjustedEnd)}
+            adjustedStart={formatTime(entry.adjustedStart) + (entry.adjustedStartSource === 'manual' && entry.adjustedStart ? ' *' : '')}
+            adjustedEnd={formatTime(entry.adjustedEnd) + (entry.adjustedEndSource === 'manual' && entry.adjustedEnd ? ' *' : '')}
             shiftData={{
                 lifecycle_status: entry.liveStatus,
                 assignment_outcome: entry.attendanceStatus,

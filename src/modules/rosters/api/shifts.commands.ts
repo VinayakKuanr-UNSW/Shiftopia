@@ -143,7 +143,7 @@ export const shiftsCommands = {
             shift_subgroup_id: safeUuid(shiftData.shift_subgroup_id),
             roster_subgroup_id: safeUuid(shiftData.shift_subgroup_id),
             role_id: safeUuid(shiftData.role_id),
-            remuneration_level_id: safeUuid(shiftData.remuneration_level_id),
+            remuneration_level: shiftData.remuneration_level !== undefined && shiftData.remuneration_level !== null ? Number(shiftData.remuneration_level) : null,
             paid_break_minutes: shiftData.paid_break_minutes || 0,
             unpaid_break_minutes: shiftData.unpaid_break_minutes || 0,
             break_minutes: (shiftData.paid_break_minutes || 0) + (shiftData.unpaid_break_minutes || 0),
@@ -234,8 +234,8 @@ export const shiftsCommands = {
             editPayload.role_id = safeUuid(updates.role_id);
         if (updates.sub_department_id !== undefined)
             editPayload.sub_department_id = safeUuid(updates.sub_department_id);
-        if (updates.remuneration_level_id !== undefined)
-            editPayload.remuneration_level_id = safeUuid(updates.remuneration_level_id);
+        if (updates.remuneration_level !== undefined)
+            editPayload.remuneration_level = updates.remuneration_level !== null ? Number(updates.remuneration_level) : null;
         if (updates.group_type !== undefined) editPayload.group_type = updates.group_type;
         // sub_group_name: pass through even when null so it can be explicitly cleared.
         if (updates.sub_group_name !== undefined)
@@ -699,17 +699,82 @@ export const shiftsCommands = {
                     BulkPublishResponseSchema,
                 );
 
-                if (result.success !== false) {
-                    const errorMap = new Map((result.errors || []).map((e: any) => [e.shift_id, e.reason]));
-                    for (const id of normalIds) {
-                        if (errorMap.has(id)) {
-                            dbFailed.push({ id, reason: errorMap.get(id)! });
-                        } else {
-                            publishedIds.push(id);
-                        }
-                    }
-                } else {
+                if (result.success === false) {
+                    // RPC signalled a hard failure — the whole batch was rejected.
                     normalIds.forEach(id => dbFailed.push({ id, reason: result.message || 'Bulk publish failed' }));
+                } else {
+                    // Forward-compatibility: if a future RPC version returns a per-shift
+                    // errors array, use it as the primary source of truth.
+                    const hasLegacyErrors = Array.isArray(result.errors) && result.errors.length > 0;
+                    if (hasLegacyErrors) {
+                        const errorMap = new Map(
+                            (result.errors as Array<{ shift_id: string; reason: string }>)
+                                .map((e) => [e.shift_id, e.reason])
+                        );
+                        for (const id of normalIds) {
+                            if (errorMap.has(id)) {
+                                dbFailed.push({ id, reason: errorMap.get(id)! });
+                            } else {
+                                publishedIds.push(id);
+                            }
+                        }
+                    } else if (
+                        // Fast path: the RPC confirms every requested shift was updated.
+                        // failure_count === 0 (or success_count exactly matches) means we can
+                        // trust the full normalIds list without a round-trip.
+                        typeof result.failure_count === 'number' && result.failure_count === 0
+                    ) {
+                        normalIds.forEach(id => publishedIds.push(id));
+                    } else if (
+                        // Discrepancy detected: the RPC silently skipped some shifts
+                        // (e.g. wrong FSM state, shift starts in the past, S1+emergency).
+                        // failure_count > 0, OR success_count returned and doesn't match
+                        // the count we sent. Fetch ground-truth from the DB to classify each
+                        // shift individually — never fabricate success.
+                        (typeof result.failure_count === 'number' && result.failure_count > 0)
+                        || (typeof result.success_count === 'number' && result.success_count !== normalIds.length)
+                    ) {
+                        const { data: rows, error: selectError } = await supabase
+                            .from('shifts')
+                            .select('id, lifecycle_status')
+                            .in('id', normalIds);
+
+                        if (selectError) {
+                            // Verification query itself failed. We cannot safely claim any
+                            // shift was published. Mark all as failed with the DB error so
+                            // the caller can surface it to the user (who can reload to see
+                            // the real state).
+                            normalIds.forEach(id =>
+                                dbFailed.push({ id, reason: `Could not verify publish status: ${selectError.message}` })
+                            );
+                        } else {
+                            // Post-publish lifecycle states: Published, InProgress, Completed.
+                            // Any other state means the RPC skipped this shift.
+                            const postPublishStatuses = new Set(['Published', 'InProgress', 'Completed']);
+                            const publishedSet = new Set(
+                                (rows ?? [])
+                                    .filter((r: { id: string; lifecycle_status: string }) =>
+                                        postPublishStatuses.has(r.lifecycle_status))
+                                    .map((r: { id: string; lifecycle_status: string }) => r.id)
+                            );
+                            for (const id of normalIds) {
+                                if (publishedSet.has(id)) {
+                                    publishedIds.push(id);
+                                } else {
+                                    dbFailed.push({
+                                        id,
+                                        reason: 'Skipped by server (not in a publishable state or starts in the past)',
+                                    });
+                                }
+                            }
+                        }
+                    } else {
+                        // Neither failure_count nor success_count was present in the response
+                        // (e.g. older RPC that predates these fields). Optimistically trust the
+                        // RPC's success flag — this is the same behaviour the code had before
+                        // the reconciliation logic was introduced.
+                        normalIds.forEach(id => publishedIds.push(id));
+                    }
                 }
             } catch (e: any) {
                 normalIds.forEach(id => dbFailed.push({ id, reason: e.message }));

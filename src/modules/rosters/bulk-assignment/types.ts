@@ -180,6 +180,13 @@ export interface EmployeeInfo {
     qualifications?: Array<{ qualification_id: string; expires_at?: string | null }>;
     /** Active user_contracts rows — source of truth for R10 role contract match. */
     contracts?: ContractRecordV2[];
+    /**
+     * Employment status — drives contract-scoped compliance rules
+     * (e.g. V8_ORD_HOURS_AVG, exempt for CASUAL). Undefined/null when
+     * unavailable, in which case the engine defaults to CASUAL.
+     */
+    contract_type?: 'FT' | 'PT' | 'CASUAL' | null;
+    contracted_weekly_hours?: number;
 }
 
 // =============================================================================

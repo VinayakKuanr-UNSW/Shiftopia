@@ -131,7 +131,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
 
   const selectableShifts = useMemo(() => {
     return filteredShifts.filter(s => {
-      const startTimeStr = s.start_time || s.startTime || s.start || '00:00';
+      const startTimeStr = s.start_time || (s as any).startTime || (s as any).start || '00:00';
       const hasStarted = isSydneyStarted(s.shift_date, startTimeStr);
       return !isPastDate && !hasStarted;
     });
@@ -297,7 +297,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
         shift_group_id: (shift as any).shift_group_id,
         shift_subgroup_id: (shift as any).shift_subgroup_id || (shift as any).roster_subgroup_id,
         role_id: shift.role_id,
-        remuneration_level_id: shift.remuneration_level_id,
+        remuneration_level: shift.remuneration_level,
         paid_break_minutes: shift.paid_break_minutes,
         unpaid_break_minutes: shift.unpaid_break_minutes,
         timezone: shift.timezone,
@@ -439,7 +439,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start pb-2">
               {filteredShifts.map((shift, idx) => {
-                const startTimeStr = shift.start_time || shift.startTime || shift.start || '00:00';
+                const startTimeStr = shift.start_time || (shift as any).startTime || (shift as any).start || '00:00';
                 const hasStarted = isSydneyStarted(shift.shift_date, startTimeStr);
                 const isPast = isPastDate || hasStarted;
                 const isDraft = shift.lifecycle_status === 'Draft';

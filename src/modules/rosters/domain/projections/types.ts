@@ -199,7 +199,7 @@ export interface ProjectedLevel {
 
 export interface RolesProjection {
   levels:         ProjectedLevel[];
-  /** Roles with no remuneration_level_id */
+  /** Roles with no remuneration_level */
   unassignedRoles: ProjectedRole[];
   stats:          ProjectionStats;
 }
@@ -271,7 +271,7 @@ export interface RoleRecord {
   id:                     string;
   name:                   string;
   code?:                  string | null;
-  remuneration_level_id?: string | null;
+  remuneration_level?:    number | null;
   forecasting_bucket?:    'static' | 'semi_dynamic' | 'dynamic' | null;
   supervision_ratio_min?: number | null;
   supervision_ratio_max?: number | null;
@@ -279,7 +279,6 @@ export interface RoleRecord {
 }
 
 export interface LevelRecord {
-  id:           string;
   level_name:   string;
   level_number: number;
 }

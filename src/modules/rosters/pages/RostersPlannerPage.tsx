@@ -680,12 +680,14 @@ const NewRostersPage: React.FC = () => {
 
   // Toolbar owns result feedback; page owns data and cache management.
   // `shiftIds` are pre-validated by the toolbar's VALIDATING phase — use them directly.
+  // NOTE: Do NOT call clearSelection / setBulkModeActive here — the toolbar's state
+  // machine must reach `result` before the session ends. The toolbar calls
+  // `onActionComplete` at the right moment (user dismisses result or action succeeds
+  // fully), which then calls clearSelection + setBulkModeActive(false).
   const handleBulkPublish = async (shiftIds: string[]): Promise<BulkActionResult> => {
     if (shiftIds.length === 0) return { successCount: 0, failedCount: 0 };
 
     const result = await bulkPublish.mutateAsync(shiftIds);
-    clearSelection();
-    setBulkModeActive(false);
     return {
       successCount: result.publishedIds.length,
       failedCount: result.complianceFailed.length + result.dbFailed.length,
@@ -693,19 +695,18 @@ const NewRostersPage: React.FC = () => {
     };
   };
 
-  const handleBulkUnpublish = async (_shiftIds: string[]): Promise<BulkActionResult> => {
-    // Use preflight-eligible IDs only (published, not in bidding)
-    const eligibleIds = preflightData?.unpublish.eligible
-      ? selectedShiftsData
-          .filter(s => s.lifecycle_status === 'Published' && s.bidding_status === 'not_on_bidding')
-          .map(s => s.id)
-      : selectedShiftsData.filter(s => s.lifecycle_status === 'Published').map(s => s.id);
+  const handleBulkUnpublish = async (shiftIds: string[]): Promise<BulkActionResult> => {
+    // Filter the PASSED ids for eligibility using the page-level `shifts` array so
+    // that retry ids resolve correctly even if the selection has since changed.
+    // Eligibility: Published and not currently in bidding.
+    const eligibleIds = shiftIds.filter(id => {
+      const shift = shifts.find(s => s.id === id);
+      return shift?.lifecycle_status === 'Published' && shift?.bidding_status === 'not_on_bidding';
+    });
 
     if (eligibleIds.length === 0) return { successCount: 0, failedCount: 0 };
 
     const result = await bulkUnpublishByHook.mutateAsync(eligibleIds);
-    clearSelection();
-    setBulkModeActive(false);
     return {
       successCount: result.unpublishedIds.length,
       failedCount:  result.failed.length,
@@ -737,8 +738,6 @@ const NewRostersPage: React.FC = () => {
   const handleBulkDelete = async (): Promise<BulkActionResult> => {
     if (selectedV8ShiftIds.size === 0) return { successCount: 0, failedCount: 0 };
     const result = await bulkDelete.mutateAsync(selectedV8ShiftIdsArray);
-    clearSelection();
-    setBulkModeActive(false);
     return {
       successCount: result.deletedIds.length,
       failedCount: result.failed.length,
@@ -1307,8 +1306,10 @@ const NewRostersPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Bulk Toolbar */}
-      {bulkModeActive && selectedV8ShiftIds.size > 0 && (
+      {/* Bulk Toolbar — kept mounted while bulkModeActive regardless of selection size
+          so the result panel can display after an action completes. The toolbar's own
+          guard suppresses the main pill when selectedCount===0 and not in result state. */}
+      {bulkModeActive && (
         <BulkActionsToolbar
           selectedCount={selectedCount}
           selectedV8ShiftIds={selectedV8ShiftIdsArray}
@@ -1323,6 +1324,7 @@ const NewRostersPage: React.FC = () => {
           onAssign={() => modalsRef.current?.openBulkAssign()}
           onUnassign={handleBulkUnassign}
           onValidatePublish={handleValidatePublish}
+          onActionComplete={() => { clearSelection(); setBulkModeActive(false); }}
           allowedActions={{
             canPublish: stateCounts.draftCount > 0,
             canUnpublish: stateCounts.publishedCount > 0,

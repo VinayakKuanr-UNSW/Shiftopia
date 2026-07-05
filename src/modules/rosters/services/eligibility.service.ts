@@ -278,20 +278,12 @@ export const EligibilityService = {
      */
     async getContractedStaff(context: Omit<EligibilityContext, 'roleId'>): Promise<ContractedStaffMember[]> {
         try {
+            // public.user_contracts is a VIEW over hr.user_contracts and carries no
+            // FK metadata, so PostgREST can't embed profiles/roles through it. Fetch
+            // scalar rows here and resolve the names in a second pass below.
             let query = supabase
                 .from('user_contracts')
-                .select(`
-                    user_id,
-                    profiles:profiles!user_contracts_user_id_profiles_fkey (
-                        id,
-                        first_name,
-                        last_name
-                    ),
-                    role:roles!user_contracts_role_id_fkey (
-                        name,
-                        code
-                    )
-                `);
+                .select('user_id, role_id');
 
             if (context.organizationId && isValidUuid(context.organizationId)) {
                 query = query.eq('organization_id', context.organizationId);
@@ -313,20 +305,37 @@ export const EligibilityService = {
                 return [];
             }
 
+            const rows = (data ?? []) as Array<{ user_id: string; role_id: string | null }>;
+            const userIds = [...new Set(rows.map(r => r.user_id).filter(Boolean))];
+            const roleIds = [...new Set(rows.map(r => r.role_id).filter((v): v is string => !!v))];
+
+            // Resolve names separately (profiles is a real table; roles is the
+            // public compat view over hr.roles — both queryable by id).
+            const [profilesRes, rolesRes] = await Promise.all([
+                userIds.length
+                    ? supabase.from('profiles').select('id, first_name, last_name').in('id', userIds)
+                    : Promise.resolve({ data: [] as any[] }),
+                roleIds.length
+                    ? supabase.from('roles').select('id, name, code').in('id', roleIds)
+                    : Promise.resolve({ data: [] as any[] }),
+            ]);
+
+            const profileById = new Map((profilesRes.data ?? []).map((p: any) => [p.id, p]));
+            const roleById = new Map((rolesRes.data ?? []).map((r: any) => [r.id, r]));
+
             // Deduplicate by user_id
             const staffMap = new Map<string, ContractedStaffMember>();
-            (data ?? []).forEach((row: any) => {
-                const rawProfile = row.profiles;
-                const profile = Array.isArray(rawProfile) ? rawProfile[0] : rawProfile;
-
+            rows.forEach((row) => {
+                const profile = profileById.get(row.user_id);
                 if (!profile?.id || staffMap.has(profile.id)) return;
-                
+
+                const role = row.role_id ? roleById.get(row.role_id) : null;
                 staffMap.set(profile.id, {
                     id: profile.id,
                     first_name: profile.first_name || '',
                     last_name: profile.last_name || '',
-                    role_name: row.role?.name ?? null,
-                    role_code: row.role?.code ?? null,
+                    role_name: role?.name ?? null,
+                    role_code: role?.code ?? null,
                 });
             });
 

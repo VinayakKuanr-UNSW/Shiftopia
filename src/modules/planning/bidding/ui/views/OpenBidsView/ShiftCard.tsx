@@ -46,9 +46,20 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
   const netMins = durationMins - shift.unpaidBreak;
   const netHoursDisplay = (netMins / 60).toFixed(1);
 
+  // Venue-inherited card theming (mirrors index.tsx getGroupVariant)
+  const g = (shift.groupType || shift.group || '').toLowerCase();
+  const d = (shift.department || '').toLowerCase();
+  const groupVariant =
+    g.includes('convention') || d.includes('convention') ? 'convention' :
+    g.includes('exhibition') || d.includes('exhibition') ? 'exhibition' :
+    g.includes('theatre') || g.includes('theater') || d.includes('theatre') || d.includes('theater') ? 'theatre' :
+    g.includes('cutaway') || d.includes('cutaway') ? 'cutaway' :
+    'default';
+
   return (
     <SharedShiftCard
         variant="timecard"
+        groupVariant={groupVariant}
         organization={shift.location}
         department={shift.department}
         subGroup={shift.subDepartment}

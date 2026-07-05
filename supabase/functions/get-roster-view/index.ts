@@ -25,7 +25,7 @@ const SHIFT_SELECT = `
   departments(id, name),
   sub_departments(id, name),
   roles!shifts_role_id_fkey(id, name),
-  remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max),
+  remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max),
   assigned_profiles:profiles!assigned_employee_id(first_name, last_name)
 `;
 
@@ -145,9 +145,9 @@ Deno.serve(async (req: Request) => {
               employment_status,
               contracted_weekly_hours,
               role_id,
-              profiles:profiles!user_contracts_user_id_profiles_fkey(id, first_name, last_name),
-              department:departments!user_contracts_department_id_fkey(name),
-              sub_department:sub_departments!user_contracts_sub_department_id_fkey(name)
+              profiles:profiles(id, first_name, last_name),
+              department:departments(name),
+              sub_department:sub_departments(name)
             `)
             .eq("status", "Active")
             .eq("organization_id", organization_id);

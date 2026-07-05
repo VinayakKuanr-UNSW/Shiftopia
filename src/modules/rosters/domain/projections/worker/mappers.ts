@@ -69,7 +69,7 @@ export function shiftToDTO(shift: Shift): WorkerShiftDTO {
     subDepartmentId: shift.sub_department_id,
     roleId: shift.role_id,
     roleName: shift.roles?.name ?? null,
-    remunerationLevelId: shift.remuneration_level_id,
+    remunerationLevel: shift.remuneration_level,
     remunerationRate: shift.remuneration_rate,
     actualHourlyRate: shift.actual_hourly_rate,
 
@@ -154,7 +154,7 @@ export function roleToDTO(role: RoleRecord): WorkerRoleDTO {
     id: role.id,
     name: role.name,
     code: role.code ?? null,
-    remunerationLevelId: role.remuneration_level_id ?? null,
+    remunerationLevel: role.remuneration_level ?? null,
   };
 }
 
@@ -166,7 +166,7 @@ export function rolesToDTO(roles: RoleRecord[]): WorkerRoleDTO[] {
 
 export function levelToDTO(level: LevelRecord): WorkerLevelDTO {
   return {
-    id: level.id,
+    id: level.level_number.toString(),
     levelName: level.level_name,
     levelNumber: level.level_number,
   };

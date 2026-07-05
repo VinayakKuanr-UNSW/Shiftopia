@@ -14,7 +14,7 @@ export interface CreateShiftData {
     shift_group_id?: string | null;
     shift_subgroup_id?: string | null;
     role_id?: string | null;
-    remuneration_level_id?: string | null;
+    remuneration_level?: number | null;
     paid_break_minutes?: number;
     unpaid_break_minutes?: number;
     timezone?: string;

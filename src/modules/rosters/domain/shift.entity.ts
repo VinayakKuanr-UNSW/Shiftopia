@@ -61,7 +61,7 @@ export interface Shift {
     shift_group_id: string | null;
     shift_subgroup_id: string | null;
     role_id: string | null;
-    remuneration_level_id: string | null;
+    remuneration_level: number | null;
     remuneration_rate: number | null;
     actual_hourly_rate: number | null;
     currency: string;
@@ -151,6 +151,8 @@ export interface Shift {
     adjusted_end?: string | null;
     /** True when the billable times above were manually set by a manager. */
     adjusted_is_manual?: boolean;
+    adjusted_start_source?: 'manual' | 'snapped' | null;
+    adjusted_end_source?: 'manual' | 'snapped' | null;
     
     is_recurring: boolean;
     recurrence_rule: string | null;
@@ -160,7 +162,6 @@ export interface Shift {
     sub_departments?: { id: string; name: string } | null;
     roles?: { id: string; name: string } | null;
     remuneration_levels?: {
-        id: string;
         level_number: number;
         level_name: string;
         hourly_rate_min: number;

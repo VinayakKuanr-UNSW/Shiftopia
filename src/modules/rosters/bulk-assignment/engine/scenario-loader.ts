@@ -148,10 +148,26 @@ export class ScenarioLoader {
 
         const profile = profileRes.data;
 
+        // Map the V8 contract type ('FULL_TIME'|'PART_TIME'|'CASUAL'|
+        // 'STUDENT_VISA'|'FLEXI_PART_TIME') onto the 'FT'|'PT'|'CASUAL' form
+        // EmployeeInfo carries. Without this, contract_type stays undefined and
+        // the V8 engine defaults everyone to CASUAL — which silently exempts
+        // real FT/PT staff from the ordinary-hours 4-week averaging cap
+        // (V8_ORD_HOURS_AVG). STUDENT_VISA maps to CASUAL: its binding limit is
+        // the separate student-visa cap, and CASUAL keeps the ord-hours exemption.
+        const contractType: EmployeeInfo['contract_type'] =
+            ctx.contract_type === 'FULL_TIME'                                  ? 'FT'
+            : ctx.contract_type === 'PART_TIME' || ctx.contract_type === 'FLEXI_PART_TIME' ? 'PT'
+            : 'CASUAL';
+
         return {
             id:                  employeeId,
             name:                profile?.full_name ?? employeeId,
             employment_end_date: profile?.termination_date ?? null,
+            contract_type:       contractType,
+            // ctx.contracted_weekly_hours is currently 0 (not yet sourced); leave
+            // undefined so the engine falls back to its 38h default rather than 0.
+            contracted_weekly_hours: ctx.contracted_weekly_hours || undefined,
             // contracts → source of truth for R10 role/hierarchy match
             contracts:           ctx.contracts,
             qualifications:      (ctx.qualifications ?? []).map(q => ({

@@ -567,6 +567,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                         unpaid_break_minutes: (selectedShift as any).unpaid_break_minutes,
                         role_name: (selectedShift as any).roles?.name,
                         department_name: (selectedShift as any).departments?.name,
+                        group_type: (selectedShift as any).group_type || (selectedShift as any).roles?.groupType || null,
                     }}
                     requesterShift={{
                         id: theirShift.id,
@@ -575,6 +576,7 @@ export const OfferSwapModal: React.FC<OfferSwapModalProps> = ({
                         end_time: (theirShift as any).end_time,
                         unpaid_break_minutes: (theirShift as any).unpaid_break_minutes,
                         role_name: (theirShift as any).roles?.name,
+                        group_type: (theirShift as any).group_type || (theirShift as any).roles?.groupType || null,
                     }}
                     requesterId={currentSwap?.requested_by_employee_id || null}
                     requesterName={requesterName}

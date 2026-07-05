@@ -65,6 +65,22 @@ import { supabase } from '@/platform/supabase/client';
 
 export type { ShiftFilters };
 
+// ── Aggregate-invalidation helper ────────────────────────────────────────────
+
+/**
+ * Shift lifecycle/assignment changes alter the server-side aggregates
+ * (bucket summary cells + planner stats footer) — refetch them.
+ *
+ * Intentionally uses the default refetchType ('active') so that any
+ * summary or plannerStats query currently mounted in the viewport
+ * immediately fires a network request. Do NOT pass refetchType: 'none'
+ * here — the whole point is to unfreeze the visible bucket numbers.
+ */
+function invalidateShiftAggregates(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: shiftKeys.summaries });
+  queryClient.invalidateQueries({ queryKey: shiftKeys.plannerStatsRoot });
+}
+
 // ── Shared optimistic-update helpers ─────────────────────────────────────────
 
 export type Snapshot = [readonly unknown[], Shift[] | undefined][];
@@ -396,7 +412,85 @@ export function useRosterStructure(rosterId?: string) {
 
 // ── Mutation hooks ────────────────────────────────────────────────────────────
 
-/** Create a new shift. Cancels in-flight list queries, then invalidates on settle. */
+/**
+ * Build a provisional Shift entity from the create payload so the grid can
+ * render the new card before the server round-trip (compliance check +
+ * sm_create_shift + detail refetch) completes. Replaced by the confirmed row
+ * in onSuccess; removed by rollback in onError.
+ */
+function buildOptimisticShift(
+  tempId: string,
+  data: Parameters<typeof shiftsCommands.createShift>[0],
+): Shift {
+  const toMinutes = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+  let duration = toMinutes(data.end_time) - toMinutes(data.start_time);
+  if (duration <= 0) duration += 24 * 60; // overnight
+  const unpaid = data.unpaid_break_minutes || 0;
+  const paid = data.paid_break_minutes || 0;
+  const nowIso = new Date().toISOString();
+
+  return {
+    id: tempId,
+    roster_id: data.roster_id,
+    organization_id: data.organization_id ?? null,
+    department_id: data.department_id,
+    sub_department_id: data.sub_department_id ?? null,
+    shift_date: data.shift_date,
+    roster_date: data.shift_date,
+    start_time: data.start_time,
+    end_time: data.end_time,
+    start_at: data.start_at ?? null,
+    end_at: data.end_at ?? null,
+    is_overnight: toMinutes(data.end_time) <= toMinutes(data.start_time),
+    scheduled_length_minutes: duration,
+    net_length_minutes: duration - unpaid,
+    paid_break_minutes: paid,
+    unpaid_break_minutes: unpaid,
+    break_minutes: paid + unpaid,
+    timezone: data.timezone || 'Australia/Sydney',
+    group_type: data.group_type ?? null,
+    sub_group_name: data.sub_group_name ?? null,
+    display_order: data.display_order ?? 0,
+    shift_group_id: data.shift_group_id ?? null,
+    roster_subgroup_id: data.shift_subgroup_id ?? null,
+    role_id: data.role_id ?? null,
+    remuneration_level: data.remuneration_level ?? null,
+    assigned_employee_id: data.assigned_employee_id ?? null,
+    assigned_at: data.assigned_employee_id ? nowIso : null,
+    assignment_status: data.assigned_employee_id ? 'assigned' : 'unassigned',
+    assignment_outcome: null,
+    fulfillment_status: 'none',
+    lifecycle_status: 'Draft',
+    is_draft: true,
+    is_published: false,
+    is_cancelled: false,
+    is_locked: false,
+    is_on_bidding: false,
+    bidding_status: 'not_on_bidding',
+    trading_status: 'NoTrade',
+    trade_requested_at: null,
+    attendance_status: 'unknown',
+    event_ids: data.event_ids ?? [],
+    tags: data.tags ?? [],
+    required_skills: data.required_skills ?? [],
+    required_licenses: data.required_licenses ?? [],
+    notes: data.notes ?? null,
+    is_training: data.is_training ?? false,
+    version: 0,
+    created_at: nowIso,
+    updated_at: nowIso,
+    deleted_at: null,
+  } as unknown as Shift;
+}
+
+/**
+ * Create a new shift — optimistic. The provisional card appears in every
+ * cached list covering the shift's date immediately; the server-confirmed
+ * row replaces it on success, and a rollback removes it on error.
+ */
 export function useCreateShift() {
   const queryClient = useQueryClient();
 
@@ -404,23 +498,37 @@ export function useCreateShift() {
     mutationFn: (data: Parameters<typeof shiftsCommands.createShift>[0]) =>
       shiftsCommands.createShift(data),
 
-    onMutate: async () => {
+    onMutate: async (data) => {
       // Prevent race: a stale refetch should not overwrite the coming server response
       await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
+      const snapshot = snapshotLists(queryClient);
+      const tempId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      patchLists(
+        queryClient,
+        (old) => [...old, buildOptimisticShift(tempId, data)],
+        dateInRange(data.shift_date),
+      );
+      return { snapshot, tempId };
     },
 
-    onSuccess: (newShift) => {
-      // Insert the confirmed shift into all list caches that cover its date
+    onSuccess: (newShift, _vars, context) => {
+      // Swap the provisional card for the confirmed server row
       patchLists(queryClient, (old) => {
+        const withoutTemp = old.filter(s => s.id !== context?.tempId);
         // Avoid inserting duplicate if cache was already updated elsewhere
-        if (old.some(s => s.id === newShift.id)) return old;
-        return [...old, newShift as unknown as Shift];
+        if (withoutTemp.some(s => s.id === newShift.id)) return withoutTemp;
+        return [...withoutTemp, newShift as unknown as Shift];
       });
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
     },
 
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -551,6 +659,7 @@ export function useDeleteShift() {
       // removed the shift from cache. A refetch would just confirm it's gone.
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: rosterKeys.all, refetchType: 'none' });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -577,6 +686,7 @@ export function useApplyShiftOp() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
       queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -610,6 +720,7 @@ export function useBulkAssignShifts() {
 
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -642,6 +753,7 @@ export function useBulkUnassignShifts() {
 
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -681,6 +793,7 @@ export function usePublishShift() {
     onSettled: (_data, _err, shiftId) => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: shiftKeys.detail(shiftId) });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -702,7 +815,8 @@ export function useUnpublishShift() {
         queryClient.getQueryData<Shift>(shiftKeys.detail(shiftId))?.version ??
         findShiftInLists(queryClient, shiftId)?.version;
       if (typeof cachedVersion === 'number') {
-        return runGatewayOp({ shiftId, expectedVersion: cachedVersion, op: 'unpublish', payload: { reason } });
+        return runGatewayOp({ shiftId, expectedVersion: cachedVersion, op: 'unpublish', payload: { reason } })
+          .then(res => ({ success: res.ok, error: res.code !== 'APPLIED' ? res.code : undefined }));
       }
       return shiftsCommands.unpublishShift(shiftId, reason);
     },
@@ -737,7 +851,7 @@ export function useUnpublishShift() {
       return { snapshot };
     },
 
-    onError: (err, _vars, context) => {
+    onError: (err, _vars, context: any) => {
       if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
       // A conflict / gone means our cached version was stale — pull the truth back.
       const code = (err as Partial<ShiftOpError>)?.shiftOpResult?.code;
@@ -752,6 +866,7 @@ export function useUnpublishShift() {
       queryClient.invalidateQueries({ queryKey: shiftKeys.detail(shiftId) });
       queryClient.invalidateQueries({ queryKey: ['shifts', 'offers'] });
       queryClient.invalidateQueries({ queryKey: ['shifts', 'offerCount'] });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -818,6 +933,7 @@ export function useBulkUnpublishShifts() {
       shiftIds.forEach(id => queryClient.invalidateQueries({ queryKey: shiftKeys.detail(id) }));
       queryClient.invalidateQueries({ queryKey: ['shifts', 'offers'] });
       queryClient.invalidateQueries({ queryKey: ['shifts', 'offerCount'] });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -874,6 +990,7 @@ export function useBulkPublishShifts() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -911,6 +1028,7 @@ export function useBulkDeleteShifts() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -1027,6 +1145,7 @@ export function useDropShift() {
       queryClient.invalidateQueries({ queryKey: rosterKeys.all });
       // Invalidate employee bids so stale "Accepted — Assigned to You" entries disappear
       queryClient.invalidateQueries({ queryKey: ['myBids'] });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -1169,6 +1288,7 @@ export function useCancelShift() {
 
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }

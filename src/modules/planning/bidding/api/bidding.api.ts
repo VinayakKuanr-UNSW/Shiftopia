@@ -84,7 +84,7 @@ export const biddingApi = {
                 departments(id, name),
                 sub_departments(id, name),
                 roles(id, name),
-                remuneration_levels(id, level_number, level_name, hourly_rate_min, hourly_rate_max)
+                remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max)
             `)
             .in('bidding_status', ['on_bidding_normal', 'on_bidding_urgent', 'on_bidding'])
             .is('assigned_employee_id', null)

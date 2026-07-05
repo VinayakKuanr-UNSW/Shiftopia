@@ -180,10 +180,11 @@ const MonthView: React.FC<MonthViewProps> = ({
                                 isSelected ? 'ring-1 ring-white/50' : ''
                               )}
                               style={{ 
-                                backgroundColor: 
+                                backgroundColor:
                                   type === 'convention' ? '#60a5fa' : // blue-400
                                   type === 'exhibition' ? '#4ade80' : // green-400
                                   type === 'theatre' ? '#f87171' :    // red-400
+                                  type === 'cutaway' ? '#fbbf24' :    // amber-400
                                   '#94a3b8'                           // slate-400
                               }}
                             />

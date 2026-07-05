@@ -78,6 +78,11 @@ export function TemplateSubgroupCard({
             border: 'border-red-500/30',
             text: 'text-red-700 dark:text-red-300',
         },
+        amber: {
+            bg: 'bg-amber-500/15 dark:bg-amber-900/40',
+            border: 'border-amber-500/30',
+            text: 'text-amber-700 dark:text-amber-300',
+        },
     };
 
     const colors = colorClasses[groupColor] || colorClasses.blue;

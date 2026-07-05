@@ -35,7 +35,7 @@ function makeShift(overrides: Partial<Shift> = {}): WorkerShiftDTO {
     shift_subgroup_id: null,
     role_id: 'role-1',
     role_level: null,
-    remuneration_level_id: null,
+    remuneration_level: null,
     remuneration_rate: 25,
     actual_hourly_rate: null,
     currency: 'AUD',
@@ -211,7 +211,7 @@ describe('projectGroup — projected shift fields', () => {
     const ps = Object.values(theatre.subGroups[0].shiftsByDate).flat()[0];
     // The projected shift carries a lightweight color KEY; the UI resolves it
     // to the canonical color set. Theatre's accent must be red.
-    expect(ps.groupColorKey).toBe('theatre');
-    expect(GROUP_COLORS[ps.groupColorKey as TemplateGroupType].accent).toBe('red');
+    expect((ps as any).groupColorKey).toBe('theatre');
+    expect(GROUP_COLORS[(ps as any).groupColorKey as TemplateGroupType].accent).toBe('red');
   });
 });

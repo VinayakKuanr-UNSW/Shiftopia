@@ -9,8 +9,9 @@
 //     ROUTE_TO_REVIEW_IF_FAIL / IGNORE)
 //   - always-on rules cannot be disabled (certification / fatigue / overlap)
 //   - payroll-delta computation
-//   - fail-closed semantics (unknown availability ⇒ unavailable; matrix never
-//     emits AUTO_APPROVE under any reject/blocking signal)
+//   - fail-closed semantics (unknown availability ⇒ ROUTE_TO_REVIEW — never
+//     auto-approved, never mass-rejected; matrix never emits AUTO_APPROVE
+//     under any reject/blocking signal)
 //
 // Run: npx vitest run --config supabase/functions/auto-approve-swaps/vitest.config.ts
 // =============================================================================
@@ -310,13 +311,29 @@ describe('eligibility: always-on rules cannot be configured away', () => {
 });
 
 // =============================================================================
-// ELIGIBILITY — fail-closed (unknown availability ⇒ unavailable)
+// ELIGIBILITY — fail-closed availability tri-state
 // =============================================================================
 
 describe('eligibility: fail-closed', () => {
-  it('null availability is treated as UNAVAILABLE (reject)', () => {
+  it('null availability (data not loaded) routes to REVIEW — never approved, never mass-rejected', () => {
     const input = cleanInput();
     input.requester.available_for_received = null;
+    const r = evaluateEligibility(input, {});
+    expect(r.rejectVotes.some((v) => v.ruleId === 'availability')).toBe(false);
+    expect(r.reviewVotes.some((v) => v.ruleId === 'availability')).toBe(true);
+  });
+
+  it('unknown availability respects an explicit org IGNORE', () => {
+    const input = cleanInput();
+    input.offerer!.available_for_received = null;
+    const r = evaluateEligibility(input, { availability: { enabled: false } });
+    expect(r.rejectVotes.some((v) => v.ruleId === 'availability')).toBe(false);
+    expect(r.reviewVotes.some((v) => v.ruleId === 'availability')).toBe(false);
+  });
+
+  it('explicit false availability still hard-rejects', () => {
+    const input = cleanInput();
+    input.offerer!.available_for_received = false;
     const r = evaluateEligibility(input, {});
     expect(r.rejectVotes.some((v) => v.ruleId === 'availability')).toBe(true);
   });

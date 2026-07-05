@@ -9,7 +9,7 @@ export interface UserContract {
     departmentId: string | null;
     subDepartmentId: string | null;
     roleId: string;
-    remLevelId: string;
+    remLevelId: number;
     accessLevel: AccessLevel; // DEPRECATED - Use certificates
     employmentStatus?: string | null;
     status: string;

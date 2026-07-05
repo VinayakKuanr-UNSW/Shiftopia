@@ -71,7 +71,7 @@ function toProjectedShift(shift: WorkerShiftDTO): ProjectedShiftResult {
     roleId: shift.roleId,
     levelName: shift.levelName ?? '',
     levelNumber: shift.levelNumber ?? 0,
-    levelId: shift.remunerationLevelId,
+    levelId: shift.remunerationLevel !== null && shift.remunerationLevel !== undefined ? shift.remunerationLevel.toString() : null,
     groupType,
     subGroupName: shift.subGroupName ?? shift.rosterSubgroupName ?? null,
     groupColorKey: groupType ?? 'unassigned',
@@ -151,10 +151,10 @@ export function projectRoles(
 ): RolesProjection {
   const { roles = [], levels = [] } = ctx;
 
-  const levelById = new Map<string, WorkerLevelDTO>(levels.map(l => [l.id, l]));
+  const levelById = new Map<number, WorkerLevelDTO>(levels.map(l => [l.levelNumber, l]));
   const roleById = new Map<string, WorkerRoleDTO>(roles.map(r => [r.id, r]));
 
-  const levelRoleMap = new Map<string, Map<string, RoleAccum>>();
+  const levelRoleMap = new Map<number, Map<string, RoleAccum>>();
   const unassignedRoleMap = new Map<string, RoleAccum>();
 
   // Every projected shift (incl. cancelled) for top-level stats aggregation.
@@ -162,8 +162,8 @@ export function projectRoles(
 
   roles.forEach(role => {
     const roleAccum = emptyRoleAccum(role.id, role.name, role.code ?? '');
-    if (role.remunerationLevelId) {
-      const lid = role.remunerationLevelId;
+    if (role.remunerationLevel) {
+      const lid = role.remunerationLevel;
       if (!levelRoleMap.has(lid)) levelRoleMap.set(lid, new Map());
       levelRoleMap.get(lid)!.set(role.id, roleAccum);
     } else {
@@ -176,8 +176,8 @@ export function projectRoles(
     allProjected.push(ps);
     const roleId = shift.roleId ?? 'unknown';
     const roleName = shift.roleName ?? 'Unnamed Role';
-    const levelId = shift.remunerationLevelId
-      ?? roleById.get(roleId)?.remunerationLevelId
+    const levelId = shift.remunerationLevel
+      ?? roleById.get(roleId)?.remunerationLevel
       ?? null;
 
     if (levelId) {
@@ -203,8 +203,8 @@ export function projectRoles(
     }
   });
 
-  const allLevelIds = new Set<string>([
-    ...levels.map(l => l.id),
+  const allLevelIds = new Set<number>([
+    ...levels.map(l => l.levelNumber),
     ...Array.from(levelRoleMap.keys()),
   ]);
 
@@ -227,7 +227,7 @@ export function projectRoles(
     const totalCost = projectedRoles.reduce((acc, r) => acc + r.totalCost, 0);
 
     projectedLevels.push({
-      id: levelId,
+      id: levelId.toString(),
       name: levelMeta?.levelName ?? `Level ${levelNumber}`,
       levelNumber,
       colorClass: levelColorClass(levelNumber),

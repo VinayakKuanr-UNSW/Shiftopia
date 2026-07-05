@@ -74,7 +74,7 @@ export const ShiftCoreSchema = z.object({
   department_id: UuidSchema,
   sub_department_id: UuidSchema.nullable(),
   role_id: UuidSchema.nullable(),
-  remuneration_level_id: UuidSchema.nullable(),
+  remuneration_level: z.number().nullable(),
   assigned_employee_id: UuidSchema.nullable(),
   roster_subgroup_id: UuidSchema,
   created_by_user_id: UuidSchema.nullable(),

@@ -133,6 +133,7 @@ const EVENT_ICON_BY_OP: Record<string, LucideIcon> = {
   select_winner:      Gavel,
   approve_trade:      ArrowLeftRight,
   reject_trade:       ArrowLeftRight,
+  trade_expired:      ArrowLeftRight,
   timesheet_finalize: Receipt,
   timesheet_adjust:   Receipt,
 };
@@ -165,12 +166,13 @@ function eventIcon(row: ShiftEventTimelineRow): LucideIcon {
 
 // Accent overrides for events whose meaning is stronger than their domain colour.
 const EVENT_COLOR_BY_OP: Record<string, string> = {
-  create:      FSM_COLOR_HEX.slate,
-  publish:     FSM_COLOR_HEX.blue,
-  unpublish:   FSM_COLOR_HEX.orange,
-  in_progress: FSM_COLOR_HEX.violet,
-  delete:      FSM_COLOR_HEX.red,
-  complete:    FSM_COLOR_HEX.emerald,
+  create:        FSM_COLOR_HEX.slate,
+  publish:       FSM_COLOR_HEX.blue,
+  unpublish:     FSM_COLOR_HEX.orange,
+  in_progress:   FSM_COLOR_HEX.violet,
+  delete:        FSM_COLOR_HEX.red,
+  complete:      FSM_COLOR_HEX.emerald,
+  trade_expired: FSM_COLOR_HEX.amber,
 };
 
 const EVENT_COLOR_BY_TYPE: Record<string, string> = {
@@ -232,6 +234,7 @@ const OP_LABELS: Record<string, string> = {
   select_winner:      'Bid Winner Selected',
   approve_trade:      'Trade Approved',
   reject_trade:       'Trade Rejected',
+  trade_expired:      'Trade Expired',
   complete:           'Completed',
   in_progress:        'In Progress',
   timesheet_finalize: 'Timesheet Finalized',
@@ -491,6 +494,7 @@ const FIELD_LABELS: Record<string, string> = {
   role_id: 'Role',
   shift_group_id: 'Shift Group',
   roster_subgroup_id: 'Roster Subgroup',
+  remuneration_level: 'Remuneration Level',
   remuneration_level_id: 'Remuneration Level',
   sub_department_id: 'Sub Department',
   required_skills: 'Required Skills',

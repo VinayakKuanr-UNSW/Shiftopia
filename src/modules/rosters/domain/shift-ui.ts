@@ -389,6 +389,8 @@ export interface ShiftDotInput {
      * identically on every surface (roster, my-roster, timesheets).
      */
     adjusted_is_manual?: boolean;
+    adjusted_start_source?: 'manual' | 'snapped' | null;
+    adjusted_end_source?: 'manual' | 'snapped' | null;
 }
 
 /**
@@ -573,47 +575,35 @@ export function getLiveRuleBadges(shift: ShiftDotInput): LiveRuleBadges {
     const now = Date.now();
     const effectiveEnd = end ?? start + AUTO_CLOCKOUT_MS;
 
-    // ── Manager override ──────────────────────────────────────────────────────
-    // When a manager has manually committed billable times (the only case where
-    // `adjusted_is_manual` is set), those times are the source of truth. Both
-    // halves are re-derived from them and marked with `*`. This is the single
-    // canonical override signal — identical on every surface — so the `*` only
-    // ever reflects a finalized manual override, never auto/snapped billable.
-    if (shift.adjusted_is_manual && shift.adjusted_start && shift.adjusted_end) {
-        const adjIn = parseToMs(shift.adjusted_start, shift.shift_date);
-        const adjOut = parseToMs(shift.adjusted_end, shift.shift_date);
-        if (adjIn !== null && adjOut !== null) {
-            return {
-                arrival: classifyArrival(adjIn, start, '*'),
-                departure: end !== null ? classifyDeparture(adjOut, end, '*') : null,
-            };
-        }
+    // ── Arrival (Clock-In) ──
+    const startManual = !!(shift.adjusted_start_source === 'manual' || (shift.adjusted_is_manual && shift.adjusted_start));
+    const startVal = startManual ? shift.adjusted_start : shift.actual_start;
+    const ci = parseToMs(startVal, shift.shift_date);
+    
+    let arrival: ShiftRuleBadge | null = null;
+    if (ci !== null) {
+        arrival = classifyArrival(ci, start, startManual ? '*' : '');
+    } else {
+        // Fallback or stand-in badge when never clocked in
+        if (now > effectiveEnd) arrival = { label: 'No Show', color: LR.noShow };
+        else if (now > start)        arrival = { label: 'Missing', color: LR.missing };
+        else if (now >= start - CLOCKIN_WINDOW_MS) arrival = { label: 'Awaiting Check-In', color: LR.awaiting };
+        else arrival = { label: 'Scheduled', color: LR.scheduled };
     }
 
-    const ci = parseToMs(shift.actual_start, shift.shift_date);   // clock-in
-    const co = parseToMs(shift.actual_end, shift.shift_date);     // clock-out
+    // ── Departure (Clock-Out) ──
+    const endManual = !!(shift.adjusted_end_source === 'manual' || (shift.adjusted_is_manual && shift.adjusted_end));
+    const endVal = endManual ? shift.adjusted_end : shift.actual_end;
+    const co = parseToMs(endVal, shift.shift_date);
 
-    // ── Never clocked in — arrival stand-in only ──────────────────────────────
-    if (ci === null) {
-        if (now > effectiveEnd) return { arrival: { label: 'No Show', color: LR.noShow }, departure: null };
-        if (now > start)        return { arrival: { label: 'Missing', color: LR.missing }, departure: null };
-        if (now >= start - CLOCKIN_WINDOW_MS) return { arrival: { label: 'Awaiting Check-In', color: LR.awaiting }, departure: null };
-        return { arrival: { label: 'Scheduled', color: LR.scheduled }, departure: null };
-    }
-
-    // ── Clocked in — arrival quality is fixed for the rest of the shift ───────
-    const arrival = classifyArrival(ci, start);
-
-    // ── Departure half ────────────────────────────────────────────────────────
     let departure: ShiftRuleBadge | null = null;
-    if (shift.attendance_status === 'auto_clock_out') {
+    if (shift.attendance_status === 'auto_clock_out' && !endManual) {
         departure = { label: 'Auto Clock-Out', color: LR.autoOut };
     } else if (co !== null) {
-        departure = end !== null ? classifyDeparture(co, end) : { label: 'On Time Out', color: LR.onTimeOut };
-    } else if (now > effectiveEnd && now < start + AUTO_CLOCKOUT_MS) {
+        departure = end !== null ? classifyDeparture(co, end, endManual ? '*' : '') : { label: 'On Time Out', color: LR.onTimeOut };
+    } else if (now > effectiveEnd && now < start + AUTO_CLOCKOUT_MS && ci !== null) {
         departure = { label: 'Working Overtime', color: LR.overtime };
     }
-    // else: still clocked in mid-shift → no departure badge yet
 
     return { arrival, departure };
 }

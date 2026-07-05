@@ -15,7 +15,7 @@
  * single staggered entrance. Theme-aware via semantic tokens (light + dark).
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 import {
     FormControl,
@@ -422,6 +422,27 @@ export const ShiftFormDrawerContent: React.FC<ShiftFormDrawerContentProps> = ({
     const goToStep = (step: number) => {
         if (step <= maxUnlockedStep) setWizardStep(step);
     };
+
+    /* ── Auto-run compliance on entering Step 5 ──
+       The panel/hook never self-run by design — the wizard drives it here so a
+       changed input can't leave a stale/red verdict on screen. Runs only for an
+       assigned, editable shift, once the employee's shift history has loaded, and
+       only when the panel is idle or stale (never mid-run/results — the status
+       guard + the hook's internal runningRef prevent any re-run loop). */
+    const panelStatus = compliancePanel.status;
+    useEffect(() => {
+        if (wizardStep !== 5) return;
+        if (isReadOnly || isTemplateMode) return;
+        if (!watchEmployeeId) return;      // unassigned → compliance not required
+        if (isLoadingShifts) return;       // wait for existing-shift history to load
+        if (panelStatus === 'idle' || panelStatus === 'stale') {
+            compliancePanel.run();
+        }
+        // compliancePanel.run is intentionally omitted: it is recreated each render,
+        // so listing it would fire this effect on every render. The status guard
+        // above makes the current-closure run() safe.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [wizardStep, watchEmployeeId, isReadOnly, isTemplateMode, isLoadingShifts, panelStatus]);
 
     /* ── Break recommendation logic ── */
     const localShiftLength = useMemo(

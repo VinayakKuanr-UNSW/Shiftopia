@@ -80,7 +80,7 @@ export async function applyShiftOp(args: {
             p_shift_id:         args.shiftId,
             p_expected_version: args.expectedVersion,
             p_op:               args.op,
-            p_payload:          args.payload ?? {},
+            p_payload:          (args.payload ?? {}) as any,
             p_idempotency_key:  idempotencyKey,
         });
 

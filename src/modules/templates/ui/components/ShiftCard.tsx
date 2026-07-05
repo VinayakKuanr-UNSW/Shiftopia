@@ -22,6 +22,7 @@ import {
   formatTimeDisplay,
   calculateNetHours,
 } from '@/modules/templates/model/templates.types';
+import { useSkills, useLicenses } from '@/modules/rosters/state/useRosterShifts';
 
 interface ShiftCardProps {
   shift: TemplateShift;
@@ -54,6 +55,12 @@ const colorClasses: Record<
     border: 'border-red-500/20 dark:border-red-500/30',
     text: 'text-red-600 dark:text-red-400',
   },
+  amber: {
+    bg: 'bg-amber-500/5 dark:bg-amber-500/10',
+    bgHover: 'hover:bg-amber-500/10 dark:hover:bg-amber-500/20',
+    border: 'border-amber-500/20 dark:border-amber-500/30',
+    text: 'text-amber-600 dark:text-amber-400',
+  },
 };
 
 const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
@@ -65,6 +72,20 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
   onClone,
 }) => {
   const colors = colorClasses[groupColor] || colorClasses.blue;
+
+  // Template shifts persist skill/licence UUIDs — resolve to display names.
+  // Values that are already names (legacy rows) pass through unchanged.
+  const { data: skillsLookup } = useSkills();
+  const { data: licensesLookup } = useLicenses();
+  const skillName = React.useCallback(
+    (v: string) => skillsLookup?.find(s => s.id === v)?.name ?? v,
+    [skillsLookup],
+  );
+  const licenseName = React.useCallback(
+    (v: string) => licensesLookup?.find(l => l.id === v)?.name ?? v,
+    [licensesLookup],
+  );
+
   const netHours = calculateNetHours(
     shift.startTime,
     shift.endTime,
@@ -202,11 +223,11 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
       )}
 
       {/* Remuneration Level */}
-      {shift.remunerationLevel && (
+      {(shift.remunerationLevelName || shift.remunerationLevel) && (
         <div className="flex items-center gap-2 mb-2">
           <Tag className="h-3.5 w-3.5 text-muted-foreground/70" />
           <span className="text-xs text-muted-foreground">
-            {shift.remunerationLevel}
+            {shift.remunerationLevelName || `Level ${shift.remunerationLevel}`}
           </span>
         </div>
       )}
@@ -219,7 +240,7 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
               key={`skill-${idx}`}
               className="text-[9px] px-1.5 py-0 bg-purple-500/20 text-purple-400 border-purple-500/30"
             >
-              {skill}
+              {skillName(skill)}
             </Badge>
           ))}
           {shift.licenses?.slice(0, 2).map((license, idx) => (
@@ -227,7 +248,7 @@ const ShiftCard: React.FC<ShiftCardProps> = React.memo(({
               key={`license-${idx}`}
               className="text-[9px] px-1.5 py-0 bg-amber-500/20 text-amber-400 border-amber-500/30"
             >
-              {license}
+              {licenseName(license)}
             </Badge>
           ))}
           {(shift.skills?.length || 0) + (shift.licenses?.length || 0) > 5 && (
