@@ -50,9 +50,12 @@ def test_two_shifts_same_day_one_employee_assigns_at_least_one():
     employees = [make_employee("e1")]
     out = solve(shifts, employees)
     assert out.status in ("OPTIMAL", "FEASIBLE")
-    # Same employee, gap = 30m < 600m rest → solver must reject one of the
-    # two; assigning both is a rest-gap violation.
-    assert len(out.assignments) == 1
+    # Two NON-overlapping shifts on the SAME day, 30m apart, 8h15m total spread
+    # (< 12h). Post-H4 the rest gap (cl. 40) no longer applies within a day, so
+    # this is a legal split-shift structure and BOTH must be assignable to one
+    # employee. (Also still guards the spread-of-hours bug: a regression there
+    # would return 0 assignments, not 2.)
+    assert len(out.assignments) == 2
 
 
 def test_overlapping_shifts_distribute_across_employees():
@@ -1049,3 +1052,38 @@ def test_twenty_in_28_workday_cap_enforced():
     per_emp = Counter(a.employee_id for a in out.assignments)
     assert per_emp["e1"] <= 20            # the cap binds the cheap worker
     assert per_emp.get("e2", 0) >= 1      # overflow forced onto emp2
+
+
+# ---------------------------------------------------------------------------
+# H4 — legal same-day split shifts must be assignable (rest gap is cross-day)
+# ---------------------------------------------------------------------------
+
+def test_split_shift_same_day_pair_assignable_to_one():
+    """Audit H4: a part-timer's two same-day engagements with a <=3h gap (a
+    legal split shift, cl. 39) and a total spread <= 12h must both be assignable
+    to ONE employee. The solver previously refused this because rest-gap padding
+    was applied within a day; rest gap (cl. 40) is now cross-day only."""
+    shifts = [
+        make_shift("a", "2026-05-15", "09:00", "12:00"),   # 3h
+        make_shift("b", "2026-05-15", "14:00", "17:00"),   # 3h, 2h gap, spread 8h
+    ]
+    employees = [make_employee("e1", employment_type="PT")]
+    out = solve(shifts, employees)
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert len(out.assignments) == 2
+    assert {a.employee_id for a in out.assignments} == {"e1"}
+
+
+# ---------------------------------------------------------------------------
+# M2 — 12h/day cap is SOFT (must not reintroduce the old infeasibility)
+# ---------------------------------------------------------------------------
+
+def test_daily_12h_cap_is_soft_single_long_shift_still_covered():
+    """Audit M2: the re-added 12h/day cap must be a Tier-0 SOFT slack, not a hard
+    720m bound. A single 13h shift (which spread-of-hours can't catch — it needs
+    2+ shifts/day) must still solve and be covered, exactly like before the cap
+    (the old hard 720 cap made such a day INFEASIBLE)."""
+    shifts = [make_shift("long", "2026-05-15", "06:00", "19:00")]  # 13h
+    out = solve(shifts, [make_employee("e1")])
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert len(out.assignments) == 1

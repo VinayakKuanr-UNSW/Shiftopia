@@ -1,5 +1,5 @@
 import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
-import { parseTimeToMinutes } from '../utils/time';
+import { shiftDurationMinutes } from '../utils/time';
 
 /**
  * V8 Rule: Maximum Daily Hours
@@ -13,12 +13,7 @@ export const maxDailyHoursRule: V8RuleEvaluator = (ctx) => {
     
     for (const s of shifts) {
         const date = s.date || s.shift_date || '';
-        const start = parseTimeToMinutes(s.start_time);
-        let end = parseTimeToMinutes(s.end_time);
-        
-        let totalMins = end - start;
-        if (totalMins < 0) totalMins += 1440; // Cross-midnight
-        
+        const totalMins = shiftDurationMinutes(s.start_time, s.end_time);
         dailyMinutes.set(date, (dailyMinutes.get(date) || 0) + totalMins);
     }
     

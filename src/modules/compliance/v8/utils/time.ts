@@ -19,6 +19,36 @@ export function parseTimeToMinutes(time?: string | null): number {
 }
 
 /**
+ * Duration of a shift in minutes — the single source of truth for cross-midnight
+ * duration across every V8 rule (previously each rule inlined its own `+1440`
+ * variant, and they disagreed on the `end == start` edge — audit M1).
+ *
+ * A shift crosses midnight when its end time is strictly earlier than its start
+ * (`end < start → +24h`). `end == start` is treated as ZERO length (a degenerate
+ * / placeholder shift), NOT 24h, so malformed data cannot spuriously trip the
+ * daily-hours, spread or meal-break caps.
+ */
+export function shiftDurationMinutes(start?: string | null, end?: string | null): number {
+    const s = parseTimeToMinutes(start);
+    let e = parseTimeToMinutes(end);
+    if (e < s) e += 1440;
+    return e - s;
+}
+
+/**
+ * The shift's end time in minutes-from-start-day-midnight, normalized for cross-
+ * midnight (`end < start → +1440`). Use when start and end are needed separately
+ * (e.g. spread-of-hours' earliest-start / latest-end). Same convention as
+ * {@link shiftDurationMinutes}.
+ */
+export function normalizedEndMinutes(start?: string | null, end?: string | null): number {
+    const s = parseTimeToMinutes(start);
+    let e = parseTimeToMinutes(end);
+    if (e < s) e += 1440;
+    return e;
+}
+
+/**
  * Compare two date strings (YYYY-MM-DD).
  */
 export function compareDates(a: string, b: string): number {

@@ -362,11 +362,21 @@ def shifts_overlap(a, b) -> bool:
 
 
 def rest_gap_violated(a, b, min_rest: int) -> bool:
-    """True if placing a and b in the same schedule violates the rest gap."""
+    """True if placing a and b in the same schedule violates the rest gap.
+
+    Rest gap (ICC EBA cl. 40) is a CROSS-DAY provision — "the completion of work
+    on the one day and the commencement of work on the next day". Two shifts that
+    START on the same calendar day are a split-shift / spread concern (cl. 39 +
+    the 12h spread cap), NOT a rest-gap one, so they are never a rest violation
+    here. Overlaps are always blocked. (Audit H4 — the solver was refusing legal
+    PT/flexi split shifts; this mirrors the V8 auditor's same-start-day rule.)
+    """
     if shifts_overlap(a, b):
         return True
     a0, a1 = shift_window(a)
     b0, b1 = shift_window(b)
+    if a0 // 1440 == b0 // 1440:
+        return False  # same start day — not a rest-gap concern
     if a0 < b0:
         return (b0 - a1) < min_rest
     else:
@@ -1184,89 +1194,65 @@ class ScheduleModelBuilder:
             return
 
         min_rest = self.data.constraints.min_rest_minutes
-        # DELIVERABLE 3: multi-hire rest gap is 480m.
+        # DELIVERABLE 3: multi-hire rest gap is 480m; normal is `min_rest` (600m).
         multi_hire_rest = 480
-        # All intervals in the primary AddNoOverlap use the SMALLER 480m pad.
-        # Normal-Normal pairs that need 600m are enforced via explicit pairwise.
-        primary_pad = multi_hire_rest
 
         # Pre-index shift windows and types
         _sw: dict[str, tuple[int, int]] = {s.id: shift_window(s) for s in self.data.shifts}
         _is_mh: dict[str, bool] = {s.id: (s.shift_type == 'MULTI_HIRE') for s in self.data.shifts}
 
-        # DELIVERABLE 3: Identify Normal-Normal pairs where gap in [480, 600).
-        # These pairs MUST be explicitly blocked (since the primary 480m
-        # AddNoOverlap will not catch them).
-        normal_normal_tight: set[frozenset] = set()
-        shifts_sorted_for_pairs = sorted(self.data.shifts, key=lambda s: _sw[s.id][0])
-        for i, sa in enumerate(shifts_sorted_for_pairs):
-            if _is_mh.get(sa.id):
-                continue  # sa is MH → not a Normal-Normal pair
-            sa_start, sa_end = _sw[sa.id]
-            for j in range(i + 1, len(shifts_sorted_for_pairs)):
-                sb = shifts_sorted_for_pairs[j]
-                sb_start, sb_end = _sw[sb.id]
-                if sb_start >= sa_end + min_rest:
-                    break  # all further sb are far enough apart
-                if _is_mh.get(sb.id):
-                    continue  # not a Normal-Normal pair
-                # sb is NORMAL, sa is NORMAL, sb_start < sa_end + 600m
-                if sb_start < sa_end:
-                    continue  # overlapping (AddNoOverlap catches this)
-                gap = sb_start - sa_end
-                # gap in [0, 480): already covered by primary 480m no-overlap
-                # gap in [480, 600): NOT covered by 480m no-overlap → need explicit
-                if primary_pad <= gap < min_rest:
-                    normal_normal_tight.add(frozenset([sa.id, sb.id]))
-
+        # 1. OVERLAP — AddNoOverlap on UNPADDED real intervals. Rest gap is added
+        #    SEPARATELY (step 2) rather than folded into interval padding, so a
+        #    SAME-DAY non-overlapping pair (a legal split shift, cl. 39) is NOT
+        #    blocked by rest padding (audit H4). Candidate-vs-existing rest is
+        #    enforced at eligibility (existing_blocks_proposal), so existing
+        #    shifts here only need overlap protection.
         for emp in self.data.employees:
             intervals = []
-            # DELIVERABLE 3: Use primary_pad (480m) for ALL shifts in the
-            # main AddNoOverlap.  Normal-Normal tight pairs are handled
-            # via explicit pairwise constraints below.
             for s in self.data.shifts:
                 v = self._x.get((emp.id, s.id))
                 if v is None:
                     continue
                 s_start, s_end = _sw[s.id]
-                duration = s_end - s_start
-                size = duration + primary_pad
-                end = s_end + primary_pad
-                interval = self.model.NewOptionalIntervalVar(
-                    s_start, size, end, v,
+                intervals.append(self.model.NewOptionalIntervalVar(
+                    s_start, s_end - s_start, s_end, v,
                     f'iv_{emp.id[:6]}_{s.id[:6]}',
-                )
-                intervals.append(interval)
-
-            # Pinned existing shifts: fixed intervals that always exist.
-            # Pad with primary_pad (480m); existing shifts are padded with
-            # standard min_rest separately via explicit pairwise if they
-            # are non-multi-hire (existing shifts don't have a shift_type
-            # so we use min_rest conservatively).
+                ))
             for ex in emp.existing_shifts:
                 ex_start, ex_end = shift_window(ex)
-                duration = ex_end - ex_start
-                # Existing shifts use full min_rest pad (conservative, correct)
-                size = duration + min_rest
-                end = ex_end + min_rest
-                fixed = self.model.NewIntervalVar(
-                    ex_start, size, end,
+                intervals.append(self.model.NewIntervalVar(
+                    ex_start, ex_end - ex_start, ex_end,
                     f'iv_ex_{emp.id[:6]}_{ex.id[:6]}',
-                )
-                intervals.append(fixed)
-
+                ))
             if intervals:
                 self.model.AddNoOverlap(intervals)
 
-            # DELIVERABLE 3: Add explicit pairwise for Normal-Normal tight pairs
-            # (gap in [480, 600)).  The primary 480m no-overlap does not block
-            # these; we add `x[e,sa] + x[e,sb] <= 1` for each such pair.
-            for pair in normal_normal_tight:
-                sa_id, sb_id = tuple(pair)
-                v1 = self._x.get((emp.id, sa_id))
-                v2 = self._x.get((emp.id, sb_id))
-                if v1 is not None and v2 is not None:
-                    self.model.Add(v1 + v2 <= 1)
+        # 2. REST GAP — explicit pairwise, CROSS-DAY candidate pairs only. Clause
+        #    40 governs "one day … the next day"; same-start-day pairs are a
+        #    split-shift/spread concern (handled by AddNoOverlap + the 12h spread
+        #    cap). Sorted with an early break, so this stays ~O(N) tight pairs —
+        #    it does NOT reintroduce the pairwise overlap blow-up the interval
+        #    refactor removed (that was O(N^2) overlap pairs; this is only the
+        #    handful of cross-day boundary pairs within the rest window).
+        shifts_sorted = sorted(self.data.shifts, key=lambda s: _sw[s.id][0])
+        for i, sa in enumerate(shifts_sorted):
+            sa_start, sa_end = _sw[sa.id]
+            for j in range(i + 1, len(shifts_sorted)):
+                sb = shifts_sorted[j]
+                sb_start, sb_end = _sw[sb.id]
+                if sb_start >= sa_end + min_rest:
+                    break  # every later shift is beyond the widest (600m) rest window
+                if sb_start < sa_end:
+                    continue  # overlap — already handled by AddNoOverlap
+                if sa_start // 1440 == sb_start // 1440:
+                    continue  # H4: same start day — not a rest-gap concern
+                required = multi_hire_rest if (_is_mh.get(sa.id) or _is_mh.get(sb.id)) else min_rest
+                if (sb_start - sa_end) < required:
+                    for emp in self.data.employees:
+                        v1 = self._x.get((emp.id, sa.id))
+                        v2 = self._x.get((emp.id, sb.id))
+                        if v1 is not None and v2 is not None:
+                            self.model.Add(v1 + v2 <= 1)
 
     def _add_overlap_pairwise_relaxed(self):
         """Legacy pairwise overlap, used only under relax_constraints=true.
@@ -1366,7 +1352,18 @@ class ScheduleModelBuilder:
                 
                 # Link day_vars
                 self.model.Add(day_vars[i] == cp_model.LinearExpr.Sum([dur * var for dur, var in shift_terms]) + existing_mins)
-                
+
+                # 12h/day ordinary cap (cl. 35.1(d)/35.2(d)/35.3(d)/35.4(c)) — SOFT
+                # so a single pinned 12h+ existing shift can't make the model
+                # infeasible (that INFEASIBILITY is exactly why the old hard 720
+                # cap was removed). Matches the V8 auditor's maxDailyHours block
+                # (audit M2): the solver now prefers to spread a day's minutes
+                # across people rather than pile >12h on one.
+                day_over = self.model.NewIntVar(0, 1440, f'daycap_{emp.id[:4]}_{i}')
+                self.model.Add(day_vars[i] - day_over <= 720)
+                # Tier 0: Hard Legal Compliance (100,000,000 penalty per minute)
+                self._workload_slack_terms.append(100_000_000 * day_over)
+
                 # Link work_day_vars
                 # Link work_day_vars (Precision Fix #7: mark BOTH days for cross-midnight)
                 for s in self.data.shifts:

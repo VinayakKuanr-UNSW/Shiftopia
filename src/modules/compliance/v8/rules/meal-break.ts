@@ -1,5 +1,5 @@
 import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
-import { parseTimeToMinutes } from '../utils/time';
+import { shiftDurationMinutes } from '../utils/time';
 
 /**
  * V8 Rule: Meal Breaks
@@ -15,11 +15,7 @@ export const mealBreakRule: V8RuleEvaluator = (ctx) => {
         // employee's committed history (see V8Shift.is_candidate).
         if (s.is_candidate === false) continue;
 
-        const start = parseTimeToMinutes(s.start_time);
-        let end = parseTimeToMinutes(s.end_time);
-
-        let totalMins = end - start;
-        if (totalMins < 0) totalMins += 1440; // Cross-midnight
+        const totalMins = shiftDurationMinutes(s.start_time, s.end_time);
 
         // If shift is longer than 5 hours, we check if a break is recorded.
         // In the rostering UI, this is usually reflected by s.unpaid_break_minutes.

@@ -1,5 +1,5 @@
 import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
-import { parseTimeToMinutes } from '../utils/time';
+import { shiftDurationMinutes } from '../utils/time';
 
 /**
  * V8 Rule: Student Visa 48h Fortnightly Limit
@@ -23,11 +23,7 @@ export const studentVisaRule: V8RuleEvaluator = (ctx) => {
         // CRITICAL: Skip shifts with missing scheduling info to prevent crashes
         if (!date || !s.start_time || !s.end_time) continue;
 
-        const start = parseTimeToMinutes(s.start_time);
-        let end = parseTimeToMinutes(s.end_time);
-        if (end <= start) end += 1440;
-        
-        const netHours = Math.max(0, (end - start - (s.unpaid_break_minutes || 0)) / 60);
+        const netHours = Math.max(0, (shiftDurationMinutes(s.start_time, s.end_time) - (s.unpaid_break_minutes || 0)) / 60);
         dailyHours.set(date, (dailyHours.get(date) || 0) + netHours);
     }
     

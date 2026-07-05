@@ -1,5 +1,5 @@
 import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
-import { parseTimeToMinutes } from '../utils/time';
+import { shiftDurationMinutes } from '../utils/time';
 
 /**
  * V8 Rule: Minimum Engagement
@@ -26,11 +26,7 @@ export const minEngagementRule: V8RuleEvaluator = (ctx) => {
         // for cumulative context and arrive without their training flag.
         if (s.is_candidate === false) continue;
 
-        const start = parseTimeToMinutes(s.start_time);
-        let end = parseTimeToMinutes(s.end_time);
-        if (end <= start) end += 1440; // Cross-midnight
-
-        const totalMins = end - start;
+        const totalMins = shiftDurationMinutes(s.start_time, s.end_time);
 
         const isTraining = s.is_training === true;
         const isHoliday = !!(s.is_sunday || s.is_public_holiday);

@@ -1,5 +1,5 @@
 import { V8Hit, V8RuleEvaluator } from '../types';
-import { parseTimeToMinutes } from '../utils/time';
+import { shiftDurationMinutes } from '../utils/time';
 
 /**
  * V8 Rule: Ordinary Hours Averaging (ICC EBA cl. 35)
@@ -30,12 +30,8 @@ export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
         if (!dateStr || !s.start_time || !s.end_time) continue; // skip malformed
         if (!s.is_ordinary_hours) continue;
 
-        const startMins = parseTimeToMinutes(s.start_time);
-        let endMins = parseTimeToMinutes(s.end_time);
-        if (endMins <= startMins) endMins += 1440; // cross-midnight
-
         const breakMins = s.unpaid_break_minutes || 0;
-        const netHours = Math.max(0, (endMins - startMins) - breakMins) / 60;
+        const netHours = Math.max(0, shiftDurationMinutes(s.start_time, s.end_time) - breakMins) / 60;
         dailyHours.set(dateStr, (dailyHours.get(dateStr) || 0) + netHours);
     }
 

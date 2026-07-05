@@ -1,5 +1,5 @@
 import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
-import { parseTimeToMinutes } from '../utils/time';
+import { parseTimeToMinutes, normalizedEndMinutes } from '../utils/time';
 
 /**
  * V8 Rule: Spread of Hours
@@ -28,8 +28,7 @@ export const spreadOfHoursRule: V8RuleEvaluator = (ctx) => {
 
         for (const s of dayShifts) {
             const start = parseTimeToMinutes(s.start_time);
-            let end = parseTimeToMinutes(s.end_time);
-            if (end <= start) end += 1440; // Cross-midnight adjustment
+            const end = normalizedEndMinutes(s.start_time, s.end_time);
 
             if (start < earliestStart) earliestStart = start;
             if (end > latestEnd) latestEnd = end;
