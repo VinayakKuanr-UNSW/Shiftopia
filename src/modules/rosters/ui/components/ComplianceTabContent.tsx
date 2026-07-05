@@ -119,7 +119,6 @@ export function ComplianceTabContent({
     onRunAll: onRunAllOverride
 }: ComplianceTabContentProps) {
     const [isRunningAll, setIsRunningAll] = useState(false);
-    const [restGapRelaxed, setRestGapRelaxed] = useState(false);
     const [staleRules, setStaleRules] = useState<Set<string>>(new Set());
     const rules = getRegisteredRules();
 
@@ -130,11 +129,19 @@ export function ComplianceTabContent({
         [buildComplianceInput]
     );
 
-    // Merge rest gap toggle into the compliance input (student_visa_enforcement comes from DB)
+    // ICC EBA cl. 40.2 — 8h cross-day break by written agreement. DB-driven
+    // (per-employee) and read-only here, mirroring student-visa enforcement.
+    const restGapAgreement8h = useMemo(
+        () => (buildComplianceInput().rest_gap_hours ?? 10) === 8,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [buildComplianceInput]
+    );
+
+    // Compliance input already carries rest_gap_hours (from the DB-driven
+    // agreement flag) and student_visa_enforcement — pass it through as-is.
     const buildInput = useCallback((): ComplianceCheckInput => ({
         ...buildComplianceInput(),
-        rest_gap_hours: restGapRelaxed ? 8 : 10
-    }), [buildComplianceInput, restGapRelaxed]);
+    }), [buildComplianceInput]);
 
     // Summary stats across all results (client + server)
     const summaryStats = useMemo(() => {
@@ -265,12 +272,6 @@ export function ComplianceTabContent({
             setIsRunningAll(false);
         }
     }, [buildInput, rules, onRuleResult, onChecksComplete, shiftId]);
-
-    // Rest Gap toggle — marks result as stale instead of clearing, so card stays expanded
-    const handleRestGapToggle = (relaxed: boolean) => {
-        setRestGapRelaxed(relaxed);
-        setStaleRules(prev => new Set([...prev, 'MIN_REST_GAP']));
-    };
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -433,10 +434,12 @@ export function ComplianceTabContent({
                                             }
                                             : rule.id === 'MIN_REST_GAP'
                                                 ? {
-                                                    label: 'Relaxed mode (8h)',
-                                                    description: 'Allow 8h rest gap instead of the default 10h',
-                                                    enabled: restGapRelaxed,
-                                                    onChange: handleRestGapToggle
+                                                    label: restGapAgreement8h ? '8h break (written agreement)' : 'Standard 10h break',
+                                                    description: restGapAgreement8h
+                                                        ? 'Written 8h-break agreement on file (ICC EBA cl. 40.2). Managed on Work Rights.'
+                                                        : 'Default 10h break between days. An 8h break requires a written agreement (set on Work Rights).',
+                                                    enabled: restGapAgreement8h,
+                                                    readOnly: true,
                                                 }
                                                 : undefined
                                     }

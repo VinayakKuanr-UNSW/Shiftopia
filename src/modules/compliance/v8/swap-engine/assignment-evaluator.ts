@@ -52,6 +52,15 @@ export interface AssignmentEvaluationInput {
     action_type: 'add' | 'assign' | 'bid';
     /** Optional solver overrides (rest gap, student visa enforcement, etc.). */
     config?: SolverConfig;
+    /**
+     * Employment context for the employee. Hydrates contract-scoped rules
+     * (e.g. V8_ORD_HOURS_AVG, which is exempt for CASUAL). When absent, the
+     * engine treats the party as CASUAL so behaviour is unchanged.
+     */
+    employee_context?: {
+        contract_type?: 'FT' | 'PT' | 'CASUAL' | null;
+        contracted_weekly_hours?: number;
+    };
 }
 
 // =============================================================================
@@ -146,6 +155,8 @@ export class AssignmentEvaluator {
             hypothetical_schedule: hypotheticalSchedule,
             received_shift: input.candidate_shift,  // The new shift being added
             given_shift: DUMMY_SHIFT,               // Nothing is given up
+            contract_type: input.employee_context?.contract_type ?? null,
+            contracted_weekly_hours: input.employee_context?.contracted_weekly_hours,
         };
 
         const scenario: SwapScenario = {

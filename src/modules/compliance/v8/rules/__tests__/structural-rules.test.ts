@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { noOverlapRule, minShiftLengthRule } from '../structural-rules';
+import { noOverlapRule } from '../structural-rules';
 import { buildContext, buildShift, resetIdCounter } from './_helpers';
 
 describe('noOverlapRule', () => {
@@ -60,31 +60,5 @@ describe('noOverlapRule', () => {
   });
 });
 
-describe('minShiftLengthRule', () => {
-  it('passes a standard 3-hour regular shift', () => {
-    const ctx = buildContext({
-      shifts: [buildShift({ start_time: '09:00', end_time: '12:00' })],
-    });
-    expect(minShiftLengthRule(ctx)).toEqual([]);
-  });
-
-  it('passes a 2-hour training shift', () => {
-    const ctx = buildContext({
-      shifts: [
-        buildShift({ start_time: '09:00', end_time: '11:00', is_training: true }),
-      ],
-    });
-    expect(minShiftLengthRule(ctx)).toEqual([]);
-  });
-
-  it('blocks a 2-hour regular (non-training) shift', () => {
-    const ctx = buildContext({
-      shifts: [
-        buildShift({ start_time: '09:00', end_time: '11:00', is_training: false }),
-      ],
-    });
-    const hits = minShiftLengthRule(ctx);
-    expect(hits).toHaveLength(1);
-    expect(hits[0].status).toBe('BLOCKING');
-  });
-});
+// Minimum-duration enforcement moved wholesale into minEngagementRule
+// (V8_MIN_ENGAGEMENT). See ./min-engagement.test.ts.

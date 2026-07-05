@@ -11,9 +11,13 @@ export const mealBreakRule: V8RuleEvaluator = (ctx) => {
     const violations: V8Hit[] = [];
 
     for (const s of shifts) {
+        // Per-shift check — only the shift(s) being added/changed, not the
+        // employee's committed history (see V8Shift.is_candidate).
+        if (s.is_candidate === false) continue;
+
         const start = parseTimeToMinutes(s.start_time);
         let end = parseTimeToMinutes(s.end_time);
-        
+
         let totalMins = end - start;
         if (totalMins < 0) totalMins += 1440; // Cross-midnight
 

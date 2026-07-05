@@ -1,4 +1,4 @@
-import { v8Engine } from '../engine';
+import { v8Engine, V8Engine } from '../engine';
 import { V8Employee, V8Shift } from '../types';
 import { ComplianceCheckInput, ComplianceCheckResult, ComplianceStatus, ComplianceResult } from '../../types';
 import { fetchV8EmployeeContext } from '../../employee-context';
@@ -66,8 +66,12 @@ export async function runV8Compliance(
         });
     }
 
-    // 3. Run V8
-    const v8Result = v8Engine.evaluate(employee, v8Shifts);
+    // 3. Run V8 — honour the configurable cross-day rest gap (clause 40.2:
+    // 8h by written agreement). Absent → default 10h engine.
+    const engine = input.rest_gap_hours
+        ? new V8Engine({ min_rest_gap_minutes: input.rest_gap_hours * 60 })
+        : v8Engine;
+    const v8Result = engine.evaluate(employee, v8Shifts);
 
     // 4. Map Hits to V1 ComplianceResult format
     const results: ComplianceResult[] = v8Result.hits.map(hit => ({

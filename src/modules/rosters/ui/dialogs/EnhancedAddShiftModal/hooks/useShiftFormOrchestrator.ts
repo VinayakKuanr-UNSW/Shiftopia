@@ -111,7 +111,7 @@ export function useShiftFormOrchestrator({
     const watchLicenses = form.watch('required_licenses');
     const watchEmployeeId = form.watch('assigned_employee_id');
     const watchShiftDate = form.watch('shift_date');
-    const watchRemLevel = form.watch('remuneration_level_id');
+    const watchRemLevel = form.watch('remuneration_level');
     const watchTimezone = form.watch('timezone') || SYDNEY_TZ;
     const watchGroup = form.watch('group_type');
     const watchSubGroupName = form.watch('sub_group_name');
@@ -218,7 +218,7 @@ export function useShiftFormOrchestrator({
     }, [scopeTree, rosters, selectedRosterId, safeContext, watchGroup, watchSubGroupName]);
 
     // ── Hard validation ──────────────────────────────────────────────────────
-    const { hardValidation, employeeExistingShifts, studentVisaEnforcement, isLoadingShifts } = useHardValidation({
+    const { hardValidation, employeeExistingShifts, studentVisaEnforcement, restGapAgreement8h, contractType, isLoadingShifts } = useHardValidation({
         watchStart,
         watchEnd,
         watchShiftDate,
@@ -239,7 +239,7 @@ export function useShiftFormOrchestrator({
         return Math.max(0, shiftLength - unpaid / 60);
     }, [shiftLength, watchUnpaidBreak]);
 
-    const selectedRemLevel = remunerationLevels.find(r => r.id === watchRemLevel);
+    const selectedRemLevel = remunerationLevels.find(r => r.level_number === watchRemLevel);
     const minShiftHours = useMemo(() => {
         if (watchIsTraining) return 2.0;
         if (!watchShiftDate) return 3.0;
@@ -342,8 +342,8 @@ export function useShiftFormOrchestrator({
     useEffect(() => {
         if (watchV8RoleId && roles.length > 0) {
             const role = roles.find(r => r.id === watchV8RoleId);
-            if (role?.remuneration_level_id) {
-                form.setValue('remuneration_level_id', role.remuneration_level_id);
+            if (role?.remuneration_level) {
+                form.setValue('remuneration_level', role.remuneration_level);
             }
         }
     }, [watchV8RoleId, roles, form]);
@@ -354,8 +354,8 @@ export function useShiftFormOrchestrator({
             const match = roles.find(r => r.id === safeContext.roleId);
             if (match) {
                 form.setValue('role_id', match.id);
-                if (match.remuneration_level_id) {
-                    form.setValue('remuneration_level_id', match.remuneration_level_id);
+                if (match.remuneration_level) {
+                    form.setValue('remuneration_level', match.remuneration_level);
                 }
             }
         }
@@ -370,7 +370,7 @@ export function useShiftFormOrchestrator({
                 group_type: (existingShift.group_type || existingShift.groupName?.toLowerCase().replace(/\s+/g, '_') || safeContext.group_type || safeContext.groupName?.toLowerCase().replace(/\s+/g, '_')) as FormValues['group_type'] || undefined,
                 sub_group_name: existingShift.sub_group_name || existingShift.subGroupName || safeContext.sub_group_name || safeContext.subGroupName || '',
                 role_id: existingShift.role_id || existingShift.roleId || '',
-                remuneration_level_id: existingShift.remuneration_level_id || existingShift.remunerationLevelId || '',
+                remuneration_level: existingShift.remuneration_level || undefined,
                 shift_date: existingShift.shift_date ? startOfDay(parse(existingShift.shift_date, 'yyyy-MM-dd', new Date())) : undefined,
                 start_time: existingShift.start_time || existingShift.startTime || '',
                 end_time: existingShift.end_time || existingShift.endTime || '',
@@ -392,7 +392,7 @@ export function useShiftFormOrchestrator({
                 group_type: (context?.group_type || context?.groupName?.toLowerCase().replace(/\s+/g, '_')) as FormValues['group_type'],
                 sub_group_name: context?.sub_group_name || context?.subGroupName || '',
                 role_id: context?.roleId || '',
-                remuneration_level_id: context?.remunerationLevelId || '',
+                remuneration_level: context?.remunerationLevel || undefined,
                 shift_date: context?.date ? startOfDay(parse(context.date, 'yyyy-MM-dd', new Date())) : undefined,
                 start_time: context?.eventStartTime || '',
                 end_time: context?.eventEndTime || '',
@@ -428,7 +428,11 @@ export function useShiftFormOrchestrator({
         overrideLicenseIds: watchLicenses?.length ? watchLicenses : undefined,
         candidate_is_training: watchIsTraining || false,
         student_visa_enforcement: studentVisaEnforcement,
-    }), [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchUnpaidBreak, isTemplateMode, employeeExistingShifts, watchTimezone, existingShift?.id, watchV8RoleId, watchSkills, watchLicenses, watchIsTraining, studentVisaEnforcement]);
+        // ICC EBA cl. 40.2: 8h cross-day break by written agreement, else 10h.
+        rest_gap_hours: restGapAgreement8h ? 8 : 10,
+        // Contract type hydrates split-shift (PT/flexi) + ord-hours rules.
+        employee_context: { contract_type: contractType },
+    }), [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchUnpaidBreak, isTemplateMode, employeeExistingShifts, watchTimezone, existingShift?.id, watchV8RoleId, watchSkills, watchLicenses, watchIsTraining, studentVisaEnforcement, restGapAgreement8h, contractType]);
 
     const {
         runChecks,
@@ -826,7 +830,7 @@ export function useShiftFormOrchestrator({
         try {
             if (isTemplateMode && onShiftCreated) {
                 const role = roles.find(r => r.id === values.role_id);
-                const remLevel = remunerationLevels.find(r => r.id === values.remuneration_level_id);
+                const remLevel = remunerationLevels.find(r => r.level_number === values.remuneration_level);
                 const assignedEmployee = employees.find(e => e.id === values.assigned_employee_id);
 
                 onShiftCreated({
@@ -834,9 +838,10 @@ export function useShiftFormOrchestrator({
                     role_id: values.role_id,
                     roleId: values.role_id,
                     roleName: role?.name,
-                    remuneration_level_id: values.remuneration_level_id,
-                    remunerationLevelId: values.remuneration_level_id,
-                    remunerationLevel: remLevel?.level_name,
+                    // remuneration_level is a smallint in the DB (HR framework) —
+                    // the numeric level goes here; the label goes in ...Name.
+                    remunerationLevel: remLevel?.level_number ?? values.remuneration_level ?? null,
+                    remunerationLevelName: remLevel?.level_name,
                     start_time: values.start_time,
                     startTime: values.start_time,
                     end_time: values.end_time,
@@ -878,7 +883,7 @@ export function useShiftFormOrchestrator({
                     shift_group_id: resolvedContext.groupId || null,
                     shift_subgroup_id: resolvedContext.subGroupId || null,
                     role_id: values.role_id || null,
-                    remuneration_level_id: values.remuneration_level_id || null,
+                    remuneration_level: values.remuneration_level || null,
                     paid_break_minutes: values.paid_break_minutes || 0,
                     unpaid_break_minutes: values.unpaid_break_minutes || 0,
                     timezone: values.timezone,
@@ -945,7 +950,7 @@ export function useShiftFormOrchestrator({
                             // References
                             role_id: basePayloadWithUtc.role_id || '',
                             sub_department_id: basePayloadWithUtc.sub_department_id || '',
-                            remuneration_level_id: basePayloadWithUtc.remuneration_level_id || '',
+                            remuneration_level: basePayloadWithUtc.remuneration_level || null,
                             shift_group_id: basePayloadWithUtc.shift_group_id || '',
                             shift_subgroup_id: basePayloadWithUtc.shift_subgroup_id || '',
                             // Grouping
@@ -1032,10 +1037,21 @@ export function useShiftFormOrchestrator({
                         onMutationError(err);
                     }
                 } else {
+                    // Optimistic create: useCreateShift inserts a provisional card into
+                    // the grid caches in onMutate, so the shift is visible immediately.
+                    // Close the modal now instead of blocking on the server round-trip
+                    // (compliance check + sm_create_shift + detail refetch); a failure
+                    // rolls the card back and surfaces a destructive toast.
                     createShiftMutation.mutate(
                         payload,
-                        { onSuccess: onMutationSuccess, onError: onMutationError },
+                        { onSuccess: () => onSuccess?.(), onError: onMutationError },
                     );
+                    toast({
+                        title: 'Shift Created',
+                        description: `Shift created for ${format(values.shift_date!, 'dd MMM yyyy')}`,
+                    });
+                    form.reset();
+                    onClose();
                 }
             }
         } catch (error: unknown) {

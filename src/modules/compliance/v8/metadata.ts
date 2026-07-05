@@ -18,11 +18,11 @@ export const V8_RULE_METADATA: Record<string, V8RuleMeta> = {
         category: 'TIME',
         description: 'No two shifts may overlap in time.'
     },
-    V8_MIN_SHIFT_LENGTH: {
-        id: 'V8_MIN_SHIFT_LENGTH',
-        name: 'Minimum Shift Length',
+    V8_MIN_ENGAGEMENT: {
+        id: 'V8_MIN_ENGAGEMENT',
+        name: 'Minimum Engagement',
         category: 'TIME',
-        description: 'Shift duration must be within limits.'
+        description: 'Shift must meet the minimum engagement (2h training · 3h weekday · 4h Sunday/PH).'
     },
     V8_MAX_DAILY_HOURS: {
         id: 'V8_MAX_DAILY_HOURS',
@@ -35,6 +35,12 @@ export const V8_RULE_METADATA: Record<string, V8RuleMeta> = {
         name: 'Minimum Rest Gap',
         category: 'TIME',
         description: 'Minimum rest gap required between any two consecutive shifts.'
+    },
+    V8_SPLIT_SHIFT: {
+        id: 'V8_SPLIT_SHIFT',
+        name: 'Split Shift',
+        category: 'TIME',
+        description: 'Same-day two-part shift (PT/flexi): the gap between engagements must not exceed 3h (clause 39.4).'
     },
     V8_MAX_CONSECUTIVE_DAYS: {
         id: 'V8_MAX_CONSECUTIVE_DAYS',
