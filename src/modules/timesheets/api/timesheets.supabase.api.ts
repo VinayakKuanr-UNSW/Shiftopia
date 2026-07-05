@@ -548,11 +548,7 @@ export async function updateTimesheetEntry(
         if (updates.adjustedStart !== undefined) {
             const adjStart = validTime(updates.adjustedStart);
             const normAdjStart = normalizeToHHMM(adjStart);
-            const defaultStart = shift ? normalizeToHHMM(
-                (isShiftFinished(shift.shift_date, shift.start_time, shift.end_time, shift.actual_end)
-                    ? snapToQuarterHour(shift.actual_start)
-                    : shift.start_time) || shift.start_time
-            ) : null;
+            const defaultStart = shift ? normalizeToHHMM(snapToQuarterHour(shift.actual_start)) : null;
 
             if (normAdjStart && normAdjStart !== defaultStart) {
                 payload.start_time = adjStart;
@@ -564,11 +560,7 @@ export async function updateTimesheetEntry(
         if (updates.adjustedEnd !== undefined) {
             const adjEnd = validTime(updates.adjustedEnd);
             const normAdjEnd = normalizeToHHMM(adjEnd);
-            const defaultEnd = shift ? normalizeToHHMM(
-                (isShiftFinished(shift.shift_date, shift.start_time, shift.end_time)
-                    ? snapToQuarterHour(shift.actual_end)
-                    : shift.end_time) || shift.end_time
-            ) : null;
+            const defaultEnd = shift ? normalizeToHHMM(snapToQuarterHour(shift.actual_end)) : null;
 
             if (normAdjEnd && normAdjEnd !== defaultEnd) {
                 payload.end_time = adjEnd;

@@ -1397,17 +1397,35 @@ class ScheduleModelBuilder:
                         # Tier 0: Hard Legal Compliance (100,000,000 penalty)
                         self._workload_slack_terms.append(100_000_000 * slack)
             
-            # 4. Consecutive Days Limit (Precision Fix #2: Move to SOFT)
-            max_streak = 7
-            if emp.employment_type == 'PT' and emp.is_flexible: max_streak = 10
-            elif emp.employment_type == 'Casual': max_streak = 12
-                
+            # 4. Consecutive-days streak — FLEXIBLE PART-TIME ONLY (cl. 35.3(g),
+            #    max 10). FT/PT/casual consecutive-day density is governed solely
+            #    by the 20-in-28 cap (4b) below; the EBA gives no basis for an
+            #    arbitrary standard streak cap, and the old 7/casual-12 caps
+            #    disagreed with the V8 auditor (audit H2). Policy locked 2026-07-05.
+            if emp.employment_type == 'PT' and emp.is_flexible:
+                max_streak = 10
+                for i in range(num_calendar_days):
+                    if i >= max_streak:
+                        streak_over = self.model.NewIntVar(0, 7, f'streak_{emp.id[:4]}_{i}')
+                        self.model.Add(sum(work_day_vars[i-max_streak:i+1]) - streak_over <= max_streak)
+                        # Tier 0: Hard Legal Compliance (100,000,000 penalty)
+                        self._workload_slack_terms.append(100_000_000 * streak_over)
+
+            # 4b. 20-in-28 workday cap (cl. 35.1(e)/35.2(f)/35.3(h)/35.4(e)).
+            #     Previously named in this method's docstring but NEVER enforced
+            #     (audit C2) — the solver could emit 21+/28 rosters that the V8
+            #     auditor then blocked. Rolling 28-day LOOKBACK from each day so
+            #     the cap fires at any horizon length (e.g. 21-in-21), exactly
+            #     matching the V8 auditor's per-end-day 28-day window. `lo` is
+            #     clipped to the horizon start; only windows that can exceed 20
+            #     days (i >= 20) get a constraint, to avoid trivial variables.
             for i in range(num_calendar_days):
-                if i >= max_streak:
-                    streak_over = self.model.NewIntVar(0, 7, f'streak_{emp.id[:4]}_{i}')
-                    self.model.Add(sum(work_day_vars[i-max_streak:i+1]) - streak_over <= max_streak)
+                if i >= 20:
+                    lo = max(0, i - 27)
+                    wd_over = self.model.NewIntVar(0, 8, f'wd28_{emp.id[:4]}_{i}')
+                    self.model.Add(sum(work_day_vars[lo:i+1]) - wd_over <= 20)
                     # Tier 0: Hard Legal Compliance (100,000,000 penalty)
-                    self._workload_slack_terms.append(100_000_000 * streak_over)
+                    self._workload_slack_terms.append(100_000_000 * wd_over)
 
             # 5. Student Visa Constraint (HC-12: Rolling 14 days, Dynamic Limit)
             if emp.is_student:

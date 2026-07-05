@@ -79,31 +79,37 @@ export const maxWorkdayLimitsRule: V8RuleEvaluator = (ctx) => {
         });
     }
 
-    // --- RULE B: CONTRACT-AWARE STREAK ---
-    const streakLimit = employee.contract_type === 'FLEXI_PART_TIME' ? 10 : 6;
-    
-    let currentStreak = 1;
-    let streakStart = sortedDates[0];
+    // --- RULE B: CONSECUTIVE-DAYS STREAK (flexible part-time ONLY) ---
+    // The EBA fixes a hard consecutive-days cap only for flexible part-time
+    // (cl. 35.3(g) — "up to a maximum of ten (10) consecutive days"). FT, PT and
+    // casual density is governed entirely by the 20-in-28 cap above (there is no
+    // EBA basis for an arbitrary 6- or 7-day standard streak), so no separate
+    // streak cap applies to them. Policy locked 2026-07-05 and mirrored in the
+    // CP-SAT scheduler (model_builder.py `_add_workload_limits`).
+    if (employee.contract_type === 'FLEXI_PART_TIME') {
+        const streakLimit = 10;
+        let currentStreak = 1;
+        let streakStart = sortedDates[0];
 
-    for (let i = 1; i < sortedDates.length; i++) {
-        const d1 = new Date(sortedDates[i - 1]).getTime();
-        const d2 = new Date(sortedDates[i]).getTime();
-        
-        const diffDays = Math.round((d2 - d1) / 86400000);
-        
-        if (diffDays === 1) {
-            currentStreak++;
-        } else {
-            if (currentStreak > streakLimit) {
-                violations.push(generateStreakHit(currentStreak, streakLimit, streakStart, sortedDates[i-1], shifts));
+        for (let i = 1; i < sortedDates.length; i++) {
+            const d1 = new Date(sortedDates[i - 1]).getTime();
+            const d2 = new Date(sortedDates[i]).getTime();
+            const diffDays = Math.round((d2 - d1) / 86400000);
+
+            if (diffDays === 1) {
+                currentStreak++;
+            } else {
+                if (currentStreak > streakLimit) {
+                    violations.push(generateStreakHit(currentStreak, streakLimit, streakStart, sortedDates[i - 1], shifts));
+                }
+                currentStreak = 1;
+                streakStart = sortedDates[i];
             }
-            currentStreak = 1;
-            streakStart = sortedDates[i];
         }
-    }
 
-    if (currentStreak > streakLimit) {
-        violations.push(generateStreakHit(currentStreak, streakLimit, streakStart, sortedDates[sortedDates.length - 1], shifts));
+        if (currentStreak > streakLimit) {
+            violations.push(generateStreakHit(currentStreak, streakLimit, streakStart, sortedDates[sortedDates.length - 1], shifts));
+        }
     }
 
     return violations;

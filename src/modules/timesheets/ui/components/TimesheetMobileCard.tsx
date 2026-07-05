@@ -335,6 +335,8 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 adjusted_start: entry.adjustedStart,
                 adjusted_end: entry.adjustedEnd,
                 adjusted_is_manual: entry.isAdjustedManual,
+                adjusted_start_source: entry.adjustedStartSource,
+                adjusted_end_source: entry.adjustedEndSource,
                 shift_date: entry.date,
                 start_time: entry.scheduledStart,
                 end_time: entry.scheduledEnd,

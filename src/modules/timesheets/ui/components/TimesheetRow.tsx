@@ -116,6 +116,8 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
         adjusted_start: entry.adjustedStart,
         adjusted_end: entry.adjustedEnd,
         adjusted_is_manual: entry.isAdjustedManual,
+        adjusted_start_source: entry.adjustedStartSource,
+        adjusted_end_source: entry.adjustedEndSource,
         start_at: entry.rawStartAt,
         end_at: entry.rawEndAt,
         shift_date: typeof entry.date === 'string' ? entry.date : undefined,

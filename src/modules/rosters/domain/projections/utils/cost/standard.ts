@@ -37,8 +37,10 @@ function getApprenticeMultiplier(options: CostCalculatorOptions): number {
   if (type === 'adult') {
     multiplier = (APPRENTICE_MATRIX.adult as any)[year] || 1.0;
   } else if (type === 'school_based') {
+    // Schedule 4 (Apprentices) prescribes NO +25% loading for school-based
+    // apprentices — that in-lieu-of-leave loading is a Schedule 5 (Trainees)
+    // provision (§1.8.1) and is opt-in. Applying it here over-paid apprentices.
     multiplier = (APPRENTICE_MATRIX.school_based as any)[year] || 0.50;
-    multiplier *= 1.25;
   } else {
     const branch = hasYr12 ? APPRENTICE_MATRIX.standard.yr12 : APPRENTICE_MATRIX.standard.no_yr12;
     multiplier = (branch as any)[year] || 0.50;
@@ -173,7 +175,24 @@ export function estimateDetailedShiftCost(
   }
 
   const netHours = Math.max(0, (calculatedMins || 0) / 60);
-  const ordinaryHours = Math.min(netHours, ORDINARY_HOURS_CAP);
+
+  // ── Overtime (Clause 42) — computed BEFORE ordinary so the two never overlap ─
+  // FT/PT: overtime is time beyond the rostered hours OR beyond the 12h/day
+  // ordinary cap. Casuals: overtime only past the 12h/day ordinary cap.
+  const scheduledHours = (options.scheduled_length_minutes || 0) / 60;
+  let overtimeHours: number;
+  if (!isCasual && scheduledHours > 0) {
+    overtimeHours = Math.max(0, netHours - scheduledHours, netHours - ORDINARY_HOURS_CAP);
+  } else {
+    overtimeHours = Math.max(0, netHours - ORDINARY_HOURS_CAP);
+  }
+
+  // Ordinary hours are what remains after removing overtime — never counted as
+  // both. The old `Math.min(netHours, 12)` billed hours between scheduled and 12
+  // as ordinary AND overtime whenever netHours > scheduledHours (a systematic
+  // FT/PT over-count). For the normal path (netHours <= scheduledHours) this is
+  // identical to the old value, so projection totals are unchanged there.
+  const ordinaryHours = Math.max(0, netHours - overtimeHours);
 
   // ── Penalty multipliers ────────────────────────────────────────────────
   let penaltyRate = baseRate;
@@ -207,21 +226,18 @@ export function estimateDetailedShiftCost(
 
     const endDay = fastEndDayOfWeek(dayOfWeek, endMins, !!is_overnight);
     const allowanceMultiplier = getNightAllowanceMultiplier(endDay, isCasual) || 0;
-    nightAllowanceCost = nightHours * ordinaryRate * allowanceMultiplier;
+    // Clause 41.4 / Schedule 3 cl. 6.2(d): the Saturday, Sunday and public
+    // holiday loadings are NOT cumulative upon the night-shift allowance. When
+    // the day's ordinary hours already carry a penalty loading, the night
+    // allowance is not additionally payable (conservative single-loading rule).
+    const hasPenaltyLoading =
+      isHoliday || dayOfWeek === 6 /* Sat */ || dayOfWeek === 0 /* Sun */;
+    nightAllowanceCost = hasPenaltyLoading
+      ? 0
+      : nightHours * ordinaryRate * allowanceMultiplier;
   }
 
-  // 5. Overtime Calculation (Clause 42)
-  const scheduledHours = (options.scheduled_length_minutes || 0) / 60;
-  let overtimeHours = 0;
-  
-  if (!isCasual && scheduledHours > 0) {
-    // FT/PT: OT is excess of rostered hours OR excess of daily ordinary cap (12h)
-    overtimeHours = Math.max(0, netHours - scheduledHours, netHours - ORDINARY_HOURS_CAP);
-  } else {
-    // Casuals: OT is after the daily ordinary cap
-    overtimeHours = Math.max(0, netHours - ORDINARY_HOURS_CAP);
-  }
-
+  // 5. Overtime cost (Clause 42) — overtimeHours already computed above.
   const ot_th = Math.min(overtimeHours, 3);
   const ot_dt = Math.max(0, overtimeHours - 3);
   

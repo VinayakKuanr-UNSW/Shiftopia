@@ -265,6 +265,8 @@ export const TimesheetMobileView: React.FC<TimesheetMobileViewProps> = ({
                                 adjusted_start: e.adjustedStart,
                                 adjusted_end: e.adjustedEnd,
                                 adjusted_is_manual: e.isAdjustedManual,
+                                adjusted_start_source: e.adjustedStartSource,
+                                adjusted_end_source: e.adjustedEndSource,
                                 attendance_status: e.attendanceStatus,
                                 attendance_note: e.attendanceNote,
                             });

@@ -1010,3 +1010,42 @@ def test_decomposition_single_week_falls_back_to_monolithic():
     out = _solve_decomposed(shifts, emps)
     assert out.status in ("OPTIMAL", "FEASIBLE")
     assert len(out.assignments) == 2 and not out.unassigned_shift_ids
+
+
+# ---------------------------------------------------------------------------
+# 20-in-28 workday cap — audit C2 (was documented but never enforced)
+# ---------------------------------------------------------------------------
+
+from datetime import date as _date, timedelta as _timedelta
+
+
+def _consecutive_dates(start: str, n: int) -> list[str]:
+    y, m, d = map(int, start.split("-"))
+    base = _date(y, m, d)
+    return [(base + _timedelta(days=i)).isoformat() for i in range(n)]
+
+
+def test_twenty_in_28_workday_cap_enforced():
+    """Audit C2: the 20-days-in-28 cap (cl. 35.1(e)/35.2(f)/35.4(e)) was named
+    in _add_workload_limits' docstring but never enforced, so the solver could
+    emit 21+/28 rosters that the V8 auditor then blocked.
+
+    Isolation: emp1 is far cheaper than emp2, so cost pressure (which outranks
+    fairness) would otherwise pile all 21 consecutive days on emp1. Coverage is
+    satisfiable within the cap (20 + 1), so the Tier-0 20-in-28 guardrail must
+    hold emp1 at 20 and push the 21st day to emp2 — with zero shifts left
+    uncovered."""
+    dates = _consecutive_dates("2026-05-01", 21)
+    shifts = [make_shift(f"s{i}", d, "10:00", "14:00") for i, d in enumerate(dates)]
+    emps = [
+        make_employee("e1", employment_type="Casual", hourly_rate=20.0, max_weekly_minutes=100_000),
+        make_employee("e2", employment_type="Casual", hourly_rate=60.0, max_weekly_minutes=100_000),
+    ]
+    out = solve(shifts, emps)
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert len(out.unassigned_shift_ids) == 0  # coverage achievable within the cap
+
+    from collections import Counter
+    per_emp = Counter(a.employee_id for a in out.assignments)
+    assert per_emp["e1"] <= 20            # the cap binds the cheap worker
+    assert per_emp.get("e2", 0) >= 1      # overflow forced onto emp2

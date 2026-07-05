@@ -157,13 +157,13 @@ describe('getLiveRuleBadges - two-badge arrival/departure model', () => {
         expect(departure(s)).toBe('Auto Clock-Out');
     });
 
-    it('manual override re-derives both halves with a * suffix', () => {
+    it('manual override re-derives both halves without a * suffix', () => {
         const badges = getLiveRuleBadges({ lifecycle_status: 'Completed', attendance_status: 'no_show',
             adjusted_is_manual: true,
             start_at: iso(-8 * HOUR), end_at: iso(-1 * HOUR),
             adjusted_start: iso(-8 * HOUR + 20 * MIN), adjusted_end: iso(-2 * HOUR) });
-        expect(badges.arrival?.label).toBe('Late In*');
-        expect(badges.departure?.label).toBe('Early Out*');
+        expect(badges.arrival?.label).toBe('Late In');
+        expect(badges.departure?.label).toBe('Early Out');
     });
 
     it('auto/snapped billable times do NOT get a * (no manual override)', () => {
@@ -197,10 +197,10 @@ describe('getLiveRule - single-badge adapter (departure wins over arrival)', () 
             actual_start: iso(-1 * HOUR + 20 * MIN) })?.label).toBe('Late In');
     });
 
-    it('keeps the * suffix so manual overrides are still detectable', () => {
+    it('does NOT keep the * suffix', () => {
         expect(getLiveRule({ lifecycle_status: 'Completed', attendance_status: 'no_show',
             adjusted_is_manual: true, start_at: iso(-8 * HOUR), end_at: iso(-1 * HOUR),
             adjusted_start: iso(-8 * HOUR + 2 * MIN), adjusted_end: iso(-1 * HOUR + 2 * MIN) })?.label.endsWith('*'))
-            .toBe(true);
+            .toBe(false);
     });
 });

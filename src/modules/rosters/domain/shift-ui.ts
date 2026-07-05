@@ -582,7 +582,7 @@ export function getLiveRuleBadges(shift: ShiftDotInput): LiveRuleBadges {
     
     let arrival: ShiftRuleBadge | null = null;
     if (ci !== null) {
-        arrival = classifyArrival(ci, start, startManual ? '*' : '');
+        arrival = classifyArrival(ci, start);
     } else {
         // Fallback or stand-in badge when never clocked in
         if (now > effectiveEnd) arrival = { label: 'No Show', color: LR.noShow };
@@ -600,7 +600,7 @@ export function getLiveRuleBadges(shift: ShiftDotInput): LiveRuleBadges {
     if (shift.attendance_status === 'auto_clock_out' && !endManual) {
         departure = { label: 'Auto Clock-Out', color: LR.autoOut };
     } else if (co !== null) {
-        departure = end !== null ? classifyDeparture(co, end, endManual ? '*' : '') : { label: 'On Time Out', color: LR.onTimeOut };
+        departure = end !== null ? classifyDeparture(co, end) : { label: 'On Time Out', color: LR.onTimeOut };
     } else if (now > effectiveEnd && now < start + AUTO_CLOCKOUT_MS && ci !== null) {
         departure = { label: 'Working Overtime', color: LR.overtime };
     }
