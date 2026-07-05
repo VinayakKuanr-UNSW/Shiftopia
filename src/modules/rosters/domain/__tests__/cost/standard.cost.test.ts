@@ -111,3 +111,79 @@ describe('M5 — school-based apprentices get no +25% loading', () => {
     expect(r.breakdown.baseRate).toBeCloseTo(50, 5);
   });
 });
+
+describe('M3 — minimum-payment floor (cl. 12.x / 56.2)', () => {
+  it('a casual who works 1h on a weekday is paid the 3h minimum', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 60, scheduled_length_minutes: 60,
+        start_time: '09:00', end_time: '10:00',
+        employmentType: 'Casual', rate: 37.5, // casual base (ordinary 30)
+      }),
+    );
+    expect(r.ordinaryHours).toBe(3);
+    expect(r.totalCost).toBeCloseTo(3 * 37.5, 5); // 3h @ loaded casual weekday rate
+  });
+
+  it('a casual who works 1h on a Sunday is paid the 4h minimum at Sunday rate', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 60, scheduled_length_minutes: 60,
+        start_time: '09:00', end_time: '10:00',
+        shift_date: '2026-07-05', // Sunday
+        employmentType: 'Casual', rate: 37.5,
+      }),
+    );
+    expect(r.ordinaryHours).toBe(4);
+    // 4h @ (ordinary 30 * 1.75 Sunday casual) = 210
+    expect(r.ordinaryCost).toBeCloseTo(4 * 30 * 1.75, 5);
+  });
+
+  it('full-time is NOT floored (weekly-salaried, no per-engagement minimum)', () => {
+    const r = estimateDetailedShiftCost(
+      base({ netMinutes: 60, scheduled_length_minutes: 60, start_time: '09:00', end_time: '10:00' }),
+    );
+    expect(r.ordinaryHours).toBe(1);
+  });
+
+  it('does not inflate a normal above-floor casual shift', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 300, scheduled_length_minutes: 300,
+        start_time: '09:00', end_time: '14:00',
+        employmentType: 'Casual', rate: 37.5,
+      }),
+    );
+    expect(r.ordinaryHours).toBe(5);
+  });
+});
+
+describe('H3b — fixed allowances reach the total (Schedule 2)', () => {
+  it('meal + protein-spill are added to a full-time shift cost', () => {
+    const r = estimateDetailedShiftCost(
+      base({ netMinutes: 480, scheduled_length_minutes: 480, allowances: { meal: true, proteinSpill: true } }),
+    );
+    expect(r.allowanceCost).toBeCloseTo(13.61 + 7.17, 5);
+    expect(r.totalCost).toBeCloseTo(8 * 30 + 13.61 + 7.17, 5);
+  });
+
+  it('split-shift allowance is paid to a part-timer', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 300, scheduled_length_minutes: 300, start_time: '09:00', end_time: '14:00',
+        employmentType: 'Part-Time', rate: 30, allowances: { splitShift: true },
+      }),
+    );
+    expect(r.allowanceCost).toBeCloseTo(11.13, 5);
+  });
+
+  it('split-shift allowance is NOT paid to a casual (cl. 28.4)', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 300, scheduled_length_minutes: 300, start_time: '09:00', end_time: '14:00',
+        employmentType: 'Casual', rate: 37.5, allowances: { splitShift: true },
+      }),
+    );
+    expect(r.allowanceCost).toBe(0);
+  });
+});

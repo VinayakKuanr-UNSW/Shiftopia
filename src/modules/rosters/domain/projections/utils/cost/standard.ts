@@ -1,6 +1,8 @@
 import { CostCalculatorOptions, ShiftCostBreakdown } from './types';
-import { 
-  hd, WAGE_RATES, DEFAULT_RATE, ORDINARY_HOURS_CAP
+import {
+  hd, WAGE_RATES, DEFAULT_RATE, ORDINARY_HOURS_CAP,
+  ALLOWANCE_MEAL, ALLOWANCE_FIRST_AID_PER_HOUR,
+  ALLOWANCE_PROTEIN_SPILL, ALLOWANCE_SPLIT_SHIFT
 } from './constants';
 import { getTraineeBaseRate } from './trainee_matrix';
 import type { AwardContext } from './award-context';
@@ -206,8 +208,23 @@ export function estimateDetailedShiftCost(
     }
   }
 
-  const ordinaryCost = ordinaryHours * penaltyRate;
-  
+  // ── Minimum-payment floor (cl. 12.3(e) / 12.4(c) / 12.5(c) / 56.2) ───────
+  // A part-time / flexi / casual engagement is PAID for at least the minimum
+  // hours even when fewer are worked (e.g. sent home early, or a casual reports
+  // to a changed/cancelled start under cl. 38.3). Full-time members are weekly-
+  // salaried with no per-engagement minimum and are excluded. Sundays and public
+  // holidays floor at 4h (cl. 56.2 / 12.x); otherwise 3h. The 2h training-on-a-
+  // non-event-day floor (12.4(c)a / 12.5(c)a) is not modelled — the engine has
+  // no is_training input — so the standard floor is used there.
+  const isFullTime = /full/i.test(employmentType || '');
+  let paidOrdinaryHours = ordinaryHours;
+  if (!isFullTime && netHours > 0) {
+    const floorHours = (isHoliday || dayOfWeek === 0 /* Sunday */) ? 4 : 3;
+    if (paidOrdinaryHours < floorHours) paidOrdinaryHours = floorHours;
+  }
+
+  const ordinaryCost = paidOrdinaryHours * penaltyRate;
+
   // ── 4. Night Shift Allowance (Clause 43) ─────────────────────────────
   let nightAllowanceCost = 0;
   let nightHours = 0;
@@ -250,15 +267,30 @@ export function estimateDetailedShiftCost(
     overtimeCost = (ot_th * 1.5 + ot_dt * 2.0) * ordinaryRate;
   }
 
-  const totalCost = (ordinaryCost || 0) + (overtimeCost || 0) + (nightAllowanceCost || 0);
+  // ── 6. Fixed allowances (Clause 28 / Schedule 2 §3) ──────────────────────
+  // Previously `options.allowances` was accepted but NEVER applied, so meal /
+  // first-aid / protein-spill / split-shift allowances reached no cost total.
+  let otherAllowanceCost = 0;
+  const al = options.allowances;
+  if (al) {
+    if (al.meal) otherAllowanceCost += ALLOWANCE_MEAL;                              // per occasion (cl. 28.1)
+    if (al.firstAid) otherAllowanceCost += ALLOWANCE_FIRST_AID_PER_HOUR * ordinaryHours; // per ordinary hour worked (cl. 28.2)
+    if (al.proteinSpill) otherAllowanceCost += ALLOWANCE_PROTEIN_SPILL;             // per shift (cl. 28.3)
+    // The split-shift allowance is NOT payable to casual Team Members (cl. 28.4).
+    if (al.splitShift && !isCasual) otherAllowanceCost += ALLOWANCE_SPLIT_SHIFT;    // per shift (cl. 28.4)
+  }
+
+  const allowanceCost = nightAllowanceCost + otherAllowanceCost;
+
+  const totalCost = (ordinaryCost || 0) + (overtimeCost || 0) + (allowanceCost || 0);
 
   return {
     totalCost: isNaN(totalCost) ? 0 : totalCost,
     ordinaryCost: isNaN(ordinaryCost) ? 0 : ordinaryCost,
     overtimeCost: isNaN(overtimeCost) ? 0 : overtimeCost,
-    penaltyCost: isNaN(nightAllowanceCost) ? 0 : nightAllowanceCost, // Approximation
-    allowanceCost: isNaN(nightAllowanceCost) ? 0 : nightAllowanceCost,
-    ordinaryHours: ordinaryHours || 0,
+    penaltyCost: isNaN(nightAllowanceCost) ? 0 : nightAllowanceCost, // night-shift allowance (Approximation)
+    allowanceCost: isNaN(allowanceCost) ? 0 : allowanceCost,
+    ordinaryHours: paidOrdinaryHours || 0,
     overtimeHours: overtimeHours || 0,
     breakdown: {
       baseRate: baseRate || 0,
