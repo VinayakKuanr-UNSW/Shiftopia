@@ -17,13 +17,10 @@ if (!supabaseServiceKey) {
   throw new Error('[FATAL] Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
 }
 
-/** 12.5 hours in milliseconds — auto-completion threshold */
+/** 12.5 hours in milliseconds — auto clock-out threshold */
 const AUTO_COMPLETE_MS = 12.5 * 60 * 60 * 1000;
 
-/**
- * Resolve a shift's scheduled time to a Unix timestamp (ms).
- * Priority: timestamp (ISO) → shift_date + local time (assumed Sydney UTC+11).
- */
+/** Resolve an ISO timestamp to Unix ms, or null. */
 function resolveTimeMs(iso: string | null): number | null {
   if (iso) {
     const d = new Date(iso);
@@ -47,84 +44,90 @@ Deno.serve(async (req: Request) => {
     let updatedCount = 0;
     const logs: string[] = [];
 
-    // Fetch shifts that are either InProgress (for auto-out)
-    // or Published/Confirmed (for no-show detection)
-    const { data: shifts, error: fetchError } = await supabase
+    // ── LOGIC 1: Auto clock-out — 12.5h after the LATER of clock-in/start ──
+    // Mirrors sm_run_state_processor Pass 6 exactly:
+    //   • threshold = GREATEST(actual clock-in, scheduled start) + 12.5h
+    //   • does NOT fabricate actual_end — no clock-out happened, the raw
+    //     actual stays NULL; attendance_status = 'auto_clock_out' is the
+    //     terminal signal (unlocks manager review, drives the badge/metric)
+    //   • not gated on lifecycle = InProgress (shifts are auto-completed at
+    //     scheduled end, so hanging clock-ins are usually 'Completed')
+    const { data: hanging, error: hangingError } = await supabase
       .from('shifts')
-      .select('id, lifecycle_status, assignment_status, assigned_employee_id, shift_date, start_time, end_time, start_at, end_at, actual_start, actual_end')
-      .in('lifecycle_status', ['InProgress', 'Published', 'Confirmed'])
+      .select('id, lifecycle_status, attendance_status, start_at, actual_start, actual_end')
+      .in('attendance_status', ['checked_in', 'late'])
+      .is('actual_end', null)
+      .in('lifecycle_status', ['InProgress', 'Completed'])
+      .neq('is_cancelled', true);
+
+    if (hangingError) {
+      throw hangingError;
+    }
+
+    for (const shift of hanging || []) {
+      const startMs = resolveTimeMs(shift.start_at);
+      if (startMs === null) {
+        logs.push(`[SKIP] shift ${shift.id}: cannot resolve scheduled start`);
+        continue;
+      }
+      const clockInMs = resolveTimeMs(shift.actual_start);
+      const anchorMs = Math.max(clockInMs ?? startMs, startMs); // later of the two
+      if (now.getTime() >= anchorMs + AUTO_COMPLETE_MS) {
+        const { error: updateError } = await supabase
+          .from('shifts')
+          .update({
+            lifecycle_status:  'Completed',
+            attendance_status: 'auto_clock_out',
+            attendance_note:   'Auto-completed by system (12.5hr limit)',
+            updated_at:        now.toISOString(),
+          })
+          .eq('id', shift.id);
+
+        if (updateError) {
+          logs.push(`[ERROR] shift ${shift.id} (auto-out): ${updateError.message}`);
+        } else {
+          updatedCount++;
+          logs.push(`[INFO] Auto clock-out shift ${shift.id}: attendance -> auto_clock_out (actual_end stays NULL)`);
+        }
+      }
+    }
+
+    // ── LOGIC 2: Auto-No-Show for missed assigned shifts ────────────
+    // If the shift ended and nobody checked in, mark as no-show
+    const { data: pendingShifts, error: fetchError } = await supabase
+      .from('shifts')
+      .select('id, lifecycle_status, assigned_employee_id, end_at, actual_start')
+      .in('lifecycle_status', ['Published', 'Confirmed'])
+      .not('assigned_employee_id', 'is', null)
       .neq('is_cancelled', true);
 
     if (fetchError) {
       throw fetchError;
     }
 
-    for (const shift of shifts || []) {
-      const startMs = resolveTimeMs(shift.start_at);
-      const endMs   = resolveTimeMs(shift.end_at);
-
-      if (startMs === null || endMs === null) {
-        logs.push(`[SKIP] shift ${shift.id}: cannot resolve timing`);
+    for (const shift of pendingShifts || []) {
+      const endMs = resolveTimeMs(shift.end_at);
+      if (endMs === null) {
+        logs.push(`[SKIP] shift ${shift.id}: cannot resolve scheduled end`);
         continue;
       }
+      if (shift.actual_start === null && now.getTime() >= endMs) {
+        const { error: updateError } = await supabase
+          .from('shifts')
+          .update({
+            lifecycle_status: 'Completed',
+            attendance_status: 'no_show',
+            assignment_outcome: 'no_show',
+            attendance_note: 'Auto-no-show: No clock-in recorded by shift end',
+            updated_at: now.toISOString(),
+          })
+          .eq('id', shift.id);
 
-      // ── LOGIC 1: Auto-Clock-Out for hanging InProgress shifts ───────
-      // Use actual_start (real clock-in time) if available, fall back to
-      // scheduled start_at so the 12.5h window is measured from real work start.
-      if (shift.lifecycle_status === 'InProgress') {
-        const effectiveStartMs = resolveTimeMs(shift.actual_start ?? shift.start_at);
-        const autoCompleteAt   = (effectiveStartMs ?? startMs) + AUTO_COMPLETE_MS;
-        const effectiveEndMs   = resolveTimeMs(shift.actual_end ?? shift.end_at) ?? now.getTime();
-        if (now.getTime() >= autoCompleteAt) {
-          const netMinutes = Math.max(
-            0,
-            Math.round((effectiveEndMs - (effectiveStartMs ?? startMs)) / 60000),
-          );
-          const { error: updateError } = await supabase
-            .from('shifts')
-            .update({
-              lifecycle_status:   'Completed',
-              attendance_status:  'auto_clock_out',
-              actual_end:         new Date(effectiveEndMs).toISOString(),
-              actual_net_minutes: netMinutes,
-              attendance_note:    'Auto-completed by system (12.5hr limit)',
-              updated_at:         now.toISOString(),
-            })
-            .eq('id', shift.id);
-
-          if (updateError) {
-            logs.push(`[ERROR] shift ${shift.id} (auto-out): ${updateError.message}`);
-          } else {
-            updatedCount++;
-            logs.push(`[INFO] Auto-completed shift ${shift.id}: InProgress -> Completed (auto_clock_out)`);
-          }
-        }
-      }
-
-      // ── LOGIC 2: Auto-No-Show for missed assigned shifts ────────────
-      // If the shift ended and nobody checked in, mark as no-show
-      else if (
-        (shift.lifecycle_status === 'Published' || shift.lifecycle_status === 'Confirmed') &&
-        shift.assigned_employee_id !== null
-      ) {
-        if (now.getTime() >= endMs) {
-          const { error: updateError } = await supabase
-            .from('shifts')
-            .update({
-              lifecycle_status: 'Completed',
-              attendance_status: 'no_show',
-              assignment_outcome: 'no_show',
-              attendance_note: 'Auto-no-show: No clock-in recorded by shift end',
-              updated_at: now.toISOString(),
-            })
-            .eq('id', shift.id);
-
-          if (updateError) {
-            logs.push(`[ERROR] shift ${shift.id} (no-show): ${updateError.message}`);
-          } else {
-            updatedCount++;
-            logs.push(`[INFO] Auto-no-show shift ${shift.id}: Published -> Completed (no_show)`);
-          }
+        if (updateError) {
+          logs.push(`[ERROR] shift ${shift.id} (no-show): ${updateError.message}`);
+        } else {
+          updatedCount++;
+          logs.push(`[INFO] Auto-no-show shift ${shift.id}: Published -> Completed (no_show)`);
         }
       }
     }
@@ -133,7 +136,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({
         success: true,
         updatedCount,
-        totalChecked: shifts?.length || 0,
+        totalChecked: (hanging?.length || 0) + (pendingShifts?.length || 0),
         logs,
         timestamp: now.toISOString(),
       }),

@@ -151,6 +151,9 @@ export interface Shift {
     adjusted_end?: string | null;
     /** True when the billable times above were manually set by a manager. */
     adjusted_is_manual?: boolean;
+    /** Per-side manual override flags — only the edited side gets its `*`. */
+    adjusted_start_is_manual?: boolean;
+    adjusted_end_is_manual?: boolean;
     
     is_recurring: boolean;
     recurrence_rule: string | null;

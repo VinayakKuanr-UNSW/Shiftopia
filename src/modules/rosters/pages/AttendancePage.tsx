@@ -18,6 +18,7 @@ import {
   BarChart3, Filter, ArrowUp, ArrowDown, XCircle, AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { CustomDateRangePicker } from '@/modules/core/ui/components/CustomDateRangePicker';
 import { useAuth } from '@/platform/auth/useAuth';
 import { supabase } from '@/platform/supabase/client';
@@ -139,7 +140,9 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
 
   const timing   = getShiftTiming(shift, now);
   const status   = (shift.attendance_status ?? 'unknown') as AttendanceStatus;
-  const isAutoClockOut = shift.attendance_note === 'auto_clocked_out';
+  // Canonical auto clock-out signal is attendance_status; the legacy Pass-5
+  // note ('auto_clocked_out') is kept for historical rows.
+  const isAutoClockOut = shift.attendance_status === 'auto_clock_out' || shift.attendance_note === 'auto_clocked_out';
 
   const canClockIn  = status === 'unknown' && timing === 'in_window' && !shift.actual_end;
   const canClockOut = (status === 'checked_in' || status === 'late') && !shift.actual_end && timing !== 'before_window';
@@ -312,7 +315,13 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
           if (shift.timesheet_end_time) return shift.timesheet_end_time;
           return snapToQuarterHour(shift.actual_end) ?? '';
       })(),
-      isAdjustedManual: !!shift.timesheet_start_time,
+      adjustedStartSource: shift.timesheet_start_time ? 'manual' : (shift.actual_start ? 'snapped' : null),
+      adjustedEndSource: shift.timesheet_end_time ? 'manual' : (shift.actual_end ? 'snapped' : null),
+      isAdjustedManual: !!(shift.timesheet_start_time || shift.timesheet_end_time),
+      rawActualStart: shift.actual_start,
+      rawActualEnd: shift.actual_end,
+      rawStartAt: typeof shift.start_at === 'string' ? shift.start_at : shift.start_at ? new Date(shift.start_at).toISOString() : null,
+      rawEndAt: typeof shift.end_at === 'string' ? shift.end_at : shift.end_at ? new Date(shift.end_at).toISOString() : null,
       length: String(shift.scheduled_length_minutes || 0),
       paidBreak: String(shift.paid_break_minutes || 0),
       unpaidBreak: String(shift.unpaid_break_minutes || 0),
@@ -360,11 +369,23 @@ function shiftToAttendanceInput(shift: Shift, nowMs: number): AttendanceInput {
   const scheduledStartMs = shift.start_at ? new Date(shift.start_at).getTime() : toMs(shift, 'start');
   const scheduledEndMs   = shift.end_at   ? new Date(shift.end_at).getTime()   : toMs(shift, 'end');
 
-  const clockInVarianceMin = shift.actual_start
-    ? Math.round((new Date(shift.actual_start).getTime() - scheduledStartMs) / 60000)
+  // A manually adjusted billable time overrides the raw clock for its own
+  // side — the `*` on the Live Rules badge must flow into the metrics too.
+  const effectiveInMs = shift.timesheet_start_time && shift.shift_date
+    ? parseZonedDateTime(shift.shift_date, shift.timesheet_start_time).getTime()
+    : shift.actual_start ? new Date(shift.actual_start).getTime() : null;
+  const effectiveOutMs = shift.timesheet_end_time && shift.shift_date
+    ? (() => {
+        const ms = parseZonedDateTime(shift.shift_date, shift.timesheet_end_time).getTime();
+        return ms < scheduledStartMs ? ms + 24 * 60 * 60 * 1000 : ms; // overnight
+      })()
+    : shift.actual_end ? new Date(shift.actual_end).getTime() : null;
+
+  const clockInVarianceMin = effectiveInMs !== null
+    ? Math.round((effectiveInMs - scheduledStartMs) / 60000)
     : null;
-  const clockOutVarianceMin = shift.actual_end
-    ? Math.round((new Date(shift.actual_end).getTime() - scheduledEndMs) / 60000)
+  const clockOutVarianceMin = effectiveOutMs !== null
+    ? Math.round((effectiveOutMs - scheduledEndMs) / 60000)
     : null;
 
   return {
@@ -567,7 +588,13 @@ const AttendancePage: React.FC = () => {
       clockOut: shift.actual_end || '',
       adjustedStart: shift.timesheet_start_time || snapToQuarterHour(shift.actual_start) || '',
       adjustedEnd: shift.timesheet_end_time || snapToQuarterHour(shift.actual_end) || '',
-      isAdjustedManual: !!shift.timesheet_start_time,
+      adjustedStartSource: shift.timesheet_start_time ? 'manual' : (shift.actual_start ? 'snapped' : null),
+      adjustedEndSource: shift.timesheet_end_time ? 'manual' : (shift.actual_end ? 'snapped' : null),
+      isAdjustedManual: !!(shift.timesheet_start_time || shift.timesheet_end_time),
+      rawActualStart: shift.actual_start,
+      rawActualEnd: shift.actual_end,
+      rawStartAt: typeof shift.start_at === 'string' ? shift.start_at : shift.start_at ? new Date(shift.start_at).toISOString() : null,
+      rawEndAt: typeof shift.end_at === 'string' ? shift.end_at : shift.end_at ? new Date(shift.end_at).toISOString() : null,
       length: String(shift.scheduled_length_minutes || 0),
       paidBreak: String(shift.paid_break_minutes || 0),
       unpaidBreak: String(shift.unpaid_break_minutes || 0),

@@ -381,11 +381,21 @@ export interface ShiftDotInput {
     is_cancelled?:      boolean | null;
     /**
      * True when `adjusted_start`/`adjusted_end` were manually committed by a
-     * manager override (vs. auto/snapped billable times). This is the single
-     * canonical signal that drives the `*` suffix, so it must be plumbed
-     * identically on every surface (roster, my-roster, timesheets).
+     * manager override (vs. auto/snapped billable times).
+     *
+     * @deprecated Legacy both-sides flag. Prefer the per-side flags below —
+     * when they are present they win. Kept as a fallback so surfaces that
+     * haven't been re-plumbed keep their old (both-sides) behaviour.
      */
     adjusted_is_manual?: boolean;
+    /**
+     * Per-side manual-override signals. A side gets its `*` suffix (and its
+     * Live Rule re-derived from the adjusted time) ONLY when its own flag is
+     * true — editing the In must never star the Out, and vice-versa. Must be
+     * plumbed identically on every surface (roster, my-roster, timesheets).
+     */
+    adjusted_start_is_manual?: boolean;
+    adjusted_end_is_manual?: boolean;
 }
 
 /**
@@ -421,10 +431,28 @@ function parseToMs(dateStr: string | Date | null | undefined, shiftDate?: string
                 timePart = `${hour.toString().padStart(2, '0')}:${min}:00`;
             }
         }
-        const combined = new Date(`${shiftDate}T${timePart}`);
+        // Time-only strings are wall-clock times in the venue timezone
+        // (Australia/Sydney), NOT the browser's — parse them as such so a
+        // non-Sydney viewer classifies Late/Early identically to a Sydney one.
+        const combined = parseZonedDateTime(shiftDate, timePart);
         if (!isNaN(combined.getTime())) return combined.getTime();
     }
     return null;
+}
+
+/**
+ * Resolve the scheduled start/end of a shift to epoch ms.
+ * End times parsed from a time-only fallback roll over +24h when they land
+ * at/before the start (overnight shifts) so "Live"/"Missing"/"No Show" don't
+ * fire mid-shift. Timestamps (`start_at`/`end_at`) are trusted as-is.
+ */
+function resolveScheduleMs(shift: ShiftDotInput): { start: number | null; end: number | null } {
+    const start = shift.start_at ? parseToMs(shift.start_at) : parseToMs(shift.start_time, shift.shift_date);
+    let end = shift.end_at ? parseToMs(shift.end_at) : parseToMs(shift.end_time, shift.shift_date);
+    if (!shift.end_at && start !== null && end !== null && end <= start) {
+        end += 24 * 60 * 60 * 1000; // overnight rollover on the time-only fallback
+    }
+    return { start, end };
 }
 
 // Two NEW, independent nomenclatures shown together on every shift card
@@ -508,8 +536,7 @@ function classifyDeparture(co: number, end: number, suffix = ''): ShiftRuleBadge
  * time can't be parsed.
  */
 export function getTimeRule(shift: ShiftDotInput): ShiftRuleBadge | null {
-    const start = shift.start_at ? parseToMs(shift.start_at) : parseToMs(shift.start_time, shift.shift_date);
-    const end = shift.end_at ? parseToMs(shift.end_at) : parseToMs(shift.end_time, shift.shift_date);
+    const { start, end } = resolveScheduleMs(shift);
     if (start === null) return null;
 
     const now = Date.now();
@@ -549,54 +576,69 @@ export function getTimeRule(shift: ShiftDotInput): ShiftRuleBadge | null {
  */
 export function getLiveRuleBadges(shift: ShiftDotInput): LiveRuleBadges {
     const empty: LiveRuleBadges = { arrival: null, departure: null };
-    const start = shift.start_at ? parseToMs(shift.start_at) : parseToMs(shift.start_time, shift.shift_date);
-    const end = shift.end_at ? parseToMs(shift.end_at) : parseToMs(shift.end_time, shift.shift_date);
+    const { start, end } = resolveScheduleMs(shift);
     if (start === null) return empty;
 
     const now = Date.now();
-    const effectiveEnd = end ?? start + AUTO_CLOCKOUT_MS;
-
-    // ── Manager override ──────────────────────────────────────────────────────
-    // When a manager has manually committed billable times (the only case where
-    // `adjusted_is_manual` is set), those times are the source of truth. Both
-    // halves are re-derived from them and marked with `*`. This is the single
-    // canonical override signal — identical on every surface — so the `*` only
-    // ever reflects a finalized manual override, never auto/snapped billable.
-    if (shift.adjusted_is_manual && shift.adjusted_start && shift.adjusted_end) {
-        const adjIn = parseToMs(shift.adjusted_start, shift.shift_date);
-        const adjOut = parseToMs(shift.adjusted_end, shift.shift_date);
-        if (adjIn !== null && adjOut !== null) {
-            return {
-                arrival: classifyArrival(adjIn, start, '*'),
-                departure: end !== null ? classifyDeparture(adjOut, end, '*') : null,
-            };
-        }
-    }
 
     const ci = parseToMs(shift.actual_start, shift.shift_date);   // clock-in
     const co = parseToMs(shift.actual_end, shift.shift_date);     // clock-out
 
-    // ── Never clocked in — arrival stand-in only ──────────────────────────────
-    if (ci === null) {
-        if (now > effectiveEnd) return { arrival: { label: 'No Show', color: LR.noShow }, departure: null };
-        if (now > start)        return { arrival: { label: 'Missing', color: LR.missing }, departure: null };
-        if (now >= start - CLOCKIN_WINDOW_MS) return { arrival: { label: 'Awaiting Check-In', color: LR.awaiting }, departure: null };
-        return { arrival: { label: 'Scheduled', color: LR.scheduled }, departure: null };
-    }
+    // Auto clock-out fires 12.5h after the LATER of actual clock-in and
+    // scheduled start (matches the DB safety net). effectiveEnd falls back to
+    // that horizon when the end can't be parsed, so cards never stick on Live.
+    const autoOutAt = Math.max(ci ?? start, start) + AUTO_CLOCKOUT_MS;
+    const effectiveEnd = end ?? autoOutAt;
 
-    // ── Clocked in — arrival quality is fixed for the rest of the shift ───────
-    const arrival = classifyArrival(ci, start);
+    // ── Manager override — strictly per-side ──────────────────────────────────
+    // A side is re-derived from its adjusted time and marked `*` ONLY when that
+    // side was manually committed by a manager. Editing the In never stars the
+    // Out (and vice-versa); the untouched side keeps its actual-clock rule.
+    // The legacy `adjusted_is_manual` both-sides flag is honoured as a fallback
+    // for surfaces not yet re-plumbed. Never set for auto/snapped billable.
+    const startIsManual = shift.adjusted_start_is_manual ?? shift.adjusted_is_manual ?? false;
+    const endIsManual = shift.adjusted_end_is_manual ?? shift.adjusted_is_manual ?? false;
+    const manualIn = startIsManual && shift.adjusted_start
+        ? parseToMs(shift.adjusted_start, shift.shift_date)
+        : null;
+    let manualOut = endIsManual && shift.adjusted_end
+        ? parseToMs(shift.adjusted_end, shift.shift_date)
+        : null;
+    // Adjusted times are wall-clock on shift_date — roll an Out that lands
+    // before the start (overnight shift) onto the next day, mirroring the
+    // overnight handling used for scheduled end times.
+    if (manualOut !== null && manualOut < start - GRACE_MS) manualOut += 24 * 60 * 60 * 1000;
+
+    // ── Arrival half ──────────────────────────────────────────────────────────
+    let arrival: ShiftRuleBadge | null;
+    if (manualIn !== null) {
+        arrival = classifyArrival(manualIn, start, '*');
+    } else if (ci === null) {
+        // Never clocked in — pre-/post-shift stand-ins
+        if (now > effectiveEnd)                 arrival = { label: 'No Show', color: LR.noShow };
+        else if (now > start)                   arrival = { label: 'Missing', color: LR.missing };
+        else if (now >= start - CLOCKIN_WINDOW_MS) arrival = { label: 'Awaiting Check-In', color: LR.awaiting };
+        else                                    arrival = { label: 'Scheduled', color: LR.scheduled };
+    } else {
+        // Clocked in — arrival quality is fixed for the rest of the shift
+        arrival = classifyArrival(ci, start);
+    }
 
     // ── Departure half ────────────────────────────────────────────────────────
     let departure: ShiftRuleBadge | null = null;
-    if (shift.attendance_status === 'auto_clock_out') {
+    if (manualOut !== null) {
+        departure = end !== null
+            ? classifyDeparture(manualOut, end, '*')
+            : { label: 'On Time Out*', color: LR.onTimeOut };
+    } else if (shift.attendance_status === 'auto_clock_out') {
         departure = { label: 'Auto Clock-Out', color: LR.autoOut };
     } else if (co !== null) {
         departure = end !== null ? classifyDeparture(co, end) : { label: 'On Time Out', color: LR.onTimeOut };
-    } else if (now > effectiveEnd && now < start + AUTO_CLOCKOUT_MS) {
+    } else if (ci !== null && now > effectiveEnd && now < autoOutAt) {
+        // Still clocked in past scheduled end, before the auto clock-out horizon
         departure = { label: 'Working Overtime', color: LR.overtime };
     }
-    // else: still clocked in mid-shift → no departure badge yet
+    // else: still clocked in mid-shift (or never clocked in) → no departure yet
 
     return { arrival, departure };
 }

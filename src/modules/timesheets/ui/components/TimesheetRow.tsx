@@ -34,7 +34,7 @@ import {
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { Label } from '@/modules/core/ui/primitives/label';
 import type { TimesheetRow as TimesheetRowType } from "../../model/timesheet.types";
-import { calculateHoursBetween, formatHours, formatDifferential, isShiftFinished } from "./TimesheetTable.utils";
+import { calculateHoursBetween, formatHours, formatDifferential, isShiftFinished, timesheetEntryToShiftInput } from "./TimesheetTable.utils";
 import { getProtectionContext, getTimeRule, getLiveRuleBadges, isTimesheetReviewable } from "@/modules/rosters/domain/shift-ui";
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
 import { ZERO_COST_BREAKDOWN } from '@/modules/rosters/domain/projections/utils/cost/constants';
@@ -85,6 +85,10 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
         paidBreak: entry.paidBreak || "0",
         unpaidBreak: entry.unpaidBreak || "0",
     });
+    // Snapshot of the editor prefill — only sides the manager actually CHANGED
+    // are persisted (and thus become manual/`*`). Saving an untouched side
+    // would silently convert its snapped/auto value into a manual override.
+    const [initialEdit, setInitialEdit] = useState({ adjustedStart: "", adjustedEnd: "" });
 
     // Shift physically over (used to gate the "Mark No-Show" affordance).
     const isShiftOver = useMemo(() =>
@@ -106,21 +110,9 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
         isPast
     ), [entry.liveStatus, isPast]);
 
-    const shiftInput = useMemo(() => ({
-        lifecycle_status: entry.liveStatus,
-        attendance_status: entry.attendanceStatus,
-        attendance_note: entry.attendanceNote,
-        actual_start: entry.rawActualStart ?? entry.clockIn,
-        actual_end: entry.rawActualEnd ?? entry.clockOut,
-        adjusted_start: entry.adjustedStart,
-        adjusted_end: entry.adjustedEnd,
-        adjusted_is_manual: entry.isAdjustedManual,
-        start_at: entry.rawStartAt,
-        end_at: entry.rawEndAt,
-        shift_date: typeof entry.date === 'string' ? entry.date : undefined,
-        start_time: entry.scheduledStart,
-        end_time: entry.scheduledEnd,
-    }), [entry]);
+    // Single shared projection — keeps row, mobile card, and bulk-select gating
+    // derived from the exact same ShiftDotInput (incl. per-side manual flags).
+    const shiftInput = useMemo(() => timesheetEntryToShiftInput(entry), [entry]);
 
     const timeRuleBadge = useMemo(() => getTimeRule(shiftInput), [shiftInput]);
     const liveRuleBadges = useMemo(() => getLiveRuleBadges(shiftInput), [shiftInput]);
@@ -306,9 +298,15 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
         const cost = estimateDetailedCostFromShift(fakeShift);
         const approximatePay = `$${cost.totalCost.toFixed(2)}`;
 
+        // Persist ONLY the sides the manager changed — an untouched side keeps
+        // its snapped/auto provenance and must not become a manual override.
+        const normTime = (t: string) => formatTimeStr(t).slice(0, 5);
+        const startChanged = normTime(adjustedStart) !== normTime(initialEdit.adjustedStart);
+        const endChanged = normTime(adjustedEnd) !== normTime(initialEdit.adjustedEnd);
+
         onSave?.(String(entry.id), {
-            adjustedStart,
-            adjustedEnd,
+            ...(startChanged ? { adjustedStart } : {}),
+            ...(endChanged ? { adjustedEnd } : {}),
             paidBreak: editedAdjusted.paidBreak,
             unpaidBreak: editedAdjusted.unpaidBreak,
             length: calculatedValues.length,
@@ -341,12 +339,16 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             return;
         }
         if (!readOnly && !isFinalized && !isEditingAdjusted && entry.liveStatus !== 'Cancelled') {
-            setEditedAdjusted({
+            const prefill = {
                 adjustedStart: entry.adjustedStart || entry.scheduledStart || "",
                 adjustedEnd: entry.adjustedEnd || entry.scheduledEnd || "",
+            };
+            setEditedAdjusted({
+                ...prefill,
                 paidBreak: entry.paidBreak || "0",
                 unpaidBreak: entry.unpaidBreak || "0",
             });
+            setInitialEdit(prefill);
             setIsEditingAdjusted(true);
         }
     };
@@ -536,6 +538,9 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                                     "text-muted-foreground/30 italic font-medium"
                                                 )}>
                                                     {entry.adjustedStart || '-'}
+                                                    {entry.adjustedStartSource === 'manual' && entry.adjustedStart && (
+                                                        <span className="ml-0.5 text-indigo-500 dark:text-indigo-300">*</span>
+                                                    )}
                                                 </span>
                                             </div>
                                             {entry.adjustedStartSource === 'snapped' && entry.adjustedStart && (
@@ -571,6 +576,9 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                                     "text-muted-foreground/30 italic font-medium"
                                                 )}>
                                                     {entry.adjustedEnd || '-'}
+                                                    {entry.adjustedEndSource === 'manual' && entry.adjustedEnd && (
+                                                        <span className="ml-0.5 text-indigo-500 dark:text-indigo-300">*</span>
+                                                    )}
                                                 </span>
                                             </div>
                                             {entry.adjustedEndSource === 'snapped' && entry.adjustedEnd && (

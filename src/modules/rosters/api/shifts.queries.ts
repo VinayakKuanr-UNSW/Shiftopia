@@ -170,8 +170,11 @@ export function normalizeShiftRow(row: Record<string, any>): Shift {
             shift.timesheet_end_time = ts.end_time ?? null;
             // Billable times only live on the timesheet when a manager committed
             // a manual override — auto/snapped billable is never persisted there.
+            // Overrides are PER-SIDE: only the edited side is manual/`*`.
             shift.adjusted_start = ts.start_time ?? null;
             shift.adjusted_end = ts.end_time ?? null;
+            shift.adjusted_start_is_manual = !!ts.start_time;
+            shift.adjusted_end_is_manual = !!ts.end_time;
             shift.adjusted_is_manual = !!(ts.start_time || ts.end_time);
         }
     }
