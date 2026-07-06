@@ -86,7 +86,7 @@ const BUCKET_CONFIG = {
 /** Display codes matching rule numbers — all active rules registered in the engine */
 const DISPLAY_CODE: Record<string, string> = {
     'V8_NO_OVERLAP':            'R01',
-    'V8_MIN_SHIFT_LENGTH':      'R02',
+    'V8_MIN_ENGAGEMENT':        'R02',
     'V8_MAX_DAILY_HOURS':       'R03',
     'V8_STUDENT_VISA_LIMIT':    'R05',
     'V8_ORD_HOURS_AVG':         'R06',

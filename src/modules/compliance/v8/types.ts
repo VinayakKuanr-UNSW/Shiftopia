@@ -30,6 +30,15 @@ export interface V8Shift {
     is_sunday?:            boolean;
     is_public_holiday?:    boolean;
     shift_type?:           'NORMAL' | 'MULTI_HIRE';
+    /**
+     * True when this shift is being added/changed by the current operation,
+     * false when it is a pre-existing (committed) shift pulled in only for
+     * cumulative context (rest-gap, daily/weekly hours, overlap, etc.).
+     * `undefined` = caller did not distinguish (legacy paths → treated as
+     * evaluable). Pure per-shift structural rules (min-engagement, meal-break)
+     * must skip `is_candidate === false` so they never re-validate history.
+     */
+    is_candidate?:         boolean;
 }
 
 /** Unified employee context */

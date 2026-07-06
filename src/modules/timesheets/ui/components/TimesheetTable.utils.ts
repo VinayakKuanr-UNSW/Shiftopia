@@ -14,7 +14,13 @@ export const timesheetEntryToShiftInput = (entry: TimesheetRow): ShiftDotInput =
     actual_end: entry.rawActualEnd ?? entry.clockOut,
     adjusted_start: entry.adjustedStart,
     adjusted_end: entry.adjustedEnd,
+    // Per-side manual signals — only the manually edited side gets its Live
+    // Rule overridden (and `*`-suffixed). Snapped billable never counts.
+    adjusted_start_is_manual: entry.adjustedStartSource === 'manual',
+    adjusted_end_is_manual: entry.adjustedEndSource === 'manual',
     adjusted_is_manual: entry.isAdjustedManual,
+    adjusted_start_source: entry.adjustedStartSource,
+    adjusted_end_source: entry.adjustedEndSource,
     start_at: entry.rawStartAt,
     end_at: entry.rawEndAt,
     shift_date: typeof entry.date === 'string' ? entry.date : undefined,

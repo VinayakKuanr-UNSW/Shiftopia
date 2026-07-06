@@ -9,7 +9,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { motion, type Variants } from 'framer-motion';
 import {
-  format, parseISO, differenceInMinutes, isToday,
+  format, parseISO, isToday, startOfWeek, endOfWeek,
 } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -18,6 +18,7 @@ import {
   BarChart3, Filter, ArrowUp, ArrowDown, XCircle, AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { CustomDateRangePicker } from '@/modules/core/ui/components/CustomDateRangePicker';
 import { useAuth } from '@/platform/auth/useAuth';
 import { supabase } from '@/platform/supabase/client';
@@ -55,6 +56,11 @@ import { UnifiedModuleFunctionBar } from '@/modules/core/ui/components/UnifiedMo
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { TimesheetRow as TimesheetRowComponent } from '@/modules/timesheets/ui/components/TimesheetRow';
 import { TimesheetTable } from '@/modules/timesheets/ui/components/TimesheetTable';
+import {
+  computeAttendanceMetrics,
+  type AttendanceInput,
+} from '@/modules/rosters/domain/attendance-metrics';
+import { AttendanceMetricsBar } from '@/modules/rosters/ui/components/AttendanceMetricsBar';
 
 // ── Motion variants ────────────────────────────────────────────────────────────
 
@@ -134,7 +140,9 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
 
   const timing   = getShiftTiming(shift, now);
   const status   = (shift.attendance_status ?? 'unknown') as AttendanceStatus;
-  const isAutoClockOut = shift.attendance_note === 'auto_clocked_out';
+  // Canonical auto clock-out signal is attendance_status; the legacy Pass-5
+  // note ('auto_clocked_out') is kept for historical rows.
+  const isAutoClockOut = shift.attendance_status === 'auto_clock_out' || shift.attendance_note === 'auto_clocked_out';
 
   const canClockIn  = status === 'unknown' && timing === 'in_window' && !shift.actual_end;
   const canClockOut = (status === 'checked_in' || status === 'late') && !shift.actual_end && timing !== 'before_window';
@@ -307,7 +315,13 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
           if (shift.timesheet_end_time) return shift.timesheet_end_time;
           return snapToQuarterHour(shift.actual_end) ?? '';
       })(),
-      isAdjustedManual: !!shift.timesheet_start_time,
+      adjustedStartSource: shift.timesheet_start_time ? 'manual' : (shift.actual_start ? 'snapped' : null),
+      adjustedEndSource: shift.timesheet_end_time ? 'manual' : (shift.actual_end ? 'snapped' : null),
+      isAdjustedManual: !!(shift.timesheet_start_time || shift.timesheet_end_time),
+      rawActualStart: shift.actual_start,
+      rawActualEnd: shift.actual_end,
+      rawStartAt: typeof shift.start_at === 'string' ? shift.start_at : shift.start_at ? new Date(shift.start_at).toISOString() : null,
+      rawEndAt: typeof shift.end_at === 'string' ? shift.end_at : shift.end_at ? new Date(shift.end_at).toISOString() : null,
       length: String(shift.scheduled_length_minutes || 0),
       paidBreak: String(shift.paid_break_minutes || 0),
       unpaidBreak: String(shift.unpaid_break_minutes || 0),
@@ -343,105 +357,44 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
   );
 };
 
-// ── Totals bar ─────────────────────────────────────────────────────────────────
+// ── Attendance scorecard input mapping ──────────────────────────────────────────
 
-const TotalsBar: React.FC<{ shifts: Shift[] }> = ({ shifts }) => {
-  const totals = useMemo(() => {
-    let hoursWorked = 0;
-    let lateInCount  = 0;
-    let earlyOutCount = 0;
-    let noShowCount  = 0;
+/**
+ * Map a Shift to the normalised AttendanceInput consumed by the shared
+ * computeAttendanceMetrics(). Scheduled bounds prefer the UTC-at-rest
+ * start_at/end_at fields, falling back to the local shift_date + times
+ * (overnight-aware via toMs), mirroring timesheets.supabase.api.ts.
+ */
+function shiftToAttendanceInput(shift: Shift, nowMs: number): AttendanceInput {
+  const scheduledStartMs = shift.start_at ? new Date(shift.start_at).getTime() : toMs(shift, 'start');
+  const scheduledEndMs   = shift.end_at   ? new Date(shift.end_at).getTime()   : toMs(shift, 'end');
 
-    for (const s of shifts) {
-      const tsStatus = (s.timesheet_status || '').toLowerCase();
-      
-      // No-Show metric: counts finalized no-shows
-      if (tsStatus === 'no_show' || s.attendance_status === 'no_show') {
-        noShowCount++;
-        continue; // No hours worked for no-shows
-      }
+  // A manually adjusted billable time overrides the raw clock for its own
+  // side — the `*` on the Live Rules badge must flow into the metrics too.
+  const effectiveInMs = shift.timesheet_start_time && shift.shift_date
+    ? parseZonedDateTime(shift.shift_date, shift.timesheet_start_time).getTime()
+    : shift.actual_start ? new Date(shift.actual_start).getTime() : null;
+  const effectiveOutMs = shift.timesheet_end_time && shift.shift_date
+    ? (() => {
+        const ms = parseZonedDateTime(shift.shift_date, shift.timesheet_end_time).getTime();
+        return ms < scheduledStartMs ? ms + 24 * 60 * 60 * 1000 : ms; // overnight
+      })()
+    : shift.actual_end ? new Date(shift.actual_end).getTime() : null;
 
-      // Worked, Late, and Early metrics only count for APPROVED timesheets
-      if (tsStatus === 'approved' && s.timesheet_start_time && s.timesheet_end_time) {
-        // Calculate worked hours from adjusted (billable) times
-        const start = new Date(`${s.shift_date}T${s.timesheet_start_time}`);
-        const end = new Date(`${s.shift_date}T${s.timesheet_end_time}`);
-        if (end < start) end.setDate(end.getDate() + 1); // Overnight support
-        
-        const durationMins = differenceInMinutes(end, start);
-        const unpaidSub = s.unpaid_break_minutes || 0;
-        hoursWorked += Math.max(0, durationMins - unpaidSub);
+  const clockInVarianceMin = effectiveInMs !== null
+    ? Math.round((effectiveInMs - scheduledStartMs) / 60000)
+    : null;
+  const clockOutVarianceMin = effectiveOutMs !== null
+    ? Math.round((effectiveOutMs - scheduledEndMs) / 60000)
+    : null;
 
-        // Late In: based on adjusted start vs scheduled start
-        const scheduledStart = new Date(`${s.shift_date}T${s.start_time}`).getTime();
-        // If adjusted start is >5 mins after scheduled, count as late
-        if (start.getTime() > scheduledStart + 5 * 60 * 1000) {
-          lateInCount++;
-        }
-
-        // Early Out: based on adjusted end vs scheduled end
-        const scheduledEnd = toMs(s, 'end');
-        // If adjusted end is <5 mins before scheduled, count as early out
-        if (end.getTime() < scheduledEnd - 5 * 60 * 1000) {
-          earlyOutCount++;
-        }
-      }
-    }
-
-    return {
-      hoursWorked: (hoursWorked / 60).toFixed(1),
-      lateInCount,
-      earlyOutCount,
-      noShowCount,
-    };
-  }, [shifts]);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ ease: [0.16, 1, 0.3, 1], duration: 0.4 }}
-      className="grid grid-cols-4 gap-3 p-4 rounded-2xl bg-muted/40 border border-border"
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.05, duration: 0.35 }}
-        className="text-center"
-      >
-        <p className="text-xl font-black font-mono text-foreground tabular-nums">{totals.hoursWorked}h</p>
-        <p className="text-[11px] text-muted-foreground mt-0.5 uppercase tracking-widest font-bold">Worked</p>
-      </motion.div>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.1, duration: 0.35 }}
-        className="text-center"
-      >
-        <p className="text-xl font-black font-mono text-amber-500 tabular-nums">{totals.lateInCount}</p>
-        <p className="text-[11px] text-muted-foreground mt-0.5 uppercase tracking-widest font-bold">Late In</p>
-      </motion.div>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.15, duration: 0.35 }}
-        className="text-center"
-      >
-        <p className="text-xl font-black font-mono text-orange-500 tabular-nums">{totals.earlyOutCount}</p>
-        <p className="text-[11px] text-muted-foreground mt-0.5 uppercase tracking-widest font-bold">Early Out</p>
-      </motion.div>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.2, duration: 0.35 }}
-        className="text-center"
-      >
-        <p className="text-xl font-black font-mono text-red-500 tabular-nums">{totals.noShowCount}</p>
-        <p className="text-[11px] text-muted-foreground mt-0.5 uppercase tracking-widest font-bold">No Show</p>
-      </motion.div>
-    </motion.div>
-  );
-};
+  return {
+    clockInVarianceMin,
+    clockOutVarianceMin,
+    attendanceStatus: shift.attendance_status ?? null,
+    hasEnded: nowMs > scheduledEndMs || shift.lifecycle_status === 'Completed' || !!shift.actual_end,
+  };
+}
 
 // ── Status Filter Drawer ────────────────────────────────────────────────────────
 
@@ -498,8 +451,8 @@ const AttendancePage: React.FC = () => {
   const { user } = useAuth();
   const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
 
-  const [startDate, setStartDate] = useState<Date>(() => new Date());
-  const [endDate, setEndDate]     = useState<Date>(() => new Date());
+  const [startDate, setStartDate] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [endDate, setEndDate]     = useState<Date>(() => endOfWeek(new Date(), { weekStartsOn: 1 }));
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
   const [sortField, setSortField] = useState<keyof TimesheetRow | null>(null);
@@ -635,7 +588,13 @@ const AttendancePage: React.FC = () => {
       clockOut: shift.actual_end || '',
       adjustedStart: shift.timesheet_start_time || snapToQuarterHour(shift.actual_start) || '',
       adjustedEnd: shift.timesheet_end_time || snapToQuarterHour(shift.actual_end) || '',
-      isAdjustedManual: !!shift.timesheet_start_time,
+      adjustedStartSource: shift.timesheet_start_time ? 'manual' : (shift.actual_start ? 'snapped' : null),
+      adjustedEndSource: shift.timesheet_end_time ? 'manual' : (shift.actual_end ? 'snapped' : null),
+      isAdjustedManual: !!(shift.timesheet_start_time || shift.timesheet_end_time),
+      rawActualStart: shift.actual_start,
+      rawActualEnd: shift.actual_end,
+      rawStartAt: typeof shift.start_at === 'string' ? shift.start_at : shift.start_at ? new Date(shift.start_at).toISOString() : null,
+      rawEndAt: typeof shift.end_at === 'string' ? shift.end_at : shift.end_at ? new Date(shift.end_at).toISOString() : null,
       length: String(shift.scheduled_length_minutes || 0),
       paidBreak: String(shift.paid_break_minutes || 0),
       unpaidBreak: String(shift.unpaid_break_minutes || 0),
@@ -650,6 +609,13 @@ const AttendancePage: React.FC = () => {
       groupType: shift.group_type,
     }));
   }, [filteredLogs]);
+
+  // Attendance scorecard — same 9 metrics/definitions as Timesheets + Insights.
+  // Computed over the full fetched range (not the status filter) so the totals are stable.
+  const attendanceMetrics = useMemo(
+    () => computeAttendanceMetrics(logShifts.map((s) => shiftToAttendanceInput(s, Date.now()))),
+    [logShifts],
+  );
 
 
   return (
@@ -751,14 +717,17 @@ const AttendancePage: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 px-4 lg:px-6 py-4 pb-32 scrollbar-none">
-              {/* Totals */}
-              {logShifts.length > 0 && <TotalsBar shifts={logShifts} />}
+            <div className={cn(
+              "flex-1 min-h-0 overflow-y-auto space-y-4 px-4 lg:px-6 py-4 pb-32 scrollbar-none",
+              groupedLogs.length === 0 && "flex flex-col items-center justify-center pb-4"
+            )}>
+              {/* Attendance scorecard */}
+              {logShifts.length > 0 && <AttendanceMetricsBar metrics={attendanceMetrics} />}
 
 
               {viewMode === 'card' ? (
                 groupedLogs.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                  <div className="flex flex-col items-center justify-center text-center gap-3">
                     <BarChart3 className="h-10 w-10 text-muted-foreground/40" />
                     <p className="text-base font-bold text-foreground">No attendance records</p>
                     <p className="text-sm text-muted-foreground">

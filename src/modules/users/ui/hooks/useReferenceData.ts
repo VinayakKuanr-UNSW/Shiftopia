@@ -28,18 +28,23 @@ export const useReferenceData = (shouldLoad: boolean = false) => {
         setIsLoading(true);
         try {
             const [orgsRes, deptsRes, subDeptsRes, rolesRes, remLevelsRes] = await Promise.all([
-                supabase.from('organizations').select('id, name').order('name'),
-                supabase.from('departments').select('id, name, organization_id').order('name'),
-                supabase.from('sub_departments').select('id, name, department_id').order('name'),
-                supabase.from('roles').select('id, name, level, sub_department_id, remuneration_level_id, employment_type').order('name'),
-                supabase.from('remuneration_levels').select('id, level_number, level_name, hourly_rate_min').order('level_number'),
+                (supabase as any).schema('hr').from('organizations').select('id, name').order('name'),
+                (supabase as any).schema('hr').from('departments').select('id, name, organization_id').order('name'),
+                (supabase as any).schema('hr').from('subdepartments').select('id, name, department_id').order('name'),
+                (supabase as any).schema('hr').from('roles').select('id, name, subdepartment_id, remuneration_level').order('name'),
+                (supabase as any).schema('hr').from('remuneration_levels').select('level_number, level_name, hourly_rate_min').order('level_number'),
             ]);
 
             setData({
                 organizations: orgsRes.data || [],
                 departments: deptsRes.data || [],
                 subDepartments: subDeptsRes.data || [],
-                roles: rolesRes.data || [],
+                roles: (rolesRes.data || []).map((r: any) => ({
+                    id: r.id,
+                    name: r.name,
+                    sub_department_id: r.subdepartment_id,
+                    remuneration_level: r.remuneration_level,
+                })),
                 remLevels: remLevelsRes.data || [],
             });
             setIsLoaded(true);

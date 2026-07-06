@@ -151,11 +151,13 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
     if (s.group_type === 'convention_centre') return 'convention' as const;
     if (s.group_type === 'exhibition_centre') return 'exhibition' as const;
     if (s.group_type === 'theatre') return 'theatre' as const;
+    if (s.group_type === 'the_cutaway') return 'cutaway' as const;
 
     const name = (s.departments?.name || '').toLowerCase();
     if (name.includes('convention')) return 'convention' as const;
     if (name.includes('exhibition')) return 'exhibition' as const;
     if (name.includes('theatre') || name.includes('theater')) return 'theatre' as const;
+    if (name.includes('cutaway')) return 'cutaway' as const;
     return 'default' as const;
   })();
 

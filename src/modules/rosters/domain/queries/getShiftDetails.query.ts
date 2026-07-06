@@ -18,7 +18,7 @@ export interface ShiftDetails {
     roleName?: string;
     assignedEmployeeId?: string;
     assignedEmployeeName?: string;
-    remunerationLevelId?: string;
+
     remunerationLevel?: number;
     status: string;
     isDraft: boolean;
@@ -39,7 +39,7 @@ interface Department { name: string; }
 interface SubDepartment { name: string; }
 interface Role { name: string; }
 interface Employee { first_name: string; last_name: string; }
-interface RemunerationLevel { level: number; }
+interface RemunerationLevel { level_number: number; }
 interface ShiftGroup { name: string; }
 interface ShiftSubgroup { name: string; }
 
@@ -52,7 +52,7 @@ interface ShiftQueryResult {
     sub_department_id: string;
     role_id: string | null;
     assigned_employee_id: string | null;
-    remuneration_level_id: string | null;
+    remuneration_level: number | null;
     status: string;
     is_draft: boolean;
     shift_group_id: string | null;
@@ -92,7 +92,7 @@ export async function getShiftDetails(
       sub_department_id,
       role_id,
       assigned_employee_id,
-      remuneration_level_id,
+      remuneration_level,
       status,
       is_draft,
       shift_group_id,
@@ -107,7 +107,7 @@ export async function getShiftDetails(
       sub_departments:sub_department_id(name),
       roles:role_id(name),
       employees:assigned_employee_id(first_name, last_name),
-      remuneration_levels:remuneration_level_id(level),
+      remuneration_levels:remuneration_level(level_number),
       shift_groups:shift_group_id(name),
       shift_subgroups:shift_subgroup_id(name)
     `)
@@ -138,8 +138,7 @@ export async function getShiftDetails(
         assignedEmployeeName: data.employees
             ? `${data.employees.first_name} ${data.employees.last_name}`
             : undefined,
-        remunerationLevelId: data.remuneration_level_id || undefined,
-        remunerationLevel: data.remuneration_levels?.level,
+        remunerationLevel: data.remuneration_level || data.remuneration_levels?.level_number || undefined,
         status: data.status || 'draft',
         isDraft: data.is_draft ?? true,
         shiftGroupId: data.shift_group_id || undefined,

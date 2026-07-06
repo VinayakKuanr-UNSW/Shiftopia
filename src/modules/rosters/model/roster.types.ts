@@ -120,8 +120,8 @@ export interface DbRosterShift {
     name: string | null;
     role_id: string | null;
     role_name: string | null;
-    remuneration_level_id: string | null;
-    remuneration_level: string | null;
+    remuneration_level: number | null;
+    remuneration_level_name: string | null;
     start_time: string;
     end_time: string;
     paid_break_minutes: number;
@@ -171,8 +171,8 @@ export interface RosterShiftWithLiveState {
     name: string | null;
     role_id: string | null;
     role_name: string | null;
-    remuneration_level_id: string | null;
-    remuneration_level: string | null;
+    remuneration_level: number | null;
+    remuneration_level_name: string | null;
     start_time: string;
     end_time: string;
     paid_break_minutes: number;
@@ -241,8 +241,8 @@ export interface RosterShift {
     name: string | null;
     roleId: string | null;
     roleName: string | null;
-    remunerationLevelId: string | null;
-    remunerationLevel: string | null;
+    remunerationLevel: number | null;
+    remunerationLevelName: string | null;
     startTime: string;
     endTime: string;
     paidBreakMinutes: number;
@@ -354,8 +354,8 @@ export interface NewRosterShift {
     name?: string;
     roleId?: string;
     roleName?: string;
-    remunerationLevelId?: string;
-    remunerationLevel?: string;
+    remunerationLevel?: number;
+    remunerationLevelName?: string;
     startTime: string;
     endTime: string;
     paidBreakMinutes?: number;
@@ -431,6 +431,7 @@ export function getGroupColor(name: string | null | undefined): string {
     if (n.includes('convention')) return 'convention_centre';
     if (n.includes('exhibition')) return 'exhibition_centre';
     if (n.includes('theatre')) return 'theatre';
+    if (n.includes('cutaway')) return 'the_cutaway';
     return 'default_yellow';
 }
 
@@ -467,8 +468,8 @@ export function dbRosterDayToFrontend(db: any): RosterDay {
                     name: sh.name,
                     roleId: sh.roleId,
                     roleName: sh.roleName,
-                    remunerationLevelId: sh.remunerationLevelId,
                     remunerationLevel: sh.remunerationLevel,
+                    remunerationLevelName: sh.remunerationLevelName,
                     startTime: sh.startTime,
                     endTime: sh.endTime,
                     paidBreakMinutes: sh.paidBreakMinutes || 0,
@@ -694,8 +695,8 @@ export function flatRosterShiftsToRosterDay(
             name: item.name,
             roleId: item.role_id,
             roleName: item.role_name,
-            remunerationLevelId: item.remuneration_level_id,
             remunerationLevel: item.remuneration_level,
+            remunerationLevelName: item.remuneration_level_name,
             startTime: item.start_time,
             endTime: item.end_time,
             paidBreakMinutes: item.paid_break_minutes,

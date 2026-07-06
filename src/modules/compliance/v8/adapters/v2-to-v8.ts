@@ -34,6 +34,11 @@ export function runV8ComplexBridge(
         qualifications: input.employee_context.qualifications,
     };
 
+    // Shifts being added/changed by this operation — the only ones that pure
+    // per-shift structural rules (min-engagement, meal-break) should validate.
+    // Existing shifts are pulled in solely for cumulative/pairwise context.
+    const candidateIds = new Set((input.candidate_changes?.add_shifts ?? []).map(s => s.id));
+
     const v8Shifts: V8Shift[] = simulatedShifts.map(s => {
         const dateStr = s.date || s.shift_date || '';
         return {
@@ -45,7 +50,8 @@ export function runV8ComplexBridge(
             unpaid_break_minutes: s.unpaid_break_minutes || 0,
             is_training: s.is_training ?? false,
             is_sunday: s.is_sunday ?? isSunday(dateStr),
-            is_public_holiday: s.is_public_holiday ?? isPublicHoliday(parseLocalDateStr(dateStr))
+            is_public_holiday: s.is_public_holiday ?? isPublicHoliday(parseLocalDateStr(dateStr)),
+            is_candidate: candidateIds.has(s.id)
         };
     });
 

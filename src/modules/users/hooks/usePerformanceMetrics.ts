@@ -47,6 +47,7 @@ export interface EmployeeMetricsSnapshot {
     offer_expirations: number;
     early_clock_outs: number;
     late_clock_ins: number;
+    auto_clock_outs: number;
 
     // Calculated rates (%)
     acceptance_rate: number;
@@ -59,6 +60,7 @@ export interface EmployeeMetricsSnapshot {
     reliability_score: number;
     late_clock_in_rate: number;
     early_clock_out_rate: number;
+    auto_clock_out_rate: number;
     no_show_rate: number;
     punctuality_rate: number;
 
@@ -89,6 +91,7 @@ export const EMPTY_METRICS: EmployeeMetricsSnapshot = {
     offer_expirations: 0,
     early_clock_outs: 0,
     late_clock_ins: 0,
+    auto_clock_outs: 0,
     acceptance_rate: 0,
     drop_rate: 0,
     rejection_rate: 0,
@@ -99,6 +102,7 @@ export const EMPTY_METRICS: EmployeeMetricsSnapshot = {
     reliability_score: 100,
     late_clock_in_rate: 0,
     early_clock_out_rate: 0,
+    auto_clock_out_rate: 0,
     no_show_rate: 0,
     punctuality_rate: 100,
     calculated_at: new Date().toISOString(),
@@ -117,7 +121,12 @@ export const METRIC_THRESHOLDS = {
     offer_expiration_rate:    { good: 10, warn: 25 },
     late_clock_in_rate:       { good: 5,  warn: 15 },
     early_clock_out_rate:     { good: 5,  warn: 15 },
+    early_clock_in_rate:      { good: 5,  warn: 15 },
+    late_clock_out_rate:      { good: 5,  warn: 15 },
+    auto_clock_out_rate:      { good: 5,  warn: 15 },
     no_show_rate:             { good: 2,  warn: 5  },
+    on_time_in_rate:          { good: 85, warn: 70 },
+    on_time_out_rate:         { good: 85, warn: 70 },
 } as const;
 
 type MetricThresholdKey = keyof typeof METRIC_THRESHOLDS;
@@ -129,7 +138,7 @@ export const getMetricStatus = (metricType: string, value: number): 'good' | 'wa
     const thresholds = METRIC_THRESHOLDS[metricType as MetricThresholdKey];
     if (!thresholds) return 'good';
 
-    const higherIsBetter: MetricThresholdKey[] = ['acceptance_rate', 'reliability_score'];
+    const higherIsBetter: MetricThresholdKey[] = ['acceptance_rate', 'reliability_score', 'on_time_in_rate', 'on_time_out_rate'];
     if (higherIsBetter.includes(metricType as MetricThresholdKey)) {
         if (value >= thresholds.good) return 'good';
         if (value >= thresholds.warn) return 'warn';
@@ -259,6 +268,16 @@ export const REPORT_THRESHOLDS = {
     no_show_rate:     { good: 2,  warn: 5  },
     reliability_score: { good: 90, warn: 75 },
     bid_success_rate:  { good: 70, warn: 40 },
+    performance_score: { good: 85, warn: 70 },
+    engagement_score:  { good: 60, warn: 30 },
+    attendance_compliance_rate: { good: 95, warn: 85 },
+    standard_drop_rate: { good: 5,  warn: 15 },
+    urgent_drop_rate:   { good: 3,  warn: 10 },
+    early_clock_in_rate: { good: 5,  warn: 15 },
+    late_clock_out_rate: { good: 5,  warn: 15 },
+    auto_clock_out_rate: { good: 5,  warn: 15 },
+    on_time_in_rate:  { good: 85, warn: 70 },
+    on_time_out_rate: { good: 85, warn: 70 },
 } as const;
 
 type ReportThresholdKey = keyof typeof REPORT_THRESHOLDS;
@@ -267,7 +286,7 @@ export const getReportCellStatus = (metricType: string, value: number): 'good' |
     const thresholds = REPORT_THRESHOLDS[metricType as ReportThresholdKey];
     if (!thresholds) return 'good';
 
-    const higherIsBetter = ['acceptance_rate', 'reliability_score'];
+    const higherIsBetter = ['acceptance_rate', 'reliability_score', 'performance_score', 'engagement_score', 'attendance_compliance_rate', 'on_time_in_rate', 'on_time_out_rate'];
     if (higherIsBetter.includes(metricType)) {
         if (value >= thresholds.good) return 'good';
         if (value >= thresholds.warn) return 'warn';

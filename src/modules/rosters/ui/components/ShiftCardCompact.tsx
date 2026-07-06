@@ -10,9 +10,12 @@ import {
   TooltipTrigger,
 } from '@/modules/core/ui/primitives/tooltip';
 import { determineShiftState, getShiftStateDebugString } from '../../domain/shift-state.utils';
+import { FSM_STATE_META } from '../../domain/shift-fsm';
 import { Shift } from '../../api/shifts.api';
 import { computeShiftUrgency } from '../../domain/bidding-urgency';
 import { getProtectionContext, getShiftStatusIcons } from '../../domain/shift-ui';
+import { EditingPresenceBadge } from './EditingPresenceBadge';
+import type { ShiftEditor } from '../hooks/useShiftEditingPresence';
 
 /* ============================================================
    TYPES
@@ -66,6 +69,12 @@ interface ShiftCardCompactProps {
   onSwap?: (shiftId: string) => void;
   onCancel?: (shiftId: string) => void;
   showStatusIcons?: boolean;
+  /**
+   * ADVISORY presence: other managers currently editing THIS shift.
+   * Feed from `useShiftEditingPresence(...).editorsByShift[shift.id]`.
+   * Optional + non-gating — purely a Google-Docs-style courtesy hint.
+   */
+  editors?: ShiftEditor[];
 }
 
 /* ============================================================
@@ -113,6 +122,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
   onSwap,
   onCancel,
   showStatusIcons,
+  editors,
 }) => {
   const headerColor = getHeaderColor(shift.groupColor);
   const isDraft = shift.lifecycleStatus === 'draft';
@@ -164,6 +174,15 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
       )}
       onClick={isPast ? undefined : onClick}
     >
+      {/* ADVISORY EDITING PRESENCE — other managers on this shift (non-gating).
+          Mount point: fed from useShiftEditingPresence().editorsByShift[shift.id]
+          via the `editors` prop. Renders nothing when empty. */}
+      {editors && editors.length > 0 && (
+        <div className="absolute top-1 right-1 z-20" onClick={(e) => e.stopPropagation()}>
+          <EditingPresenceBadge editors={editors} />
+        </div>
+      )}
+
       {/* HEADER */}
       <div className={cn('px-4 py-2 flex justify-between items-center min-h-[40px]', headerColor)}>
         <span className="text-[11px] font-bold uppercase tracking-widest truncate flex-1 opacity-90">
@@ -223,7 +242,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
             <div className="flex flex-col items-center gap-0.5">
               <div className="w-4 h-4 flex items-center justify-center font-mono font-bold text-[10px] text-muted-foreground border border-border rounded">#</div>
               <span className={cn("text-[9px] font-bold text-center text-blue-600 dark:text-blue-400")}>
-                {stateId}
+                {(FSM_STATE_META as Record<string, { displayId: string }>)[stateId]?.displayId ?? stateId}
               </span>
             </div>
 

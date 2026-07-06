@@ -44,20 +44,37 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
     const { data: contracts, isLoading } = useQuery({
         queryKey: ['user_contracts', employeeId],
         queryFn: async () => {
-            const { data, error } = await supabase
+            // public.user_contracts is a VIEW over hr.user_contracts (no FK metadata),
+            // so embeds fail. Fetch scalar rows, then resolve names in a second pass
+            // and re-attach them under the same keys the render expects.
+            const { data: rawContracts, error } = await supabase
                 .from('user_contracts')
-                .select(`
-                    *,
-                    organizations(name),
-                    departments(name),
-                    sub_departments(name),
-                    roles(name)
-                `)
+                .select('*')
                 .eq('user_id', employeeId)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-            return data;
+            const rows = (rawContracts ?? []) as any[];
+
+            const roleIds = [...new Set(rows.map(r => r.role_id).filter(Boolean))];
+            const orgIds = [...new Set(rows.map(r => r.organization_id).filter(Boolean))];
+            const deptIds = [...new Set(rows.map(r => r.department_id).filter(Boolean))];
+
+            const [rolesRes, orgsRes, deptsRes] = await Promise.all([
+                roleIds.length ? supabase.from('roles').select('id, name').in('id', roleIds) : Promise.resolve({ data: [] as any[] }),
+                orgIds.length ? supabase.from('organizations').select('id, name').in('id', orgIds) : Promise.resolve({ data: [] as any[] }),
+                deptIds.length ? supabase.from('departments').select('id, name').in('id', deptIds) : Promise.resolve({ data: [] as any[] }),
+            ]);
+            const roleById = new Map((rolesRes.data ?? []).map((r: any) => [r.id, r]));
+            const orgById = new Map((orgsRes.data ?? []).map((o: any) => [o.id, o]));
+            const deptById = new Map((deptsRes.data ?? []).map((d: any) => [d.id, d]));
+
+            return rows.map(c => ({
+                ...c,
+                roles: c.role_id ? roleById.get(c.role_id) ?? null : null,
+                organizations: c.organization_id ? orgById.get(c.organization_id) ?? null : null,
+                departments: c.department_id ? deptById.get(c.department_id) ?? null : null,
+            }));
         },
         enabled: !!employeeId
     });

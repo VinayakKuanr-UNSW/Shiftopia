@@ -5,6 +5,7 @@
 
 import { supabase } from '@/platform/supabase/client';
 import { isShiftFinished } from '../ui/components/TimesheetTable.utils';
+import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 
 export interface TimesheetShiftRow {
@@ -102,9 +103,11 @@ export interface TimesheetFilters {
  */
 
 /**
- * Snap an HH:MM or ISO datetime string to the nearest 15-minute boundary.
- * e.g. "09:07" → "09:00", "09:08" → "09:15", "09:52" → "09:45"
- * When given an ISO timestamp, the LOCAL wall-clock time is used (browser TZ).
+ * Snap an HH:MM[:SS] or ISO datetime string to the nearest 15-minute boundary.
+ * e.g. "09:07:00" → "09:00", "09:08" → "09:15", "09:52" → "09:45"
+ * Seconds participate in the rounding ("09:07:59" is nearer 09:15 than 09:00).
+ * ISO timestamps are read as VENUE wall-clock time (Australia/Sydney), not the
+ * browser's, so every viewer snaps to the same billable time.
  * Returns null if value is falsy or unparseable.
  */
 export function snapToQuarterHour(value: string | null | undefined): string | null {
@@ -112,22 +115,24 @@ export function snapToQuarterHour(value: string | null | undefined): string | nu
 
     let h: number;
     let m: number;
+    let s: number;
 
     if (value.includes('T') || (value.length > 8 && value.includes('-'))) {
-        // ISO datetime → use Date for correct local-timezone extraction
+        // ISO datetime → extract Sydney wall-clock components
         const d = new Date(value);
         if (isNaN(d.getTime())) return null;
-        h = d.getHours();   // local hour
-        m = d.getMinutes(); // local minute
+        const [hh, mm, ss] = formatInTimezone(d, SYDNEY_TZ, 'HH:mm:ss').split(':').map(Number);
+        h = hh; m = mm; s = ss;
     } else {
         // Plain HH:MM or HH:MM:SS string
         const parts = value.split(':').map(Number);
         if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
         h = parts[0];
         m = parts[1];
+        s = parts.length > 2 && !isNaN(parts[2]) ? parts[2] : 0;
     }
 
-    const snapped = Math.round(m / 15) * 15;
+    const snapped = Math.round((m + s / 60) / 15) * 15;
     if (snapped === 60) {
         const nextH = (h + 1) % 24;
         return `${nextH.toString().padStart(2, '0')}:00`;
@@ -169,13 +174,13 @@ export async function getShiftsForTimesheet(
                 department_id,
                 sub_department_id,
                 role_id,
-                remuneration_level_id,
+                remuneration_level,
                 assigned_employee_id,
                 organizations(id, name),
                 departments(id, name),
                 sub_departments(id, name),
                 roles(id, name),
-                remuneration_levels(id, level_name, hourly_rate_min),
+                remuneration_levels(level_number, level_name, hourly_rate_min),
                 roster_subgroups!roster_subgroup_id(name, roster_groups(name))
             `)
             .gte('shift_date', startDate)
@@ -265,7 +270,7 @@ export async function getShiftsForTimesheet(
 
             const hourlyRate = remLevel?.hourly_rate_min || shift.remuneration_rate || 0;
             const calculatedNetMins = (() => {
-                const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time);
+                const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time, shift.actual_end);
                 const startRaw = timesheet?.start_time || (finished ? snapToQuarterHour(shift.actual_start) : null);
                 const endRaw = timesheet?.end_time || (finished ? snapToQuarterHour(shift.actual_end) : null);
                 if (!startRaw || !endRaw || startRaw === 'NIL' || endRaw === 'NIL') return 0;
@@ -288,6 +293,37 @@ export async function getShiftsForTimesheet(
 
             const currentEstimatedPay = (calculatedNetMins / 60) * hourlyRate;
 
+            // ── Variances (drive attendance/performance metrics) ────────────
+            // A manually adjusted time OVERRIDES the raw clock for its own side
+            // only — mirrors the per-side `*` on the Live Rules badges. Sched-
+            // uled fallbacks are venue wall-clock (Sydney), never browser-local.
+            const scheduledStartMs = shift.start_at
+                ? new Date(shift.start_at).getTime()
+                : parseZonedDateTime(shift.shift_date, shift.start_time).getTime();
+            const scheduledEndMs = shift.end_at
+                ? new Date(shift.end_at).getTime()
+                : (() => {
+                      const ms = parseZonedDateTime(shift.shift_date, shift.end_time).getTime();
+                      return ms <= scheduledStartMs ? ms + 24 * 60 * 60 * 1000 : ms; // overnight
+                  })();
+            const clockInVariance = (() => {
+                const effectiveMs = timesheet?.start_time
+                    ? parseZonedDateTime(shift.shift_date, timesheet.start_time).getTime()
+                    : shift.actual_start ? new Date(shift.actual_start).getTime() : null;
+                if (effectiveMs === null) return null;
+                return Math.round((effectiveMs - scheduledStartMs) / 60000);
+            })();
+            const clockOutVariance = (() => {
+                const effectiveMs = timesheet?.end_time
+                    ? (() => {
+                          const ms = parseZonedDateTime(shift.shift_date, timesheet.end_time).getTime();
+                          return ms < scheduledStartMs ? ms + 24 * 60 * 60 * 1000 : ms; // overnight
+                      })()
+                    : shift.actual_end ? new Date(shift.actual_end).getTime() : null;
+                if (effectiveMs === null) return null;
+                return Math.round((effectiveMs - scheduledEndMs) / 60000);
+            })();
+
             return {
                 id: shift.id,
                 shiftId: shift.id,
@@ -309,7 +345,7 @@ export async function getShiftsForTimesheet(
 
                 roleId: shift.role_id,
                 roleName: role?.name || '',
-                remunerationLevelId: shift.remuneration_level_id,
+                remunerationLevelId: shift.remuneration_level ? shift.remuneration_level.toString() : null,
                 remunerationLevel: remLevel?.level_name || '',
 
                 shiftDate: shift.shift_date,
@@ -345,7 +381,7 @@ export async function getShiftsForTimesheet(
                 })(),
                 adjustedEndSource: (() => {
                     if (timesheet?.end_time) return 'manual';
-                    const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time);
+                    const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time, shift.actual_end);
                     if (finished && shift.actual_end) return 'snapped';
                     return null;
                 })(),
@@ -367,27 +403,9 @@ export async function getShiftsForTimesheet(
 
                 attendanceStatus: shift.attendance_status || null,
                 attendanceNote: shift.attendance_note || null,
-                clockInVarianceMinutes: (() => {
-                    if (!shift.actual_start) return null;
-                    const scheduledMs = new Date(
-                        shift.start_at || `${shift.shift_date}T${shift.start_time}`
-                    ).getTime();
-                    return Math.round((new Date(shift.actual_start).getTime() - scheduledMs) / 60000);
-                })(),
-                clockOutVarianceMinutes: (() => {
-                    if (!shift.actual_end) return null;
-                    const scheduledMs = new Date(
-                        shift.end_at || `${shift.shift_date}T${shift.end_time}`
-                    ).getTime();
-                    return Math.round((new Date(shift.actual_end).getTime() - scheduledMs) / 60000);
-                })(),
-                varianceMinutes: (() => {
-                    if (!shift.actual_start) return null;
-                    const scheduledMs = new Date(
-                        shift.start_at || `${shift.shift_date}T${shift.start_time}`
-                    ).getTime();
-                    return Math.round((new Date(shift.actual_start).getTime() - scheduledMs) / 60000);
-                })(),
+                clockInVarianceMinutes: clockInVariance,
+                clockOutVarianceMinutes: clockOutVariance,
+                varianceMinutes: clockInVariance, // legacy alias for clock-in variance
 
                 hourlyRate,
                 estimatedPay: Math.round(currentEstimatedPay * 100) / 100,
@@ -469,20 +487,18 @@ export async function updateTimesheetEntry(
             .eq('shift_id', shiftId)
             .maybeSingle();
 
+        // Always get shift details to determine default snapped/scheduled times and handle no_show status
+        const { data: shift } = await supabase
+            .from('shifts')
+            .select('attendance_status, start_time, end_time, actual_start, actual_end, shift_date')
+            .eq('id', shiftId)
+            .single();
+
         // 2. Safety Guard: If it's already Approved, Rejected, or No-Show
         // Block updates to finalized records, UNLESS manager is editing metrics.
         let currentStatus = (existing?.status || '').toLowerCase();
-        
-        // If no timesheet record yet, check the shift record for attendance_status
-        if (!currentStatus) {
-            const { data: shift } = await supabase
-                .from('shifts')
-                .select('attendance_status')
-                .eq('id', shiftId)
-                .single();
-            if (shift?.attendance_status === 'no_show') {
-                currentStatus = 'no_show';
-            }
+        if (!currentStatus && shift?.attendance_status === 'no_show') {
+            currentStatus = 'no_show';
         }
 
         const isEditingMetrics = 
@@ -507,7 +523,7 @@ export async function updateTimesheetEntry(
             const { error: shiftUpdateErr } = await supabase
                 .from('shifts')
                 .update({
-                    attendance_status: null,
+                    attendance_status: null as any,
                     attendance_note: 'No-Show overridden by manager',
                     updated_at: new Date().toISOString(),
                 })
@@ -538,11 +554,38 @@ export async function updateTimesheetEntry(
             return val;
         };
 
-        const adjStart = validTime(updates.adjustedStart);
-        if (adjStart !== undefined) payload.start_time = adjStart;
-        
-        const adjEnd = validTime(updates.adjustedEnd);
-        if (adjEnd !== undefined) payload.end_time = adjEnd;
+        const normalizeToHHMM = (timeStr: string | null | undefined): string | null => {
+            if (!timeStr || timeStr === '-' || timeStr === 'NIL') return null;
+            const match = timeStr.match(/^(\d{1,2}):(\d{2})/);
+            if (match) {
+                return `${match[1].padStart(2, '0')}:${match[2]}`;
+            }
+            return null;
+        };
+
+        if (updates.adjustedStart !== undefined) {
+            const adjStart = validTime(updates.adjustedStart);
+            const normAdjStart = normalizeToHHMM(adjStart);
+            const defaultStart = shift ? normalizeToHHMM(snapToQuarterHour(shift.actual_start)) : null;
+
+            if (normAdjStart && normAdjStart !== defaultStart) {
+                payload.start_time = adjStart;
+            } else {
+                payload.start_time = null;
+            }
+        }
+
+        if (updates.adjustedEnd !== undefined) {
+            const adjEnd = validTime(updates.adjustedEnd);
+            const normAdjEnd = normalizeToHHMM(adjEnd);
+            const defaultEnd = shift ? normalizeToHHMM(snapToQuarterHour(shift.actual_end)) : null;
+
+            if (normAdjEnd && normAdjEnd !== defaultEnd) {
+                payload.end_time = adjEnd;
+            } else {
+                payload.end_time = null;
+            }
+        }
 
         // Reset status to submitted if editing metrics on a finalized timesheet
         if (isEditingMetrics && ['approved', 'rejected', 'no_show'].includes(currentStatus)) {

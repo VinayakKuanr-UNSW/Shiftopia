@@ -84,6 +84,10 @@ export class ComplianceEvaluator {
             current_shifts: currentShifts,
             candidate_shift: candidateToRosterShift(candidate),
             action_type: 'assign',
+            employee_context: {
+                contract_type: employee.contract_type,
+                contracted_weekly_hours: employee.contracted_weekly_hours,
+            },
         });
 
         // Convert ConstraintViolation[] → ShiftViolation[]

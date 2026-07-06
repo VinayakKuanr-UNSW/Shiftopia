@@ -1,4 +1,5 @@
 import { supabase } from '@/platform/supabase/client';
+import { getSydneyNow, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { processInChunks } from '../domain/bulk-action-engine';
 import { Shift, isValidUuid, safeUuid, calculateMinutesBetweenTimes } from '../domain/shift.entity';
 import { CreateShiftData, UpdateShiftData } from './shifts.dto';
@@ -23,6 +24,7 @@ import {
     RequestTradeResponseSchema,
     EmployeeDropResponseSchema,
     CloseBiddingResponseSchema,
+    ApplyShiftOpResponseSchema,
 } from './contracts';
 
 // ============================================================
@@ -139,8 +141,9 @@ export const shiftsCommands = {
             display_order: shiftData.display_order || 0,
             shift_group_id: safeUuid(shiftData.shift_group_id),
             shift_subgroup_id: safeUuid(shiftData.shift_subgroup_id),
+            roster_subgroup_id: safeUuid(shiftData.shift_subgroup_id),
             role_id: safeUuid(shiftData.role_id),
-            remuneration_level_id: safeUuid(shiftData.remuneration_level_id),
+            remuneration_level: shiftData.remuneration_level !== undefined && shiftData.remuneration_level !== null ? Number(shiftData.remuneration_level) : null,
             paid_break_minutes: shiftData.paid_break_minutes || 0,
             unpaid_break_minutes: shiftData.unpaid_break_minutes || 0,
             break_minutes: (shiftData.paid_break_minutes || 0) + (shiftData.unpaid_break_minutes || 0),
@@ -186,83 +189,187 @@ export const shiftsCommands = {
     async updateShift(shiftId: string, updates: UpdateShiftData): Promise<Shift> {
         const user = await requireUser();
 
-        {
-            const payload: Record<string, unknown> = {};
-            // We pass updates directly, but mapped to correct keys/types if needed
-            // The RPC handles COALESCE logic, so we only need to pass defined fields.
+        // Prevent modification if the shift is in the past
+        const currentShift = await shiftsQueries.getShiftById(shiftId);
+        if (currentShift) {
+            const now = getSydneyNow();
+            const shiftStartAt = parseZonedDateTime(currentShift.shift_date, currentShift.start_time, SYDNEY_TZ);
+            if (now >= shiftStartAt) {
+                throw new Error('Cannot edit a shift that is in the past.');
+            }
+        }
 
-            if (updates.roster_id !== undefined)
-                payload.roster_id = safeUuid(updates.roster_id);
-            if (updates.department_id !== undefined)
-                payload.department_id = safeUuid(updates.department_id);
-            if (updates.sub_department_id !== undefined)
-                payload.sub_department_id = safeUuid(updates.sub_department_id);
-            if (updates.group_type !== undefined)
-                payload.group_type = updates.group_type;
-            if (updates.sub_group_name !== undefined)
-                payload.sub_group_name = updates.sub_group_name;
-            if (updates.display_order !== undefined)
-                payload.display_order = updates.display_order;
-            if (updates.shift_group_id !== undefined)
-                payload.shift_group_id = safeUuid(updates.shift_group_id);
-            if (updates.shift_subgroup_id !== undefined) {
-                const safeSubgroupId = safeUuid(updates.shift_subgroup_id);
-                if (safeSubgroupId) {
-                    payload.roster_subgroup_id = safeSubgroupId;
-                }
-            }
-            if (updates.role_id !== undefined)
-                payload.role_id = safeUuid(updates.role_id);
-            if (updates.remuneration_level_id !== undefined)
-                payload.remuneration_level_id = safeUuid(updates.remuneration_level_id);
-            if (updates.shift_date !== undefined) {
-                payload.shift_date = updates.shift_date;
-                // roster_date handles separately in RPC if shift_date provided
-            }
-            if (updates.start_time !== undefined)
-                payload.start_time = updates.start_time;
-            if (updates.end_time !== undefined) payload.end_time = updates.end_time;
-            if (updates.paid_break_minutes !== undefined)
-                payload.paid_break_minutes = updates.paid_break_minutes;
-            if (updates.unpaid_break_minutes !== undefined)
-                payload.unpaid_break_minutes = updates.unpaid_break_minutes;
-            if (updates.timezone !== undefined) payload.timezone = updates.timezone;
-            if (updates.start_at !== undefined) payload.start_at = updates.start_at;
-            if (updates.end_at !== undefined) payload.end_at = updates.end_at;
-            if (updates.assigned_employee_id !== undefined) {
-                payload.assigned_employee_id = safeUuid(updates.assigned_employee_id);
-                if (updates.assigned_employee_id) {
-                    payload.assignment_source = updates.assignment_source ?? 'manual';
-                } else {
-                    payload.assignment_source = null;
-                }
-            }
-            if (updates.required_skills !== undefined)
-                payload.required_skills = updates.required_skills;
-            if (updates.required_licenses !== undefined)
-                payload.required_licenses = updates.required_licenses;
-            if (updates.event_ids !== undefined)
-                payload.event_ids = updates.event_ids;
-            if (updates.tags !== undefined) payload.tags = updates.tags;
-            if (updates.notes !== undefined) payload.notes = updates.notes;
-            if (updates.cancellation_reason !== undefined)
-                payload.cancellation_reason = updates.cancellation_reason;
-            if (updates.is_training !== undefined)
-                payload.is_training = updates.is_training;
+        // ── Split the incoming patch into two buckets ──────────────────────────
+        //
+        //  (1) editPayload — schedule + grouping fields (and, on a DRAFT shift,
+        //      the assignment) that the audited gateway 'edit' op WHITELISTS.
+        //      These flow through sm_apply_shift_op so the action lands in the
+        //      shift_events ledger as a SINGLE record (state + field diff +
+        //      folded assignment).
+        //
+        //  (2) excludedPayload — fields the gateway 'edit' op DELIBERATELY does
+        //      NOT own (structural/RLS-scoping moves, canonical timestamps, jsonb
+        //      eligibility arrays, cancellation reason). These keep their existing
+        //      direct-update behaviour so nothing regresses.
+        //
+        // Gateway 'edit' whitelist (payload keys, per 20260630001100):
+        //   start_time, end_time, shift_date, paid_break_minutes,
+        //   unpaid_break_minutes, notes, role_id, sub_department_id,
+        //   remuneration_level_id, group_type, sub_group_name, display_order,
+        //   shift_group_id, shift_subgroup_id, timezone, is_training,
+        //   assigned_employee_id, assignment_source
+        const editPayload: Record<string, unknown> = {};
 
-            // 4. Execute DB write — direct UPDATE on shifts table.
-            //    The legacy RPC `sm_update_shift` fails because it tries to call
-            //     a non-existent `notify_user` function. Direct update bypasses it.
+        if (updates.start_time !== undefined) editPayload.start_time = updates.start_time;
+        if (updates.end_time !== undefined) editPayload.end_time = updates.end_time;
+        if (updates.shift_date !== undefined) editPayload.shift_date = updates.shift_date;
+        if (updates.paid_break_minutes !== undefined)
+            editPayload.paid_break_minutes = updates.paid_break_minutes;
+        if (updates.unpaid_break_minutes !== undefined)
+            editPayload.unpaid_break_minutes = updates.unpaid_break_minutes;
+        // notes: pass through even when null so it can be explicitly cleared
+        // (the gateway uses the `?` operator to allow clearing).
+        if (updates.notes !== undefined) editPayload.notes = updates.notes;
+        if (updates.role_id !== undefined)
+            editPayload.role_id = safeUuid(updates.role_id);
+        if (updates.sub_department_id !== undefined)
+            editPayload.sub_department_id = safeUuid(updates.sub_department_id);
+        if (updates.remuneration_level !== undefined)
+            editPayload.remuneration_level = updates.remuneration_level !== null ? Number(updates.remuneration_level) : null;
+        if (updates.group_type !== undefined) editPayload.group_type = updates.group_type;
+        // sub_group_name: pass through even when null so it can be explicitly cleared.
+        if (updates.sub_group_name !== undefined)
+            editPayload.sub_group_name = updates.sub_group_name;
+        if (updates.display_order !== undefined)
+            editPayload.display_order = updates.display_order;
+        if (updates.shift_group_id !== undefined)
+            editPayload.shift_group_id = safeUuid(updates.shift_group_id);
+        // Payload key is `shift_subgroup_id`; the gateway maps it to the DB column
+        // roster_subgroup_id internally. (Preserves the old "only set when a valid
+        // UUID is present" behaviour — a null/invalid value is simply omitted, so
+        // COALESCE keeps the existing subgroup.)
+        if (updates.shift_subgroup_id !== undefined) {
+            const safeSubgroupId = safeUuid(updates.shift_subgroup_id);
+            if (safeSubgroupId) {
+                editPayload.shift_subgroup_id = safeSubgroupId;
+            }
+        }
+        if (updates.timezone !== undefined) editPayload.timezone = updates.timezone;
+        if (updates.is_training !== undefined) editPayload.is_training = updates.is_training;
+
+        // Assignment is FOLDED into the single audited `edit` op so an
+        // edit-and-reassign on a DRAFT shift produces ONE shift_events record
+        // (the gateway gates the fold on assign/unassign FSM legality and its
+        // via_gateway guard suppresses the duplicate trigger ASSIGNED row).
+        // Pass an explicit `null` (not undefined) when clearing so the key
+        // survives JSON serialization and the gateway sees the unassign intent.
+        // Published-shift assignment changes are gated out server-side and keep
+        // their dedicated assign/emergency path.
+        if (updates.assigned_employee_id !== undefined) {
+            const empId = safeUuid(updates.assigned_employee_id);
+            editPayload.assigned_employee_id = empId ?? null;
+            editPayload.assignment_source = empId
+                ? (updates.assignment_source ?? 'manual')
+                : null;
+        }
+
+        // ── Non-whitelist fields: preserve the existing direct-update path ─────
+        // These are NOT silently dropped. roster_id/department_id/organization_id
+        // are structural moves; start_at/end_at are canonical timestamps; the jsonb
+        // arrays + cancellation_reason are owned by other pipelines. (Assignment
+        // now flows through the audited `edit` op above, not here.)
+        const excludedPayload: Record<string, unknown> = {};
+
+        if (updates.roster_id !== undefined)
+            excludedPayload.roster_id = safeUuid(updates.roster_id);
+        if (updates.department_id !== undefined)
+            excludedPayload.department_id = safeUuid(updates.department_id);
+        if (updates.organization_id !== undefined)
+            excludedPayload.organization_id = safeUuid(updates.organization_id);
+        if (updates.start_at !== undefined) excludedPayload.start_at = updates.start_at;
+        if (updates.end_at !== undefined) excludedPayload.end_at = updates.end_at;
+        if (updates.required_skills !== undefined)
+            editPayload.required_skills = updates.required_skills;
+        if (updates.required_licenses !== undefined)
+            editPayload.required_licenses = updates.required_licenses;
+        if (updates.event_ids !== undefined)
+            editPayload.event_ids = updates.event_ids;
+        if (updates.tags !== undefined) excludedPayload.tags = updates.tags;
+        if (updates.cancellation_reason !== undefined)
+            excludedPayload.cancellation_reason = updates.cancellation_reason;
+
+        const hasEdit = Object.keys(editPayload).length > 0;
+        const hasExcluded = Object.keys(excludedPayload).length > 0;
+
+        // ── (1) Schedule/grouping edits → audited gateway op ──────────────────
+        if (hasEdit) {
+            // The gateway performs CAS against the EXACT current version, so an
+            // expected version is mandatory. If the caller did not supply one,
+            // read the current version (non-critical updates that omit it keep
+            // working — we just fetch the head version to satisfy the contract).
+            let expectedVersion = updates.expectedVersion;
+            if (expectedVersion === undefined) {
+                const current = await shiftsQueries.getShiftById(shiftId);
+                if (!current) {
+                    throw new Error('Shift not found or has been deleted.');
+                }
+                expectedVersion = current.version;
+            }
+
+            const envelope = await callRpc(
+                'sm_apply_shift_op',
+                {
+                    p_shift_id: shiftId,
+                    p_expected_version: expectedVersion,
+                    p_op: 'edit',
+                    p_payload: { ...editPayload, reason: 'Shift edited' },
+                    p_idempotency_key: null,
+                },
+                ApplyShiftOpResponseSchema,
+            );
+
+            switch (envelope.code) {
+                case 'APPLIED':
+                case 'IDEMPOTENT_REPLAY':
+                    break;
+                case 'VERSION_CONFLICT':
+                    throw new Error(
+                        'This shift was modified by someone else (concurrent modification). ' +
+                        'Reload and try again.',
+                    );
+                case 'ILLEGAL_TRANSITION':
+                    throw new Error(
+                        `This edit is not allowed in the shift's current state (${envelope.current_state ?? 'unknown'}).`,
+                    );
+                case 'FORBIDDEN':
+                    throw new Error('You do not have permission to edit this shift.');
+                case 'GONE':
+                    throw new Error('Shift not found or has been deleted.');
+                case 'WRITE_REJECTED':
+                    throw new Error(`Shift edit was rejected: ${envelope.note ?? 'unknown reason'}.`);
+                default:
+                    throw new Error(envelope.error ?? 'Failed to edit shift.');
+            }
+        }
+
+        // ── (2) Non-whitelist fields → existing direct-update path ────────────
+        // Behaviour-preserving: same direct UPDATE the legacy code used (the
+        // legacy RPC sm_update_shift is broken via a missing notify_user fn).
+        // Only runs when there are excluded fields to write.
+        if (hasExcluded) {
             let query = supabase
                 .from('shifts')
                 .update({
-                    ...payload,
+                    ...excludedPayload,
                     updated_at:       new Date().toISOString(),
                     last_modified_by: user.id,
                 })
                 .eq('id', shiftId);
 
-            if (updates.expectedVersion !== undefined) {
+            // Honour optimistic concurrency when the caller passed a version. If
+            // the gateway 'edit' op already ran above, it bumped the version, so
+            // only gate on the original expected version when there was NO edit.
+            if (updates.expectedVersion !== undefined && !hasEdit) {
                 query = query.eq('version', updates.expectedVersion);
             }
 
@@ -275,14 +382,14 @@ export const shiftsCommands = {
             if (!updatedRows || updatedRows.length === 0) {
                 throw new Error('No rows were updated. The shift may have been modified by another user.');
             }
-
-            const updatedShift = await shiftsQueries.getShiftById(shiftId);
-            if (!updatedShift) {
-                throw new Error('Shift updated but could not be retrieved');
-            }
-
-            return updatedShift;
         }
+
+        const updatedShift = await shiftsQueries.getShiftById(shiftId);
+        if (!updatedShift) {
+            throw new Error('Shift updated but could not be retrieved');
+        }
+
+        return updatedShift;
     },
 
     /* ============================================================
@@ -368,50 +475,60 @@ export const shiftsCommands = {
     async bulkUnassignShifts(shiftIds: string[]): Promise<Shift[]> {
         if (shiftIds.length === 0) return [];
 
-        const user = await requireUser();
-
-        // Fetch current assignment state before clearing it so the audit log
-        // records which employee was removed from each shift.  Unassign never
-        // adds compliance violations (it only removes them), so this is purely
-        // observability — the mutation is not blocked.
+        // Route each unassign through the audited mutation gateway (the `unassign`
+        // op added in 20260623000100_shift_unassign_op). The gateway records a
+        // durable UNASSIGNED shift_events row per shift (naming the removed worker),
+        // so the previous console.info "audit log" is gone. Partial-success
+        // semantics are preserved: a per-shift failure (already-unassigned, version
+        // conflict, illegal state, etc.) is skipped, not fatal.
+        //
+        // The gateway requires the EXACT current version for its CAS, so fetch
+        // version per shift first (this also lets us return the updated rows).
         const { data: preState } = await supabase
             .from('shifts')
-            .select('id, assigned_employee_id, shift_date, start_time, end_time')
+            .select('id, version, assigned_employee_id')
             .in('id', shiftIds)
             .is('deleted_at', null);
 
-        const removedAssignments = (preState ?? [])
-            .filter((s: any) => s.assigned_employee_id !== null)
-            .map((s: any) => ({
-                shift_id:             s.id,
-                removed_employee_id:  s.assigned_employee_id,
-                shift_date:           s.shift_date,
-                start_time:           s.start_time,
-                end_time:             s.end_time,
-            }));
+        const succeededIds: string[] = [];
 
-        // Structured audit log — consumed by downstream observability tooling.
-        // Unassign is never blocked (removing a shift can only reduce violations),
-        // but every removal must be observable for compliance audit trails.
-        console.info(JSON.stringify({
-            operation:           'bulk_unassign',
-            actor_id:            user.id,
-            shift_ids:           shiftIds,
-            removed_assignments: removedAssignments,
-            timestamp:           new Date().toISOString(),
-        }));
+        await Promise.all(
+            (preState ?? []).map(async (s: { id: string; version: number; assigned_employee_id: string | null }) => {
+                // Nothing to remove — the gateway would soft-reject (ALREADY_UNASSIGNED).
+                if (s.assigned_employee_id === null) return;
 
+                try {
+                    const envelope = await callRpc(
+                        'sm_apply_shift_op',
+                        {
+                            p_shift_id: s.id,
+                            p_expected_version: s.version,
+                            p_op: 'unassign',
+                            p_payload: { reason: 'Bulk unassign' },
+                            p_idempotency_key: null,
+                        },
+                        ApplyShiftOpResponseSchema,
+                    );
+
+                    if (envelope.code === 'APPLIED' || envelope.code === 'IDEMPOTENT_REPLAY') {
+                        succeededIds.push(s.id);
+                    }
+                    // Any other code (VERSION_CONFLICT / ILLEGAL_TRANSITION /
+                    // WRITE_REJECTED / FORBIDDEN / GONE) is a per-shift skip.
+                } catch {
+                    // Network/validation error on one shift must not fail the batch.
+                }
+            }),
+        );
+
+        if (succeededIds.length === 0) return [];
+
+        // Return the freshly-unassigned rows (preserves the Shift[] return type).
         const { data, error } = await supabase
             .from('shifts')
-            .update({
-                assigned_employee_id: null,
-                assigned_at: null,
-                last_modified_by: user.id,
-                updated_at: new Date().toISOString(),
-            })
-            .in('id', shiftIds)
-            .is('deleted_at', null)
-            .select('*');
+            .select('*')
+            .in('id', succeededIds)
+            .is('deleted_at', null);
 
         if (error) throw error;
 
@@ -422,39 +539,62 @@ export const shiftsCommands = {
 
 
     async publishShift(shiftId: string) {
-        // TTS-aware routing for already-assigned shifts.
-        // Compliance is checked at assignment time; publish is a lifecycle transition only.
+        // Publish is a lifecycle transition only — compliance is checked at assignment time.
         const shift = await shiftsQueries.getShiftById(shiftId);
-        if (shift?.assigned_employee_id && isValidUuid(shift.assigned_employee_id)) {
-            // TTS-aware routing: if 0 < TTS < 4h and the shift is already assigned,
-            // bypass the offer flow (S3) entirely and publish straight to Confirmed (S4).
-            //
-            // sm_publish_shift never sets assignment_outcome, so an assigned draft always
-            // lands in S3 (Published+Offered). With TTS < 4h the shift-state-processor
-            // cron immediately expires S3 → S2 (Draft+Assigned), creating a stuck loop.
-            const ttsMs = shift.start_at
-                ? new Date(shift.start_at).getTime() - Date.now()
-                : new Date(`${shift.shift_date}T${shift.start_time}`).getTime() - Date.now();
 
-            if (ttsMs > 0 && ttsMs < 4 * 60 * 60 * 1000) {
-                const user = await requireUser();
-                // is_draft / is_published / is_on_bidding are DB-generated columns
-                // (GENERATED ALWAYS AS) — they cannot be set explicitly. The DB
-                // derives them from lifecycle_status and bidding_status automatically.
-                const { error } = await supabase
-                    .from('shifts')
-                    .update({
-                        lifecycle_status:   'Published',
-                        assignment_outcome: 'confirmed',
-                        fulfillment_status: 'scheduled',
-                        bidding_status:     'not_on_bidding',
-                        updated_at:         new Date().toISOString(),
-                        last_modified_by:   user.id,
-                    })
-                    .eq('id', shiftId);
-                if (error) throw new Error(error.message);
-                return { success: true };
+        if (shift) {
+            const now = getSydneyNow();
+            const shiftStartAt = parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ);
+            if (now >= shiftStartAt) {
+                throw new Error('Cannot publish a shift that is in the past.');
             }
+        }
+
+        const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+        const ttsMs = shift?.start_at
+            ? new Date(shift.start_at).getTime() - Date.now()
+            : shift
+                ? new Date(`${shift.shift_date}T${shift.start_time}`).getTime() - Date.now()
+                : Number.POSITIVE_INFINITY;
+        const isAssigned = !!shift?.assigned_employee_id && isValidUuid(shift.assigned_employee_id);
+
+        // Emergent window (TTS ≤ 4h) + UNASSIGNED: opening bidding (S5) is a no-op —
+        // the shift-state-processor expires bidding inside the 4h lock, bouncing the
+        // shift straight back to Draft (S1). Block it and steer the manager to
+        // Emergency Assignment: assigning a worker publishes directly to Confirmed (S4).
+        if (!isAssigned && ttsMs <= FOUR_HOURS_MS) {
+            throw new Error(
+                'This shift starts within 4 hours, so it can’t be opened for bidding — bids are locked in the emergency window and it would immediately revert to Draft. Assign an employee to emergency-publish it instead.',
+            );
+        }
+
+        // TTS-aware routing for assigned shifts: inside the 4h window, bypass the offer
+        // flow (S3) and publish straight to Confirmed (S4). sm_publish_shift never sets
+        // assignment_outcome, so an assigned draft would otherwise land in S3 and the
+        // shift-state-processor cron would immediately expire S3 → S2, a stuck loop.
+        if (isAssigned && ttsMs > 0 && ttsMs < FOUR_HOURS_MS) {
+            const user = await requireUser();
+            // is_draft / is_published / is_on_bidding are DB-generated columns
+            // (GENERATED ALWAYS AS) — they cannot be set explicitly. The DB
+            // derives them from lifecycle_status and bidding_status automatically.
+            const { error } = await supabase
+                .from('shifts')
+                .update({
+                    lifecycle_status:   'Published',
+                    assignment_outcome: 'confirmed',
+                    fulfillment_status: 'scheduled',
+                    bidding_status:     'not_on_bidding',
+                    // Skipping the offer step because TTS < 4h IS the emergency
+                    // signal — stamp emergency_assigned_at so fn_capture_shift_event
+                    // emits EMERGENCY_ASSIGNED (powers the Emergency Assigned metric)
+                    // while the shift still lands in S4 (Confirmed).
+                    emergency_assigned_at: new Date().toISOString(),
+                    updated_at:         new Date().toISOString(),
+                    last_modified_by:   user.id,
+                })
+                .eq('id', shiftId);
+            if (error) throw new Error(error.message);
+            return { success: true };
         }
 
         const result = await callAuthenticatedRpc(
@@ -480,8 +620,22 @@ export const shiftsCommands = {
         const complianceChecks = await Promise.allSettled(
             shiftIds.map(async (id) => {
                 const shift = await shiftsQueries.getShiftById(id);
-                // Unassigned shifts: no compliance needed, always pass
+                // Unassigned shifts: no compliance needed. BUT inside the 4h emergency
+                // window, opening bidding (S5) auto-expires back to Draft (S1) — so skip
+                // the no-op and surface the emergency-assignment hint instead of passing.
                 if (!shift?.assigned_employee_id || !isValidUuid(shift.assigned_employee_id)) {
+                    const ttsUnassigned = shift?.start_at
+                        ? new Date(shift.start_at).getTime() - Date.now()
+                        : shift
+                            ? new Date(`${shift.shift_date}T${shift.start_time}`).getTime() - Date.now()
+                            : Number.POSITIVE_INFINITY;
+                    if (ttsUnassigned <= FOUR_H_MS) {
+                        return {
+                            id,
+                            pass: false as const,
+                            reason: 'Starts within 4h — assign an employee to emergency-publish (bidding would expire)',
+                        };
+                    }
                     return { id, pass: true as const, reason: '' };
                 }
                 const netMinutes =
@@ -545,17 +699,82 @@ export const shiftsCommands = {
                     BulkPublishResponseSchema,
                 );
 
-                if (result.success !== false) {
-                    const errorMap = new Map((result.errors || []).map((e: any) => [e.shift_id, e.reason]));
-                    for (const id of normalIds) {
-                        if (errorMap.has(id)) {
-                            dbFailed.push({ id, reason: errorMap.get(id)! });
-                        } else {
-                            publishedIds.push(id);
-                        }
-                    }
-                } else {
+                if (result.success === false) {
+                    // RPC signalled a hard failure — the whole batch was rejected.
                     normalIds.forEach(id => dbFailed.push({ id, reason: result.message || 'Bulk publish failed' }));
+                } else {
+                    // Forward-compatibility: if a future RPC version returns a per-shift
+                    // errors array, use it as the primary source of truth.
+                    const hasLegacyErrors = Array.isArray(result.errors) && result.errors.length > 0;
+                    if (hasLegacyErrors) {
+                        const errorMap = new Map(
+                            (result.errors as Array<{ shift_id: string; reason: string }>)
+                                .map((e) => [e.shift_id, e.reason])
+                        );
+                        for (const id of normalIds) {
+                            if (errorMap.has(id)) {
+                                dbFailed.push({ id, reason: errorMap.get(id)! });
+                            } else {
+                                publishedIds.push(id);
+                            }
+                        }
+                    } else if (
+                        // Fast path: the RPC confirms every requested shift was updated.
+                        // failure_count === 0 (or success_count exactly matches) means we can
+                        // trust the full normalIds list without a round-trip.
+                        typeof result.failure_count === 'number' && result.failure_count === 0
+                    ) {
+                        normalIds.forEach(id => publishedIds.push(id));
+                    } else if (
+                        // Discrepancy detected: the RPC silently skipped some shifts
+                        // (e.g. wrong FSM state, shift starts in the past, S1+emergency).
+                        // failure_count > 0, OR success_count returned and doesn't match
+                        // the count we sent. Fetch ground-truth from the DB to classify each
+                        // shift individually — never fabricate success.
+                        (typeof result.failure_count === 'number' && result.failure_count > 0)
+                        || (typeof result.success_count === 'number' && result.success_count !== normalIds.length)
+                    ) {
+                        const { data: rows, error: selectError } = await supabase
+                            .from('shifts')
+                            .select('id, lifecycle_status')
+                            .in('id', normalIds);
+
+                        if (selectError) {
+                            // Verification query itself failed. We cannot safely claim any
+                            // shift was published. Mark all as failed with the DB error so
+                            // the caller can surface it to the user (who can reload to see
+                            // the real state).
+                            normalIds.forEach(id =>
+                                dbFailed.push({ id, reason: `Could not verify publish status: ${selectError.message}` })
+                            );
+                        } else {
+                            // Post-publish lifecycle states: Published, InProgress, Completed.
+                            // Any other state means the RPC skipped this shift.
+                            const postPublishStatuses = new Set(['Published', 'InProgress', 'Completed']);
+                            const publishedSet = new Set(
+                                (rows ?? [])
+                                    .filter((r: { id: string; lifecycle_status: string }) =>
+                                        postPublishStatuses.has(r.lifecycle_status))
+                                    .map((r: { id: string; lifecycle_status: string }) => r.id)
+                            );
+                            for (const id of normalIds) {
+                                if (publishedSet.has(id)) {
+                                    publishedIds.push(id);
+                                } else {
+                                    dbFailed.push({
+                                        id,
+                                        reason: 'Skipped by server (not in a publishable state or starts in the past)',
+                                    });
+                                }
+                            }
+                        }
+                    } else {
+                        // Neither failure_count nor success_count was present in the response
+                        // (e.g. older RPC that predates these fields). Optimistically trust the
+                        // RPC's success flag — this is the same behaviour the code had before
+                        // the reconciliation logic was introduced.
+                        normalIds.forEach(id => publishedIds.push(id));
+                    }
                 }
             } catch (e: any) {
                 normalIds.forEach(id => dbFailed.push({ id, reason: e.message }));
@@ -573,6 +792,10 @@ export const shiftsCommands = {
                     assignment_outcome: 'confirmed',
                     fulfillment_status: 'scheduled',
                     bidding_status:     'not_on_bidding',
+                    // TTS < 4h emergency publish — stamp emergency_assigned_at so the
+                    // confirm transition is captured as EMERGENCY_ASSIGNED (metric),
+                    // while still landing in S4 (Confirmed). See publishShift above.
+                    emergency_assigned_at: new Date().toISOString(),
                     updated_at:         new Date().toISOString(),
                     last_modified_by:   user.id,
                 })
@@ -616,6 +839,15 @@ export const shiftsCommands = {
     },
 
     async unpublishShift(shiftId: string, reason?: string) {
+        const shift = await shiftsQueries.getShiftById(shiftId);
+        if (shift) {
+            const now = getSydneyNow();
+            const shiftStartAt = parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ);
+            if (now >= shiftStartAt) {
+                throw new Error('Cannot unpublish a shift that is in the past.');
+            }
+        }
+
         const result = await callAuthenticatedRpc(
             'sm_unpublish_shift',
             (userId) => ({ p_shift_id: shiftId, p_user_id: userId, p_reason: reason ?? 'Unpublished' }),
@@ -846,7 +1078,7 @@ export const shiftsCommands = {
     async rejectOffer(shiftId: string, reason: string) {
         // TTS-aware routing:
         //   TTS > 4h → sm_reject_offer → bidding (S5) — peers can still bid
-        //   TTS ≤ 4h → sm_expire_offer_now → draft+unassigned (S1) — bidding window closed,
+        //   TTS ≤ 4h → sm_expire_offer_now → draft+assigned (S2) — bidding window closed,
         //              manager must use emergency assignment
         const { data: shift } = await (supabase as any)
             .from('shifts')

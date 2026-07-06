@@ -52,6 +52,43 @@ logger = logging.getLogger(__name__)
 # INPUT / OUTPUT DATA TYPES
 # =============================================================================
 
+# The solver compares `employment_type` against a small canonical set
+# {'FT','PT','Casual'} at several sites (28-day/152h ordinary-hours cap,
+# consecutive-days streak, fairness over-coefficient, target-mix matching).
+# The wire, however, sends LONG forms ('Full-Time','Part-Time','Casual') from
+# the TS controller (see auto-scheduler.controller.ts). If the two drift, the
+# FT/PT constraints silently never attach — a class of bug this file already
+# warned about ("collapsed unassignable pools when employment_type strings
+# drifted"). Normalize ONCE, at the dataclass boundary, so every comparison
+# site sees canonical values regardless of wire form.
+_EMPLOYMENT_TYPE_ALIASES = {
+    # -> 'FT'
+    'ft': 'FT', 'full-time': 'FT', 'full_time': 'FT', 'fulltime': 'FT',
+    'full time': 'FT', 'full': 'FT',
+    # -> 'PT'
+    'pt': 'PT', 'part-time': 'PT', 'part_time': 'PT', 'parttime': 'PT',
+    'part time': 'PT', 'part': 'PT',
+    'flexible part-time': 'PT', 'flexible part_time': 'PT',
+    'flexible parttime': 'PT', 'flexible part time': 'PT',
+    # -> 'Casual'
+    'casual': 'Casual',
+}
+
+
+def normalize_employment_type(value: Optional[str]) -> str:
+    """Canonicalize any wire form of employment_type to the solver's set
+    {'FT','PT','Casual'}. Case-insensitive and whitespace-stripped.
+
+    None / empty / unrecognized values fall back to 'Casual' — matching the
+    existing EmployeeInput default and the safest legal posture (Casuals carry
+    no FT/PT ordinary-hours contract floor).
+    """
+    if not value:
+        return 'Casual'
+    key = str(value).strip().lower()
+    return _EMPLOYMENT_TYPE_ALIASES.get(key, 'Casual')
+
+
 @dataclass
 class ShiftInput:
     id: str
@@ -71,6 +108,14 @@ class ShiftInput:
     target_employment_type: Optional[str] = None
     is_training: bool = False
 
+    def __post_init__(self):
+        # Normalize the target so the SC-1 employment-isolation comparison
+        # (emp.employment_type != shift.target_employment_type) works no matter
+        # which wire form arrives. Leave None as None (no target = no penalty).
+        if self.target_employment_type is not None:
+            self.target_employment_type = normalize_employment_type(
+                self.target_employment_type
+            )
 
 
 @dataclass
@@ -147,6 +192,15 @@ class EmployeeInput:
     # applies only when `has_availability_data` is true (see employee_eligible).
     availability_slots: list[AvailabilitySlotInput] = field(default_factory=list)
     has_availability_data: bool = False
+
+    def __post_init__(self):
+        # Canonicalize the wire form ('Full-Time'/'Part-Time'/'Casual') to the
+        # solver's set ('FT'/'PT'/'Casual'). Without this, the FT/PT ordinary-
+        # hours 28-day/152h cap (a Tier-0 legal constraint) never attaches
+        # because 'Full-Time' != 'FT'. Both `_build_employee` copies in
+        # ortools_runner.py construct EmployeeInput(**...) via the constructor,
+        # so this single point covers the main and audit paths.
+        self.employment_type = normalize_employment_type(self.employment_type)
 
 
 @dataclass
@@ -308,11 +362,21 @@ def shifts_overlap(a, b) -> bool:
 
 
 def rest_gap_violated(a, b, min_rest: int) -> bool:
-    """True if placing a and b in the same schedule violates the rest gap."""
+    """True if placing a and b in the same schedule violates the rest gap.
+
+    Rest gap (ICC EBA cl. 40) is a CROSS-DAY provision — "the completion of work
+    on the one day and the commencement of work on the next day". Two shifts that
+    START on the same calendar day are a split-shift / spread concern (cl. 39 +
+    the 12h spread cap), NOT a rest-gap one, so they are never a rest violation
+    here. Overlaps are always blocked. (Audit H4 — the solver was refusing legal
+    PT/flexi split shifts; this mirrors the V8 auditor's same-start-day rule.)
+    """
     if shifts_overlap(a, b):
         return True
     a0, a1 = shift_window(a)
     b0, b1 = shift_window(b)
+    if a0 // 1440 == b0 // 1440:
+        return False  # same start day — not a rest-gap concern
     if a0 < b0:
         return (b0 - a1) < min_rest
     else:
@@ -556,7 +620,16 @@ class ScheduleModelBuilder:
         # Populated during build
         self._eligibility_map: dict[str, list[EmployeeInput]] = {}
         self._rest_eliminated: set[tuple[str, str]] = set()
+        # SOFT slacks that YIELD to coverage (availability max, contract min,
+        # anti-hogging) — objective category 'other', tiered BELOW coverage.
         self._workload_slack_terms: list[cp_model.LinearExpr] = []
+        # HARD legal caps (12h/day, 152h/28d, 20-in-28, flexi streak, student
+        # visa, spread, casual max-2/day) — objective category 'legal_hard',
+        # tiered ABOVE coverage so the solver never auto-generates an ILLEGAL
+        # roster: an unavoidable breach leaves the shift uncovered for manual
+        # escalation rather than assigning it (policy locked 2026-07-05,
+        # see [[eba-compliance-audit-remediation]]).
+        self._hard_legal_slack_terms: list[cp_model.LinearExpr] = []
         self._metrics = OptimizerDebugMetrics(
             raw_pairs=0, eligible_pairs=0, rest_eliminated_pairs=0,
             final_variables=0, num_constraints=0, greedy_hint_applied=False,
@@ -586,6 +659,7 @@ class ScheduleModelBuilder:
             'undesirable_balance': [],  # DELIVERABLE 4: night/weekend fairness
             'longitudinal_fairness': [],  # SC-11: F1 cross-roster fairness ledger
             'other': [],
+            'legal_hard': [],  # hard legal caps, tiered ABOVE coverage (CRIT-2)
         }
         # B3 — lexicographic objective tiers, populated by _add_objective() and
         # optimised in strict priority order by _solve(). See _add_objective.
@@ -1130,89 +1204,65 @@ class ScheduleModelBuilder:
             return
 
         min_rest = self.data.constraints.min_rest_minutes
-        # DELIVERABLE 3: multi-hire rest gap is 480m.
+        # DELIVERABLE 3: multi-hire rest gap is 480m; normal is `min_rest` (600m).
         multi_hire_rest = 480
-        # All intervals in the primary AddNoOverlap use the SMALLER 480m pad.
-        # Normal-Normal pairs that need 600m are enforced via explicit pairwise.
-        primary_pad = multi_hire_rest
 
         # Pre-index shift windows and types
         _sw: dict[str, tuple[int, int]] = {s.id: shift_window(s) for s in self.data.shifts}
         _is_mh: dict[str, bool] = {s.id: (s.shift_type == 'MULTI_HIRE') for s in self.data.shifts}
 
-        # DELIVERABLE 3: Identify Normal-Normal pairs where gap in [480, 600).
-        # These pairs MUST be explicitly blocked (since the primary 480m
-        # AddNoOverlap will not catch them).
-        normal_normal_tight: set[frozenset] = set()
-        shifts_sorted_for_pairs = sorted(self.data.shifts, key=lambda s: _sw[s.id][0])
-        for i, sa in enumerate(shifts_sorted_for_pairs):
-            if _is_mh.get(sa.id):
-                continue  # sa is MH → not a Normal-Normal pair
-            sa_start, sa_end = _sw[sa.id]
-            for j in range(i + 1, len(shifts_sorted_for_pairs)):
-                sb = shifts_sorted_for_pairs[j]
-                sb_start, sb_end = _sw[sb.id]
-                if sb_start >= sa_end + min_rest:
-                    break  # all further sb are far enough apart
-                if _is_mh.get(sb.id):
-                    continue  # not a Normal-Normal pair
-                # sb is NORMAL, sa is NORMAL, sb_start < sa_end + 600m
-                if sb_start < sa_end:
-                    continue  # overlapping (AddNoOverlap catches this)
-                gap = sb_start - sa_end
-                # gap in [0, 480): already covered by primary 480m no-overlap
-                # gap in [480, 600): NOT covered by 480m no-overlap → need explicit
-                if primary_pad <= gap < min_rest:
-                    normal_normal_tight.add(frozenset([sa.id, sb.id]))
-
+        # 1. OVERLAP — AddNoOverlap on UNPADDED real intervals. Rest gap is added
+        #    SEPARATELY (step 2) rather than folded into interval padding, so a
+        #    SAME-DAY non-overlapping pair (a legal split shift, cl. 39) is NOT
+        #    blocked by rest padding (audit H4). Candidate-vs-existing rest is
+        #    enforced at eligibility (existing_blocks_proposal), so existing
+        #    shifts here only need overlap protection.
         for emp in self.data.employees:
             intervals = []
-            # DELIVERABLE 3: Use primary_pad (480m) for ALL shifts in the
-            # main AddNoOverlap.  Normal-Normal tight pairs are handled
-            # via explicit pairwise constraints below.
             for s in self.data.shifts:
                 v = self._x.get((emp.id, s.id))
                 if v is None:
                     continue
                 s_start, s_end = _sw[s.id]
-                duration = s_end - s_start
-                size = duration + primary_pad
-                end = s_end + primary_pad
-                interval = self.model.NewOptionalIntervalVar(
-                    s_start, size, end, v,
+                intervals.append(self.model.NewOptionalIntervalVar(
+                    s_start, s_end - s_start, s_end, v,
                     f'iv_{emp.id[:6]}_{s.id[:6]}',
-                )
-                intervals.append(interval)
-
-            # Pinned existing shifts: fixed intervals that always exist.
-            # Pad with primary_pad (480m); existing shifts are padded with
-            # standard min_rest separately via explicit pairwise if they
-            # are non-multi-hire (existing shifts don't have a shift_type
-            # so we use min_rest conservatively).
+                ))
             for ex in emp.existing_shifts:
                 ex_start, ex_end = shift_window(ex)
-                duration = ex_end - ex_start
-                # Existing shifts use full min_rest pad (conservative, correct)
-                size = duration + min_rest
-                end = ex_end + min_rest
-                fixed = self.model.NewIntervalVar(
-                    ex_start, size, end,
+                intervals.append(self.model.NewIntervalVar(
+                    ex_start, ex_end - ex_start, ex_end,
                     f'iv_ex_{emp.id[:6]}_{ex.id[:6]}',
-                )
-                intervals.append(fixed)
-
+                ))
             if intervals:
                 self.model.AddNoOverlap(intervals)
 
-            # DELIVERABLE 3: Add explicit pairwise for Normal-Normal tight pairs
-            # (gap in [480, 600)).  The primary 480m no-overlap does not block
-            # these; we add `x[e,sa] + x[e,sb] <= 1` for each such pair.
-            for pair in normal_normal_tight:
-                sa_id, sb_id = tuple(pair)
-                v1 = self._x.get((emp.id, sa_id))
-                v2 = self._x.get((emp.id, sb_id))
-                if v1 is not None and v2 is not None:
-                    self.model.Add(v1 + v2 <= 1)
+        # 2. REST GAP — explicit pairwise, CROSS-DAY candidate pairs only. Clause
+        #    40 governs "one day … the next day"; same-start-day pairs are a
+        #    split-shift/spread concern (handled by AddNoOverlap + the 12h spread
+        #    cap). Sorted with an early break, so this stays ~O(N) tight pairs —
+        #    it does NOT reintroduce the pairwise overlap blow-up the interval
+        #    refactor removed (that was O(N^2) overlap pairs; this is only the
+        #    handful of cross-day boundary pairs within the rest window).
+        shifts_sorted = sorted(self.data.shifts, key=lambda s: _sw[s.id][0])
+        for i, sa in enumerate(shifts_sorted):
+            sa_start, sa_end = _sw[sa.id]
+            for j in range(i + 1, len(shifts_sorted)):
+                sb = shifts_sorted[j]
+                sb_start, sb_end = _sw[sb.id]
+                if sb_start >= sa_end + min_rest:
+                    break  # every later shift is beyond the widest (600m) rest window
+                if sb_start < sa_end:
+                    continue  # overlap — already handled by AddNoOverlap
+                if sa_start // 1440 == sb_start // 1440:
+                    continue  # H4: same start day — not a rest-gap concern
+                required = multi_hire_rest if (_is_mh.get(sa.id) or _is_mh.get(sb.id)) else min_rest
+                if (sb_start - sa_end) < required:
+                    for emp in self.data.employees:
+                        v1 = self._x.get((emp.id, sa.id))
+                        v2 = self._x.get((emp.id, sb.id))
+                        if v1 is not None and v2 is not None:
+                            self.model.Add(v1 + v2 <= 1)
 
     def _add_overlap_pairwise_relaxed(self):
         """Legacy pairwise overlap, used only under relax_constraints=true.
@@ -1299,7 +1349,13 @@ class ScheduleModelBuilder:
             work_day_vars = [self.model.NewBoolVar(f'wd_{emp.id[:4]}_{i}') for i in range(num_calendar_days)]
             
             for i in range(num_calendar_days):
-                day_start_abs = d0_abs + i * 1440
+                # d0_abs is a DAY index (…//1440); the absolute-minute base for
+                # calendar day i is therefore (d0_abs + i) * 1440. The old
+                # `d0_abs + i*1440` mixed day-units with minute-units, so
+                # minutes_on_day() returned 0 for EVERY shift and day_vars was
+                # identically 0 — silently no-op'ing the 12h/day, 152h/28d,
+                # 20-in-28, flexi-streak and student-visa caps (audit CRIT-1).
+                day_start_abs = (d0_abs + i) * 1440
                 day_end_abs = day_start_abs + 1440
                 shift_terms = []
                 for s in self.data.shifts:
@@ -1312,7 +1368,18 @@ class ScheduleModelBuilder:
                 
                 # Link day_vars
                 self.model.Add(day_vars[i] == cp_model.LinearExpr.Sum([dur * var for dur, var in shift_terms]) + existing_mins)
-                
+
+                # 12h/day ordinary cap (cl. 35.1(d)/35.2(d)/35.3(d)/35.4(c)) — SOFT
+                # so a single pinned 12h+ existing shift can't make the model
+                # infeasible (that INFEASIBILITY is exactly why the old hard 720
+                # cap was removed). Matches the V8 auditor's maxDailyHours block
+                # (audit M2): the solver now prefers to spread a day's minutes
+                # across people rather than pile >12h on one.
+                day_over = self.model.NewIntVar(0, 1440, f'daycap_{emp.id[:4]}_{i}')
+                self.model.Add(day_vars[i] - day_over <= 720)
+                # Tier 0: Hard Legal Compliance (100,000,000 penalty per minute)
+                self._hard_legal_slack_terms.append(100_000_000 * day_over)
+
                 # Link work_day_vars
                 # Link work_day_vars (Precision Fix #7: mark BOTH days for cross-midnight)
                 for s in self.data.shifts:
@@ -1341,19 +1408,72 @@ class ScheduleModelBuilder:
                         slack = self.model.NewIntVar(0, 100_000, f'slack_h_{emp.id[:4]}_{i}')
                         self.model.Add(S[i] - start_val - slack <= limit_mins)
                         # Tier 0: Hard Legal Compliance (100,000,000 penalty)
-                        self._workload_slack_terms.append(100_000_000 * slack)
+                        self._hard_legal_slack_terms.append(100_000_000 * slack)
             
-            # 4. Consecutive Days Limit (Precision Fix #2: Move to SOFT)
-            max_streak = 7
-            if emp.employment_type == 'PT' and emp.is_flexible: max_streak = 10
-            elif emp.employment_type == 'Casual': max_streak = 12
-                
+            # 4. Consecutive-days streak — FLEXIBLE PART-TIME ONLY (cl. 35.3(g),
+            #    max 10). FT/PT/casual consecutive-day density is governed solely
+            #    by the 20-in-28 cap (4b) below; the EBA gives no basis for an
+            #    arbitrary standard streak cap, and the old 7/casual-12 caps
+            #    disagreed with the V8 auditor (audit H2). Policy locked 2026-07-05.
+            if emp.employment_type == 'PT' and emp.is_flexible:
+                max_streak = 10
+                for i in range(num_calendar_days):
+                    if i >= max_streak:
+                        streak_over = self.model.NewIntVar(0, 7, f'streak_{emp.id[:4]}_{i}')
+                        self.model.Add(sum(work_day_vars[i-max_streak:i+1]) - streak_over <= max_streak)
+                        # Tier 0: Hard Legal Compliance (100,000,000 penalty)
+                        self._hard_legal_slack_terms.append(100_000_000 * streak_over)
+
+            # 4b. 20-in-28 workday cap (cl. 35.1(e)/35.2(f)/35.3(h)/35.4(e)).
+            #     Previously named in this method's docstring but NEVER enforced
+            #     (audit C2) — the solver could emit 21+/28 rosters that the V8
+            #     auditor then blocked. Rolling 28-day LOOKBACK from each day so
+            #     the cap fires at any horizon length (e.g. 21-in-21), exactly
+            #     matching the V8 auditor's per-end-day 28-day window. `lo` is
+            #     clipped to the horizon start; only windows that can exceed 20
+            #     days (i >= 20) get a constraint, to avoid trivial variables.
             for i in range(num_calendar_days):
-                if i >= max_streak:
-                    streak_over = self.model.NewIntVar(0, 7, f'streak_{emp.id[:4]}_{i}')
-                    self.model.Add(sum(work_day_vars[i-max_streak:i+1]) - streak_over <= max_streak)
+                if i >= 20:
+                    lo = max(0, i - 27)
+                    wd_over = self.model.NewIntVar(0, 8, f'wd28_{emp.id[:4]}_{i}')
+                    self.model.Add(sum(work_day_vars[lo:i+1]) - wd_over <= 20)
                     # Tier 0: Hard Legal Compliance (100,000,000 penalty)
-                    self._workload_slack_terms.append(100_000_000 * streak_over)
+                    self._hard_legal_slack_terms.append(100_000_000 * wd_over)
+
+            # 4c. Casual max-2-engagements/day (ICC EBA cl. 35.4(f)) — HARD legal
+            #     cap, tiered ABOVE coverage. A casual may work at most TWO
+            #     separate engagements (shifts) that START on any one calendar
+            #     day. Training shifts are exempt and never counted (policy
+            #     locked 2026-07-05). Counted by START day (not occupancy) so
+            #     the solver agrees with the V8 auditor's maxDailyEngagementsRule
+            #     (which groups on shiftStartDate). Only days with >=1 assignable
+            #     shift AND a possible total >2 get a constraint.
+            if emp.employment_type == 'Casual':
+                eng_new: dict[int, list] = {}
+                eng_existing: dict[int, int] = {}
+                for s in self.data.shifts:
+                    if getattr(s, 'is_training', False):
+                        continue  # training exempt
+                    var = self._x.get((emp.id, s.id))
+                    if var is None:
+                        continue
+                    di = (shift_window(s)[0] // 1440) - d0_abs
+                    if 0 <= di < num_calendar_days:
+                        eng_new.setdefault(di, []).append(var)
+                for ex in emp.existing_shifts:
+                    di = (shift_window(ex)[0] // 1440) - d0_abs
+                    if 0 <= di < num_calendar_days:
+                        eng_existing[di] = eng_existing.get(di, 0) + 1
+                for di, vars_on_day in eng_new.items():
+                    existing_ct = eng_existing.get(di, 0)
+                    if len(vars_on_day) + existing_ct <= 2:
+                        continue  # cannot exceed 2 even if all are assigned
+                    engage_over = self.model.NewIntVar(
+                        0, len(vars_on_day) + existing_ct, f'eng2_{emp.id[:4]}_{di}')
+                    self.model.Add(
+                        cp_model.LinearExpr.Sum(vars_on_day) + existing_ct - engage_over <= 2)
+                    # Tier 0: Hard Legal Compliance (100,000,000 penalty)
+                    self._hard_legal_slack_terms.append(100_000_000 * engage_over)
 
             # 5. Student Visa Constraint (HC-12: Rolling 14 days, Dynamic Limit)
             if emp.is_student:
@@ -1364,7 +1484,7 @@ class ScheduleModelBuilder:
                         visa_slack = self.model.NewIntVar(0, 10000, f'visa_{emp.id[:4]}_{i}')
                         self.model.Add(S[i] - start_val - visa_slack <= emp.visa_limit)
                         # Tier 0: Hard Legal Compliance (100,000,000 penalty)
-                        self._workload_slack_terms.append(100_000_000 * visa_slack)
+                        self._hard_legal_slack_terms.append(100_000_000 * visa_slack)
 
             # 6. Anti-Hogging Constraint (Precision Fix #7: Ensure Slack)
             total_demand_mins = sum(s.duration_minutes for s in self.data.shifts)
@@ -1445,7 +1565,7 @@ class ScheduleModelBuilder:
                 # Tier 0: Hard Legal Compliance (100,000,000 penalty per minute).
                 # Collected here and added to the objective by the SC-8 loop in
                 # _add_objective(), which drains every _workload_slack_terms entry.
-                self._workload_slack_terms.append(100_000_000 * spread_slack)
+                self._hard_legal_slack_terms.append(100_000_000 * spread_slack)
 
     # -- HC-6: Time-Coupled Capacity --------------------------------------------
 
@@ -1959,10 +2079,15 @@ class ScheduleModelBuilder:
                         _t(penalty * self._x[emp.id, s.id], 'longitudinal_fairness')
 
         # -- SC-8: Workload Slack Penalties --------------------------------
-        # Spread, visa, streak, and min-contract slack vars were collected
-        # in _workload_slack_terms during constraint construction; without
-        # this loop they would never make it into the objective and the
-        # "softened" hard constraints would silently be free to violate.
+        # Slack vars collected during constraint construction; without this
+        # loop they would never enter the objective and the "softened" hard
+        # constraints would silently be free to violate. Two buckets:
+        #   'legal_hard' — 12h/day, 152h/28d, 20-in-28, flexi streak, student
+        #                  visa, spread, casual max-2/day. Tiered ABOVE coverage.
+        #   'other'      — availability max, contract min, anti-hogging. Soft;
+        #                  tiered BELOW coverage (they yield to coverage).
+        for slack_term in self._hard_legal_slack_terms:
+            _t(slack_term, 'legal_hard')
         for slack_term in self._workload_slack_terms:
             _t(slack_term, 'other')
 
@@ -1990,7 +2115,29 @@ class ScheduleModelBuilder:
             exprs = [t for n in names for t in cat[n]]
             return cp_model.LinearExpr.Sum(exprs) if exprs else 0
 
-        coverage_t = _cat_sum(['coverage', 'relaxed_violations', 'other'])
+        # CRIT-1/CRIT-2 fix + policy (2026-07-05): the objective is a strict
+        # lexicographic ladder. Previously coverage and ALL workload slacks
+        # ('other') shared ONE weighted-sum tier; because a legal slack is 1e8
+        # PER MINUTE while an uncovered shift is only ~1e8 total, the solver
+        # could buy down legal slack by LEAVING SHIFTS UNCOVERED (once the caps
+        # actually computed — CRIT-1). The tiers are now fully separated:
+        #
+        #   1. legal_hard  — HARD legal caps. ABOVE coverage: the solver never
+        #                    auto-generates an illegal roster; an unavoidable
+        #                    breach is left uncovered for escalation.
+        #   2. coverage    — uncovered shifts + relaxed-constraint violations.
+        #   3. soft        — availability max, contract min, anti-hog. These
+        #                    YIELD to coverage (cover past someone's stated max
+        #                    if that's the only way to staff a shift).
+        #   4. guardrail   — fatigue, fairness/balance, availability & quality.
+        #   5. cost        — labour $, the residual tie-breaker.
+        #
+        # Each tier is locked at its optimum before the next (see _solve), so a
+        # lawful roster is never traded for coverage/cost/wellbeing, coverage is
+        # never traded for anything below it, and so on down the ladder.
+        legal_hard_t = _cat_sum(['legal_hard'])
+        coverage_t = _cat_sum(['coverage', 'relaxed_violations'])
+        soft_t = _cat_sum(['other'])
         guardrail_t = _cat_sum(['fatigue', 'fairness', 'undesirable_balance',
                                 'longitudinal_fairness', 'availability',
                                 'employment_mix', 'continuity'])
@@ -1998,19 +2145,24 @@ class ScheduleModelBuilder:
         fairness_only_t = _cat_sum(['fairness', 'undesirable_balance',
                                     'longitudinal_fairness'])
 
-        # tier_profile selects the priority order. 'balanced' is the live policy;
-        # the others exist only to generate Pareto "what-if" alternatives (B4).
+        # tier_profile selects the priority order of the LOWER tiers only;
+        # legal_hard » coverage » soft is invariant across all profiles (a
+        # lawful, covered, availability-respecting roster is non-negotiable).
+        # 'cheapest' / 'fairest' exist only to generate Pareto alternatives (B4).
         if self.tier_profile == 'cheapest':
-            # Cost beats wellbeing → the cheapest coverage-feasible roster.
+            # Cost beats wellbeing → the cheapest lawful, covered roster.
             self._objective_tiers = [
-                ('coverage', coverage_t), ('cost', cost_t), ('guardrail', guardrail_t)]
+                ('legal', legal_hard_t), ('coverage', coverage_t),
+                ('soft', soft_t), ('cost', cost_t), ('guardrail', guardrail_t)]
         elif self.tier_profile == 'fairest':
-            # Push balance hardest (fairness as the sole tier-2 objective).
+            # Push balance hardest (fairness as the sole wellbeing objective).
             self._objective_tiers = [
-                ('coverage', coverage_t), ('guardrail', fairness_only_t), ('cost', cost_t)]
+                ('legal', legal_hard_t), ('coverage', coverage_t),
+                ('soft', soft_t), ('guardrail', fairness_only_t), ('cost', cost_t)]
         else:  # 'balanced' — the live single-mode policy
             self._objective_tiers = [
-                ('coverage', coverage_t), ('guardrail', guardrail_t), ('cost', cost_t)]
+                ('legal', legal_hard_t), ('coverage', coverage_t),
+                ('soft', soft_t), ('guardrail', guardrail_t), ('cost', cost_t)]
         # NOTE: the objective itself is set per-tier inside _solve(); we do not
         # call self.model.Minimize() here.
 
@@ -2149,12 +2301,20 @@ class ScheduleModelBuilder:
         # the regression suite's reproducibility — is preserved. The weights sum
         # to 1.0, so the total across tiers stays <= params.max_time_seconds and
         # the TS client's `solverBudgetSec*1000 + 30_000` timeout is never blown.
-        FIRST_TIER_FRACTION = 0.7  # tier-1 gets 70% of the budget
+        # CRIT-2: coverage is no longer tier-1 (the hard-legal tier now precedes
+        # it), but legal-slack minimisation is cheap (drive slack to its floor),
+        # so we hand the COVERAGE tier the bulk and give the cheap tiers around
+        # it a thin slice. Located by name so it survives tier-order changes;
+        # coverage absorbs the remainder, guaranteeing it the majority share.
         if n_tiers <= 1:
             tier_weights = [1.0]
         else:
-            rest = (1.0 - FIRST_TIER_FRACTION) / (n_tiers - 1)
-            tier_weights = [FIRST_TIER_FRACTION] + [rest] * (n_tiers - 1)
+            cov_idx = next((i for i, (name, _) in enumerate(tiers)
+                            if name == 'coverage'), 0)
+            PRE, AFTER = 0.1, 0.1  # cheap tiers before/after coverage
+            n_after = n_tiers - cov_idx - 1
+            tier_weights = [PRE if i < cov_idx else AFTER for i in range(n_tiers)]
+            tier_weights[cov_idx] = max(0.05, 1.0 - PRE * cov_idx - AFTER * n_after)
 
         status_code = cp_model.UNKNOWN
         self._tier_values: dict[str, float] = {}

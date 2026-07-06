@@ -33,6 +33,7 @@ import {
 import { Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/modules/core/lib/utils';
+import { isPublicHoliday, getPublicHolidayName } from '@/modules/core/lib/holidays';
 import { AvailabilitySlot } from '../../model/availability.types';
 import { AssignedShiftInterval } from '../../api/availability-view.api';
 import { Skeleton } from '@/modules/core/ui/primitives/skeleton';
@@ -187,8 +188,8 @@ export function CalendarPane({
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentMonth);
     const monthEnd   = endOfMonth(currentMonth);
-    const gridStart  = startOfWeek(monthStart, { weekStartsOn: 0 });
-    const gridEnd    = endOfWeek(monthEnd, { weekStartsOn: 0 });
+    const gridStart  = startOfWeek(monthStart, { weekStartsOn: 1 });
+    const gridEnd    = endOfWeek(monthEnd, { weekStartsOn: 1 });
     return eachDayOfInterval({ start: gridStart, end: gridEnd });
   }, [currentMonth]);
 
@@ -210,7 +211,7 @@ export function CalendarPane({
 
       {/* Weekday Headers */}
       <div className="grid grid-cols-7 gap-1 mb-2">
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
           <div
             key={day}
             className="h-8 flex items-center justify-center text-xs font-medium text-muted-foreground"
@@ -230,6 +231,7 @@ export function CalendarPane({
           const isCurrentMonth = isSameMonth(date, currentMonth);
           const isTodayDate  = isToday(date);
           const isLocked     = state === 'locked';
+          const holiday      = isPublicHoliday(date);
 
           return (
             <div
@@ -240,7 +242,13 @@ export function CalendarPane({
                 !isCurrentMonth && 'opacity-40',
                 isTodayDate && 'ring-2 ring-blue-500 ring-offset-1'
               )}
-              title={isLocked ? buildLockTooltip(dayAssigned) : undefined}
+              title={
+                isLocked
+                  ? buildLockTooltip(dayAssigned)
+                  : holiday
+                  ? getPublicHolidayName(date) ?? undefined
+                  : undefined
+              }
             >
               {/* Date Number */}
               <div
@@ -250,6 +258,8 @@ export function CalendarPane({
                     ? 'text-blue-600 dark:text-blue-400'
                     : isLocked
                     ? 'text-purple-700 dark:text-purple-200'
+                    : holiday
+                    ? 'text-amber-500 dark:text-amber-400 font-semibold'
                     : 'text-foreground'
                 )}
               >

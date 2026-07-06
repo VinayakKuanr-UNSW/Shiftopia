@@ -50,9 +50,12 @@ def test_two_shifts_same_day_one_employee_assigns_at_least_one():
     employees = [make_employee("e1")]
     out = solve(shifts, employees)
     assert out.status in ("OPTIMAL", "FEASIBLE")
-    # Same employee, gap = 30m < 600m rest → solver must reject one of the
-    # two; assigning both is a rest-gap violation.
-    assert len(out.assignments) == 1
+    # Two NON-overlapping shifts on the SAME day, 30m apart, 8h15m total spread
+    # (< 12h). Post-H4 the rest gap (cl. 40) no longer applies within a day, so
+    # this is a legal split-shift structure and BOTH must be assignable to one
+    # employee. (Also still guards the spread-of-hours bug: a regression there
+    # would return 0 assignments, not 2.)
+    assert len(out.assignments) == 2
 
 
 def test_overlapping_shifts_distribute_across_employees():
@@ -308,30 +311,43 @@ def test_multi_week_horizon_solves_and_assigns():
     assert len(out.assignments) == len(shifts)
 
 
-def test_twelve_hour_plus_day_is_assignable():
-    """Regression: day_vars were bounded at 720 (12h). A single 13h shift made
-    `day_vars[i] == sum(...)` infeasible, so the solver left it uncovered (or
-    the whole day collapsed). A 13h shift must now be assignable."""
+def test_single_over_12h_shift_is_refused_not_infeasible():
+    """A single shift whose OWN duration exceeds the 12h/day cap (cl. 35) is an
+    UNAVOIDABLE legal breach: no assignment can make it lawful. Under the locked
+    policy (hard legal caps sit ABOVE coverage — 2026-07-05) the solver REFUSES
+    it, leaving it uncovered for manual escalation rather than auto-generating an
+    illegal roster.
+
+    Regression guard: the model must stay FEASIBLE. The old hard 720m day bound
+    made `day_vars[i] == sum(...)` INFEASIBLE and collapsed the whole day; the
+    cap is now a Tier-0 soft slack, so the run solves cleanly and simply reports
+    the shift as uncovered (with a binding-constraint reason)."""
     shifts = [make_shift("s1", "2026-05-15", "08:00", "21:00")]  # 13h
     employees = [make_employee("e1")]
     out = solve(shifts, employees)
-    assert out.status in ("OPTIMAL", "FEASIBLE")
-    assert len(out.assignments) == 1
+    assert out.status in ("OPTIMAL", "FEASIBLE")   # feasible, not a crash
+    assert len(out.assignments) == 0               # refused: illegal engagement
+    assert out.unassigned_shift_ids == ["s1"]
 
 
 # ---------------------------------------------------------------------------
 # HC-4 maximum weekly hours (audit — was never enforced)
 # ---------------------------------------------------------------------------
 
-def test_max_weekly_hours_softly_enforced():
-    """Regression: HC-4 (weekly max) was documented as a hard constraint but
-    never added to the model — only the `w` var's loose upper bound capped it.
-    It is now a Tier-0 softened cap. With a single employee whose max is 480m
-    (8h) and 1200m (20h) of *low-priority* coverable work, the solver should
-    prefer to leave the excess uncovered rather than blow ~14h past the cap,
-    because a priority-1 uncovered shift (1e8) is cheaper than the Tier-0
-    max-hours penalty (1e8/min) for every minute over."""
-    # Three non-overlapping 8h shifts on different days; one employee, 8h cap.
+def test_max_weekly_availability_yields_to_coverage():
+    """Policy (2026-07-05): `max_weekly_minutes` is an AVAILABILITY ceiling, not
+    a legal cap, so it sits BELOW coverage in the lexicographic ladder. When the
+    ONLY way to staff a shift is to roster someone past their stated weekly max,
+    the solver DOES so and surfaces the overage as a soft penalty for a human to
+    review — an unstaffed shift is worse than an availability breach.
+
+    Previously coverage and this slack shared one weighted-sum tier, and because
+    the slack was 1e8/min it dwarfed the 1e8/shift coverage reward, so the solver
+    left shifts UNCOVERED to respect an availability ceiling — the wrong trade.
+    Contrast the LEGAL caps (12h/day, 20-in-28, …) which sit ABOVE coverage and
+    are never breached (see test_single_over_12h_shift_is_refused_not_infeasible
+    and the avoidable-breach spread test)."""
+    # Three non-overlapping 8h shifts on different days; one casual, 8h/wk max.
     shifts = [
         make_shift("s1", "2026-05-15", "09:00", "17:00", priority=1),
         make_shift("s2", "2026-05-16", "09:00", "17:00", priority=1),
@@ -341,12 +357,11 @@ def test_max_weekly_hours_softly_enforced():
                                min_contract_minutes=0, max_weekly_minutes=480)]
     out = solve(shifts, employees)
     assert out.status in ("OPTIMAL", "FEASIBLE")
-    # At most one 8h (480m) shift fits under the cap; the Tier-0 penalty makes
-    # exceeding it by an entire extra shift more expensive than leaving it
-    # uncovered. Pre-fix (no cap), the solver would happily assign all three.
-    assert len(out.assignments) <= 1, (
-        f"HC-4 max-hours should constrain to ~1 shift, got {len(out.assignments)}. "
-        f"The weekly-max cap has regressed to unenforced."
+    # Availability yields to coverage: all three are staffed even though that is
+    # 24h against a stated 8h max. Pre-fix, only ~1 would have been assigned.
+    assert len(out.assignments) == 3, (
+        f"availability should yield to coverage, got {len(out.assignments)} "
+        f"assignments. The max-weekly ceiling has wrongly out-ranked coverage."
     )
 
 
@@ -1010,3 +1025,142 @@ def test_decomposition_single_week_falls_back_to_monolithic():
     out = _solve_decomposed(shifts, emps)
     assert out.status in ("OPTIMAL", "FEASIBLE")
     assert len(out.assignments) == 2 and not out.unassigned_shift_ids
+
+
+# ---------------------------------------------------------------------------
+# 20-in-28 workday cap — audit C2 (was documented but never enforced)
+# ---------------------------------------------------------------------------
+
+from datetime import date as _date, timedelta as _timedelta
+
+
+def _consecutive_dates(start: str, n: int) -> list[str]:
+    y, m, d = map(int, start.split("-"))
+    base = _date(y, m, d)
+    return [(base + _timedelta(days=i)).isoformat() for i in range(n)]
+
+
+def test_twenty_in_28_workday_cap_enforced():
+    """Audit C2: the 20-days-in-28 cap (cl. 35.1(e)/35.2(f)/35.4(e)) was named
+    in _add_workload_limits' docstring but never enforced, so the solver could
+    emit 21+/28 rosters that the V8 auditor then blocked.
+
+    Isolation: emp1 is far cheaper than emp2, so cost pressure (which outranks
+    fairness) would otherwise pile all 21 consecutive days on emp1. Coverage is
+    satisfiable within the cap (20 + 1), so the Tier-0 20-in-28 guardrail must
+    hold emp1 at 20 and push the 21st day to emp2 — with zero shifts left
+    uncovered."""
+    dates = _consecutive_dates("2026-05-01", 21)
+    shifts = [make_shift(f"s{i}", d, "10:00", "14:00") for i, d in enumerate(dates)]
+    emps = [
+        make_employee("e1", employment_type="Casual", hourly_rate=20.0, max_weekly_minutes=100_000),
+        make_employee("e2", employment_type="Casual", hourly_rate=60.0, max_weekly_minutes=100_000),
+    ]
+    out = solve(shifts, emps)
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert len(out.unassigned_shift_ids) == 0  # coverage achievable within the cap
+
+    from collections import Counter
+    per_emp = Counter(a.employee_id for a in out.assignments)
+    assert per_emp["e1"] <= 20            # the cap binds the cheap worker
+    assert per_emp.get("e2", 0) >= 1      # overflow forced onto emp2
+
+
+# ---------------------------------------------------------------------------
+# H4 — legal same-day split shifts must be assignable (rest gap is cross-day)
+# ---------------------------------------------------------------------------
+
+def test_split_shift_same_day_pair_assignable_to_one():
+    """Audit H4: a part-timer's two same-day engagements with a <=3h gap (a
+    legal split shift, cl. 39) and a total spread <= 12h must both be assignable
+    to ONE employee. The solver previously refused this because rest-gap padding
+    was applied within a day; rest gap (cl. 40) is now cross-day only."""
+    shifts = [
+        make_shift("a", "2026-05-15", "09:00", "12:00"),   # 3h
+        make_shift("b", "2026-05-15", "14:00", "17:00"),   # 3h, 2h gap, spread 8h
+    ]
+    employees = [make_employee("e1", employment_type="PT")]
+    out = solve(shifts, employees)
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert len(out.assignments) == 2
+    assert {a.employee_id for a in out.assignments} == {"e1"}
+
+
+# ---------------------------------------------------------------------------
+# M2 — 12h/day cap is SOFT (must not reintroduce the old infeasibility)
+# ---------------------------------------------------------------------------
+
+def test_daily_12h_cap_spreads_avoidable_breach_without_dropping_coverage():
+    """Audit M2 (re-scoped after CRIT-1/CRIT-2): the 12h/day cap is a HARD legal
+    tier ABOVE coverage, but it must shape assignments WITHOUT sacrificing
+    coverage whenever a >12h day is AVOIDABLE. Two 8h shifts on the SAME day
+    (16h if stacked on one person) and two employees: the solver must spread
+    them so neither exceeds 12h AND both shifts stay covered.
+
+    This is the meaningful guarantee now that the cap actually computes (CRIT-1)
+    and out-ranks coverage only for UNAVOIDABLE breaches (CRIT-2): avoidable
+    breaches are engineered away by the assignment, not by dropping shifts."""
+    shifts = [
+        make_shift("a", "2026-05-20", "06:00", "14:00"),   # 8h
+        make_shift("b", "2026-05-20", "14:00", "22:00"),   # 8h — same day
+    ]
+    employees = [make_employee("x", employment_type="Casual"),
+                 make_employee("y", employment_type="Casual")]
+    out = solve(shifts, employees)
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert len(out.assignments) == 2                            # both covered
+    assert len({a.employee_id for a in out.assignments}) == 2   # spread, neither >12h
+
+
+# ---------------------------------------------------------------------------
+# Casual max-2-engagements/day — ICC EBA cl. 35.4(f) (hard legal, above coverage)
+# Mirrors the V8 auditor's maxDailyEngagementsRule.
+# ---------------------------------------------------------------------------
+
+def _three_same_day_casual_shifts():
+    # Three non-overlapping 3h engagements on one weekday (spread 08:00–19:00 =
+    # 11h < 12h; each == the 3h casual minimum so none is pre-filtered).
+    return [
+        make_shift("m1", "2026-05-15", "08:00", "11:00"),
+        make_shift("m2", "2026-05-15", "12:00", "15:00"),
+        make_shift("m3", "2026-05-15", "16:00", "19:00"),
+    ]
+
+
+def test_casual_max_two_engagements_avoidable_spreads():
+    """cl. 35.4(f): a casual may work at most TWO engagements per day. With THREE
+    same-day shifts and TWO casuals, the cap is avoidable — the solver must
+    spread so NO casual gets a third engagement, and all three stay covered."""
+    employees = [make_employee("c1", employment_type="Casual"),
+                 make_employee("c2", employment_type="Casual")]
+    out = solve(_three_same_day_casual_shifts(), employees)
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert len(out.assignments) == 3  # coverage preserved (breach was avoidable)
+    from collections import Counter
+    per_emp = Counter(a.employee_id for a in out.assignments)
+    assert max(per_emp.values()) <= 2  # no casual exceeds two engagements/day
+
+
+def test_casual_third_same_day_engagement_refused_when_only_casual():
+    """When the ONLY way to cover a 3rd same-day casual shift is to breach the
+    2-per-day cap (a single eligible casual), the hard legal cap out-ranks
+    coverage: exactly two are assigned and the third is left uncovered."""
+    out = solve(_three_same_day_casual_shifts(),
+                [make_employee("c1", employment_type="Casual")])
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert len(out.assignments) == 2          # capped at two engagements
+    assert len(out.unassigned_shift_ids) == 1  # third refused, not force-assigned
+
+
+def test_casual_training_shift_exempt_from_two_per_day():
+    """Training engagements are exempt from the 2-per-day count (policy
+    2026-07-05): two rostered casual shifts PLUS a training shift on the same
+    day are all assignable to one casual — the training shift doesn't count."""
+    shifts = [
+        make_shift("w1", "2026-05-15", "08:00", "11:00"),
+        make_shift("w2", "2026-05-15", "12:00", "15:00"),
+        make_shift("t1", "2026-05-15", "16:00", "19:00", is_training=True),
+    ]
+    out = solve(shifts, [make_employee("c1", employment_type="Casual")])
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert len(out.assignments) == 3  # training shift is exempt from the cap

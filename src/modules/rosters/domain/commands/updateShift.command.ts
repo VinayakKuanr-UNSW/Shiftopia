@@ -41,7 +41,9 @@ export async function executeUpdateShift(
     if (updates.startTime !== undefined) updateData.start_time = updates.startTime;
     if (updates.endTime !== undefined) updateData.end_time = updates.endTime;
     if (updates.roleId !== undefined) updateData.role_id = updates.roleId;
-    if (updates.remunerationLevelId !== undefined) updateData.remuneration_level_id = updates.remunerationLevelId;
+    if (updates.remunerationLevelId !== undefined) {
+        updateData.remuneration_level = updates.remunerationLevelId ? parseInt(updates.remunerationLevelId) : null;
+    }
     if (updates.shiftGroupId !== undefined) updateData.shift_group_id = updates.shiftGroupId;
     if (updates.shiftSubgroupId !== undefined) updateData.shift_subgroup_id = updates.shiftSubgroupId;
     if (updates.assignedEmployeeId !== undefined) updateData.assigned_employee_id = updates.assignedEmployeeId;

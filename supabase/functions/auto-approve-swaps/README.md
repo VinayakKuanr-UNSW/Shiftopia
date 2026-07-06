@@ -2,7 +2,7 @@
 
 Drains `swap_review_queue` and decides each MANAGER_PENDING swap: **AUTO_APPROVE / MANUAL_REVIEW / AUTO_REJECT**. The decision *brain* runs here (TypeScript); the *commit* is owned by the DB (`sm_swap_auto_decide` → the `sm_apply_shift_op` gateway). Ships **shadow-first** and is **dormant** until an org opts in.
 
-> Status: **NOT deployed** (but now deployable). Code + unit tests only. The DB side (tables, trigger, RPCs) is already live in prod (migrations `20260623140946`, `20260623143908`), but no org has an enabled policy, so the queue is empty and nothing runs.
+> Status: **DEPLOYED & RUNNING (shadow)** as of 2026-06-25. The Edge Function is ACTIVE in prod, invoked every minute by pg_cron job `auto-approve-swaps-tick` (worker secret from Vault). The DB side (tables, trigger, RPCs) is live (migrations `20260623140946`, `20260623143908`). The default org has one policy row with `enabled=true, shadow_mode=true` — swaps enqueue and the bot logs decisions, but nothing is auto-acted until `shadow_mode=false`. Managers configure the policy and review the decision feed from the **Auto-Approve control on the Swap Requests page** (`AutoApproveSwapsControl` via `swapPolicy.api.ts`).
 
 ---
 

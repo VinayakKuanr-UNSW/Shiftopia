@@ -142,9 +142,13 @@ export function checkBulkRestGaps(
 
     for (const segment of segments) {
         if (prevSegment !== null) {
-            // F3: Same-calendar-day gaps are now evaluated (removed the earlier
-            // same-day skip). A 2h break between two intraday shifts is a
-            // rest-gap violation just like a cross-day gap.
+            // Clause 40 (Breaks Between Shifts) applies only BETWEEN calendar
+            // days ("the one day … the next day"). Two engagements that START
+            // on the same calendar day are a split-shift (clause 39) / spread
+            // concern, not a rest-gap one, so they are skipped here. (Reverses
+            // the earlier "F3" behaviour that flagged intraday gaps as rest
+            // violations and would have blocked legitimate split shifts.)
+            const isSameStartDay = prevSegment.originalDate === segment.originalDate;
 
             // Calculate gap between prevSegment.end and segment.start
             const gapMinutes = differenceInMinutes(segment.startDateTime, prevSegment.endDateTime);
@@ -153,11 +157,11 @@ export function checkBulkRestGaps(
             // Overlapping segments produce a negative or zero gap — handled by
             // NO_OVERLAP; for rest-gap purposes we treat them as 0.
             const effectiveGap = Math.max(0, gapHours);
-            const isViolation = effectiveGap < minRestHours;
+            const isViolation = !isSameStartDay && effectiveGap < minRestHours;
 
             // Update rest impacts for candidates
             // Previous shift's "after" gap
-            if (candidateIds.has(prevSegment.shiftId)) {
+            if (!isSameStartDay && candidateIds.has(prevSegment.shiftId)) {
                 const impact = restImpacts.get(prevSegment.shiftId)!;
                 // Only update if this is the first "after" gap we encounter for this shift
                 if (impact.rest_after_hours === null) {
@@ -167,7 +171,7 @@ export function checkBulkRestGaps(
             }
 
             // Current shift's "before" gap
-            if (candidateIds.has(segment.shiftId)) {
+            if (!isSameStartDay && candidateIds.has(segment.shiftId)) {
                 const impact = restImpacts.get(segment.shiftId)!;
                 // Only update if this is the first "before" gap we encounter for this shift
                 if (impact.rest_before_hours === null) {

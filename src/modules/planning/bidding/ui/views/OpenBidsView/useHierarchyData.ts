@@ -22,9 +22,9 @@ export function useHierarchyData(): UseHierarchyDataReturn {
       setIsLoading(true);
       try {
         const [orgsResult, deptsResult, subDeptsResult] = await Promise.all([
-          supabase.from('organizations').select('id, name'),
-          supabase.from('departments').select('id, name, organization_id'),
-          supabase.from('sub_departments').select('id, name, department_id'),
+          (supabase as any).schema('hr').from('organizations').select('id, name'),
+          (supabase as any).schema('hr').from('departments').select('id, name, organization_id'),
+          (supabase as any).schema('hr').from('subdepartments').select('id, name, department_id'),
         ]);
 
         if (orgsResult.data) setOrganizations(orgsResult.data as any);

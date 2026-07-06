@@ -44,6 +44,15 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 import { evaluateEligibility } from './eligibility.ts';
 import { decide } from './decision-matrix.ts';
+import {
+  buildSolverResult,
+  normalizeCompliance,
+  toSolverSignals,
+  toSolverSummary,
+  type ComplianceResult,
+  type PartyResult,
+} from './solver-fold.ts';
+import { countAutoApprovals, exceedsWeeklyCap, pairCount } from './abuse-logic.ts';
 import type {
   AutoDecideResult,
   AutoDecidePayload,
@@ -56,7 +65,6 @@ import type {
   QueueRow,
   RosterEntry,
   SolverSignals,
-  SolverSummary,
   SwapPolicy,
   WorkerSummary,
 } from './types.ts';
@@ -65,7 +73,7 @@ import type {
 // CONSTANTS
 // =============================================================================
 
-const ENGINE_VERSION = 'auto-approve-swaps@1.0.0'; // stamped on every decision (00 §8)
+const ENGINE_VERSION = 'auto-approve-swaps@1.1.0'; // stamped on every decision (00 §8)
 const POLICY_VERSION_FALLBACK = 1; // only used if a policy row has no version
 
 const ROSTER_WINDOW_DAYS = 30; // ±30d, mirrors validateSwapCompliance (swaps.api.ts:52)
@@ -260,6 +268,16 @@ async function processRow(
         })
       : null;
 
+    // No evaluable party (open giveaway with no counterpart): nothing was
+    // compliance-checked, so the bot must not decide AT ALL — leave the swap
+    // MANAGER_PENDING for a human. (solver-fold would also fold this to
+    // BLOCKING as a belt-and-braces fail-closed default.)
+    if (!partyA && !partyB) {
+      await complete(service, row.id, 'DONE', 'no evaluable party (left for manual review)');
+      summary.done++;
+      return;
+    }
+
     const solverRaw = buildSolverResult(partyA, partyB);
     const solver = toSolverSummary(solverRaw);
     const solverSignals = toSolverSignals(solverRaw);
@@ -439,26 +457,6 @@ async function complete(
 //       violations: string[], warnings: string[], ... }
 // =============================================================================
 
-type ComplianceStatus = 'passed' | 'violated' | 'warned' | 'unavailable';
-
-interface ComplianceResult {
-  status: ComplianceStatus;
-  violations: string[];
-  warnings: string[];
-  // ...other fields (weeklyHours, qualificationViolations, …) are passed through
-  // opaquely; the worker only needs status/violations/warnings.
-}
-
-/** Per-party post-swap compliance verdict, kept in the audited solver_result. */
-interface PartyResult {
-  employee_id: string;
-  received_shift_id: string;
-  excluded_shift_id: string | null;
-  status: ComplianceStatus;
-  violations: string[];
-  warnings: string[];
-}
-
 async function evaluateParty(
   service: SupabaseClient,
   args: {
@@ -530,63 +528,9 @@ async function callEvaluateCompliance(
   return normalizeCompliance(await resp.json());
 }
 
-// deno-lint-ignore no-explicit-any
-function normalizeCompliance(raw: any): ComplianceResult {
-  const status: ComplianceStatus = ['passed', 'violated', 'warned', 'unavailable'].includes(
-    raw?.status,
-  )
-    ? raw.status
-    : 'unavailable';
-  return {
-    status,
-    violations: Array.isArray(raw?.violations) ? raw.violations : [],
-    warnings: Array.isArray(raw?.warnings) ? raw.warnings : [],
-  };
-}
-
-/**
- * Fold the per-party compliance verdicts into the SolverResult shape the
- * decision matrix + audit payload consume.
- *
- * - any party 'violated' OR 'unavailable' (fail-closed) ⇒ feasible=false,
- *   verdict BLOCKING.
- * - any party 'warned' (and none violated) ⇒ feasible=true, verdict WARNING.
- * - both 'passed' ⇒ feasible=true, verdict PASS.
- */
-function buildSolverResult(
-  partyA: PartyResult | null,
-  partyB: PartyResult | null,
-): SolverResultLite {
-  const parties = [partyA, partyB].filter(Boolean) as PartyResult[];
-
-  const anyViolated = parties.some(
-    (p) => p.status === 'violated' || p.status === 'unavailable',
-  );
-  const anyWarned = parties.some((p) => p.status === 'warned');
-
-  const violations = parties
-    .filter((p) => p.status === 'violated' || p.status === 'unavailable')
-    .map((p) => ({
-      employee_id: p.employee_id,
-      status: p.status,
-      messages: p.status === 'unavailable'
-        ? ['compliance engine unavailable (fail-closed)']
-        : p.violations,
-    }));
-
-  const warnings = parties
-    .filter((p) => p.status === 'warned')
-    .map((p) => ({ employee_id: p.employee_id, messages: p.warnings }));
-
-  return {
-    feasible: !anyViolated,
-    verdict: anyViolated ? 'BLOCKING' : anyWarned ? 'WARNING' : 'PASS',
-    partyA,
-    partyB,
-    violations,
-    warnings,
-  };
-}
+// normalizeCompliance / buildSolverResult / toSolverSummary / toSolverSignals
+// live in ./solver-fold.ts (pure, unit-tested) — including the fail-closed
+// rules: unavailable ⇒ BLOCKING, and ZERO evaluated parties ⇒ BLOCKING.
 
 // =============================================================================
 // DATA LOADERS (service role)
@@ -733,7 +677,17 @@ async function checkAbuse(
   const parties = [swap.requester_id, swap.target_id].filter(Boolean) as string[];
   let rateLimited = false;
 
+  // Flatten the joined shift_swaps party columns off each committed decision.
+  // deno-lint-ignore no-explicit-any
+  const toPartyRows = (data: any[]): { requester_id: string | null; target_id: string | null }[] =>
+    data.map((d) => ({
+      requester_id: d?.shift_swaps?.requester_id ?? null,
+      target_id: d?.shift_swaps?.target_id ?? null,
+    }));
+
   // 4.1 Swap farming: committed AUTO_APPROVE count for either party in 7 days.
+  // FAIL-CLOSED: a returned query error (supabase-js does not throw) or a throw
+  // both mean "cannot verify the rate" ⇒ downgrade to review.
   try {
     const since = isoDaysAgo(RATE_LIMIT_WINDOW_DAYS);
     const { data, error } = await service
@@ -742,28 +696,16 @@ async function checkAbuse(
       .eq('decision', 'AUTO_APPROVE')
       .eq('committed', true)
       .gte('created_at', since);
-    if (!error && Array.isArray(data)) {
-      const counts = new Map<string, number>();
-      for (const d of data) {
-        // deno-lint-ignore no-explicit-any
-        const ss = (d as any).shift_swaps;
-        const ids = [ss?.requester_id, ss?.target_id].filter(Boolean) as string[];
-        for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
-      }
-      for (const p of parties) {
-        if ((counts.get(p) ?? 0) >= policy.max_auto_per_employee_per_week) {
-          rateLimited = true;
-          break;
-        }
-      }
-    }
+    if (error || !Array.isArray(data)) throw error ?? new Error('rate-limit query returned no rows array');
+    const counts = countAutoApprovals(toPartyRows(data));
+    rateLimited = exceedsWeeklyCap(counts, parties, policy.max_auto_per_employee_per_week);
   } catch (e) {
-    // Fail-closed for the brake: if we cannot verify the rate, downgrade.
     console.warn('[auto-approve-swaps] rate-limit check failed → downgrade', e);
     rateLimited = true;
   }
 
-  // 4.2 Mutual favoritism: same unordered pair count in 30 days.
+  // 4.2 Mutual favoritism: same unordered pair count in 30 days. Same
+  // fail-closed contract as 4.1.
   if (!rateLimited && swap.target_id) {
     try {
       const pairwiseMax = numFromRules(policy, 'pairwise_max', PAIRWISE_MAX_DEFAULT);
@@ -773,19 +715,9 @@ async function checkAbuse(
         .select('id, committed, created_at, shift_swaps!inner(requester_id, target_id, created_at)')
         .eq('committed', true)
         .gte('created_at', since);
-      if (!error && Array.isArray(data)) {
-        const a = least(swap.requester_id, swap.target_id);
-        const b = greatest(swap.requester_id, swap.target_id);
-        let pairCount = 0;
-        for (const d of data) {
-          // deno-lint-ignore no-explicit-any
-          const ss = (d as any).shift_swaps;
-          if (!ss?.requester_id || !ss?.target_id) continue;
-          if (least(ss.requester_id, ss.target_id) === a && greatest(ss.requester_id, ss.target_id) === b) {
-            pairCount++;
-          }
-        }
-        if (pairCount >= pairwiseMax) rateLimited = true;
+      if (error || !Array.isArray(data)) throw error ?? new Error('pairwise query returned no rows array');
+      if (pairCount(toPartyRows(data), swap.requester_id, swap.target_id) >= pairwiseMax) {
+        rateLimited = true;
       }
     } catch (e) {
       console.warn('[auto-approve-swaps] pairwise check failed → downgrade', e);
@@ -921,50 +853,6 @@ function toRosterEntry(r: RosterRow): RosterEntry {
 }
 
 // =============================================================================
-// SOLVER RESULT SHAPE (local — no vendored v8 types)
-// =============================================================================
-
-interface SolverResultLite {
-  feasible: boolean;
-  verdict: 'PASS' | 'WARNING' | 'BLOCKING';
-  partyA: PartyResult | null;
-  partyB: PartyResult | null;
-  violations: { employee_id: string; status: ComplianceStatus; messages: string[] }[];
-  warnings: { employee_id: string; messages: string[] }[];
-}
-
-function toSolverSummary(r: SolverResultLite): SolverSummary {
-  return {
-    feasible: r.feasible,
-    verdict: r.verdict,
-    blocking: r.violations.map((v) => ({
-      employee_name: v.employee_id,
-      summary: v.messages.join('; ') || v.status,
-    })),
-  };
-}
-
-function toSolverSignals(r: SolverResultLite): SolverSignals {
-  // evaluate-compliance does not split fatigue vs overtime by constraint id; it
-  // returns coarse violations/warnings. Map: a per-party BLOCKING verdict feeds
-  // the always-on fatigue gate as a blocking signal (belt-and-braces — overlap
-  // is also re-checked in the eligibility engine), and any warning feeds the
-  // overtime/warning signals + the confidence penalty.
-  const fatigueBlocking = r.verdict === 'BLOCKING';
-  const warningCount = r.warnings.reduce((n, w) => n + (w.messages.length || 1), 0);
-  const overtimeWarning = warningCount > 0;
-  return {
-    fatigue_blocking: fatigueBlocking,
-    fatigue_hits: fatigueBlocking
-      ? r.violations.flatMap((v) => v.messages.length ? v.messages : [v.status])
-      : [],
-    overtime_warning: overtimeWarning,
-    overtime_hits: r.warnings.flatMap((w) => w.messages),
-    warning_count: warningCount,
-  };
-}
-
-// =============================================================================
 // IDEMPOTENCY KEY — sha256_hex(`${swap}:${reqVer}:${offVer}:${polVer}`) (00 §5)
 //
 // MUST match the DB enqueue trigger byte-for-byte. off_ver=0 for a giveaway.
@@ -1048,13 +936,6 @@ function isoDaysAgo(days: number): string {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - days);
   return d.toISOString();
-}
-
-function least(a: string, b: string): string {
-  return a <= b ? a : b;
-}
-function greatest(a: string, b: string): string {
-  return a >= b ? a : b;
 }
 
 function numFromRules(policy: SwapPolicy, key: string, dflt: number): number {

@@ -91,6 +91,7 @@ const getGroupColor = (groupType: string | null = null, deptName: string = '') =
     if (type === 'convention_centre' || name.includes('convention')) return 'bg-blue-600/10 border-blue-500/20 text-blue-400';
     if (type === 'exhibition_centre' || name.includes('exhibition')) return 'bg-emerald-600/10 border-emerald-500/20 text-emerald-400';
     if (type === 'theatre' || name.includes('theatre')) return 'bg-rose-600/10 border-rose-500/20 text-rose-400';
+    if (type === 'the_cutaway' || name.includes('cutaway')) return 'bg-amber-600/10 border-amber-500/20 text-amber-400';
 
     return 'bg-slate-800/50 border-slate-700 text-slate-300';
 };

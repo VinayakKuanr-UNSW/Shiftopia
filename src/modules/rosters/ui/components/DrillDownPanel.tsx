@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useShiftFormNav } from '@/modules/rosters/hooks/useShiftFormNav';
 import { 
   useShiftsByDateRange,
   useDeleteShift,
@@ -12,22 +12,15 @@ import {
 } from '@/modules/rosters/state/useRosterShifts';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { format } from 'date-fns';
-import { X, Loader2, MoreHorizontal, Edit2, CopyPlus, Trash2, Send, Undo2, Lock } from 'lucide-react';
+import { X, Loader2, Edit2, CopyPlus, Trash2, Send, Undo2, Lock, ChevronLeft } from 'lucide-react';
 import { isSydneyPast, isSydneyStarted } from '@/modules/core/lib/date.utils';
+import { cn } from '@/modules/core/lib/utils';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
 import { SmartShiftCard } from './SmartShiftCard';
-import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
-import { Badge } from '@/modules/core/ui/primitives/badge';
 import { useToast } from '@/modules/core/hooks/use-toast';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/modules/core/ui/primitives/dropdown-menu';
 import { Shift } from '@/modules/rosters/domain/shift.entity';
+import { ShiftHistoryTimeline } from './ShiftHistoryTimeline';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -65,7 +58,10 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
   rosterId,
 }) => {
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const openShiftFormNav = useShiftFormNav();
+
+  // State for showing Shift History inside the central modal
+  const [historyShiftId, setHistoryShiftId] = useState<string | null>(null);
 
   const isPastDate = useMemo(() => {
     if (!date) return false;
@@ -113,17 +109,29 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
   const setSelectedV8ShiftIds = useRosterStore((s) => s.setSelectedV8ShiftIds);
   const clearSelection = useRosterStore((s) => s.clearSelection);
 
-  // Clear selection when drawer opens, closes, or changes date
+  // Clear selection and history mode when modal opens, closes, or changes date
   useEffect(() => {
     clearSelection();
+    setHistoryShiftId(null);
     return () => {
       clearSelection();
+      setHistoryShiftId(null);
     };
   }, [isOpen, date, clearSelection]);
 
+  // Escape closes the modal (standard centered-dialog affordance)
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   const selectableShifts = useMemo(() => {
     return filteredShifts.filter(s => {
-      const startTimeStr = s.start_time || s.startTime || s.start || '00:00';
+      const startTimeStr = s.start_time || (s as any).startTime || (s as any).start || '00:00';
       const hasStarted = isSydneyStarted(s.shift_date, startTimeStr);
       return !isPastDate && !hasStarted;
     });
@@ -178,9 +186,32 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
       .map(s => s.id);
     if (draftIds.length === 0) return;
     try {
-      await bulkPublish.mutateAsync(draftIds);
-      toast({ title: 'Shifts Published', description: `Successfully published ${draftIds.length} shifts.` });
-      clearSelection();
+      // bulkPublishShifts returns a partial result — some shifts are skipped (e.g.
+      // unassigned shifts inside the 4h emergency window, which can't be opened for
+      // bidding). Report the ACTUAL outcome rather than assuming all published.
+      const result = await bulkPublish.mutateAsync(draftIds);
+      const published = result.publishedIds.length;
+      const skipped = [...result.complianceFailed, ...result.dbFailed];
+
+      if (published > 0 && skipped.length === 0) {
+        toast({ title: 'Shifts Published', description: `Successfully published ${published} shift${published === 1 ? '' : 's'}.` });
+        clearSelection();
+      } else if (published > 0) {
+        toast({
+          title: `Published ${published} of ${draftIds.length}`,
+          description: `${skipped.length} skipped — ${skipped[0].reason}`,
+          variant: 'destructive',
+        });
+        clearSelection();
+      } else {
+        // Nothing published — keep the selection so the manager can act (e.g. assign
+        // an employee, then emergency-publish). Surface the first reason.
+        toast({
+          title: 'Nothing Published',
+          description: skipped[0]?.reason ?? 'These shifts can’t be published right now.',
+          variant: 'destructive',
+        });
+      }
     } catch (e: any) {
       toast({ title: 'Publish Failed', description: e.message || 'Error', variant: 'destructive' });
     }
@@ -236,11 +267,17 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
   const confirmDeleteShift = async () => {
     if (!shiftToDelete) return;
     try {
-      await deleteMutation.mutateAsync(shiftToDelete.id);
+      // Pass the version the UI is showing → the gateway rejects the delete with a
+      // VERSION_CONFLICT if another manager changed this shift in the meantime.
+      await deleteMutation.mutateAsync({
+        shiftId: shiftToDelete.id,
+        expectedVersion: shiftToDelete.version,
+      });
       toast({ title: 'Shift Deleted', description: 'The shift was removed successfully.' });
       setDeleteDialogOpen(false);
       setShiftToDelete(null);
     } catch (e: any) {
+      // e.message is concurrency-aware (e.g. "changed by another manager").
       toast({ title: 'Delete Failed', description: e.message || 'Error', variant: 'destructive' });
     }
   };
@@ -260,7 +297,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
         shift_group_id: (shift as any).shift_group_id,
         shift_subgroup_id: (shift as any).shift_subgroup_id || (shift as any).roster_subgroup_id,
         role_id: shift.role_id,
-        remuneration_level_id: shift.remuneration_level_id,
+        remuneration_level: shift.remuneration_level,
         paid_break_minutes: shift.paid_break_minutes,
         unpaid_break_minutes: shift.unpaid_break_minutes,
         timezone: shift.timezone,
@@ -281,8 +318,8 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
 
   const activeRosterId = rosterId || filteredShifts[0]?.roster_id;
 
-  // Navigate to the dedicated full-page Add/Edit Shift route. No modal/Dialog,
-  // so the form's nested dropdowns work without pointer-events conflicts.
+  // Open the Add/Edit Shift wizard as a centered modal OVER the roster grid.
+  // Custom overlay (not a Radix Dialog), so nested dropdowns keep working.
   const openShiftForm = (shift: Shift | null) => {
     if (!organizationId || !departmentId) {
       toast({
@@ -292,72 +329,105 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
       });
       return;
     }
-    navigate('/rosters/shift/new', {
-      state: {
-        editMode: !!shift,
-        existingShift: shift,
-        isTemplateMode: false,
-        context: {
-          mode: 'group',
-          launchSource: shift ? 'edit' : 'grid',
-          date,
-          organizationId,
-          departmentId,
-          subDepartmentId,
-          group_type: groupType,
-          groupName,
-          sub_group_name: subGroupName,
-          subGroupName,
-          rosterId: activeRosterId,
-        },
+    openShiftFormNav({
+      editMode: !!shift,
+      existingShift: shift,
+      isTemplateMode: false,
+      context: {
+        mode: 'group',
+        launchSource: shift ? 'edit' : 'grid',
+        date,
+        organizationId,
+        departmentId,
+        subDepartmentId,
+        group_type: groupType,
+        groupName,
+        sub_group_name: subGroupName,
+        subGroupName,
+        rosterId: activeRosterId,
       },
     });
+    // Close this bucket modal so the wizard isn't stacked underneath it (the
+    // drill-down overlay is z-50; the wizard sits at z-40 so its z-50 dropdowns
+    // stay clickable). The wizard carries its own context, so closing is safe.
+    onClose();
   };
 
   return (
     <>
-      <div 
-        className={`fixed inset-y-0 right-0 w-full md:w-[480px] bg-slate-50 dark:bg-[#090d16] border-l border-slate-200 dark:border-white/10 shadow-2xl z-50 flex flex-col transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      {/* Centered modal overlay — click outside to dismiss */}
+      <div
+        onClick={onClose}
+        aria-hidden={!isOpen}
+        className={`fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/70 backdrop-blur-sm transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       >
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => e.stopPropagation()}
+          className={`relative w-full ${historyShiftId ? 'max-w-6xl' : 'max-w-5xl'} max-h-[90vh] flex flex-col rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#080b12] shadow-2xl overflow-hidden transition-all duration-300 ${isOpen ? 'scale-100 opacity-100 translate-y-0' : 'scale-95 opacity-0 translate-y-3'}`}
+        >
         <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-white/10 bg-slate-100/50 dark:bg-[#111726]/50">
-          <div>
-            <h2 className="text-lg font-bold">{groupName} {subGroupName ? ` - ${subGroupName}` : ''}</h2>
-            <p className="text-sm text-muted-foreground">{displayDate}</p>
+          <div className="flex items-center gap-3">
+            {historyShiftId ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setHistoryShiftId(null)}
+                className="rounded-full h-8 w-8 hover:bg-slate-200 dark:hover:bg-white/10"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+            ) : null}
+            <div>
+              <h2 className="text-lg font-bold">
+                {historyShiftId ? 'Shift Audit History' : `${groupName}${subGroupName ? ` - ${subGroupName}` : ''}`}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {historyShiftId ? 'Detailed audit log for selected shift' : displayDate}
+              </p>
+            </div>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full">
             <X className="h-5 w-5" />
           </Button>
         </div>
 
-        <div className="p-4 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-slate-50/50 dark:bg-[#0c101c]/50">
-          <div className="text-sm font-medium">
-            {filteredShifts.length} Shift{filteredShifts.length !== 1 ? 's' : ''}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs font-semibold"
-              disabled={selectableShifts.length === 0}
-              onClick={handleSelectAllToggle}
-            >
-              {allSelected ? 'Deselect All' : 'Select All'}
-            </Button>
-            {!isPastDate && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-8"
-                onClick={() => openShiftForm(null)}
+        {!historyShiftId && (
+          <div className="p-4 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-slate-50/50 dark:bg-[#0c101c]/50">
+            <div className="text-sm font-medium">
+              {filteredShifts.length} Shift{filteredShifts.length !== 1 ? 's' : ''}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs font-semibold"
+                disabled={selectableShifts.length === 0}
+                onClick={handleSelectAllToggle}
               >
-                Add Shift
+                {allSelected ? 'Deselect All' : 'Select All'}
               </Button>
-            )}
+              {!isPastDate && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-8"
+                  onClick={() => openShiftForm(null)}
+                >
+                  Add Shift
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
-        <ScrollArea className="flex-1 p-4 bg-slate-100/30 dark:bg-[#080c14]/40">
-          {isLoading ? (
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 bg-slate-100 dark:bg-[#06080e]">
+          {historyShiftId ? (
+            <div className="min-w-0 py-1">
+              <ShiftHistoryTimeline shiftId={historyShiftId} />
+            </div>
+          ) : isLoading ? (
             <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
               <Loader2 className="h-8 w-8 animate-spin mb-4" />
               <p>Loading full shift details...</p>
@@ -367,169 +437,155 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
               <p>No shifts scheduled for this day.</p>
             </div>
           ) : (
-            <div className="space-y-3 pb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start pb-2">
               {filteredShifts.map((shift, idx) => {
-                const startTimeStr = shift.start_time || shift.startTime || shift.start || '00:00';
+                const startTimeStr = shift.start_time || (shift as any).startTime || (shift as any).start || '00:00';
                 const hasStarted = isSydneyStarted(shift.shift_date, startTimeStr);
                 const isPast = isPastDate || hasStarted;
                 const isDraft = shift.lifecycle_status === 'Draft';
                 const isPublished = shift.lifecycle_status === 'Published';
                 
-                const menu = (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full bg-white/10 hover:bg-white/30 text-white border-0 shadow-none hover:text-white pointer-events-auto">
-                        <MoreHorizontal className="h-3.5 w-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56 bg-popover/95 backdrop-blur-xl border-border/50 shadow-2xl z-[100]">
-                      {isDraft && (
-                        hasStarted ? (
-                          <DropdownMenuItem disabled className="text-muted-foreground/50 cursor-not-allowed">
-                            <Lock className="h-4 w-4 mr-2" />
-                            Edit Shift (Locked)
-                          </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem
-                            onClick={() => openShiftForm(shift)}
-                            className="text-popover-foreground hover:bg-accent cursor-pointer"
-                          >
-                            <Edit2 className="h-4 w-4 mr-2" />
-                            Edit Shift
-                          </DropdownMenuItem>
-                        )
-                      )}
-                      
-                      <DropdownMenuItem
-                        onClick={() => handleCloneShift(shift)}
-                        className="text-popover-foreground hover:bg-accent cursor-pointer"
+                // Inline action icons (replaces the ellipsis menu). Each is
+                // disabled when the action doesn't apply to the shift's state.
+                const iconBtn = 'h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/10 disabled:opacity-25 disabled:pointer-events-none';
+                const actions = (
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      title={isDraft ? (hasStarted ? 'Edit locked — shift has started' : 'Edit shift') : 'Edit available for drafts only'}
+                      disabled={!isDraft || hasStarted}
+                      onClick={() => openShiftForm(shift)}
+                      className={cn(iconBtn, 'hover:text-white')}
+                    >
+                      {isDraft && hasStarted ? <Lock className="h-4 w-4" /> : <Edit2 className="h-4 w-4" />}
+                    </button>
+                    <button
+                      type="button"
+                      title={hasStarted ? 'Clone locked — shift has started' : 'Clone to draft'}
+                      disabled={hasStarted}
+                      onClick={() => handleCloneShift(shift)}
+                      className={cn(iconBtn, 'hover:text-blue-400')}
+                    >
+                      <CopyPlus className="h-4 w-4" />
+                    </button>
+                    {isPublished ? (
+                      <button
+                        type="button"
+                        title={hasStarted ? 'Unpublish locked — shift has started' : 'Unpublish shift'}
+                        disabled={hasStarted}
+                        onClick={() => handleUnpublishShift(shift)}
+                        className={cn(iconBtn, 'hover:text-amber-400')}
                       >
-                        <CopyPlus className="h-4 w-4 mr-2 text-blue-500" />
-                        Clone to Draft
-                      </DropdownMenuItem>
-              
-                      <DropdownMenuSeparator className="bg-border" />
-              
-                      {isDraft && !isPublished && (
-                        hasStarted ? (
-                          <DropdownMenuItem disabled className="text-muted-foreground/50 cursor-not-allowed">
-                            <Lock className="h-4 w-4 mr-2" />
-                            Publish (Locked)
-                          </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem
-                            onClick={() => handlePublishShift(shift)}
-                            className="text-popover-foreground hover:bg-accent cursor-pointer"
-                          >
-                            <Send className="h-4 w-4 mr-2" />
-                            Publish Shift
-                          </DropdownMenuItem>
-                        )
-                      )}
-              
-                      {isPublished && !hasStarted && (
-                        <DropdownMenuItem
-                          onClick={() => handleUnpublishShift(shift)}
-                          className="text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 cursor-pointer"
-                        >
-                          <Undo2 className="h-4 w-4 mr-2" />
-                          Unpublish Shift
-                        </DropdownMenuItem>
-                      )}
-              
-                      <DropdownMenuSeparator className="bg-border" />
-              
-                      <DropdownMenuItem
-                        onClick={() => { setShiftToDelete(shift); setDeleteDialogOpen(true); }}
-                        className="text-destructive hover:bg-destructive/10 cursor-pointer"
+                        <Undo2 className="h-4 w-4" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        title={hasStarted ? 'Publish locked — shift has started' : 'Publish shift'}
+                        disabled={hasStarted}
+                        onClick={() => handlePublishShift(shift)}
+                        className={cn(iconBtn, 'hover:text-emerald-400')}
                       >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete Shift
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                        <Send className="h-4 w-4" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      title="Delete shift"
+                      onClick={() => { setShiftToDelete(shift); setDeleteDialogOpen(true); }}
+                      className={cn(iconBtn, 'hover:text-rose-400')}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 );
-                
+
                 const isSelected = selectedV8ShiftIds.has(shift.id);
                 return (
-                  <div key={shift.id} className="flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2" style={{ animationDelay: `${idx * 30}ms` }}>
-                    <Checkbox
-                      checked={isSelected}
-                      disabled={isPast}
-                      onCheckedChange={() => toggleShiftSelection(shift.id)}
-                      className="border-muted-foreground/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                  <div key={shift.id} className="min-w-0 animate-in fade-in slide-in-from-bottom-2" style={{ animationDelay: `${idx * 30}ms` }}>
+                    <SmartShiftCard
+                      shift={shift}
+                      variant="comfortable"
+                      groupColor={groupType}
+                      groupName={groupName}
+                      isLocked={isPast}
+                      isPast={isPast}
+                      isDnDActive={false}
+                      isSelected={isSelected}
+                      onClick={bulkModeActive ? () => toggleShiftSelection(shift.id) : undefined}
+                      headerAction={bulkModeActive ? undefined : actions}
+                      onViewHistory={(id) => setHistoryShiftId(id)}
+                      selectionSlot={
+                        <Checkbox
+                          checked={isSelected}
+                          disabled={isPast}
+                          onCheckedChange={() => toggleShiftSelection(shift.id)}
+                          className="h-[18px] w-[18px] rounded-[5px] border-2 border-muted-foreground/40 data-[state=checked]:bg-primary data-[state=checked]:border-primary shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                        />
+                      }
                     />
-                    <div className="flex-1 min-w-0">
-                      <SmartShiftCard
-                        shift={shift}
-                        variant="compact"
-                        groupColor={groupType}
-                        isLocked={isPast}
-                        isPast={isPast}
-                        isDnDActive={false}
-                        isSelected={isSelected}
-                        onClick={bulkModeActive ? () => toggleShiftSelection(shift.id) : undefined}
-                        headerAction={bulkModeActive ? undefined : menu}
-                      />
-                    </div>
                   </div>
                 );
               })}
             </div>
           )}
-        </ScrollArea>
+        </div>
 
-        {/* Local Drawer Bulk Actions Toolbar */}
-        {selectedInDrawerCount > 0 && (
-          <div className="border-t border-slate-200 dark:border-white/10 bg-slate-100/80 dark:bg-[#0c101c]/80 p-4 space-y-3 animate-in slide-in-from-bottom-2 duration-200">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-muted-foreground">
-                {selectedInDrawerCount} of {filteredShifts.length} Shift{filteredShifts.length !== 1 ? 's' : ''} Selected
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => clearSelection()}
-                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-              >
-                Clear
-              </Button>
-            </div>
-            
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                onClick={handleBulkPublish}
-                disabled={isProcessing || !hasDraftSelected || isPastDate}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs gap-1"
-              >
-                {isPublishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                Publish ({draftSelectedCount})
-              </Button>
-              
-              <Button
-                size="sm"
-                onClick={handleBulkUnpublish}
-                disabled={isProcessing || !hasPublishedSelected || isPastDate}
-                className="flex-1 border border-amber-500/20 text-amber-500 hover:bg-amber-500/10 font-medium text-xs gap-1 bg-transparent"
-              >
-                {isUnpublishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
-                Unpublish ({publishedSelectedCount})
-              </Button>
-              
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => setBulkDeleteConfirmOpen(true)}
-                disabled={isProcessing}
-                className="font-medium text-xs gap-1 px-3"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Delete
-              </Button>
-            </div>
+        {/* Reserved footer zone — always present so selecting never reflows the grid */}
+        {!historyShiftId && (
+          <div className="border-t border-slate-200 dark:border-white/10 bg-slate-100/80 dark:bg-[#0c101c]/80 px-4 min-h-[64px] flex items-center shrink-0">
+            {selectedInDrawerCount > 0 ? (
+              <div className="w-full flex items-center justify-between gap-3 animate-in fade-in duration-200">
+                <span className="text-xs font-semibold text-muted-foreground shrink-0">
+                  {selectedInDrawerCount} of {filteredShifts.length} selected
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleBulkPublish}
+                    disabled={isProcessing || !hasDraftSelected || isPastDate}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs gap-1 shadow-none"
+                  >
+                    {isPublishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                    Publish ({draftSelectedCount})
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleBulkUnpublish}
+                    disabled={isProcessing || !hasPublishedSelected || isPastDate}
+                    className="border border-amber-500/20 text-amber-500 hover:bg-amber-500/10 font-medium text-xs gap-1 bg-transparent shadow-none"
+                  >
+                    {isUnpublishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
+                    Unpublish ({publishedSelectedCount})
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => setBulkDeleteConfirmOpen(true)}
+                    disabled={isProcessing}
+                    className="font-medium text-xs gap-1 px-3 shadow-none"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => clearSelection()}
+                    className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="w-full text-xs text-muted-foreground/50 text-center">
+                Select shifts to publish, unpublish, or delete in bulk
+              </p>
+            )}
           </div>
         )}
+        </div>
       </div>
 
       {/* Bulk Delete Dialog */}

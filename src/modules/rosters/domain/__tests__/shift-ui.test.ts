@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { getTimeRule, getLiveRule, getLiveRuleBadges } from '../shift-ui';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { getTimeRule, getLiveRule, getLiveRuleBadges, isTimesheetReviewable } from '../shift-ui';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 
 // ─── Time Rules ────────────────────────────────────────────────────────────────
 
@@ -32,8 +33,34 @@ describe('getTimeRule - 5-state schedule lifecycle', () => {
             .toBe('Closed');
     });
 
+    it('Closed when clocked out early, even though still inside the scheduled window', () => {
+        // Worker clocked out (actual_end set) an hour into an 8h shift — must not read Live.
+        expect(getTimeRule({ lifecycle_status: 'Completed', start_at: iso(-1 * HOUR), end_at: iso(+7 * HOUR), actual_end: iso(-0.5 * HOUR) })?.label)
+            .toBe('Closed');
+    });
+
+    it('Closed when Completed inside the scheduled window (no clock-out recorded)', () => {
+        expect(getTimeRule({ lifecycle_status: 'Completed', start_at: iso(-1 * HOUR), end_at: iso(+7 * HOUR) })?.label)
+            .toBe('Closed');
+    });
+
+    it('Closed when cancelled inside the scheduled window', () => {
+        expect(getTimeRule({ lifecycle_status: 'Published', is_cancelled: true, start_at: iso(-1 * HOUR), end_at: iso(+7 * HOUR) })?.label)
+            .toBe('Closed');
+    });
+
     it('returns null when the start time is unparseable', () => {
         expect(getTimeRule({ lifecycle_status: 'Published' })).toBeNull();
+    });
+
+    it('Live when clocked in early, even though now is before the scheduled start time', () => {
+        expect(getTimeRule({ lifecycle_status: 'Published', start_at: iso(+1 * HOUR), end_at: iso(+9 * HOUR), actual_start: iso(-0.1 * HOUR) })?.label)
+            .toBe('Live');
+    });
+
+    it('Closed when auto clocked out', () => {
+        expect(getTimeRule({ lifecycle_status: 'Published', start_at: iso(-5 * HOUR), end_at: iso(+3 * HOUR), attendance_status: 'auto_clock_out' })?.label)
+            .toBe('Closed');
     });
 });
 
@@ -131,7 +158,56 @@ describe('getLiveRuleBadges - two-badge arrival/departure model', () => {
         expect(departure(s)).toBe('Auto Clock-Out');
     });
 
-    it('manual override re-derives both halves with a * suffix', () => {
+    // ── Per-side manual overrides ───────────────────────────────────────────────
+    it('editing only the In stars the arrival — departure keeps its actual-clock rule', () => {
+        const badges = getLiveRuleBadges({ lifecycle_status: 'Completed',
+            start_at: iso(-8 * HOUR), end_at: iso(-1 * HOUR),
+            actual_start: iso(-8 * HOUR + 2 * MIN), actual_end: iso(-1 * HOUR + 1 * MIN),
+            adjusted_start: iso(-8 * HOUR + 20 * MIN), adjusted_end: iso(-1 * HOUR + 1 * MIN),
+            adjusted_start_is_manual: true, adjusted_end_is_manual: false });
+        expect(badges.arrival?.label).toBe('Late In*');
+        expect(badges.departure?.label).toBe('On Time Out'); // no star
+    });
+
+    it('editing only the Out stars the departure — arrival keeps its actual-clock rule', () => {
+        const badges = getLiveRuleBadges({ lifecycle_status: 'Completed',
+            start_at: iso(-8 * HOUR), end_at: iso(-1 * HOUR),
+            actual_start: iso(-8 * HOUR + 2 * MIN), actual_end: iso(-1 * HOUR + 1 * MIN),
+            adjusted_start: iso(-8 * HOUR + 2 * MIN), adjusted_end: iso(-2 * HOUR),
+            adjusted_start_is_manual: false, adjusted_end_is_manual: true });
+        expect(badges.arrival?.label).toBe('On Time In'); // no star
+        expect(badges.departure?.label).toBe('Early Out*');
+    });
+
+    it('manual In override applies even when there is no adjusted/actual end (overridden no-show)', () => {
+        const badges = getLiveRuleBadges({ lifecycle_status: 'Completed', attendance_status: 'no_show',
+            start_at: iso(-8 * HOUR), end_at: iso(-1 * HOUR),
+            adjusted_start: iso(-8 * HOUR + 1 * MIN),
+            adjusted_start_is_manual: true, adjusted_end_is_manual: false });
+        expect(badges.arrival?.label).toBe('On Time In*');
+        expect(badges.departure).toBeNull();
+    });
+
+    // ── Auto clock-out horizon = LATER of clock-in and scheduled start ─────────
+    it('late clock-in extends Working Overtime past start + 12.5h', () => {
+        // start 13h ago, clocked in 1h late (12h ago) → horizon = clock-in + 12.5h
+        // = 30 min from now, so the employee is still Working Overtime.
+        const s = { lifecycle_status: 'Completed', attendance_status: 'checked_in',
+            start_at: iso(-13 * HOUR), end_at: iso(-5 * HOUR), actual_start: iso(-12 * HOUR) };
+        expect(departure(s)).toBe('Working Overtime');
+        expect(isTimesheetReviewable(s)).toBe(false); // overtime is non-terminal
+    });
+
+    it('early clock-in anchors the horizon to scheduled start (whichever is later)', () => {
+        // clocked in 1h early, start 13h ago → horizon = start + 12.5h = 30 min
+        // ago... auto clock-out should already have fired server-side; client
+        // shows no overtime badge past the horizon.
+        const s = { lifecycle_status: 'Completed', attendance_status: 'checked_in',
+            start_at: iso(-13 * HOUR), end_at: iso(-5 * HOUR), actual_start: iso(-14 * HOUR) };
+        expect(departure(s)).toBeUndefined();
+    });
+
+    it('legacy both-sides flag re-derives both halves with a * suffix', () => {
         const badges = getLiveRuleBadges({ lifecycle_status: 'Completed', attendance_status: 'no_show',
             adjusted_is_manual: true,
             start_at: iso(-8 * HOUR), end_at: iso(-1 * HOUR),
@@ -176,5 +252,34 @@ describe('getLiveRule - single-badge adapter (departure wins over arrival)', () 
             adjusted_is_manual: true, start_at: iso(-8 * HOUR), end_at: iso(-1 * HOUR),
             adjusted_start: iso(-8 * HOUR + 2 * MIN), adjusted_end: iso(-1 * HOUR + 2 * MIN) })?.label.endsWith('*'))
             .toBe(true);
+    });
+});
+
+// ─── Overnight shifts (time-only fallback, no start_at/end_at) ────────────────
+
+describe('overnight shifts via shift_date + times fallback', () => {
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    // 22:00 → 06:00 Sydney shift; "now" pinned mid-shift at 02:00 the next day.
+    const overnight = { lifecycle_status: 'Published', shift_date: '2026-01-10',
+        start_time: '22:00:00', end_time: '06:00:00' };
+    const midShift = parseZonedDateTime('2026-01-11', '02:00');
+
+    it('Time Rule stays Live mid-shift (end rolls over to the next day)', () => {
+        vi.setSystemTime(midShift);
+        expect(getTimeRule(overnight)?.label).toBe('Live');
+    });
+
+    it('Live Rule shows Missing (not No Show) mid-shift with no clock-in', () => {
+        vi.setSystemTime(midShift);
+        expect(getLiveRuleBadges(overnight).arrival?.label).toBe('Missing');
+    });
+
+    it('review stays locked mid-shift, unlocks after the (rolled-over) end', () => {
+        vi.setSystemTime(midShift);
+        expect(isTimesheetReviewable(overnight)).toBe(false);
+        vi.setSystemTime(parseZonedDateTime('2026-01-11', '06:05'));
+        expect(isTimesheetReviewable(overnight)).toBe(true); // No Show stand-in
     });
 });

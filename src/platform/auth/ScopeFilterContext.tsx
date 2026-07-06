@@ -10,12 +10,12 @@ interface ScopeFilterContextType {
 
 const ScopeFilterContext = createContext<ScopeFilterContextType | undefined>(undefined);
 
-const SESSION_STORAGE_KEY = 'superman_scope_filters';
+const LOCAL_STORAGE_KEY = 'superman_scope_filters';
 
 export const ScopeFilterProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [personalScope, setPersonalScopeState] = useState<ScopeSelection | null>(() => {
         if (typeof window === 'undefined') return null;
-        const saved = sessionStorage.getItem(SESSION_STORAGE_KEY);
+        const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
@@ -29,7 +29,7 @@ export const ScopeFilterProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     const [managerialScope, setManagerialScopeState] = useState<ScopeSelection | null>(() => {
         if (typeof window === 'undefined') return null;
-        const saved = sessionStorage.getItem(SESSION_STORAGE_KEY);
+        const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
@@ -49,14 +49,14 @@ export const ScopeFilterProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setManagerialScopeState(scope);
     }, []);
 
-    // Persist to session storage
+    // Persist to local storage
     useEffect(() => {
         if (typeof window === 'undefined') return;
         const data = {
             personal: personalScope,
             managerial: managerialScope,
         };
-        sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data));
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
     }, [personalScope, managerialScope]);
 
     return (

@@ -181,7 +181,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
         shift_group_id: (shift as any).shift_group_id,
         shift_subgroup_id: (shift as any).shift_subgroup_id || (shift as any).roster_subgroup_id,
         role_id: shift.role_id,
-        remuneration_level_id: shift.remuneration_level_id,
+        remuneration_level: shift.remuneration_level,
         paid_break_minutes: shift.paid_break_minutes,
         unpaid_break_minutes: shift.unpaid_break_minutes,
         timezone: shift.timezone,
@@ -207,48 +207,60 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
     }
   };
 
-  const buildShiftMenu = (shift: any) => (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
-        <button
-          className="h-4 w-4 flex items-center justify-center hover:bg-muted dark:hover:bg-white/20 rounded transition-colors"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <MoreHorizontal className="h-3 w-3 text-muted-foreground dark:text-white/60" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="bg-popover border-border min-w-[160px] z-50">
-        <DropdownMenuItem
-          onClick={() => onEditShift?.(shift)}
-          className="text-popover-foreground hover:bg-accent cursor-pointer"
-        >
-          <Edit2 className="h-4 w-4 mr-2" />
-          Edit Shift
-        </DropdownMenuItem>
+  const buildShiftMenu = (shift: any) => {
+    const { isPast } = resolveShiftStatus(shift);
 
-        <DropdownMenuItem
-          onClick={() => handleCloneShift(shift)}
-          className="text-popover-foreground hover:bg-accent cursor-pointer"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Clone Shift
-        </DropdownMenuItem>
+    return (
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="h-4 w-4 flex items-center justify-center hover:bg-muted dark:hover:bg-white/20 rounded transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MoreHorizontal className="h-3 w-3 text-muted-foreground dark:text-white/60" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="bg-popover border-border min-w-[160px] z-50">
+          <DropdownMenuItem
+            disabled={isPast}
+            onClick={() => onEditShift?.(shift)}
+            className={cn(
+              "text-popover-foreground hover:bg-accent cursor-pointer",
+              isPast && "text-muted-foreground/50 cursor-not-allowed"
+            )}
+          >
+            <Edit2 className="h-4 w-4 mr-2" />
+            Edit Shift {isPast && '(Locked)'}
+          </DropdownMenuItem>
 
-        {canUnpublish(shift) && (
-          <>
-            <DropdownMenuSeparator className="bg-border" />
-            <DropdownMenuItem
-              onClick={() => handleRequestUnpublish(shift.id)}
-              className="text-amber-400 hover:bg-amber-500/10 cursor-pointer"
-            >
-              <Undo2 className="h-4 w-4 mr-2" />
-              Unpublish Shift
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+          <DropdownMenuItem
+            disabled={isPast}
+            onClick={() => handleCloneShift(shift)}
+            className={cn(
+              "text-popover-foreground hover:bg-accent cursor-pointer",
+              isPast && "text-muted-foreground/50 cursor-not-allowed"
+            )}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Clone Shift {isPast && '(Locked)'}
+          </DropdownMenuItem>
+
+          {canUnpublish(shift) && !isPast && (
+            <>
+              <DropdownMenuSeparator className="bg-border" />
+              <DropdownMenuItem
+                onClick={() => handleRequestUnpublish(shift.id)}
+                className="text-amber-400 hover:bg-amber-500/10 cursor-pointer"
+              >
+                <Undo2 className="h-4 w-4 mr-2" />
+                Unpublish Shift
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
 
   // Keep for modal context (event name / date for new shift creation)
   const { data: events = [] } = useEvents(organizationId);
@@ -580,7 +592,7 @@ export const EventsModeView: React.FC<EventsModeViewProps> = ({
                               showStatusIcons={true}
                               headerAction={buildShiftMenu(shift)}
                               detailedCost={(shift as any).detailedCost}
-                              onClick={() => onEditShift?.(shift)}
+                              onClick={() => isPast ? undefined : onEditShift?.(shift)}
                             />
                           </div>
                         );

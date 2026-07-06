@@ -6,7 +6,18 @@ import { useEmployees, useShiftsByDateRange } from '@/modules/rosters/state/useR
 import {
     Loader2, Activity, Users, CalendarDays,
     GraduationCap, RefreshCw, ShieldAlert, CheckCircle2, AlertTriangle,
+    Search,
 } from 'lucide-react';
+import { Input } from '@/modules/core/ui/primitives/input';
+import {
+    Pagination,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationLink,
+    PaginationNext,
+    PaginationPrevious,
+} from '@/modules/core/ui/primitives/pagination';
 import { calculateMinutesBetweenTimes } from '@/modules/rosters/domain/shift.entity';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/modules/core/ui/primitives/badge';
@@ -25,154 +36,14 @@ import {
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
-
-// ── Types ──────────────────────────────────────────────────────────────
-
-interface ShiftPillData {
-    id: string;
-    netHours: number;
-    orgName?: string;
-    deptName?: string;
-    subDeptName?: string;
-    roleName?: string;
-    isDraft: boolean;
-}
-
-// ── Compliance types ──────────────────────────────────────────────────────────
-
-type CompV8Severity = 'violation' | 'warning' | 'ok';
-
-interface WindowViolation {
-    weeks: 2 | 3 | 4;
-    hours: number;
-    limit: number;
-    severity: CompV8Severity;
-}
-
-interface WeekComp {
-    weekHours: number;
-    windows: WindowViolation[];
-    worstV8Severity: CompV8Severity;
-}
-
-interface EmpComp {
-    overallV8Severity: CompV8Severity;
-    worstDesc: string;
-    weeks: Record<number, WeekComp>;
-    dailyViolations: Set<string>;
-    dailyWarnings: Set<string>;
-}
-
-// ── EBA constants ─────────────────────────────────────────────────────────────
-
-const EBA_WEEKLY_LIMIT  = 38;   // h/week hard cap
-const DAILY_CAP_HARD    = 12;   // h — violation
-const DAILY_CAP_SOFT    = 10;   // h — warning
-const NEAR_LIMIT_RATIO  = 0.90; // 90 % of limit triggers warning badge
-
-const ROLLING_WINDOWS = [
-    { weeks: 2 as const, days: 14 },
-    { weeks: 3 as const, days: 21 },
-    { weeks: 4 as const, days: 28 },
-] as const;
-
-// ── computeEmpComp ────────────────────────────────────────────────────────────
-
-function computeEmpComp(
-    byWeek: Record<number, number>,
-    byDate: Record<string, ShiftPillData[]>,
-    sortedWeekNums: number[],
-): EmpComp {
-    // 1. Daily cap checks
-    const dailyViolations = new Set<string>();
-    const dailyWarnings   = new Set<string>();
-    for (const [date, shifts] of Object.entries(byDate)) {
-        const hours = shifts.reduce((sum, s) => sum + s.netHours, 0);
-        if (hours > DAILY_CAP_HARD)       dailyViolations.add(date);
-        else if (hours > DAILY_CAP_SOFT)  dailyWarnings.add(date);
-    }
-
-    // 2. Per-week entries
-    const weekComps: Record<number, WeekComp> = {};
-    for (const wn of sortedWeekNums) {
-        weekComps[wn] = { weekHours: byWeek[wn] || 0, windows: [], worstV8Severity: 'ok' };
-    }
-
-    // 3. Bubble daily cap severity into week
-    for (const date of dailyViolations) {
-        const wn = getISOWeek(new Date(date));
-        if (weekComps[wn]) weekComps[wn].worstV8Severity = 'violation';
-    }
-    for (const date of dailyWarnings) {
-        const wn = getISOWeek(new Date(date));
-        if (weekComps[wn] && weekComps[wn].worstV8Severity === 'ok')
-            weekComps[wn].worstV8Severity = 'warning';
-    }
-
-    // 4. Rolling-window checks (prefix-sum sweep over sorted week indices)
-    for (const win of ROLLING_WINDOWS) {
-        const limit     = EBA_WEEKLY_LIMIT * win.weeks;
-        const warnLimit = limit * NEAR_LIMIT_RATIO;
-
-        for (let endIdx = win.weeks - 1; endIdx < sortedWeekNums.length; endIdx++) {
-            let sum = 0;
-            for (let i = endIdx - win.weeks + 1; i <= endIdx; i++) {
-                sum += byWeek[sortedWeekNums[i]] || 0;
-            }
-            if (sum <= warnLimit) continue;
-
-            const severity: CompV8Severity = sum > limit ? 'violation' : 'warning';
-            const endWn = sortedWeekNums[endIdx];
-            if (!weekComps[endWn]) continue;
-
-            const existing = weekComps[endWn].windows.find(w => w.weeks === win.weeks);
-            if (existing) {
-                if (sum > existing.hours) {
-                    existing.hours    = parseFloat(sum.toFixed(1));
-                    existing.severity = severity;
-                }
-            } else {
-                weekComps[endWn].windows.push({
-                    weeks: win.weeks,
-                    hours: parseFloat(sum.toFixed(1)),
-                    limit,
-                    severity,
-                });
-            }
-
-            if (severity === 'violation') {
-                weekComps[endWn].worstV8Severity = 'violation';
-            } else if (severity === 'warning' && weekComps[endWn].worstV8Severity === 'ok') {
-                weekComps[endWn].worstV8Severity = 'warning';
-            }
-        }
-    }
-
-    // 5. Derive overall severity + description
-    let overallV8Severity: CompV8Severity = 'ok';
-    let worstDesc = 'All checks passed';
-
-    for (const comp of Object.values(weekComps)) {
-        for (const win of comp.windows) {
-            if (win.severity === 'violation' && overallV8Severity !== 'violation') {
-                overallV8Severity = 'violation';
-                worstDesc = `${win.hours}h in ${win.weeks}w window (limit ${win.limit}h)`;
-            } else if (win.severity === 'warning' && overallV8Severity === 'ok') {
-                overallV8Severity = 'warning';
-                worstDesc = `Near limit: ${win.hours}h in ${win.weeks}w window`;
-            }
-        }
-    }
-    if (dailyViolations.size > 0 && overallV8Severity !== 'violation') {
-        overallV8Severity = 'violation';
-        worstDesc = `Daily cap exceeded on ${dailyViolations.size} day(s) (>${DAILY_CAP_HARD}h)`;
-    } else if (dailyWarnings.size > 0 && overallV8Severity === 'ok') {
-        overallV8Severity = 'warning';
-        worstDesc = `Near daily cap on ${dailyWarnings.size} day(s) (>${DAILY_CAP_SOFT}h)`;
-    }
-
-    return { overallV8Severity, worstDesc, weeks: weekComps, dailyViolations, dailyWarnings };
-}
+import {
+    computeEmpComp,
+    EBA_WEEKLY_LIMIT,
+    type ShiftPillData,
+    type CompV8Severity,
+    type EmpComp,
+    type GridContractType,
+} from '@/modules/insights/model/grid-compliance';
 
 // ── Cell class helpers ────────────────────────────────────────────────────────
 
@@ -231,6 +102,14 @@ const GridPage: React.FC = () => {
     const [year, setYear] = useState(today.getFullYear());
     const [viewMode, setViewMode] = useState<'hours' | 'compliance'>('hours');
 
+    const [searchTerm, setSearchTerm] = useState('');
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(25);
+
+    React.useEffect(() => {
+        setPage(1);
+    }, [scope, year, searchTerm]);
+
     const startDate = useMemo(() => format(startOfYear(new Date(year, 0, 1)), 'yyyy-MM-dd'), [year]);
     const endDate   = useMemo(() => format(endOfYear(new Date(year, 0, 1)),  'yyyy-MM-dd'), [year]);
 
@@ -270,13 +149,21 @@ const GridPage: React.FC = () => {
             byWeek: Record<number, number>;
             draftDates: Set<string>;
         }> = {};
-        const empMap = new Map<string, { id: string; first_name: string; last_name: string }>();
+        const empMap = new Map<string, { 
+            id: string; 
+            first_name: string; 
+            last_name: string;
+            contract_type?: GridContractType;
+            contracted_weekly_hours?: number;
+        }>();
 
         employeesByContract.forEach(emp => {
             empMap.set(emp.id, { 
                 id: emp.id, 
                 first_name: emp.first_name, 
                 last_name: emp.last_name,
+                contract_type: (emp as any).contract_type,
+                contracted_weekly_hours: (emp as any).contracted_weekly_hours,
             });
             data[emp.id] = { byDate: {}, byWeek: {}, draftDates: new Set() };
         });
@@ -334,22 +221,42 @@ const GridPage: React.FC = () => {
 
     const isLoading = isLoadingEmployees || isLoadingShifts;
     const scrollContainerRef = React.useRef<HTMLDivElement>(null);
-    const finalEmployeeIds = useMemo(() => finalEmployees.map(e => e.id), [finalEmployees]);
 
-    // Student visa
+    // Filter employees by searchTerm
+    const filteredEmployees = useMemo(() => {
+        if (!searchTerm) return finalEmployees;
+        const query = searchTerm.toLowerCase();
+        return finalEmployees.filter(emp => {
+            const fullName = `${emp.first_name || ''} ${emp.last_name || ''}`.toLowerCase();
+            return fullName.includes(query) || emp.id.toLowerCase().includes(query);
+        });
+    }, [finalEmployees, searchTerm]);
+
+    const totalCount = filteredEmployees.length;
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    const currentPage = Math.min(page, totalPages);
+
+    const paginatedEmployees = useMemo(() => {
+        const startIndex = (currentPage - 1) * pageSize;
+        return filteredEmployees.slice(startIndex, startIndex + pageSize);
+    }, [filteredEmployees, currentPage, pageSize]);
+
+    const paginatedEmployeeIds = useMemo(() => paginatedEmployees.map(e => e.id), [paginatedEmployees]);
+
+    // Student visa - query only for visible page
     const { data: studentVisaStatusData = [] } = useQuery({
-        queryKey: ['employees-student-visa', finalEmployeeIds],
+        queryKey: ['employees-student-visa', paginatedEmployeeIds],
         queryFn: async () => {
-            if (finalEmployeeIds.length === 0) return [];
+            if (paginatedEmployeeIds.length === 0) return [];
             const { data, error } = await supabase
                 .from('employee_licenses')
                 .select('employee_id, has_restricted_work_limit, license:license_id ( name )')
                 .eq('status', 'Active')
-                .in('employee_id', finalEmployeeIds);
+                .in('employee_id', paginatedEmployeeIds);
             if (error) throw error;
             return data;
         },
-        enabled: finalEmployeeIds.length > 0,
+        enabled: paginatedEmployeeIds.length > 0,
         staleTime: 5 * 60_000,
     });
 
@@ -362,30 +269,61 @@ const GridPage: React.FC = () => {
         return map;
     }, [studentVisaStatusData]);
 
-    // Compliance map (computed once per data change)
+    // Compliance map (computed once per page/data change, only for visible page)
     const complianceMap = useMemo(() => {
         const map: Record<string, EmpComp> = {};
-        for (const emp of finalEmployees) {
+        for (const emp of paginatedEmployees) {
             const d = aggregatedData[emp.id];
-            if (d) map[emp.id] = computeEmpComp(d.byWeek, d.byDate, sortedWeekNums);
+            if (d) map[emp.id] = computeEmpComp(d.byWeek, d.byDate, sortedWeekNums, emp.contract_type, emp.contracted_weekly_hours);
         }
         return map;
-    }, [finalEmployees, aggregatedData, sortedWeekNums]);
+    }, [paginatedEmployees, aggregatedData, sortedWeekNums]);
 
     // Auto-scroll to today
     React.useEffect(() => {
-        if (!isLoading && finalEmployees.length > 0) {
+        if (!isLoading && paginatedEmployees.length > 0) {
             const todayStr = format(new Date(), 'yyyy-MM-dd');
             const el = document.getElementById(`col-${todayStr}`);
             if (el && scrollContainerRef.current)
                 el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
         }
-    }, [isLoading, finalEmployees.length]);
+    }, [isLoading, paginatedEmployees.length]);
 
     const handleRefresh = () => {
         queryClient.invalidateQueries({ queryKey: ['shifts', 'list'] });
         queryClient.invalidateQueries({ queryKey: ['shifts', 'lookup', 'employees'] });
         refetchShifts();
+    };
+
+    const getPageNumbers = () => {
+        const pages: Array<number | 'ellipsis'> = [];
+        const maxVisible = 5;
+        
+        if (totalPages <= maxVisible) {
+            for (let i = 1; i <= totalPages; i++) {
+                pages.push(i);
+            }
+        } else {
+            pages.push(1);
+            
+            if (currentPage > 3) {
+                pages.push('ellipsis');
+            }
+            
+            const start = Math.max(2, currentPage - 1);
+            const end = Math.min(totalPages - 1, currentPage + 1);
+            
+            for (let i = start; i <= end; i++) {
+                pages.push(i);
+            }
+            
+            if (currentPage < totalPages - 2) {
+                pages.push('ellipsis');
+            }
+            
+            pages.push(totalPages);
+        }
+        return pages;
     };
 
     const compMode = viewMode === 'compliance';
@@ -401,12 +339,12 @@ const GridPage: React.FC = () => {
                 isGammaLocked={isGammaLocked}
                 functionBar={
                     <div className="flex flex-wrap items-center justify-between gap-4 w-full">
-                        <div className="flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center gap-3 flex-wrap animate-in fade-in duration-300">
                             <div className="flex items-center gap-4 px-4 py-2 bg-muted/30 rounded-2xl border border-border/40">
                                 <div className="flex items-center gap-2">
                                     <Users className="h-3.5 w-3.5 text-muted-foreground" />
                                     <span className="text-[11px] font-bold text-foreground">
-                                        {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : finalEmployees.length} PERSONNEL
+                                        {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : totalCount} PERSONNEL
                                     </span>
                                 </div>
                                 <div className="h-3 w-[1px] bg-border/40" />
@@ -416,6 +354,16 @@ const GridPage: React.FC = () => {
                                         {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : shifts.length} SHIFTS
                                     </span>
                                 </div>
+                            </div>
+
+                            <div className="relative w-48 sm:w-64">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/45" />
+                                <Input
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder="Search personnel..."
+                                    className="pl-8 h-9 text-[11px] font-bold tracking-wider rounded-xl bg-muted/20 border-border/40 focus:bg-background/80 transition-colors placeholder:text-muted-foreground/30 focus-visible:ring-1 focus-visible:ring-primary/20"
+                                />
                             </div>
 
                             <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-xl border border-border/40">
@@ -525,7 +473,7 @@ const GridPage: React.FC = () => {
                         </thead>
 
                         <tbody>
-                            {finalEmployees.map(emp => {
+                            {paginatedEmployees.map(emp => {
                                 const empComp = complianceMap[emp.id];
                                 const ovSev   = empComp?.overallV8Severity ?? 'ok';
 
@@ -723,10 +671,10 @@ const GridPage: React.FC = () => {
                                 );
                             })}
 
-                            {finalEmployees.length === 0 && !isLoading && (
+                            {totalCount === 0 && !isLoading && (
                                 <tr>
                                     <td colSpan={100} className="p-20 text-center">
-                                        <div className="flex flex-col items-center gap-4 max-w-sm mx-auto">
+                                        <div className="flex flex-col items-center gap-4 max-w-sm mx-auto animate-in fade-in duration-300">
                                             <div className="bg-muted/30 p-4 rounded-full">
                                                 <Users className="w-8 h-8 text-muted-foreground/40" />
                                             </div>
@@ -737,12 +685,12 @@ const GridPage: React.FC = () => {
                                                 <p className="text-xs text-muted-foreground leading-relaxed">
                                                     {!scope.org_ids[0]
                                                         ? 'Please select an organization from the banner above to load data.'
-                                                        : `No personnel recorded for the selected filters in ${year}. Try adjusting your scope or year.`}
+                                                        : `No personnel recorded for the selected filters or search terms in ${year}. Try adjusting your scope, search query or year.`}
                                                 </p>
                                             </div>
                                             <div className="mt-4 flex gap-4 text-[9px] font-mono opacity-20 uppercase tracking-widest border-t border-border/50 pt-4">
                                                 <span>S:{shifts.length}</span>
-                                                <span>P:{finalEmployees.length}</span>
+                                                <span>P:{totalCount}</span>
                                                 <span>O:{scope.org_ids[0]?.split('-')[0] || 'NONE'}</span>
                                                 <span>D:{scope.dept_ids.length}</span>
                                             </div>
@@ -753,6 +701,71 @@ const GridPage: React.FC = () => {
                         </tbody>
                     </table>
                 </div>
+
+                {/* Pagination Controls Footer */}
+                {!isLoading && totalCount > 0 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-border/40 bg-card/50">
+                        <div className="text-xs text-muted-foreground font-mono">
+                            Showing <span className="text-foreground font-bold">{Math.min(totalCount, (currentPage - 1) * pageSize + 1)}</span> to{' '}
+                            <span className="text-foreground font-bold">{Math.min(totalCount, currentPage * pageSize)}</span> of{' '}
+                            <span className="text-foreground font-bold">{totalCount}</span> users
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <Pagination className="justify-end w-auto mx-0">
+                                <PaginationContent>
+                                    <PaginationItem>
+                                        <PaginationPrevious 
+                                            href="#" 
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                if (currentPage > 1) setPage(currentPage - 1);
+                                            }}
+                                            className={cn(
+                                                "cursor-pointer",
+                                                currentPage === 1 && "pointer-events-none opacity-50"
+                                            )}
+                                        />
+                                    </PaginationItem>
+
+                                    {getPageNumbers().map((p, idx) => (
+                                        <PaginationItem key={idx}>
+                                            {p === 'ellipsis' ? (
+                                                <PaginationEllipsis />
+                                            ) : (
+                                                <PaginationLink
+                                                    href="#"
+                                                    isActive={currentPage === p}
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        setPage(p);
+                                                    }}
+                                                    className="cursor-pointer"
+                                                >
+                                                    {p}
+                                                </PaginationLink>
+                                            )}
+                                        </PaginationItem>
+                                    ))}
+
+                                    <PaginationItem>
+                                        <PaginationNext 
+                                            href="#" 
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                if (currentPage < totalPages) setPage(currentPage + 1);
+                                            }}
+                                            className={cn(
+                                                "cursor-pointer",
+                                                currentPage === totalPages && "pointer-events-none opacity-50"
+                                            )}
+                                        />
+                                    </PaginationItem>
+                                </PaginationContent>
+                            </Pagination>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <style>{`

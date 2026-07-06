@@ -104,7 +104,7 @@ function toProjectedShift(shift: WorkerShiftDTO): ProjectedShiftResult {
     roleId: shift.roleId,
     levelName: shift.levelName ?? '',
     levelNumber: shift.levelNumber ?? 0,
-    levelId: shift.remunerationLevelId,
+    levelId: shift.remunerationLevel !== null && shift.remunerationLevel !== undefined ? shift.remunerationLevel.toString() : null,
     groupType,
     subGroupName: shift.subGroupName ?? shift.rosterSubgroupName ?? null,
     groupColorKey: groupType ?? 'unassigned',
@@ -168,14 +168,8 @@ export function projectPeople(
           dicebearUrl('unassigned', 'shapes'),
         ));
       } else {
-        const firstName = shift.employeeFirstName ?? 'Assigned';
-        const lastName  = shift.employeeLastName  ?? '';
-        empMap.set(targetId, makeEmployee(
-          targetId,
-          `${firstName} ${lastName}`.trim(),
-          contractedHoursMap[targetId] ?? 0,
-          dicebearUrl(targetId),
-        ));
+        // Skip shifts for employees not in the current paginated/filtered employee list
+        return;
       }
     }
 

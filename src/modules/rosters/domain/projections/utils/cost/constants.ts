@@ -1,6 +1,6 @@
-import Holidays from 'date-holidays';
-
-export const hd = new Holidays('AU', 'NSW');
+// Re-export the app-wide AU/NSW holiday instance so the cost engine and the
+// calendar UI share a single source of truth for public holidays.
+export { ausHolidays as hd } from '@/modules/core/lib/holidays';
 
 export const SUNDAY = 0;
 export const MONDAY = 1;
@@ -24,11 +24,11 @@ export const ANNUAL_LEAVE_LOADING = 0.175;
 export const ADDITIONAL_LOADING1 = 0.05;
 export const ADDITIONAL_LOADING2 = 0.10;
 
-// Allowance Constants (Clause 40)
-export const ALLOWANCE_MEAL = 14.50;
-export const ALLOWANCE_FIRST_AID_PER_HOUR = 0.50;
-export const ALLOWANCE_PROTEIN_SPILL = 20.00;
-export const ALLOWANCE_SPLIT_SHIFT = 10.00;
+// Allowance Constants (Clause 28 / Schedule 2 §3 — values as at 2025 vote)
+export const ALLOWANCE_MEAL = 13.61;              // per occasion (cl. 28.1)
+export const ALLOWANCE_FIRST_AID_PER_HOUR = 0.56; // per ordinary hour (cl. 28.2)
+export const ALLOWANCE_PROTEIN_SPILL = 7.17;      // per shift (cl. 28.3)
+export const ALLOWANCE_SPLIT_SHIFT = 11.13;       // per shift (cl. 28.4)
 
 // Thresholds
 export const MEAL_ALLOWANCE_OVERTIME_THRESHOLD_HOURS = 2.0;

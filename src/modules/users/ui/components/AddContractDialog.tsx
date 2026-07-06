@@ -20,7 +20,7 @@ interface AddContractDialogProps {
         department_id?: string | null;
         sub_department_id?: string | null;
         role_id: string;
-        rem_level_id?: string | null;
+        remuneration_level?: number | null;
         employment_status?: string | null;
     };
     onSuccess?: () => void;
@@ -53,7 +53,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                 department_id: existingContract.department_id || '',
                 sub_department_id: existingContract.sub_department_id || '',
                 role_id: existingContract.role_id,
-                rem_level_id: existingContract.rem_level_id || '',
+                remuneration_level: existingContract.remuneration_level || '',
                 employment_status: (existingContract.employment_status as any) || 'Casual',
                 contracted_weekly_hours: (existingContract as any).contracted_weekly_hours || 0,
                 is_apprentice: (existingContract as any).is_apprentice || false,
@@ -81,7 +81,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                 department_id: '',
                 sub_department_id: '',
                 role_id: '',
-                rem_level_id: '',
+                remuneration_level: '',
                 employment_status: '',
                 contracted_weekly_hours: 0,
                 annual_guaranteed_hours: 0,
@@ -127,7 +127,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                     department_id: formData.department_id,
                     sub_department_id: formData.sub_department_id,
                     role_id: formData.role_id,
-                    rem_level_id: formData.rem_level_id,
+                    remuneration_level: formData.remuneration_level === '' ? undefined : formData.remuneration_level,
                     employment_status: formData.employment_status as any,
                     contracted_weekly_hours: formData.contracted_weekly_hours,
                     is_apprentice: formData.is_apprentice,
@@ -169,18 +169,18 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
     const isRoleSelected = !!formData.role_id;
 
     const selectedRole = roles.find(r => r.id === formData.role_id);
-    const selectedRemLevel = remLevels.find(rl => rl.id === formData.rem_level_id);
-    const isRemLocked = !!formData.role_id && !!selectedRole?.remuneration_level_id;
+    const selectedRemLevel = remLevels.find(rl => rl.level_number === formData.remuneration_level);
+    const isRemLocked = !!formData.role_id && !!selectedRole?.remuneration_level;
 
     // Auto-populate remuneration level when role changes
     React.useEffect(() => {
-        if (formData.role_id && !formData.rem_level_id) {
+        if (formData.role_id && formData.remuneration_level === '') {
             const role = roles.find(r => r.id === formData.role_id);
-            if (role?.remuneration_level_id) {
-                updateField('rem_level_id', role.remuneration_level_id);
+            if (role?.remuneration_level) {
+                updateField('remuneration_level', role.remuneration_level);
             }
         }
-    }, [formData.role_id, roles, formData.rem_level_id, updateField]);
+    }, [formData.role_id, roles, formData.remuneration_level, updateField]);
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -312,7 +312,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                                             options={filteredRoles.map(r => ({ id: r.id, name: r.name }))}
                                             onValueChange={(val) => {
                                             const role = roles.find(r => r.id === val);
-                                            updateRole(val, role?.remuneration_level_id);
+                                            updateRole(val, role?.remuneration_level);
                                         }}
                                             icon={<Briefcase className="w-5 h-5" />}
                                         />

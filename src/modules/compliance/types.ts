@@ -56,6 +56,14 @@ export interface ComplianceCheckInput {
     // When true the 48h/fortnight limit becomes a hard blocking error (default: non-blocking warning)
     student_visa_enforcement?: boolean;
 
+    // Employment context — hydrates contract-scoped rules in the assignment
+    // evaluator (V8_SPLIT_SHIFT needs PT/flexi; V8_ORD_HOURS_AVG is exempt for
+    // casual). Absent → treated as casual (unchanged legacy behaviour).
+    employee_context?: {
+        contract_type?: 'FT' | 'PT' | 'CASUAL' | null;
+        contracted_weekly_hours?: number;
+    };
+
     // Rule 10 – Rest Gap configuration
     // Minimum rest hours between shifts (default 10; relaxed mode allows 8)
     rest_gap_hours?: number;

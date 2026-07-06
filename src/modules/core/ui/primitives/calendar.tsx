@@ -5,6 +5,7 @@ import { DayPicker } from "react-day-picker";
 
 import { cn } from '@/modules/core/lib/utils';
 import { buttonVariants } from '@/modules/core/ui/primitives/button';
+import { isPublicHoliday } from '@/modules/core/lib/holidays';
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>;
 
@@ -12,11 +13,15 @@ function Calendar({
   className,
   classNames,
   showOutsideDays = true,
+  weekStartsOn = 1, // Monday — app-wide convention (Mon–Sun)
+  modifiers,
+  modifiersClassNames,
   ...props
 }: CalendarProps) {
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
+      weekStartsOn={weekStartsOn}
       className={cn("p-4 pointer-events-auto", className)}
       classNames={{
         months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
@@ -61,6 +66,16 @@ function Calendar({
           "aria-selected:bg-accent/40 aria-selected:text-accent-foreground rounded-none",
         day_hidden: "invisible",
         ...classNames,
+      }}
+      modifiers={{
+        // AUS (NSW) public holidays — marked in yellow.
+        holiday: (date: Date) => isPublicHoliday(date),
+        ...modifiers,
+      }}
+      modifiersClassNames={{
+        holiday:
+          "text-amber-500 dark:text-amber-400 font-bold aria-selected:text-primary-foreground",
+        ...modifiersClassNames,
       }}
       components={{
         IconLeft: ({ ..._props }) => <ChevronLeft className="h-4 w-4" />,

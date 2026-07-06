@@ -62,8 +62,8 @@ export interface DbTemplateShift {
   name: string | null;
   role_id: string | null;
   role_name: string | null;
-  remuneration_level_id: string | null;
-  remuneration_level: string | null;
+  remuneration_level: number | null;
+  remuneration_level_name: string | null;
   start_time: string;
   end_time: string;
   paid_break_minutes: number;
@@ -103,8 +103,8 @@ export interface TemplateShift {
   name?: string;
   roleId?: string;
   roleName?: string;
-  remunerationLevelId?: string;
-  remunerationLevel?: string;
+  remunerationLevel?: number;
+  remunerationLevelName?: string;
   startTime: string;
   endTime: string;
   netLength?: number;
@@ -283,16 +283,31 @@ export interface ValidationResult {
       CONVERSION FUNCTIONS
       ============================================================ */
 
+/**
+ * Coerce a remuneration level to its smallint number.
+ * DB column is smallint (HR framework); older editor state / payloads may
+ * carry the display label ("Level 4") — strip to the digits so the
+ * save_template_full RPC never sees a non-numeric value.
+ */
+export function normalizeRemunerationLevel(v: unknown): number | null {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string') {
+    const n = parseInt(v.replace(/\D+/g, ''), 10);
+    return Number.isNaN(n) ? null : n;
+  }
+  return null;
+}
+
 export function dbShiftToFrontend(dbShift: any): TemplateShift {
   return {
     id: dbShift.id,
     name: dbShift.name || undefined,
     roleId: dbShift.roleId || dbShift.role_id || undefined,
     roleName: dbShift.roleName || dbShift.role_name || undefined,
-    remunerationLevelId:
-      dbShift.remunerationLevelId || dbShift.remuneration_level_id || undefined,
     remunerationLevel:
-      dbShift.remunerationLevel || dbShift.remuneration_level || undefined,
+      normalizeRemunerationLevel(dbShift.remunerationLevel ?? dbShift.remuneration_level) ?? undefined,
+    remunerationLevelName:
+      dbShift.remunerationLevelName || dbShift.remuneration_level_name || undefined,
     startTime: dbShift.startTime || dbShift.start_time || '09:00',
     endTime: dbShift.endTime || dbShift.end_time || '17:00',
     netLength:
@@ -411,8 +426,8 @@ export function frontendToDbGroups(groups: Group[]): any[] {
         name: sh.name || null,
         roleId: sh.roleId || null,
         roleName: sh.roleName || null,
-        remunerationLevelId: sh.remunerationLevelId || null,
-        remunerationLevel: sh.remunerationLevel || null,
+        remunerationLevel: normalizeRemunerationLevel(sh.remunerationLevel),
+        remunerationLevelName: sh.remunerationLevelName || null,
         startTime: sh.startTime,
         endTime: sh.endTime,
         paidBreakDuration: sh.paidBreakDuration || 0,

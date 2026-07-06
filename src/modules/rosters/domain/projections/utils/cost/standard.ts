@@ -1,6 +1,8 @@
 import { CostCalculatorOptions, ShiftCostBreakdown } from './types';
-import { 
-  hd, WAGE_RATES, DEFAULT_RATE, ORDINARY_HOURS_CAP
+import {
+  hd, WAGE_RATES, DEFAULT_RATE, ORDINARY_HOURS_CAP,
+  ALLOWANCE_MEAL, ALLOWANCE_FIRST_AID_PER_HOUR,
+  ALLOWANCE_PROTEIN_SPILL, ALLOWANCE_SPLIT_SHIFT
 } from './constants';
 import { getTraineeBaseRate } from './trainee_matrix';
 import type { AwardContext } from './award-context';
@@ -37,8 +39,10 @@ function getApprenticeMultiplier(options: CostCalculatorOptions): number {
   if (type === 'adult') {
     multiplier = (APPRENTICE_MATRIX.adult as any)[year] || 1.0;
   } else if (type === 'school_based') {
+    // Schedule 4 (Apprentices) prescribes NO +25% loading for school-based
+    // apprentices — that in-lieu-of-leave loading is a Schedule 5 (Trainees)
+    // provision (§1.8.1) and is opt-in. Applying it here over-paid apprentices.
     multiplier = (APPRENTICE_MATRIX.school_based as any)[year] || 0.50;
-    multiplier *= 1.25;
   } else {
     const branch = hasYr12 ? APPRENTICE_MATRIX.standard.yr12 : APPRENTICE_MATRIX.standard.no_yr12;
     multiplier = (branch as any)[year] || 0.50;
@@ -173,7 +177,24 @@ export function estimateDetailedShiftCost(
   }
 
   const netHours = Math.max(0, (calculatedMins || 0) / 60);
-  const ordinaryHours = Math.min(netHours, ORDINARY_HOURS_CAP);
+
+  // ── Overtime (Clause 42) — computed BEFORE ordinary so the two never overlap ─
+  // FT/PT: overtime is time beyond the rostered hours OR beyond the 12h/day
+  // ordinary cap. Casuals: overtime only past the 12h/day ordinary cap.
+  const scheduledHours = (options.scheduled_length_minutes || 0) / 60;
+  let overtimeHours: number;
+  if (!isCasual && scheduledHours > 0) {
+    overtimeHours = Math.max(0, netHours - scheduledHours, netHours - ORDINARY_HOURS_CAP);
+  } else {
+    overtimeHours = Math.max(0, netHours - ORDINARY_HOURS_CAP);
+  }
+
+  // Ordinary hours are what remains after removing overtime — never counted as
+  // both. The old `Math.min(netHours, 12)` billed hours between scheduled and 12
+  // as ordinary AND overtime whenever netHours > scheduledHours (a systematic
+  // FT/PT over-count). For the normal path (netHours <= scheduledHours) this is
+  // identical to the old value, so projection totals are unchanged there.
+  const ordinaryHours = Math.max(0, netHours - overtimeHours);
 
   // ── Penalty multipliers ────────────────────────────────────────────────
   let penaltyRate = baseRate;
@@ -187,8 +208,23 @@ export function estimateDetailedShiftCost(
     }
   }
 
-  const ordinaryCost = ordinaryHours * penaltyRate;
-  
+  // ── Minimum-payment floor (cl. 12.3(e) / 12.4(c) / 12.5(c) / 56.2) ───────
+  // A part-time / flexi / casual engagement is PAID for at least the minimum
+  // hours even when fewer are worked (e.g. sent home early, or a casual reports
+  // to a changed/cancelled start under cl. 38.3). Full-time members are weekly-
+  // salaried with no per-engagement minimum and are excluded. Sundays and public
+  // holidays floor at 4h (cl. 56.2 / 12.x); otherwise 3h. The 2h training-on-a-
+  // non-event-day floor (12.4(c)a / 12.5(c)a) is not modelled — the engine has
+  // no is_training input — so the standard floor is used there.
+  const isFullTime = /full/i.test(employmentType || '');
+  let paidOrdinaryHours = ordinaryHours;
+  if (!isFullTime && netHours > 0) {
+    const floorHours = (isHoliday || dayOfWeek === 0 /* Sunday */) ? 4 : 3;
+    if (paidOrdinaryHours < floorHours) paidOrdinaryHours = floorHours;
+  }
+
+  const ordinaryCost = paidOrdinaryHours * penaltyRate;
+
   // ── 4. Night Shift Allowance (Clause 43) ─────────────────────────────
   let nightAllowanceCost = 0;
   let nightHours = 0;
@@ -207,21 +243,18 @@ export function estimateDetailedShiftCost(
 
     const endDay = fastEndDayOfWeek(dayOfWeek, endMins, !!is_overnight);
     const allowanceMultiplier = getNightAllowanceMultiplier(endDay, isCasual) || 0;
-    nightAllowanceCost = nightHours * ordinaryRate * allowanceMultiplier;
+    // Clause 41.4 / Schedule 3 cl. 6.2(d): the Saturday, Sunday and public
+    // holiday loadings are NOT cumulative upon the night-shift allowance. When
+    // the day's ordinary hours already carry a penalty loading, the night
+    // allowance is not additionally payable (conservative single-loading rule).
+    const hasPenaltyLoading =
+      isHoliday || dayOfWeek === 6 /* Sat */ || dayOfWeek === 0 /* Sun */;
+    nightAllowanceCost = hasPenaltyLoading
+      ? 0
+      : nightHours * ordinaryRate * allowanceMultiplier;
   }
 
-  // 5. Overtime Calculation (Clause 42)
-  const scheduledHours = (options.scheduled_length_minutes || 0) / 60;
-  let overtimeHours = 0;
-  
-  if (!isCasual && scheduledHours > 0) {
-    // FT/PT: OT is excess of rostered hours OR excess of daily ordinary cap (12h)
-    overtimeHours = Math.max(0, netHours - scheduledHours, netHours - ORDINARY_HOURS_CAP);
-  } else {
-    // Casuals: OT is after the daily ordinary cap
-    overtimeHours = Math.max(0, netHours - ORDINARY_HOURS_CAP);
-  }
-
+  // 5. Overtime cost (Clause 42) — overtimeHours already computed above.
   const ot_th = Math.min(overtimeHours, 3);
   const ot_dt = Math.max(0, overtimeHours - 3);
   
@@ -234,15 +267,30 @@ export function estimateDetailedShiftCost(
     overtimeCost = (ot_th * 1.5 + ot_dt * 2.0) * ordinaryRate;
   }
 
-  const totalCost = (ordinaryCost || 0) + (overtimeCost || 0) + (nightAllowanceCost || 0);
+  // ── 6. Fixed allowances (Clause 28 / Schedule 2 §3) ──────────────────────
+  // Previously `options.allowances` was accepted but NEVER applied, so meal /
+  // first-aid / protein-spill / split-shift allowances reached no cost total.
+  let otherAllowanceCost = 0;
+  const al = options.allowances;
+  if (al) {
+    if (al.meal) otherAllowanceCost += ALLOWANCE_MEAL;                              // per occasion (cl. 28.1)
+    if (al.firstAid) otherAllowanceCost += ALLOWANCE_FIRST_AID_PER_HOUR * ordinaryHours; // per ordinary hour worked (cl. 28.2)
+    if (al.proteinSpill) otherAllowanceCost += ALLOWANCE_PROTEIN_SPILL;             // per shift (cl. 28.3)
+    // The split-shift allowance is NOT payable to casual Team Members (cl. 28.4).
+    if (al.splitShift && !isCasual) otherAllowanceCost += ALLOWANCE_SPLIT_SHIFT;    // per shift (cl. 28.4)
+  }
+
+  const allowanceCost = nightAllowanceCost + otherAllowanceCost;
+
+  const totalCost = (ordinaryCost || 0) + (overtimeCost || 0) + (allowanceCost || 0);
 
   return {
     totalCost: isNaN(totalCost) ? 0 : totalCost,
     ordinaryCost: isNaN(ordinaryCost) ? 0 : ordinaryCost,
     overtimeCost: isNaN(overtimeCost) ? 0 : overtimeCost,
-    penaltyCost: isNaN(nightAllowanceCost) ? 0 : nightAllowanceCost, // Approximation
-    allowanceCost: isNaN(nightAllowanceCost) ? 0 : nightAllowanceCost,
-    ordinaryHours: ordinaryHours || 0,
+    penaltyCost: isNaN(nightAllowanceCost) ? 0 : nightAllowanceCost, // night-shift allowance (Approximation)
+    allowanceCost: isNaN(allowanceCost) ? 0 : allowanceCost,
+    ordinaryHours: paidOrdinaryHours || 0,
     overtimeHours: overtimeHours || 0,
     breakdown: {
       baseRate: baseRate || 0,

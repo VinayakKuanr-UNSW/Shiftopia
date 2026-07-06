@@ -25,9 +25,37 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { shiftsQueries, type ShiftDeltaRow } from '../api/shifts.queries';
 import { shiftsCommands } from '../api/shifts.commands';
+import { applyShiftOp } from '../api/shifts.api';
+import { mapShiftOpResultToUx, type ShiftOp, type ShiftOpResult } from '../domain/shift-ops.contract';
 import { complianceService } from '../services/compliance.service';
 import type { Shift } from '../domain/shift.entity';
 import { shiftKeys, rosterKeys, type ShiftFilters } from '../api/queryKeys';
+
+/**
+ * Error thrown by gateway-backed mutations when the op did not apply (conflict,
+ * gone, rejected, …). The `.message` is the human-readable UX copy; `.shiftOpResult`
+ * carries the raw gateway envelope for richer handling (diff, refresh).
+ */
+export interface ShiftOpError extends Error {
+  shiftOpResult: ShiftOpResult;
+}
+
+/** Run a gateway op and throw a `ShiftOpError` (with UX copy) when it didn't apply. */
+async function runGatewayOp(args: {
+  shiftId: string;
+  expectedVersion: number;
+  op: ShiftOp;
+  payload?: Record<string, unknown>;
+}): Promise<ShiftOpResult> {
+  const res = await applyShiftOp(args);
+  if (!res.ok) {
+    const ux = mapShiftOpResultToUx(res);
+    throw Object.assign(new Error(ux.toast ?? 'Action could not be applied.'), {
+      shiftOpResult: res,
+    }) as ShiftOpError;
+  }
+  return res;
+}
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { isAppError } from '@/platform/supabase/rpc/errors';
 import { supabase } from '@/platform/supabase/client';
@@ -36,6 +64,22 @@ import { supabase } from '@/platform/supabase/client';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type { ShiftFilters };
+
+// ── Aggregate-invalidation helper ────────────────────────────────────────────
+
+/**
+ * Shift lifecycle/assignment changes alter the server-side aggregates
+ * (bucket summary cells + planner stats footer) — refetch them.
+ *
+ * Intentionally uses the default refetchType ('active') so that any
+ * summary or plannerStats query currently mounted in the viewport
+ * immediately fires a network request. Do NOT pass refetchType: 'none'
+ * here — the whole point is to unfreeze the visible bucket numbers.
+ */
+function invalidateShiftAggregates(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: shiftKeys.summaries });
+  queryClient.invalidateQueries({ queryKey: shiftKeys.plannerStatsRoot });
+}
 
 // ── Shared optimistic-update helpers ─────────────────────────────────────────
 
@@ -96,6 +140,20 @@ function findShiftDateInLists(
     if (!data || !Array.isArray(data)) continue;
     const found = data.find(s => s.id === shiftId);
     if (found?.shift_date) return found.shift_date;
+  }
+  return undefined;
+}
+
+/** Find a shift (the version the client is currently showing) in the lists cache. */
+function findShiftInLists(
+  queryClient: ReturnType<typeof useQueryClient>,
+  shiftId: string,
+): Shift | undefined {
+  const lists = queryClient.getQueriesData<Shift[]>({ queryKey: shiftKeys.lists });
+  for (const [, data] of lists) {
+    if (!data || !Array.isArray(data)) continue;
+    const found = data.find(s => s.id === shiftId);
+    if (found) return found;
   }
   return undefined;
 }
@@ -354,7 +412,85 @@ export function useRosterStructure(rosterId?: string) {
 
 // ── Mutation hooks ────────────────────────────────────────────────────────────
 
-/** Create a new shift. Cancels in-flight list queries, then invalidates on settle. */
+/**
+ * Build a provisional Shift entity from the create payload so the grid can
+ * render the new card before the server round-trip (compliance check +
+ * sm_create_shift + detail refetch) completes. Replaced by the confirmed row
+ * in onSuccess; removed by rollback in onError.
+ */
+function buildOptimisticShift(
+  tempId: string,
+  data: Parameters<typeof shiftsCommands.createShift>[0],
+): Shift {
+  const toMinutes = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+  let duration = toMinutes(data.end_time) - toMinutes(data.start_time);
+  if (duration <= 0) duration += 24 * 60; // overnight
+  const unpaid = data.unpaid_break_minutes || 0;
+  const paid = data.paid_break_minutes || 0;
+  const nowIso = new Date().toISOString();
+
+  return {
+    id: tempId,
+    roster_id: data.roster_id,
+    organization_id: data.organization_id ?? null,
+    department_id: data.department_id,
+    sub_department_id: data.sub_department_id ?? null,
+    shift_date: data.shift_date,
+    roster_date: data.shift_date,
+    start_time: data.start_time,
+    end_time: data.end_time,
+    start_at: data.start_at ?? null,
+    end_at: data.end_at ?? null,
+    is_overnight: toMinutes(data.end_time) <= toMinutes(data.start_time),
+    scheduled_length_minutes: duration,
+    net_length_minutes: duration - unpaid,
+    paid_break_minutes: paid,
+    unpaid_break_minutes: unpaid,
+    break_minutes: paid + unpaid,
+    timezone: data.timezone || 'Australia/Sydney',
+    group_type: data.group_type ?? null,
+    sub_group_name: data.sub_group_name ?? null,
+    display_order: data.display_order ?? 0,
+    shift_group_id: data.shift_group_id ?? null,
+    roster_subgroup_id: data.shift_subgroup_id ?? null,
+    role_id: data.role_id ?? null,
+    remuneration_level: data.remuneration_level ?? null,
+    assigned_employee_id: data.assigned_employee_id ?? null,
+    assigned_at: data.assigned_employee_id ? nowIso : null,
+    assignment_status: data.assigned_employee_id ? 'assigned' : 'unassigned',
+    assignment_outcome: null,
+    fulfillment_status: 'none',
+    lifecycle_status: 'Draft',
+    is_draft: true,
+    is_published: false,
+    is_cancelled: false,
+    is_locked: false,
+    is_on_bidding: false,
+    bidding_status: 'not_on_bidding',
+    trading_status: 'NoTrade',
+    trade_requested_at: null,
+    attendance_status: 'unknown',
+    event_ids: data.event_ids ?? [],
+    tags: data.tags ?? [],
+    required_skills: data.required_skills ?? [],
+    required_licenses: data.required_licenses ?? [],
+    notes: data.notes ?? null,
+    is_training: data.is_training ?? false,
+    version: 0,
+    created_at: nowIso,
+    updated_at: nowIso,
+    deleted_at: null,
+  } as unknown as Shift;
+}
+
+/**
+ * Create a new shift — optimistic. The provisional card appears in every
+ * cached list covering the shift's date immediately; the server-confirmed
+ * row replaces it on success, and a rollback removes it on error.
+ */
 export function useCreateShift() {
   const queryClient = useQueryClient();
 
@@ -362,23 +498,37 @@ export function useCreateShift() {
     mutationFn: (data: Parameters<typeof shiftsCommands.createShift>[0]) =>
       shiftsCommands.createShift(data),
 
-    onMutate: async () => {
+    onMutate: async (data) => {
       // Prevent race: a stale refetch should not overwrite the coming server response
       await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
+      const snapshot = snapshotLists(queryClient);
+      const tempId = `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      patchLists(
+        queryClient,
+        (old) => [...old, buildOptimisticShift(tempId, data)],
+        dateInRange(data.shift_date),
+      );
+      return { snapshot, tempId };
     },
 
-    onSuccess: (newShift) => {
-      // Insert the confirmed shift into all list caches that cover its date
+    onSuccess: (newShift, _vars, context) => {
+      // Swap the provisional card for the confirmed server row
       patchLists(queryClient, (old) => {
+        const withoutTemp = old.filter(s => s.id !== context?.tempId);
         // Avoid inserting duplicate if cache was already updated elsewhere
-        if (old.some(s => s.id === newShift.id)) return old;
-        return [...old, newShift as unknown as Shift];
+        if (withoutTemp.some(s => s.id === newShift.id)) return withoutTemp;
+        return [...withoutTemp, newShift as unknown as Shift];
       });
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
     },
 
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -470,13 +620,15 @@ export function useDeleteShift() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (shiftId: string) => {
-      const success = await shiftsCommands.deleteShift(shiftId);
-      if (!success) throw new Error('Failed to delete shift on the server.');
-      return success;
-    },
+    // Routed through the optimistic-concurrency gateway: a SOFT delete (deleted_at)
+    // guarded by the shift `version` the UI was showing. Two managers can no longer
+    // both delete/clobber the same shift — the stale one gets a VERSION_CONFLICT.
+    // Safe for UX because every roster read filters `deleted_at IS NULL` and
+    // delta-sync evicts tombstoned rows. (Hard archival remains via sm_delete_shift.)
+    mutationFn: ({ shiftId, expectedVersion }: { shiftId: string; expectedVersion: number }) =>
+      runGatewayOp({ shiftId, expectedVersion, op: 'delete' }),
 
-    onMutate: async (shiftId) => {
+    onMutate: async ({ shiftId }) => {
       await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
       const snapshot = snapshotLists(queryClient);
 
@@ -491,8 +643,15 @@ export function useDeleteShift() {
       return { snapshot };
     },
 
-    onError: (_err, _id, context) => {
+    onError: (err, _vars, context) => {
       if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
+      // A conflict / gone means our cache was stale — pull the truth back so the
+      // restored card reflects the other manager's change.
+      const code = (err as Partial<ShiftOpError>)?.shiftOpResult?.code;
+      if (code === 'VERSION_CONFLICT' || code === 'GONE') {
+        queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+        queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+      }
     },
 
     onSettled: () => {
@@ -500,6 +659,34 @@ export function useDeleteShift() {
       // removed the shift from cache. A refetch would just confirm it's gone.
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: rosterKeys.all, refetchType: 'none' });
+      invalidateShiftAggregates(queryClient);
+    },
+  });
+}
+
+/**
+ * Generic optimistic-concurrency mutation through the shift gateway
+ * (`sm_apply_shift_op`). Callers pass the shift's CURRENT `version`; a non-applied
+ * result is thrown as a {@link ShiftOpError} whose `.message` is ready-to-toast UX
+ * copy. Use for op call sites that don't need bespoke optimistic cache patching
+ * (the foundation for wiring edit / approve_trade / reject_trade once their
+ * gateway-semantics prerequisites are met).
+ */
+export function useApplyShiftOp() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (args: {
+      shiftId: string;
+      expectedVersion: number;
+      op: ShiftOp;
+      payload?: Record<string, unknown>;
+    }) => runGatewayOp(args),
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -533,6 +720,7 @@ export function useBulkAssignShifts() {
 
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -565,6 +753,7 @@ export function useBulkUnassignShifts() {
 
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -604,6 +793,7 @@ export function usePublishShift() {
     onSettled: (_data, _err, shiftId) => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: shiftKeys.detail(shiftId) });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -613,8 +803,23 @@ export function useUnpublishShift() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shiftId, reason }: { shiftId: string; reason?: string }) =>
-      shiftsCommands.unpublishShift(shiftId, reason),
+    // Route through the optimistic-concurrency gateway when we know the version
+    // the client is currently showing (detail cache → lists cache). That cached
+    // version IS the correct "expected version": if another manager changed this
+    // shift since our last sync, the gateway returns VERSION_CONFLICT (e.g. they
+    // selected a bid winner while we tried to unpublish). When the version isn't
+    // cached, fall back to the legacy direct RPC (no CAS). The gateway `unpublish`
+    // branch is a faithful mirror of sm_unpublish_shift.
+    mutationFn: ({ shiftId, reason }: { shiftId: string; reason?: string }) => {
+      const cachedVersion =
+        queryClient.getQueryData<Shift>(shiftKeys.detail(shiftId))?.version ??
+        findShiftInLists(queryClient, shiftId)?.version;
+      if (typeof cachedVersion === 'number') {
+        return runGatewayOp({ shiftId, expectedVersion: cachedVersion, op: 'unpublish', payload: { reason } })
+          .then(res => ({ success: res.ok, error: res.code !== 'APPLIED' ? res.code : undefined }));
+      }
+      return shiftsCommands.unpublishShift(shiftId, reason);
+    },
 
     onMutate: async ({ shiftId }) => {
       await queryClient.cancelQueries({ queryKey: shiftKeys.lists });
@@ -646,8 +851,14 @@ export function useUnpublishShift() {
       return { snapshot };
     },
 
-    onError: (_err, _vars, context) => {
+    onError: (err, _vars, context: any) => {
       if (context?.snapshot) rollbackLists(queryClient, context.snapshot);
+      // A conflict / gone means our cached version was stale — pull the truth back.
+      const code = (err as Partial<ShiftOpError>)?.shiftOpResult?.code;
+      if (code === 'VERSION_CONFLICT' || code === 'GONE') {
+        queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+        queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+      }
     },
 
     onSettled: (_data, _err, { shiftId }) => {
@@ -655,6 +866,7 @@ export function useUnpublishShift() {
       queryClient.invalidateQueries({ queryKey: shiftKeys.detail(shiftId) });
       queryClient.invalidateQueries({ queryKey: ['shifts', 'offers'] });
       queryClient.invalidateQueries({ queryKey: ['shifts', 'offerCount'] });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -721,6 +933,7 @@ export function useBulkUnpublishShifts() {
       shiftIds.forEach(id => queryClient.invalidateQueries({ queryKey: shiftKeys.detail(id) }));
       queryClient.invalidateQueries({ queryKey: ['shifts', 'offers'] });
       queryClient.invalidateQueries({ queryKey: ['shifts', 'offerCount'] });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -777,6 +990,7 @@ export function useBulkPublishShifts() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -814,6 +1028,7 @@ export function useBulkDeleteShifts() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -930,6 +1145,7 @@ export function useDropShift() {
       queryClient.invalidateQueries({ queryKey: rosterKeys.all });
       // Invalidate employee bids so stale "Accepted — Assigned to You" entries disappear
       queryClient.invalidateQueries({ queryKey: ['myBids'] });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }
@@ -1072,6 +1288,7 @@ export function useCancelShift() {
 
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists, refetchType: 'none' });
+      invalidateShiftAggregates(queryClient);
     },
   });
 }

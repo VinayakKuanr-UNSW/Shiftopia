@@ -9,7 +9,7 @@ export interface ContractFormState {
     department_id: string;
     sub_department_id: string;
     role_id: string;
-    rem_level_id: string;
+    remuneration_level: number | '';
     employment_status: string;
     contracted_weekly_hours: number;
     annual_guaranteed_hours?: number;
@@ -37,7 +37,7 @@ const INITIAL_STATE: ContractFormState = {
     department_id: '',
     sub_department_id: '',
     role_id: '',
-    rem_level_id: '',
+    remuneration_level: '',
     employment_status: '',
     contracted_weekly_hours: 0,
     annual_guaranteed_hours: 0,
@@ -124,7 +124,7 @@ export const useContractForm = (employeeId: string, onSuccess?: () => void) => {
         });
     };
 
-    const updateRole = (roleId: string, linkedRemLevelId?: string, employmentType?: string) => {
+    const updateRole = (roleId: string, linkedRemLevel?: number, employmentType?: string) => {
         setFormData(prev => {
             let nextStatus = prev.employment_status;
             if (employmentType) {
@@ -154,7 +154,7 @@ export const useContractForm = (employeeId: string, onSuccess?: () => void) => {
             return {
                 ...prev,
                 role_id: roleId,
-                rem_level_id: linkedRemLevelId || prev.rem_level_id,
+                remuneration_level: linkedRemLevel !== undefined ? linkedRemLevel : prev.remuneration_level,
                 employment_status: nextStatus,
                 contracted_weekly_hours: nextHours,
                 annual_guaranteed_hours: nextAnnualHours
@@ -168,7 +168,7 @@ export const useContractForm = (employeeId: string, onSuccess?: () => void) => {
         if (!formData.department_id) missing.push('Department');
         if (!formData.sub_department_id) missing.push('Sub-Department');
         if (!formData.role_id) missing.push('Role');
-        if (!formData.rem_level_id) missing.push('Remuneration Level');
+        if (formData.remuneration_level === '') missing.push('Remuneration Level');
         return missing;
     };
 
@@ -185,13 +185,13 @@ export const useContractForm = (employeeId: string, onSuccess?: () => void) => {
 
         setIsSubmitting(true);
         try {
-            const { error } = await (supabase as any).from('user_contracts').insert({
+            const { error } = await (supabase as any).schema('hr').from('user_contracts').insert({
                 user_id: employeeId,
                 organization_id: formData.organization_id,
                 department_id: formData.department_id,
                 sub_department_id: formData.sub_department_id,
                 role_id: formData.role_id,
-                rem_level_id: formData.rem_level_id,
+                remuneration_level: formData.remuneration_level,
                 employment_status: formData.employment_status,
                 contracted_weekly_hours: formData.contracted_weekly_hours,
                 annual_guaranteed_hours: formData.annual_guaranteed_hours,
@@ -222,7 +222,7 @@ export const useContractForm = (employeeId: string, onSuccess?: () => void) => {
             setFormData(prev => ({
                 ...prev,
                 role_id: '',
-                rem_level_id: '',
+                remuneration_level: '',
             }));
 
             if (onSuccess) onSuccess();

@@ -13,6 +13,13 @@ export interface SwapParty {
     received_shift:        RosterShift;
     given_shift:           RosterShift;
     is_student_visa?:      boolean;
+    /**
+     * Employment status of this party. Drives contract-scoped rules (e.g.
+     * V8_ORD_HOURS_AVG, which exempts CASUAL). When absent/null the engine
+     * defaults to CASUAL so behaviour is unchanged for legacy callers.
+     */
+    contract_type?:            'FT' | 'PT' | 'CASUAL' | null;
+    contracted_weekly_hours?:  number;
 }
 
 export interface SwapScenario {

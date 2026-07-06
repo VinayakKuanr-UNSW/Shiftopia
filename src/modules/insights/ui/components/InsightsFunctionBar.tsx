@@ -1,5 +1,5 @@
 import React from 'react';
-import { RefreshCw, BarChart2, Users, ShieldCheck } from 'lucide-react';
+import { RefreshCw, BarChart2, Users, ShieldCheck, Activity } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import {
   Select,
@@ -13,6 +13,7 @@ import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 
 interface InsightsFunctionBarProps {
+  activeTab: string;
   preset: string;
   onPresetChange: (preset: string) => void;
   presetLabels: Record<string, string>;
@@ -20,10 +21,17 @@ interface InsightsFunctionBarProps {
   startDate: string;
   endDate: string;
   onRefresh: () => void;
+  
+  // Performance Tab props
+  selectedQuarterLabel?: string;
+  quarterOptions?: { label: string; year: number; quarter: number }[];
+  onQuarterChange?: (label: string) => void;
+  
   className?: string;
 }
 
 export const InsightsFunctionBar: React.FC<InsightsFunctionBarProps> = ({
+  activeTab,
   preset,
   onPresetChange,
   presetLabels,
@@ -31,6 +39,9 @@ export const InsightsFunctionBar: React.FC<InsightsFunctionBarProps> = ({
   startDate,
   endDate,
   onRefresh,
+  selectedQuarterLabel,
+  quarterOptions,
+  onQuarterChange,
   className,
 }) => {
   const { isDark } = useTheme();
@@ -55,38 +66,69 @@ export const InsightsFunctionBar: React.FC<InsightsFunctionBarProps> = ({
             <ShieldCheck className="h-4 w-4" />
             Compliance
           </TabsTrigger>
+          <TabsTrigger value="performance" className="gap-2 px-4 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold text-[10px] lg:text-xs uppercase tracking-widest">
+            <Activity className="h-4 w-4" />
+            Team Performance
+          </TabsTrigger>
         </TabsList>
 
         <div className="h-6 w-px bg-border/20 hidden md:block mx-2" />
 
-        {/* Date Selector */}
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Period</span>
-          <Select value={preset} onValueChange={onPresetChange}>
-            <SelectTrigger className={cn(
-              "w-40 h-10 lg:h-11 border-none font-bold text-sm rounded-xl transition-all shadow-sm",
-              isDark ? "bg-white/5" : "bg-slate-900/5"
+        {/* Dynamic Selector based on active tab */}
+        {activeTab === 'performance' ? (
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 ml-1">Quarter</span>
+            <Select
+              value={selectedQuarterLabel}
+              onValueChange={onQuarterChange}
+            >
+              <SelectTrigger className={cn(
+                "w-40 h-10 lg:h-11 border-none font-bold text-sm rounded-xl transition-all shadow-sm",
+                isDark ? "bg-white/5" : "bg-slate-900/5"
+              )}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className={cn(
+                "border-none rounded-xl shadow-2xl",
+                isDark ? "bg-[#1c2333] text-foreground" : "bg-white"
+              )}>
+                {quarterOptions?.map(o => (
+                  <SelectItem key={o.label} value={o.label} className="font-semibold">
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Period</span>
+            <Select value={preset} onValueChange={onPresetChange}>
+              <SelectTrigger className={cn(
+                "w-40 h-10 lg:h-11 border-none font-bold text-sm rounded-xl transition-all shadow-sm",
+                isDark ? "bg-white/5" : "bg-slate-900/5"
+              )}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className={cn(
+                "border-none rounded-xl shadow-2xl",
+                isDark ? "bg-[#1c2333] text-foreground" : "bg-white"
+              )}>
+                {presets.map(p => (
+                  <SelectItem key={p} value={p} className="font-semibold">
+                    {presetLabels[p]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className={cn(
+              "text-[10px] font-black px-3 py-1.5 rounded-lg opacity-80",
+              isDark ? "bg-white/5 text-muted-foreground" : "bg-slate-900/5 text-slate-500"
             )}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className={cn(
-              "border-none rounded-xl shadow-2xl",
-              isDark ? "bg-[#1c2333] text-foreground" : "bg-white"
-            )}>
-              {presets.map(p => (
-                <SelectItem key={p} value={p} className="font-semibold">
-                  {presetLabels[p]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <span className={cn(
-            "text-[10px] font-black px-3 py-1.5 rounded-lg opacity-80",
-            isDark ? "bg-white/5 text-muted-foreground" : "bg-slate-900/5 text-slate-500"
-          )}>
-            {startDate} → {endDate}
-          </span>
-        </div>
+              {startDate} → {endDate}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-2">

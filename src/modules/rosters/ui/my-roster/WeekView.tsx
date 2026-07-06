@@ -48,8 +48,8 @@ const WeekView: React.FC<WeekViewProps> = ({ date, getShiftsForDate }) => {
     date: Date;
   } | null>(null);
 
-  // Start week on Sunday (weekStartsOn: 0) to match header
-  const start = startOfWeek(date, { weekStartsOn: 0 });
+  // Start week on Monday (app-wide Mon–Sun convention)
+  const start = startOfWeek(date, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
 
 

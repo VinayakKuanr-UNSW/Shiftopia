@@ -36,7 +36,7 @@ function makeShift(overrides: Partial<Shift> = {}): WorkerShiftDTO {
     shift_subgroup_id: null,
     role_id: 'role-1',
     role_level: null,
-    remuneration_level_id: 'level-1',
+    remuneration_level: 3,
     remuneration_rate: 25,
     actual_hourly_rate: null,
     currency: 'AUD',
@@ -115,14 +115,14 @@ function seedCost(dto: WorkerShiftDTO, totalCost: number): void {
 }
 
 const ROLES: RoleRecord[] = [
-  { id: 'role-1', name: 'V8Stage Hand',  code: 'SH',  remuneration_level_id: 'level-1' },
-  { id: 'role-2', name: 'AV Tech',     code: 'AVT', remuneration_level_id: 'level-1' },
-  { id: 'role-3', name: 'Usher',       code: 'USH', remuneration_level_id: 'level-2' },
+  { id: 'role-1', name: 'V8Stage Hand',  code: 'SH',  remuneration_level: 3 },
+  { id: 'role-2', name: 'AV Tech',     code: 'AVT', remuneration_level: 3 },
+  { id: 'role-3', name: 'Usher',       code: 'USH', remuneration_level: 1 },
 ];
 
 const LEVELS: LevelRecord[] = [
-  { id: 'level-1', level_name: 'Level 3 – Tech',     level_number: 3 },
-  { id: 'level-2', level_name: 'Level 1 – Casual',   level_number: 1 },
+  { level_name: 'Level 3 – Tech',     level_number: 3 },
+  { level_name: 'Level 1 – Casual',   level_number: 1 },
 ];
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -130,20 +130,20 @@ const LEVELS: LevelRecord[] = [
 describe('projectRoles — level structure', () => {
   it('groups shifts under their remuneration level', () => {
     const shifts = [
-      makeShift({ role_id: 'role-1', remuneration_level_id: 'level-1' }),
+      makeShift({ role_id: 'role-1', remuneration_level: 3 }),
     ];
     const result = projectRoles(shifts as unknown as WorkerShiftDTO[], { roles: rolesToDTO(ROLES), levels: levelsToDTO(LEVELS) });
-    const lv = result.levels.find(l => l.id === 'level-1');
+    const lv = result.levels.find(l => l.id === '3');
     expect(lv).toBeDefined();
     expect(lv!.roles.find(r => r.id === 'role-1')).toBeDefined();
   });
 
   it('sorts levels by level_number ascending', () => {
     const shifts = [
-      makeShift({ role_id: 'role-1', remuneration_level_id: 'level-1' }),
-      makeShift({ role_id: 'role-3', remuneration_level_id: 'level-2',
+      makeShift({ role_id: 'role-1', remuneration_level: 3 }),
+      makeShift({ role_id: 'role-3', remuneration_level: 1,
         roles: { id: 'role-3', name: 'Usher' },
-        remuneration_levels: { id: 'level-2', level_name: 'Level 1 – Casual', level_number: 1, hourly_rate_min: 15 },
+        remuneration_levels: { level_name: 'Level 1 – Casual', level_number: 1, hourly_rate_min: 15 },
       }),
     ];
     const result = projectRoles(shifts as unknown as WorkerShiftDTO[], { roles: rolesToDTO(ROLES), levels: levelsToDTO(LEVELS) });
@@ -151,17 +151,17 @@ describe('projectRoles — level structure', () => {
   });
 
   it('levels with no shifts are omitted', () => {
-    const shifts = [makeShift({ role_id: 'role-1', remuneration_level_id: 'level-1' })];
+    const shifts = [makeShift({ role_id: 'role-1', remuneration_level: 3 })];
     const result = projectRoles(shifts as unknown as WorkerShiftDTO[], { roles: rolesToDTO(ROLES), levels: levelsToDTO(LEVELS) });
     // level-2 has no shifts
-    expect(result.levels.find(l => l.id === 'level-2')).toBeUndefined();
+    expect(result.levels.find(l => l.id === '1')).toBeUndefined();
   });
 });
 
 describe('projectRoles — unassigned roles', () => {
-  it('places shifts with no remuneration_level_id in unassignedRoles', () => {
+  it('places shifts with no remuneration_level in unassignedRoles', () => {
     const shifts = [
-      makeShift({ remuneration_level_id: null, roles: { id: 'role-x', name: 'Runner' } }),
+      makeShift({ remuneration_level: null, roles: { id: 'role-x', name: 'Runner' } }),
     ];
     const result = projectRoles(shifts as unknown as WorkerShiftDTO[]);
     expect(result.unassignedRoles).toHaveLength(1);
@@ -172,11 +172,11 @@ describe('projectRoles — unassigned roles', () => {
 describe('projectRoles — shiftsByDate', () => {
   it('groups shifts under the correct date key', () => {
     const shifts = [
-      makeShift({ shift_date: '2025-03-15', role_id: 'role-1', remuneration_level_id: 'level-1' }),
-      makeShift({ shift_date: '2025-03-16', role_id: 'role-1', remuneration_level_id: 'level-1' }),
+      makeShift({ shift_date: '2025-03-15', role_id: 'role-1', remuneration_level: 3 }),
+      makeShift({ shift_date: '2025-03-16', role_id: 'role-1', remuneration_level: 3 }),
     ];
     const result = projectRoles(shifts as unknown as WorkerShiftDTO[], { roles: rolesToDTO(ROLES), levels: levelsToDTO(LEVELS) });
-    const lv     = result.levels.find(l => l.id === 'level-1')!;
+    const lv     = result.levels.find(l => l.id === '3')!;
     const role   = lv.roles.find(r => r.id === 'role-1')!;
     expect(Object.keys(role.shiftsByDate)).toHaveLength(2);
     expect(role.shiftsByDate['2025-03-15']).toHaveLength(1);
@@ -188,14 +188,14 @@ describe('projectRoles — totalHours / totalCost aggregation', () => {
   it('level totalHours sums across all roles in that level', () => {
     // Cost is employee-dependent: assigned shifts read their cost from the
     // projection cache (seeded here), unassigned shifts contribute zero.
-    const s1 = makeShift({ assigned_employee_id: 'emp-1', role_id: 'role-1', remuneration_level_id: 'level-1', net_length_minutes: 480, remuneration_rate: 30 });
-    const s2 = makeShift({ assigned_employee_id: 'emp-2', role_id: 'role-2', remuneration_level_id: 'level-1', net_length_minutes: 240, remuneration_rate: 30,
+    const s1 = makeShift({ assigned_employee_id: 'emp-1', role_id: 'role-1', remuneration_level: 3, net_length_minutes: 480, remuneration_rate: 30 });
+    const s2 = makeShift({ assigned_employee_id: 'emp-2', role_id: 'role-2', remuneration_level: 3, net_length_minutes: 240, remuneration_rate: 30,
       roles: { id: 'role-2', name: 'AV Tech' },
     });
     seedCost(s1, 240); // 8h * 30
     seedCost(s2, 120); // 4h * 30
     const result = projectRoles([s1, s2], { roles: rolesToDTO(ROLES), levels: levelsToDTO(LEVELS) });
-    const lv = result.levels.find(l => l.id === 'level-1')!;
+    const lv = result.levels.find(l => l.id === '3')!;
     expect(lv.totalHours).toBeCloseTo(12); // 8h + 4h
     expect(lv.totalCost).toBeCloseTo(360);  // 8*30 + 4*30
   });
@@ -204,13 +204,13 @@ describe('projectRoles — totalHours / totalCost aggregation', () => {
 describe('projectRoles — levelColorClass', () => {
   it('applies a purple colour class for level ≥ 7', () => {
     const lvShift = makeShift({
-      remuneration_level_id: 'level-9',
-      remuneration_levels: { id: 'level-9', level_name: 'Level 9', level_number: 9, hourly_rate_min: 50 },
+      remuneration_level: 9,
+      remuneration_levels: { level_name: 'Level 9', level_number: 9, hourly_rate_min: 50 },
     });
     const result = projectRoles([lvShift], {
-      levels: levelsToDTO([{ id: 'level-9', level_name: 'Level 9', level_number: 9 }] as any),
+      levels: levelsToDTO([{ level_name: 'Level 9', level_number: 9 }] as any),
     });
-    const lv = result.levels.find(l => l.id === 'level-9')!;
+    const lv = result.levels.find(l => l.id === '9')!;
     expect(lv.colorClass).toContain('purple');
   });
 });

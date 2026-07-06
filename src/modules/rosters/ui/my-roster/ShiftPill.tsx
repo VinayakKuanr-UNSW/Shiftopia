@@ -27,6 +27,7 @@ const ShiftPill: React.FC<ShiftPillProps> = ({
     if (name.includes('convention')) return 'convention';
     if (name.includes('exhibition')) return 'exhibition';
     if (name.includes('theatre')) return 'theatre';
+    if (name.includes('cutaway')) return 'cutaway';
     return 'default';
   }, [groupColor]);
 
@@ -55,6 +56,14 @@ const ShiftPill: React.FC<ShiftPillProps> = ({
           accent: 'bg-rose-500',
           text: 'text-rose-700 dark:text-rose-300',
           time: 'text-rose-600/60 dark:text-rose-400/60'
+        };
+      case 'cutaway':
+        return {
+          bg: 'bg-amber-500/10 hover:bg-amber-500/20',
+          border: 'border-amber-500/40',
+          accent: 'bg-amber-500',
+          text: 'text-amber-700 dark:text-amber-300',
+          time: 'text-amber-600/60 dark:text-amber-400/60'
         };
       default:
         return {
@@ -145,6 +154,7 @@ const ShiftPill: React.FC<ShiftPillProps> = ({
         groupVariant === 'convention' ? 'shadow-[inset_0_0_12px_rgba(59,130,246,0.2)]' :
         groupVariant === 'exhibition' ? 'shadow-[inset_0_0_12px_rgba(16,185,129,0.2)]' :
         groupVariant === 'theatre' ? 'shadow-[inset_0_0_12px_rgba(244,63,94,0.2)]' :
+        groupVariant === 'cutaway' ? 'shadow-[inset_0_0_12px_rgba(245,158,11,0.2)]' :
         'shadow-[inset_0_0_12px_rgba(148,163,184,0.2)]'
       )} />
     </button>

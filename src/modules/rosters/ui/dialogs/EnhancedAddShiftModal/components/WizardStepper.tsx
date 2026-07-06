@@ -69,7 +69,7 @@ export const WizardStepper: React.FC<WizardStepperProps> = ({
                                     'h-7 w-7 rounded-full flex items-center justify-center border-2 transition-all duration-300',
                                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                                     isCurrent &&
-                                        'bg-indigo-500 border-indigo-500 text-white scale-110 shadow-[0_0_18px_-2px_rgba(99,102,241,0.6)]',
+                                        'bg-indigo-500 border-indigo-500 text-white scale-110 shadow-sm',
                                     isCompleted && !isCurrent &&
                                         'bg-emerald-500/15 border-emerald-500 text-emerald-500',
                                     !isCurrent && !isCompleted &&

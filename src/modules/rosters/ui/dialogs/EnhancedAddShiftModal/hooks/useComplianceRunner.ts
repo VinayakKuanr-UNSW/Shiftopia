@@ -75,6 +75,9 @@ export function useComplianceRunner({
                 current_shifts: input.existing_shifts.map(s => ({ ...s })) as any,
                 candidate_shift: { ...input.candidate_shift } as any,
                 action_type:    (input.action_type as 'add' | 'assign' | 'bid') ?? 'assign',
+                // Hydrates contract-scoped rules (V8_SPLIT_SHIFT needs PT/flexi;
+                // V8_ORD_HOURS_AVG is exempt for casual). Absent → casual.
+                employee_context: input.employee_context,
                 config: {
                     rest_gap_hours:           input.rest_gap_hours,
                     averaging_cycle_weeks:    input.averaging_cycle_weeks,

@@ -21,8 +21,8 @@ export type ShiftStateID =
     | 'S3'      // Published – Offered   (assigned + outcome = null)
     | 'S4'      // Published – Confirmed
     | 'S5'      // Published – Bidding   (unassigned)
-    | 'S9'      // Published – Trade Requested
-    | 'S10'     // Published – Trade Accepted
+    | 'S9'      // Published – Trade Requested (Pending Peer)   — display: S6
+    | 'S10'     // Published – Trade Requested (Pending Manager) — display: S7
     | 'S11'     // In Progress
     | 'S13'     // Completed
     | 'S15'     // Cancelled
@@ -41,7 +41,20 @@ export interface ShiftFSMInput {
 // ─── State metadata ───────────────────────────────────────────────────────────
 
 export interface ShiftFSMStateInfo {
+    /**
+     * Canonical state ID. This is a stable TS↔PL/pgSQL contract — DB transition
+     * guards (`sm_*`, `publish_shift`) branch on these exact strings returned by
+     * `get_shift_fsm_state()`. NEVER renumber it. For the user-facing badge use
+     * {@link ShiftFSMStateInfo.displayId} instead.
+     */
     id: ShiftStateID;
+    /**
+     * Gapless, user-facing ID shown on cards (S1…S10). The deprecated tombstone
+     * states (old S6/S7/S8/S12/S14) left holes in the canonical numbering, so the
+     * UI collapses the survivors back to a clean sequence. Display-only — keep all
+     * logic, tests, and DB on `id`.
+     */
+    displayId: string;
     label: string;
     description: string;
     /** Tailwind colour token — use with bg-/text-/border- prefixes */
@@ -49,18 +62,57 @@ export interface ShiftFSMStateInfo {
 }
 
 export const FSM_STATE_META: Record<ShiftStateID, ShiftFSMStateInfo> = {
-    S1:  { id: 'S1',  label: 'Draft',             description: 'Created, not yet assigned or published',    color: 'slate'   },
-    S2:  { id: 'S2',  label: 'Draft (Assigned)',   description: 'Assigned in draft — not yet published',     color: 'slate'   },
-    S3:  { id: 'S3',  label: 'Offered',            description: 'Published and offered to an employee',      color: 'blue'    },
-    S4:  { id: 'S4',  label: 'Confirmed',          description: 'Assignment accepted and confirmed',         color: 'emerald' },
-    S5:  { id: 'S5',  label: 'Bidding',            description: 'Open for employee bids',                    color: 'violet'  },
-    S9:  { id: 'S9',  label: 'Trade Requested',    description: 'Employee has requested a trade',            color: 'amber'   },
-    S10: { id: 'S10', label: 'Trade Accepted',     description: 'Trade accepted — awaiting manager approval',color: 'orange'  },
-    S11: { id: 'S11', label: 'In Progress',        description: 'Shift has started',                         color: 'blue'    },
-    S13:     { id: 'S13',     label: 'Completed',          description: 'Shift has ended',                           color: 'gray'    },
-    S15:     { id: 'S15',     label: 'Cancelled',          description: 'Shift has been cancelled',                  color: 'red'     },
-    UNKNOWN: { id: 'UNKNOWN', label: 'Unknown',            description: 'Unrecognized shift state — stale DB data',  color: 'gray'    },
+    S1:  { id: 'S1',  displayId: 'S1',  label: 'Draft',             description: 'Created, not yet assigned or published',    color: 'slate'   },
+    S2:  { id: 'S2',  displayId: 'S2',  label: 'Draft (Assigned)',   description: 'Assigned in draft — not yet published',     color: 'slate'   },
+    S3:  { id: 'S3',  displayId: 'S3',  label: 'Offered',            description: 'Published and offered to an employee',      color: 'blue'    },
+    S4:  { id: 'S4',  displayId: 'S4',  label: 'Confirmed',          description: 'Assignment accepted and confirmed',         color: 'emerald' },
+    S5:  { id: 'S5',  displayId: 'S5',  label: 'Bidding',            description: 'Open for employee bids',                    color: 'violet'  },
+    S9:  { id: 'S9',  displayId: 'S6',  label: 'Trade Requested (Pending Peer)',    description: 'Employee has requested a trade — awaiting a peer to accept',  color: 'amber'   },
+    S10: { id: 'S10', displayId: 'S7',  label: 'Trade Requested (Pending Manager)', description: 'Trade accepted by a peer — awaiting manager approval',        color: 'orange'  },
+    S11: { id: 'S11', displayId: 'S8',  label: 'In Progress',        description: 'Shift has started',                         color: 'blue'    },
+    S13:     { id: 'S13',     displayId: 'S9',  label: 'Completed',          description: 'Shift has ended',                           color: 'gray'    },
+    S15:     { id: 'S15',     displayId: 'S10', label: 'Cancelled',          description: 'Shift has been cancelled',                  color: 'red'     },
+    UNKNOWN: { id: 'UNKNOWN', displayId: '—',   label: 'Unknown',            description: 'Unrecognized shift state — stale DB data',  color: 'gray'    },
 };
+
+/** Hex colours for the Tailwind tokens above — for inline-styled badges/rows. */
+export const FSM_COLOR_HEX: Record<ShiftFSMStateInfo['color'], string> = {
+    slate:   '#64748B',
+    blue:    '#3B82F6',
+    violet:  '#8B5CF6',
+    emerald: '#10B981',
+    amber:   '#F59E0B',
+    orange:  '#F97316',
+    red:     '#EF4444',
+    gray:    '#94A3B8',
+};
+
+/** Display descriptor for a shift's State badge/row. */
+export interface ShiftStateDisplay {
+    /** Gapless UI id (S1…S10). */
+    id: string;
+    label: string;
+    /** Hex colour for inline styling, matching the card's Time/Live rule rows. */
+    color: string;
+}
+
+/**
+ * Resolve the user-facing State descriptor for a card. Uses the gapless
+ * {@link ShiftFSMStateInfo.displayId} and maps the colour token to a hex value so
+ * it can sit alongside the Time Rules / Live Rules rows.
+ *
+ * There is no emergent `*` suffix: S3 (Offered) and S5 (Bidding) auto-expire at
+ * TTS = 4h (S3 → S2, S5 → S1) before they can enter the emergent window, so an
+ * emergent S3/S5 is not a representable state.
+ */
+export function getShiftStateDisplay(state: ShiftStateID): ShiftStateDisplay {
+    const meta = FSM_STATE_META[state];
+    return {
+        id: meta.displayId,
+        label: meta.label,
+        color: FSM_COLOR_HEX[meta.color],
+    };
+}
 
 // ─── Core derivation function ─────────────────────────────────────────────────
 

@@ -3,9 +3,23 @@
  */
 
 import { SwapScenario, SolverResult, ConstraintViolation, SolverConfig } from './types';
-import { v8Engine } from '../engine';
-import { V8Employee, V8Shift, V8Status } from '../types';
+import { v8Engine, V8Engine } from '../engine';
+import { V8ContractType, V8Employee, V8Shift, V8Status } from '../types';
 import { ComplianceResult, ComplianceCalculation } from '../../types';
+
+/**
+ * Map a party's employment status ('FT'|'PT'|'CASUAL'|null) onto the V8 engine's
+ * ContractType. Absent/null → 'CASUAL' so behaviour is unchanged when no context
+ * is supplied (CASUAL is exempt from V8_ORD_HOURS_AVG).
+ */
+function toV8ContractType(t: 'FT' | 'PT' | 'CASUAL' | null | undefined): V8ContractType {
+    switch (t) {
+        case 'FT': return 'FULL_TIME';
+        case 'PT': return 'PART_TIME';
+        case 'CASUAL': return 'CASUAL';
+        default: return 'CASUAL';
+    }
+}
 
 export class V8SwapEngine {
     /**
@@ -14,19 +28,27 @@ export class V8SwapEngine {
     evaluate(scenario: SwapScenario, config?: SolverConfig): SolverResult {
         const t0 = performance.now();
 
+        // Honour the configurable cross-day rest gap (clause 40.2 — 8h by
+        // written agreement). Absent config preserves the 10h default engine.
+        const engine = config?.rest_gap_hours
+            ? new V8Engine({ min_rest_gap_minutes: config.rest_gap_hours * 60 })
+            : v8Engine;
+
         // 1. Evaluate Party A
         const empA: V8Employee = {
             id: scenario.partyA.employee_id,
             name: scenario.partyA.name,
-            contract_type: 'CASUAL', // Default, bridge will hydrate if needed
-            contracted_weekly_hours: 38
+            // Hydrated from the party's employment status. Absent/null → 'CASUAL'
+            // (unchanged legacy behaviour; CASUAL is exempt from V8_ORD_HOURS_AVG).
+            contract_type: toV8ContractType(scenario.partyA.contract_type ?? 'CASUAL'),
+            contracted_weekly_hours: scenario.partyA.contracted_weekly_hours ?? 38
         };
         const shiftsA: V8Shift[] = scenario.partyA.hypothetical_schedule.map(s => ({
             ...s,
             is_ordinary_hours: s.is_ordinary_hours ?? true
         }));
 
-        const resultA = v8Engine.evaluate(empA, shiftsA);
+        const resultA = engine.evaluate(empA, shiftsA);
 
         // 2. Evaluate Party B
         const isDummy = scenario.partyB.employee_id === '__assignment_dummy__';
@@ -43,7 +65,7 @@ export class V8SwapEngine {
                 ...s,
                 is_ordinary_hours: s.is_ordinary_hours ?? true
             }));
-            resultB = v8Engine.evaluate(empB, shiftsB);
+            resultB = engine.evaluate(empB, shiftsB);
         }
 
         // 3. Aggregate Results

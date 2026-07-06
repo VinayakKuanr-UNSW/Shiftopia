@@ -226,7 +226,8 @@ const OfferItem: React.FC<{
             groupVariant={
                 offer.shift.group_type === 'convention_centre' ? 'convention' :
                 offer.shift.group_type === 'exhibition_centre' ? 'exhibition' :
-                offer.shift.group_type === 'theatre' ? 'theatre' : 'default'
+                offer.shift.group_type === 'theatre' ? 'theatre' :
+                offer.shift.group_type === 'the_cutaway' ? 'cutaway' : 'default'
             }
             footerActions={footerActions}
         />

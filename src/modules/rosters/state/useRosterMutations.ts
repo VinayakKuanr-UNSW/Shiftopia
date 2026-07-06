@@ -70,7 +70,7 @@ export function useAddSubGroup() {
 interface AddSubGroupRangeVariables {
   organizationId:  string;
   departmentId:    string;
-  subDepartmentId: string;
+  subDepartmentId: string | null;
   groupExternalId: string;
   name:            string;
   startDate:       string;
@@ -86,7 +86,7 @@ export function useAddSubGroupRange() {
       const { error } = await supabase.rpc('add_roster_subgroup_range', {
         p_org_id:            vars.organizationId,
         p_dept_id:           vars.departmentId,
-        p_sub_dept_id:       vars.subDepartmentId,
+        p_sub_dept_id:       vars.subDepartmentId || null,
         p_group_external_id: vars.groupExternalId,
         p_name:              vars.name,
         p_start_date:        vars.startDate,

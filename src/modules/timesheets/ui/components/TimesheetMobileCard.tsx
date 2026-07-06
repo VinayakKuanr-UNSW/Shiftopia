@@ -185,6 +185,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
         const isConvention = type === 'convention_centre' || group.includes('convention') || dept.includes('convention') || subDept.includes('convention') || org.includes('convention');
         const isExhibition = type === 'exhibition_centre' || group.includes('exhibition') || dept.includes('exhibition') || subDept.includes('exhibition') || org.includes('exhibition');
         const isTheatre = type === 'theatre' || group.includes('theatre') || dept.includes('theatre') || subDept.includes('theatre') || org.includes('theatre');
+        const isCutaway = type === 'the_cutaway' || group.includes('cutaway') || dept.includes('cutaway') || subDept.includes('cutaway') || org.includes('cutaway');
 
         if (isConvention) return { 
             color: '#2563eb', 
@@ -200,13 +201,20 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
             tint: 'rgba(16, 185, 129, 0.04)'
         };
         
-        if (isTheatre) return { 
-            color: '#ef4444', 
-            secondary: '#dc2626', 
+        if (isTheatre) return {
+            color: '#ef4444',
+            secondary: '#dc2626',
             atmosphere: ['#991b1b', '#ef4444', '#f87171'],
             tint: 'rgba(239, 68, 68, 0.04)'
         };
-        
+
+        if (isCutaway) return {
+            color: '#d97706',
+            secondary: '#f59e0b',
+            atmosphere: ['#b45309', '#d97706', '#fbbf24'],
+            tint: 'rgba(245, 158, 11, 0.04)'
+        };
+
         return { color: '#9333ea', secondary: '#a855f7', atmosphere: ['#7e22ce', '#9333ea', '#c084fc'], tint: 'transparent' };
     }, [entry.groupType, entry.group, entry.department, entry.subDepartment, entry.organization]);
 
@@ -297,7 +305,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
                     return parts[0] * 60 + parts[1];
                 }
-                return (parseInt(entry.netLength, 10) || 0) * 60;
+                return parseInt(entry.netLength, 10) || 0;
             })()}
             paidBreak={parseInt(entry.paidBreak) || 0}
             unpaidBreak={parseInt(entry.unpaidBreak) || 0}
@@ -309,23 +317,30 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 if (type === 'convention_centre' || group.includes('convention') || dept.includes('convention')) return 'convention';
                 if (type === 'exhibition_centre' || group.includes('exhibition') || dept.includes('exhibition')) return 'exhibition';
                 if (type === 'theatre' || group.includes('theatre') || dept.includes('theatre')) return 'theatre';
+                if (type === 'the_cutaway' || group.includes('cutaway') || dept.includes('cutaway')) return 'cutaway';
                 return 'default';
             })()}
             employeeName={entry.employee}
             clockIn={formatTime(entry.clockIn)}
             clockOut={formatTime(entry.clockOut)}
-            adjustedStart={formatTime(entry.adjustedStart)}
-            adjustedEnd={formatTime(entry.adjustedEnd)}
+            adjustedStart={formatTime(entry.adjustedStart) + (entry.adjustedStartSource === 'manual' && entry.adjustedStart ? ' *' : '')}
+            adjustedEnd={formatTime(entry.adjustedEnd) + (entry.adjustedEndSource === 'manual' && entry.adjustedEnd ? ' *' : '')}
             shiftData={{
                 lifecycle_status: entry.liveStatus,
                 assignment_outcome: entry.attendanceStatus,
                 attendance_status: entry.attendanceStatus,
                 attendance_note: entry.attendanceNote,
-                actual_start: entry.clockIn,
-                actual_end: entry.clockOut,
+                actual_start: entry.rawActualStart ?? entry.clockIn,
+                actual_end: entry.rawActualEnd ?? entry.clockOut,
                 adjusted_start: entry.adjustedStart,
                 adjusted_end: entry.adjustedEnd,
+                adjusted_start_is_manual: entry.adjustedStartSource === 'manual',
+                adjusted_end_is_manual: entry.adjustedEndSource === 'manual',
                 adjusted_is_manual: entry.isAdjustedManual,
+                adjusted_start_source: entry.adjustedStartSource,
+                adjusted_end_source: entry.adjustedEndSource,
+                start_at: entry.rawStartAt,
+                end_at: entry.rawEndAt,
                 shift_date: entry.date,
                 start_time: entry.scheduledStart,
                 end_time: entry.scheduledEnd,

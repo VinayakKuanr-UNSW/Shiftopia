@@ -10,7 +10,7 @@ export const formSchema = z.object({
     group_type: z.string().min(1, 'Group is required'),
     sub_group_name: z.string().min(1, 'Sub-group is required'),
     role_id: z.string().min(1, 'Role is required'),
-    remuneration_level_id: z.string().optional(),
+    remuneration_level: z.number().optional().nullable(),
     shift_date: z.date().optional(),
     start_time: z.string().min(1, 'Start time is required'),
     end_time: z.string().min(1, 'End time is required'),
@@ -51,7 +51,7 @@ export interface ShiftContext {
     sub_group_name?: string;
     employeeId?: string;
     roleId?: string;
-    remunerationLevelId?: string;
+    remunerationLevel?: number;
     rosterId?: string;
     eventStartTime?: string;
     eventEndTime?: string;
@@ -75,11 +75,11 @@ export interface EnhancedAddShiftModalProps {
 export interface Role {
     id: string;
     name: string;
-    remuneration_level_id?: string;
+    remuneration_level?: number;
 }
 
 export interface RemunerationLevel {
-    id: string;
+    level_number: number;
     level_name: string;
     hourly_rate_min: number;
     hourly_rate_max?: number;

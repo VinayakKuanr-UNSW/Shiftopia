@@ -98,10 +98,10 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                         isReadOnly
                             ? "bg-[#0a0a0c] border-slate-800/50 shadow-none"
                             : isPublished
-                                ? "bg-[#0c0512] border-purple-900/30 shadow-[0_0_40px_-12px_rgba(168,85,247,0.15)]"
+                                ? "bg-[#0c0512] border-purple-900/30 shadow-xl"
                                 : isEmergencyAssignment
-                                    ? "bg-[#09090b] border-indigo-500/15 shadow-[0_0_40px_-12px_rgba(99,102,241,0.1)]"
-                                    : "bg-card dark:bg-[#0a0c10] border-border/50"
+                                    ? "bg-[#0c0506] border-red-500/25 shadow-xl"
+                                    : "bg-card dark:bg-[#0a0c10] border-border/50 shadow-xl"
                     )}
                     aria-describedby={undefined}
                 >
@@ -167,7 +167,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                                     : isPublished
                                         ? "border-purple-500/15 bg-purple-950/15"
                                         : isEmergencyAssignment
-                                            ? "border-indigo-500/15 bg-indigo-950/15"
+                                            ? "border-red-500/15 bg-red-950/15"
                                             : "border-border/50 bg-card/80 dark:bg-[#0a0c10]/80"
                             )}>
                                 <Button
@@ -202,7 +202,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                                                 ? isPublished
                                                     ? "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-500/20 border border-purple-400/20"
                                                     : isEmergencyAssignment
-                                                        ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20 border border-indigo-400/20"
+                                                        ? "bg-red-600 hover:bg-red-500 text-white shadow-red-500/20 border border-red-400/20"
                                                         : "bg-amber-600 hover:bg-amber-500 text-white shadow-amber-500/20 border border-amber-400/20"
                                                 : "bg-slate-800/50 text-slate-500 cursor-not-allowed border border-white/5"
                                         )}

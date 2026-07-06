@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '@/platform/auth/useAuth';
 import MyRosterCalendar from '@/modules/rosters/ui/my-roster/MyRosterCalendar';
 import { MyOffersModal } from '@/modules/rosters/ui/my-roster/MyOffersModal';
-import { useRosterView, useMyRoster } from '@/modules/rosters';
+import { useMyRoster } from '@/modules/rosters';
 import { usePendingOfferCount, useMyOffers } from '@/modules/rosters/state/useRosterShifts';
 import { CalendarDays, Info, Loader2, Mail } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
@@ -136,7 +136,10 @@ const MyRosterNavigator: React.FC<{
 
 const MyRosterPage: React.FC = () => {
   const { user } = useAuth();
-  const { view, setView, selectedDate, setSelectedDate } = useRosterView();
+  // Personal roster owns its own view state (decoupled from the manager planner's
+  // shared store) so it always opens on the current week (Mon–Sun) preset.
+  const [view, setView] = useState<ViewType>('week');
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   useOrgSelection(); // keeps context subscription without unused destructure
   const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
 

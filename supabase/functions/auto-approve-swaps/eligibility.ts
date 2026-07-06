@@ -190,16 +190,48 @@ export function evaluateEligibility(
   }
 
   // ── 3.10 Availability (AUTO_REJECT_IF_FAIL) ─────────────────────────────────
-  // Fail CLOSED: unknown availability (null) is treated as unavailable.
+  // Tri-state per party: ok / unknown / bad.
+  //   - KNOWN-BAD (explicit false, or inactive worker) ⇒ normal fail (default
+  //     AUTO_REJECT_IF_FAIL, policy-configurable).
+  //   - UNKNOWN (null — availability data was not loaded) ⇒ fail with mode
+  //     FORCED to ROUTE_TO_REVIEW_IF_FAIL: never auto-approve on unknown data,
+  //     but never auto-REJECT a real swap just because a data source is absent
+  //     (in live mode that would bulk-reject every valid request). Respects an
+  //     explicit IGNORE (org opted out of availability checking entirely).
   {
-    const reqAvail = giveaway || !Os ? true : Ra.available_for_received === true && Ra.is_active;
-    const offAvail = Ob ? Ob.available_for_received === true && Ob.is_active : true;
-    emit('availability', reqAvail && offAvail ? 'pass' : 'fail', {
-      reqAvail,
-      offAvail,
+    const availState = (p: EligParty | null, relevant: boolean): 'ok' | 'unknown' | 'bad' => {
+      if (!relevant || !p) return 'ok';
+      if (!p.is_active) return 'bad';
+      if (p.available_for_received === true) return 'ok';
+      if (p.available_for_received == null) return 'unknown';
+      return 'bad'; // explicit false
+    };
+    const reqState = availState(Ra, !giveaway && Os !== null);
+    const offState = availState(Ob, Ob !== null);
+    const detail = {
+      reqState,
+      offState,
       requester_active: Ra.is_active,
       offerer_active: Ob?.is_active ?? null,
-    });
+    };
+
+    if (reqState === 'bad' || offState === 'bad') {
+      emit('availability', 'fail', detail);
+    } else if (reqState === 'unknown' || offState === 'unknown') {
+      const mode = effectiveMode('availability', rules);
+      if (mode !== 'IGNORE') {
+        outcomes.push({
+          ruleId: 'availability',
+          status: 'fail',
+          mode: 'ROUTE_TO_REVIEW_IF_FAIL',
+          detail: { ...detail, unknown_data: true },
+        });
+      } else {
+        outcomes.push({ ruleId: 'availability', status: 'fail', mode: 'IGNORE', detail });
+      }
+    } else {
+      emit('availability', 'pass', detail);
+    }
   }
 
   // ── Aggregate votes by EFFECTIVE mode ───────────────────────────────────────

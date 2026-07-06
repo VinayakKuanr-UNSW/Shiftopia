@@ -79,7 +79,13 @@ export function computePeakFatigue(shifts: FatigueShift[]): number {
   const referenceDates = Array.from(new Set(shifts.map((s) => s.shift_date)));
   let peak = 0;
   for (const referenceDate of referenceDates) {
-    const { current } = calculateFatigueWithRecovery(shifts, referenceDate);
+    const mapped = shifts.map((s) => ({
+      shift_date: s.shift_date,
+      start_time: s.start_time,
+      end_time: s.end_time,
+      unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
+    }));
+    const { current } = calculateFatigueWithRecovery(mapped, referenceDate);
     if (current > peak) peak = current;
   }
   return peak;

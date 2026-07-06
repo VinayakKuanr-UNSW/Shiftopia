@@ -76,7 +76,7 @@ export interface WorkerShiftDTO {
   subDepartmentId: string | null;
   roleId: string | null;
   roleName: string | null;
-  remunerationLevelId: string | null;
+  remunerationLevel: number | null;
   remunerationRate: number | null;
   actualHourlyRate: number | null;
 
@@ -147,7 +147,7 @@ export interface WorkerRoleDTO {
   id: string;
   name: string;
   code: string | null;
-  remunerationLevelId: string | null;
+  remunerationLevel: number | null;
 }
 
 /**

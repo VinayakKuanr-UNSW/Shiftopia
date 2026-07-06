@@ -1,4 +1,4 @@
-import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
+import { V8Hit, V8RuleEvaluator } from '../types';
 import { parseTimeToMinutes } from '../utils/time';
 
 /**
@@ -58,37 +58,7 @@ export const noOverlapRule: V8RuleEvaluator = (ctx) => {
     return violations;
 };
 
-/**
- * V8 Rule: Minimum Shift Length
- * 
- * Enforces the minimum duration (usually 2h, 3h, or 4h) based on shift type.
- */
-export const minShiftLengthRule: V8RuleEvaluator = (ctx) => {
-    const { shifts } = ctx;
-    const violations: V8Hit[] = [];
-
-    for (const s of shifts) {
-        const start = parseTimeToMinutes(s.start_time || '00:00');
-        let end = parseTimeToMinutes(s.end_time || '00:00');
-        
-        let mins = end - start;
-        if (mins <= 0) mins += 1440; // Cross-midnight
-
-        // Default min is 2h (120m) for training, 3h (180m) for regular
-        const requiredMins = s.is_training ? 120 : 180;
-
-        if (mins < requiredMins) {
-            violations.push({
-                rule_id: 'V8_MIN_SHIFT_LENGTH',
-                rule_name: 'Minimum Shift Length',
-                status: 'BLOCKING',
-                summary: `Shift too short (${mins}m)`,
-                details: `Shift on ${s.date} is only ${mins} minutes long. Minimum required is ${requiredMins} minutes.`,
-                affected_shifts: [s.id],
-                blocking: true
-            });
-        }
-    }
-
-    return violations;
-};
+// NOTE: The former `minShiftLengthRule` (V8_MIN_SHIFT_LENGTH / R02) was removed.
+// Minimum-duration enforcement is now owned solely by `minEngagementRule`
+// (V8_MIN_ENGAGEMENT), which handles the training / weekday / Sunday-PH tiers in
+// one place. See ./min-engagement.ts.

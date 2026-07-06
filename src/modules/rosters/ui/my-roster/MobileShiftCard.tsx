@@ -65,7 +65,8 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, onC
         groupVariant={
           groupColor.toLowerCase().includes('convention') ? 'convention' :
           groupColor.toLowerCase().includes('exhibition') ? 'exhibition' :
-          groupColor.toLowerCase().includes('theatre') ? 'theatre' : 'default'
+          groupColor.toLowerCase().includes('theatre') ? 'theatre' :
+          groupColor.toLowerCase().includes('cutaway') ? 'cutaway' : 'default'
         }
         shiftData={shift}
       />

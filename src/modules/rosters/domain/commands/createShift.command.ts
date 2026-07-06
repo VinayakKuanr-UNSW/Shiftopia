@@ -57,19 +57,19 @@ export async function executeCreateShift(
         return { success: false, error: 'Date and times are required' };
     }
 
-    let finalRemunerationLevelId = remunerationLevelId;
-
     try {
-        // If roleId is provided but remunerationLevelId is not, fetch it from the role
-        if (roleId && !finalRemunerationLevelId) {
-            const { data: roleData } = await supabase
+        let finalRemunerationLevel = remunerationLevelId ? parseInt(remunerationLevelId) : null;
+
+        if (roleId && finalRemunerationLevel == null) {
+            const { data: roleData } = await (supabase as any)
+                .schema('hr')
                 .from('roles')
-                .select('remuneration_level_id')
+                .select('remuneration_level')
                 .eq('id', roleId)
                 .single();
 
-            if (roleData?.remuneration_level_id) {
-                finalRemunerationLevelId = roleData.remuneration_level_id;
+            if (roleData?.remuneration_level != null) {
+                finalRemunerationLevel = roleData.remuneration_level;
             }
         }
 
@@ -83,7 +83,7 @@ export async function executeCreateShift(
                 end_time: endTime,
                 roster_id: rosterId,
                 role_id: roleId || null,
-                remuneration_level_id: finalRemunerationLevelId || null,
+                remuneration_level: finalRemunerationLevel || null,
                 shift_group_id: shiftGroupId || null,
                 roster_subgroup_id: shiftSubgroupId || null,
                 assigned_employee_id: assignedEmployeeId || null,

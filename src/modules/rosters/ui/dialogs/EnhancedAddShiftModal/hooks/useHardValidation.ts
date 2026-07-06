@@ -18,6 +18,26 @@ import { isEqual } from 'lodash';
 
 const EMPTY_ARRAY: any[] = [];
 
+/**
+ * Map the DB `employment_type` enum to the compliance contract type used by the
+ * assignment evaluator. `contractual` and unknown values map to null (treated
+ * as CASUAL downstream) so we never over-apply contract-scoped rules.
+ */
+function mapEmploymentTypeToContract(t?: string | null): 'FT' | 'PT' | 'CASUAL' | null {
+    switch ((t ?? '').toLowerCase()) {
+        case 'full_time':
+        case 'full-time':
+            return 'FT';
+        case 'part_time':
+        case 'part-time':
+            return 'PT';
+        case 'casual':
+            return 'CASUAL';
+        default:
+            return null;
+    }
+}
+
 interface UseHardValidationProps {
     watchStart: string;
     watchEnd: string;
@@ -32,6 +52,10 @@ interface UseHardValidationReturn {
     hardValidation: HardValidationResult;
     employeeExistingShifts: ShiftTimeRange[];
     studentVisaEnforcement: boolean;
+    /** ICC EBA cl. 40.2 — written agreement to an 8h (vs 10h) cross-day break. */
+    restGapAgreement8h: boolean;
+    /** Contract type for contract-scoped rules (split-shift, ord-hours). */
+    contractType: 'FT' | 'PT' | 'CASUAL' | null;
     isLoadingShifts: boolean;
 }
 
@@ -105,6 +129,30 @@ export function useHardValidation({
 
     const studentVisaEnforcement = visaData?.has_restricted_work_limit ?? false;
 
+    // ── Compliance flags from profiles (rest-gap agreement + contract type) ───
+    // rest_gap_agreement_8h → ICC EBA cl. 40.2 (8h vs 10h cross-day break).
+    // employment_type       → hydrates contract-scoped rules (split-shift needs
+    //                          PT/flexi; ord-hours averaging is exempt for casual).
+    // Defensive: if a column is missing (pre-migration) the query errors and we
+    // fall back to safe defaults (agreement=false, contract=null→casual).
+    const { data: profileData } = useQuery({
+        queryKey: ['profiles', watchEmployeeId, 'compliance_flags'],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('rest_gap_agreement_8h, employment_type')
+                .eq('id', watchEmployeeId!)
+                .maybeSingle();
+            if (error) return null;
+            return data as { rest_gap_agreement_8h?: boolean; employment_type?: string | null } | null;
+        },
+        enabled: queryEnabled,
+        staleTime: 5 * 60 * 1000,
+    });
+
+    const restGapAgreement8h = profileData?.rest_gap_agreement_8h ?? false;
+    const contractType = mapEmploymentTypeToContract(profileData?.employment_type);
+
     // Shape RPC results into ShiftTimeRange[] — exclusion already handled server-side
     const employeeExistingShifts = useMemo<ShiftTimeRange[]>(() => {
         return rawShifts.map(s => ({
@@ -150,5 +198,5 @@ export function useHardValidation({
         });
     }, [watchStart, watchEnd, watchShiftDate, watchEmployeeId, employeeExistingShifts, isTemplateMode, timezone]);
 
-    return { hardValidation, employeeExistingShifts, studentVisaEnforcement, isLoadingShifts };
+    return { hardValidation, employeeExistingShifts, studentVisaEnforcement, restGapAgreement8h, contractType, isLoadingShifts };
 }

@@ -1265,7 +1265,7 @@ const LaborDemandForecastingPage: React.FC = () => {
       if (lvl) return (lvl.hourly_rate_min + lvl.hourly_rate_max) / 2;
       // Fall back to level lookup
       const level = remunerationLevels.find(
-        (l) => l.id === shift.remuneration_level_id,
+        (l) => l.level_number === shift.remuneration_level,
       );
       if (level) return (level.hourly_rate_min + level.hourly_rate_max) / 2;
       return 28; // enterprise default

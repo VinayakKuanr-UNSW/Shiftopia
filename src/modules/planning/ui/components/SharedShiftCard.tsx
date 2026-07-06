@@ -40,7 +40,7 @@ export interface SharedShiftCardProps {
     isUrgent?: boolean;
     /** Full three-zone urgency badge. When provided, supersedes isUrgent. */
     urgency?: ShiftUrgency;
-    groupVariant?: 'convention' | 'exhibition' | 'theatre' | 'default';
+    groupVariant?: 'convention' | 'exhibition' | 'theatre' | 'cutaway' | 'default';
     complianceLabel?: string;
     isPast?: boolean;
     statusIcons?: React.ReactNode;
@@ -150,6 +150,14 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                 color: '#ef4444',
                 secondary: '#dc2626',
                 atmosphere: ['#991b1b', '#ef4444', '#f87171'],
+            };
+            case 'cutaway': return { 
+                badge: 'dept-badge-cutaway', 
+                cardBg: `${base} dept-card-glass-cutaway`,
+                accent: 'text-amber-500',
+                color: '#d97706',
+                secondary: '#f59e0b',
+                atmosphere: ['#b45309', '#d97706', '#fbbf24'],
             };
             default: return { 
                 badge: 'dept-badge-default', 

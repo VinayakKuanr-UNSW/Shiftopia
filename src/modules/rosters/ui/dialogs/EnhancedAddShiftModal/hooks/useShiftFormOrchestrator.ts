@@ -21,7 +21,11 @@ import { format, startOfDay, parse, getDay } from 'date-fns';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCreateShift, useUpdateShift, useUnpublishShift } from '@/modules/rosters/state/useRosterShifts';
+import { shiftKeys, rosterKeys } from '@/modules/rosters/api/queryKeys';
+import { applyShiftOp } from '@/modules/rosters/api/shifts.api';
+import { mapShiftOpResultToUx, type ShiftOpResult } from '@/modules/rosters/domain/shift-ops.contract';
 import { formatInTimezone, isPastInTimezone, isPublicHoliday, parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 import type { TemplateGroupType } from '@/modules/rosters/domain/shift.entity';
@@ -57,6 +61,7 @@ export function useShiftFormOrchestrator({
     const safeContext = context ?? {};
     const { toast } = useToast();
     const { scopeTree } = useScopeFilter('managerial');
+    const queryClient = useQueryClient();
 
     // ── Mutations ────────────────────────────────────────────────────────────
     const createShiftMutation = useCreateShift();
@@ -106,7 +111,7 @@ export function useShiftFormOrchestrator({
     const watchLicenses = form.watch('required_licenses');
     const watchEmployeeId = form.watch('assigned_employee_id');
     const watchShiftDate = form.watch('shift_date');
-    const watchRemLevel = form.watch('remuneration_level_id');
+    const watchRemLevel = form.watch('remuneration_level');
     const watchTimezone = form.watch('timezone') || SYDNEY_TZ;
     const watchGroup = form.watch('group_type');
     const watchSubGroupName = form.watch('sub_group_name');
@@ -213,7 +218,7 @@ export function useShiftFormOrchestrator({
     }, [scopeTree, rosters, selectedRosterId, safeContext, watchGroup, watchSubGroupName]);
 
     // ── Hard validation ──────────────────────────────────────────────────────
-    const { hardValidation, employeeExistingShifts, studentVisaEnforcement, isLoadingShifts } = useHardValidation({
+    const { hardValidation, employeeExistingShifts, studentVisaEnforcement, restGapAgreement8h, contractType, isLoadingShifts } = useHardValidation({
         watchStart,
         watchEnd,
         watchShiftDate,
@@ -234,7 +239,7 @@ export function useShiftFormOrchestrator({
         return Math.max(0, shiftLength - unpaid / 60);
     }, [shiftLength, watchUnpaidBreak]);
 
-    const selectedRemLevel = remunerationLevels.find(r => r.id === watchRemLevel);
+    const selectedRemLevel = remunerationLevels.find(r => r.level_number === watchRemLevel);
     const minShiftHours = useMemo(() => {
         if (watchIsTraining) return 2.0;
         if (!watchShiftDate) return 3.0;
@@ -337,8 +342,8 @@ export function useShiftFormOrchestrator({
     useEffect(() => {
         if (watchV8RoleId && roles.length > 0) {
             const role = roles.find(r => r.id === watchV8RoleId);
-            if (role?.remuneration_level_id) {
-                form.setValue('remuneration_level_id', role.remuneration_level_id);
+            if (role?.remuneration_level) {
+                form.setValue('remuneration_level', role.remuneration_level);
             }
         }
     }, [watchV8RoleId, roles, form]);
@@ -349,8 +354,8 @@ export function useShiftFormOrchestrator({
             const match = roles.find(r => r.id === safeContext.roleId);
             if (match) {
                 form.setValue('role_id', match.id);
-                if (match.remuneration_level_id) {
-                    form.setValue('remuneration_level_id', match.remuneration_level_id);
+                if (match.remuneration_level) {
+                    form.setValue('remuneration_level', match.remuneration_level);
                 }
             }
         }
@@ -365,7 +370,7 @@ export function useShiftFormOrchestrator({
                 group_type: (existingShift.group_type || existingShift.groupName?.toLowerCase().replace(/\s+/g, '_') || safeContext.group_type || safeContext.groupName?.toLowerCase().replace(/\s+/g, '_')) as FormValues['group_type'] || undefined,
                 sub_group_name: existingShift.sub_group_name || existingShift.subGroupName || safeContext.sub_group_name || safeContext.subGroupName || '',
                 role_id: existingShift.role_id || existingShift.roleId || '',
-                remuneration_level_id: existingShift.remuneration_level_id || existingShift.remunerationLevelId || '',
+                remuneration_level: existingShift.remuneration_level || undefined,
                 shift_date: existingShift.shift_date ? startOfDay(parse(existingShift.shift_date, 'yyyy-MM-dd', new Date())) : undefined,
                 start_time: existingShift.start_time || existingShift.startTime || '',
                 end_time: existingShift.end_time || existingShift.endTime || '',
@@ -387,7 +392,7 @@ export function useShiftFormOrchestrator({
                 group_type: (context?.group_type || context?.groupName?.toLowerCase().replace(/\s+/g, '_')) as FormValues['group_type'],
                 sub_group_name: context?.sub_group_name || context?.subGroupName || '',
                 role_id: context?.roleId || '',
-                remuneration_level_id: context?.remunerationLevelId || '',
+                remuneration_level: context?.remunerationLevel || undefined,
                 shift_date: context?.date ? startOfDay(parse(context.date, 'yyyy-MM-dd', new Date())) : undefined,
                 start_time: context?.eventStartTime || '',
                 end_time: context?.eventEndTime || '',
@@ -423,7 +428,11 @@ export function useShiftFormOrchestrator({
         overrideLicenseIds: watchLicenses?.length ? watchLicenses : undefined,
         candidate_is_training: watchIsTraining || false,
         student_visa_enforcement: studentVisaEnforcement,
-    }), [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchUnpaidBreak, isTemplateMode, employeeExistingShifts, watchTimezone, existingShift?.id, watchV8RoleId, watchSkills, watchLicenses, watchIsTraining, studentVisaEnforcement]);
+        // ICC EBA cl. 40.2: 8h cross-day break by written agreement, else 10h.
+        rest_gap_hours: restGapAgreement8h ? 8 : 10,
+        // Contract type hydrates split-shift (PT/flexi) + ord-hours rules.
+        employee_context: { contract_type: contractType },
+    }), [watchEmployeeId, watchStart, watchEnd, watchShiftDate, watchUnpaidBreak, isTemplateMode, employeeExistingShifts, watchTimezone, existingShift?.id, watchV8RoleId, watchSkills, watchLicenses, watchIsTraining, studentVisaEnforcement, restGapAgreement8h, contractType]);
 
     const {
         runChecks,
@@ -613,13 +622,15 @@ export function useShiftFormOrchestrator({
 
         if (isTemplateMode) return true;
 
-        // Compliance check
+        // Compliance is required ONLY when an employee is assigned. An unassigned /
+        // open shift has nothing employee-specific to validate, so it can be saved
+        // directly without running compliance.
+        if (!watchEmployeeId) return true;
+
+        // Compliance check (assigned shifts): must have run and passed.
         if (compliancePanel.status !== 'results') return false;
-        
-        // If employee assigned, must pass all checks (including employee-specific)
-        // If no employee, must pass shift-level checks (which are the only ones that run)
         return compliancePanel.canProceed;
-    }, [watchV8RoleId, watchShiftDate, watchStart, watchEnd, hasDepartment, hasRoster, isTemplateMode, hardValidation.passed, compliancePanel.status, compliancePanel.canProceed]);
+    }, [watchV8RoleId, watchShiftDate, watchStart, watchEnd, hasDepartment, hasRoster, isTemplateMode, watchEmployeeId, hardValidation.passed, compliancePanel.status, compliancePanel.canProceed]);
 
     // v2-powered "Run All" — replaces v1 rule runners in ComplianceTabContent.
     // Maps v2 V8Hit[] results back to the v1 ComplianceResult format so
@@ -757,10 +768,10 @@ export function useShiftFormOrchestrator({
                     description: hardValidation.errors.join('. ') || 'Hard validation failed.',
                     variant: 'destructive',
                 });
-            } else if (!isTemplateMode && !complianceHasRun) {
+            } else if (!isTemplateMode && !!watchEmployeeId && !complianceHasRun) {
                 toast({
                     title: 'Compliance Required',
-                    description: 'Please run compliance checks before saving this shift.',
+                    description: 'Please run compliance checks before saving this assigned shift.',
                     variant: 'destructive',
                 });
             } else {
@@ -792,6 +803,13 @@ export function useShiftFormOrchestrator({
         }
 
         const onMutationSuccess = () => {
+            // The gateway edit/assign ops call applyShiftOp directly (not via the
+            // useUpdateShift mutation), so nothing invalidates the roster cache. With
+            // staleTime 30s, returning to /rosters would otherwise show STALE shifts
+            // (e.g. a just-applied assignment missing from the bucket). Mark the list
+            // + roster queries stale here so the grid refetches when it remounts.
+            queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+            queryClient.invalidateQueries({ queryKey: rosterKeys.all });
             toast({
                 title: editMode ? 'Shift Updated' : 'Shift Created',
                 description: `Shift ${editMode ? 'updated' : 'created'} for ${format(values.shift_date!, 'dd MMM yyyy')}`,
@@ -812,7 +830,7 @@ export function useShiftFormOrchestrator({
         try {
             if (isTemplateMode && onShiftCreated) {
                 const role = roles.find(r => r.id === values.role_id);
-                const remLevel = remunerationLevels.find(r => r.id === values.remuneration_level_id);
+                const remLevel = remunerationLevels.find(r => r.level_number === values.remuneration_level);
                 const assignedEmployee = employees.find(e => e.id === values.assigned_employee_id);
 
                 onShiftCreated({
@@ -820,9 +838,10 @@ export function useShiftFormOrchestrator({
                     role_id: values.role_id,
                     roleId: values.role_id,
                     roleName: role?.name,
-                    remuneration_level_id: values.remuneration_level_id,
-                    remunerationLevelId: values.remuneration_level_id,
-                    remunerationLevel: remLevel?.level_name,
+                    // remuneration_level is a smallint in the DB (HR framework) —
+                    // the numeric level goes here; the label goes in ...Name.
+                    remunerationLevel: remLevel?.level_number ?? values.remuneration_level ?? null,
+                    remunerationLevelName: remLevel?.level_name,
                     start_time: values.start_time,
                     startTime: values.start_time,
                     end_time: values.end_time,
@@ -864,7 +883,7 @@ export function useShiftFormOrchestrator({
                     shift_group_id: resolvedContext.groupId || null,
                     shift_subgroup_id: resolvedContext.subGroupId || null,
                     role_id: values.role_id || null,
-                    remuneration_level_id: values.remuneration_level_id || null,
+                    remuneration_level: values.remuneration_level || null,
                     paid_break_minutes: values.paid_break_minutes || 0,
                     unpaid_break_minutes: values.unpaid_break_minutes || 0,
                     timezone: values.timezone,
@@ -915,15 +934,124 @@ export function useShiftFormOrchestrator({
                     : { ...basePayloadWithUtc, lifecycle_status: 'Draft' as const, fulfillment_status: (values.assigned_employee_id ? 'scheduled' : 'none') as 'scheduled' | 'none' };
 
                 if (editMode && existingShift?.id) {
-                    updateShiftMutation.mutate(
-                        { shiftId: existingShift.id, updates: payload },
-                        { onSuccess: onMutationSuccess, onError: onMutationError },
-                    );
+                    // Route through the shift-mutation gateway for version-CAS + conflict UX.
+                    // The gateway's edit branch covers all the fields in basePayloadWithUtc
+                    // except structural ones (roster_id, department_id, organization_id,
+                    // assigned_employee_id) which are deliberately excluded.
+                    try {
+                        const gatewayPayload: Record<string, unknown> = {
+                            // Schedule
+                            start_time: basePayloadWithUtc.start_time,
+                            end_time: basePayloadWithUtc.end_time,
+                            shift_date: basePayloadWithUtc.shift_date,
+                            // Breaks
+                            paid_break_minutes: basePayloadWithUtc.paid_break_minutes,
+                            unpaid_break_minutes: basePayloadWithUtc.unpaid_break_minutes,
+                            // References
+                            role_id: basePayloadWithUtc.role_id || '',
+                            sub_department_id: basePayloadWithUtc.sub_department_id || '',
+                            remuneration_level: basePayloadWithUtc.remuneration_level || null,
+                            shift_group_id: basePayloadWithUtc.shift_group_id || '',
+                            shift_subgroup_id: basePayloadWithUtc.shift_subgroup_id || '',
+                            // Grouping
+                            group_type: basePayloadWithUtc.group_type || '',
+                            sub_group_name: basePayloadWithUtc.sub_group_name ?? '',
+                            display_order: basePayloadWithUtc.display_order ?? 0,
+                            // Timezone — start_at/end_at are recomputed by the
+                            // trg_recalc_shift_utc_timestamps trigger, so we don't send them.
+                            timezone: basePayloadWithUtc.timezone,
+                            // Training
+                            is_training: basePayloadWithUtc.is_training ?? false,
+                            // Text
+                            notes: basePayloadWithUtc.notes ?? '',
+                            // Skills, certs, and events
+                            required_skills: basePayloadWithUtc.required_skills || [],
+                            required_licenses: basePayloadWithUtc.required_licenses || [],
+                            event_ids: basePayloadWithUtc.event_ids || [],
+                        };
+
+                        // Surface a gateway failure without closing the modal.
+                        const showOpFailure = (res: ShiftOpResult) => {
+                            const ux = mapShiftOpResultToUx(res);
+                            toast({
+                                title: ux.toast ?? 'Update Failed',
+                                description: res.code === 'VERSION_CONFLICT'
+                                    ? 'Another user modified this shift. Please close and reopen to see the latest version.'
+                                    : ux.toast ?? 'Could not update the shift.',
+                                variant: 'destructive',
+                            });
+                            // Don't close modal — let user retry or close manually
+                        };
+
+                        // 1) Field edit. The gateway's `edit` op owns schedule/grouping
+                        // fields but DELIBERATELY excludes assignment (see _apply_shift_op_write),
+                        // so the assignee is applied separately in step 2.
+                        const editResult = await applyShiftOp({
+                            shiftId: existingShift.id,
+                            expectedVersion: existingShift.version ?? 0,
+                            op: 'edit',
+                            payload: gatewayPayload,
+                        });
+
+                        if (!editResult.ok) {
+                            showOpFailure(editResult);
+                            return;
+                        }
+
+                        // 2) Assignment delta. Assignment is owned by the `assign` op (which
+                        // also sets assigned_at / assignment_status / outcome), NOT `edit`, so
+                        // a changed assignee must go through it — version-chained off the edit's
+                        // new version (each applied op bumps shifts.version via the CAS trigger).
+                        const prevAssignee =
+                            existingShift.assigned_employee_id ?? existingShift.assignedEmployeeId ?? null;
+                        const nextAssignee = values.assigned_employee_id || null;
+
+                        if (nextAssignee && nextAssignee !== prevAssignee) {
+                            const assignResult = await applyShiftOp({
+                                shiftId: existingShift.id,
+                                expectedVersion: editResult.version ?? (existingShift.version ?? 0) + 1,
+                                op: 'assign',
+                                payload: { employee_id: nextAssignee },
+                            });
+                            if (!assignResult.ok) {
+                                showOpFailure(assignResult);
+                                return;
+                            }
+                        } else if (!nextAssignee && prevAssignee) {
+                            // Removing the assignee → the `unassign` op (inverse of assign).
+                            // Legal only from S2 (Draft assigned) → S1; a published shift would
+                            // be rejected as ILLEGAL_TRANSITION (unpublish it first).
+                            const unassignResult = await applyShiftOp({
+                                shiftId: existingShift.id,
+                                expectedVersion: editResult.version ?? (existingShift.version ?? 0) + 1,
+                                op: 'unassign',
+                            });
+                            if (!unassignResult.ok) {
+                                showOpFailure(unassignResult);
+                                return;
+                            }
+                        }
+
+                        onMutationSuccess();
+                    } catch (err: unknown) {
+                        onMutationError(err);
+                    }
                 } else {
+                    // Optimistic create: useCreateShift inserts a provisional card into
+                    // the grid caches in onMutate, so the shift is visible immediately.
+                    // Close the modal now instead of blocking on the server round-trip
+                    // (compliance check + sm_create_shift + detail refetch); a failure
+                    // rolls the card back and surfaces a destructive toast.
                     createShiftMutation.mutate(
                         payload,
-                        { onSuccess: onMutationSuccess, onError: onMutationError },
+                        { onSuccess: () => onSuccess?.(), onError: onMutationError },
                     );
+                    toast({
+                        title: 'Shift Created',
+                        description: `Shift created for ${format(values.shift_date!, 'dd MMM yyyy')}`,
+                    });
+                    form.reset();
+                    onClose();
                 }
             }
         } catch (error: unknown) {
@@ -940,7 +1068,8 @@ export function useShiftFormOrchestrator({
         resolvedContext, selectedRosterId, isTemplateMode, editMode, watchTimezone,
         onShiftCreated, roles, remunerationLevels, employees, netLength,
         onSuccess, form, onClose, createShiftMutation, updateShiftMutation,
-        existingShift, toast, complianceHasRun, isEmergencyAssignment,
+        existingShift, toast, complianceHasRun, isEmergencyAssignment, queryClient,
+        watchEmployeeId,
     ]);
 
     // ── Return ────────────────────────────────────────────────────────────────

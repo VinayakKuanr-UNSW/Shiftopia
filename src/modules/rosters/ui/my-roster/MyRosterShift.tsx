@@ -92,7 +92,8 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
         groupVariant={
           groupColor.toLowerCase().includes('convention') ? 'convention' :
           groupColor.toLowerCase().includes('exhibition') ? 'exhibition' :
-          groupColor.toLowerCase().includes('theatre') ? 'theatre' : 'default'
+          groupColor.toLowerCase().includes('theatre') ? 'theatre' :
+          groupColor.toLowerCase().includes('cutaway') ? 'cutaway' : 'default'
         }
         onClick={onClick}
         shiftData={shift}

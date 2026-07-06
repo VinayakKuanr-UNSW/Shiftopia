@@ -105,15 +105,11 @@ export const GroupStatsSummary: React.FC<GroupStatsSummaryProps> = ({
     if (compact) {
         return (
             <div className={cn('flex items-center gap-3 text-xs', className)}>
-                <span className="text-white/70 font-medium">
-                    {stats.totalShifts} shift{stats.totalShifts !== 1 ? 's' : ''}
-                </span>
-                <span className="text-white/40">|</span>
                 <span className="text-emerald-400 font-medium">{stats.totalHours.toFixed(0)}h</span>
                 <span className="text-white/40">|</span>
                 <span className="text-white/70">
-                    <Users className="h-3 w-3 inline mr-0.5" />
-                    {stats.uniqueEmployees}
+                    <Users className="h-3 w-3 inline mr-1 text-white/60" />
+                    {stats.uniqueEmployees} employee{stats.uniqueEmployees !== 1 ? 's' : ''}
                 </span>
             </div>
         );

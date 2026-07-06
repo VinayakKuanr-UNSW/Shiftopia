@@ -73,7 +73,7 @@ export const RoleStep: React.FC<RoleStepProps> = ({
                                     <FormControl>
                                         <SelectTrigger className={cn(
                                             "bg-muted/50 border-border text-foreground h-11 transition-all",
-                                            !field.value && "border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.1)]"
+                                            !field.value && "border-amber-500/50 shadow-sm"
                                         )}>
                                             <SelectValue placeholder={isLoadingData ? 'Loading...' : 'Select role'} />
                                         </SelectTrigger>
@@ -105,8 +105,10 @@ export const RoleStep: React.FC<RoleStepProps> = ({
 
                 <FormField
                     control={form.control}
-                    name="remuneration_level_id"
-                    render={({ field }) => (
+                    name="remuneration_level"
+                    render={({ field }) => {
+                        const stringValue = field.value !== undefined && field.value !== null ? field.value.toString() : '';
+                        return (
                         <FormItem>
                             <FormLabel className="text-muted-foreground flex items-center gap-2">
                                 Pay Level
@@ -114,7 +116,7 @@ export const RoleStep: React.FC<RoleStepProps> = ({
                                 <span className="text-xs text-muted-foreground/80 font-normal">(from role)</span>
                             </FormLabel>
                             {!isReadOnly ? (
-                                <Select onValueChange={field.onChange} value={field.value || ''} disabled>
+                                 <Select onValueChange={(val) => field.onChange(val ? Number(val) : null)} value={stringValue} disabled>
                                     <FormControl>
                                         <SelectTrigger className="bg-muted/50 border-border text-foreground h-11 opacity-70 cursor-not-allowed">
                                             <SelectValue placeholder={watchV8RoleId ? 'Loading...' : 'Select a role first'} />
@@ -122,7 +124,7 @@ export const RoleStep: React.FC<RoleStepProps> = ({
                                     </FormControl>
                                     <SelectContent className="bg-popover border-border">
                                         {remunerationLevels.map((level) => (
-                                            <SelectItem key={level.id} value={level.id} className="text-foreground">
+                                            <SelectItem key={level.level_number} value={level.level_number.toString()} className="text-foreground">
                                                 {level.level_name} - ${level.hourly_rate_min}/hr
                                             </SelectItem>
                                         ))}
@@ -130,11 +132,12 @@ export const RoleStep: React.FC<RoleStepProps> = ({
                                 </Select>
                             ) : (
                                 <div className="text-sm font-medium text-foreground/60 px-1">
-                                    {remunerationLevels.find(l => l.id === field.value)?.level_name || '—'}
+                                    {remunerationLevels.find(l => l.level_number.toString() === stringValue)?.level_name || '—'}
                                 </div>
                             )}
                         </FormItem>
-                    )}
+                    );
+                    }}
                 />
             </div>
 
