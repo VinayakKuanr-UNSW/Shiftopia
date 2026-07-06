@@ -151,8 +151,15 @@ export interface Shift {
     adjusted_end?: string | null;
     /** True when the billable times above were manually set by a manager. */
     adjusted_is_manual?: boolean;
+    /**
+     * Per-side override provenance — only the manually edited side gets its
+     * `*`. `*_source` carries manual|snapped|null; the booleans are the
+     * equivalent flag form. normalizeShiftRow sets both.
+     */
     adjusted_start_source?: 'manual' | 'snapped' | null;
     adjusted_end_source?: 'manual' | 'snapped' | null;
+    adjusted_start_is_manual?: boolean;
+    adjusted_end_is_manual?: boolean;
     
     is_recurring: boolean;
     recurrence_rule: string | null;

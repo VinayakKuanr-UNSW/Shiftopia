@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { format, startOfWeek, startOfMonth } from 'date-fns';
+import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { Clock, RefreshCw, ListFilter } from 'lucide-react';
 import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
 
@@ -97,7 +98,9 @@ export const TimesheetPage: React.FC = () => {
     const formatClockDisplay = (value: string | null | undefined): string => {
         if (!value || value === '-') return '-';
         const d = new Date(value);
-        if (!isNaN(d.getTime())) return format(d, 'h:mm a');
+        // ISO timestamps render as VENUE wall-clock (Sydney) so every viewer
+        // sees the same clock times the schedule columns are expressed in.
+        if (!isNaN(d.getTime())) return formatInTimezone(d, SYDNEY_TZ, 'h:mm a');
         const parts = value.split(':').map(Number);
         if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
             const h = parts[0], m = parts[1];
@@ -141,6 +144,13 @@ export const TimesheetPage: React.FC = () => {
         scheduledEnd: shift.scheduledEnd,
         clockIn: formatClockDisplay(shift.clockIn),
         clockOut: formatClockDisplay(shift.clockOut),
+        // Raw ISO timestamps — the Live Rules engine and review gate MUST get
+        // these (not the formatted display strings) or overnight shifts and
+        // non-Sydney viewers are misclassified.
+        rawActualStart: shift.clockIn,
+        rawActualEnd: shift.clockOut,
+        rawStartAt: shift.rawStartAt,
+        rawEndAt: shift.rawEndAt,
         adjustedStart: shift.adjustedStart || '',
         adjustedEnd: shift.adjustedEnd || '',
         adjustedStartSource: shift.adjustedStartSource,

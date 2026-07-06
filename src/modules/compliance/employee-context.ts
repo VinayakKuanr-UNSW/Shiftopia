@@ -75,9 +75,9 @@ export async function fetchV8EmployeeContext(
             .single(),
         supabase
             .from('user_contracts')
-            .select('organization_id, department_id, sub_department_id, role_id')
+            .select('organization_id, department_id, sub_department_id, role_id, contracted_weekly_hours')
             .eq('user_id', employeeId)
-            .eq('status', 'active'),
+            .eq('status', 'Active'),
         supabase
             .from('employee_skills')
             .select('skill_id, expiration_date')
@@ -146,10 +146,14 @@ export async function fetchV8EmployeeContext(
     // Derive assigned_role_ids from contracts for backward compat.
     const assigned_role_ids = [...new Set(contracts.map(c => c.role_id))];
 
+    const contracted_weekly_hours = rawContracts.length > 0
+        ? Math.max(...rawContracts.map((c: any) => Number(c.contracted_weekly_hours) || 0))
+        : 0;
+
     const ctx: V8EmployeeContext = {
         employee_id:             employeeId,
         contract_type,
-        contracted_weekly_hours: 0,
+        contracted_weekly_hours,
         assigned_role_ids,
         contracts,
         qualifications,

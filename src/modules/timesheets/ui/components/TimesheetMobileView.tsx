@@ -24,6 +24,7 @@ import type { TimesheetRow } from '../../model/timesheet.types';
 import type { ActiveFilters } from './TimesheetFilterDrawer';
 import { applyTimesheetFilters } from './TimesheetFilterDrawer';
 import { getLiveRule } from '@/modules/rosters/domain/shift-ui';
+import { timesheetEntryToShiftInput } from './TimesheetTable.utils';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -256,20 +257,7 @@ export const TimesheetMobileView: React.FC<TimesheetMobileViewProps> = ({
                     const overrideCounts: Record<string, number> = {};
                     displayEntries.forEach(e => {
                         if (e.attendanceStatus === 'no_show') {
-                            const rule = getLiveRule({
-                                shift_date: String(e.date),
-                                start_time: e.scheduledStart,
-                                end_time: e.scheduledEnd,
-                                actual_start: e.clockIn,
-                                actual_end: e.clockOut,
-                                adjusted_start: e.adjustedStart,
-                                adjusted_end: e.adjustedEnd,
-                                adjusted_is_manual: e.isAdjustedManual,
-                                adjusted_start_source: e.adjustedStartSource,
-                                adjusted_end_source: e.adjustedEndSource,
-                                attendance_status: e.attendanceStatus,
-                                attendance_note: e.attendanceNote,
-                            });
+                            const rule = getLiveRule(timesheetEntryToShiftInput(e));
                             const label = rule?.label || 'No Show';
                             if (label.endsWith('*')) {
                                 overrideCounts[label] = (overrideCounts[label] || 0) + 1;
