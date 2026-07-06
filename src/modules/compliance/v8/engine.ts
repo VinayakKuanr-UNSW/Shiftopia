@@ -19,6 +19,7 @@ import { noOverlapRule } from './rules/structural-rules';
 import { mealBreakRule } from './rules/meal-break';
 import { spreadOfHoursRule } from './rules/spread-of-hours';
 import { splitShiftRule } from './rules/split-shift';
+import { maxDailyEngagementsRule } from './rules/max-daily-engagements';
 import { minEngagementRule } from './rules/min-engagement';
 import { qualificationRule } from './rules/employment-rules';
 
@@ -35,8 +36,9 @@ const ACTIVE_RULES: V8RuleEvaluator[] = [
     mealBreakRule,
     maxDailyHoursRule,
     spreadOfHoursRule,
-    splitShiftRule,   // clause 39 — same-day pairs (warns on >3h gap)
-    minRestGapRule,   // clause 40 — cross-day pairs only
+    splitShiftRule,          // clause 39 — PT/flexi same-day gap (warns on >3h)
+    maxDailyEngagementsRule, // clause 35.4(f) — casual hard cap of 2 shifts/day
+    minRestGapRule,          // clause 40 — cross-day pairs only
     
     // 4. Budget & Patterns (Cumulative)
     maxWorkdayLimitsRule,
