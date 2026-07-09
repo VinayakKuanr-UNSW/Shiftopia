@@ -118,6 +118,13 @@ export interface OptimizerConstraints {
     enforce_skill_match?: boolean;   // Default true
     allow_partial?: boolean;         // Default true — allow uncovered shifts
     relax_constraints?: boolean;     // If true, softens overlap/rest-gap to soft constraints
+    /**
+     * When true, declared availability is a HARD constraint AND "unset = unavailable":
+     * the solver may only place a shift fully inside a declared availability slot, and
+     * an employee with no slots is unavailable for every shift. The auto-scheduler
+     * always sends true; manual workflows do NOT use this (availability is warn-only there).
+     */
+    enforce_availability?: boolean;
 }
 
 export interface OptimizeRequest {

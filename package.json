@@ -19,7 +19,8 @@
     "test:coverage": "vitest run --coverage",
     "verify": "npm run type-check && npm run test && npm run build",
     "ship": "npm run verify && git push",
-    "seed:generate": "npx tsx scripts/generate-venueops-seed.ts > supabase/seed.sql"
+    "seed:generate": "npx tsx scripts/generate-venueops-seed.ts > supabase/seed.sql",
+    "gen:eba-rates": "node scripts/gen-eba-rate-schedule.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

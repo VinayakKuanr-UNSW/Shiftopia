@@ -13,7 +13,9 @@ export type ShiftUrgency = 'normal' | 'urgent' | 'emergent';
 /** @deprecated use ShiftUrgency */
 export type BiddingUrgency = ShiftUrgency;
 
-const FOUR_HOURS_MS    = 4  * 60 * 60 * 1000;
+/** TTS ≤ this = 'emergent': bids/swaps are locked server-side and the autoscheduler skips the shift. */
+export const EMERGENT_WINDOW_MS = 4 * 60 * 60 * 1000;
+const FOUR_HOURS_MS    = EMERGENT_WINDOW_MS;
 const TWENTY_FOUR_H_MS = 24 * 60 * 60 * 1000;
 
 /**

@@ -86,7 +86,12 @@ export function estimateCostFromShift(shift: any, netMinutesOverride?: number): 
     previousWage: shift.previousWage,
     employmentType: shift.target_employment_type,
     isSecurityRole: shift.roles?.name?.toLowerCase().includes('security'),
-    classificationLevel: extractLevel(shift.roles?.name)
+    classificationLevel: extractLevel(shift.roles?.name),
+    // cl 42 weekly OT is cross-shift context this single-shift wrapper can't
+    // derive; pass it through only if a caller has already computed it. Undefined
+    // ⇒ no weekly OT (unchanged legacy behaviour).
+    priorOrdinaryHoursThisWeek: shift.priorOrdinaryHoursThisWeek,
+    higherDutiesLevel: shift.higherDutiesLevel,
   } as any);
 }
 
@@ -124,7 +129,11 @@ export function estimateDetailedCostFromShift(shift: any, netMinutesOverride?: n
     previousWage: shift.previousWage,
     employmentType: (empType === 'FT' || /full/i.test(empType)) ? 'Full-Time' : (empType === 'PT' || /part/i.test(empType)) ? 'Part-Time' : (empType || 'Casual'),
     isSecurityRole: roleName?.toLowerCase().includes('security'),
-    classificationLevel: extractLevel(roleName)
+    classificationLevel: extractLevel(roleName),
+    // See estimateCostFromShift — cross-shift weekly-OT context is only forwarded
+    // when a caller has already computed it; undefined leaves weekly OT off.
+    priorOrdinaryHoursThisWeek: shift.priorOrdinaryHoursThisWeek,
+    higherDutiesLevel: shift.higherDutiesLevel,
   } as any);
 
   // Cache the result if no override was used

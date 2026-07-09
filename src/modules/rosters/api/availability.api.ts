@@ -1,91 +1,168 @@
 /**
  * Availability API Service
- * 
+ *
  * Fetches availability data from Supabase and provides resolved availability
- * for use in the Peoples Mode grid.
+ * for the People Mode grid and the assign-shift availability warnings.
+ *
+ * SOURCE OF TRUTH: `availability_slots` — the materialized per-day slots that a
+ * DB trigger generates from `availability_rules` (what "My Availabilities" and
+ * the seed write to). The older `availabilities` table is vestigial/empty; the
+ * whole app (scheduler, bidding, swaps) reads slots, so we do too. Reading
+ * `availabilities` here was the reason People Mode showed "No availability set"
+ * for everyone even after availability was declared.
  */
 
 import { supabase } from '@/platform/supabase/client';
-import { format } from 'date-fns';
+import { format, eachDayOfInterval } from 'date-fns';
+import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 import {
-    RawAvailability,
+    AvailabilityWindow,
     EmployeeAvailability,
 } from '@/modules/rosters/domain/availabilityResolution.types';
-import {
-    resolveAvailabilityBatch,
-    toEmployeeAvailability,
-} from '@/modules/rosters/domain/availabilityResolution';
+
+/* ============================================================
+   TYPES
+   ============================================================ */
+
+/** A materialized daily slot row from `availability_slots`. */
+interface RawAvailabilitySlot {
+    profile_id: string;
+    slot_date: string;  // "YYYY-MM-DD"
+    start_time: string; // "HH:MM:SS"
+    end_time: string;   // "HH:MM:SS"
+}
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+
+/** "HH:MM:SS" | "HH:MM" -> "HH:MM" (the shape AvailabilityBar expects). */
+function toHHMM(time: string): string {
+    const [h = '00', m = '00'] = time.split(':');
+    return `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
+}
+
+/** Build the UI availability record for one (profile, day) from its slots. */
+function toEmployeeAvailability(
+    profileId: string,
+    date: string,
+    windows: AvailabilityWindow[],
+): EmployeeAvailability {
+    const sorted = [...windows].sort((a, b) => a.start.localeCompare(b.start));
+    const isFullyUnavailable = sorted.length === 0;
+    const isFullyAvailable =
+        sorted.length === 1 &&
+        sorted[0].start === '00:00' &&
+        (sorted[0].end === '24:00' || sorted[0].end === '00:00');
+
+    return {
+        employeeId: profileId,
+        date,
+        availableWindows: sorted,
+        unavailableWindows: [],
+        isFullyAvailable,
+        isFullyUnavailable,
+        // Reached only for profiles that have declared availability, so a day
+        // with no slot is a genuine "unavailable that day", not "unknown".
+        hasData: true,
+    };
+}
 
 /* ============================================================
    API FUNCTIONS
    ============================================================ */
 
 /**
- * Fetch raw availability rows from the database for given profiles and date range
- */
-export async function fetchRawAvailabilities(
-    profileIds: string[],
-    startDate: Date,
-    endDate: Date
-): Promise<RawAvailability[]> {
-    const startDateStr = format(startDate, 'yyyy-MM-dd');
-    const endDateStr = format(endDate, 'yyyy-MM-dd');
-
-    const { data, error } = await supabase
-        .from('availabilities')
-        .select('*')
-        .in('profile_id', profileIds)
-        .lte('start_date', endDateStr) // Rule starts before or on view end
-        .gte('end_date', startDateStr) // Rule ends after or on view start
-        .order('created_at', { ascending: true });
-
-    if (error) {
-        console.error('Error fetching availabilities:', error);
-        return [];
-    }
-
-    return (data || []) as RawAvailability[];
-}
-
-/**
- * Get resolved availability for multiple profiles across a date range
- * Returns a nested Map: profileId -> date -> EmployeeAvailability
+ * Get resolved availability for multiple profiles across a date range.
+ * Returns a nested Map: profileId -> "YYYY-MM-DD" -> EmployeeAvailability.
+ *
+ * Profiles with NO declared availability rule are omitted from the map, so the
+ * UI's `getAvailability()` returns null for them → "No availability set" (as
+ * opposed to a profile who declared rules but happens to be off that day, which
+ * renders as fully unavailable).
  */
 export async function getResolvedAvailabilities(
     profileIds: string[],
     startDate: Date,
     endDate: Date
 ): Promise<Map<string, Map<string, EmployeeAvailability>>> {
-    // Skip if no profiles
-    if (profileIds.length === 0) {
-        return new Map();
-    }
-
-    // Fetch raw availability rules
-    const rawRules = await fetchRawAvailabilities(profileIds, startDate, endDate);
-
-    // Resolve using the resolution service
-    const resolved = resolveAvailabilityBatch(profileIds, startDate, endDate, rawRules);
-
-    // Convert to EmployeeAvailability format for UI
     const result = new Map<string, Map<string, EmployeeAvailability>>();
 
-    for (const [profileId, dateMap] of resolved) {
-        const employeeMap = new Map<string, EmployeeAvailability>();
+    // The People Mode employee list includes non-UUID pseudo-rows (e.g. the
+    // 'unassigned-bucket' Open Shifts row). Passing one of those into
+    // `.in('profile_id', …)` makes Postgres reject the WHOLE query with an
+    // invalid-uuid cast error, which would blank out availability for everyone.
+    const validIds = profileIds.filter(isValidUuid);
+    if (validIds.length === 0) return result;
 
-        for (const [date, dayAvailability] of dateMap) {
-            employeeMap.set(date, toEmployeeAvailability(dayAvailability));
+    const startStr = format(startDate, 'yyyy-MM-dd');
+    const endStr = format(endDate, 'yyyy-MM-dd');
+
+    // 1. Materialized slots in the visible window (the available windows).
+    const { data: slotRows, error: slotErr } = await supabase
+        .from('availability_slots')
+        .select('profile_id,slot_date,start_time,end_time')
+        .in('profile_id', validIds)
+        .gte('slot_date', startStr)
+        .lte('slot_date', endStr);
+
+    if (slotErr) {
+        console.error('Error fetching availability_slots:', slotErr);
+        return result;
+    }
+
+    // 2. Which profiles have declared ANY availability rule. This distinguishes
+    //    "off that day" (has rules, no slot → unavailable) from "never set
+    //    availability" (no rules → we show nothing / universally unknown).
+    const { data: ruleRows, error: ruleErr } = await supabase
+        .from('availability_rules')
+        .select('profile_id')
+        .in('profile_id', validIds);
+
+    if (ruleErr) {
+        console.error('Error fetching availability_rules:', ruleErr);
+    }
+
+    const declaredSet = new Set<string>(
+        (ruleRows ?? []).map((r) => (r as { profile_id: string }).profile_id),
+    );
+
+    // Group slots by profile + date.
+    const windowsByProfileDate = new Map<string, AvailabilityWindow[]>();
+    for (const slot of (slotRows ?? []) as RawAvailabilitySlot[]) {
+        const key = `${slot.profile_id}|${slot.slot_date}`;
+        const list = windowsByProfileDate.get(key) ?? [];
+        list.push({ start: toHHMM(slot.start_time), end: toHHMM(slot.end_time) });
+        windowsByProfileDate.set(key, list);
+    }
+
+    const days = eachDayOfInterval({ start: startDate, end: endDate }).map((d) =>
+        format(d, 'yyyy-MM-dd'),
+    );
+    // Slots are only materialized forward from today, so a PAST day with no slot
+    // means "not generated" (unknown), not "declared unavailable". Skip those so
+    // we don't paint the past days of a month view bright red; future days with
+    // no slot are genuine unavailable days per the person's weekly pattern.
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+
+    for (const profileId of validIds) {
+        if (!declaredSet.has(profileId)) continue; // no rules → leave null
+
+        const dateMap = new Map<string, EmployeeAvailability>();
+        for (const day of days) {
+            const windows = windowsByProfileDate.get(`${profileId}|${day}`) ?? [];
+            if (windows.length === 0 && day < todayStr) continue; // past + no slot → unknown
+            dateMap.set(day, toEmployeeAvailability(profileId, day, windows));
         }
-
-        result.set(profileId, employeeMap);
+        result.set(profileId, dateMap);
     }
 
     return result;
 }
 
 /**
- * Get availability for a single profile on a single date
- * Convenience function for simpler use cases
+ * Get availability for a single profile on a single date.
+ * Convenience wrapper used by the assign-shift availability warnings.
  */
 export async function getEmployeeAvailabilityForDate(
     profileId: string,
@@ -101,7 +178,6 @@ export async function getEmployeeAvailabilityForDate(
 }
 
 export const availabilityApi = {
-    fetchRawAvailabilities,
     getResolvedAvailabilities,
     getEmployeeAvailabilityForDate,
 };

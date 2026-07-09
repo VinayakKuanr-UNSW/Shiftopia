@@ -41,7 +41,7 @@ import {
   useTemplates,
   useRostersLookup,
 } from '@/modules/rosters/state/useRosterShifts';
-import { UnifiedRosterNavigator, type ViewType } from './UnifiedRosterNavigator';
+import { UnifiedRosterNavigator, type ViewType, computeRange, formatRangeLabel } from './UnifiedRosterNavigator';
 export type { ViewType } from './UnifiedRosterNavigator';
 import { RosterFilterPopover } from './RosterFilterPopover';
 import { useRosterUI, RosterMode } from '@/modules/rosters/contexts/RosterUIContext';
@@ -72,6 +72,8 @@ import { useRosterStructure } from '../../state/useRosterStructure';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { PublishRosterButton, type PublishRosterResult } from './PublishRosterButton';
+import type { PublishRosterPlan } from '@/modules/rosters/domain/bulk-action-engine';
 
 /* ============================================================
    TYPES
@@ -132,6 +134,17 @@ export interface RosterFunctionBarProps {
   isBulkMode?: boolean;
   onBulkModeToggle?: () => void;
   onAutoScheduleClick?: () => void;
+
+  /**
+   * One-click "Publish" action. When both callbacks are provided, a Publish
+   * button is shown in the right-hand actions group. `loadPublishPlan` fetches
+   * + partitions the current roster (assigned → offers, unassigned → bidding,
+   * dead → delete); `executePublishRoster` applies the confirmed plan.
+   * `canPublish` gates the trigger (edit permission + org selected).
+   */
+  loadPublishPlan?: () => Promise<PublishRosterPlan>;
+  executePublishRoster?: (plan: PublishRosterPlan) => Promise<PublishRosterResult>;
+  canPublish?: boolean;
 
   /** Number of active filters — shows an orange dot badge on the Filter button when > 0 */
   activeFilterCount?: number;
@@ -225,6 +238,9 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
   isBulkMode = false,
   onBulkModeToggle,
   onAutoScheduleClick,
+  loadPublishPlan,
+  executePublishRoster,
+  canPublish = true,
   activeFilterCount = 0,
   transparent = false,
 }) => {
@@ -396,7 +412,30 @@ export const RosterFunctionBar: React.FC<RosterFunctionBarProps> = ({
         </div>
 
         {/* Right Section: Actions */}
-        <div className="flex-shrink-0 flex items-center justify-end">
+        <div className="flex-shrink-0 flex items-center justify-end gap-2">
+
+          {/* ── One-click Publish (offers + bidding + dead-shift cleanup) ── */}
+          {loadPublishPlan && executePublishRoster && (() => {
+            const range = computeRange(selectedDate, viewType);
+            const rangeLabel = formatRangeLabel(range, viewType);
+            const viewTypeLabel = {
+              day: 'Day',
+              '3day': '3-Day',
+              week: 'Week',
+              month: 'Month',
+            }[viewType] || 'Week';
+
+            return (
+              <PublishRosterButton
+                disabled={!canPublish}
+                loadPlan={loadPublishPlan}
+                execute={executePublishRoster}
+                selectedViewType={viewTypeLabel}
+                selectedViewRange={rangeLabel}
+              />
+            );
+          })()}
+
           <div className="flex items-center gap-1 bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-1.5 h-10 shadow-sm dark:shadow-none">
 
             {/* ── Data group: Refresh + Filter ───────────────────────── */}

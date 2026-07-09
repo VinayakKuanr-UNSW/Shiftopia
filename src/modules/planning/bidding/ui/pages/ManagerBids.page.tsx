@@ -4,15 +4,16 @@ import type { BidToggle, ToggleCounts } from '../views/OpenBidsView/types';
 import { useAuth } from '@/platform/auth/useAuth';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Gavel, Flame, Clock, CheckCircle, Zap, Loader2 } from 'lucide-react';
+import { Gavel, Flame, Clock, CheckCircle, CircleSlash, Zap, Loader2 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 
 const TOGGLE_CONFIG: Record<BidToggle, { label: string; Icon: typeof Flame; activeClass: string }> = {
+    standard: { label: 'Standard', Icon: Clock,       activeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
     urgent:   { label: 'Urgent',   Icon: Flame,       activeClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' },
-    normal:   { label: 'Normal',   Icon: Clock,       activeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
     resolved: { label: 'Resolved', Icon: CheckCircle, activeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+    expired:  { label: 'Expired',  Icon: CircleSlash, activeClass: 'bg-slate-500/15 text-slate-400 border-slate-500/30' },
 };
 
 export const ManagerBidsPage: React.FC = () => {
@@ -23,7 +24,7 @@ export const ManagerBidsPage: React.FC = () => {
     const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
     const [searchQuery, setSearchQuery] = useState('');
     const [activeToggle, setActiveToggle] = useState<BidToggle>('urgent');
-    const [counts, setCounts] = useState<ToggleCounts>({ urgent: 0, normal: 0, resolved: 0 });
+    const [counts, setCounts] = useState<ToggleCounts>({ standard: 0, urgent: 0, resolved: 0, expired: 0 });
     const [autoAssign, setAutoAssign] = useState<{ run: () => void; isRunning: boolean }>({ run: () => {}, isRunning: false });
     // Bids are inherently forward-looking — default to a window that includes
     // upcoming open shifts (matches the employee bids page: −7 → +30 days).

@@ -66,6 +66,25 @@ export interface CostCalculatorOptions {
   is_sws_trial?: boolean;
   sws_trial_start_date?: string;
   classificationLevel?: string;
+
+  // ── Higher duties (cl 29) ────────────────────────────────────────────────
+  // Classification the member is TEMPORARILY performing above their substantive
+  // grade for this shift. When it resolves (via the same wageRates lookup as
+  // classificationLevel) to a HIGHER rate than the substantive base, the whole
+  // shift is priced at the higher rate — max(substantive, higherDuties), never
+  // underpay. Only affects the classification/rate path (not apprentice /
+  // trainee / SWS). Key form matches classificationLevel (e.g. 'LEVEL_5').
+  higherDutiesLevel?: string;
+
+  // ── Weekly overtime (cl 42) ──────────────────────────────────────────────
+  // Ordinary hours this member has ALREADY accumulated earlier in the same ISO
+  // week (Mon-anchored), BEFORE this shift, from prior shifts ordered by
+  // date/time. When provided (non-casual only), the ordinary hours on THIS shift
+  // that push the running weekly total past 38h are re-priced as overtime rather
+  // than ordinary. UNDEFINED / null ⇒ weekly OT is OFF and behaviour is exactly
+  // as before (safe-by-default). Casual weekly OT is ambiguous under the EA, so
+  // it is deliberately not applied even when a value is supplied for a casual.
+  priorOrdinaryHoursThisWeek?: number;
 }
 
 export interface CostEngine {

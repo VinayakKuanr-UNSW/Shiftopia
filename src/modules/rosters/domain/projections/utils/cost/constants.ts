@@ -47,6 +47,16 @@ export const WAGE_RATES = {
   LEVEL_7: { permanent: 34.19, casual: 42.74 },
 };
 
+// ── Estimate labelling (audit Phase 1) ───────────────────────────────────────
+// This module is an AWARD-COST ESTIMATOR, not a payroll system. Every UI surface
+// that renders its dollar output must label it as an estimate and must never
+// present it as payable pay. These shared strings keep that wording consistent
+// across the roster cards, my-roster dialog, timesheet table and exports.
+export const COST_ESTIMATE_LABEL = 'Est. cost';
+export const COST_ESTIMATE_TITLE = 'Estimated cost (not payroll)';
+export const COST_ESTIMATE_DISCLAIMER =
+  'Award estimate only — not payroll. Excludes leave loading, weekly-averaged overtime and future CPI indexation.';
+
 /**
  * Zero-cost sentinel for unassigned shifts.
  *

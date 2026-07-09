@@ -84,7 +84,11 @@ import {
   preflightUnpublish,
   preflightDelete,
   preflightUnassign,
+  planPublishRoster,
+  type PublishRosterPlan,
 } from '@/modules/rosters/domain/bulk-action-engine';
+import type { PublishRosterResult } from '@/modules/rosters/ui/components/PublishRosterButton';
+import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
 import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
 import { LayoutGrid, Search } from 'lucide-react';
 import { Input } from '@/modules/core/ui/primitives/input';
@@ -93,6 +97,7 @@ import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import { executeAssignShift } from '@/modules/rosters/domain/commands/assignShift.command';
 import { resolveGroupType } from '@/modules/rosters/utils/roster-utils';
 import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
+import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import {
   Tooltip,
   TooltipContent,
@@ -714,6 +719,70 @@ const NewRostersPage: React.FC = () => {
     };
   };
 
+  // ── One-click "Publish" (function bar) ────────────────────────────────────
+  // Publishes every draft shift in the current view (assigned → offers,
+  // unassigned → open bidding) and deletes dead shifts (unassigned drafts whose
+  // window is already live). Loads on demand so it works in every view — the
+  // default Group Bucket View gates off the per-shift fetch, so we can't rely on
+  // the rendered `shifts` array here. `fetchQuery` reuses the cache when it's
+  // already warm (non-bucket views).
+  const loadPublishPlan = React.useCallback(async (): Promise<PublishRosterPlan> => {
+    const empty: PublishRosterPlan = {
+      assignedIds: [],
+      unassignedIds: [],
+      emergentAssignedIds: [],
+      emergentUnassignedIds: [],
+      deadIds: [],
+      alreadyPublishedCount: 0,
+    };
+    if (!selectedOrganizationId || !startDate || !endDate) return empty;
+
+    const planShifts = await queryClient.fetchQuery({
+      queryKey: shiftKeys.byDateRange(selectedOrganizationId, startDate, endDate, queryFilters),
+      queryFn: () => shiftsQueries.getShiftsForDateRange(selectedOrganizationId, startDate, endDate, queryFilters),
+      staleTime: 30_000,
+    });
+
+    return planPublishRoster((planShifts ?? []) as Shift[]);
+  }, [selectedOrganizationId, startDate, endDate, queryFilters, queryClient]);
+
+  const executePublishRoster = React.useCallback(
+    async (plan: PublishRosterPlan): Promise<PublishRosterResult> => {
+      // Publish future assigned (→ offers) + future unassigned (→ bidding) +
+      // emergent assigned (→ emergency-assigned). Emergent UNASSIGNED shifts are
+      // intentionally excluded — bidding would immediately expire, so they need
+      // manual assignment (surfaced in the confirm dialog).
+      const publishIds = [
+        ...plan.assignedIds,
+        ...plan.unassignedIds,
+        ...plan.emergentAssignedIds,
+      ];
+      let published = 0;
+      let deleted = 0;
+      let failed = 0;
+      const failedReasons: string[] = [];
+
+      // Delete dead shifts first so they never round-trip through publish.
+      if (plan.deadIds.length > 0) {
+        const res = await bulkDelete.mutateAsync(plan.deadIds);
+        deleted = res.deletedIds.length;
+        failed += res.failed.length;
+        failedReasons.push(...res.failed.map(f => f.reason));
+      }
+
+      // The publish command already routes each shift by assignment + time-to-start.
+      if (publishIds.length > 0) {
+        const res = await bulkPublish.mutateAsync(publishIds);
+        published = res.publishedIds.length;
+        failed += res.complianceFailed.length + res.dbFailed.length;
+        failedReasons.push(...[...res.complianceFailed, ...res.dbFailed].map(f => f.reason));
+      }
+
+      return { published, deleted, failed, failedReasons };
+    },
+    [bulkDelete, bulkPublish],
+  );
+
   const handleBulkUnassign = async () => {
     const assignedIds = selectedShiftsData
       .filter(s => s.assigned_employee_id)
@@ -1080,6 +1149,10 @@ const NewRostersPage: React.FC = () => {
               isBulkMode={bulkModeActive}
               onBulkModeToggle={() => handleBulkModeToggle(!bulkModeActive)}
               onAutoScheduleClick={() => modalsRef.current?.openAutoScheduler()}
+              // One-click Publish (offers + bidding + dead-shift cleanup)
+              loadPublishPlan={loadPublishPlan}
+              executePublishRoster={executePublishRoster}
+              canPublish={canEdit && !!selectedOrganizationId}
             />
           </div>
         </div>
@@ -1345,7 +1418,14 @@ const NewRostersPage: React.FC = () => {
           role: (e as any).role_name ?? undefined,
         }))}
         autoSchedulerShifts={shifts
-          .filter((s) => !s.assigned_employee_id && !s.is_cancelled && !s.deleted_at)
+          /* Autoscheduler scope: DRAFT + unassigned, outside the emergent
+             (TTS ≤ 4h) window — published shifts belong to bidding/offers,
+             emergent ones to the emergency-assignment flow. Must stay in
+             sync with the filter in AutoSchedulerModal.tsx. */
+          .filter((s) =>
+            !s.assigned_employee_id && !s.is_cancelled && !s.deleted_at
+            && (s.is_draft ?? true)
+            && computeShiftUrgency(s.shift_date, s.start_time) !== 'emergent')
           .map((s) => ({
             id: s.id,
             shift_date: s.shift_date,

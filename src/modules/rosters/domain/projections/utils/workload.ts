@@ -22,15 +22,19 @@ const DAYS_PER_WEEK = 7;
  * sums every shift in the visible range — a week, a month, etc. To compare
  * like-for-like we scale the weekly contract by the number of days on screen.
  *
- * Falls back to a 7-day window when `rangeDays` is missing so a stray caller
- * never divides by zero.
+ * The effective days are floored at ONE WEEK: scaling a weekly contract down
+ * to a sub-week window (e.g. Day view, rangeDays=1 → 38/7 ≈ 5.4h) makes a
+ * single legitimate 8h shift read as heavily over-utilized (~147%). A weekly
+ * floor keeps utilization meaningful on short ranges while leaving Week (7)
+ * and Month (28–31) untouched. Also falls back to a 7-day window when
+ * `rangeDays` is missing so a stray caller never divides by zero.
  */
 export function periodContractedHours(
   contractedWeeklyHours: number | undefined | null,
   rangeDays: number | undefined,
 ): number {
   if (!contractedWeeklyHours || contractedWeeklyHours <= 0) return 0;
-  const days = rangeDays && rangeDays > 0 ? rangeDays : DAYS_PER_WEEK;
+  const days = rangeDays && rangeDays > 0 ? Math.max(rangeDays, DAYS_PER_WEEK) : DAYS_PER_WEEK;
   return contractedWeeklyHours * (days / DAYS_PER_WEEK);
 }
 
@@ -73,18 +77,31 @@ type FatigueShift = {
  * used to) reads 0 for any roster planned in the future. Instead we anchor the
  * window to each shift's own date — matching the auto-scheduler's convention
  * (AutoSchedulerPanel uses `proposal.shiftDate`) — and take the worst point.
+ *
+ * `history` is the set of shifts in the 7 days BEFORE the visible window. It is
+ * fed in as recovery/accumulation context ONLY: it makes each visible day's
+ * 7-day trailing window complete regardless of the view zoom (Day/3D would
+ * otherwise be starved of prior-week shifts and under-count fatigue), but it is
+ * never itself a reference date — we only report the peak on days actually shown.
+ * The mapped array is built once (not per reference date) to avoid O(D×N) allocs.
  */
-export function computePeakFatigue(shifts: FatigueShift[]): number {
+export function computePeakFatigue(
+  shifts: FatigueShift[],
+  history: FatigueShift[] = [],
+): number {
   if (shifts.length === 0) return 0;
   const referenceDates = Array.from(new Set(shifts.map((s) => s.shift_date)));
+  const normalize = (s: FatigueShift) => ({
+    shift_date: s.shift_date,
+    start_time: s.start_time,
+    end_time: s.end_time,
+    unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
+  });
+  const mapped = history.length > 0
+    ? [...history.map(normalize), ...shifts.map(normalize)]
+    : shifts.map(normalize);
   let peak = 0;
   for (const referenceDate of referenceDates) {
-    const mapped = shifts.map((s) => ({
-      shift_date: s.shift_date,
-      start_time: s.start_time,
-      end_time: s.end_time,
-      unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
-    }));
     const { current } = calculateFatigueWithRecovery(mapped, referenceDate);
     if (current > peak) peak = current;
   }

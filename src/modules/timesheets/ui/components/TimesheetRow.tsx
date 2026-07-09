@@ -38,7 +38,7 @@ import type { TimesheetRow as TimesheetRowType } from "../../model/timesheet.typ
 import { calculateHoursBetween, formatHours, formatDifferential, isShiftFinished, timesheetEntryToShiftInput } from "./TimesheetTable.utils";
 import { getProtectionContext, getTimeRule, getLiveRuleBadges, isTimesheetReviewable } from "@/modules/rosters/domain/shift-ui";
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
-import { ZERO_COST_BREAKDOWN } from '@/modules/rosters/domain/projections/utils/cost/constants';
+import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
 
 interface TimesheetRowProps {
     entry: TimesheetRowType;
@@ -588,8 +588,8 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                     </>
                 )}
 
-                {/* Payroll */}
-                <td className={`${cellClass} font-black text-primary tracking-tight`}>
+                {/* Estimated cost — award estimate, NOT payroll */}
+                <td title={COST_ESTIMATE_DISCLAIMER} className={`${cellClass} font-black text-primary tracking-tight`}>
                     {entry.approximatePay || '-'}
                 </td>
 

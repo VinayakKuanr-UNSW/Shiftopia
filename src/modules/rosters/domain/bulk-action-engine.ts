@@ -12,6 +12,7 @@
 
 import type { Shift } from './shift.entity';
 import { getSydneyNow, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { getTimeRule } from './shift-ui';
 
 // ============================================================
 // TYPES
@@ -163,6 +164,126 @@ export function preflightUnassign(shifts: Shift[]): BulkPreflightSummary {
     }
 
     return { eligibleIds, blocked, warned: [] };
+}
+
+// ============================================================
+// PUBLISH-ROSTER PLAN (one-click roster finalize)
+// ============================================================
+
+/**
+ * Partition of the current roster for the "Publish" one-click action.
+ *
+ *   • assignedIds   — DRAFT + assigned + still in the future. Publishing sends
+ *                     these to the assignee as Offers (or emergency-confirms
+ *                     inside the 4h window).
+ *   • unassignedIds — DRAFT + unassigned + still in the future. Publishing opens
+ *                     these for Open Bidding.
+ *   • deadIds       — DRAFT + unassigned + already "Live" (the scheduled window
+ *                     has started with nobody on it). These can never be staffed
+ *                     and are deleted.
+ *
+ * The three buckets are disjoint by construction: a dead shift is past-start,
+ * a publishable shift is future-start.
+ */
+export interface PublishRosterPlan {
+    /** X — future assigned drafts (TTS > 4h): sent to the assignee as Offers. */
+    assignedIds: string[];
+    /** Y — future unassigned drafts (TTS > 4h): opened for Open Bidding. */
+    unassignedIds: string[];
+    /**
+     * A — assigned drafts inside the 4h window (TTS ≤ 4h): emergency-assigned
+     * (published straight to Confirmed, bypassing the offer step).
+     */
+    emergentAssignedIds: string[];
+    /**
+     * B — unassigned drafts inside the 4h window (TTS ≤ 4h): CANNOT be opened for
+     * bidding (it would immediately expire) — must be assigned manually. Skipped.
+     */
+    emergentUnassignedIds: string[];
+    /** W — unassigned drafts already "Live" (started, unstaffed): deleted. */
+    deadIds: string[];
+    /** Z — already-published shifts in the view: skipped (informational). */
+    alreadyPublishedCount: number;
+}
+
+/** Emergency window — a shift that starts within this horizon is "emergent". */
+const EMERGENT_WINDOW_MS = 4 * 60 * 60 * 1000;
+
+/**
+ * Compute the {@link PublishRosterPlan} from a set of shifts (typically the
+ * loaded roster for the current org + date range + scope filter). Pure/sync —
+ * no network. Only DRAFT shifts participate; published, in-progress, completed,
+ * cancelled and deleted shifts are left untouched.
+ *
+ * Every draft shift falls into exactly one bucket:
+ *   assigned future (X) · unassigned future (Y) · emergent assigned (A) ·
+ *   emergent unassigned (B) · dead unassigned-live (W). Already-published shifts
+ *   are only counted (Z).
+ */
+export function planPublishRoster(shifts: Shift[]): PublishRosterPlan {
+    const assignedIds: string[] = [];
+    const unassignedIds: string[] = [];
+    const emergentAssignedIds: string[] = [];
+    const emergentUnassignedIds: string[] = [];
+    const deadIds: string[] = [];
+    let alreadyPublishedCount = 0;
+
+    const nowMs = getSydneyNow().getTime();
+
+    for (const s of shifts) {
+        if (!s.deleted_at && !s.is_cancelled && s.lifecycle_status === 'Published') {
+            alreadyPublishedCount++;
+        }
+
+        const isPublishedOrTerminal =
+            s.lifecycle_status === 'Published' ||
+            s.lifecycle_status === 'InProgress' ||
+            s.lifecycle_status === 'Completed' ||
+            s.lifecycle_status === 'Cancelled';
+
+        // Only DRAFT shifts are in scope.
+        if (s.deleted_at || s.is_cancelled || isPublishedOrTerminal) continue;
+
+        const isUnassigned = !s.assigned_employee_id;
+
+        // Dead shift — an unassigned draft whose scheduled window is already LIVE.
+        // It started with nobody on it and can never be staffed → delete.
+        if (isUnassigned && getTimeRule(s)?.label === 'Live') {
+            deadIds.push(s.id);
+            continue;
+        }
+
+        // Resolve the start instant the same way getTimeRule does (canonical
+        // start_at wins, else the wall-clock shift_date + start_time). Past-start
+        // drafts that aren't "dead" (e.g. assigned but never published) can't be
+        // published → skipped.
+        const startMs = s.start_at
+            ? new Date(s.start_at).getTime()
+            : parseZonedDateTime(s.shift_date, s.start_time, SYDNEY_TZ).getTime();
+        if (!Number.isFinite(startMs) || startMs <= nowMs) continue;
+
+        const isEmergent = startMs - nowMs <= EMERGENT_WINDOW_MS;
+
+        if (isEmergent) {
+            // Inside the 4h lock: assigned → emergency-assign; unassigned → can't
+            // open bidding (would immediately expire), needs manual assignment.
+            if (isUnassigned) emergentUnassignedIds.push(s.id);
+            else emergentAssignedIds.push(s.id);
+        } else if (isUnassigned) {
+            unassignedIds.push(s.id);
+        } else {
+            assignedIds.push(s.id);
+        }
+    }
+
+    return {
+        assignedIds,
+        unassignedIds,
+        emergentAssignedIds,
+        emergentUnassignedIds,
+        deadIds,
+        alreadyPublishedCount,
+    };
 }
 
 // ============================================================

@@ -51,6 +51,10 @@ export function useResolvedAvailability(
         queryKey: [
             'availability',
             'resolved',
+            // Source discriminator: bumped when the read path moved off the empty
+            // `availabilities` table onto `availability_slots`. Prevents reusing a
+            // stale (empty) cache entry from the old code path after a hot reload.
+            'slots-v2',
             profileIdKey,
             dateRange?.start.getTime(),
             dateRange?.end.getTime(),

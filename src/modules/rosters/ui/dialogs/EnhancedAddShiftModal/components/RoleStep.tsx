@@ -18,6 +18,7 @@ import { Separator } from '@/modules/core/ui/primitives/separator';
 import { Lock, Gavel, AlertTriangle } from 'lucide-react';
 import { RoleStepProps } from '../types';
 import { estimateShiftCost } from '@/modules/rosters/domain/projections/utils/cost';
+import { COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
 
 export const RoleStep: React.FC<RoleStepProps> = ({
     form,
@@ -222,6 +223,7 @@ export const RoleStep: React.FC<RoleStepProps> = ({
                         <span className="text-blue-300/70">Estimated Cost</span>
                         <span className="text-2xl font-bold text-blue-300">${estimatedCost.toFixed(2)}</span>
                     </div>
+                    <p className="mt-1 text-[10px] italic text-blue-300/50">{COST_ESTIMATE_DISCLAIMER}</p>
                 </div>
             )}
         </div>

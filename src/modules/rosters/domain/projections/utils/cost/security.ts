@@ -1,7 +1,8 @@
-import { 
-  hd, SATURDAY, SUNDAY, DEFAULT_RATE, CASUAL_LOADING, TIME_AND_HALF_MULTIPLIER, TIME_AND_QUARTER_MULTIPLIER, TIME_AND_THREE_QUARTERS_MULTIPLIER, DOUBLE_TIME_AND_HALF_MULTIPLIER, DOUBLE_TIME_AND_THREE_QUARTERS_MULTIPLIER, TIME_AND_HALF_HOURS_CAP, DOUBLE_TIME_MULTIPLIER
+import {
+  hd, SATURDAY, SUNDAY, CASUAL_LOADING, TIME_AND_HALF_MULTIPLIER, TIME_AND_QUARTER_MULTIPLIER, TIME_AND_THREE_QUARTERS_MULTIPLIER, DOUBLE_TIME_AND_HALF_MULTIPLIER, DOUBLE_TIME_AND_THREE_QUARTERS_MULTIPLIER, TIME_AND_HALF_HOURS_CAP, DOUBLE_TIME_MULTIPLIER, ZERO_COST_BREAKDOWN
 } from './constants';
 import { CostCalculatorOptions, ShiftCostBreakdown } from './types';
+import { resolveRateSet } from './rate-schedule';
 import type { AwardContext } from './award-context';
 import { getDateFacts, parseTimeToMinutes } from './award-context';
 
@@ -14,24 +15,14 @@ import { getDateFacts, parseTimeToMinutes } from './award-context';
  *   - ZERO allocations in the hot loop.
  */
 
-const SECURITY_ANNUALISED_RATES = {
-  level3: 32.20,
-  level4: 34.63,
-  level5: 37.06,
-  level6: 39.48,
-};
-
-const SECURITY_ORDINARY_MAPPING: Record<number, number> = {
-  32.20: 27.23, // Level 3
-  34.63: 28.79, // Level 4
-  37.06: 30.82, // Level 5
-  39.48: 32.82, // Level 6
-};
+// Security annualised rates & their ordinary-rate mapping are now effective-
+// dated — see rate-schedule.ts (audit Phase 2). They are resolved per shift from
+// resolveRateSet(shift_date).security, so cl 25.1 CPI increases are data, not code.
 
 const ORDINARY_HOURS_CAP_SECURITY = 12.0;
 
-function isSecurityAnnualised(rate: number): boolean {
-  return Object.values(SECURITY_ANNUALISED_RATES).includes(rate);
+function isSecurityAnnualised(rate: number, annualisedHourly: Record<string, number>): boolean {
+  return Object.values(annualisedHourly).includes(rate);
 }
 
 function toOrdinaryRate(casualRate: number): number {
@@ -42,16 +33,34 @@ export function estimateDetailedShiftCost(
   options: CostCalculatorOptions,
   ctx?: AwardContext,
 ): ShiftCostBreakdown {
+  // A cancelled shift is not worked and carries no labour cost (audit Phase 1).
+  if (options.is_cancelled) return ZERO_COST_BREAKDOWN;
+
+  // Casuals accrue no paid leave — their 25% loading is paid in lieu — so a
+  // leave-flagged casual security shift costs nothing (audit Phase 3). Annualised
+  // / full-time security is salaried (leave is already within the annual salary),
+  // so it falls through to normal pricing.
+  if (
+    (options.isAnnualLeave || options.isPersonalLeave || options.isCarerLeave) &&
+    /casual/i.test(options.employmentType || '')
+  ) {
+    return ZERO_COST_BREAKDOWN;
+  }
+
   const { netMinutes, rate, shift_date, is_overnight, previousWage, employmentType } = options;
-  let effectiveRate = rate ?? DEFAULT_RATE;
-  if (isNaN(effectiveRate)) effectiveRate = DEFAULT_RATE;
-  
-  const isAnnualised = isSecurityAnnualised(effectiveRate);
+
+  // audit Phase 2: security annualised/ordinary rates are effective-dated.
+  const rateSet = resolveRateSet(shift_date);
+
+  let effectiveRate = rate ?? rateSet.defaultRate;
+  if (isNaN(effectiveRate)) effectiveRate = rateSet.defaultRate;
+
+  const isAnnualised = isSecurityAnnualised(effectiveRate, rateSet.security.annualisedHourly);
   const isCasual = !isAnnualised && /casual/i.test(employmentType || '');
-  
+
   let ordinaryRate = effectiveRate;
   if (isAnnualised) {
-    ordinaryRate = SECURITY_ORDINARY_MAPPING[effectiveRate] ?? effectiveRate;
+    ordinaryRate = rateSet.security.ordinaryFromAnnualised[effectiveRate] ?? effectiveRate;
   } else if (isCasual) {
     ordinaryRate = toOrdinaryRate(effectiveRate);
   }

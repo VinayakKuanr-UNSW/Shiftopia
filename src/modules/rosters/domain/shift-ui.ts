@@ -154,9 +154,10 @@ export function getShiftUIContext(shift: ShiftUIContextInput): ShiftUIContext {
         if (state === 'S11') return 'emerald';                         // In Progress
         
         // Late / No Show detection logic
+        const hasActualStart = shift.actual_start && shift.actual_start !== '-' && shift.actual_start !== '—';
         if (
             isPastStart &&
-            !shift.actual_start &&
+            !hasActualStart &&
             shift.lifecycle_status === 'Published'
         ) {
             // If the shift has ended, it's a No Show → Red (Danger)
@@ -318,7 +319,8 @@ export function getShiftStatusIcons(shift: Partial<Shift>): ShiftStatusIcon[] {
                       (shift.shift_date && shift.end_time ? parseZonedDateTime(shift.shift_date, shift.end_time).getTime() : null);
     
     // Use the actual end time if available, otherwise scheduled end
-    const effectiveEndMs = shift.actual_end ? new Date(shift.actual_end).getTime() : (schedEndMs || 0);
+    const hasActualEnd = shift.actual_end && shift.actual_end !== '-' && shift.actual_end !== '—';
+    const effectiveEndMs = hasActualEnd ? new Date(shift.actual_end!).getTime() : (schedEndMs || 0);
     
     // A shift is considered "Past" (Locked) as soon as it starts for Manager view
     // But for general status, we use start time for the Lock icon consistency
@@ -555,9 +557,10 @@ export function getTimeRule(shift: ShiftDotInput): ShiftRuleBadge | null {
     // that the clock sits inside the scheduled window — without this guard a
     // shift that the worker clocked out of early (or that completed / was
     // cancelled) keeps reading "Live" until its scheduled end_at.
+    const hasActualEnd = shift.actual_end && shift.actual_end !== '-' && shift.actual_end !== '—';
     if (shift.is_cancelled
         || shift.lifecycle_status === 'Completed'
-        || shift.actual_end
+        || hasActualEnd
         || shift.attendance_status === 'auto_clock_out') {
         return { label: 'Closed', color: '#64748B' }; // slate
     }

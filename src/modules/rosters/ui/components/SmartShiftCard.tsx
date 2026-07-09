@@ -50,7 +50,7 @@ import { useShiftPresence } from '../presence/ShiftEditingPresenceProvider';
 import type { ShiftEditor } from '../hooks/useShiftEditingPresence';
 import { getShiftStateDisplay } from '../../domain/shift-fsm';
 import type { ShiftCostBreakdown } from '../../domain/projections/utils/cost/types';
-import { ZERO_COST_BREAKDOWN } from '../../domain/projections/utils/cost/constants';
+import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '../../domain/projections/utils/cost/constants';
 import { estimateDetailedCostFromShift } from '../../domain/projections/utils/cost';
 import ShiftHistoryTimeline from './ShiftHistoryTimeline';
 import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
@@ -230,7 +230,7 @@ const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }) => {
     return (
         <div className="space-y-2 p-1 min-w-[180px]">
             <div className="flex justify-between items-center pb-1 border-b border-white/10">
-                <span className="text-[10px] uppercase tracking-wider opacity-60">Estimated Pay</span>
+                <span className="text-[10px] uppercase tracking-wider opacity-60">{COST_ESTIMATE_TITLE}</span>
                 <span className="text-xs font-bold text-emerald-400">${totalCost.toFixed(2)}</span>
             </div>
             
@@ -256,7 +256,7 @@ const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }) => {
             </div>
             
             <div className="pt-1 text-[9px] opacity-40 italic border-t border-white/5">
-                Calculated per ICC Sydney EA 2025
+                {COST_ESTIMATE_DISCLAIMER}
             </div>
         </div>
     );

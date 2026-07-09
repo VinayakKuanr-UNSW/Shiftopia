@@ -22,7 +22,7 @@ import CreateSwapRequestModal from './CreateSwapRequestModal';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
-import { ZERO_COST_BREAKDOWN } from '@/modules/rosters/domain/projections/utils/cost/constants';
+import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
 import {
     Tooltip,
     TooltipContent,
@@ -50,7 +50,7 @@ export const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }
   return (
       <div className="space-y-2 p-1 min-w-[180px]">
           <div className="flex justify-between items-center pb-1 border-b border-white/10">
-              <span className="text-[10px] uppercase tracking-wider opacity-60">Estimated Pay</span>
+              <span className="text-[10px] uppercase tracking-wider opacity-60">{COST_ESTIMATE_TITLE}</span>
               <span className="text-xs font-bold text-emerald-400">${totalCost.toFixed(2)}</span>
           </div>
           <div className="space-y-1 text-[10px]">
@@ -72,7 +72,7 @@ export const CostBreakdownTooltip: React.FC<{ breakdown: any }> = ({ breakdown }
               )}
           </div>
           <div className="pt-1 text-[9px] opacity-40 italic border-t border-white/5">
-              Calculated per ICC Sydney EA 2025
+              {COST_ESTIMATE_DISCLAIMER}
           </div>
       </div>
   );

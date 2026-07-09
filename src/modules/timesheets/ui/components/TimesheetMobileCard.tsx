@@ -22,7 +22,7 @@ import { TimesheetStatusBadge } from './TimesheetStatusBadge';
 import { getGroupColor } from '@/modules/rosters/model/roster.types';
 import type { TimesheetRow } from '../../model/timesheet.types';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
-import { isShiftFinished, isEntryReviewable } from './TimesheetTable.utils';
+import { isShiftFinished, isEntryReviewable, cleanTime } from './TimesheetTable.utils';
 
 interface TimesheetMobileCardProps {
     entry: TimesheetRow;
@@ -330,8 +330,8 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 assignment_outcome: entry.attendanceStatus,
                 attendance_status: entry.attendanceStatus,
                 attendance_note: entry.attendanceNote,
-                actual_start: entry.rawActualStart ?? entry.clockIn,
-                actual_end: entry.rawActualEnd ?? entry.clockOut,
+                actual_start: cleanTime(entry.rawActualStart) ?? cleanTime(entry.clockIn),
+                actual_end: cleanTime(entry.rawActualEnd) ?? cleanTime(entry.clockOut),
                 adjusted_start: entry.adjustedStart,
                 adjusted_end: entry.adjustedEnd,
                 adjusted_start_is_manual: entry.adjustedStartSource === 'manual',

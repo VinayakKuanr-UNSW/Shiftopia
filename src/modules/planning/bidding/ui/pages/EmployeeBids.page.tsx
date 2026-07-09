@@ -26,6 +26,8 @@ import { calculateTimeRemaining, formatTimeRemaining } from '../views/OpenBidsVi
 
 import { BidComplianceModal } from '../components/BidComplianceModal';
 import { BidConfirmComplianceDialog } from '../components/BidConfirmComplianceDialog';
+import { getAvailabilitySlots } from '@/modules/availability/api/availability.api';
+import { evaluateShiftAvailabilityFromSlots } from '@/modules/rosters/domain/availability-check';
 import { BidOpportunityDrawer } from '../components/BidOpportunityDrawer';
 import { BidOpportunityCard } from '../components/BidOpportunityCard';
 import { BidOpportunityListItem } from '../components/BidOpportunityListItem';
@@ -101,6 +103,7 @@ export const EmployeeBidsPage: React.FC = () => {
     const [complianceResult, setComplianceResult] = useState<ComplianceResult | null>(null);
     const [showComplianceDialog, setShowComplianceDialog] = useState(false);
     const [pendingBidShift, setPendingBidShift] = useState<ShiftData | null>(null);
+    const [availabilityWarning, setAvailabilityWarning] = useState<string | null>(null);
 
     // Compliance Modal State
     const [complianceModalShift, setComplianceModalShift] = useState<ShiftData | null>(null);
@@ -442,8 +445,19 @@ export const EmployeeBidsPage: React.FC = () => {
             });
             setCheckingV8ShiftId(null);
 
-            if (result.status === 'violated' || result.status === 'warned') {
-                setComplianceResult(result);
+            // Warn-only availability self-check — never blocks a bid, but if the
+            // shift falls outside the bidder's declared availability we route
+            // through the same confirmation dialog so they acknowledge it.
+            let availWarn: string | null = null;
+            try {
+                const slots = await getAvailabilitySlots(user.id, shift.date, shift.date);
+                const a = evaluateShiftAvailabilityFromSlots(slots, shift.date, shift.startTime + ':00', shift.endTime + ':00');
+                if (a.isWarning) availWarn = a.message;
+            } catch { /* availability lookup never blocks a bid */ }
+
+            if (result.status === 'violated' || result.status === 'warned' || availWarn) {
+                setComplianceResult(result.status === 'violated' || result.status === 'warned' ? result : null);
+                setAvailabilityWarning(availWarn);
                 setPendingBidShift(shift);
                 setShowComplianceDialog(true);
             } else {
@@ -461,12 +475,14 @@ export const EmployeeBidsPage: React.FC = () => {
         setShowComplianceDialog(false);
         setPendingBidShift(null);
         setComplianceResult(null);
+        setAvailabilityWarning(null);
     };
 
     const handleCancelBid = () => {
         setShowComplianceDialog(false);
         setPendingBidShift(null);
         setComplianceResult(null);
+        setAvailabilityWarning(null);
     };
 
     // ========================================================================
@@ -1124,6 +1140,7 @@ export const EmployeeBidsPage: React.FC = () => {
                 open={showComplianceDialog}
                 onOpenChange={setShowComplianceDialog}
                 result={complianceResult}
+                availabilityWarning={availabilityWarning}
                 onCancel={handleCancelBid}
                 onConfirm={handleConfirmBidWithWarning}
             />

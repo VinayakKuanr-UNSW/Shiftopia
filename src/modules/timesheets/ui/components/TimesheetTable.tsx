@@ -18,6 +18,7 @@ import {
 } from "./TimesheetFilterDrawer";
 import { exportTimesheetXLSX, exportTimesheetPDF } from "./timesheet.export";
 import { isEntryReviewable } from "./TimesheetTable.utils";
+import { COST_ESTIMATE_LABEL, COST_ESTIMATE_DISCLAIMER } from "@/modules/rosters/domain/projections/utils/cost/constants";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -110,8 +111,9 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
         });
     }, [filteredEntries, sortField, sortDirection]);
 
-    const SortableHeader = ({ field, label, className }: { field: keyof TimesheetRow, label: string, className?: string }) => (
+    const SortableHeader = ({ field, label, className, title }: { field: keyof TimesheetRow, label: string, className?: string, title?: string }) => (
         <th
+            title={title}
             className={cn(
                 "p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 cursor-pointer hover:bg-muted/50 border-b border-border/50 text-left group transition-colors",
                 className
@@ -325,8 +327,8 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                         <th className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 border-b border-border/50 text-left bg-primary/5">Paid</th>
                                         <th className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 border-b border-border/50 text-left bg-primary/5">Unpaid</th>
                                         <SortableHeader field="netLength" label="Net" className="bg-primary/5 border-r border-border/30" />
-                                        {/* Payroll */}
-                                        <SortableHeader field="approximatePay" label="Pay" />
+                                        {/* Estimated cost — award estimate, NOT payroll */}
+                                        <SortableHeader field="approximatePay" label={COST_ESTIMATE_LABEL} title={COST_ESTIMATE_DISCLAIMER} />
                                         <SortableHeader field="differential" label="Diff" className="border-r border-border/30" />
                                         {/* Statuses */}
                                         <SortableHeader field="liveStatus" label="Time Rules" />

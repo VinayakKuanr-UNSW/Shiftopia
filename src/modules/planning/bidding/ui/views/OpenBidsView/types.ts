@@ -76,7 +76,7 @@ export interface EmployeeBid {
 
 
 
-export type BidToggle = 'urgent' | 'normal' | 'resolved';
+export type BidToggle = 'standard' | 'urgent' | 'resolved' | 'expired';
 
 export interface TimeRemaining {
   years: number;
@@ -90,7 +90,8 @@ export interface TimeRemaining {
 }
 
 export interface ToggleCounts {
+  standard: number;
   urgent: number;
-  normal: number;
   resolved: number;
+  expired: number;
 }

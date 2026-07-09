@@ -4,6 +4,31 @@ const ONE_HOUR = 60;
 const HOURS_IN_DAY = 24;
 
 /**
+ * Fatigue classification bands.
+ *
+ * These are a HEURISTIC recalibration (pending validation), not a
+ * regulatory threshold. The per-shift model yields ~14 for a normal 8h day
+ * shift and ~26 for an 8h night shift, so the old <10/<20 bands classified
+ * essentially every working employee as amber/red. The bands below map:
+ *   - `ok`       — normal day work (a plateaued run of day shifts sits here)
+ *   - `risk`     — night work / accumulation across insufficiently-rested days
+ *   - `critical` — stacked shifts with no recovery (e.g. clopenings)
+ */
+export const FATIGUE_BANDS = { OK_MAX: 20, RISK_MAX: 35 } as const;
+
+export type FatigueBand = 'ok' | 'risk' | 'critical';
+
+/** Classify a fatigue score into a display band. Single source of truth for
+ *  the FTG badge, its tooltip, and the Health-Mode heatmap tint. */
+export function getFatigueBand(score: number): FatigueBand {
+  return score < FATIGUE_BANDS.OK_MAX
+    ? 'ok'
+    : score < FATIGUE_BANDS.RISK_MAX
+      ? 'risk'
+      : 'critical';
+}
+
+/**
  * Fast datetime parser returning absolute hours since epoch.
  * Eliminates GC pressure from instantiating Date objects.
  */

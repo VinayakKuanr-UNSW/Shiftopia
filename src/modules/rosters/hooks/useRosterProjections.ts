@@ -1,6 +1,10 @@
 import { useMemo, useState, useEffect, useRef, startTransition } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useRosterStore, selectDateRange } from '../state/useRosterStore';
-import { differenceInCalendarDays } from 'date-fns';
+import { differenceInCalendarDays, subDays, format } from 'date-fns';
+import { shiftsQueries } from '../api/shifts.queries';
+import { computePeakFatigue } from '../domain/projections/utils/workload';
+import { UNASSIGNED_BUCKET_ID } from '../domain/projections/constants';
 import { applyAdvancedFilters } from '../domain/projections/utils/filters';
 import { buildStats } from '../domain/projections/projectors/shared';
 import type { 
@@ -32,6 +36,42 @@ export function useRosterProjections(input: ProjectionInput): ProjectionResult {
   const rangeDays = useRosterStore(s => {
     const { from, to } = selectDateRange(s);
     return differenceInCalendarDays(to, from) + 1;
+  });
+
+  // ── Fatigue history (People mode only) ──────────────────────────────────────
+  // The shifts query is scoped to the visible range, so the fatigue calc's
+  // trailing 7-day recovery window is starved in Day/3D views (it can't see the
+  // prior week) and FTG reads lower than in Week/Month for the SAME day. Fetch
+  // the 7 days BEFORE the window as read-only recovery context so FTG is
+  // consistent across all zooms. These shifts are never rendered or counted in
+  // hours/pay/UTL — fatigue only. Primitive-string selector so it doesn't churn.
+  const windowStartIso = useRosterStore(s => format(selectDateRange(s).from, 'yyyy-MM-dd'));
+  const historyStart = useMemo(
+    () => format(subDays(new Date(`${windowStartIso}T00:00:00`), 7), 'yyyy-MM-dd'),
+    [windowStartIso],
+  );
+  const historyEnd = useMemo(
+    () => format(subDays(new Date(`${windowStartIso}T00:00:00`), 1), 'yyyy-MM-dd'),
+    [windowStartIso],
+  );
+  const fatigueEmployeeIds = useMemo(() => (input.employees ?? []).map(e => e.id), [input.employees]);
+  const fatigueEmployeeIdKey = useMemo(() => [...fatigueEmployeeIds].sort().join(','), [fatigueEmployeeIds]);
+
+  const { data: fatigueHistory } = useQuery({
+    queryKey: ['fatigue-history', historyStart, historyEnd, fatigueEmployeeIdKey],
+    queryFn: async () => {
+      const rows = await shiftsQueries.getFatigueHistoryShifts(fatigueEmployeeIds, historyStart, historyEnd);
+      const map = new Map<string, { shift_date: string; start_time: string; end_time: string; unpaid_break_minutes: number | null }[]>();
+      for (const r of rows) {
+        if (r.is_cancelled || !r.assigned_employee_id) continue;
+        const arr = map.get(r.assigned_employee_id) ?? [];
+        arr.push({ shift_date: r.shift_date, start_time: r.start_time, end_time: r.end_time, unpaid_break_minutes: r.unpaid_break_minutes });
+        map.set(r.assigned_employee_id, arr);
+      }
+      return map;
+    },
+    enabled: activeMode === 'people' && fatigueEmployeeIds.length > 0,
+    staleTime: 60_000,
   });
 
   const {
@@ -233,10 +273,37 @@ export function useRosterProjections(input: ProjectionInput): ProjectionResult {
     };
   }, [pool]);
 
+  // History-aware fatigue refinement: the worker computes a visible-only
+  // fatigueScore; once the 7-day history loads we recompute each employee's peak
+  // fatigue WITH that history so FTG is identical for a given day across
+  // Day/3D/Week/Month. Memoized on (workerPeople, fatigueHistory) — cheap for the
+  // paginated employee count and only re-runs when either changes.
+  const peopleWithFatigue = useMemo<PeopleProjection | null>(() => {
+    if (!workerPeople) return null;
+    if (!fatigueHistory || fatigueHistory.size === 0) return workerPeople;
+    const employeesOut = workerPeople.employees.map(emp => {
+      if (emp.id === UNASSIGNED_BUCKET_ID) return emp;
+      const hist = fatigueHistory.get(emp.id);
+      if (!hist || hist.length === 0) return emp;
+      const visible = (Object.values(emp.shifts).flat() as any[])
+        .filter(s => !s.isCancelled)
+        .map(s => ({
+          shift_date: s.date ?? s.rawShift?.shift_date,
+          start_time: s.startTime ?? s.rawShift?.start_time,
+          end_time: s.endTime ?? s.rawShift?.end_time,
+          unpaid_break_minutes: s.unpaidBreakMinutes ?? 0,
+        }))
+        .filter(s => s.shift_date && s.start_time && s.end_time);
+      if (visible.length === 0) return emp;
+      return { ...emp, fatigueScore: computePeakFatigue(visible, hist) };
+    });
+    return { ...workerPeople, employees: employeesOut };
+  }, [workerPeople, fatigueHistory]);
+
   return {
     activeMode,
     group: activeMode === 'group' ? workerGroup : null,
-    people: activeMode === 'people' ? workerPeople : null,
+    people: activeMode === 'people' ? peopleWithFatigue : null,
     events: activeMode === 'events' ? workerEvents : null,
     roles: activeMode === 'roles' ? workerRoles : null,
     stats: workerStats,

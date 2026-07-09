@@ -171,6 +171,9 @@ class ConstraintsReq(BaseModel):
     enforce_skill_match: bool = True
     allow_partial: bool = True
     relax_constraints: bool = False
+    # HARD availability + "unset = unavailable" for the auto-scheduler (see
+    # OptimizerConstraints.enforce_availability). The live scheduler sends True.
+    enforce_availability: bool = False
 
 
 class StrategyReq(BaseModel):
@@ -612,8 +615,11 @@ def _explain_eligibility(
                 reasons.append('HARD_AVAILABILITY_BLOCK')
                 break
 
-    # Declared availability slots (HC-5d)
-    if emp.has_availability_data:
+    # Declared availability slots (HC-5d).
+    # Mirrors employee_eligible: when enforce_availability is on, availability is a
+    # HARD constraint and "unset = unavailable"; otherwise only employees with
+    # records on file are restricted to their slots.
+    if c.enforce_availability or emp.has_availability_data:
         s0, s1 = shift_window(shift)
         covered = False
         for slot in emp.availability_slots:

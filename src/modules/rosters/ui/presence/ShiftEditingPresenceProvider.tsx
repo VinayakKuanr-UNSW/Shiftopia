@@ -237,30 +237,42 @@ export function useShiftPresence(
   const scopeKey =
     departmentId && shiftDate ? presenceScopeKey(departmentId, shiftDate) : null;
 
+  const register = ctx?.register;
+  const unregister = ctx?.unregister;
+  const clearEditingCtx = ctx?.clearEditing;
+  const setEditingCtx = ctx?.setEditing;
+  const enabled = ctx?.enabled;
+
   useEffect(() => {
-    if (!ctx || !ctx.enabled || !scopeKey) return;
-    ctx.register(scopeKey);
+    if (!enabled || !register || !unregister || !scopeKey) return;
+    register(scopeKey);
     return () => {
       // Stop broadcasting an edit intent for this shift when the card unmounts,
       // then release the scope (ref-counted; the channel closes at zero).
-      if (shiftId) ctx.clearEditing(scopeKey, shiftId);
-      ctx.unregister(scopeKey);
+      if (shiftId && clearEditingCtx) {
+        clearEditingCtx(scopeKey, shiftId);
+      }
+      unregister(scopeKey);
     };
-  }, [ctx, scopeKey, shiftId]);
+  }, [enabled, register, unregister, clearEditingCtx, scopeKey, shiftId]);
 
   const editors =
     ctx && shiftId ? ctx.editorsByShift[shiftId] ?? EMPTY_EDITORS : EMPTY_EDITORS;
 
   const setEditing = useCallback(
     (opIntent?: string) => {
-      if (ctx && scopeKey && shiftId) ctx.setEditing(scopeKey, shiftId, opIntent);
+      if (setEditingCtx && scopeKey && shiftId) {
+        setEditingCtx(scopeKey, shiftId, opIntent);
+      }
     },
-    [ctx, scopeKey, shiftId],
+    [setEditingCtx, scopeKey, shiftId],
   );
 
   const clearEditing = useCallback(() => {
-    if (ctx && scopeKey && shiftId) ctx.clearEditing(scopeKey, shiftId);
-  }, [ctx, scopeKey, shiftId]);
+    if (clearEditingCtx && scopeKey && shiftId) {
+      clearEditingCtx(scopeKey, shiftId);
+    }
+  }, [clearEditingCtx, scopeKey, shiftId]);
 
   return { editors, setEditing, clearEditing };
 }

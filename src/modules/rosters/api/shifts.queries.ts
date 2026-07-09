@@ -313,6 +313,40 @@ export const shiftsQueries = {
        GET SHIFTS FOR DATE RANGE (Week/Month views)
        ============================================================ */
 
+    /**
+     * Lightweight fetch of assigned shifts for FATIGUE history only — minimal
+     * columns, keyed by employee. Feeds People-Mode's fatigue calc a 7-day
+     * lookback so the FTG score is consistent across Day/3D/Week/Month zooms
+     * (see computePeakFatigue). NOT rendered and NOT counted in hours/pay/UTL.
+     */
+    async getFatigueHistoryShifts(
+        employeeIds: string[],
+        startDate: string,
+        endDate: string,
+    ): Promise<Array<{
+        assigned_employee_id: string;
+        shift_date: string;
+        start_time: string;
+        end_time: string;
+        unpaid_break_minutes: number | null;
+        is_cancelled: boolean | null;
+    }>> {
+        const ids = employeeIds.filter(isValidUuid);
+        if (ids.length === 0) return [];
+        const { data, error } = await supabase
+            .from('shifts')
+            .select('assigned_employee_id, shift_date, start_time, end_time, unpaid_break_minutes, is_cancelled')
+            .in('assigned_employee_id', ids)
+            .gte('shift_date', startDate)
+            .lte('shift_date', endDate)
+            .is('deleted_at', null);
+        if (error) {
+            console.warn('getFatigueHistoryShifts failed:', error);
+            return [];
+        }
+        return (data || []) as any;
+    },
+
     async getShiftsForDateRange(
         organizationId: string,
         startDate: string,

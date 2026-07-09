@@ -35,14 +35,18 @@ function resolveEmployeeName(shift: WorkerShiftDTO): string | null {
 
 function makeEmployee(
   id: string,
+  employeeId: string,
   name: string,
   contractedHours: number,
   avatar: string,
+  isOffRoster?: boolean,
 ): ProjectedEmployee {
-  return { 
-    id, 
-    name, 
-    avatar, 
+  return {
+    id,
+    employeeId,
+    name,
+    avatar,
+    ...(isOffRoster ? { isOffRoster: true } : {}),
     contractedHours,
     periodContractedHours: 0,
     currentHours: 0,
@@ -148,10 +152,17 @@ export function projectPeople(
 
   employees.forEach(emp => {
     const name = `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() || 'Unknown';
+    // Casual staff have no contract baseline — the upstream 38h default is a
+    // fabrication for People Mode, so treat them as "no contract" (0). FT/PT
+    // keep their real contracted hours.
+    const contractedHours = emp.contractType === 'CASUAL'
+      ? 0
+      : (emp.contractedHours ?? contractedHoursMap[emp.id] ?? 0);
     empMap.set(emp.id, makeEmployee(
       emp.id,
+      emp.employeeId ?? emp.id,
       name,
-      emp.contractedHours ?? contractedHoursMap[emp.id] ?? 0,
+      contractedHours,
       dicebearUrl(emp.firstName ?? emp.id),
     ));
   });
@@ -163,13 +174,24 @@ export function projectPeople(
       if (targetId === UNASSIGNED_BUCKET_ID) {
         empMap.set(UNASSIGNED_BUCKET_ID, makeEmployee(
           UNASSIGNED_BUCKET_ID,
+          '',
           'Open Shifts',
           0,
           dicebearUrl('unassigned', 'shapes'),
         ));
       } else {
-        // Skip shifts for employees not in the current paginated/filtered employee list
-        return;
+        // H2: The assignee isn't in the current paginated/filtered employee list.
+        // Do NOT drop the shift — synthesise an off-roster bucket from the
+        // identity embedded on the shift DTO so the assigned shift stays visible
+        // and auditable.
+        empMap.set(targetId, makeEmployee(
+          targetId,
+          shift.assignedEmployeeId ?? targetId,
+          resolveEmployeeName(shift) ?? 'Assigned',
+          0,
+          dicebearUrl(shift.employeeFirstName ?? shift.assignedEmployeeId ?? targetId),
+          true, // isOffRoster
+        ));
       }
     }
 
@@ -208,7 +230,10 @@ export function projectPeople(
     emp.overHoursWarning = isOverContractedHours(emp.currentHours, emp.contractedHours, rangeDays);
     emp.utilization = computeUtilizationPct(emp.currentHours, emp.contractedHours, rangeDays);
 
-    const empShifts = Object.values(emp.shifts).flat() as unknown as ProjectedShiftResult[];
+    // Cancelled shifts don't happen — they must not inflate fatigue (they're
+    // already excluded from hours/pay above). Mirror that gate here.
+    const empShifts = (Object.values(emp.shifts).flat() as unknown as ProjectedShiftResult[])
+      .filter(ps => !ps.isCancelled);
     if (empShifts.length > 0 && emp.id !== UNASSIGNED_BUCKET_ID) {
       // Map DTO back to the specific keys fatigue.ts expects
       const fatigueInput = empShifts.map(ps => {
@@ -227,8 +252,13 @@ export function projectPeople(
   });
 
   empArray.sort((a, b) => {
+    // Order: regular employees (by name) » off-roster buckets (by name) »
+    // Open Shifts bucket last.
     if (a.id === UNASSIGNED_BUCKET_ID) return 1;
     if (b.id === UNASSIGNED_BUCKET_ID) return -1;
+    const aOff = a.isOffRoster ? 1 : 0;
+    const bOff = b.isOffRoster ? 1 : 0;
+    if (aOff !== bOff) return aOff - bOff;
     return a.name.localeCompare(b.name);
   });
 

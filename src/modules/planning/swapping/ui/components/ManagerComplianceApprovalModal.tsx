@@ -32,6 +32,9 @@ import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { useCompliancePanel } from '@/modules/compliance/ui/useCompliancePanel';
 import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
+import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
+import { getAvailabilitySlots } from '@/modules/availability/api/availability.api';
+import { evaluateShiftAvailabilityFromSlots } from '@/modules/rosters/domain/availability-check';
 
 // =============================================================================
 // TYPES
@@ -261,6 +264,45 @@ export function ManagerComplianceApprovalModal({
     const [isRejectingState, setIsRejectingState] = useState(false);
     const [rejectReason, setRejectReason] = useState('');
     const [activeTab, setActiveTab] = useState<'live' | 'snapshot'>('live');
+    // Warn-only availability notices (never block approval; require acknowledgement).
+    const [availWarnings, setAvailWarnings] = useState<string[]>([]);
+    const [availAck, setAvailAck] = useState(false);
+
+    // Cross-assignment availability check: after the swap each party works the
+    // OTHER's shift, so we check the requester against the offerer's shift (and
+    // vice-versa) using the same slot source + full-containment rule as the
+    // auto-scheduler. Warn-only — gated by an explicit acknowledgement, never a hard block.
+    useEffect(() => {
+        let cancelled = false;
+        if (!isOpen) { setAvailWarnings([]); setAvailAck(false); return; }
+        (async () => {
+            try {
+                const ids = [requesterV8ShiftId, offererV8ShiftId].filter(Boolean) as string[];
+                if (ids.length === 0) return;
+                const { data: rows } = await supabase
+                    .from('shifts')
+                    .select('id, shift_date, start_time, end_time')
+                    .in('id', ids);
+                const reqShift = (rows as any[] || []).find((s) => s.id === requesterV8ShiftId);
+                const offShift = offererV8ShiftId ? (rows as any[] || []).find((s) => s.id === offererV8ShiftId) : null;
+                const warns: string[] = [];
+                if (offShift) {
+                    const slots = await getAvailabilitySlots(requesterEmployeeId, offShift.shift_date, offShift.shift_date);
+                    const a = evaluateShiftAvailabilityFromSlots(slots, offShift.shift_date, offShift.start_time, offShift.end_time);
+                    if (a.isWarning) warns.push(`${requesterName}: ${a.message}`);
+                }
+                if (offererEmployeeId && reqShift) {
+                    const slots = await getAvailabilitySlots(offererEmployeeId, reqShift.shift_date, reqShift.shift_date);
+                    const a = evaluateShiftAvailabilityFromSlots(slots, reqShift.shift_date, reqShift.start_time, reqShift.end_time);
+                    if (a.isWarning) warns.push(`${offererName}: ${a.message}`);
+                }
+                if (!cancelled) setAvailWarnings(warns);
+            } catch {
+                /* availability lookup must never block a swap approval */
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [isOpen, requesterV8ShiftId, offererV8ShiftId, requesterEmployeeId, offererEmployeeId, requesterName, offererName]);
 
     // -------------------------------------------------------------------------
     // Build inputs for useCompliancePanel
@@ -539,6 +581,21 @@ export function ManagerComplianceApprovalModal({
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -10 }}
                         >
+                            {availWarnings.length > 0 && (
+                                <div className="mb-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3">
+                                    <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-1.5">
+                                        <AlertTriangle className="h-3.5 w-3.5" />
+                                        Outside declared availability
+                                    </div>
+                                    <ul className="space-y-0.5 text-[11px] text-amber-700 dark:text-amber-300">
+                                        {availWarnings.map((w, i) => <li key={i}>• {w}</li>)}
+                                    </ul>
+                                    <label className="mt-2 flex items-center gap-2 cursor-pointer text-[11px] font-bold text-amber-700 dark:text-amber-300">
+                                        <Checkbox checked={availAck} onCheckedChange={(v) => setAvailAck(v === true)} />
+                                        Approve anyway — I acknowledge this is outside declared availability.
+                                    </label>
+                                </div>
+                            )}
                             <CompliancePanel
                                 hook={panel}
                                 partyAName={requesterName}
@@ -614,7 +671,7 @@ export function ManagerComplianceApprovalModal({
                                     ) : (
                                         <Button
                                             onClick={handleApprove}
-                                            disabled={!canApprove || isApproving}
+                                            disabled={!canApprove || isApproving || (availWarnings.length > 0 && !availAck)}
                                             className={cn(
                                                 "w-full min-h-[56px] rounded-2xl font-black uppercase tracking-[0.1em] text-xs shadow-xl flex items-center justify-center gap-2 transition-all",
                                                 canApprove

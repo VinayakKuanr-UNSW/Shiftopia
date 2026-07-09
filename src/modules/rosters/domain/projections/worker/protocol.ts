@@ -108,6 +108,14 @@ export interface WorkerShiftDTO {
   isCarerLeave?: boolean;
   previousWage?: number;
 
+  // ── Weekly overtime (cl 42) — pipeline-computed, NOT mapper-populated ──────
+  // Ordinary hours the assigned member already banked earlier in the SAME ISO
+  // week (before this shift). This is inherently cross-shift: a single shift has
+  // no way to know it in isolation, so `shiftToDTO` leaves it undefined and the
+  // pipeline fills it in `buildStats` after grouping each employee's shifts by
+  // ISO week and ordering them. Undefined ⇒ the engine's weekly OT stays OFF.
+  priorOrdinaryHoursThisWeek?: number;
+
   // ── Roster structure ──
   rosterSubgroupId: string | null;
   rosterSubgroupName: string | null;
@@ -134,10 +142,14 @@ export interface WorkerShiftDTO {
  */
 export interface WorkerEmployeeDTO {
   id: string;
+  /** Human-facing employee identifier (falls back to the profile id). */
+  employeeId?: string | null;
   firstName: string | null;
   lastName: string | null;
   /** Weekly contracted hours (e.g. 38). Scaled to the visible period downstream. */
   contractedHours?: number;
+  /** Employment/contract type. CASUAL → no contract baseline in People Mode. */
+  contractType?: 'FT' | 'PT' | 'CASUAL' | null;
 }
 
 /**

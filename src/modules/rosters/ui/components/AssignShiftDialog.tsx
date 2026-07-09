@@ -23,7 +23,9 @@ import {
   ShiftTimeRange
 } from '@/modules/compliance';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
+import { getEmployeeAvailabilityForDate } from '@/modules/rosters/api/availability.api';
+import { evaluateShiftAvailability } from '@/modules/rosters/domain/availability-check';
 
 interface ShiftGroup {
   shiftIds: string[];
@@ -52,6 +54,9 @@ export const AssignShiftDialog: React.FC<AssignShiftDialogProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [assignments, setAssignments] = useState<Record<string, string[]>>({});
   const [isComplianceChecking, setIsComplianceChecking] = useState(false);
+  // Warn-only availability notices for the current selection (manual workflow):
+  // populated on the first Assign click; a second "Assign Anyway" click proceeds.
+  const [availabilityWarnings, setAvailabilityWarnings] = useState<string[]>([]);
   const { useAllEmployees } = useEmployees();
   const { data: employeesData = [] } = useAllEmployees();
   const employees = employeesData as Employee[];
@@ -92,6 +97,8 @@ export const AssignShiftDialog: React.FC<AssignShiftDialogProps> = ({
   const toggleEmployeeForGroup = (groupIndex: number, employeeId: string) => {
     const group = shiftGroups[groupIndex];
     if (!group) return;
+    // Selection changed — invalidate any pending "Assign Anyway" acknowledgement.
+    setAvailabilityWarnings([]);
 
     const groupKey = `group_${groupIndex}`;
 
@@ -117,8 +124,9 @@ export const AssignShiftDialog: React.FC<AssignShiftDialogProps> = ({
     });
   };
 
-  // Handle final assignment submission
-  const handleAssign = async () => {
+  // Handle final assignment submission. `force` skips the warn-only availability
+  // gate (set on the second, "Assign Anyway", click).
+  const handleAssign = async (force = false) => {
     const allAssignments: Array<{ shiftId: string, employeeId: string }> = [];
 
     Object.entries(assignments).forEach(([groupKey, employeeIds]) => {
@@ -148,6 +156,7 @@ export const AssignShiftDialog: React.FC<AssignShiftDialogProps> = ({
     try {
       let blockingFailure = false;
       const results: Array<{ shiftId: string, passed: boolean }> = [];
+      const availabilityWarns: string[] = [];
 
       // Perform compliance checks for each assignment
       for (const assignment of allAssignments) {
@@ -174,6 +183,21 @@ export const AssignShiftDialog: React.FC<AssignShiftDialogProps> = ({
           end_time: shift.endTime?.includes('T') ? shift.endTime.split('T')[1].substring(0, 5) : shift.endTime,
           shift_date: shift.date
         };
+
+        // WARN-ONLY availability check for manual assignment. Availability is a
+        // HARD constraint only for the Auto Scheduler; here it never blocks — we
+        // just collect a notice when a shift falls outside declared availability
+        // (unset availability is treated as unavailable).
+        try {
+          const avail = await getEmployeeAvailabilityForDate(assignment.employeeId, shift.date);
+          const availCheck = evaluateShiftAvailability(avail, candidateShift.start_time, candidateShift.end_time);
+          if (availCheck.isWarning) {
+            const empName = employees.find(e => e.id === assignment.employeeId)?.fullName ?? 'Employee';
+            availabilityWarns.push(`${empName}: ${availCheck.message}`);
+          }
+        } catch {
+          /* availability lookup failure must never block a manual assignment */
+        }
 
         const input = buildComplianceInput({
           employeeId: assignment.employeeId,
@@ -203,6 +227,16 @@ export const AssignShiftDialog: React.FC<AssignShiftDialogProps> = ({
         return;
       }
 
+      // Availability is warn-only for manual assignment: on the first click we
+      // surface the notice and require an explicit "Assign Anyway" (second click),
+      // but we never block the assignment.
+      if (availabilityWarns.length > 0 && !force) {
+        setAvailabilityWarnings(availabilityWarns);
+        setIsComplianceChecking(false);
+        return;
+      }
+
+      setAvailabilityWarnings([]);
       onAssign(allAssignments);
       setIsOpen(false);
       setAssignments({});
@@ -294,16 +328,37 @@ export const AssignShiftDialog: React.FC<AssignShiftDialogProps> = ({
           ))}
         </ScrollArea>
 
+        {availabilityWarnings.length > 0 && (
+          <div className="mx-1 mb-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+            <div className="flex items-center gap-2 font-medium mb-1">
+              <AlertTriangle className="h-4 w-4" />
+              Outside declared availability
+            </div>
+            <ul className="list-disc pl-5 space-y-0.5 text-amber-100/90">
+              {availabilityWarnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+            <div className="mt-1 text-xs text-amber-200/70">
+              You can still proceed — click “Assign Anyway” to confirm.
+            </div>
+          </div>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => setIsOpen(false)}>
             Cancel
           </Button>
-          <Button onClick={handleAssign} disabled={isComplianceChecking}>
+          <Button
+            onClick={() => handleAssign(availabilityWarnings.length > 0)}
+            disabled={isComplianceChecking}
+            className={availabilityWarnings.length > 0 ? 'bg-amber-600 hover:bg-amber-500' : undefined}
+          >
             {isComplianceChecking ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Checking Compliance...
               </>
+            ) : availabilityWarnings.length > 0 ? (
+              'Assign Anyway'
             ) : (
               'Assign Shifts'
             )}

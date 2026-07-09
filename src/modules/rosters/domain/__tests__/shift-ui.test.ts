@@ -62,6 +62,11 @@ describe('getTimeRule - 5-state schedule lifecycle', () => {
         expect(getTimeRule({ lifecycle_status: 'Published', start_at: iso(-5 * HOUR), end_at: iso(+3 * HOUR), attendance_status: 'auto_clock_out' })?.label)
             .toBe('Closed');
     });
+
+    it('does NOT treat actual_end "-" as Closed', () => {
+        expect(getTimeRule({ lifecycle_status: 'Published', start_at: iso(+5 * HOUR), end_at: iso(+13 * HOUR), actual_end: '-' })?.label)
+            .not.toBe('Closed');
+    });
 });
 
 // ─── Live Rules ────────────────────────────────────────────────────────────────

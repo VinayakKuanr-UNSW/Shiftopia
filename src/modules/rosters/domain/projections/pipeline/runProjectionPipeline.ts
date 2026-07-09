@@ -124,6 +124,42 @@ export function computeCostForShift(
   return result;
 }
 
+/**
+ * Weekly-OT-aware cost — same inputs as computeCostForShift plus the running
+ * `priorOrdinaryHoursThisWeek` (cl 42). Deliberately UNCACHED: the per-shift
+ * cache key (shiftId:updatedAtMs) does not encode the weekly context, so caching
+ * a weekly-adjusted result would corrupt the shared entry read by the display
+ * path. These are a small minority of shifts (only members already past ~38h in
+ * a week), so recomputing them per projection is cheap.
+ */
+export function computeCostForShiftWeekly(
+  shift: WorkerShiftDTO,
+  netMinutes: number,
+  priorOrdinaryHoursThisWeek: number,
+  ctx?: AwardContext,
+): ShiftCostBreakdown {
+  const empType = shift.targetEmploymentType;
+  return estimateDetailedShiftCost({
+    netMinutes,
+    start_time: shift.startTime,
+    end_time: shift.endTime,
+    rate: shift.actualHourlyRate || shift.remunerationRate,
+    scheduled_length_minutes: shift.scheduledLengthMinutes,
+    is_overnight: shift.isOvernight,
+    is_cancelled: shift.isCancelled,
+    shift_date: shift.shiftDate,
+    allowances: shift.allowances ?? undefined,
+    isAnnualLeave: shift.isAnnualLeave,
+    isPersonalLeave: shift.isPersonalLeave,
+    isCarerLeave: shift.isCarerLeave,
+    previousWage: shift.previousWage,
+    employmentType: (empType === 'FT' || /full/i.test(empType as string)) ? 'Full-Time' : (empType === 'PT' || /part/i.test(empType as string)) ? 'Part-Time' : (empType as any || 'Casual'),
+    isSecurityRole: shift.roleName?.toLowerCase().includes('security'),
+    classificationLevel: extractLevel(shift.roleName),
+    priorOrdinaryHoursThisWeek,
+  } as CostCalculatorOptions, ctx);
+}
+
 // ── Net minutes from DTO ─────────────────────────────────────────────────────
 
 function netMinutesFromDTO(shift: WorkerShiftDTO): number {
@@ -134,6 +170,85 @@ function netMinutesFromDTO(shift: WorkerShiftDTO): number {
   let end = eh * 60 + em;
   if (end <= start) end += 24 * 60;
   return Math.max(0, (end - start) - shift.unpaidBreakMinutes);
+}
+
+// ── Weekly overtime accumulation (cl 42) ─────────────────────────────────────
+// The cost engine can move ordinary hours past 38h/week into overtime, but only
+// if it is TOLD how many ordinary hours the member already banked earlier in the
+// SAME ISO week. That is cross-shift context the engine can't see per-shift, so
+// the pipeline computes it here: group each employee's assigned, non-cancelled,
+// non-casual shifts by ISO week (Mon-anchored), order by date then start time,
+// and hand each shift the RUNNING prior-ordinary total. Casuals are excluded
+// (casual weekly OT is ambiguous under the EA — see standard.ts).
+
+/** ISO-8601 week key `YYYY-Www` (Monday-anchored) for grouping. Pure, no deps. */
+function isoWeekKey(dateStr: string): string {
+  // Parse YYYY-MM-DD as a UTC date to avoid TZ drift, then apply the ISO rule.
+  const [y, m, d] = dateStr.split('T')[0].split('-').map(Number);
+  const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+  // ISO weekday: Mon=1..Sun=7. Shift to the Thursday of this week (ISO anchor).
+  const dayNum = dt.getUTCDay() || 7;
+  dt.setUTCDate(dt.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((dt.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${dt.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+/** True when the DTO's employment type is a permanent (non-casual) engagement. */
+function isNonCasualDTO(shift: WorkerShiftDTO): boolean {
+  const t = (shift.targetEmploymentType ?? '').toLowerCase();
+  // Casual is the only excluded class; FT / PT / flexi all accrue weekly OT.
+  return !!t && !t.includes('casual');
+}
+
+/**
+ * Build `shiftId → priorOrdinaryHoursThisWeek` for every assigned non-casual
+ * shift. Only the ORDINARY portion of each shift accumulates (daily/weekly OT
+ * hours don't re-enter the ordinary tally). We derive the per-shift ordinary
+ * hours from a cheap capless daily model that mirrors the engine's daily split;
+ * the engine then applies the weekly reallocation exactly using this prior total.
+ */
+function buildPriorOrdinaryMap(shifts: WorkerShiftDTO[]): Map<string, number> {
+  const prior = new Map<string, number>();
+
+  // employeeId → isoWeek → list of {shift, sortKey}
+  const byEmpWeek = new Map<string, Map<string, WorkerShiftDTO[]>>();
+  for (const s of shifts) {
+    if (s.isCancelled || !s.assignedEmployeeId || !isNonCasualDTO(s)) continue;
+    const emp = s.assignedEmployeeId;
+    const wk = isoWeekKey(s.shiftDate);
+    let weeks = byEmpWeek.get(emp);
+    if (!weeks) { weeks = new Map(); byEmpWeek.set(emp, weeks); }
+    let list = weeks.get(wk);
+    if (!list) { list = []; weeks.set(wk, list); }
+    list.push(s);
+  }
+
+  for (const weeks of byEmpWeek.values()) {
+    for (const list of weeks.values()) {
+      // Order by date, then start time — the sequence in which hours accrue.
+      list.sort((a, b) =>
+        a.shiftDate === b.shiftDate
+          ? a.startTime.localeCompare(b.startTime)
+          : a.shiftDate.localeCompare(b.shiftDate),
+      );
+      let running = 0;
+      for (const s of list) {
+        prior.set(s.id, running);
+        // Ordinary hours banked by THIS shift (daily model, no weekly cap here —
+        // the engine handles the weekly split; we only need the ordinary tally).
+        const net = netMinutesFromDTO(s) / 60;
+        const sched = (s.scheduledLengthMinutes || 0) / 60;
+        const dailyOt = sched > 0
+          ? Math.max(0, net - sched, net - 12)
+          : Math.max(0, net - 12);
+        const dailyOrdinary = Math.max(0, net - dailyOt);
+        running += dailyOrdinary;
+      }
+    }
+  }
+
+  return prior;
 }
 
 // ── Stats builder ────────────────────────────────────────────────────────────
@@ -150,13 +265,23 @@ function buildStats(shifts: WorkerShiftDTO[]): ProjectionStatsResult {
     .filter(Boolean);
   const ctx = buildAwardContext(assignedDates);
 
+  // ── cl 42 weekly OT: per-employee / per-ISO-week prior-ordinary accumulation.
+  const priorOrdinaryMap = buildPriorOrdinaryMap(nonCancelled);
+
   for (const s of nonCancelled) {
     const mins = netMinutesFromDTO(s);
     totalNetMinutes += mins;
 
     // Cost is employee-dependent — only compute for assigned shifts
     if (s.assignedEmployeeId) {
-      const detail = computeCostForShift(s, mins, ctx);
+      const prior = priorOrdinaryMap.get(s.id);
+      // When a shift carries a weekly-OT prior total we price it WITHOUT the
+      // per-shift cache: the cache is keyed on shiftId:updatedAtMs only, so a
+      // weekly-context-dependent cost would poison the shared entry used by the
+      // display path. Shifts with no prior context keep the cached fast path.
+      const detail = prior !== undefined
+        ? computeCostForShiftWeekly(s, mins, prior, ctx)
+        : computeCostForShift(s, mins, ctx);
       estimatedCost += detail.totalCost;
       cb.base += detail.ordinaryCost;
       cb.penalty += detail.penaltyCost;

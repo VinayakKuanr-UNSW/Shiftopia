@@ -38,6 +38,7 @@ import { WhyThisPerson } from './WhyThisPerson';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
+import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
 import {
     autoSchedulerController,
     AutoSchedulerInputTooLargeError,
@@ -188,8 +189,15 @@ export function AutoSchedulerModal({
 
     const filteredShifts = useMemo(() => {
         if (!startDate || !endDate || validationError) return [];
+        // Scope: DRAFT + unassigned only. Published shifts are in the bidding/
+        // offer pipeline; emergent shifts (TTS ≤ 4h, includes already-started)
+        // belong to the emergency-assignment flow. The controller re-checks
+        // the time window at run time in case a shift crosses into it.
         return rawShifts
-            .filter((s) => !s.assigned_employee_id && !s.is_cancelled && !s.deleted_at)
+            .filter((s) =>
+                !s.assigned_employee_id && !s.is_cancelled && !s.deleted_at
+                && (s.is_draft ?? true)
+                && computeShiftUrgency(s.shift_date, s.start_time) !== 'emergent')
             .map((s) => ({
                 id: s.id,
                 shift_date: s.shift_date,
@@ -800,6 +808,7 @@ export function AutoSchedulerModal({
                                             const entries = Object.entries(breakdown).filter(([, v]) => Number.isFinite(v));
                                             const total = entries.reduce((s, [, v]) => s + Math.abs(v), 0);
                                             if (total === 0) return null;
+
                                             const colorOf = (cat: string): string => {
                                                 switch (cat) {
                                                     case 'cost': return 'bg-blue-500';
@@ -807,26 +816,88 @@ export function AutoSchedulerModal({
                                                     case 'fatigue': return 'bg-amber-500';
                                                     case 'coverage': return 'bg-rose-500';
                                                     case 'continuity': return 'bg-emerald-500';
+                                                    case 'other': return 'bg-indigo-500';
+                                                    case 'legal_hard': return 'bg-red-500';
+                                                    case 'undesirable_balance': return 'bg-fuchsia-500';
+                                                    case 'longitudinal_fairness': return 'bg-violet-500';
                                                     default: return 'bg-muted-foreground/40';
                                                 }
                                             };
-                                            const labelOf = (cat: string): string => cat.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+                                            const labelOf = (cat: string): string => {
+                                                if (cat === 'other') return 'Soft Limits (Hours/Contract)';
+                                                if (cat === 'legal_hard') return 'Hard Legal Limits';
+                                                return cat.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                                            };
+
+                                            const tooltipOf = (cat: string): string => {
+                                                switch (cat) {
+                                                    case 'coverage':
+                                                        return 'Penalty points from leaving shifts uncovered. The solver treats covering shifts as a Tier-2 priority (100M points per uncovered shift).';
+                                                    case 'other':
+                                                        return 'Penalty points from soft limits (100M points/min over maximum hours; 100k points/min under contract floor). These are Tier-3 priority, meaning the solver will exceed them to guarantee coverage.';
+                                                    case 'legal_hard':
+                                                        return 'Penalty points from hard legal constraints (e.g. 12-hour daily spread). These are Tier-1 priority: the solver never auto-generates illegal shifts; unavoidable breaches are left uncovered.';
+                                                    case 'cost':
+                                                        return 'Labor cost penalty points (Tier-5). Used as a residual tie-breaker to find the cheapest compliant roster.';
+                                                    case 'fatigue':
+                                                        return 'Fatigue penalty points used to balance staff fatigue. Part of Tier-4 (Wellbeing) to distribute hours and prevent burnout.';
+                                                    case 'fairness':
+                                                    case 'longitudinal_fairness':
+                                                        return 'Fairness penalty points from the cross-roster fairness ledger. Balances weekend/night shifts over multiple roster cycles.';
+                                                    case 'undesirable_balance':
+                                                        return 'Penalty points to avoid assigning excessive consecutive weekend or night shifts.';
+                                                    case 'continuity':
+                                                        return 'Penalty points to encourage consistent schedules and team structure.';
+                                                    default:
+                                                        return 'Raw scheduler penalty term.';
+                                                }
+                                            };
+
                                             const fmtValue = (cat: string, v: number): string =>
                                                 cat === 'cost' ? `$${Math.round(v / 100).toLocaleString()}` : Math.round(v).toLocaleString();
                                             const sorted = [...entries].sort(([, a], [, b]) => Math.abs(b) - Math.abs(a));
+
                                             return (
                                                 <div className="p-5 rounded-[2rem] bg-card/40 dark:bg-card/20 border border-border/40 shadow-xl flex flex-col gap-4">
                                                     <div className="flex flex-col gap-1">
-                                                        <div className="flex items-baseline justify-between">
-                                                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">Objective Breakdown</span>
-                                                            <span className="text-[10px] font-bold text-muted-foreground/40 tracking-wide">Total: {Math.round(total).toLocaleString()}</span>
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">Objective Breakdown</span>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <button type="button" className="inline-flex focus:outline-none">
+                                                                            <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/50 hover:text-muted-foreground cursor-help" />
+                                                                        </button>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent className="bg-popover border border-border/40 p-4 max-w-sm shadow-2xl text-xs leading-normal">
+                                                                        <div className="flex flex-col gap-2">
+                                                                            <span className="font-bold text-foreground">How the Optimizer Decides</span>
+                                                                            <p className="text-muted-foreground">
+                                                                                Shiftopia uses a <strong>lexicographic (priority-tiered) solver</strong>. Instead of trading off between categories, it locks them in order:
+                                                                            </p>
+                                                                            <ol className="list-decimal pl-4 flex flex-col gap-1 text-muted-foreground font-medium">
+                                                                                <li><strong>Tier 1: Legal Hard</strong> (Never break laws)</li>
+                                                                                <li><strong>Tier 2: Coverage</strong> (Cover shifts if possible)</li>
+                                                                                <li><strong>Tier 3: Soft limits</strong> (Max hours, min contract)</li>
+                                                                                <li><strong>Tier 4: Wellbeing</strong> (Fatigue, fairness)</li>
+                                                                                <li><strong>Tier 5: Cost</strong> (Cheapest choice)</li>
+                                                                            </ol>
+                                                                            <p className="text-muted-foreground text-[10px] mt-1 pt-1 border-t border-border/30">
+                                                                                * Higher-tier rules are satisfied at all costs, which can result in large penalty scores in lower tiers (e.g. "Soft Limits") if coverage requirements force them to be violated.
+                                                                            </p>
+                                                                        </div>
+                                                                    </TooltipContent>
+                                                                </Tooltip>
+                                                            </div>
+                                                            <span className="text-[10px] font-bold text-muted-foreground/40 tracking-wide">Total Score: {Math.round(total).toLocaleString()}</span>
                                                         </div>
                                                         {/* Bug 2 fix: clarify these are penalty magnitudes, not priority weights.
                                                             The solver optimises in strict lexicographic tiers, so categories in
                                                             different tiers are never traded off against each other — presenting
                                                             them as competing percentages of one total would imply a false ranking. */}
                                                         <p className="text-[10px] leading-snug text-muted-foreground/50">
-                                                            Share of total penalty magnitude by category — not priority weights. The solver optimises in fixed tiers: coverage » wellbeing » cost.
+                                                            Share of total penalty magnitude by category — not priority weights. The solver optimises in fixed tiers: coverage » wellbeing » cost. Hover over items below for details.
                                                         </p>
                                                     </div>
                                                     <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted/30">
@@ -839,17 +910,33 @@ export function AutoSchedulerModal({
                                                             />
                                                         ))}
                                                     </div>
-                                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-4 gap-y-2">
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-2">
                                                         {sorted.map(([cat, v]) => (
-                                                            <div key={cat} className="flex items-center gap-2 min-w-0">
-                                                                <span className={`${colorOf(cat)} h-2 w-2 rounded-sm shrink-0`} />
-                                                                <span className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wide truncate">{labelOf(cat)}</span>
-                                                                <span
-                                                                    className="text-[10px] font-black text-foreground/90 ml-auto tabular-nums"
-                                                                    title={`${labelOf(cat)}: ${((Math.abs(v) / total) * 100).toFixed(0)}% of total penalty magnitude — not a priority weight`}
-                                                                >{((Math.abs(v) / total) * 100).toFixed(0)}%</span>
-                                                                <span className="text-[10px] font-bold text-muted-foreground/50 tabular-nums shrink-0">{fmtValue(cat, v)}</span>
-                                                            </div>
+                                                            <Tooltip key={cat}>
+                                                                <TooltipTrigger asChild>
+                                                                    <div className="flex items-center gap-2 min-w-0 cursor-help hover:bg-muted/30 dark:hover:bg-muted/10 p-1.5 rounded-xl transition-all border border-transparent hover:border-border/30">
+                                                                        <span className={`${colorOf(cat)} h-2 w-2 rounded-sm shrink-0`} />
+                                                                        <span className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wide truncate">{labelOf(cat)}</span>
+                                                                        <span className="text-[10px] font-black text-foreground/90 ml-auto tabular-nums">
+                                                                            {((Math.abs(v) / total) * 100).toFixed(0)}%
+                                                                        </span>
+                                                                        <span className="text-[10px] font-bold text-muted-foreground/50 tabular-nums shrink-0">{fmtValue(cat, v)}</span>
+                                                                    </div>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent className="bg-popover border border-border/40 p-3 max-w-xs shadow-2xl text-xs leading-normal">
+                                                                    <div className="flex flex-col gap-1.5">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className={`${colorOf(cat)} h-2.5 w-2.5 rounded-sm`} />
+                                                                            <span className="font-bold text-foreground">{labelOf(cat)}</span>
+                                                                        </div>
+                                                                        <p className="text-muted-foreground leading-normal">{tooltipOf(cat)}</p>
+                                                                        <div className="mt-1.5 pt-1.5 border-t border-border/30 flex justify-between text-[10px] text-muted-foreground font-medium">
+                                                                            <span>Share: {((Math.abs(v) / total) * 100).toFixed(1)}%</span>
+                                                                            <span>Raw Score: {Math.round(v).toLocaleString()}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </TooltipContent>
+                                                            </Tooltip>
                                                         ))}
                                                     </div>
                                                 </div>

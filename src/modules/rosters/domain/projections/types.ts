@@ -208,8 +208,13 @@ export interface RolesProjection {
 
 export interface ProjectedEmployee {
   id:               string;
+  /** Human-facing employee identifier (falls back to the profile id). */
+  employeeId:       string;
   name:             string;
   avatar:           string;
+  /** true when this bucket was synthesised on the fly for an assignee that
+   *  wasn't in the loaded employee page (H2), rather than a loaded employee. */
+  isOffRoster?:     boolean;
   /** Weekly contracted hours (e.g. 38) — the raw contract rate. */
   contractedHours:  number;
   /** Contracted hours scaled to the visible period (week, month, …). The
@@ -289,6 +294,9 @@ export interface EmployeeRecord {
   last_name?:   string | null;
   /** Weekly contracted hours (e.g. 38). Sourced from the active user contract. */
   contracted_weekly_hours?: number | null;
+  /** Employment/contract type. CASUAL staff have no contract baseline for
+   *  People Mode, so their utilization renders as "no contract". */
+  contract_type?: 'FT' | 'PT' | 'CASUAL' | null;
 }
 
 export interface EventRecord {

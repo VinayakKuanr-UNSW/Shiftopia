@@ -37,6 +37,7 @@ import { auditor } from './audit/auditor';
 import { rosterFetcher, durationMinutes } from './data/roster-fetcher';
 import { fairnessLedgerService } from '@/modules/rosters/services/fairnessLedger.service';
 import { debtsToMap, type ShiftForFairness } from '@/modules/rosters/domain/fairness-ledger';
+import { EMERGENT_WINDOW_MS } from '@/modules/rosters/domain/bidding-urgency';
 import type {
     OptimizeRequest,
     OptimizeResponse,
@@ -458,13 +459,16 @@ export class AutoSchedulerController {
             );
         }
 
-        // ── Layer 0.5: Past-shift identification ─────────────────────────────
-        // We identify shifts that have already started and exclude them from
-        // the optimizer. This prevents the solver from wasting capacity on
-        // shifts that can't be assigned, and ensures the user sees a clear
-        // failure reason for them.
+        // ── Layer 0.5: Past + emergent shift identification ──────────────────
+        // Shifts that have already started can never be assigned. Shifts inside
+        // the emergent window (TTS ≤ 4h) are excluded too: bids and swaps are
+        // already locked server-side at that point, and last-minute coverage
+        // must go through the emergency-assignment flow, not a bulk optimize.
+        // Both buckets skip the solver AND the greedy fallback, and surface as
+        // blocking violations so the user sees why they were not assigned.
         const now = Date.now();
         const pastShifts: ShiftMeta[] = [];
+        const emergentShifts: ShiftMeta[] = [];
         const futureShifts: ShiftMeta[] = [];
 
         for (const s of input.shifts) {
@@ -474,14 +478,40 @@ export class AutoSchedulerController {
             const start = new Date(`${s.shift_date}T${s.start_time}`);
             if (start.getTime() <= now) {
                 pastShifts.push(s);
+            } else if (start.getTime() - now <= EMERGENT_WINDOW_MS) {
+                emergentShifts.push(s);
             } else {
                 futureShifts.push(s);
             }
         }
 
-        if (pastShifts.length > 0) {
-            console.debug('[AutoScheduler] Found %d past shifts — excluding from optimizer', pastShifts.length);
+        if (pastShifts.length > 0 || emergentShifts.length > 0) {
+            console.debug(
+                '[AutoScheduler] Excluding %d past and %d emergent (TTS ≤ 4h) shifts from optimizer',
+                pastShifts.length, emergentShifts.length,
+            );
         }
+
+        // Failed-proposal stubs for the excluded shifts — appended to every
+        // result path (optimizer and greedy) so UI accounting stays complete.
+        const unschedulableProposal = (s: ShiftMeta, type: 'PAST_SHIFT' | 'EMERGENT_SHIFT', description: string): ValidatedProposal => ({
+            shiftId: s.id,
+            employeeId: '',
+            employeeName: '',
+            shiftDate: s.shift_date,
+            startTime: s.start_time,
+            endTime: s.end_time,
+            optimizerCost: 0,
+            employmentType: 'Casual',
+            complianceStatus: 'FAIL',
+            violations: [{ type, description, blocking: true }],
+            passing: false,
+        });
+        const excludedProposals: ValidatedProposal[] = [
+            ...pastShifts.map(s => unschedulableProposal(s, 'PAST_SHIFT', 'This shift has already started and cannot be assigned.')),
+            ...emergentShifts.map(s => unschedulableProposal(s, 'EMERGENT_SHIFT', 'This shift starts within 4 hours — use the emergency assignment flow instead of the autoscheduler.')),
+        ];
+        const excludedShiftIds = excludedProposals.map(p => p.shiftId);
 
         // ── Layer 1: Build optimizer request ─────────────────────────────────
         const dates = input.shifts.map(s => s.shift_date).sort();
@@ -626,7 +656,10 @@ export class AutoSchedulerController {
             const optimizeReq: OptimizeRequest = {
                 shifts: optimizerShifts,
                 employees: optimizerEmployees,
-                constraints: input.constraints ?? { min_rest_minutes: 600, relax_constraints: false },
+                // Availability is a HARD constraint for the auto-scheduler: unset =
+                // unavailable, and the solver may never place a shift outside a
+                // declared block. Forced on regardless of caller-supplied constraints.
+                constraints: { min_rest_minutes: 600, relax_constraints: false, ...input.constraints, enforce_availability: true },
                 // B1 — single-mode: always send the pinned policy (no sliders).
                 strategy: SINGLE_MODE_STRATEGY,
                 solver_params: {
@@ -663,8 +696,10 @@ export class AutoSchedulerController {
                 console.warn('[AutoScheduler] Optimizer returned %s — falling back to greedy engine', optimizerStatus);
                 usedFallback = true;
                 const validationStart = performance.now();
-                // Note: greedyFallback still processes all shifts, it will naturally handle the past ones
-                validatedProposals = await greedyFallback(input.shifts, input.employees, input.employeeDetails ?? new Map(), existingRoster, input.strategy);
+                // Past/emergent shifts are excluded from greedy too — appended
+                // back as failed proposals so they stay visible in the UI.
+                validatedProposals = await greedyFallback(futureShifts, input.employees, input.employeeDetails ?? new Map(), existingRoster, input.strategy);
+                validatedProposals.push(...excludedProposals);
                 validationTimeMs = Math.round(performance.now() - validationStart);
                 uncoveredV8ShiftIds = validatedProposals.filter(p => !p.passing).map(p => p.shiftId);
             } else {
@@ -672,32 +707,18 @@ export class AutoSchedulerController {
                 const { shiftMap, employeeMap } = solutionParser.buildMaps(input.shifts, input.employees);
                 const { groups, uncoveredV8ShiftIds: uncov } = solutionParser.parse(optimizeResponse, shiftMap, employeeMap);
                 
-                // Add back the past shifts as uncovered (since optimizer never saw them)
-                uncoveredV8ShiftIds = [...uncov, ...pastShifts.map(s => s.id)];
+                // Add back the past/emergent shifts as uncovered (optimizer never saw them)
+                uncoveredV8ShiftIds = [...uncov, ...excludedShiftIds];
 
                 const validationStart = performance.now();
                 validatedProposals = await this._validateProposals(
-                    groups, 
-                    input.employeeDetails ?? new Map(), 
+                    groups,
+                    input.employeeDetails ?? new Map(),
                     existingRoster
                 );
 
-                // Add back the past shifts as explicitly failed proposals (for UI visibility)
-                for (const ps of pastShifts) {
-                    validatedProposals.push({
-                        shiftId: ps.id,
-                        employeeId: '',
-                        employeeName: '',
-                        shiftDate: ps.shift_date,
-                        startTime: ps.start_time,
-                        endTime: ps.end_time,
-                        optimizerCost: 0,
-                        employmentType: 'Casual',
-                        complianceStatus: 'FAIL',
-                        violations: [{ type: 'PAST_SHIFT', description: 'This shift has already started and cannot be assigned.', blocking: true }],
-                        passing: false,
-                    });
-                }
+                // Add back the past/emergent shifts as explicitly failed proposals (for UI visibility)
+                validatedProposals.push(...excludedProposals);
 
                 validationTimeMs = Math.round(performance.now() - validationStart);
                 console.debug('[AutoScheduler] Compliance validation: %dms', validationTimeMs);
@@ -712,7 +733,8 @@ export class AutoSchedulerController {
                 usedFallback = true;
                 optimizerStatus = 'UNKNOWN';
                 const validationStart = performance.now();
-                validatedProposals = await greedyFallback(input.shifts, input.employees, input.employeeDetails ?? new Map(), existingRoster, input.strategy);
+                validatedProposals = await greedyFallback(futureShifts, input.employees, input.employeeDetails ?? new Map(), existingRoster, input.strategy);
+                validatedProposals.push(...excludedProposals);
                 validationTimeMs = Math.round(performance.now() - validationStart);
                 uncoveredV8ShiftIds = validatedProposals.filter(p => !p.passing).map(p => p.shiftId);
             } else {
@@ -741,7 +763,10 @@ export class AutoSchedulerController {
                 inputEmployees: input.employees,
                 employeeDetails: input.employeeDetails ?? new Map(),
                 existingRoster,
-                constraints: input.constraints ?? { min_rest_minutes: 600, relax_constraints: false },
+                // Availability is a HARD constraint for the auto-scheduler: unset =
+                // unavailable, and the solver may never place a shift outside a
+                // declared block. Forced on regardless of caller-supplied constraints.
+                constraints: { min_rest_minutes: 600, relax_constraints: false, ...input.constraints, enforce_availability: true },
                 budgetSeconds: Math.min(30, Math.max(10, Math.round(solverBudget / 4))),
                 signal: input.signal,
             });
@@ -933,7 +958,10 @@ export class AutoSchedulerController {
                 proposals: result.proposals,
                 optimizerShifts,
                 optimizerEmployees,
-                constraints: input.constraints ?? { min_rest_minutes: 600, relax_constraints: false },
+                // Availability is a HARD constraint for the auto-scheduler: unset =
+                // unavailable, and the solver may never place a shift outside a
+                // declared block. Forced on regardless of caller-supplied constraints.
+                constraints: { min_rest_minutes: 600, relax_constraints: false, ...input.constraints, enforce_availability: true },
                 capacityCheck,
                 availabilityData,
             });
@@ -1201,9 +1229,10 @@ export class AutoSchedulerController {
         const { shiftMap, employeeMap } = solutionParser.buildMaps(inputShifts, inputEmployees);
 
         // Only retry genuine compliance failures with a known assignee — never a
-        // PAST_SHIFT (unfixable) or a SYSTEM error, and never an empty employee.
+        // PAST_SHIFT / EMERGENT_SHIFT (unfixable) or a SYSTEM error, and never
+        // an empty employee.
         const isRepairable = (p: ValidatedProposal) =>
-            !!p.employeeId && !(p.violations ?? []).some(v => v.type === 'PAST_SHIFT' || v.type === 'SYSTEM');
+            !!p.employeeId && !(p.violations ?? []).some(v => v.type === 'PAST_SHIFT' || v.type === 'EMERGENT_SHIFT' || v.type === 'SYSTEM');
 
         let compliant = proposals.filter(p => p.passing);
         const failing = proposals.filter(p => !p.passing);

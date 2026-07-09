@@ -736,4 +736,17 @@ body {
   .surface-muted {
     @apply bg-muted/40 dark:bg-muted/20 rounded-xl;
   }
+
+  /* Force solid background on sticky employee cells under any theme */
+  .sticky-employee-cell {
+    background-color: hsl(var(--card)) !important;
+    backdrop-filter: none !important;
+  }
+  /* Hover tint MUST stay opaque — a translucent hover bg (e.g. accent/0.15) lets
+     shift cards that scroll under the sticky column bleed through on the hovered
+     row. color-mix keeps the subtle accent tint while compositing over the solid
+     card colour so the column is never see-through. */
+  .group:hover .sticky-employee-cell {
+    background-color: color-mix(in srgb, hsl(var(--accent)) 15%, hsl(var(--card))) !important;
+  }
 }

@@ -210,6 +210,14 @@ class OptimizerConstraints:
     enforce_skill_match: bool = True
     allow_partial: bool = True
     relax_constraints: bool = False
+    # When True, declared availability is a HARD constraint AND "unset = unavailable":
+    # an employee is eligible for a shift ONLY if it is fully contained within a
+    # declared availability slot, so an employee with NO slots is unavailable for
+    # every shift and the solver can never place a shift outside a declared block
+    # (any such roster is infeasible). Default False preserves the legacy
+    # "no records on file = universally available" behaviour for callers/tests that
+    # don't send availability. The live auto-scheduler sends True.
+    enforce_availability: bool = False
 
 
 @dataclass
@@ -521,14 +529,18 @@ def employee_eligible(
             if s0 < a1 and a0 < s1:
                 return False
 
-    # HC-5d: Declared availability windows (hard filter when on file).
+    # HC-5d: Declared availability windows.
     #
-    # Policy: an employee with NO availability records on file at all is
-    # treated as universally available (not yet onboarded). An employee with
-    # ANY records on file (`has_availability_data=True`) is treated as
-    # available *only* during declared slots — any shift not fully covered
-    # by at least one slot is rejected.
-    if emp.has_availability_data:
+    # Policy (2026-07): when `enforce_availability` is on, availability is a HARD
+    # constraint and "unset = unavailable" — an employee is eligible for a shift
+    # ONLY if it is fully contained within a declared availability slot, so an
+    # employee with NO slots is unavailable for every shift (the solver can never
+    # place a shift outside a declared block; such a roster is infeasible).
+    #
+    # When it is off (legacy default), we fall back to the old rule: only an
+    # employee with ANY records on file (`has_availability_data`) is restricted to
+    # their slots; one with no records at all is treated as universally available.
+    if c.enforce_availability or emp.has_availability_data:
         s0, s1 = shift_window(shift)
         covered = False
         for slot in emp.availability_slots:
@@ -2163,6 +2175,20 @@ class ScheduleModelBuilder:
             self._objective_tiers = [
                 ('legal', legal_hard_t), ('coverage', coverage_t),
                 ('soft', soft_t), ('guardrail', guardrail_t), ('cost', cost_t)]
+
+        # Requirement #1 (policy 2026-07): COST IS A PURE TIE-BREAKER. In the live
+        # 'balanced' profile cost MUST be the terminal tier, so a cheaper roster can
+        # never be bought at the expense of feasibility (legal), coverage, stated
+        # availability/contract limits (soft), or the wellbeing guardrails above it.
+        # Among rosters that tie on every higher tier, the solver then picks the
+        # lowest total labour cost (overtime already priced into the cost tier by
+        # SC-5, so marginal hours flow to cheaper labour, e.g. casuals over FT/PT
+        # overtime). The 'cheapest'/'fairest' profiles exist ONLY to generate Pareto
+        # alternatives (B4) and are never the live solve — see _solve_alternatives.
+        if self.tier_profile == 'balanced':
+            assert self._objective_tiers[-1][0] == 'cost', (
+                "balanced profile must keep 'cost' as the terminal tie-breaker tier"
+            )
         # NOTE: the objective itself is set per-tier inside _solve(); we do not
         # call self.model.Minimize() here.
 

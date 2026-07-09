@@ -6,7 +6,7 @@ import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
 import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils';
-import { computeBiddingUrgency, isOnBidding } from '@/modules/rosters/domain/bidding-urgency';
+import { computeShiftUrgency, isOnBidding } from '@/modules/rosters/domain/bidding-urgency';
 import type { ManagerBidShift, BidToggle } from './types';
 
 interface UseManagerBidShiftsReturn {
@@ -63,14 +63,25 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
 
         const stateId = determineShiftState(s);
 
-        // Determine toggle category
-        let toggle: BidToggle = 'normal';
+        // Determine toggle category. Four terminal/active buckets:
+        //   resolved → a winner was assigned (assigned_employee_id set)
+        //   expired  → went unfilled: bidding closed with no winner, OR the 4h
+        //              bidding window elapsed (urgency 'emergent') with nobody assigned
+        //   urgent   → still open for bidding, TTS ≤ 24h
+        //   standard → still open for bidding, plenty of lead time
+        let toggle: BidToggle;
         if (s.assigned_employee_id) {
           toggle = 'resolved';
-        } else if (isOnBidding(s.bidding_status) && computeBiddingUrgency(s.shift_date, s.start_time) === 'urgent') {
-          toggle = 'urgent';
         } else {
-          toggle = 'normal';
+          const urgency = computeShiftUrgency(s.shift_date, s.start_time, s.start_at);
+          const onBidding = isOnBidding(s.bidding_status);
+          if (s.bidding_status === 'bidding_closed_no_winner' || (onBidding && urgency === 'emergent')) {
+            toggle = 'expired';
+          } else if (onBidding && urgency === 'urgent') {
+            toggle = 'urgent';
+          } else {
+            toggle = 'standard';
+          }
         }
 
         // Bid count from the fetched array of IDs

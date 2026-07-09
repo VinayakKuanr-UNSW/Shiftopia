@@ -281,7 +281,7 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
 
                         {estimatedPay && (
                             <div className="pt-1.5 mt-1.5 border-t border-foreground/[0.03]">
-                                <DataRow label="Estimated Pay" value={estimatedPay} emphasis accentColor="text-emerald-500" />
+                                <DataRow label="Est. cost (not payroll)" value={estimatedPay} emphasis accentColor="text-emerald-500" />
                             </div>
                         )}
 

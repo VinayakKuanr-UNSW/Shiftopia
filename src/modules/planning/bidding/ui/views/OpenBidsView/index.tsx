@@ -12,7 +12,7 @@ import { cn } from '@/modules/core/lib/utils';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { Drawer, DrawerContent } from '@/modules/core/ui/primitives/drawer';
 import {
-  Search, Flame, Clock, CheckCircle, Loader2, Inbox,
+  Search, Flame, Clock, CheckCircle, CircleSlash, Loader2, Inbox,
   Users, Zap, ShieldCheck, ShieldAlert, Shield,
   CircleCheck, CircleX, TriangleAlert, ChevronDown, ChevronRight, ChevronLeft,
   Sparkles, UserCheck as LucideUserCheck, History,
@@ -467,6 +467,7 @@ const RoleCard: React.FC<RoleCardProps> = ({
   const groupVariant = getGroupVariant(shift.groupType, shift.department);
   const theme = GROUP_THEME[groupVariant];
   const isResolved = shift.toggle === 'resolved';
+  const isExpired = shift.toggle === 'expired';
 
   useTimeTicker(1000);
 
@@ -489,7 +490,7 @@ const RoleCard: React.FC<RoleCardProps> = ({
         isSelected
           ? "bg-primary/10 border-primary/40 ring-1 ring-primary/20 shadow-md"
           : "bg-white dark:bg-slate-900 border-border/50 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:border-border",
-        isResolved && "opacity-60"
+        (isResolved || isExpired) && "opacity-60"
       )}
       whileHover={{ y: -1 }}
       whileTap={{ scale: 0.98 }}
@@ -553,6 +554,10 @@ const RoleCard: React.FC<RoleCardProps> = ({
         
         {isResolved && (
           <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
+        )}
+
+        {isExpired && (
+          <CircleSlash className="h-3.5 w-3.5 text-slate-400" />
         )}
       </div>
     </motion.button>
@@ -700,9 +705,10 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
   );
 
   const counts: ToggleCounts = useMemo(() => ({
+    standard: shifts.filter(s => s.toggle === 'standard').length,
     urgent:   shifts.filter(s => s.toggle === 'urgent').length,
-    normal:   shifts.filter(s => s.toggle === 'normal').length,
     resolved: shifts.filter(s => s.toggle === 'resolved').length,
+    expired:  shifts.filter(s => s.toggle === 'expired').length,
   }), [shifts]);
 
   // Report counts up to controlling parent (GoldStandardHeader filter chips).
@@ -807,7 +813,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     // order — processing out-of-order lets MAX_CONSECUTIVE_DAYS be fooled by
     // short isolated fragments that never individually breach the 20-day limit.
     const urgentShifts = shifts
-      .filter(s => s.toggle !== 'resolved' && s.bidCount > 0)
+      .filter(s => (s.toggle === 'urgent' || s.toggle === 'standard') && s.bidCount > 0)
       .sort((a, b) => a.date.localeCompare(b.date));
     if (urgentShifts.length === 0) {
       toast({ title: 'No Eligible Shifts', description: 'No open shifts with active bids.' });
@@ -1098,9 +1104,10 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
               />
             </div>
             <div className="flex items-center gap-1 overflow-x-auto flex-nowrap pb-0.5 -mx-1 px-1">
+              <ToggleChip active={activeToggle === 'standard'} onClick={() => setActiveToggle('standard')} icon={<Clock className="h-3 w-3" />} label="Standard" count={counts.standard} activeClass="bg-amber-500/10 text-amber-400 border-amber-500/20" />
               <ToggleChip active={activeToggle === 'urgent'} onClick={() => setActiveToggle('urgent')} icon={<Flame className="h-3 w-3" />} label="Urgent" count={counts.urgent} activeClass="bg-rose-500/10 text-rose-400 border-rose-500/20" />
-              <ToggleChip active={activeToggle === 'normal'} onClick={() => setActiveToggle('normal')} icon={<Clock className="h-3 w-3" />} label="Normal" count={counts.normal} activeClass="bg-amber-500/10 text-amber-400 border-amber-500/20" />
               <ToggleChip active={activeToggle === 'resolved'} onClick={() => setActiveToggle('resolved')} icon={<CheckCircle className="h-3 w-3" />} label="Resolved" count={counts.resolved} activeClass="bg-emerald-500/10 text-emerald-400 border-emerald-500/20" />
+              <ToggleChip active={activeToggle === 'expired'} onClick={() => setActiveToggle('expired')} icon={<CircleSlash className="h-3 w-3" />} label="Expired" count={counts.expired} activeClass="bg-slate-500/10 text-slate-400 border-slate-500/20" />
             </div>
           </div>
         ) : (
@@ -1118,9 +1125,10 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
             <Separator orientation="vertical" className="h-5 bg-border/40" />
 
             <div className="flex items-center gap-1 p-0.5 bg-muted/20 rounded-xl border border-border/40">
+              <ToggleChip active={activeToggle === 'standard'} onClick={() => setActiveToggle('standard')} icon={<Clock className="h-3 w-3" />} label="Standard" count={counts.standard} activeClass="bg-amber-500/10 text-amber-400 border-amber-500/20" />
               <ToggleChip active={activeToggle === 'urgent'} onClick={() => setActiveToggle('urgent')} icon={<Flame className="h-3 w-3" />} label="Urgent" count={counts.urgent} activeClass="bg-rose-500/10 text-rose-400 border-rose-500/20" />
-              <ToggleChip active={activeToggle === 'normal'} onClick={() => setActiveToggle('normal')} icon={<Clock className="h-3 w-3" />} label="Normal" count={counts.normal} activeClass="bg-amber-500/10 text-amber-400 border-amber-500/20" />
               <ToggleChip active={activeToggle === 'resolved'} onClick={() => setActiveToggle('resolved')} icon={<CheckCircle className="h-3 w-3" />} label="Resolved" count={counts.resolved} activeClass="bg-emerald-500/10 text-emerald-400 border-emerald-500/20" />
+              <ToggleChip active={activeToggle === 'expired'} onClick={() => setActiveToggle('expired')} icon={<CircleSlash className="h-3 w-3" />} label="Expired" count={counts.expired} activeClass="bg-slate-500/10 text-slate-400 border-slate-500/20" />
             </div>
 
             <div className="flex-1" />

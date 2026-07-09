@@ -43,11 +43,36 @@ export interface AwardContext {
 // ── Builder ──────────────────────────────────────────────────────────────────
 
 /**
+ * Format a Date's LOCAL calendar day as YYYY-MM-DD.
+ *
+ * WHY NOT toISOString(): the org runs at ICC Sydney (Australia/Sydney, UTC+10/+11).
+ * `date.toISOString()` renders the day in UTC, which for any local time before
+ * ~10:00–11:00 rolls the calendar day BACKWARDS — e.g. a Date at 1 Jul 08:00
+ * Sydney serialises to `2025-06-30T22:00:00Z`, so `.split('T')[0]` would give
+ * `2025-06-30` (the wrong day, and the wrong day-of-week / public-holiday facts).
+ * Reading the LOCAL parts keeps the calendar day the one the roster actually
+ * means. This is the same local-parts pattern used by `addOneDay` in standard.ts
+ * and by the `new Date(dateStr + 'T00:00:00')` construction below.
+ */
+function formatLocalYmd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
  * Normalize a date value to a YYYY-MM-DD string.
  * Handles Date objects, ISO strings, and plain date strings.
+ *
+ * NOTE: for a Date object we derive the day from LOCAL parts (see
+ * `formatLocalYmd`), never `toISOString()`, which would shift the calendar day
+ * backwards in AU timezones. The overwhelmingly common projection input is
+ * already a `YYYY-MM-DD` string, which passes through untouched; only the
+ * Date-object branch was affected by the day-shift, and it is now fixed.
  */
 function toDateString(d: string | Date): string {
-  if (d instanceof Date) return d.toISOString().split('T')[0];
+  if (d instanceof Date) return formatLocalYmd(d);
   if (typeof d === 'string' && d.includes('T')) return d.split('T')[0];
   return d;
 }
@@ -109,10 +134,54 @@ export function getDateFacts(ctx: AwardContext, dateStr: string): DateFacts {
   return facts;
 }
 
+// ── DST / duration boundary (documented, deliberate) ─────────────────────────
+//
+// The org runs at ICC Sydney (Australia/Sydney), which observes DST: the clock
+// springs forward one hour (~early Oct, 02:00→03:00) and falls back one hour
+// (~early Apr, 03:00→02:00). An overnight shift that crosses one of those two
+// transitions has a REAL wall-clock duration of 7h (spring forward) or 9h (fall
+// back) even though its start/end strings look like a naive 8h.
+//
+// THIS ENGINE DOES NOT RE-DERIVE WALL-CLOCK DURATION ACROSS A DST TRANSITION.
+// It is a synchronous, worker-safe cost estimator with NO tz database. It prices
+// from the duration the UPSTREAM caller supplies:
+//   • `netMinutes` / `scheduled_length_minutes` when present (preferred), or
+//   • the naive difference of the start/end strings via `fastNetMinutes`
+//     (`end += 1440` for overnight — a flat 24h day, so no DST adjustment).
+// Getting the true worked minutes right across a DST boundary is therefore the
+// UPSTREAM caller's responsibility (the timesheet / roster layer that owns real
+// instants). This is a deliberate, documented boundary — not a silent gap — and
+// bringing a full tz/DST-offset implementation in-process is intentionally out
+// of scope (it would pull a tz database into the worker and break worker-safety).
+//
+// The naive-24h assumption is exact for every non-transition night (the vast
+// majority) and off by at most ±60 min for the ≤2 overnight shifts per year that
+// straddle a Sydney DST switch. `fastNightMinutes` is likewise a wall-clock
+// window overlap and is not DST-adjusted, for the same reason.
+
+/**
+ * Documentation marker for the DST boundary above. This is a pure no-op that
+ * exists so the boundary is greppable and its rationale travels with the code:
+ * given a naive (non-DST-adjusted) minute count, the estimator uses it as-is.
+ * Correcting a real DST-crossing duration must happen UPSTREAM (where real
+ * instants live) before the value reaches this engine.
+ *
+ * @param naiveMinutes minutes derived from start/end strings or supplied by the
+ *                     caller, assuming a flat 24h day (no DST offset applied).
+ * @returns the same value, unchanged — the estimator does not adjust for DST.
+ */
+export function dstNaiveMinutes(naiveMinutes: number): number {
+  return naiveMinutes;
+}
+
 // ── Fast Time Utilities ──────────────────────────────────────────────────────
 //
 // These replace `date-fns` calls in the hot path. All operate on raw integers
 // (minutes since midnight) to avoid Date object allocation entirely.
+//
+// DST NOTE: all helpers below treat a day as a flat 1440 minutes. See the
+// "DST / duration boundary" block above for why DST-offset correction is
+// intentionally the upstream caller's responsibility, not this engine's.
 
 /**
  * Parse a time string "HH:MM" or "HH:MM:SS" into minutes since midnight.

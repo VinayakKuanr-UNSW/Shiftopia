@@ -20,7 +20,7 @@ const COLUMNS: { header: string; key: keyof TimesheetRow }[] = [
     { header: 'Paid Break (min)',    key: 'paidBreak' },
     { header: 'Unpaid Break (min)', key: 'unpaidBreak' },
     { header: 'Net Length',         key: 'netLength' },
-    { header: 'Approx. Pay',        key: 'approximatePay' },
+    { header: 'Est. cost (not payroll)', key: 'approximatePay' },
     { header: 'Variance (min)',      key: 'differential' },
     { header: 'Lifecycle',          key: 'liveStatus' },
     { header: 'Timesheet Status',   key: 'timesheetStatus' },
@@ -63,7 +63,7 @@ const PDF_GROUPS = [
     { label: 'Scheduled',           span: 2 },
     { label: 'Attendance (Actual)', span: 2 },
     { label: 'Adjusted (Billable)', span: 6 },
-    { label: 'Payroll',             span: 2 },
+    { label: 'Estimate (not payroll)', span: 2 },
     { label: 'Status',              span: 2 },
 ];
 

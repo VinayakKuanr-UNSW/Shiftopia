@@ -95,6 +95,10 @@ export function shiftToDTO(shift: Shift): WorkerShiftDTO {
     isPersonalLeave: shift.isPersonalLeave,
     isCarerLeave: shift.isCarerLeave,
     previousWage: shift.previousWage,
+    // priorOrdinaryHoursThisWeek is intentionally NOT set here — it is a
+    // cross-shift accumulation (ordinary hours earlier in the same ISO week) that
+    // only the pipeline can compute once it has all of an employee's shifts. See
+    // buildStats() in runProjectionPipeline.ts. Left undefined ⇒ weekly OT OFF.
 
     // Roster structure
     rosterSubgroupId: shift.roster_subgroup?.name ? (shift as any).roster_subgroup_id ?? null : null,
@@ -131,12 +135,15 @@ export function shiftsToDTO(shifts: Shift[]): WorkerShiftDTO[] {
 export function employeeToDTO(emp: EmployeeRecord, contractedHours?: number): WorkerEmployeeDTO {
   return {
     id: emp.id,
+    // Human-facing staff number when present, else the profile UUID.
+    employeeId: (emp as any).employee_id ?? emp.id,
     firstName: emp.first_name ?? null,
     lastName: emp.last_name ?? null,
     // Prefer an explicit override map, else fall back to the contract on the
     // record itself. Without this, weekly contracted hours never reached the
     // projector and utilization always collapsed to 0%.
     contractedHours: contractedHours ?? emp.contracted_weekly_hours ?? undefined,
+    contractType: (emp as any).contract_type ?? null,
   };
 }
 

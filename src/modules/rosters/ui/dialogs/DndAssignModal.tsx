@@ -9,8 +9,11 @@
  * (which re-runs compliance — redundant but fail-closed).
  */
 
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { Loader2, User, Clock, Calendar, Briefcase } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Loader2, User, Clock, Calendar, Briefcase, AlertTriangle } from 'lucide-react';
+import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
+import { evaluateShiftAvailabilityFromSlots } from '@/modules/rosters/domain/availability-check';
 import {
   Dialog,
   DialogContent,
@@ -73,6 +76,23 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
   shiftEndTime = '',
 }) => {
   const autoRanRef = useRef(false);
+  const [availAck, setAvailAck] = useState(false);
+
+  // Warn-only declared-availability check for this MANUAL assignment. It never
+  // blocks (that's the Auto Scheduler's job) — it just surfaces a notice, gated
+  // by an explicit acknowledgement. Uses the same `availability_slots` source and
+  // full-containment rule as the optimizer so the manual warning and the hard
+  // constraint agree.
+  const { data: availSlots } = useQuery({
+    queryKey: ['availability', 'slots', 'assign-modal', employeeId, shiftDate],
+    queryFn: () => getAvailabilitySlots(employeeId, shiftDate, shiftDate),
+    enabled: open && !!employeeId && !!shiftDate,
+    staleTime: 30_000,
+  });
+  const availResult = useMemo(
+    () => evaluateShiftAvailabilityFromSlots(availSlots ?? [], shiftDate, shiftStartTime || '', shiftEndTime || ''),
+    [availSlots, shiftDate, shiftStartTime, shiftEndTime],
+  );
 
   // Stable buildInputs — mirrors runFullCompliancePreCheck from assignShift.command.ts
   const buildInputs = useCallback(async (): Promise<[V8OrchestratorInput]> => {
@@ -157,6 +177,7 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
     }
     if (!open) {
       autoRanRef.current = false;
+      setAvailAck(false);
     }
   }, [open]); // intentionally excluding panel.run to avoid re-trigger loops
 
@@ -275,6 +296,21 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
           <CompliancePanel hook={panel} />
         </div>
 
+        {/* Availability — warn-only (never blocks; requires explicit acknowledgement) */}
+        {availResult.isWarning && (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
+            <div className="flex items-center gap-2 font-semibold mb-1">
+              <AlertTriangle className="h-4 w-4" />
+              Outside declared availability
+            </div>
+            <p className="text-xs opacity-90">{availResult.message}</p>
+            <label className="mt-2 flex items-center gap-2 cursor-pointer text-xs font-medium">
+              <Checkbox checked={availAck} onCheckedChange={(v) => setAvailAck(v === true)} />
+              Assign anyway — I acknowledge this shift is outside the employee’s availability.
+            </label>
+          </div>
+        )}
+
         {/* Footer */}
         <DialogFooter className="mt-2 gap-2">
           <Button
@@ -287,7 +323,7 @@ export const DndAssignModal: React.FC<DndAssignModalProps> = ({
           </Button>
           <Button
             onClick={() => onConfirm({ ignoreWarnings: panel.warningsAcknowledged })}
-            disabled={!panel.canProceed || isAssigning}
+            disabled={!panel.canProceed || isAssigning || (availResult.isWarning && !availAck)}
             className={cn(
               'text-xs font-black uppercase tracking-widest shadow-lg transition-all active:scale-95',
               panel.canProceed

@@ -6,12 +6,17 @@ import { type TimesheetRow } from '../../model/timesheet.types';
  * Live Rules engine consumes. Single source of truth for this projection so the
  * row, mobile card, and bulk-select all derive identical attendance state.
  */
+export const cleanTime = (val: string | null | undefined): string | null => {
+    if (!val || val === '-' || val === '—' || val === '') return null;
+    return val;
+};
+
 export const timesheetEntryToShiftInput = (entry: TimesheetRow): ShiftDotInput => ({
     lifecycle_status: entry.liveStatus,
     attendance_status: entry.attendanceStatus,
     attendance_note: entry.attendanceNote,
-    actual_start: entry.rawActualStart ?? entry.clockIn,
-    actual_end: entry.rawActualEnd ?? entry.clockOut,
+    actual_start: cleanTime(entry.rawActualStart) ?? cleanTime(entry.clockIn),
+    actual_end: cleanTime(entry.rawActualEnd) ?? cleanTime(entry.clockOut),
     adjusted_start: entry.adjustedStart,
     adjusted_end: entry.adjustedEnd,
     // Per-side manual signals — only the manually edited side gets its Live

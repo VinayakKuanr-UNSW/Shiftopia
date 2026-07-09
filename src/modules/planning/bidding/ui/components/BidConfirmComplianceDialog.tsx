@@ -10,12 +10,14 @@ interface Props {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     result: ComplianceResult | null;
+    /** Warn-only note when the shift falls outside the bidder's declared availability. */
+    availabilityWarning?: string | null;
     onCancel: () => void;
     onConfirm: () => void;
 }
 
 export const BidConfirmComplianceDialog: React.FC<Props> = ({
-    open, onOpenChange, result, onCancel, onConfirm,
+    open, onOpenChange, result, availabilityWarning, onCancel, onConfirm,
 }) => {
     return (
         <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -28,7 +30,7 @@ export const BidConfirmComplianceDialog: React.FC<Props> = ({
                     <AlertDialogDescription className="text-base font-medium">
                         {result?.status === 'violated'
                             ? 'This shift has a blocking compliance issue. You cannot bid on this shift.'
-                            : 'This shift has a compliance warning. You may still proceed, but your bid may be reviewed.'}
+                            : 'Please review the notice below. You may still proceed with your bid.'}
                     </AlertDialogDescription>
                     <div className="space-y-1 mt-2">
                         {result?.violations.map((v, i) => (
@@ -41,6 +43,11 @@ export const BidConfirmComplianceDialog: React.FC<Props> = ({
                                 <AlertTriangle className="h-4 w-4 shrink-0" /> {w}
                             </div>
                         ))}
+                        {availabilityWarning && (
+                            <div className="flex items-center gap-2 text-sm text-amber-500 font-bold bg-amber-500/5 p-2 rounded-lg border border-amber-500/10">
+                                <AlertTriangle className="h-4 w-4 shrink-0" /> {availabilityWarning}
+                            </div>
+                        )}
                     </div>
                 </AlertDialogHeader>
                 <AlertDialogFooter className="mt-4 gap-2">

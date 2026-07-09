@@ -159,12 +159,16 @@ function mergePeople(partials: any[], rangeDays?: number): any {
     // can land in different workers and a per-chunk peak would understate it.
     let fatigueScore = emp.fatigueScore;
     if (emp.id !== UNASSIGNED_BUCKET_ID) {
-      const mergedShifts = (Object.values(emp.shifts).flat() as any[]).map((ps) => ({
-        shift_date: ps.date,
-        start_time: ps.startTime,
-        end_time: ps.endTime,
-        unpaid_break_minutes: ps.unpaidBreakMinutes ?? 0,
-      }));
+      // Cancelled shifts don't happen — exclude them from fatigue so they can't
+      // inflate FTG (they're already out of hours/pay). Mirrors people.projector.
+      const mergedShifts = (Object.values(emp.shifts).flat() as any[])
+        .filter((ps) => !ps.isCancelled)
+        .map((ps) => ({
+          shift_date: ps.date,
+          start_time: ps.startTime,
+          end_time: ps.endTime,
+          unpaid_break_minutes: ps.unpaidBreakMinutes ?? 0,
+        }));
       if (mergedShifts.length > 0) fatigueScore = computePeakFatigue(mergedShifts);
     }
 
