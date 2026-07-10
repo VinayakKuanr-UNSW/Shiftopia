@@ -15,7 +15,7 @@
 -- source (audit Phase 3), keep the two in sync when adding a new effective row.
 --
 -- SAFETY: this migration is idempotent (IF NOT EXISTS / ON CONFLICT DO NOTHING)
--- and additive. It has been AUTHORED for review; apply it deliberately (do not
+-- and additive. APPLIED TO PROD 2026-07-11 via MCP apply_migration (do not
 -- rely on an unreviewed `db push` — version drift has bitten this repo before).
 -- cl 25.3 (rates must stay ≥ 2% above the Amusement, Events & Recreation Award)
 -- is a human check when inserting a new effective_from row; it is not enforced

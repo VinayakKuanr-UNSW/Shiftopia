@@ -1,0 +1,23 @@
+-- =============================================================================
+-- Audit F1 follow-up — APPLIED TO PROD 2026-07-11 via MCP.
+--
+-- Pass 4 of sm_run_state_processor marked employees NO-SHOW for rostered
+-- shifts that ended during their APPROVED LEAVE — defaming the attendance
+-- record and polluting performance metrics. A shift inside an approved-leave
+-- range is now excluded from the no-show pass (stays 'unknown'); leave pay is
+-- synthesised from leave_requests, so no terminal attendance state is needed.
+--
+-- Regenerated from the LIVE pg_proc definition (drift rule: never regenerate
+-- prod functions from the repo). Only Pass 4's WHERE clause changed:
+--
+--   AND NOT EXISTS (
+--     SELECT 1 FROM leave_requests lr
+--     WHERE lr.employee_id = shifts.assigned_employee_id
+--       AND lr.status = 'approved'
+--       AND shifts.shift_date BETWEEN lr.start_date::date AND lr.end_date::date
+--   )
+--
+-- Full procedure body as applied lives in the prod migration record
+-- (supabase_migrations.schema_migrations, name: no_show_pass_excludes_approved_leave).
+-- To modify this procedure again: pull the live definition from pg_proc first.
+-- =============================================================================

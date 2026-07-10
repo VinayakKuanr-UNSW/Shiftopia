@@ -1,0 +1,17 @@
+-- =============================================================================
+-- Security follow-up (audit F2 residual) — APPLIED TO PROD 2026-07-11 via MCP.
+--
+-- The baseline shipped:
+--   "Public read for leave_requests" FOR SELECT USING (true)
+-- which let EVERY authenticated user read EVERY leave request — medical and
+-- FDV-adjacent data. The leave_module migration added the intended policies
+-- (self-select + cert-based manager select), making the public-read policy
+-- strictly a privacy hole. Drop it.
+--
+-- After this, reads flow through:
+--   * leave_requests_self_select    (employee_id = auth.uid())
+--   * leave_requests_manager_select (active app_access_certificates cert
+--     scoped via hr.user_contracts org/dept/sub-dept)
+--   * service_role (bypasses RLS)
+-- =============================================================================
+DROP POLICY IF EXISTS "Public read for leave_requests" ON "public"."leave_requests";

@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Migration: gross_pay_records — persistence for the GROSS-pay engine
 -- File:      20260709100000_gross_pay_records.sql
--- Status:    AUTHORED — NOT APPLIED.
+-- Status:    APPLIED TO PROD 2026-07-11 via MCP apply_migration (name: gross_pay_records).
 --
 -- This is a live production DB and the repo has been bitten by blind
 -- `supabase db push` / migration-version drift before (see MEMORY). This file
@@ -195,6 +195,6 @@ GRANT ALL ON TABLE "public"."gross_pay_records" TO "service_role";
 COMMIT;
 
 -- =============================================================================
--- END — AUTHORED, NOT APPLIED. Do not `supabase db push` this file. Apply via
+-- END — APPLIED TO PROD 2026-07-11. Do not `supabase db push` this file. Apply via
 -- the reviewed migration path only.
 -- =============================================================================

@@ -1,8 +1,7 @@
 -- =============================================================================
 -- Leave Module — balances table + leave_requests enhancements + RLS + triggers
 --
--- AUTHORED, NOT APPLIED.
--- Review before applying: supabase db push --dry-run
+-- APPLIED TO PROD 2026-07-11 via MCP apply_migration (name: leave_module).
 -- =============================================================================
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -60,6 +59,7 @@ CREATE OR REPLACE FUNCTION accrue_leave_balances()
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = pg_catalog, public, hr
 AS $$
 BEGIN
   -- We loop through all active user_contracts to accrue day-by-day to handle gaps.
@@ -243,6 +243,7 @@ CREATE OR REPLACE FUNCTION deduct_leave_balance_on_approval()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = pg_catalog, public
 AS $$
 DECLARE
   target_type text;
@@ -379,6 +380,7 @@ CREATE POLICY leave_requests_manager_update
 CREATE OR REPLACE FUNCTION update_leave_balances_updated_at()
 RETURNS trigger
 LANGUAGE plpgsql
+SET search_path = pg_catalog, public
 AS $$
 BEGIN
   NEW.updated_at = now();
@@ -423,8 +425,11 @@ ON CONFLICT DO NOTHING;
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
-    -- Delete if exists
-    PERFORM cron.unschedule('nightly_leave_accrual');
+    -- Unschedule only when the job exists — cron.unschedule RAISES on a
+    -- missing job and would abort the whole migration on first apply.
+    IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'nightly_leave_accrual') THEN
+      PERFORM cron.unschedule('nightly_leave_accrual');
+    END IF;
     -- Schedule to run at 2 AM every day
     PERFORM cron.schedule('nightly_leave_accrual', '0 2 * * *', 'SELECT accrue_leave_balances()');
   END IF;
