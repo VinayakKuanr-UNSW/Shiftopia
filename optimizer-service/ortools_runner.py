@@ -107,6 +107,7 @@ class ShiftReq(BaseModel):
     # 1.5×/2.5× rate. Previously these were dataclass-only and silently
     # ignored on the boundary.
     is_sunday: bool = False
+    is_saturday: bool = False  # cl 41.1 ×1.25; also derived server-side from shift_date
     is_public_holiday: bool = False
     # 'NORMAL' or 'MULTI_HIRE' — affects the rest-gap rule (480m vs 600m).
     # MULTI_HIRE handling is currently approximated by AddNoOverlap with

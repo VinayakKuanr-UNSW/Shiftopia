@@ -67,7 +67,15 @@ export async function fetchV8EmployeeContext(
         return cached.ctx;
     }
 
-    const [profileRes, contractsRes, skillsRes, licensesRes] = await Promise.all([
+    // Leave lookahead window (audit F1): V8_LEAVE_CONFLICT needs the
+    // employee's approved-leave dates around any shift being evaluated. The
+    // context loader has no shift window, so it fetches a generous fixed
+    // horizon (past 7 days for late edits, next 120 days for future rosters).
+    const today = new Date();
+    const leaveFrom = format(subDays(today, 7), 'yyyy-MM-dd');
+    const leaveTo = format(addDays(today, 120), 'yyyy-MM-dd');
+
+    const [profileRes, contractsRes, skillsRes, licensesRes, leaveRes] = await Promise.all([
         supabase
             .from('profiles')
             .select('id, employment_type')
@@ -86,6 +94,13 @@ export async function fetchV8EmployeeContext(
             .from('employee_licenses')
             .select('license_id, expiration_date, issue_date, has_restricted_work_limit, license_type')
             .eq('employee_id', employeeId),
+        (supabase as any)
+            .from('leave_requests')
+            .select('start_date, end_date, status')
+            .eq('employee_id', employeeId)
+            .eq('status', 'approved')
+            .lte('start_date', `${leaveTo}T23:59:59`)
+            .gte('end_date', leaveFrom),
     ]);
 
     const profile  = profileRes.data;
@@ -150,6 +165,35 @@ export async function fetchV8EmployeeContext(
         ? Math.max(...rawContracts.map((c: any) => Number(c.contracted_weekly_hours) || 0))
         : 0;
 
+    // Expand approved-leave ranges to per-day YYYY-MM-DD dates (clamped to the
+    // lookahead window). Fail-open: a query error just leaves leave_days
+    // undefined and V8_LEAVE_CONFLICT stays silent.
+    let leave_days: string[] | undefined;
+    if (leaveRes && !(leaveRes as any).error) {
+        const toYmd = (v: unknown): string => {
+            const str = String(v ?? '');
+            return str.includes('T') ? str.split('T')[0] : str.slice(0, 10);
+        };
+        const daySet = new Set<string>();
+        for (const row of ((leaveRes as any).data ?? []) as Array<{ start_date: string; end_date: string }>) {
+            const from0 = toYmd(row.start_date);
+            const to0 = toYmd(row.end_date);
+            if (!from0 || !to0) continue;
+            const from = from0 > leaveFrom ? from0 : leaveFrom;
+            const to = to0 < leaveTo ? to0 : leaveTo;
+            if (from > to) continue;
+            let cursor = parseISO(from);
+            const end = parseISO(to);
+            while (cursor <= end) {
+                daySet.add(format(cursor, 'yyyy-MM-dd'));
+                cursor = addDays(cursor, 1);
+            }
+        }
+        if (daySet.size > 0) leave_days = Array.from(daySet).sort();
+    } else if ((leaveRes as any)?.error) {
+        console.warn('[EmployeeContext] Approved-leave fetch failed — V8_LEAVE_CONFLICT silent', (leaveRes as any).error);
+    }
+
     const ctx: V8EmployeeContext = {
         employee_id:             employeeId,
         contract_type,
@@ -157,6 +201,7 @@ export async function fetchV8EmployeeContext(
         assigned_role_ids,
         contracts,
         qualifications,
+        leave_days,
     };
 
     // Cache the result

@@ -31,6 +31,7 @@ const CONSTRAINT_TO_VIOLATION: Record<string, ViolationType> = {
     V8_SPREAD_OF_HOURS:  'SPREAD_OF_HOURS',
     V8_MEAL_BREAK:       'MEAL_BREAK',
     V8_STUDENT_VISA:     'STUDENT_VISA',
+    V8_LEAVE_CONFLICT:   'APPROVED_LEAVE',
 };
 
 // =============================================================================
@@ -87,6 +88,8 @@ export class ComplianceEvaluator {
             employee_context: {
                 contract_type: employee.contract_type,
                 contracted_weekly_hours: employee.contracted_weekly_hours,
+                // audit F1 — approved-leave dates drive V8_LEAVE_CONFLICT.
+                leave_days: employee.leave_days,
             },
         });
 

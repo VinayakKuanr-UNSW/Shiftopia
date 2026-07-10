@@ -32,6 +32,7 @@ export interface GrossPayRemLevelEmbed {
 export interface GrossPayRoleEmbed {
   id?: string | null;
   name?: string | null;
+  remuneration_level?: number | null;
 }
 
 /**
@@ -72,6 +73,8 @@ export interface GrossPayShiftRow {
   // ── Attached by the fetcher (not selected columns) ──────────────────────
   /** The employee's employment_type from `profiles` (raw DB value, e.g. 'casual'). */
   _employmentType?: string | null;
+  /** The employee's substantive contract remuneration level. */
+  _contractRemunerationLevel?: number | null;
   /** The APPROVED timesheet overlay for this shift, if any. */
   _timesheet?: GrossPayTimesheetRow | null;
 }

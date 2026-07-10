@@ -12,6 +12,12 @@ export interface V8RuleMeta {
 }
 
 export const V8_RULE_METADATA: Record<string, V8RuleMeta> = {
+    V8_LEAVE_CONFLICT: {
+        id: 'V8_LEAVE_CONFLICT',
+        name: 'Approved Leave',
+        category: 'TIME',
+        description: 'A shift must not fall on a date the employee has approved leave.'
+    },
     V8_NO_OVERLAP: {
         id: 'V8_NO_OVERLAP',
         name: 'No Overlap',

@@ -39,6 +39,16 @@ export interface CostCalculatorOptions {
   isAnnualLeave?: boolean;
   isPersonalLeave?: boolean;
   isCarerLeave?: boolean;
+  /**
+   * cl 46 / NES Div 11 — family & domestic violence leave. PAID for CASUALS too
+   * (cl 46.6: "paid for the hours the Team Member is rostered on the day the
+   * leave is taken") — the only leave flag that must NOT zero out a casual.
+   * Priced flat: permanents at the de-loaded ordinary rate (like personal
+   * leave); casuals at their loaded base rate (the 25% loading is part of a
+   * casual's ordinary rate, cl 12.5(b)). No penalties, no leave loading, no
+   * min-engagement floor, no overtime.
+   */
+  isFdvLeave?: boolean;
   previousWage?: number;
   employmentType?: 'Full-Time' | 'Part-Time' | 'Casual' | 'Flexible Part-Time';
   isSecurityRole?: boolean;

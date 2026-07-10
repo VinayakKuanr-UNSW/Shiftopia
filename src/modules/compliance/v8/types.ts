@@ -53,6 +53,14 @@ export interface V8Employee {
      *  qualification rule uses these instead of skill_ids / license_ids so
      *  that expired credentials are never silently treated as valid. */
     qualifications?:         QualificationV2[];
+    /**
+     * YYYY-MM-DD dates with APPROVED leave (audit F1). Consumed by
+     * V8_LEAVE_CONFLICT — a BLOCKING rule for any candidate shift on one of
+     * these dates. Absent/empty ⇒ the rule is silent (tolerant of callers
+     * that don't hydrate leave; the solver-side `unavailable_dates`
+     * exclusion still applies to auto-scheduling).
+     */
+    leave_days?:             string[];
 }
 
 export interface QualificationV2 {

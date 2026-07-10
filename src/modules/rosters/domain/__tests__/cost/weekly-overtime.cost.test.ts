@@ -81,7 +81,9 @@ describe('weekly OT — engine (cl. 42)', () => {
     expect(r.overtimeHours).toBe(6);
     expect(r.ordinaryCost).toBeCloseTo(120, 5);              // 4h @ 30
     expect(r.overtimeCost).toBeCloseTo((3 * 1.5 + 3 * 2.0) * 30, 5); // 3h@1.5+3h@2.0 = 10.5 → 315
-    expect(r.totalCost).toBeCloseTo(435, 5);
+    // 2h of DAILY OT past the rostered finish also triggers the cl 28.1 meal allowance.
+    expect(r.allowanceCost).toBeCloseTo(13.61, 5);
+    expect(r.totalCost).toBeCloseTo(435 + 13.61, 5);
   });
 
   it('is OFF for casuals even when a prior total is supplied (ambiguous under the EA)', () => {

@@ -45,6 +45,8 @@ export interface V8EmployeeContext {
     assigned_role_ids?:       string[];
     contracts?:               import('../types').ContractRecordV2[];
     qualifications?:          import('../types').QualificationV2[];
+    /** YYYY-MM-DD dates with approved leave (audit F1 — V8_LEAVE_CONFLICT). */
+    leave_days?:              string[];
 }
 
 export interface V8OrchestratorInput {

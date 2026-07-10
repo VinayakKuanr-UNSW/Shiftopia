@@ -36,8 +36,29 @@ describe('H1 — FT/PT overtime never double-counts', () => {
     expect(r.overtimeHours).toBe(2);
     // The invariant that was broken: ordinary + overtime === net worked.
     expect(r.ordinaryHours + r.overtimeHours).toBe(10);
-    // 8h ordinary @30 + 2h OT @1.5x30 = 240 + 90.
+    // 8h ordinary @30 + 2h OT @1.5x30 = 240 + 90, plus the cl 28.1 meal
+    // allowance auto-derived from 2h+ of overtime past the rostered finish.
+    expect(r.allowanceCost).toBeCloseTo(13.61, 5);
+    expect(r.totalCost).toBeCloseTo(330 + 13.61, 5);
+  });
+
+  it('cl 28.1 meal allowance is suppressed when a meal was provided (meal: false)', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 600, scheduled_length_minutes: 480, start_time: '09:00', end_time: '19:00',
+        allowances: { meal: false },
+      }),
+    );
+    expect(r.allowanceCost).toBe(0);
     expect(r.totalCost).toBeCloseTo(330, 5);
+  });
+
+  it('no meal allowance below the 2h overtime threshold', () => {
+    const r = estimateDetailedShiftCost(
+      base({ netMinutes: 570, scheduled_length_minutes: 480, start_time: '09:00', end_time: '18:30' }),
+    );
+    expect(r.overtimeHours).toBeCloseTo(1.5, 5);
+    expect(r.allowanceCost).toBe(0);
   });
 
   it('the normal projection path (net <= scheduled) is unchanged', () => {
@@ -68,15 +89,18 @@ describe('C3 — weekend/PH penalty and night allowance are not cumulative (cl. 
         rate: 37.5, // casual base (ordinary 30)
       }),
     );
-    // Sat 22:00–24:00 (2h): ordinary 30*(1.25+0.25)=45 → 90; night MAX(0.75,0.25)
-    //   ⇒ +0.50 loading → 2*30*0.5 = 30.
-    // Sun 00:00–06:00 (6h): ordinary 30*(1.25+0.50)=52.5 → 315; night MAX(0.75,0.50)
-    //   ⇒ +0.25 loading → 6*30*0.25 = 45.
+    // Shift CONCLUDES on Sunday ⇒ the cl 43.2 casual night rate is 0.75 for ALL
+    // night hours — and it INCLUDES the 25% casual loading, so the loading net
+    // of the loaded base is 0.75 − 0.25 = 0.50.
+    // Sat 22:00–24:00 (2h): ordinary 30*(1.25+0.25)=45 → 90; night
+    //   MAX(0, 0.50 − 0.25 Sat penalty) ⇒ +0.25 → 2*30*0.25 = 15.
+    // Sun 00:00–06:00 (6h): ordinary 30*(1.25+0.50)=52.5 → 315; night
+    //   MAX(0, 0.50 − 0.50 Sun penalty) ⇒ +0 (Sunday casual 175% = night 175%).
     expect(r.ordinaryHours).toBe(8);
     expect(r.ordinaryCost).toBeCloseTo(405, 5);           // 90 + 315
-    expect(r.breakdown.nightAllowanceCost).toBeCloseTo(75, 5); // 30 + 45
-    expect(r.allowanceCost).toBeCloseTo(75, 5);
-    expect(r.totalCost).toBeCloseTo(480, 5);              // 405 + 75
+    expect(r.breakdown.nightAllowanceCost).toBeCloseTo(15, 5);
+    expect(r.allowanceCost).toBeCloseTo(15, 5);
+    expect(r.totalCost).toBeCloseTo(420, 5);              // 405 + 15
   });
 
   it('a plain weekday night shift STILL gets the full night allowance (weekday penalty = 0)', () => {
@@ -108,13 +132,45 @@ describe('C3 — weekend/PH penalty and night allowance are not cumulative (cl. 
         rate: 37.5, // casual base (ordinary 30)
       }),
     );
-    // PH Mon 22:00–24:00 (2h): ordinary 30*(1.25+1.5)=82.5 → 165; night MAX(0.45,1.5)
-    //   ⇒ +0 (PH penalty dominates).
-    // Tue 00:00–06:00 (6h, not a PH): ordinary 30*1.25=37.5 → 225; night 0.45 full
-    //   ⇒ 6*30*0.45 = 81.
+    // Shift concludes Tuesday ⇒ cl 43.2 casual Mon–Thu rate 0.45, which includes
+    // the 25% casual loading ⇒ 0.20 net of the loaded base.
+    // PH Mon 22:00–24:00 (2h): ordinary 30*(1.25+1.5)=82.5 → 165; night
+    //   MAX(0, 0.20 − 1.5) ⇒ +0 (PH penalty dominates).
+    // Tue 00:00–06:00 (6h, not a PH): ordinary 30*1.25=37.5 → 225; night
+    //   MAX(0, 0.20 − 0) ⇒ 6*30*0.20 = 36 (casual night hour totals 145%).
     expect(r.ordinaryCost).toBeCloseTo(390, 5);           // 165 + 225
-    expect(r.breakdown.nightAllowanceCost).toBeCloseTo(81, 5);
-    expect(r.totalCost).toBeCloseTo(471, 5);              // 390 + 81
+    expect(r.breakdown.nightAllowanceCost).toBeCloseTo(36, 5);
+    expect(r.totalCost).toBeCloseTo(426, 5);              // 390 + 36
+  });
+
+  it('the night rate is keyed to the CONCLUSION day (Thu→Fri night pays the Friday rate)', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 480, scheduled_length_minutes: 480,
+        start_time: '22:00', end_time: '06:00', is_overnight: true,
+        shift_date: '2026-07-09', // Thursday 22:00 → Friday 06:00
+      }),
+    );
+    // Concludes Friday ⇒ FT rate 0.25 for ALL 8 night hours (not 0.20 for the
+    // Thursday portion): 8*30*0.25 = 60.
+    expect(r.breakdown.nightAllowanceCost).toBeCloseTo(60, 5);
+    expect(r.totalCost).toBeCloseTo(240 + 60, 5);
+  });
+
+  it('a casual weekday night hour totals 145% (cl 43.2 rate includes the loading)', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 480, scheduled_length_minutes: 480,
+        start_time: '22:00', end_time: '06:00', is_overnight: true,
+        shift_date: '2026-07-06', // Monday → Tuesday, no weekend penalty
+        employmentType: 'Casual', rate: 37.5, // casual base (ordinary 30)
+      }),
+    );
+    // Loaded base 8*37.5 = 300; night = 8*30*(0.45 − 0.25) = 48 ⇒ 348 = 8h @ 43.5
+    // (145% of the 30 ordinary rate) — NOT 8h @ 51 (170%, the old double-count).
+    expect(r.ordinaryCost).toBeCloseTo(300, 5);
+    expect(r.breakdown.nightAllowanceCost).toBeCloseTo(48, 5);
+    expect(r.totalCost).toBeCloseTo(348, 5);
   });
 });
 
@@ -264,6 +320,20 @@ describe('HD — higher duties (cl. 29)', () => {
     );
     expect(r.breakdown.baseRate).toBeCloseTo(38.52, 5);
     expect(r.ordinaryCost).toBeCloseTo(8 * 38.52, 5);
+  });
+
+  it('cl 29.1(a): higher duties under 4h pays a 4-hour minimum at the higher rate', () => {
+    // FT member, 2h shift on higher duties. Whole shift at LEVEL_5 (30.82), and
+    // the cl 29.1(a) minimum tops the payment up to 4 hours at that rate.
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 120, scheduled_length_minutes: 120, start_time: '09:00', end_time: '11:00',
+        rate: null, classificationLevel: 'LEVEL_1', higherDutiesLevel: 'LEVEL_5',
+        employmentType: 'Full-Time',
+      }),
+    );
+    expect(r.ordinaryHours).toBe(4);
+    expect(r.totalCost).toBeCloseTo(4 * 30.82, 5);
   });
 
   it('does NOT apply higher duties to a trainee/apprentice/SWS rate path', () => {

@@ -50,7 +50,13 @@ export function useGrossPay({ bounds, options, enabled = true }: UseGrossPayArgs
       options ?? null,
     ],
     queryFn: async (): Promise<PeriodGrossPay[]> => {
-      const rows = await getPeriodGrossPay(bounds, options);
+      const mergedBounds = {
+        ...bounds,
+        orgIds: options?.orgIds,
+        deptIds: options?.deptIds,
+        subDeptIds: options?.subDeptIds,
+      };
+      const rows = await getPeriodGrossPay(mergedBounds, { approvedOnly: false });
       return rows ?? [];
     },
     // Only fire once we actually have period bounds.

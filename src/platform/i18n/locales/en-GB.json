@@ -33,7 +33,10 @@
     "insights": "Insights",
     "performance": "Performance",
     "grid": "Grid",
-    "users": "Users"
+    "users": "Users",
+    "my_leave": "My Leave",
+    "leave_approvals": "Leave Approvals",
+    "gross_pay": "Gross Pay"
   },
   "settings": {
     "title": "My Settings",

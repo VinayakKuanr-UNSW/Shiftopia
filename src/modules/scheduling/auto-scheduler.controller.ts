@@ -29,6 +29,7 @@ import { bulkAssignmentController, type BulkAssignmentResult } from '@/modules/r
 import { assignmentCommitter } from '@/modules/rosters/bulk-assignment/engine/assignment-committer';
 import { format } from 'date-fns';
 import { estimateShiftCost, extractLevel } from '../rosters/domain/projections/utils/cost';
+import { resolveRateSet } from '../rosters/domain/projections/utils/cost/rate-schedule';
 import { calculateFatigueWithRecovery } from '../rosters/domain/projections/utils/fatigue';
 import { calculateUtilization } from '../rosters/domain/projections/utils/fairness';
 import type { ShiftMeta, EmployeeMeta } from './optimizer/solution-parser';
@@ -449,6 +450,14 @@ export class AutoSchedulerController {
         const availabilityData = await rosterFetcher.fetchAvailability(
             input.shifts, input.employees,
         );
+        // ── Leave awareness (audit F1): approved leave = LEGAL-HARD ──────────
+        // Approved leave dates feed the solver's per-day `unavailable_dates`
+        // hard exclusion, so an employee on leave can never be proposed for
+        // those days. Leave wins over coverage (legal_hard » coverage), same
+        // tier as the other statutory caps.
+        const leaveByEmployee = await rosterFetcher.fetchApprovedLeave(
+            input.shifts, input.employees,
+        );
         throwIfAborted();
         const totalExisting = Array.from(existingRoster.values())
             .reduce((acc, list) => acc + list.length, 0);
@@ -568,10 +577,16 @@ export class AutoSchedulerController {
             }
         }
 
+        // Effective-dated EA rate set for the window (audit F6): the solver's
+        // cost ranking must track classification AND CPI increases, never a
+        // frozen L1 snapshot. Resolved once at the window start.
+        const windowRateSet = resolveRateSet(dates[0]);
+
         const optimizerEmployees: OptimizerEmployee[] = input.employees.map(e => {
             const det = input.employeeDetails?.get(e.id);
             const isFT = e.contract_type === 'FT' || /full/i.test(e.contract_type || '');
             const isPT = e.contract_type === 'PT' || /part/i.test(e.contract_type || '');
+            const isCasual = /casual/i.test(e.contract_type || '');
 
             // Default to 38h/wk (2280m) if FT, 20h/wk (1200m) if PT, else 40h/wk max for Casuals
             const baseMax = isFT ? 2280 : isPT ? 1200 : 2400;
@@ -585,13 +600,24 @@ export class AutoSchedulerController {
             const scaledMin = (det?.min_contract_minutes ?? baseMin) * weekScale;
             const cappedMin = Math.min(scaledMin, fairShareCap);
 
+            // Classification-resolved rate: explicit per-employee rate wins;
+            // otherwise Schedule 2 by level (casual vs permanent column);
+            // unknown level (0/undefined = "not classified") → conservative
+            // defaultRate. Never a hardcoded literal (goes stale at each CPI).
+            const levelKey = det?.level && det.level >= 1 && det.level <= 7
+                ? (`LEVEL_${det.level}` as keyof typeof windowRateSet.wageRates)
+                : null;
+            const scheduleRate = levelKey
+                ? (isCasual ? windowRateSet.wageRates[levelKey].casual : windowRateSet.wageRates[levelKey].permanent)
+                : null;
+
             return {
                 id: e.id,
                 name: e.name,
                 contract_type: e.contract_type,
                 contracted_role_ids: e.contracted_role_ids ?? [],
 
-                hourly_rate: e.remuneration_rate ?? (isFT ? 25.65 : isPT ? 25.65 : 32.06),
+                hourly_rate: e.remuneration_rate ?? scheduleRate ?? windowRateSet.defaultRate,
                 // Scale limits by the number of weeks in the request to support averaging
                 min_contract_minutes: Math.round(cappedMin),
                 max_weekly_minutes: Math.round((det?.max_weekly_minutes ?? baseMax) * weekScale),
@@ -613,6 +639,14 @@ export class AutoSchedulerController {
                 existing_shifts: existingRoster.get(e.id) ?? [],
                 availability_slots: availabilityData.get(e.id)?.slots ?? [],
                 has_availability_data: availabilityData.get(e.id)?.hasAnyData ?? false,
+                // Approved leave (audit F1) — MUST come after the `...det`
+                // spread so an employeeDetails copy can never clobber it. The
+                // solver's per-day `unavailable_dates` hard filter excludes
+                // these dates in both the CP-SAT and greedy/audit paths.
+                unavailable_dates: Array.from(new Set([
+                    ...((det as { unavailable_dates?: string[] } | undefined)?.unavailable_dates ?? []),
+                    ...(leaveByEmployee.get(e.id) ?? []),
+                ])),
             };
         });
 

@@ -41,11 +41,16 @@ export class V8SwapEngine {
             // Hydrated from the party's employment status. Absent/null → 'CASUAL'
             // (unchanged legacy behaviour; CASUAL is exempt from V8_ORD_HOURS_AVG).
             contract_type: toV8ContractType(scenario.partyA.contract_type ?? 'CASUAL'),
-            contracted_weekly_hours: scenario.partyA.contracted_weekly_hours ?? 38
+            contracted_weekly_hours: scenario.partyA.contracted_weekly_hours ?? 38,
+            leave_days: scenario.partyA.leave_days,
         };
         const shiftsA: V8Shift[] = scenario.partyA.hypothetical_schedule.map(s => ({
             ...s,
-            is_ordinary_hours: s.is_ordinary_hours ?? true
+            is_ordinary_hours: s.is_ordinary_hours ?? true,
+            // Candidate scoping: the RECEIVED shift is the one this operation
+            // adds; everything else is committed history that per-shift rules
+            // (leave-conflict, min-engagement, meal-break) must not re-validate.
+            is_candidate: s.is_candidate ?? (s.id === scenario.partyA.received_shift.id),
         }));
 
         const resultA = engine.evaluate(empA, shiftsA);
@@ -59,11 +64,13 @@ export class V8SwapEngine {
                 id: scenario.partyB.employee_id,
                 name: scenario.partyB.name,
                 contract_type: 'CASUAL',
-                contracted_weekly_hours: 38
+                contracted_weekly_hours: 38,
+                leave_days: scenario.partyB.leave_days,
             };
             const shiftsB: V8Shift[] = scenario.partyB.hypothetical_schedule.map(s => ({
                 ...s,
-                is_ordinary_hours: s.is_ordinary_hours ?? true
+                is_ordinary_hours: s.is_ordinary_hours ?? true,
+                is_candidate: s.is_candidate ?? (s.id === scenario.partyB.received_shift.id),
             }));
             resultB = engine.evaluate(empB, shiftsB);
         }

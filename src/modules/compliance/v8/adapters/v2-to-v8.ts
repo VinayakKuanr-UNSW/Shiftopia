@@ -32,6 +32,8 @@ export function runV8ComplexBridge(
         // Preserve the richer qualifications array (with expiry dates) so the
         // qualification rule can reject expired credentials per-shift.
         qualifications: input.employee_context.qualifications,
+        // audit F1 — approved-leave dates for V8_LEAVE_CONFLICT (optional).
+        leave_days: input.employee_context.leave_days,
     };
 
     // Shifts being added/changed by this operation — the only ones that pure

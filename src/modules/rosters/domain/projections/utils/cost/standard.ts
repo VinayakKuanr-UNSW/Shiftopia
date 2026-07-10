@@ -1,5 +1,8 @@
 import { CostCalculatorOptions, ShiftCostBreakdown } from './types';
-import { hd, ORDINARY_HOURS_CAP, SATURDAY, SUNDAY, ANNUAL_LEAVE_LOADING } from './constants';
+import {
+  hd, ORDINARY_HOURS_CAP, SATURDAY, SUNDAY, ANNUAL_LEAVE_LOADING,
+  MEAL_ALLOWANCE_OVERTIME_THRESHOLD_HOURS,
+} from './constants';
 import { resolveRateSet, type WageRateTable } from './rate-schedule';
 import { getTraineeBaseRate } from './trainee_matrix';
 import type { AwardContext } from './award-context';
@@ -53,6 +56,11 @@ function getApprenticeMultiplier(options: CostCalculatorOptions): number {
   return multiplier;
 }
 
+// cl 43.1 / 43.2 — the night-shift allowance rate is keyed off the day the
+// SHIFT CONCLUDES ("for Night Shift Hours worked where the shift concludes on
+// …"), not the day each night hour happens to be worked. The casual rates
+// (43.2) explicitly INCLUDE the 25% casual loading — the caller must subtract
+// that loading before stacking this on the already-loaded casual base.
 function getNightAllowanceMultiplier(conclusionDay: number, isCasual: boolean): number {
   // 0 = Sunday, 1 = Monday, etc.
   if (isCasual) {
@@ -207,12 +215,16 @@ export function estimateDetailedShiftCost(
   // This applies ONLY to the classification/rate path — apprentice, trainee and
   // SWS branches below intentionally ignore higher duties (their rates are
   // schedule-derived, not classification-graded).
+  let higherDutiesApplied = false;
   if (options.higherDutiesLevel && !options.is_sws && !options.is_trainee && !options.is_apprentice) {
     const hdKey = options.higherDutiesLevel.toUpperCase().replace(/\s+/g, '_') as keyof WageRateTable;
     const hdRates = rateSet.wageRates[hdKey];
     if (hdRates) {
       const hdRate = isCasual ? hdRates.casual : hdRates.permanent;
-      if (Number.isFinite(hdRate) && hdRate > baseRate) baseRate = hdRate;
+      if (Number.isFinite(hdRate) && hdRate > baseRate) {
+        baseRate = hdRate;
+        higherDutiesApplied = true;
+      }
     }
   }
 
@@ -330,10 +342,11 @@ export function estimateDetailedShiftCost(
   // public holiday the +150% penalty always exceeds the night allowance, so the
   // allowance falls away there; on Saturday/Sunday the higher of the two wins.
   //
-  // AMBIGUITY (documented per audit): the night allowance rate is keyed off the
-  // day each night hour is actually WORKED (pay-for-when-worked). An alternative
-  // reading keys the whole allowance off the shift's conclusion day; the
-  // per-segment reading is the safer / more granular of the two.
+  // The night-allowance RATE is keyed off the day the shift CONCLUDES (cl 43.1 /
+  // 43.2 wording: "where the shift concludes on …") — one rate for the whole
+  // shift's night hours. The cl 41.4 MAX comparison stays per SEGMENT, because
+  // the competing weekend/PH penalty genuinely varies by the calendar day each
+  // hour is worked on.
   const baseMult = isCasual ? 1.25 : 1.0; // permanent 25% casual loading, if any
   const hasTimes = !!options.start_time;
 
@@ -367,6 +380,15 @@ export function estimateDetailedShiftCost(
   // price minimum-payment top-up hours (which are paid but not worked).
   const startPenaltyRate = ordinaryRate * (baseMult + penaltyLoading(dayOfWeek, isHoliday));
 
+  // cl 43 conclusion day: the day the WHOLE shift ends (overtime tail included).
+  const concludesNextDay = ordinaryEndMins > 1440 || otEndMins > 1440;
+  const conclusionDay = concludesNextDay ? nextDay : dayOfWeek;
+  // cl 43.2: the casual night rates (45/50/75%) INCLUDE the 25% casual loading,
+  // which the ordinary cost below already carries via baseMult — subtract it so
+  // the loading is never paid twice. FT/PT rates (43.1) carry no loading.
+  const nightLoadOverBase =
+    (getNightAllowanceMultiplier(conclusionDay, isCasual) || 0) - (isCasual ? 0.25 : 0);
+
   let ordinaryCost = 0;
   let nightAllowanceCost = 0;
   let nightHours = 0;
@@ -380,19 +402,21 @@ export function estimateDetailedShiftCost(
       const segNightHours = fastNightMinutes(seg.fromMins, seg.toMins) / 60;
       if (segNightHours > 0) {
         nightHours += segNightHours;
-        const nLoad = getNightAllowanceMultiplier(seg.day, isCasual) || 0;
         // cl 41.4 MAX: only the excess of the night loading over the day's penalty
         // loading is additionally payable (weekday ⇒ full allowance; PH ⇒ 0).
-        nightAllowanceCost += segNightHours * ordinaryRate * Math.max(0, nLoad - segPenaltyLoad);
+        nightAllowanceCost += segNightHours * ordinaryRate * Math.max(0, nightLoadOverBase - segPenaltyLoad);
       }
     }
   }
 
-  // ── Leave pay (annual / personal / carer) ────────────────────────────────
+  // ── Leave pay (annual / personal / carer / FDV) ──────────────────────────
   // A leave-flagged shift is NOT worked: it attracts no overtime, no fixed
   // (meal / first-aid / protein-spill / split) allowances and no minimum-
-  // engagement top-up. Casuals accrue no paid leave — their 25% loading is paid
-  // in lieu (cl. 11 / NES) — so a casual leave day costs nothing.
+  // engagement top-up. Casuals accrue no paid annual/personal/carer leave —
+  // their 25% loading is paid in lieu (cl. 11 / NES) — so those casual leave
+  // days cost nothing. EXCEPTION: family & domestic violence leave (cl 46 /
+  // NES Div 11) IS paid for casuals — cl 46.6 pays "the hours the Team Member
+  // is rostered on the day that the leave is taken".
   //   • Annual leave (cl. 38): the GREATER of the ordinary rate + 17.5% loading,
   //     or the penalty / night loadings the shift WOULD have earned if worked.
   //     This is the safe reading of the common "17.5% or shift penalties,
@@ -401,15 +425,23 @@ export function estimateDetailedShiftCost(
   //   • Personal / carer's leave (NES ss96–99): paid at the ORDINARY base rate
   //     for the ordinary hours — no loading, no penalties (those attach to
   //     actual attendance).
+  //   • FDV leave (cl 46.6 / NES s106B): paid at the FULL rate "worked out as
+  //     if the employee had worked" the rostered hours — the AS-WORKED value
+  //     including weekend/PH penalties, the night allowance and (for casuals,
+  //     via baseMult) the 25% loading. That is exactly the
+  //     `ordinaryCost + nightAllowanceCost` lump the annual-leave greater-of
+  //     already compares against. No 17.5% loading, no floor, no OT.
   // ordinaryCost here is the pre-floor per-segment penalty value (the "as worked"
   // figure); the min-payment floor below is intentionally skipped for leave.
-  if (options.isAnnualLeave || options.isPersonalLeave || options.isCarerLeave) {
-    if (isCasual) return ZERO_RESULT;
+  if (options.isAnnualLeave || options.isPersonalLeave || options.isCarerLeave || options.isFdvLeave) {
+    if (isCasual && !options.isFdvLeave) return ZERO_RESULT;
     const leaveHours = ordinaryHours; // rostered ordinary hours (no floor, no OT)
     const ordinaryLeavePay = leaveHours * ordinaryRate;
     const leaveTotal = options.isAnnualLeave
       ? Math.max(ordinaryLeavePay * (1 + ANNUAL_LEAVE_LOADING), ordinaryCost + nightAllowanceCost)
-      : ordinaryLeavePay;
+      : options.isFdvLeave
+        ? ordinaryCost + nightAllowanceCost // NES s106B as-worked full rate
+        : ordinaryLeavePay;
     return {
       totalCost: round2(leaveTotal),
       ordinaryCost: round2(leaveTotal),
@@ -449,6 +481,17 @@ export function estimateDetailedShiftCost(
       ordinaryCost += (floorHours - paidOrdinaryHours) * startPenaltyRate;
       paidOrdinaryHours = floorHours;
     }
+  }
+
+  // ── Higher-duties minimum (cl 29.1(a)) ───────────────────────────────────
+  // Performing higher duties for LESS than 4 hours entitles the member to
+  // payment at the higher rate for four (4) hours. Under the whole-shift-at-the-
+  // higher-rate reading above, that means a worked-and-uplifted shift shorter
+  // than 4h is topped up to 4 paid hours at the (already-uplifted) engagement-day
+  // rate. Applies to every employment type — cl 29 is not limited to PT/casual.
+  if (higherDutiesApplied && netHours > 0 && paidOrdinaryHours < 4) {
+    ordinaryCost += (4 - paidOrdinaryHours) * startPenaltyRate;
+    paidOrdinaryHours = 4;
   }
 
   // Representative penalty rate for the breakdown (engagement-day rate).
@@ -508,8 +551,20 @@ export function estimateDetailedShiftCost(
   // first-aid / protein-spill / split-shift allowances reached no cost total.
   let otherAllowanceCost = 0;
   const al = options.allowances;
+
+  // cl 28.1 — the meal allowance is an AUTOMATIC entitlement when 2+ hours of
+  // overtime are worked immediately after the rostered finish, not payable only
+  // when the employer provides a suitable meal. It is derived from DAILY
+  // overtime (the hours actually past the rostered finish / 12h cap) — weekly
+  // >38h reclassification is not "after the rostered finishing time". An
+  // explicit `allowances.meal === false` means "meal was provided" (opt-out);
+  // `meal: true` still forces it regardless of overtime.
+  const mealPayable =
+    al?.meal === true ||
+    (al?.meal !== false && dailyOvertimeHours >= MEAL_ALLOWANCE_OVERTIME_THRESHOLD_HOURS);
+  if (mealPayable) otherAllowanceCost += rateSet.allowances.meal;                            // per occasion (cl. 28.1)
+
   if (al) {
-    if (al.meal) otherAllowanceCost += rateSet.allowances.meal;                              // per occasion (cl. 28.1)
     if (al.firstAid) otherAllowanceCost += rateSet.allowances.firstAidPerHour * ordinaryHours; // per ordinary hour worked (cl. 28.2)
     if (al.proteinSpill) otherAllowanceCost += rateSet.allowances.proteinSpill;             // per shift (cl. 28.3)
     // The split-shift allowance is NOT payable to casual Team Members (cl. 28.4).

@@ -102,6 +102,7 @@ class ShiftInput:
     priority: int = 1
     unpaid_break_minutes: int = 0
     is_sunday: bool = False
+    is_saturday: bool = False
     is_public_holiday: bool = False
     shift_type: str = 'NORMAL'  # 'NORMAL' or 'MULTI_HIRE'
     level: int = 0
@@ -116,6 +117,19 @@ class ShiftInput:
             self.target_employment_type = normalize_employment_type(
                 self.target_employment_type
             )
+        # Server-side Saturday derivation (EBA cl 41.1 — ×1.25 penalty).
+        # `is_sunday` / `is_public_holiday` are client-supplied wire flags,
+        # but older clients don't send `is_saturday` at all, so derive it
+        # from shift_date here to make the dataclass self-sufficient. An
+        # explicit True from the wire is preserved; a parse failure leaves
+        # the supplied value untouched (matching the trust model of the
+        # other two flags).
+        if not self.is_saturday and self.shift_date:
+            try:
+                y, m, d = map(int, str(self.shift_date)[:10].split('-'))
+                self.is_saturday = datetime.date(y, m, d).weekday() == 5
+            except (ValueError, TypeError):
+                pass
 
 
 @dataclass
@@ -714,13 +728,26 @@ class ScheduleModelBuilder:
 
     @staticmethod
     def _assignment_cost_cents(emp: 'EmployeeInput', shift: 'ShiftInput') -> int:
-        """Labour cost in cents for emp working shift, incl. award penalties.
-        Mirrors the SC-1 cost formula so cost_rank in the rationale is faithful."""
+        """Labour cost in cents for emp working shift, incl. day-of-week /
+        public-holiday award penalties (EBA cl 41.1: PH ×2.50 > Sunday ×1.50
+        > Saturday ×1.25). Mirrors the SC-1 per-assignment cost formula so
+        cost_rank in the rationale is faithful.
+
+        Deliberately EXCLUDES weekly overtime (EBA cl 42.2, the SC-5 term):
+        this helper ranks candidates for ONE shift in isolation, and whether
+        a given assignment tips an employee past their weekly contract floor
+        depends on every OTHER shift they hold in the horizon — unknowable
+        here without re-solving. The CP-SAT objective does charge OT (SC-5),
+        so the rationale's cost_rank can diverge from the solver's true
+        marginal cost for employees near their contract ceiling.
+        """
         rate = emp.hourly_rate
         if shift.is_public_holiday:
             rate *= 2.50
         elif shift.is_sunday:
             rate *= 1.50
+        elif shift.is_saturday:
+            rate *= 1.25
         return int(round((shift.duration_minutes / 60.0) * rate * 100))
 
     def _assignment_rationale(self, emp: 'EmployeeInput', shift: 'ShiftInput') -> dict:
@@ -1641,11 +1668,18 @@ class ScheduleModelBuilder:
                 if var is not None:
                     # Cost in cents to keep integer math
                     base_rate = emp.hourly_rate
-                    # Standard Award Penalty Rates (ICC EBA v8)
+                    # Standard Award Penalty Rates (ICC EBA v8, cl 41.1).
+                    # Precedence: PH > Sunday > Saturday. Saturday is ×1.25
+                    # applied uniformly (emp.hourly_rate is the employee's
+                    # flat rate; the additive penalty is treated the same
+                    # way Sunday is). Must stay identical to
+                    # _assignment_cost_cents above.
                     if shift.is_public_holiday:
                         base_rate *= 2.50
                     elif shift.is_sunday:
                         base_rate *= 1.50
+                    elif shift.is_saturday:
+                        base_rate *= 1.25
 
                     cost_cents = int(round((shift.duration_minutes / 60.0) * base_rate * 100))
 

@@ -29,8 +29,10 @@ import {
   LogOut,
   Activity,
   BarChart3,
-  Grid3x3,
   Fingerprint,
+  Palmtree,
+  Wallet,
+  Grid3x3,
 } from 'lucide-react';
 import { useAuth } from '@/platform/auth/useAuth';
 import { cn } from '@/modules/core/lib/utils';
@@ -72,7 +74,10 @@ type IconColorKey =
   | 'logo'
   | 'help'
   | 'contracts'
-  | 'laborDemand';
+  | 'laborDemand'
+  | 'myLeave'
+  | 'leaveApprovals'
+  | 'grossPay';
 
 const iconColorMap: Record<IconColorKey, string> = {
   workspace: 'text-purple-400',
@@ -100,7 +105,9 @@ const iconColorMap: Record<IconColorKey, string> = {
   help: 'text-blue-400',
   contracts: 'text-violet-400',
   laborDemand: 'text-fuchsia-400',
-
+  myLeave: 'text-teal-400',
+  leaveApprovals: 'text-emerald-400',
+  grossPay: 'text-lime-400',
 };
 
 /* ============================================================
@@ -355,6 +362,16 @@ const AppSidebar: React.FC = () => {
             description="Manage shift swaps"
             onMouseEnter={() => handlePrefetch('/my-swaps')}
           />
+
+          <NavigationItem
+            to="/my-leave"
+            icon={Palmtree}
+            iconColor={iconColorMap.myLeave}
+            label={t('nav.my_leave', 'My Leave')}
+            isActive={isRouteActive('/my-leave')}
+            description="Balances & requests"
+            onMouseEnter={() => handlePrefetch('/my-leave')}
+          />
         </CollapsibleSection>
 
         {/* ---------- Communication Section ---------- */}
@@ -465,6 +482,24 @@ const AppSidebar: React.FC = () => {
               label={t('nav.swap_requests')}
               isActive={isRouteActive('/management/swaps')}
               description="Approve shift swaps"
+            />
+
+            <NavigationItem
+              to="/management/leave"
+              icon={Palmtree}
+              iconColor={iconColorMap.leaveApprovals}
+              label={t('nav.leave_approvals', 'Leave Approvals')}
+              isActive={isRouteActive('/management/leave')}
+              description="Approve leave requests"
+            />
+
+            <NavigationItem
+              to="/management/payroll"
+              icon={Wallet}
+              iconColor={iconColorMap.grossPay}
+              label={t('nav.gross_pay', 'Gross Pay')}
+              isActive={isRouteActive('/management/payroll')}
+              description="Itemised employee earnings"
             />
           </CollapsibleSection>
         )}

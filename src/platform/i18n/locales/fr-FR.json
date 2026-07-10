@@ -33,7 +33,10 @@
     "insights": "Analyses",
     "performance": "Performance",
     "grid": "Grille",
-    "users": "Utilisateurs"
+    "users": "Utilisateurs",
+    "my_leave": "Mes Congés",
+    "leave_approvals": "Approbations de Congés",
+    "gross_pay": "Salaire Brut"
   },
   "settings": {
     "title": "Mes Paramètres",

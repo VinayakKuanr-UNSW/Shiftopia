@@ -114,7 +114,7 @@ describe('mapShiftRowToGrossPayInput — two-tier billable hours', () => {
     expect(input.endTime).toMatch(/^\d{2}:\d{2}$/);
   });
 
-  it('yields zero net minutes with scheduled_fallback source when unfinished and no timesheet', () => {
+  it('yields scheduled net minutes with scheduled_fallback source when unfinished and no timesheet', () => {
     // No actual_end and end_time in the future would make it unfinished; use a
     // far-future date so isShiftFinished() is false regardless of clock.
     const row = baseRow({
@@ -124,9 +124,9 @@ describe('mapShiftRowToGrossPayInput — two-tier billable hours', () => {
       _timesheet: null,
     });
     const input = mapShiftRowToGrossPayInput(row)!;
-    expect(input.netMinutes).toBe(0);
-    expect(input.startTime).toBeUndefined();
-    expect(input.endTime).toBeUndefined();
+    expect(input.netMinutes).toBe(480);
+    expect(input.startTime).toBe('09:00');
+    expect(input.endTime).toBe('17:00');
     expect(input.hoursSource).toBe('scheduled_fallback');
   });
 
@@ -185,10 +185,38 @@ describe('mapShiftRowToGrossPayInput — overnight', () => {
   });
 });
 
-describe('mapShiftRowToGrossPayInput — rate resolution', () => {
-  it('prefers remuneration_levels.hourly_rate_min', () => {
-    const row = baseRow({ remuneration_rate: 30, remuneration_levels: { hourly_rate_min: 41.2 } });
-    expect(mapShiftRowToGrossPayInput(row)!.rate).toBe(41.2);
+describe('mapShiftRowToGrossPayInput — rate & classification resolution', () => {
+  // MONEY-CRITICAL. hourly_rate_min is the PERMANENT band minimum — feeding it
+  // as the paid rate de-loaded casuals off an unloaded rate (~20% underpay) and
+  // bypassed the effective-dated EBA schedule. The adapter now derives the
+  // classification and lets the award engine resolve the Schedule 2 rate.
+  it('derives classificationLevel from level_number and leaves rate null (engine resolves the EBA rate)', () => {
+    const row = baseRow({ remuneration_rate: null });
+    const input = mapShiftRowToGrossPayInput(row)!;
+    expect(input.rate).toBeNull();
+    expect(input.classificationLevel).toBe('LEVEL_3');
+  });
+
+  it('maps level 0 to TRAINEE', () => {
+    const row = baseRow({
+      remuneration_rate: null,
+      remuneration_levels: { level_number: 0, level_name: 'Trainee', hourly_rate_min: 24.96 },
+    });
+    expect(mapShiftRowToGrossPayInput(row)!.classificationLevel).toBe('TRAINEE');
+  });
+
+  it('an explicit shift remuneration_rate is an OVERRIDE and wins over the classification', () => {
+    const row = baseRow({ remuneration_rate: 30 });
+    const input = mapShiftRowToGrossPayInput(row)!;
+    expect(input.rate).toBe(30);
+    expect(input.classificationLevel).toBe('LEVEL_3'); // still carried; engine prefers the rate
+  });
+
+  it('uses hourly_rate_min only as a last resort (embed without a level_number)', () => {
+    const row = baseRow({ remuneration_rate: null, remuneration_levels: { hourly_rate_min: 41.2 } });
+    const input = mapShiftRowToGrossPayInput(row)!;
+    expect(input.rate).toBe(41.2);
+    expect(input.classificationLevel).toBeUndefined();
   });
 
   it('falls back to shift.remuneration_rate when the level rate is missing', () => {
@@ -203,11 +231,13 @@ describe('mapShiftRowToGrossPayInput — rate resolution', () => {
 
   it('unwraps PostgREST array-style embeds', () => {
     const row = baseRow({
+      remuneration_rate: null,
       roles: [{ id: 'r1', name: 'Security Officer' }] as any,
-      remuneration_levels: [{ hourly_rate_min: 55 }] as any,
+      remuneration_levels: [{ level_number: 5, hourly_rate_min: 30.82 }] as any,
     });
     const input = mapShiftRowToGrossPayInput(row)!;
-    expect(input.rate).toBe(55);
+    expect(input.rate).toBeNull();
+    expect(input.classificationLevel).toBe('LEVEL_5');
     expect(input.isSecurityRole).toBe(true);
   });
 });
@@ -264,7 +294,8 @@ describe('mapShiftRowToGrossPayInput — documented data gaps', () => {
     expect(input.isCarerLeave).toBe(false);
     expect(input.allowances).toBeUndefined();
     expect(input.higherDutiesLevel).toBeUndefined();
-    expect(input.classificationLevel).toBeUndefined();
+    // classificationLevel is DERIVED from the row's level_number — not fabricated.
+    expect(input.classificationLevel).toBe('LEVEL_3');
   });
 
   it('passes through the scheduled length and shift id / date faithfully', () => {

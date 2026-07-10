@@ -22,10 +22,12 @@ import { splitShiftRule } from './rules/split-shift';
 import { maxDailyEngagementsRule } from './rules/max-daily-engagements';
 import { minEngagementRule } from './rules/min-engagement';
 import { qualificationRule } from './rules/employment-rules';
+import { leaveConflictRule } from './rules/leave-conflict';
 
 // Optimized Rule Execution Order
 const ACTIVE_RULES: V8RuleEvaluator[] = [
     // 1. Structural (Fastest)
+    leaveConflictRule,       // audit F1 — approved leave = legal-hard unavailability
     noOverlapRule,
     minEngagementRule, // single owner of minimum-duration enforcement
     

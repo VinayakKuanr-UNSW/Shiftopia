@@ -14,9 +14,12 @@
  *     column. Leave pay is instead SYNTHESISED from approved leave_requests in
  *     `leaveGrossPay.ts` and merged in by `getPeriodGrossPay` (leave is an
  *     absence, not a shift), so leave IS now priced end-to-end.
- *   • allowances: not represented on approved timesheet data → left undefined.
- *   • classificationLevel / higherDutiesLevel: not carried on the shift row here
- *     → left undefined (rate still resolves via remuneration_levels / rate).
+ *   • allowances: not represented on approved timesheet data → left undefined
+ *     (the engine still auto-derives the cl 28.1 meal allowance from overtime).
+ *   • higherDutiesLevel: not carried on the shift row here → left undefined.
+ *   • classificationLevel: derived from remuneration_levels.level_number
+ *     ('LEVEL_N' / 'TRAINEE') so the engine resolves the effective-dated
+ *     Schedule 2 rate, casual/permanent-aware — see the rate block below.
  */
 
 import { supabase } from '@/platform/supabase/client';
@@ -49,6 +52,9 @@ export interface GrossPayPeriodBounds extends PeriodBounds {
   organizationId?: string | null;
   departmentId?: string | null;
   subDepartmentId?: string | null;
+  orgIds?: string[];
+  deptIds?: string[];
+  subDeptIds?: string[];
 }
 
 export interface GrossPayFetchOptions {
@@ -68,7 +74,7 @@ export interface GrossPayFetchOptions {
 }
 
 // ── enum constants (verified against the supabase baseline) ────────────────
-const LIFECYCLE_PAYABLE = ['Published', 'InProgress', 'Completed'] as const;
+const LIFECYCLE_PAYABLE = ['Draft', 'Published', 'InProgress', 'Completed'] as const;
 const LIFECYCLE_CANCELLED = 'Cancelled';
 const ATTENDANCE_NO_SHOW = 'no_show';
 /** timesheet_status values that mean "final for pay". DB enum has no 'locked'; */
@@ -142,7 +148,9 @@ export function mapEmploymentType(
  *                     − unpaidBreak (timesheet.unpaid_break_minutes ?? shift.unpaid_break_minutes)
  *   • startTime / endTime returned as 'HH:MM'.
  *
- * rate = remuneration_levels.hourly_rate_min ?? shift.remuneration_rate ?? null.
+ * rate = shift.remuneration_rate (explicit override) ELSE null + the derived
+ * classificationLevel (engine resolves the effective-dated EBA rate) ELSE
+ * remuneration_levels.hourly_rate_min as a last resort.
  * isSecurityRole = roles.name (lowercased) includes 'security'.
  * isNoShow  ⇐ attendance_status === 'no_show' OR timesheet.status === 'no_show'.
  * isCancelled ⇐ lifecycle_status === 'Cancelled' OR assignment_status ∈
@@ -157,6 +165,16 @@ export function mapShiftRowToGrossPayInput(
   const ts = row._timesheet ?? null;
   const role = firstEmbed<GrossPayRoleEmbed>(row.roles);
   const remLevel = firstEmbed<GrossPayRemLevelEmbed>(row.remuneration_levels);
+  
+  const empProfile = firstEmbed<any>((row as any).assigned_profiles);
+  const employeeName = empProfile
+    ? `${empProfile.first_name} ${empProfile.last_name}`.trim()
+    : undefined;
+
+  const rosterSubgroup = firstEmbed<any>((row as any).roster_subgroup);
+  const subGroupName = rosterSubgroup?.name || undefined;
+  const groupName = rosterSubgroup?.roster_group?.name || undefined;
+  const roleName = role?.name || undefined;
 
   // ── not-worked flags ─────────────────────────────────────────────────────
   const tsStatus = (ts?.status ?? '').toLowerCase();
@@ -182,9 +200,9 @@ export function mapShiftRowToGrossPayInput(
   const managerEdited = managerEditedStart || managerEditedEnd;
 
   const adjustedStartRaw =
-    ts?.start_time ?? (finished ? snapToQuarterHour(row.actual_start ?? null) : null);
+    ts?.start_time ?? (finished ? snapToQuarterHour(row.actual_start ?? null) : null) ?? row.start_time;
   const adjustedEndRaw =
-    ts?.end_time ?? (finished ? snapToQuarterHour(row.actual_end ?? null) : null);
+    ts?.end_time ?? (finished ? snapToQuarterHour(row.actual_end ?? null) : null) ?? row.end_time;
 
   const startMins = timeToMinutes(adjustedStartRaw);
   const endMins = timeToMinutes(adjustedEndRaw);
@@ -206,22 +224,42 @@ export function mapShiftRowToGrossPayInput(
     endTime = minutesToHHMM(endMins);
   }
 
-  // ── rate ──────────────────────────────────────────────────────────────────
-  const rate: number | null =
-    (remLevel?.hourly_rate_min ?? null) ?? (row.remuneration_rate ?? null);
+  // ── rate & classification ─────────────────────────────────────────────────
+  // MONEY-CRITICAL. The old sourcing was `hourly_rate_min ?? remuneration_rate`,
+  // which fed the PERMANENT band minimum to everyone: the award engine treats a
+  // supplied rate as the LOADED rate for casuals and divides by 1.25, so every
+  // casual was de-loaded off an already-unloaded rate (~20% underpay) — and the
+  // effective-dated eba_rate schedule (cl 25 CPI machinery) never applied.
+  //
+  // Now: an explicit per-shift rate (remuneration_rate — an override, NULL in
+  // prod today) wins; otherwise pass the CLASSIFICATION string (rate = null) so
+  // the engine resolves the effective-dated Schedule 2 rate, choosing the
+  // casual vs permanent column from employment type. hourly_rate_min is only a
+  // last resort when the row has a rem-level embed without a level_number.
+  const levelNum = remLevel?.level_number != null
+    ? Number(remLevel.level_number)
+    : (row._contractRemunerationLevel != null ? Number(row._contractRemunerationLevel) : null);
+  const classificationLevel: string | undefined =
+    levelNum != null && Number.isFinite(levelNum)
+      ? (levelNum === 0 ? 'TRAINEE' : `LEVEL_${levelNum}`)
+      : undefined;
 
-  // ── classification: the shift row carries a numeric remuneration_level only;
-  // the award engine keys classification off strings like 'LEVEL_5'. Passing the
-  // raw number would MISS the wageRates lookup and silently mis-rate, so we leave
-  // classificationLevel undefined and rely on the explicit hourly rate above.
-  const classificationLevel: string | undefined = undefined;
+  const roleLevelNum = role?.remuneration_level != null ? Number(role.remuneration_level) : null;
+  const higherDutiesLevel: string | undefined =
+    roleLevelNum != null && Number.isFinite(roleLevelNum)
+      ? (roleLevelNum === 0 ? 'TRAINEE' : `LEVEL_${roleLevelNum}`)
+      : undefined;
+
+  const rate: number | null =
+    row.remuneration_rate
+      ?? (classificationLevel ? null : (remLevel?.hourly_rate_min ?? null));
 
   const isSecurityRole = (role?.name ?? '').toLowerCase().includes('security');
 
   // ── hours provenance ──────────────────────────────────────────────────────
   const hoursSource: GrossPayHoursSource = managerEdited
     ? 'adjusted'
-    : startMins != null
+    : (finished && row.actual_start != null)
       ? 'actual'
       : 'scheduled_fallback';
 
@@ -249,13 +287,19 @@ export function mapShiftRowToGrossPayInput(
     employmentType: mapEmploymentType(row._employmentType),
     classificationLevel,
     isSecurityRole,
-    // DATA GAP — higher duties not carried on the shift row here.
-    higherDutiesLevel: undefined,
+
+    employeeName,
+    roleName,
+    groupName,
+    subGroupName,
+
+
     // DATA GAP — meal/first-aid/split-shift allowances aren't represented on
     // approved timesheet data; do NOT fabricate them.
     allowances: undefined,
 
     // priorOrdinaryHoursThisWeek is sequenced by computeEmployeePeriodGrossPay.
+    higherDutiesLevel,
   };
 }
 
@@ -301,12 +345,14 @@ async function fetchHydratedShiftRows(
       remuneration_level,
       assigned_employee_id,
       role_id,
-      roles(id, name),
-      remuneration_levels(level_number, level_name, hourly_rate_min)
+      roles(id, name, remuneration_level),
+      remuneration_levels(level_number, level_name, hourly_rate_min),
+      assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
+      roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name))
     `)
     .gte('shift_date', bounds.periodStart)
     .lte('shift_date', bounds.periodEnd)
-    .in('lifecycle_status', LIFECYCLE_PAYABLE as unknown as string[])
+    .in('lifecycle_status', LIFECYCLE_PAYABLE)
     .is('deleted_at', null)
     .not('assigned_employee_id', 'is', null)
     .order('shift_date');
@@ -314,6 +360,10 @@ async function fetchHydratedShiftRows(
   if (bounds.organizationId) query = query.eq('organization_id', bounds.organizationId);
   if (bounds.departmentId) query = query.eq('department_id', bounds.departmentId);
   if (bounds.subDepartmentId) query = query.eq('sub_department_id', bounds.subDepartmentId);
+
+  if (bounds.orgIds?.length) query = query.in('organization_id', bounds.orgIds);
+  if (bounds.deptIds?.length) query = query.in('department_id', bounds.deptIds);
+  if (bounds.subDeptIds?.length) query = query.in('sub_department_id', bounds.subDeptIds);
 
   const { data: shifts, error } = await query;
   if (error) {
@@ -341,14 +391,22 @@ async function fetchHydratedShiftRows(
     new Set(rows.map((r) => r.assigned_employee_id).filter((id): id is string => !!id)),
   );
   const empTypeById = new Map<string, string | null>();
+  const contractLevelById = new Map<string, number | null>();
+
   if (employeeIds.length > 0) {
-    const { data: profiles, error: pErr } = await supabase
-      .from('profiles')
-      .select('id, employment_type')
-      .in('id', employeeIds);
-    if (pErr) console.error('[grossPay.read] profiles query error:', pErr);
-    for (const p of profiles ?? []) {
+    const [pRes, cRes] = await Promise.all([
+      supabase.from('profiles').select('id, employment_type').in('id', employeeIds),
+      supabase.from('user_contracts').select('user_id, remuneration_level').in('user_id', employeeIds).eq('status', 'Active')
+    ]);
+
+    if (pRes.error) console.error('[grossPay.read] profiles query error:', pRes.error);
+    for (const p of pRes.data ?? []) {
       empTypeById.set((p as any).id, (p as any).employment_type ?? null);
+    }
+
+    if (cRes.error) console.error('[grossPay.read] user_contracts query error:', cRes.error);
+    for (const c of cRes.data ?? []) {
+      contractLevelById.set((c as any).user_id, (c as any).remuneration_level ?? null);
     }
   }
 
@@ -356,6 +414,9 @@ async function fetchHydratedShiftRows(
     r._timesheet = (tsByShift.get(r.id) as any) ?? null;
     r._employmentType = r.assigned_employee_id
       ? (empTypeById.get(r.assigned_employee_id) ?? null)
+      : null;
+    r._contractRemunerationLevel = r.assigned_employee_id
+      ? (contractLevelById.get(r.assigned_employee_id) ?? null)
       : null;
   }
   return rows;
@@ -423,12 +484,27 @@ export async function getPeriodGrossPay(
   const leaveInputs =
     opts.includeLeave === false
       ? []
-      : await getLeaveGrossPayInputs({ periodStart: bounds.periodStart, periodEnd: bounds.periodEnd });
-  const shiftKeys = new Set(shiftInputs.map((i) => `${i.employeeId}:${i.shiftDate}`));
-  const mergedLeave = leaveInputs.filter((i) => !shiftKeys.has(`${i.employeeId}:${i.shiftDate}`));
+      : await getLeaveGrossPayInputs({ 
+          periodStart: bounds.periodStart, 
+          periodEnd: bounds.periodEnd,
+          orgIds: bounds.orgIds,
+          deptIds: bounds.deptIds,
+          subDeptIds: bounds.subDeptIds,
+        });
+  // Collision rule per employee+date: a shift priced from REAL attendance
+  // (manager-edited or actual times) beats leave; a rostered-but-unworked
+  // shift (`scheduled_fallback` hours) YIELDS to approved leave — the member
+  // was absent on leave, so pricing the rostered line as worked would both
+  // drop the leave pay and fabricate attendance.
+  const leaveKeys = new Set(leaveInputs.map((i) => `${i.employeeId}:${i.shiftDate}`));
+  const keptShifts = shiftInputs.filter(
+    (i) => !(leaveKeys.has(`${i.employeeId}:${i.shiftDate}`) && i.hoursSource === 'scheduled_fallback'),
+  );
+  const workedKeys = new Set(keptShifts.map((i) => `${i.employeeId}:${i.shiftDate}`));
+  const mergedLeave = leaveInputs.filter((i) => !workedKeys.has(`${i.employeeId}:${i.shiftDate}`));
 
   const byEmployee = new Map<string, GrossPayShiftInput[]>();
-  for (const input of [...shiftInputs, ...mergedLeave]) {
+  for (const input of [...keptShifts, ...mergedLeave]) {
     const arr = byEmployee.get(input.employeeId);
     if (arr) arr.push(input);
     else byEmployee.set(input.employeeId, [input]);

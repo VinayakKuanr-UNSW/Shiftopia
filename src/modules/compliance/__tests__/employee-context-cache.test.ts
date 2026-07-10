@@ -33,6 +33,8 @@ function makeBuilder(rows: any) {
   const builder: any = {
     select: () => builder,
     eq: () => builder,
+    lte: () => builder,
+    gte: () => builder,
     single: () => result,
     then: (resolve: any, reject: any) => result.then(resolve, reject),
   };
@@ -49,18 +51,20 @@ beforeEach(() => {
     if (table === 'user_contracts')    return makeBuilder([]);
     if (table === 'employee_skills')   return makeBuilder([]);
     if (table === 'employee_licenses') return makeBuilder([]);
+    if (table === 'leave_requests')    return makeBuilder([]);
     return makeBuilder(null);
   });
 });
 
 describe('fetchV8EmployeeContext cache', () => {
-  it('issues 4 parallel table queries on the first call', async () => {
+  it('issues 5 parallel table queries on the first call', async () => {
     await fetchV8EmployeeContext('emp-1');
-    expect(fromMock).toHaveBeenCalledTimes(4);
+    expect(fromMock).toHaveBeenCalledTimes(5);
     const tables = fromMock.mock.calls.map(c => c[0]).sort();
     expect(tables).toEqual([
       'employee_licenses',
       'employee_skills',
+      'leave_requests', // audit F1 — approved-leave dates for V8_LEAVE_CONFLICT
       'profiles',
       'user_contracts',
     ]);
@@ -78,14 +82,14 @@ describe('fetchV8EmployeeContext cache', () => {
     invalidateEmployeeContextCache('emp-1');
     fromMock.mockClear();
     await fetchV8EmployeeContext('emp-1');
-    expect(fromMock).toHaveBeenCalledTimes(4);
+    expect(fromMock).toHaveBeenCalledTimes(5);
   });
 
   it('caches per-employee independently', async () => {
     await fetchV8EmployeeContext('emp-1');
     fromMock.mockClear();
     await fetchV8EmployeeContext('emp-2');
-    expect(fromMock).toHaveBeenCalledTimes(4);
+    expect(fromMock).toHaveBeenCalledTimes(5);
     fromMock.mockClear();
     await fetchV8EmployeeContext('emp-1');
     expect(fromMock).not.toHaveBeenCalled();

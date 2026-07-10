@@ -32,7 +32,10 @@ export const ALLOWANCE_SPLIT_SHIFT = 11.13;       // per shift (cl. 28.4)
 
 // Thresholds
 export const MEAL_ALLOWANCE_OVERTIME_THRESHOLD_HOURS = 2.0;
-export const TIME_AND_HALF_HOURS_CAP = 2.0;
+// cl 42.2 / Sch 3 §4.2(c) / §6.3(c): overtime is 150% for the FIRST THREE hours,
+// double time thereafter. (Was 2.0 — a defect that moved security OT to double
+// time an hour early and diverged from the Standard engine's hardcoded 3.)
+export const TIME_AND_HALF_HOURS_CAP = 3.0;
 export const DEFAULT_RATE = 32.06; // Default to Level 1 Casual
 export const ORDINARY_HOURS_CAP = 12;
 

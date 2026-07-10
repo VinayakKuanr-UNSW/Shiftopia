@@ -16,9 +16,12 @@
 import React, { useMemo, useState } from 'react';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { Wallet } from 'lucide-react';
+import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import type { PeriodBounds } from '../domain/aggregatePeriodGrossPay';
 import { useGrossPay } from '../state/useGrossPay';
 import { GrossPayPeriodView } from './GrossPayPeriodView';
+import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
+import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
 
 export interface GrossPayPageProps {
   /**
@@ -41,65 +44,67 @@ function currentWeekBounds(): PeriodBounds {
 
 export const GrossPayPage: React.FC<GrossPayPageProps> = ({ bounds, employeeNames }) => {
   const [range, setRange] = useState<PeriodBounds>(() => bounds ?? currentWeekBounds());
+  const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
 
   // A caller-supplied fixed period locks the selector out.
   const controlled = !!bounds;
   const effectiveBounds = controlled ? bounds! : range;
 
-  const { data, isLoading, error } = useGrossPay({ bounds: effectiveBounds });
+  const { data, isLoading, error } = useGrossPay({ 
+    bounds: effectiveBounds,
+    options: {
+      orgIds: scope.org_ids.length ? scope.org_ids : undefined,
+      deptIds: scope.dept_ids.length ? scope.dept_ids : undefined,
+      subDeptIds: scope.subdept_ids.length ? scope.subdept_ids : undefined,
+    }
+  });
 
   const periods = useMemo(() => data ?? [], [data]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-background">
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header className="flex flex-wrap items-center justify-between gap-4 px-4 py-4 lg:px-6">
-        <div className="flex items-center gap-3">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-200">
-            <Wallet className="h-5 w-5" aria-hidden="true" />
-          </span>
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900 dark:text-white">
-              Gross Pay
-            </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Itemised gross earnings per employee, per pay period.
-            </p>
-          </div>
-        </div>
+    <div className="h-full flex flex-col overflow-hidden bg-background">
+      {/* ── GOLD STANDARD HEADER ── */}
+      <GoldStandardHeader
+        title="Gross Pay"
+        Icon={Wallet}
+        mode="managerial"
+        scope={scope}
+        setScope={setScope}
+        isGammaLocked={isGammaLocked}
+        functionBar={
+          !controlled ? (
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                From
+                <input
+                  type="date"
+                  value={range.periodStart}
+                  max={range.periodEnd}
+                  onChange={(e) =>
+                    setRange((r) => ({ ...r, periodStart: e.target.value }))
+                  }
+                  className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 dark:border-white/15 dark:bg-slate-800 dark:text-white"
+                />
+              </label>
+              <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                To
+                <input
+                  type="date"
+                  value={range.periodEnd}
+                  min={range.periodStart}
+                  onChange={(e) =>
+                    setRange((r) => ({ ...r, periodEnd: e.target.value }))
+                  }
+                  className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 dark:border-white/15 dark:bg-slate-800 dark:text-white"
+                />
+              </label>
+            </div>
+          ) : undefined
+        }
+      />
 
-        {!controlled && (
-          <div className="flex items-end gap-2">
-            <label className="flex flex-col text-xs font-medium text-slate-600 dark:text-slate-300">
-              From
-              <input
-                type="date"
-                value={range.periodStart}
-                max={range.periodEnd}
-                onChange={(e) =>
-                  setRange((r) => ({ ...r, periodStart: e.target.value }))
-                }
-                className="mt-1 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 dark:border-white/15 dark:bg-slate-800 dark:text-white"
-              />
-            </label>
-            <label className="flex flex-col text-xs font-medium text-slate-600 dark:text-slate-300">
-              To
-              <input
-                type="date"
-                value={range.periodEnd}
-                min={range.periodStart}
-                onChange={(e) =>
-                  setRange((r) => ({ ...r, periodEnd: e.target.value }))
-                }
-                className="mt-1 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 dark:border-white/15 dark:bg-slate-800 dark:text-white"
-              />
-            </label>
-          </div>
-        )}
-      </header>
-
-      {/* ── Body ───────────────────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto px-4 pb-6 lg:px-6">
+      {/* ── Body (Gold Standard Glassmorphic Body Card) ── */}
+      <PageLayout.Body className="mx-4 lg:mx-6 mb-4 lg:mb-6">
         <GrossPayPeriodView
           periods={periods}
           periodStart={effectiveBounds.periodStart}
@@ -108,7 +113,7 @@ export const GrossPayPage: React.FC<GrossPayPageProps> = ({ bounds, employeeName
           isLoading={isLoading}
           error={error}
         />
-      </main>
+      </PageLayout.Body>
     </div>
   );
 };

@@ -100,7 +100,8 @@ export type ViolationType =
     | 'MIN_ENGAGEMENT'
     | 'SPREAD_OF_HOURS'
     | 'MEAL_BREAK'
-    | 'STUDENT_VISA';
+    | 'STUDENT_VISA'
+    | 'APPROVED_LEAVE';
 
 /**
  * A single violation on a candidate shift.
@@ -187,6 +188,14 @@ export interface EmployeeInfo {
      */
     contract_type?: 'FT' | 'PT' | 'CASUAL' | null;
     contracted_weekly_hours?: number;
+    /**
+     * YYYY-MM-DD dates with APPROVED leave inside the candidate window
+     * (audit F1). Feeds V8_LEAVE_CONFLICT — a BLOCKING rule for any candidate
+     * shift on one of these dates. Undefined when the loader could not fetch
+     * leave (rule stays silent — fail-open at this layer; the solver-side
+     * exclusion still guards auto-scheduling).
+     */
+    leave_days?: string[];
 }
 
 // =============================================================================

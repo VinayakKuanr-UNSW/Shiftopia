@@ -19,6 +19,8 @@ import {
   Fingerprint,
   Radio,
   Activity,
+  Palmtree,
+  Wallet,
 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/platform/auth/useAuth';
@@ -111,6 +113,14 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
           indent
           sectionColor="purple"
         />
+        <NavItem
+          icon={<Palmtree className="h-5 w-5" />}
+          label={t('nav.my_leave', 'My Leave')}
+          path="/my-leave"
+          active={isRouteActive('/my-leave')}
+          indent
+          sectionColor="purple"
+        />
       </NavSection>
 
       {(hasPermission('templates') || hasPermission('rosters') || hasPermission('timesheet-view')) && (
@@ -186,6 +196,24 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
             label={t('nav.swap_requests')}
             path="/management/swaps"
             active={isRouteActive('/management/swaps')}
+            indent
+            sectionColor="green"
+          />
+
+          <NavItem
+            icon={<Palmtree className="h-5 w-5" />}
+            label={t('nav.leave_approvals', 'Leave Approvals')}
+            path="/management/leave"
+            active={isRouteActive('/management/leave')}
+            indent
+            sectionColor="green"
+          />
+
+          <NavItem
+            icon={<Wallet className="h-5 w-5" />}
+            label={t('nav.gross_pay', 'Gross Pay')}
+            path="/management/payroll"
+            active={isRouteActive('/management/payroll')}
             indent
             sectionColor="green"
           />

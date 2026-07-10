@@ -20,6 +20,8 @@ export interface SwapParty {
      */
     contract_type?:            'FT' | 'PT' | 'CASUAL' | null;
     contracted_weekly_hours?:  number;
+    /** YYYY-MM-DD dates with APPROVED leave (audit F1 — V8_LEAVE_CONFLICT). */
+    leave_days?:               string[];
 }
 
 export interface SwapScenario {

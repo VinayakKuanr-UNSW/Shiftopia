@@ -20,7 +20,8 @@
     "verify": "npm run type-check && npm run test && npm run build",
     "ship": "npm run verify && git push",
     "seed:generate": "npx tsx scripts/generate-venueops-seed.ts > supabase/seed.sql",
-    "gen:eba-rates": "node scripts/gen-eba-rate-schedule.mjs"
+    "gen:eba-rates": "node scripts/gen-eba-rate-schedule.mjs",
+    "graph:diff": "node scripts/graph-diff.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

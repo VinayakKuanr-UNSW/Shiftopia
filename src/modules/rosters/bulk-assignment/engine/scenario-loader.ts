@@ -48,12 +48,16 @@ export class ScenarioLoader {
         ]);
 
         // Build date window from the candidate shifts (±28 days around extremes)
-        const existingShifts = await this._fetchExistingShifts(
-            employeeId,
-            candidateShifts,
-        );
+        const [existingShifts, leaveDays] = await Promise.all([
+            this._fetchExistingShifts(employeeId, candidateShifts),
+            this._fetchLeaveDays(employeeId, candidateShifts),
+        ]);
 
-        return { candidateShifts, existingShifts, employee };
+        return {
+            candidateShifts,
+            existingShifts,
+            employee: { ...employee, leave_days: leaveDays },
+        };
     }
 
     // ---------------------------------------------------------------------------
@@ -128,6 +132,54 @@ export class ScenarioLoader {
             role_id:              null,
             unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
         }));
+    }
+
+    /**
+     * Approved-leave dates covering the candidate shift dates (audit F1).
+     * Feeds V8_LEAVE_CONFLICT. Fail-open: on error returns undefined so the
+     * rule stays silent rather than failing the whole load.
+     */
+    private async _fetchLeaveDays(
+        employeeId: string,
+        candidateShifts: CandidateShift[],
+    ): Promise<string[] | undefined> {
+        if (candidateShifts.length === 0) return undefined;
+        const dates = candidateShifts.map(s => s.shift_date).sort();
+        const windowStart = dates[0];
+        const windowEnd = dates[dates.length - 1];
+
+        const { data, error } = await (supabase as any)
+            .from('leave_requests')
+            .select('start_date, end_date, status')
+            .eq('employee_id', employeeId)
+            .eq('status', 'approved')
+            .lte('start_date', `${windowEnd}T23:59:59`)
+            .gte('end_date', windowStart);
+        if (error) {
+            console.warn('[ScenarioLoader] Approved-leave fetch failed — V8_LEAVE_CONFLICT silent this run', error);
+            return undefined;
+        }
+
+        const toYmd = (v: unknown): string => {
+            const str = String(v ?? '');
+            return str.includes('T') ? str.split('T')[0] : str.slice(0, 10);
+        };
+        const addDays = (ymd: string, n: number): string => {
+            const [y, m, d] = ymd.split('-').map(Number);
+            const dt = new Date(Date.UTC(y, m - 1, d + n));
+            return dt.toISOString().slice(0, 10);
+        };
+
+        const out = new Set<string>();
+        for (const row of (data ?? []) as Array<{ start_date: string; end_date: string }>) {
+            const from0 = toYmd(row.start_date);
+            const to0 = toYmd(row.end_date);
+            if (!from0 || !to0) continue;
+            const from = from0 > windowStart ? from0 : windowStart;
+            const to = to0 < windowEnd ? to0 : windowEnd;
+            for (let d = from; d <= to; d = addDays(d, 1)) out.add(d);
+        }
+        return out.size > 0 ? Array.from(out).sort() : undefined;
     }
 
     private async _fetchEmployee(employeeId: string): Promise<EmployeeInfo> {

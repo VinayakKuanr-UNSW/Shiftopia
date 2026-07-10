@@ -1164,3 +1164,62 @@ def test_casual_training_shift_exempt_from_two_per_day():
     out = solve(shifts, [make_employee("c1", employment_type="Casual")])
     assert out.status in ("OPTIMAL", "FEASIBLE")
     assert len(out.assignments) == 3  # training shift is exempt from the cap
+
+
+# ---------------------------------------------------------------------------
+# Audit F6 — Saturday penalty (EBA cl 41.1) in the cost signal
+# ---------------------------------------------------------------------------
+
+def test_assignment_cost_saturday_penalty_and_precedence():
+    """cl 41.1 ladder: PH x2.50 > Sunday x1.50 > Saturday x1.25 > weekday x1.
+    2026-05-16 is a Saturday; is_saturday is derived server-side from the
+    date, so the test does NOT set the flag explicitly."""
+    from model_builder import ScheduleModelBuilder
+    emp = make_employee("e1")
+    weekday = make_shift("w", "2026-05-15", "09:00", "17:00")   # Friday
+    saturday = make_shift("sat", "2026-05-16", "09:00", "17:00")
+    sunday = make_shift("sun", "2026-05-17", "09:00", "17:00")
+    sunday.is_sunday = True
+    ph = make_shift("ph", "2026-05-15", "09:00", "17:00")
+    ph.is_public_holiday = True
+
+    base = ScheduleModelBuilder._assignment_cost_cents(emp, weekday)
+    sat = ScheduleModelBuilder._assignment_cost_cents(emp, saturday)
+    sun = ScheduleModelBuilder._assignment_cost_cents(emp, sunday)
+    phc = ScheduleModelBuilder._assignment_cost_cents(emp, ph)
+
+    assert sat == int(round(base * 1.25))
+    assert sun == int(round(base * 1.50))
+    assert phc == int(round(base * 2.50))
+    assert phc > sun > sat > base
+
+
+def test_is_saturday_derived_from_shift_date():
+    """Older clients never send is_saturday — the dataclass derives it."""
+    sat = make_shift("sat", "2026-05-16", "09:00", "17:00")  # Saturday
+    fri = make_shift("fri", "2026-05-15", "09:00", "17:00")  # Friday
+    assert sat.is_saturday is True
+    assert fri.is_saturday is False
+
+
+# ---------------------------------------------------------------------------
+# Audit F1 — approved leave = hard per-day unavailability (unavailable_dates)
+# ---------------------------------------------------------------------------
+
+def test_unavailable_dates_exclude_employee_on_leave():
+    """An employee whose unavailable_dates cover the shift date (the carrier
+    the TS controller fills from APPROVED leave) must never be proposed for
+    that day, even when they are the only candidate; days outside the leave
+    range stay assignable."""
+    on_leave = make_employee("e1")
+    on_leave.unavailable_dates = ["2026-05-15"]
+    shifts = [
+        make_shift("s-leave", "2026-05-15", "09:00", "17:00"),
+        make_shift("s-free", "2026-05-18", "09:00", "17:00"),
+    ]
+    out = solve(shifts, [on_leave])
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assigned_ids = {a.shift_id for a in out.assignments}
+    assert "s-leave" not in assigned_ids          # leave day: refused, not covered
+    assert "s-free" in assigned_ids               # other days unaffected
+    assert "s-leave" in set(out.unassigned_shift_ids)

@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   Settings,
   TrendingUp,
+  Palmtree,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -118,6 +119,7 @@ const BottomNavbar: React.FC = () => {
     { label: 'Bids', icon: BadgeCheck, path: '/my-bids' },
     { label: 'Swaps', icon: RefreshCw, path: '/my-swaps' },
     { label: 'Radio', icon: Radio, path: '/my-broadcasts', badgeKey: 'broadcasts' },
+    { label: 'Leave', icon: Palmtree, path: '/my-leave' },
     { label: 'Notif', icon: BellRing, path: '/my-notifications', badgeKey: 'notifications' },
   ];
 
@@ -133,6 +135,7 @@ const BottomNavbar: React.FC = () => {
 
     { label: 'Settings',   Icon: Settings,        path: '/settings' },
     { label: 'Perform',    Icon: TrendingUp,      path: '/performance' },
+    { label: 'Leave Mgmt', Icon: Palmtree,        path: '/management/leave' },
   ];
 
   const isMoreRouteActive = moreItems.some((item) => location.pathname.startsWith(item.path));

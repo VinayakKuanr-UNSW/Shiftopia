@@ -1188,19 +1188,7 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
                     {isPeopleMode ? roleName : (employeeName || 'Unassigned')}
                 </div>
 
-                {/* D — Subtitle cost line */}
-                {costBreakdown.totalCost > 0 && (
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <span className="text-sm text-slate-400 dark:text-slate-400 mt-0.5 cursor-help w-fit">
-                                {isPeopleMode ? '=' : (employeeName ? '=' : '≈')} ${costBreakdown.totalCost.toFixed(2)} net
-                            </span>
-                        </TooltipTrigger>
-                        <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-2xl">
-                            <CostBreakdownTooltip breakdown={costBreakdown} />
-                        </TooltipContent>
-                    </Tooltip>
-                )}
+
 
                 {/* E — Pills row — always a single line (role pill truncates if tight) */}
                 <div className="mt-2.5 flex items-center gap-1.5">

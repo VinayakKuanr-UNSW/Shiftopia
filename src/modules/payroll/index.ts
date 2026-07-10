@@ -20,4 +20,5 @@ export {
   computeEmployeePeriodGrossPay,
   isoWeekKey,
   type PeriodBounds,
+  type PeriodConfig,
 } from './domain/aggregatePeriodGrossPay';

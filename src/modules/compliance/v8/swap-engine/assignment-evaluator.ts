@@ -60,6 +60,8 @@ export interface AssignmentEvaluationInput {
     employee_context?: {
         contract_type?: 'FT' | 'PT' | 'CASUAL' | null;
         contracted_weekly_hours?: number;
+        /** YYYY-MM-DD dates with APPROVED leave (audit F1 — V8_LEAVE_CONFLICT). */
+        leave_days?: string[];
     };
 }
 
@@ -157,6 +159,7 @@ export class AssignmentEvaluator {
             given_shift: DUMMY_SHIFT,               // Nothing is given up
             contract_type: input.employee_context?.contract_type ?? null,
             contracted_weekly_hours: input.employee_context?.contracted_weekly_hours,
+            leave_days: input.employee_context?.leave_days,
         };
 
         const scenario: SwapScenario = {

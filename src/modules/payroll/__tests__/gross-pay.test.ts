@@ -48,8 +48,13 @@ describe('computeShiftGrossPay — line itemisation (Standard)', () => {
       shiftDate: '2026-07-04', endTime: '14:00', netMinutes: 300, scheduledLengthMinutes: 300,
       employmentType: 'Casual', rate: 37.5, // ordinary 30
     }));
-    expect(line(r.lines, 'ordinary')!.amount).toBeCloseTo(150, 5); // 5h * 30
-    expect(line(r.lines, 'penalty')!.amount).toBeCloseTo(75, 5);   // 5h * 30 * 0.5
+    const baseLine = r.lines.find(l => l.description.includes('Base rate'));
+    const casualLine = r.lines.find(l => l.description.includes('Casual loading'));
+    const satLine = r.lines.find(l => l.description.includes('Saturday loading'));
+
+    expect(baseLine!.amount).toBeCloseTo(150, 5);
+    expect(casualLine!.amount).toBeCloseTo(37.5, 5);
+    expect(satLine!.amount).toBeCloseTo(37.5, 5);
     expect(r.grossPay).toBeCloseTo(225, 5);
   });
 
@@ -59,12 +64,18 @@ describe('computeShiftGrossPay — line itemisation (Standard)', () => {
       netMinutes: 480, scheduledLengthMinutes: 480, employmentType: 'Casual', rate: 37.5,
     });
     const r = computeShiftGrossPay(input);
-    expect(line(r.lines, 'ordinary')!.amount).toBeCloseTo(240, 5);        // 8h * 30
-    expect(line(r.lines, 'penalty')!.amount).toBeCloseTo(165, 5);         // 405 − 240
-    expect(line(r.lines, 'night_allowance')!.amount).toBeCloseTo(75, 5);
-    expect(r.grossPay).toBeCloseTo(480, 5);
-    // Payslip integrity: gross pay is exactly the sum of the itemised lines, and
-    // matches the independently-locked award total (480) for this shift.
+    const baseLine = r.lines.find(l => l.description.includes('Base rate'));
+    const casualLine = r.lines.find(l => l.description.includes('Casual loading'));
+    const satLine = r.lines.find(l => l.description.includes('Saturday loading'));
+    const sunLine = r.lines.find(l => l.description.includes('Sunday loading'));
+    const nightLine = r.lines.find(l => l.description.includes('Night-shift allowance'));
+
+    expect(baseLine!.amount).toBeCloseTo(240, 5);
+    expect(casualLine!.amount).toBeCloseTo(60, 5);
+    expect(satLine!.amount).toBeCloseTo(15, 5);
+    expect(sunLine!.amount).toBeCloseTo(90, 5);
+    expect(nightLine!.amount).toBeCloseTo(15, 5);
+    expect(r.grossPay).toBeCloseTo(420, 5);
     const sumOfLines = r.lines.reduce((s, l) => s + l.amount, 0);
     expect(r.grossPay).toBeCloseTo(sumOfLines, 5);
   });
@@ -102,8 +113,9 @@ describe('computeShiftGrossPay — not-worked & leave short-circuits', () => {
 describe('computeShiftGrossPay — Security engine mapping', () => {
   it('annualised full-time security weekday: ordinary earnings, no penalty', () => {
     const r = computeShiftGrossPay(shift({ isSecurityRole: true, rate: 32.20 }));
-    expect(line(r.lines, 'ordinary')!.amount).toBeCloseTo(257.6, 5); // 8 * 32.20
-    expect(line(r.lines, 'penalty')).toBeUndefined();
+    const baseLine = r.lines.find(l => l.description.includes('Base rate'));
+    expect(baseLine!.amount).toBeCloseTo(257.6, 5); // 8 * 32.20
+    expect(r.lines.find(l => l.description.includes('loading'))).toBeUndefined();
     expect(r.grossPay).toBeCloseTo(257.6, 5);
   });
 
@@ -112,8 +124,13 @@ describe('computeShiftGrossPay — Security engine mapping', () => {
       isSecurityRole: true, shiftDate: '2026-07-04', endTime: '14:00',
       netMinutes: 300, scheduledLengthMinutes: 300, employmentType: 'Casual', rate: 40,
     }));
-    expect(line(r.lines, 'ordinary')!.amount).toBeCloseTo(200, 5); // 5 * 40
-    expect(line(r.lines, 'penalty')!.amount).toBeCloseTo(40, 5);
+    const baseLine = r.lines.find(l => l.description.includes('Base rate'));
+    const casualLine = r.lines.find(l => l.description.includes('Casual loading'));
+    const satLine = r.lines.find(l => l.description.includes('Saturday loading'));
+
+    expect(baseLine!.amount).toBeCloseTo(160, 5); // 5 * 32
+    expect(casualLine!.amount).toBeCloseTo(40, 5);
+    expect(satLine!.amount).toBeCloseTo(40, 5);
     expect(r.grossPay).toBeCloseTo(240, 5);
   });
 });

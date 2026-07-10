@@ -21,9 +21,15 @@ export type EarningsCode =
   | 'overtime'          // cl 42 (daily + weekly + PH overtime)
   | 'night_allowance'   // cl 43 night-shift allowance
   | 'other_allowance'   // meal / first-aid / protein-spill / split-shift (cl 28)
-  | 'annual_leave'      // paid annual leave (incl. 17.5% loading, cl 38)
-  | 'personal_leave'    // paid personal / carer's leave (NES ss96–99)
-  | 'leave_loading';    // reserved: explicit 17.5% split if ever itemised separately
+  | 'annual_leave'      // paid annual leave (incl. 17.5% loading, cl 44.7)
+  | 'personal_leave'    // paid personal / carer's leave (cl 45 / NES ss96–99)
+  | 'public_holiday'    // PH not worked, ordinarily rostered (cl 56.4 / 44.8)
+  | 'leave_loading'     // reserved: explicit 17.5% split if ever itemised separately
+  | 'parental_leave'    // cl 51 — paid parental at ordinary base (10 weeks per request)
+  | 'long_service_leave'// cl 49 / LSL Act 1955 (NSW) — paid at ordinary rate
+  | 'jury_duty'         // cl 53 — make-up pay (first 10 days; court-pay offset is a manual adjustment)
+  | 'supporting_carer'  // cl 52 — ONE week paid, permanents only
+  | 'rest_gap_penalty'; // cl 40.1 — double-time floor when rest gap breached
 
 export interface EarningsLine {
   code: EarningsCode;
@@ -53,6 +59,23 @@ export interface ShiftGrossPay {
   paidHours: number;            // ordinary + overtime (0 for no-show / cancelled)
   hoursSource: GrossPayHoursSource;
   isLeave: boolean;
+  /**
+   * The de-loaded ordinary hourly rate the award engine priced this shift from
+   * (breakdown.ordinaryRate). Carried so cross-shift pay rules (cl 40.1
+   * double-time floor) can price uplifts even when the INPUT rate was null
+   * (classification-resolved — the normal live path).
+   */
+  ordinaryRate?: number;
+  /** cl 40.1 — uplift applied when rest gap was insufficient (0 if no breach). */
+  restGapPenaltyAmount?: number;
+
+  employeeName?: string;
+  roleName?: string;
+  groupName?: string;
+  subGroupName?: string;
+  startTime?: string;
+  endTime?: string;
+  employmentType?: string;
 }
 
 /** One gross-pay record per employee per pay period (the payroll hand-off). */

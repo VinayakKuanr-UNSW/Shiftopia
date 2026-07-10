@@ -282,6 +282,77 @@ export class RosterFetcher {
 
         return result;
     }
+
+    // ── Approved Leave ───────────────────────────────────────────────────────
+
+    /**
+     * Fetch each candidate employee's APPROVED leave dates inside the
+     * optimization window (audit F1 — leave↔scheduler integration).
+     *
+     * Approved leave is a LEGAL-HARD unavailability: it wins over coverage
+     * (mirrors the locked legal_hard » coverage precedence). The dates feed the
+     * solver's existing `unavailable_dates` per-day hard exclusion — no
+     * optimizer-service change is required.
+     *
+     * Fail-open: on query error we log and return an empty map (the solver run
+     * proceeds; the V8 leave-conflict layer still guards the commit path).
+     *
+     * @returns employeeId → sorted YYYY-MM-DD dates on approved leave, clamped
+     *          to [windowStart, windowEnd].
+     */
+    async fetchApprovedLeave(
+        shifts: ShiftMeta[],
+        employees: EmployeeMeta[],
+    ): Promise<Map<string, string[]>> {
+        const result = new Map<string, string[]>();
+        if (shifts.length === 0 || employees.length === 0) return result;
+
+        const dates = shifts.map(s => s.shift_date).sort();
+        const windowStart = dates[0];
+        const windowEnd = dates[dates.length - 1];
+        const employeeIds = employees.map(e => e.id);
+
+        // leave_requests start/end are timestamptz in prod — the T23:59:59
+        // suffix keeps a same-day range overlapping (parity with payroll's
+        // leaveGrossPay reader).
+        const { data, error } = await this.supabase
+            .from('leave_requests')
+            .select('employee_id, start_date, end_date, status')
+            .in('employee_id', employeeIds)
+            .eq('status', 'approved')
+            .lte('start_date', `${windowEnd}T23:59:59`)
+            .gte('end_date', windowStart);
+
+        if (error) {
+            console.warn('[RosterFetcher] Approved-leave fetch failed — solver will NOT exclude leave dates this run', error);
+            return result;
+        }
+
+        const toYmd = (v: string | null | undefined): string =>
+            (v ?? '').includes('T') ? String(v).split('T')[0] : String(v ?? '').slice(0, 10);
+
+        for (const row of (data ?? []) as any[]) {
+            const emp = row.employee_id as string | null;
+            if (!emp) continue;
+            const from0 = toYmd(row.start_date);
+            const to0 = toYmd(row.end_date);
+            if (!from0 || !to0) continue;
+            const from = from0 > windowStart ? from0 : windowStart;
+            const to = to0 < windowEnd ? to0 : windowEnd;
+            if (from > to) continue;
+            const days = result.get(emp) ?? [];
+            for (let d = from; d <= to; d = shiftDate(d, 1)) days.push(d);
+            result.set(emp, days);
+        }
+
+        for (const [emp, days] of result) {
+            result.set(emp, Array.from(new Set(days)).sort());
+        }
+        if (result.size > 0) {
+            console.info('[RosterFetcher] Approved leave: %d employee(s) have leave dates inside the window (hard-excluded)', result.size);
+        }
+        return result;
+    }
 }
 
 /** Singleton wired against the production Supabase client. Tests construct
