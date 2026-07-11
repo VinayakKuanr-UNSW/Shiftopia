@@ -1258,7 +1258,7 @@ export class AutoSchedulerController {
             employeeDetails, existingRoster, constraints, budgetSeconds, signal,
         } = args;
         const MAX_ITERS = 3;
-        const SEP = ' ';
+        const SEP = '\x00';
         const shiftById = new Map(optimizerShifts.map(s => [s.id, s]));
         const { shiftMap, employeeMap } = solutionParser.buildMaps(inputShifts, inputEmployees);
 
