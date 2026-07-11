@@ -16,6 +16,8 @@ import { supabase } from '@/platform/supabase/client';
 import { toast } from '@/modules/core/ui/primitives/use-toast';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/platform/i18n';
+import { useAuth } from '@/platform/auth/useAuth';
+import { PayRatesSettings } from '@/modules/payroll/ui/rate-admin/PayRatesSettings';
 
 /* ============================================================
    HELPERS
@@ -477,6 +479,9 @@ const SettingsPage: React.FC = () => {
 
   const { isDark } = useTheme();
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  // Pay Rates is a management/configuration surface (EBA wage schedule).
+  const canManageRates = hasPermission('configurations');
 
   const handleSectionChange = (newSection: string) => {
     navigate(`/settings/${newSection}`);
@@ -505,6 +510,7 @@ const SettingsPage: React.FC = () => {
             activeSection={section}
             onSectionChange={handleSectionChange}
             transparent
+            showPayRates={canManageRates}
           />
         </div>
       </div>
@@ -527,7 +533,22 @@ const SettingsPage: React.FC = () => {
             <TabsContent value="security">
               <SecuritySettings />
             </TabsContent>
-            
+            <TabsContent value="pay-rates">
+              {canManageRates ? (
+                <PayRatesSettings />
+              ) : (
+                <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+                  <div className="p-4 rounded-full bg-white/5 border border-white/10">
+                    <Shield className="h-8 w-8 text-white/40" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-medium text-white">Not authorised</h3>
+                    <p className="text-blue-200/60 max-w-sm mt-1">Pay-rate administration is restricted to managers.</p>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
             {/* Static placeholders for pending features */}
             {['account', 'notifications', 'billing', 'integrations'].map(tab => (
               <TabsContent key={tab} value={tab}>

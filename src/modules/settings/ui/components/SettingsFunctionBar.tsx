@@ -1,11 +1,12 @@
 import React from 'react';
-import { 
-  User, 
-  Shield, 
-  Palette, 
-  Bell, 
-  CreditCard, 
+import {
+  User,
+  Shield,
+  Palette,
+  Bell,
+  CreditCard,
   Link,
+  DollarSign,
   ChevronRight
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
@@ -16,13 +17,16 @@ interface SettingsFunctionBarProps {
   activeSection: string;
   onSectionChange: (section: string) => void;
   transparent?: boolean;
+  /** Show the manager-only Pay Rates section (gated by the caller). */
+  showPayRates?: boolean;
 }
 
 
 export const SettingsFunctionBar: React.FC<SettingsFunctionBarProps> = ({
   activeSection,
   onSectionChange,
-  transparent
+  transparent,
+  showPayRates,
 }) => {
   const { t } = useTranslation();
   const { isDark } = useTheme();
@@ -34,6 +38,7 @@ export const SettingsFunctionBar: React.FC<SettingsFunctionBarProps> = ({
     { id: 'appearance', label: t('settings.appearance'), icon: Palette },
     { id: 'billing', label: t('settings.billing'), icon: CreditCard },
     { id: 'integrations', label: t('settings.integrations'), icon: Link },
+    ...(showPayRates ? [{ id: 'pay-rates', label: t('settings.pay_rates'), icon: DollarSign }] : []),
   ];
 
   return (
