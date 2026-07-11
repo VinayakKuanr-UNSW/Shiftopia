@@ -23,11 +23,14 @@ import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { toast } from '@/modules/core/ui/primitives/use-toast';
 import { cn } from '@/modules/core/lib/utils';
-import { useEbaRates } from '../../state/useEbaRates';
-import { resolveEbaRateSetOnDate, type EbaRateSet } from '../../data/ebaRates.read.api';
+import { useEbaRates, useTraineeRates } from '../../state/useEbaRates';
+import { resolveEbaRateSetOnDate, type EbaRateSet, type TraineeRateSet } from '../../data/ebaRates.read.api';
 import {
   projectCpiIncrease, toMigrationSql, toRateScheduleSnippet, cpiFactor,
+  projectTraineeCpiIncrease, toTraineeMigrationSql, toTraineeSnippet,
 } from '../../domain/cpiRateIncrease';
+import { resolveTraineeRateSet } from '@/modules/rosters/domain/projections/utils/cost/trainee_matrix';
+import { ScheduleReferenceTables } from './ScheduleReferenceTables';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 const money = (n: number) => `$${n.toFixed(2)}`;
@@ -149,8 +152,9 @@ const RateSetCard: React.FC<{ set: EbaRateSet; inForce: boolean }> = ({ set, inF
 };
 
 // ── CPI increase preview / export ────────────────────────────────────────────
-const CpiPreviewPanel: React.FC<{ schedule: EbaRateSet[] }> = ({ schedule }) => {
+const CpiPreviewPanel: React.FC<{ schedule: EbaRateSet[]; traineeSchedule: TraineeRateSet[] }> = ({ schedule, traineeSchedule }) => {
   const latest = schedule[schedule.length - 1];
+  const latestTrainee = traineeSchedule[traineeSchedule.length - 1];
   const [cpi, setCpi] = useState('');
   const [effectiveFrom, setEffectiveFrom] = useState('');
 
@@ -161,6 +165,11 @@ const CpiPreviewPanel: React.FC<{ schedule: EbaRateSet[] }> = ({ schedule }) => 
     if (!valid || !latest) return null;
     return projectCpiIncrease({ base: latest, cpiPercent: cpiNum, effectiveFrom });
   }, [valid, latest, cpiNum, effectiveFrom]);
+
+  const traineeProjection = useMemo(() => {
+    if (!valid || !latestTrainee) return null;
+    return projectTraineeCpiIncrease(latestTrainee, cpiNum, effectiveFrom);
+  }, [valid, latestTrainee, cpiNum, effectiveFrom]);
 
   if (!latest) return null;
 
@@ -200,8 +209,20 @@ const CpiPreviewPanel: React.FC<{ schedule: EbaRateSet[] }> = ({ schedule }) => 
       {projection && (
         <div className="space-y-4 pt-1">
           <RateSetCard set={{ effectiveFrom: projection.effectiveFrom, rates: projection.rates, allowances: projection.allowances }} inForce={false} />
+          <p className="text-xs font-medium text-foreground/80">Schedule 2 — base classifications &amp; allowances</p>
           <CodeBlock title="Migration SQL (eba_rate + eba_allowance)" code={toMigrationSql(projection)} Icon={Database} />
           <CodeBlock title="RATE_SCHEDULE snippet (embedded cost engine)" code={toRateScheduleSnippet(projection, schedule.length - 1)} Icon={Code2} />
+          {traineeProjection && (
+            <>
+              <p className="text-xs font-medium text-foreground/80 pt-1">Schedule 5 — trainees (same increase applied)</p>
+              <CodeBlock title="Migration SQL (eba_trainee_schedule)" code={toTraineeMigrationSql(traineeProjection)} Icon={Database} />
+              <CodeBlock title="TRAINEE_RATE_SCHEDULE snippet (embedded cost engine)" code={toTraineeSnippet(traineeProjection, cpiNum, traineeSchedule.length - 1)} Icon={Code2} />
+            </>
+          )}
+          <p className="text-[11px] text-muted-foreground">
+            Apprentice (Schedule 4) and Supported-Wage (Schedule 6) rates are percentages of a
+            base that already gets this increase, so they need no separate change.
+          </p>
           <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-start gap-1.5">
             <Info className="h-3.5 w-3.5 mt-px flex-shrink-0" />
             cl 25.3: confirm the new rates stay ≥ 2% above the Amusement, Events &amp; Recreation Award before applying.
@@ -215,6 +236,7 @@ const CpiPreviewPanel: React.FC<{ schedule: EbaRateSet[] }> = ({ schedule }) => 
 // ── main ─────────────────────────────────────────────────────────────────────
 export const PayRatesSettings: React.FC = () => {
   const { schedule, isLoading, error } = useEbaRates();
+  const { schedule: traineeSchedule } = useTraineeRates();
   const [resolveDate, setResolveDate] = useState(today());
 
   const applicable = useMemo(
@@ -222,6 +244,11 @@ export const PayRatesSettings: React.FC = () => {
     [schedule, resolveDate],
   );
   const inForceToday = useMemo(() => resolveEbaRateSetOnDate(schedule, today()), [schedule]);
+  // In-force trainee set for the reference tables (falls back to embedded baseline).
+  const traineeInForce = useMemo(
+    () => resolveTraineeRateSet(today(), traineeSchedule.length ? traineeSchedule : undefined),
+    [traineeSchedule],
+  );
 
   if (isLoading) {
     return (
@@ -287,8 +314,11 @@ export const PayRatesSettings: React.FC = () => {
         </div>
       </div>
 
+      {/* Schedule 4/5/6 reference tables */}
+      <ScheduleReferenceTables traineeSet={traineeInForce} />
+
       {/* CPI preview */}
-      <CpiPreviewPanel schedule={schedule} />
+      <CpiPreviewPanel schedule={schedule} traineeSchedule={traineeSchedule.length ? traineeSchedule : [traineeInForce]} />
     </div>
   );
 };

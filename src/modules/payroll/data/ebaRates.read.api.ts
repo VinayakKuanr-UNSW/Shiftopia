@@ -16,6 +16,12 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
+import {
+  TRAINEE_RATE_SCHEDULE,
+  type TraineeRateSet,
+} from '@/modules/rosters/domain/projections/utils/cost/trainee_matrix';
+
+export type { TraineeRateSet } from '@/modules/rosters/domain/projections/utils/cost/trainee_matrix';
 
 /** One classification's rates at a given effective date (both employment bases). */
 export interface EbaRateRow {
@@ -130,4 +136,29 @@ export function resolveEbaRateSetOnDate(
     }
   }
   return applicable ?? schedule[0];
+}
+
+/**
+ * Fetch the effective-dated Schedule 5 trainee schedule. Reads the durable
+ * `eba_trainee_schedule` (JSONB matrix per effective_from); on any error or
+ * empty result — e.g. before the migration is applied — falls back to the
+ * embedded `TRAINEE_RATE_SCHEDULE` the engine uses. Both are kept identical by
+ * the rate-schedule-trainee-sync drift guard, so the fallback is authoritative.
+ */
+export async function getTraineeRateSchedule(): Promise<TraineeRateSet[]> {
+  try {
+    const { data, error } = await (supabase as any)
+      .from('eba_trainee_schedule')
+      .select('effective_from, matrix, label, source')
+      .order('effective_from', { ascending: true });
+    if (error || !data || data.length === 0) return TRAINEE_RATE_SCHEDULE;
+    return (data as any[]).map((row) => ({
+      effectiveFrom: ymd(row.effective_from),
+      label: row.label ?? '',
+      source: row.source ?? '',
+      ...(typeof row.matrix === 'string' ? JSON.parse(row.matrix) : row.matrix),
+    })) as TraineeRateSet[];
+  } catch {
+    return TRAINEE_RATE_SCHEDULE;
+  }
 }

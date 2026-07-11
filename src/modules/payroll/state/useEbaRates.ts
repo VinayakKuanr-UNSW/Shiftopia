@@ -6,7 +6,10 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { getEbaRateSchedule, type EbaRateSet } from '../data/ebaRates.read.api';
+import {
+  getEbaRateSchedule, getTraineeRateSchedule,
+  type EbaRateSet, type TraineeRateSet,
+} from '../data/ebaRates.read.api';
 
 export function useEbaRates(enabled = true) {
   const query = useQuery<EbaRateSet[]>({
@@ -22,4 +25,15 @@ export function useEbaRates(enabled = true) {
     error: query.error,
     refetch: query.refetch,
   };
+}
+
+/** Effective-dated Schedule 5 trainee schedule (DB with embedded fallback). */
+export function useTraineeRates(enabled = true) {
+  const query = useQuery<TraineeRateSet[]>({
+    queryKey: ['eba-trainee-schedule'],
+    queryFn: getTraineeRateSchedule,
+    enabled,
+    staleTime: 60 * 60 * 1000,
+  });
+  return { schedule: query.data ?? [], isLoading: query.isLoading };
 }

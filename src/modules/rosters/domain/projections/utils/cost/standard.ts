@@ -5,6 +5,7 @@ import {
 } from './constants';
 import { resolveRateSet, type WageRateTable } from './rate-schedule';
 import { getTraineeBaseRate } from './trainee_matrix';
+import { getApprenticeMultiplier } from './apprentice_matrix';
 import type { AwardContext } from './award-context';
 import { getDateFacts, parseTimeToMinutes, fastNightMinutes } from './award-context';
 
@@ -22,39 +23,6 @@ import { getDateFacts, parseTimeToMinutes, fastNightMinutes } from './award-cont
 // week attract overtime. Kept local to the Standard engine (constants.ts owns the
 // per-DAY ordinary cap ORDINARY_HOURS_CAP = 12; this is the per-WEEK line).
 const ORDINARY_HOURS_CAP_WEEKLY = 38;
-
-const APPRENTICE_MATRIX = {
-  standard: {
-    no_yr12: { 1: 0.50, 2: 0.60, 3: 0.75, 4: 0.95 },
-    yr12:    { 1: 0.55, 2: 0.65, 3: 0.75, 4: 0.95 }
-  },
-  adult: { 1: 0.80, 2: 1.0, 3: 1.0, 4: 1.0 },
-  school_based: { 1: 0.50, 2: 0.60 }
-};
-
-function getApprenticeMultiplier(options: CostCalculatorOptions): number {
-  if (!options.is_apprentice) return 1.0;
-  
-  const type = options.apprentice_type || 'standard';
-  const year = options.apprentice_year || 1;
-  const hasYr12 = options.has_completed_year_12 || false;
-  
-  let multiplier = 1.0;
-  
-  if (type === 'adult') {
-    multiplier = (APPRENTICE_MATRIX.adult as any)[year] || 1.0;
-  } else if (type === 'school_based') {
-    // Schedule 4 (Apprentices) prescribes NO +25% loading for school-based
-    // apprentices — that in-lieu-of-leave loading is a Schedule 5 (Trainees)
-    // provision (§1.8.1) and is opt-in. Applying it here over-paid apprentices.
-    multiplier = (APPRENTICE_MATRIX.school_based as any)[year] || 0.50;
-  } else {
-    const branch = hasYr12 ? APPRENTICE_MATRIX.standard.yr12 : APPRENTICE_MATRIX.standard.no_yr12;
-    multiplier = (branch as any)[year] || 0.50;
-  }
-  
-  return multiplier;
-}
 
 // cl 43.1 / 43.2 — the night-shift allowance rate is keyed off the day the
 // SHIFT CONCLUDES ("for Night Shift Hours worked where the shift concludes on
@@ -241,7 +209,7 @@ export function estimateDetailedShiftCost(
       aqfLevel: (options.trainee_aqf_level as any) || 3,
       yearOfTraineeship: options.trainee_year || 1,
       isPartTime
-    });
+    }, shift_date); // effective-dated (Schedule 5 CPI uplift, cl 25.1)
 
     if (isPartTime && options.is_training_on_job) {
       baseRate *= 0.8;

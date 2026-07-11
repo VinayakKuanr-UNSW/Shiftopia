@@ -18,6 +18,10 @@
  */
 
 import type { EbaRateSet, EbaRateRow, EbaAllowanceRow } from '../data/ebaRates.read.api';
+import {
+  applyTraineeCpiIncrease,
+  type TraineeRateSet,
+} from '@/modules/rosters/domain/projections/utils/cost/trainee_matrix';
 
 /** Round to cents — identical to rate-schedule.ts `r2`. */
 export const round2 = (x: number): number => Math.round(x * 100) / 100;
@@ -116,6 +120,51 @@ export function toRateScheduleSnippet(p: CpiProjection, baseIndex = 0): string {
     `  ${p.cpiPercent}, // ABS All-Groups CPI (Sydney), March-quarter YoY % (cl 25.2)\n` +
     `  '${p.effectiveFrom}',\n` +
     `  '${label}',\n` +
+    `));`
+  );
+}
+
+// ── Schedule 5 (trainees) — projected alongside Schedule 2 so a CPI increase ──
+// covers the whole EBA, not just the base classifications. Reuses the engine's
+// applyTraineeCpiIncrease so the emitted SQL and TS snippet agree with it.
+
+/** Project the trainee schedule forward by CPI + 0.5% from `base`. */
+export function projectTraineeCpiIncrease(
+  base: TraineeRateSet,
+  cpiPercent: number,
+  effectiveFrom: string,
+): TraineeRateSet {
+  const label = `ICC Sydney EA 2025 — ${effectiveFrom} increase (CPI + 0.5%, cl 25.1)`;
+  return applyTraineeCpiIncrease(base, cpiPercent, effectiveFrom, label);
+}
+
+/** Emit the migration INSERT for the projected trainee set (JSONB matrix). */
+export function toTraineeMigrationSql(next: TraineeRateSet): string {
+  const { effectiveFrom, label, source, ...matrix } = next;
+  const json = JSON.stringify(matrix, null, 2)
+    .split('\n')
+    .map((l, i) => (i === 0 ? l : '  ' + l))
+    .join('\n');
+  return `-- ${source}
+INSERT INTO "public"."eba_trainee_schedule" ("effective_from","matrix","label","source")
+VALUES (
+  '${effectiveFrom}',
+  $json$${json}$json$::jsonb,
+  '${label.replace(/'/g, "''")}',
+  '${source.replace(/'/g, "''")}'
+)
+ON CONFLICT ("effective_from") DO NOTHING;`;
+}
+
+/** Emit the TS snippet that appends the same trainee increase to the engine. */
+export function toTraineeSnippet(next: TraineeRateSet, cpiPercent: number, baseIndex = 0): string {
+  return (
+    `// Add to src/modules/rosters/domain/projections/utils/cost/trainee_matrix.ts\n` +
+    `TRAINEE_RATE_SCHEDULE.push(applyTraineeCpiIncrease(\n` +
+    `  TRAINEE_RATE_SCHEDULE[${baseIndex}],\n` +
+    `  ${cpiPercent}, // ABS All-Groups CPI (Sydney), March-quarter YoY % (cl 25.2)\n` +
+    `  '${next.effectiveFrom}',\n` +
+    `  '${next.label.replace(/'/g, "\\'")}',\n` +
     `));`
   );
 }

@@ -13,10 +13,14 @@ import {
   projectCpiIncrease,
   toMigrationSql,
   toRateScheduleSnippet,
+  projectTraineeCpiIncrease,
+  toTraineeMigrationSql,
+  toTraineeSnippet,
   cpiFactor,
   round2,
 } from '../domain/cpiRateIncrease';
 import type { EbaRateSet } from '../data/ebaRates.read.api';
+import { TRAINEE_RATE_SCHEDULE } from '@/modules/rosters/domain/projections/utils/cost/trainee_matrix';
 import {
   RATE_SCHEDULE,
   applyCpiIncrease,
@@ -131,6 +135,33 @@ describe('toRateScheduleSnippet', () => {
     expect(snippet).toContain('RATE_SCHEDULE.push(applyCpiIncrease(');
     expect(snippet).toContain('RATE_SCHEDULE[0]');
     expect(snippet).toContain('3.6');
+    expect(snippet).toContain("'2026-07-01'");
+  });
+});
+
+describe('Schedule 5 trainee CPI projection + export', () => {
+  const next = projectTraineeCpiIncrease(TRAINEE_RATE_SCHEDULE[0], 3.6, '2026-07-01');
+  const f = 1 + (3.6 + 0.5) / 100;
+
+  it('projects the trainee matrix by CPI% + 0.5% (matches the engine helper)', () => {
+    expect(next.weeklyLevelA[10][0]).toBe(round2(420.8 * f));
+    expect(next.hourlyLevelA[10][3]).toBe(round2(21.1 * f));
+    expect(next.certIvUpliftPct).toBe(3.8); // structural, unchanged
+  });
+
+  it('emits a parseable JSONB migration INSERT that round-trips to the matrix', () => {
+    const sql = toTraineeMigrationSql(next);
+    expect(sql).toContain('INSERT INTO "public"."eba_trainee_schedule"');
+    expect(sql).toContain('ON CONFLICT ("effective_from") DO NOTHING');
+    const json = sql.match(/\$json\$([\s\S]*?)\$json\$/)![1];
+    const parsed = JSON.parse(json);
+    expect(parsed.hourlyLevelA['10'][3]).toBe(round2(21.1 * f));
+  });
+
+  it('emits a TS snippet targeting TRAINEE_RATE_SCHEDULE', () => {
+    const snippet = toTraineeSnippet(next, 3.6, 0);
+    expect(snippet).toContain('TRAINEE_RATE_SCHEDULE.push(applyTraineeCpiIncrease(');
+    expect(snippet).toContain('TRAINEE_RATE_SCHEDULE[0]');
     expect(snippet).toContain("'2026-07-01'");
   });
 });
