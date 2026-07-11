@@ -22,6 +22,8 @@ import {
   Plus,
   ChevronRight,
   FileText,
+  Loader2,
+  UserMinus,
 } from 'lucide-react';
 import { useAuth } from '@/platform/auth/useAuth';
 import { PageLayout } from '@/modules/core/ui/layout/PageLayout';
@@ -47,6 +49,7 @@ import {
   approveLeaveRequest,
   rejectLeaveRequest,
   cancelLeaveRequest,
+  unassignConflictingShifts,
 } from '../../api/leave.api';
 import { formatLeaveConflictWarning } from '../../domain/leave-conflicts';
 
@@ -84,8 +87,18 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
   const [myRequests, setMyRequests] = useState<LeaveRequest[]>([]);
   const [teamRequests, setTeamRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  /** Post-approval roster-conflict warning (shifts still rostered inside approved leave). */
-  const [approvalWarning, setApprovalWarning] = useState<string | null>(null);
+  /**
+   * Post-approval roster-conflict state: the warning copy plus the shift IDs
+   * still rostered inside the approved leave range, so the manager can unassign
+   * them in one click. `null` = nothing to show.
+   */
+  const [approvalConflict, setApprovalConflict] = useState<
+    { text: string; shiftIds: string[] } | null
+  >(null);
+  /** True while the one-click batch unassign is in flight. */
+  const [unassigning, setUnassigning] = useState(false);
+  /** Result copy after a batch unassign (success or partial-success summary). */
+  const [unassignResult, setUnassignResult] = useState<string | null>(null);
 
   // New request form state
   const [formType, setFormType] = useState<LeaveTypeCode>('annual');
@@ -167,15 +180,36 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
   };
 
   const handleApprove = async (requestId: string) => {
-    setApprovalWarning(null);
+    setApprovalConflict(null);
+    setUnassignResult(null);
     const result = await approveLeaveRequest(requestId, employeeId);
     if (!result.error) {
-      // Approval succeeded — warn if the employee still has rostered shifts
-      // inside the leave range (they must be unassigned/re-offered manually).
-      setApprovalWarning(
-        formatLeaveConflictWarning(result.data?.conflictingShifts ?? []),
-      );
+      // Approval succeeded — surface any shifts still rostered inside the leave
+      // range so the manager can unassign them in one click (otherwise the
+      // employee is later falsely marked No-Show).
+      const conflicts = result.data?.conflictingShifts ?? [];
+      const text = formatLeaveConflictWarning(conflicts);
+      setApprovalConflict(text ? { text, shiftIds: conflicts.map((c) => c.shiftId) } : null);
     }
+    loadData();
+  };
+
+  const handleUnassignConflicts = async (shiftIds: string[]) => {
+    setUnassigning(true);
+    setUnassignResult(null);
+    const result = await unassignConflictingShifts(shiftIds);
+    setUnassigning(false);
+    if (result.error) {
+      setUnassignResult(`Unassign failed: ${result.error}`);
+      return;
+    }
+    const { attempted, succeeded } = result.data!;
+    setApprovalConflict(null);
+    setUnassignResult(
+      succeeded === attempted
+        ? `Unassigned ${succeeded} shift${succeeded === 1 ? '' : 's'} — now re-offer them from the roster.`
+        : `Unassigned ${succeeded} of ${attempted} — the rest changed since approval; check the roster.`,
+    );
     loadData();
   };
 
@@ -269,8 +303,15 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
                 requests={teamRequests}
                 onApprove={handleApprove}
                 onReject={handleReject}
-                warning={approvalWarning}
-                onDismissWarning={() => setApprovalWarning(null)}
+                warning={approvalConflict?.text ?? null}
+                conflictShiftIds={approvalConflict?.shiftIds ?? []}
+                onUnassignConflicts={handleUnassignConflicts}
+                unassigning={unassigning}
+                unassignResult={unassignResult}
+                onDismissWarning={() => {
+                  setApprovalConflict(null);
+                  setUnassignResult(null);
+                }}
               />
             )}
           </>
@@ -583,18 +624,68 @@ const ApprovalsView: React.FC<{
   onReject: (id: string) => void;
   /** Post-approval roster-conflict warning (null = nothing to show). */
   warning?: string | null;
+  /** Shift IDs still rostered inside the approved leave (drives the unassign button). */
+  conflictShiftIds?: string[];
+  /** One-click batch unassign of the conflicting shifts through the audited gateway. */
+  onUnassignConflicts?: (shiftIds: string[]) => void;
+  /** True while the batch unassign is in flight. */
+  unassigning?: boolean;
+  /** Result copy after an unassign attempt (null = nothing to show). */
+  unassignResult?: string | null;
   onDismissWarning?: () => void;
-}> = ({ requests, onApprove, onReject, warning, onDismissWarning }) => {
+}> = ({
+  requests,
+  onApprove,
+  onReject,
+  warning,
+  conflictShiftIds = [],
+  onUnassignConflicts,
+  unassigning = false,
+  unassignResult,
+  onDismissWarning,
+}) => {
   const pending = requests.filter((r) => r.status === 'pending');
 
   const warningBanner = warning ? (
     <div className="flex items-start gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
       <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" />
-      <p className="flex-1 text-xs text-amber-700 dark:text-amber-400">{warning}</p>
+      <div className="flex-1 space-y-2">
+        <p className="text-xs text-amber-700 dark:text-amber-400">{warning}</p>
+        {conflictShiftIds.length > 0 && onUnassignConflicts && (
+          <button
+            onClick={() => onUnassignConflicts(conflictShiftIds)}
+            disabled={unassigning}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-700 transition-all hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-60 dark:text-amber-300"
+          >
+            {unassigning ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <UserMinus className="h-3.5 w-3.5" />
+            )}
+            {unassigning
+              ? 'Unassigning…'
+              : `Unassign ${conflictShiftIds.length} shift${conflictShiftIds.length === 1 ? '' : 's'}`}
+          </button>
+        )}
+      </div>
       {onDismissWarning && (
         <button
           onClick={onDismissWarning}
           className="rounded-lg p-0.5 text-amber-500/70 transition-colors hover:text-amber-600 dark:hover:text-amber-300"
+          title="Dismiss"
+        >
+          <XCircle className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  ) : unassignResult ? (
+    <div className="flex items-start gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+      <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" />
+      <p className="flex-1 text-xs text-emerald-700 dark:text-emerald-400">{unassignResult}</p>
+      {onDismissWarning && (
+        <button
+          onClick={onDismissWarning}
+          className="rounded-lg p-0.5 text-emerald-500/70 transition-colors hover:text-emerald-600 dark:hover:text-emerald-300"
           title="Dismiss"
         >
           <XCircle className="h-4 w-4" />

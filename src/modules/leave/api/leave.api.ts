@@ -6,6 +6,7 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
+import { shiftsCommands } from '@/modules/rosters/api/shifts.commands';
 import type {
   LeaveBalance,
   LeaveRequest,
@@ -315,4 +316,34 @@ export async function cancelLeaveRequest(requestId: string): Promise<MutationRes
 
   if (error) return { error: error.message };
   return {};
+}
+
+export interface UnassignConflictsResult {
+  /** How many shift IDs were submitted for unassignment. */
+  attempted: number;
+  /** How many actually transitioned to unassigned (the rest were skipped). */
+  succeeded: number;
+}
+
+/**
+ * Unassign the shifts that overlap an approved leave range (the ones surfaced
+ * by `getLeaveShiftConflicts`). Routes through the audited shift-mutation
+ * gateway (`sm_apply_shift_op` via `bulkUnassignShifts`), so each removal is
+ * version-checked, FSM-guarded and recorded as a durable UNASSIGNED
+ * shift_event naming the removed worker — never a raw table write.
+ *
+ * Partial success is normal: a shift already reassigned/cancelled by another
+ * user (version conflict, illegal transition) is skipped, not fatal, so
+ * `succeeded` may be less than `attempted`.
+ */
+export async function unassignConflictingShifts(
+  shiftIds: string[],
+): Promise<MutationResult<UnassignConflictsResult>> {
+  if (shiftIds.length === 0) return { data: { attempted: 0, succeeded: 0 } };
+  try {
+    const updated = await shiftsCommands.bulkUnassignShifts(shiftIds);
+    return { data: { attempted: shiftIds.length, succeeded: updated.length } };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Failed to unassign shifts' };
+  }
 }

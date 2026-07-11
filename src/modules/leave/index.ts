@@ -32,7 +32,9 @@ export {
   rejectLeaveRequest,
   cancelLeaveRequest,
   getLeaveShiftConflicts,
+  unassignConflictingShifts,
   type LeaveShiftConflict,
+  type UnassignConflictsResult,
   type LeaveRequestFilters,
   type MutationResult,
 } from './api/leave.api';
