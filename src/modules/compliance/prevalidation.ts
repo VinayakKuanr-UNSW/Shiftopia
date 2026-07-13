@@ -10,6 +10,7 @@
  * - VALID_RANGE: End time must be after start time (or overnight)
  */
 
+import { format } from 'date-fns';
 import { ShiftTimeRange } from './types';
 import { parseTimeToMinutes, doShiftsOverlap } from './utils';
 import { getSydneyNow } from '@/modules/core/lib/date.utils';
@@ -49,7 +50,10 @@ export interface HardValidationInput {
  */
 function validateFutureTime(input: HardValidationInput): HardValidationError | null {
     const now = input.current_time || getSydneyNow();
-    const today = now.toISOString().split('T')[0];  // YYYY-MM-DD
+    // `now` is a zoned Date whose LOCAL fields are the Sydney wall-clock (matching
+    // now.getHours() below). Read the date via date-fns format (local fields), NOT
+    // toISOString() (UTC), so the "today" boundary is the Sydney calendar day.
+    const today = format(now, 'yyyy-MM-dd');  // YYYY-MM-DD
 
     // Only validate same-day shifts
     if (input.shift_date !== today || input.is_template) {
@@ -138,7 +142,10 @@ function validateTimeRange(input: HardValidationInput): HardValidationError | nu
  */
 function validateNotPastDate(input: HardValidationInput): HardValidationError | null {
     const now = input.current_time || getSydneyNow();
-    const today = now.toISOString().split('T')[0];
+    // `now` is a zoned Date whose LOCAL fields are the Sydney wall-clock (matching
+    // now.getHours() below). Read the date via date-fns format (local fields), NOT
+    // toISOString() (UTC), so the "today" boundary is the Sydney calendar day.
+    const today = format(now, 'yyyy-MM-dd');
 
     if (input.shift_date < today && !input.is_template) {
         return {

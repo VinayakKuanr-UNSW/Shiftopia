@@ -23,6 +23,7 @@ import { getGroupColor } from '@/modules/rosters/model/roster.types';
 import type { TimesheetRow } from '../../model/timesheet.types';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { isShiftFinished, isEntryReviewable, cleanTime } from './TimesheetTable.utils';
+import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 interface TimesheetMobileCardProps {
     entry: TimesheetRow;
@@ -235,8 +236,9 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
     const isPast = useMemo(() => {
         if (!entry.date || !entry.scheduledEnd) return false;
         try {
-            const endStr = `${entry.date}T${entry.scheduledEnd}`;
-            return new Date(endStr).getTime() < Date.now();
+            // Compare the shift's Sydney wall-clock end instant against the real
+            // current epoch — browser-timezone-independent.
+            return parseZonedDateTime(String(entry.date), entry.scheduledEnd, SYDNEY_TZ).getTime() < Date.now();
         } catch {
             return false;
         }

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
+import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import type { AssignmentEpisode, ShiftLifecycleEvent, TerminalOutcome } from '@/modules/rosters/domain/shift-episodes';
 
 // ─── Outcome → Badge variant/label mapping ──────────────────────────────────
@@ -80,8 +81,8 @@ function EventRow({ event }: EventRowProps) {
       <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
         <span className="text-sm font-medium text-foreground">{label}</span>
         <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-          {time.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}{' '}
-          {time.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+          {formatInTimezone(time, SYDNEY_TZ, 'MMM d')}{' '}
+          {formatInTimezone(time, SYDNEY_TZ, 'HH:mm')}
         </span>
       </div>
     </div>

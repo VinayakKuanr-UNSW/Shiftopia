@@ -34,7 +34,7 @@ import {
 import { cn } from '@/modules/core/lib/utils';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { useAuth } from '@/platform/auth/useAuth';
-import { getSydneyNow, isSydneyPast } from '@/modules/core/lib/date.utils';
+import { getSydneyNow, isSydneyPast, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -84,7 +84,7 @@ const HistoryItem: React.FC<{ batch: any }> = ({ batch }) => {
                     <div className="flex flex-col">
                         <span className="text-[11px] font-black text-foreground leading-none">{batch.appliedByName || 'System'}</span>
                         <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-tighter mt-1">
-                            {format(new Date(batch.appliedAt), 'MMM d, HH:mm')}
+                            {formatInTimezone(new Date(batch.appliedAt), SYDNEY_TZ, 'MMM d, HH:mm')}
                         </span>
                     </div>
                 </div>

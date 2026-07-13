@@ -5,7 +5,7 @@ import {
 } from './constants';
 import { resolveRateSet, type WageRateTable } from './rate-schedule';
 import { getTraineeBaseRate } from './trainee_matrix';
-import { getApprenticeMultiplier } from './apprentice_matrix';
+import { getApprenticeMultiplier, SWS_MIN_WEEKLY } from './apprentice_matrix';
 import type { AwardContext } from './award-context';
 import { getDateFacts, parseTimeToMinutes, fastNightMinutes } from './award-context';
 
@@ -199,7 +199,22 @@ export function estimateDetailedShiftCost(
   if (options.is_sws) {
     const capacity = options.sws_capacity_percentage || 100;
     baseRate = baseRate * (capacity / 100);
-  } 
+
+    // cl 1.4.2 — SWS minimum weekly payment ($90/wk). The floor is WEEKLY, so the
+    // per-shift engine can only enforce it when the caller supplies the member's
+    // total ordinary hours for the (ISO) week. Then the weekly floor is an
+    // equivalent hourly rate (SWS_MIN_WEEKLY / swsWeeklyHours) and we lift the
+    // assessed-capacity rate to the greater of the two — so pricing every one of
+    // the week's ordinary hours at this rate yields at least $90 for the week,
+    // never below. Undefined / non-positive weekly hours ⇒ no-op (safe-by-default;
+    // the floor stays the documented un-modelled gap until weekly hours are fed
+    // in, mirroring the weekly-overtime `priorOrdinaryHoursThisWeek` contract).
+    const swsWeeklyHours = options.swsWeeklyHours;
+    if (typeof swsWeeklyHours === 'number' && Number.isFinite(swsWeeklyHours) && swsWeeklyHours > 0) {
+      const floorHourly = SWS_MIN_WEEKLY / swsWeeklyHours;
+      if (floorHourly > baseRate) baseRate = floorHourly;
+    }
+  }
   else if (options.is_trainee) {
     baseRate = getTraineeBaseRate({
       category: options.trainee_category || 'junior',

@@ -27,7 +27,7 @@ import { optimizerClient, OptimizerError } from './optimizer/optimizer.client';
 import { solutionParser } from './optimizer/solution-parser';
 import { bulkAssignmentController, type BulkAssignmentResult } from '@/modules/rosters/bulk-assignment';
 import { assignmentCommitter } from '@/modules/rosters/bulk-assignment/engine/assignment-committer';
-import { format } from 'date-fns';
+import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { estimateShiftCost, extractLevel } from '../rosters/domain/projections/utils/cost';
 import { resolveRateSet } from '../rosters/domain/projections/utils/cost/rate-schedule';
 import { calculateFatigueWithRecovery } from '../rosters/domain/projections/utils/fatigue';
@@ -481,10 +481,10 @@ export class AutoSchedulerController {
         const futureShifts: ShiftMeta[] = [];
 
         for (const s of input.shifts) {
-            // Re-use logic from IncrementalValidator but on ShiftMeta
-            // Note: ShiftMeta doesn't have start_at, but we can fetch it if needed.
-            // For now, use shift_date + start_time.
-            const start = new Date(`${s.shift_date}T${s.start_time}`);
+            // Re-use logic from IncrementalValidator but on ShiftMeta.
+            // ShiftMeta has no start_at, so resolve the authored Sydney
+            // wall-clock (shift_date + start_time) to an absolute instant.
+            const start = parseZonedDateTime(s.shift_date, s.start_time, SYDNEY_TZ);
             if (start.getTime() <= now) {
                 pastShifts.push(s);
             } else if (start.getTime() - now <= EMERGENT_WINDOW_MS) {
@@ -631,7 +631,7 @@ export class AutoSchedulerController {
                   MAX_INITIAL_FATIGUE_SCORE,
                   calculateFatigueWithRecovery(
                     existingRoster.get(e.id) ?? [],
-                    format(new Date(), 'yyyy-MM-dd') // Today's fatigue as baseline
+                    formatInTimezone(new Date(), SYDNEY_TZ, 'yyyy-MM-dd') // Today's fatigue (Sydney) as baseline
                   ).current,
                 ),
                 ...det,
@@ -1170,8 +1170,8 @@ export class AutoSchedulerController {
             cur.minutes += mins;
             cur.count += 1;
             
-            // Identify if this shift is already started
-            const start = new Date(`${s.shift_date}T${s.start_time}`);
+            // Identify if this shift is already started (Sydney wall-clock).
+            const start = parseZonedDateTime(s.shift_date, s.start_time, SYDNEY_TZ);
             if (start.getTime() <= now) {
                 cur.pastMinutes += mins;
             }

@@ -5,7 +5,7 @@ import { useTableSorting } from '@/modules/core/hooks/useTableSorting';
 import { SortableTableHeader } from '@/modules/core/ui/primitives/sortable-table-header';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO, addDays, startOfWeek, endOfWeek } from 'date-fns';
-import { SYDNEY_TZ, parseZonedDateTime, formatInTimezone } from '@/modules/core/lib/date.utils';
+import { SYDNEY_TZ, parseZonedDateTime, formatInTimezone, formatShiftTime, formatShiftDate, getShiftDateKey } from '@/modules/core/lib/date.utils';
 import { biddingApi } from '../../api/bidding.api';
 import { validateCompliance, type ComplianceResult, type QualificationViolation } from '@/modules/rosters/services/compliance.service';
 import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
@@ -88,7 +88,7 @@ export const EmployeeBidsPage: React.FC = () => {
     const [showExpired, setShowExpired] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const todayStr = formatInTimezone(new Date(), SYDNEY_TZ, 'yyyy-MM-dd');
     const todayDate = React.useMemo(() => {
         const d = new Date(); d.setHours(0, 0, 0, 0); return d;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -253,10 +253,10 @@ export const EmployeeBidsPage: React.FC = () => {
                 })(),
                 subGroupName: s.sub_group_name || 'General',
                 subGroup: s.sub_departments?.name || 'General',
-                date: (s as any).start_at ? formatInTimezone(new Date((s as any).start_at), (s as any).tz_identifier || SYDNEY_TZ, 'yyyy-MM-dd') : s.shift_date,
-                weekday: (s as any).start_at ? formatInTimezone(new Date((s as any).start_at), (s as any).tz_identifier || SYDNEY_TZ, 'EEE') : format(parseISO(s.shift_date), 'EEE'),
-                startTime: (s as any).start_at ? formatInTimezone(new Date((s as any).start_at), (s as any).tz_identifier || SYDNEY_TZ, 'HH:mm') : s.start_time.slice(0, 5),
-                endTime: (s as any).end_at ? formatInTimezone(new Date((s as any).end_at), (s as any).tz_identifier || SYDNEY_TZ, 'HH:mm') : s.end_time.slice(0, 5),
+                date: getShiftDateKey(s as any) ?? s.shift_date,
+                weekday: formatShiftDate(s as any, 'EEE', format(parseISO(s.shift_date), 'EEE')),
+                startTime: formatShiftTime(s as any, 'start', 'HH:mm', s.start_time?.slice(0, 5)),
+                endTime: formatShiftTime(s as any, 'end', 'HH:mm', s.end_time?.slice(0, 5)),
                 startAt: shiftStartAt.toISOString(),
                 endAt: (s as any).end_at,
                 tzIdentifier: (s as any).tz_identifier,
@@ -317,10 +317,10 @@ export const EmployeeBidsPage: React.FC = () => {
                 })(),
                 subGroupName: s.sub_group_name || 'General',
                 subGroup: s.sub_departments?.name || 'General',
-                date: (s as any).start_at ? formatInTimezone(new Date((s as any).start_at), (s as any).tz_identifier || SYDNEY_TZ, 'yyyy-MM-dd') : s.shift_date,
-                weekday: (s as any).start_at ? formatInTimezone(new Date((s as any).start_at), (s as any).tz_identifier || SYDNEY_TZ, 'EEE') : format(parseISO(s.shift_date), 'EEE'),
-                startTime: (s as any).start_at ? formatInTimezone(new Date((s as any).start_at), (s as any).tz_identifier || SYDNEY_TZ, 'HH:mm') : s.start_time.slice(0, 5),
-                endTime: (s as any).end_at ? formatInTimezone(new Date((s as any).end_at), (s as any).tz_identifier || SYDNEY_TZ, 'HH:mm') : s.end_time.slice(0, 5),
+                date: getShiftDateKey(s as any) ?? s.shift_date,
+                weekday: formatShiftDate(s as any, 'EEE', format(parseISO(s.shift_date), 'EEE')),
+                startTime: formatShiftTime(s as any, 'start', 'HH:mm', s.start_time?.slice(0, 5)),
+                endTime: formatShiftTime(s as any, 'end', 'HH:mm', s.end_time?.slice(0, 5)),
                 startAt: shiftStartAt.toISOString(),
                 endAt: (s as any).end_at,
                 tzIdentifier: (s as any).tz_identifier,
@@ -387,7 +387,7 @@ export const EmployeeBidsPage: React.FC = () => {
 
             const shiftStart = opp.startAt
                 ? new Date(opp.startAt).getTime()
-                : new Date(`${opp.date}T${opp.startTime}:00`).getTime();
+                : parseZonedDateTime(opp.date, opp.startTime, SYDNEY_TZ).getTime();
             const biddingCloses = new Date(shiftStart - 4 * 60 * 60 * 1000);
             const isExpired = now >= biddingCloses.getTime();
 

@@ -14,12 +14,15 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 
 // ── Mock infrastructure ───────────────────────────────────────────────────────
 
 const FIXED_DATE = '2030-08-20';
 const FIXED_TIME = '14:00';
-const FIXED_START_MS = new Date(`${FIXED_DATE}T${FIXED_TIME}`).getTime();
+// Anchor the reference instant in Australia/Sydney — the same zone computeShiftUrgency
+// interprets shiftDate/startTime in — so TTS math is exact regardless of the runner's tz.
+const FIXED_START_MS = parseZonedDateTime(FIXED_DATE, FIXED_TIME).getTime();
 
 function setNow(msBeforeStart: number) {
   vi.spyOn(Date, 'now').mockReturnValue(FIXED_START_MS - msBeforeStart);

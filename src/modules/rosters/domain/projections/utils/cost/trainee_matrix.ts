@@ -91,8 +91,49 @@ const TRAINEE_2025: TraineeRateSet = {
   certIvUpliftPct: 3.8,
 };
 
+// ── FY2026/2027: +5.1% from 6 Jul 2026 ────────────────────────────────────────
+// The FY26/27 EBA variation lifts all rates 5.1%. The published FY26/27 tables
+// covered Schedule 2 (see rate-schedule.ts) but NOT the Schedule 5 trainee matrix,
+// so these figures are DERIVED at ×1.051 (each 2025 cell × 1.051, rounded to
+// cents) — the sanctioned mechanism (cl 25.1 shape = 4.6% CPI + 0.5%). Held as a
+// hand-entered literal (not an applyTraineeCpiIncrease() call) because the scaling
+// helpers below are declared later in the module; it is machine-checked against
+// the DB seed by rate-schedule-trainee-fy2026-sync.test.ts. If an official
+// Schedule 5 FY26/27 table later prints cent-different values, replace this set.
+const TRAINEE_2026: TraineeRateSet = {
+  effectiveFrom: '2026-07-06',
+  label: 'ICC Sydney EA — FY2026/2027 (5.1% increase)',
+  source: '+5.1% (×1.051) applied to Schedule 5 §1.4–§1.5 (2025 baseline)',
+  weeklyLevelA: {
+    10: [442.26, 487.24, 579.21, 674.32, 803.38, 898.50],
+    11: [487.24, 579.21, 674.32, 803.38, 898.50, 898.50],
+    12: [579.21, 674.32, 803.38, 898.50, 898.50, 898.50],
+  },
+  weeklyLevelB: {
+    10: [442.26, 487.24, 565.12, 649.52, 761.97, 868.86],
+    11: [487.24, 565.12, 649.52, 761.97, 868.86, 868.86],
+    12: [565.12, 649.52, 761.97, 868.86, 868.86, 868.86],
+  },
+  hourlyLevelA: {
+    10: [14.55, 16.03, 19.05, 22.18, 25.80, 29.55],
+    11: [16.03, 19.05, 22.18, 25.80, 29.55, 29.55],
+    12: [19.05, 22.18, 25.80, 29.55, 29.55, 29.55],
+  },
+  hourlyLevelB: {
+    10: [14.55, 16.03, 18.59, 21.37, 25.07, 28.58],
+    11: [16.03, 18.59, 21.37, 25.07, 28.58, 28.58],
+    12: [18.59, 21.37, 25.07, 28.58, 28.58, 28.58],
+  },
+  adult: {
+    ftWeekly: { A: [932.76, 967.66], B: [902.18, 936.02] },
+    ptHourly: { A: [30.68, 31.82], B: [29.67, 30.78] },
+  },
+  schoolBasedHourly: { yr12: 16.03, other: 14.55 },
+  certIvUpliftPct: 3.8,
+};
+
 /** Effective-dated trainee schedule, ascending by `effectiveFrom`. */
-export const TRAINEE_RATE_SCHEDULE: TraineeRateSet[] = [TRAINEE_2025];
+export const TRAINEE_RATE_SCHEDULE: TraineeRateSet[] = [TRAINEE_2025, TRAINEE_2026];
 
 function normalizeDate(d?: string | null): string {
   if (!d) return '';

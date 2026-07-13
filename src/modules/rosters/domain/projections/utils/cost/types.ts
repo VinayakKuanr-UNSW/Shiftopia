@@ -77,6 +77,16 @@ export interface CostCalculatorOptions {
   sws_trial_start_date?: string;
   classificationLevel?: string;
 
+  // ── SWS minimum weekly payment (Schedule 6 cl 1.4.2) ─────────────────────────
+  // The SWS floor of $90/week is a WEEKLY minimum, which a per-shift engine can
+  // only enforce when told the member's total ordinary hours rostered across the
+  // whole (ISO) week. Given that, the floor becomes an equivalent hourly rate
+  // (SWS_MIN_WEEKLY / swsWeeklyHours) and the SWS base rate is lifted to the
+  // greater of it and the assessed-capacity rate. UNDEFINED / null / ≤0 ⇒ the
+  // floor is a no-op (safe-by-default) and the assessed-capacity rate stands —
+  // exactly the prior behaviour. Only meaningful when `is_sws` is set.
+  swsWeeklyHours?: number;
+
   // ── Higher duties (cl 29) ────────────────────────────────────────────────
   // Classification the member is TEMPORARILY performing above their substantive
   // grade for this shift. When it resolves (via the same wageRates lookup as

@@ -2,6 +2,7 @@
  * Shift Helper Functions
  * Utilities for checking shift status with proper timezone handling
  */
+import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from './date.utils';
 
 /**
  * Check if a shift has already started
@@ -10,9 +11,8 @@
 export function hasShiftStarted(shift: { shift_date: string; start_time: string }): boolean {
     try {
         // Parse shift start time (assuming Australia/Sydney timezone)
-        const [hours, minutes] = shift.start_time.split(':').map(Number);
-        const shiftStart = new Date(shift.shift_date);
-        shiftStart.setHours(hours, minutes, 0, 0);
+        // Australia/Sydney wall-clock instant — independent of the viewer's browser tz.
+        const shiftStart = parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ);
 
         const now = new Date();
         return shiftStart <= now;
@@ -28,9 +28,8 @@ export function hasShiftStarted(shift: { shift_date: string; start_time: string 
  */
 export function getHoursUntilShift(shift: { shift_date: string; start_time: string }): number {
     try {
-        const [hours, minutes] = shift.start_time.split(':').map(Number);
-        const shiftStart = new Date(shift.shift_date);
-        shiftStart.setHours(hours, minutes, 0, 0);
+        // Australia/Sydney wall-clock instant — independent of the viewer's browser tz.
+        const shiftStart = parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ);
 
         const now = new Date();
         const diffMs = shiftStart.getTime() - now.getTime();
@@ -46,15 +45,9 @@ export function getHoursUntilShift(shift: { shift_date: string; start_time: stri
  */
 export function formatShiftStart(shift: { shift_date: string; start_time: string }): string {
     try {
-        const [hours, minutes] = shift.start_time.split(':').map(Number);
-        const shiftStart = new Date(shift.shift_date);
-        shiftStart.setHours(hours, minutes, 0, 0);
-
-        return shiftStart.toLocaleString('en-AU', {
-            timeZone: 'Australia/Sydney',
-            dateStyle: 'medium',
-            timeStyle: 'short'
-        });
+        // Australia/Sydney wall-clock instant — independent of the viewer's browser tz.
+        const shiftStart = parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ);
+        return formatInTimezone(shiftStart, SYDNEY_TZ, 'd MMM yyyy, h:mm a');
     } catch (error) {
         return `${shift.shift_date} ${shift.start_time}`;
     }

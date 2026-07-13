@@ -2,6 +2,7 @@ import React from 'react';
 import { Shift } from '@/modules/rosters';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { format } from 'date-fns';
+import { getNowInTimezone, SYDNEY_TZ, formatCalendarDate } from '@/modules/core/lib/date.utils';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import ShiftPill from './ShiftPill';
 
@@ -30,10 +31,13 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
   const isPast = React.useMemo(() => {
     if (!shift.shift_date || !shift.end_time) return false;
     try {
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      // "Now" in Sydney (AEST/AEDT) so comparisons against the shift's Sydney
+      // wall-clock fields are correct regardless of the viewer's browser tz.
+      const nowSyd = getNowInTimezone(SYDNEY_TZ);
+      const todayStr = format(nowSyd, 'yyyy-MM-dd');
       if (shift.shift_date > todayStr) return false;
       if (shift.shift_date < todayStr) return true;
-      const [nowH, nowM] = format(new Date(), 'HH:mm').split(':').map(Number);
+      const [nowH, nowM] = format(nowSyd, 'HH:mm').split(':').map(Number);
       const [endH, endM] = shift.end_time.split(':').map(Number);
       const resolvedEndH = endH === 0 ? 24 : endH;
       const currentMinutes = nowH * 60 + nowM;
@@ -81,7 +85,7 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
         department={groupName}
         subGroup={subGroupName}
         role={shift.roles?.name || 'Shift'}
-        shiftDate={format(new Date(shift.shift_date), 'EEE, MMM d')}
+        shiftDate={formatCalendarDate(shift.shift_date, 'EEE, MMM d')}
         startTime={shift.start_time.slice(0, 5)}
         endTime={shift.end_time.slice(0, 5)}
         netLength={netLength}

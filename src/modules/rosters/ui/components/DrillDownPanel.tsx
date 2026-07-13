@@ -11,9 +11,8 @@ import {
   useBulkDeleteShifts,
 } from '@/modules/rosters/state/useRosterShifts';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
-import { format } from 'date-fns';
 import { X, Loader2, Edit2, CopyPlus, Trash2, Send, Undo2, Lock, ChevronLeft } from 'lucide-react';
-import { isSydneyPast, isSydneyStarted } from '@/modules/core/lib/date.utils';
+import { isSydneyPast, isSydneyStarted, formatCalendarDate } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Checkbox } from '@/modules/core/ui/primitives/checkbox';
@@ -243,7 +242,7 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
     }
   };
 
-  const displayDate = date ? format(new Date(date), 'EEEE, MMMM d, yyyy') : '';
+  const displayDate = date ? formatCalendarDate(date, 'EEEE, MMMM d, yyyy') : '';
 
   // Handlers
   const handlePublishShift = async (shift: Shift) => {

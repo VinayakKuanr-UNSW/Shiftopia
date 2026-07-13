@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
+import { formatCalendarDate } from '@/modules/core/lib/date.utils';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -215,7 +216,7 @@ const OfferItem: React.FC<{
             department={offer.shift.departments?.name || ''}
             subGroup={offer.shift.sub_departments?.name}
             role={offer.shift.roles?.name || 'Shift'}
-            shiftDate={format(new Date(offer.shift.shift_date), 'EEE, MMM d, yyyy')}
+            shiftDate={formatCalendarDate(offer.shift.shift_date, 'EEE, MMM d, yyyy')}
             startTime={offer.shift.start_time.slice(0, 5)}
             endTime={offer.shift.end_time.slice(0, 5)}
             netLength={netLength}

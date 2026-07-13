@@ -1,4 +1,4 @@
-import { startOfDay, isBefore, isAfter, isSameDay, format as formatDateFns } from 'date-fns';
+import { startOfDay, isBefore, isAfter, isSameDay, format as formatDateFns, parseISO } from 'date-fns';
 import { toZonedTime, format as formatZoned, toDate } from 'date-fns-tz';
 
 // Default fallback timezone if none provided
@@ -76,7 +76,127 @@ export const parseZonedDateTime = (dateStr: string, timeStr: string, timezone: s
  * @param formatStr The format string (e.g. 'yyyy-MM-dd', 'HH:mm', 'EEE')
  */
 export const formatInTimezone = (date: Date, timezone: string = SYDNEY_TZ, formatStr: string = 'yyyy-MM-dd'): string => {
-    return formatZoned(date, formatStr, { timeZone: timezone });
+    // date-fns-tz `format` only uses `timeZone` for zone-NAME tokens (z/zzz/xxx) —
+    // it does NOT convert the numeric H/m/d fields. Passing a raw UTC instant would
+    // therefore render in the runtime's LOCAL zone. `toZonedTime` shifts the instant
+    // so its wall-clock fields represent the target zone; then formatting is correct
+    // (AEST/AEDT) regardless of the viewer's browser timezone.
+    return formatZoned(toZonedTime(date, timezone), formatStr, { timeZone: timezone });
+};
+
+// --- CANONICAL SHIFT WALL-CLOCK (always AEST/AEDT) ---------------------------
+//
+// This is an Australian app: shift times must ALWAYS display in Australia/Sydney
+// (AEST in winter / AEDT in summer — the IANA zone handles DST automatically),
+// regardless of the viewer's browser timezone.
+//
+// Source of truth = the authored naive fields (shift_date + start_time/end_time),
+// which are the Sydney wall-clock the roster was built in. The `start_at`/`end_at`
+// timestamptz columns are DERIVED (a DB trigger recomputes them from the naive
+// fields) and can drift/go stale, so they are only a fallback. Never format shift
+// times through the browser's local zone, and never trust a per-row tz column for
+// DISPLAY — pin to SYDNEY_TZ.
+
+export interface ShiftTimeFields {
+    shift_date?: string | null;
+    start_time?: string | null;
+    end_time?: string | null;
+    start_at?: string | null;
+    end_at?: string | null;
+}
+
+/**
+ * Resolve a shift's start/end as an absolute instant whose Sydney wall-clock is
+ * the authored time. Prefers naive shift_date + start_time/end_time; falls back
+ * to start_at/end_at. Returns null when nothing usable is present.
+ */
+export const getShiftInstant = (
+    shift: ShiftTimeFields | null | undefined,
+    part: 'start' | 'end' = 'start',
+): Date | null => {
+    if (!shift) return null;
+    const time = part === 'start' ? shift.start_time : shift.end_time;
+    if (shift.shift_date && time) {
+        const d = parseZonedDateTime(shift.shift_date, time, SYDNEY_TZ);
+        if (!isNaN(d.getTime())) return d;
+    }
+    const at = part === 'start' ? shift.start_at : shift.end_at;
+    if (at) {
+        const d = new Date(at);
+        if (!isNaN(d.getTime())) return d;
+    }
+    return null;
+};
+
+/**
+ * Format a shift's start/end time in Australia/Sydney (AEST/AEDT),
+ * browser-timezone-independent.
+ * @param fmt date-fns format string (e.g. 'HH:mm', 'h:mm a')
+ */
+export const formatShiftTime = (
+    shift: ShiftTimeFields | null | undefined,
+    part: 'start' | 'end' = 'start',
+    fmt: string = 'HH:mm',
+    fallback: string = '',
+): string => {
+    const d = getShiftInstant(shift, part);
+    return d ? formatInTimezone(d, SYDNEY_TZ, fmt) : fallback;
+};
+
+/**
+ * Format a shift's calendar date in Australia/Sydney (AEST/AEDT).
+ * Prefers the authored shift_date; falls back to start_at.
+ * @param fmt date-fns format string (e.g. 'EEE, MMM d', 'yyyy-MM-dd')
+ */
+export const formatShiftDate = (
+    shift: ShiftTimeFields | null | undefined,
+    fmt: string = 'EEE, MMM d',
+    fallback: string = '',
+): string => {
+    if (shift?.shift_date) {
+        const d = parseZonedDateTime(shift.shift_date, shift.start_time || '00:00', SYDNEY_TZ);
+        if (!isNaN(d.getTime())) return formatInTimezone(d, SYDNEY_TZ, fmt);
+    }
+    const d = getShiftInstant(shift, 'start');
+    return d ? formatInTimezone(d, SYDNEY_TZ, fmt) : fallback;
+};
+
+/**
+ * Format a plain calendar-date string (e.g. 'yyyy-MM-dd') for display WITHOUT any
+ * timezone shift. `new Date('2026-07-13')` parses as UTC midnight and, formatted
+ * with date-fns (local fields), renders the PREVIOUS day west of Greenwich. A
+ * calendar date has no timezone, so parse it as a local wall-clock date — the
+ * output is then the literal date in every browser tz. Full ISO instants
+ * (length > 10) are rendered in Sydney instead.
+ * @param fmt date-fns format (e.g. 'EEE, MMM d', 'MMM d, yyyy')
+ */
+export const formatCalendarDate = (
+    dateStr: string | null | undefined,
+    fmt: string = 'EEE, MMM d',
+    fallback: string = '',
+): string => {
+    if (!dateStr) return fallback;
+    if (dateStr.length <= 10) {
+        const d = parseISO(dateStr); // local midnight — no tz drift for date-only
+        return isNaN(d.getTime()) ? fallback : formatDateFns(d, fmt);
+    }
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? fallback : formatInTimezone(d, SYDNEY_TZ, fmt);
+};
+
+/**
+ * Today's calendar date as 'yyyy-MM-dd' in the given timezone (default Sydney).
+ * Use instead of `format(new Date(), 'yyyy-MM-dd')`, which yields the browser's
+ * local calendar day and can be off by one near midnight for non-Sydney viewers.
+ */
+export const todayISO = (timezone: string = SYDNEY_TZ): string =>
+    formatInTimezone(new Date(), timezone, 'yyyy-MM-dd');
+
+/** Sydney calendar date (yyyy-MM-dd) for range/bucket filtering. */
+export const getShiftDateKey = (shift: ShiftTimeFields | null | undefined): string | undefined => {
+    if (shift?.shift_date) return shift.shift_date;
+    const d = getShiftInstant(shift, 'start');
+    return d ? formatInTimezone(d, SYDNEY_TZ, 'yyyy-MM-dd') : undefined;
 };
 
 // --- LEGACY COMPATIBILITY (Deprecate gradually) ---

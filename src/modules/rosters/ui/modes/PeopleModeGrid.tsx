@@ -23,7 +23,7 @@ import { DroppableDateCell } from '@/modules/rosters/ui/components/DroppableDate
 import { useResolvedAvailability } from '@/modules/rosters/hooks/useResolvedAvailability';
 import type { Shift } from '@/modules/rosters/domain/shift.entity';
 import { isShiftLocked } from '@/modules/rosters/domain/shift-locking.utils';
-import { isSydneyPast } from '@/modules/core/lib/date.utils';
+import { isSydneyPast, todayISO } from '@/modules/core/lib/date.utils';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useCreateShift } from '@/modules/rosters/state/useRosterShifts';
 import { 
@@ -460,7 +460,7 @@ export const PeopleModeGrid: React.FC<PeopleModeGridProps> = ({
 
                   {/* Date Column Headers */}
                   {dates.map((date, idx) => {
-                    const dateIsToday = format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+                    const dateIsToday = format(date, 'yyyy-MM-dd') === todayISO();
                     return (
                       <div
                         role="columnheader"

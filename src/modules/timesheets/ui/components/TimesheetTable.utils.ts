@@ -1,4 +1,5 @@
 import { type ShiftDotInput, isTimesheetReviewable } from '@/modules/rosters/domain/shift-ui';
+import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { type TimesheetRow } from '../../model/timesheet.types';
 
 /**
@@ -97,23 +98,27 @@ export const isShiftFinished = (
     if (actualEnd && actualEnd !== '-' && actualEnd !== '—') return true;
 
     if (!scheduledEnd || scheduledEnd === '-') return false;
-    
-    try {
-        const baseDate = new Date(date);
-        const [hours, minutes] = scheduledEnd.split(':').map(Number);
-        const [startH] = scheduledStart.split(':').map(Number);
-        
-        const endTime = new Date(baseDate);
-        endTime.setHours(hours, minutes, 0, 0);
 
-        // Handle overnight shifts
-        if (hours < startH) {
-            endTime.setDate(endTime.getDate() + 1);
+    try {
+        // Evaluate shift times against the Sydney wall-clock they were authored in,
+        // regardless of the viewer's browser timezone. `date` is the authored
+        // calendar date (yyyy-MM-dd); if a Date sneaks in, coerce to that key.
+        const dateStr = typeof date === 'string'
+            ? date
+            : formatInTimezone(date, SYDNEY_TZ, 'yyyy-MM-dd');
+
+        const startInstant = parseZonedDateTime(dateStr, scheduledStart, SYDNEY_TZ);
+        let endInstant = parseZonedDateTime(dateStr, scheduledEnd, SYDNEY_TZ);
+
+        // Handle overnight shifts: parseZonedDateTime gives the SAME-day instant,
+        // so when end is at/before start, the shift ends the next day (+24h).
+        if (endInstant.getTime() <= startInstant.getTime()) {
+            endInstant = new Date(endInstant.getTime() + 24 * 60 * 60 * 1000);
         }
 
-        return new Date() >= endTime;
+        return Date.now() >= endInstant.getTime();
     } catch (e) {
         console.error("Error parsing shift end time for finished check", e);
-        return true; 
+        return true;
     }
 };

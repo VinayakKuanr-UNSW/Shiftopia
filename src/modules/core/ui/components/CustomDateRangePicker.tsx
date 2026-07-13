@@ -1,5 +1,6 @@
 import React from 'react';
 import { format } from 'date-fns';
+import { todayISO } from '@/modules/core/lib/date.utils';
 import { Calendar as CalendarIcon, RefreshCcw } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
@@ -59,8 +60,8 @@ export const CustomDateRangePicker: React.FC<CustomDateRangePickerProps> = ({
         onDateChange(today, today);
     };
 
-    const isTodaySelected = format(startDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') && 
-                            format(endDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+    const isTodaySelected = format(startDate, 'yyyy-MM-dd') === todayISO() && 
+                            format(endDate, 'yyyy-MM-dd') === todayISO();
 
     const buttonBaseCls = cn(
         "flex items-center gap-2 h-10 lg:h-11 px-2.5 lg:px-4 rounded-xl transition-all font-black tabular-nums text-[10px] lg:text-xs",

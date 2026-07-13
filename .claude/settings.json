@@ -99,7 +99,32 @@
       "Bash(awk '/input.employeeDetails|employeeDetails\\\\?:/ {print NR\": \"$0}' src/modules/scheduling/auto-scheduler.controller.ts src/modules/scheduling/types.ts)",
       "Bash(echo \"TSC=$?\")",
       "Bash(OPTIMIZER_AUTH_DISABLED=true .venv/bin/python -m pytest tests/ -q)",
-      "Bash(OPTIMIZER_AUTH_DISABLED=true ../.venv/bin/python3 -m pytest tests/ -q)"
+      "Bash(OPTIMIZER_AUTH_DISABLED=true ../.venv/bin/python3 -m pytest tests/ -q)",
+      "Bash(python3 -c ' *)",
+      "Bash(OPTIMIZER_AUTH_DISABLED=true .venv/bin/python -m pytest -q)",
+      "Bash(python3 -c \"import ortools, pytest; print\\('system ok'\\)\")",
+      "Bash(tee /private/tmp/claude-501/-Users-vinayakkuanr-Documents-Superman-ULTIMATE/72d16adb-f1a1-4101-a7b1-24c6bcb3c618/scratchpad/trainee_fy26.txt)",
+      "Bash(echo \"vitest exit: $?\")",
+      "Bash(awk '/parseZonedDateTime/{f=1} f{print NR\": \"$0} f&&/^}/{c++; if\\(c>=1\\) exit}' src/modules/core/lib/date.utils.ts)",
+      "Bash(grep -nE '\\\\$\\\\{[^}]*shift_date[^}]*\\\\}T\\\\$\\\\{|`\\\\$\\\\{shift[^`]*T\\\\$\\\\{' src/modules/planning/swapping/ui/pages/EmployeeSwaps.page.tsx)",
+      "Bash(grep -nE '\\\\}T\\\\$\\\\{' src/modules/planning/swapping/ui/pages/EmployeeSwaps.page.tsx)",
+      "Bash(awk '/export const formatInTimezone|export function formatInTimezone/{f=1} f{print NR\": \"$0} f&&/^};?$/{exit}' src/modules/core/lib/date.utils.ts)",
+      "Bash(awk '/export \\(const|function\\) getTimeRule/{f=1} f{print NR\": \"$0} f&&/^}/{c++; if\\(c>=1\\) exit}' src/modules/rosters/domain/shift-ui.ts)",
+      "Bash(grep -nE \"new Date\\\\\\('20|new Date\\\\\\(\\\\`\" src/modules/rosters/domain/__tests__/projections/group.projector.test.ts)",
+      "Bash(grep -rn \"new Date\\(\\\\`\\\\${\" src/modules/planning/bidding/api/bidding.api.ts src/modules/planning/bidding/ui/pages/EmployeeBids.page.tsx)",
+      "Bash(grep -nE 'new Date\\\\\\(`\\\\$\\\\{[^}]+\\\\}T\\\\$\\\\{' src/modules/planning/unified/service/planning-request.service.ts src/modules/scheduling/auto-scheduler.controller.ts)",
+      "Bash(grep -rnF 'new Date\\(`${' src/modules/planning/bidding/api/bidding.api.ts src/modules/planning/bidding/ui/pages/EmployeeBids.page.tsx)",
+      "Bash(grep -rln \"isShiftFinished\\\\|isPast\\\\|scheduledEnd\\\\|new Date\\(\\\\`\\\\${\" src/modules/timesheets --include=\"*.test.ts\" --include=\"*.test.tsx\")",
+      "Bash(echo \"exit:$?\")",
+      "Bash(grep -rn \"new Date\\(\\\\`\\\\${\" src/modules/timesheets/ui/components/TimesheetTable.utils.ts src/modules/timesheets/ui/components/TimesheetRow.tsx src/modules/timesheets/ui/components/TimesheetMobileCard.tsx)",
+      "Bash(grep -rnE 'new Date\\\\\\(`' src/modules/planning/bidding/api/bidding.api.ts src/modules/planning/bidding/ui/pages/EmployeeBids.page.tsx)",
+      "Bash(grep -rn 'new Date\\(`\\\\${' src/modules/timesheets/ui/components/TimesheetTable.utils.ts src/modules/timesheets/ui/components/TimesheetRow.tsx src/modules/timesheets/ui/components/TimesheetMobileCard.tsx)",
+      "Bash(grep -rnE 'new Date\\\\\\(`\\\\$\\\\{[^}]+\\\\}T\\\\$\\\\{|parseZonedDateTime|TIME_LOCK|time.?lock|assertNotTimeLocked' src/modules/planning/unified/__tests__ src/modules/scheduling/__tests__)",
+      "Bash(grep -nE \"new Date\\\\\\(\\\\`|new Date\\\\\\('[0-9]{4}-|format\\\\\\(new Date\\\\\\(\\\\\\)\" src/modules/rosters/pages/AttendancePage.tsx)",
+      "Bash(grep -nE \"new Date\\\\\\(\\\\`|new Date\\\\\\('[0-9]{4}-|format\\\\\\(new Date\\\\\\(\\\\\\)|new Date\\\\\\(_selected|new Date\\\\\\(s\\\\._selected\" src/modules/rosters/state/useRosterStore.ts)",
+      "Bash(grep -rInE \"new Date\\\\\\(\\\\`[^\\)]*\\\\\\\\\\\\$\\\\{[^}]*\\\\}T\\\\\\\\\\\\$\\\\{\" src)",
+      "Bash(grep -rInE \"const \\(endStr|startStr|dateStr|dateTimeStr|startStr|isoStr\\) = \\\\`\\\\\\\\\\\\$\\\\{\" src)",
+      "Bash(grep -rInE \"new Date\\\\\\(\\\\`\" src)"
     ]
   }
 }

@@ -36,6 +36,7 @@ import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { Label } from '@/modules/core/ui/primitives/label';
 import type { TimesheetRow as TimesheetRowType } from "../../model/timesheet.types";
 import { calculateHoursBetween, formatHours, formatDifferential, isShiftFinished, timesheetEntryToShiftInput } from "./TimesheetTable.utils";
+import { parseZonedDateTime, SYDNEY_TZ } from "@/modules/core/lib/date.utils";
 import { getProtectionContext, getTimeRule, getLiveRuleBadges, isTimesheetReviewable } from "@/modules/rosters/domain/shift-ui";
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
 import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
@@ -99,8 +100,9 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     const isPast = useMemo(() => {
         if (!entry.date || !entry.scheduledEnd) return false;
         try {
-            const endStr = `${entry.date}T${entry.scheduledEnd}`;
-            return new Date(endStr).getTime() < Date.now();
+            // Compare the shift's Sydney wall-clock end instant against the real
+            // current epoch — browser-timezone-independent.
+            return parseZonedDateTime(String(entry.date), entry.scheduledEnd, SYDNEY_TZ).getTime() < Date.now();
         } catch {
             return false;
         }

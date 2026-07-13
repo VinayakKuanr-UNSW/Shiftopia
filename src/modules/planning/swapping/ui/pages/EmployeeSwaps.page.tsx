@@ -53,7 +53,7 @@ import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { useSwaps } from '../../state/useSwaps';
 import { ShiftSwap, swapsApi } from '../../api/swaps.api';
 import { format, differenceInMinutes, parse, startOfWeek, endOfWeek } from 'date-fns';
-import { SYDNEY_TZ, parseZonedDateTime, formatInTimezone } from '@/modules/core/lib/date.utils';
+import { SYDNEY_TZ, parseZonedDateTime, formatInTimezone, formatShiftTime, formatShiftDate, getShiftDateKey } from '@/modules/core/lib/date.utils';
 import { ViewOffersModal } from '../components/ViewOffersModal';
 import { UnifiedSwapModal } from '../components/UnifiedSwapModal';
 import { SwapSelectionToolbar } from '../components/SwapSelectionToolbar';
@@ -62,7 +62,7 @@ import { useQuery } from '@tanstack/react-query';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useMinuteTick } from '@/modules/core/hooks/useMinuteTick';
-import { computeShiftUrgency, ShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
+import { computeShiftUrgency, ShiftUrgency, EMERGENT_WINDOW_MS } from '@/modules/rosters/domain/bidding-urgency';
 import { SharedShiftCard } from '../../../../planning/ui/components/SharedShiftCard';
 import { calculateTimeRemaining, formatTimeRemaining } from '../../../../planning/bidding/ui/views/OpenBidsView/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -307,10 +307,40 @@ export const getSwapTimer = (now: Date, startAt?: string, shiftDate?: string, st
     return `Expires in ${minutes}m`;
 };
 
+/**
+ * Resolve the true offer-close moment for a swap card: shift START − EMERGENT_WINDOW_MS (T−4h).
+ * Timezone-correct: naive shift_date/start_time is interpreted in the shift's tz (Sydney by default)
+ * via parseZonedDateTime — NEVER via `new Date(`${date}T${time}`)` which parses in the browser tz.
+ * Returns isClosed (past the T−4h lockout) and the formatted countdown to close (null when closed/unknown).
+ */
+const getSwapClose = (
+    shift: any,
+    now: Date,
+): { closeAt: Date | null; isClosed: boolean; timerText: string | null } => {
+    const start: Date | null = shift?.start_at
+        ? new Date(shift.start_at)
+        : (shift?.shift_date && shift?.start_time
+            ? parseZonedDateTime(shift.shift_date, shift.start_time, shift.tz_identifier ?? SYDNEY_TZ)
+            : null);
+
+    if (!start || isNaN(start.getTime())) {
+        return { closeAt: null, isClosed: false, timerText: null };
+    }
+
+    const closeAt = new Date(start.getTime() - EMERGENT_WINDOW_MS);
+    const isClosed = now.getTime() >= closeAt.getTime();
+    const timerText = isClosed ? null : formatTimeRemaining(calculateTimeRemaining(closeAt.toISOString()));
+
+    return { closeAt, isClosed, timerText };
+};
+
 // Simplified check for styling
 const isSwapExpired = (now: Date, startAt?: string, shiftDate?: string, startTime?: string, tzIdentifier?: string): boolean => {
-    const tr = calculateTimeRemaining(startAt || (shiftDate && startTime ? `${shiftDate}T${startTime}` : ''));
-    return tr.isExpired;
+    const start = startAt
+        ? new Date(startAt)
+        : (shiftDate && startTime ? parseZonedDateTime(shiftDate, startTime, tzIdentifier ?? SYDNEY_TZ) : null);
+    if (!start || isNaN(start.getTime())) return false;
+    return now.getTime() >= start.getTime() - EMERGENT_WINDOW_MS;
 };
 
 export const EmployeeSwapsPage: React.FC = () => {
@@ -435,7 +465,7 @@ export const EmployeeSwapsPage: React.FC = () => {
             const shift = (swap as any).requester_shift;
             
             // Date filter
-            const shiftDateStr = shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'yyyy-MM-dd') : shift?.shift_date;
+            const shiftDateStr = getShiftDateKey(shift);
             if (shiftDateStr && (shiftDateStr < startStr || shiftDateStr > endStr)) return false;
 
             // Priority filter
@@ -463,7 +493,7 @@ export const EmployeeSwapsPage: React.FC = () => {
             const shift = (swap as any).requester_shift;
             
             // Date filter
-            const shiftDateStr = shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'yyyy-MM-dd') : shift?.shift_date;
+            const shiftDateStr = getShiftDateKey(shift);
             if (shiftDateStr && (shiftDateStr < startStr || shiftDateStr > endStr)) return false;
 
             // Priority filter
@@ -489,7 +519,7 @@ export const EmployeeSwapsPage: React.FC = () => {
             const shift = (swap as any).requester_shift;
             
             // Date filter
-            const shiftDateStr = shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'yyyy-MM-dd') : shift?.shift_date;
+            const shiftDateStr = getShiftDateKey(shift);
             if (shiftDateStr && (shiftDateStr < startStr || shiftDateStr > endStr)) return false;
             
             return true;
@@ -568,14 +598,13 @@ export const EmployeeSwapsPage: React.FC = () => {
         const shift = (swap as any).requester_shift;
         const myOffer = ((swap as any).swap_offers || []).find((o: any) => o.offerer_id === userId || o.offerer?.id === userId);
 
-        const deadline = shift?.start_at || (shift?.shift_date && shift?.start_time ? `${shift?.shift_date}T${shift?.start_time}` : '');
-        const tr = calculateTimeRemaining(deadline);
-        const timerText = formatTimeRemaining(tr);
-        const isExpired = tr.isExpired;
+        // Offer close = shift start − 4h (T−4h lockout), tz-correct.
+        const { isClosed, timerText } = getSwapClose(shift, now);
+        const isExpired = isClosed;
 
         // Terminal check for timer redundancy
         const isTerminalSwap = swap.status === 'APPROVED' || swap.status === 'REJECTED' || swap.status === 'CANCELLED' || swap.status === 'MANAGER_PENDING' || myOffer?.status === 'WITHDRAWN';
-        const timerDisplay = isTerminalSwap ? null : (isExpired ? 'Expired' : timerText ? `Closes in ${timerText}` : null);
+        const timerDisplay = isTerminalSwap ? null : (isClosed ? 'Expired' : timerText ? `Closes in ${timerText}` : null);
 
         // Derive status from state machine
         const deriveOfferStatus = () => {
@@ -625,9 +654,9 @@ export const EmployeeSwapsPage: React.FC = () => {
                     department={shift?.departments?.name || ''}
                     subGroup={shift?.sub_departments?.name}
                     role={shift?.roles?.name || 'Unknown Role'}
-                    shiftDate={shift?.shift_date || ''}
-                    startTime={shift?.start_time || ''}
-                    endTime={shift?.end_time || ''}
+                    shiftDate={formatShiftDate(shift, 'EEE, MMM d', shift?.shift_date || '')}
+                    startTime={formatShiftTime(shift, 'start', 'HH:mm')}
+                    endTime={formatShiftTime(shift, 'end', 'HH:mm')}
                     netLength={shift?.net_length_minutes || 0}
                     paidBreak={shift?.paid_break_minutes ?? 0}
                     unpaidBreak={shift?.unpaid_break_minutes ?? 0}
@@ -669,12 +698,11 @@ export const EmployeeSwapsPage: React.FC = () => {
         const statusConfig = getStatusConfig(swap.status);
         const StatusIcon = statusConfig.icon;
         
-        const deadline = shift?.start_at || (shift?.shift_date && shift?.start_time ? `${shift?.shift_date}T${shift?.start_time}` : '');
-        const tr = calculateTimeRemaining(deadline);
-        const timerText = formatTimeRemaining(tr);
+        // Offer close = shift start − 4h (T−4h lockout), tz-correct.
+        const { isClosed, timerText } = getSwapClose(shift, now);
         const priority = getSwapPriority(now, shift?.shift_date, shift?.start_time, shift?.start_at, shift?.tz_identifier);
-        
-        const isExpired = tr.isExpired;
+
+        const isExpired = isClosed;
         const isTerminalRequest = swap.status === 'APPROVED' || swap.status === 'REJECTED' || swap.status === 'CANCELLED' || swap.status === 'MANAGER_PENDING';
         const timerDisplay = isTerminalRequest ? null : timerText;
 
@@ -692,9 +720,9 @@ export const EmployeeSwapsPage: React.FC = () => {
                     department={shift?.departments?.name || 'Department'}
                     subGroup={shift?.sub_departments?.name}
                     role={shift?.roles?.name || 'Shift'}
-                    shiftDate={shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'EEEE, MMM d, yyyy') : (shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEEE, MMM d, yyyy') : 'Unknown')}
-                    startTime={shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : (shift?.start_time ? formatTime(shift.start_time) : '00:00')}
-                    endTime={shift?.end_at ? formatInTimezone(new Date(shift.end_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : (shift?.end_time ? formatTime(shift.end_time) : '00:00')}
+                    shiftDate={formatShiftDate(shift, 'EEEE, MMM d, yyyy', 'Unknown')}
+                    startTime={formatShiftTime(shift, 'start', 'HH:mm', '00:00')}
+                    endTime={formatShiftTime(shift, 'end', 'HH:mm', '00:00')}
                     netLength={shift?.net_length_minutes || 0}
                     paidBreak={shift?.paid_break_minutes || 0}
                     unpaidBreak={shift?.unpaid_break_minutes || 0}
@@ -778,10 +806,9 @@ export const EmployeeSwapsPage: React.FC = () => {
         const shift = (swap as any).requester_shift;
         const requesterName = (swap as any).requested_by?.full_name || (swap as any).requested_by?.email || 'Someone';
         
-        const deadline = shift?.start_at || (shift?.shift_date && shift?.start_time ? `${shift?.shift_date}T${shift?.start_time}` : '');
-        const tr = calculateTimeRemaining(deadline);
-        const timerText = formatTimeRemaining(tr);
-        const isExpired = tr.isExpired;
+        // Offer close = shift start − 4h (T−4h lockout), tz-correct.
+        const { isClosed, timerText } = getSwapClose(shift, now);
+        const isExpired = isClosed;
         const hasOffered = myActiveOfferSwapIds.has(swap.id);
         const priority = getSwapPriority(now, shift?.shift_date, shift?.start_time, shift?.start_at, shift?.tz_identifier);
 
@@ -799,9 +826,9 @@ export const EmployeeSwapsPage: React.FC = () => {
                 department={shift?.departments?.name || 'Department'}
                 subGroup={shift?.sub_departments?.name}
                 role={shift?.roles?.name || 'Shift'}
-                shiftDate={shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'EEE, MMM d') : (shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE, MMM d') : 'Unknown')}
-                startTime={shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : (shift?.start_time ? formatTime(shift.start_time) : '00:00')}
-                endTime={shift?.end_at ? formatInTimezone(new Date(shift.end_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : (shift?.end_time ? formatTime(shift.end_time) : '00:00')}
+                shiftDate={formatShiftDate(shift, 'EEE, MMM d', 'Unknown')}
+                startTime={formatShiftTime(shift, 'start', 'HH:mm', '00:00')}
+                endTime={formatShiftTime(shift, 'end', 'HH:mm', '00:00')}
                 netLength={shift?.net_length_minutes || 0}
                 paidBreak={shift?.paid_break_minutes || 0}
                 unpaidBreak={shift?.unpaid_break_minutes || 0}
@@ -854,10 +881,9 @@ export const EmployeeSwapsPage: React.FC = () => {
         const myOffer = ((swap as any).swap_offers || []).find((o: any) => o.offerer_id === userId || o.offerer?.id === userId);
         const hasOffered = myActiveOfferSwapIds.has(swap.id);
         
-        const deadline = shift?.start_at || (shift?.shift_date && shift?.start_time ? `${shift?.shift_date}T${shift?.start_time}` : '');
-        const tr = calculateTimeRemaining(deadline);
-        const timerText = formatTimeRemaining(tr);
-        const isExpired = tr.isExpired;
+        // Offer close = shift start − 4h (T−4h lockout), tz-correct.
+        const { isClosed, timerText } = getSwapClose(shift, now);
+        const isExpired = isClosed;
 
         const priority = getSwapPriority(now, shift?.shift_date, shift?.start_time, shift?.start_at, shift?.tz_identifier);
         
@@ -916,9 +942,9 @@ export const EmployeeSwapsPage: React.FC = () => {
                         department={shift?.departments?.name || 'Department'}
                         subGroup={shift?.sub_departments?.name}
                         role={shift?.roles?.name || 'Shift'}
-                        shiftDate={shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'EEE d MMM') : (shift?.shift_date ? format(parse(shift.shift_date, 'yyyy-MM-dd', new Date()), 'EEE d MMM') : '—')}
-                        startTime={shift?.start_at ? formatInTimezone(new Date(shift.start_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : (shift?.start_time ? shift.start_time.slice(0, 5) : '—')}
-                        endTime={shift?.end_at ? formatInTimezone(new Date(shift.end_at), shift.tz_identifier || SYDNEY_TZ, 'HH:mm') : (shift?.end_time ? shift.end_time.slice(0, 5) : '—')}
+                        shiftDate={formatShiftDate(shift, 'EEE d MMM', '—')}
+                        startTime={formatShiftTime(shift, 'start', 'HH:mm', '—')}
+                        endTime={formatShiftTime(shift, 'end', 'HH:mm', '—')}
                         netLength={shift?.net_length_minutes || shift?.net_length || 0}
                         paidBreak={shift?.paid_break_minutes || 0}
                         unpaidBreak={shift?.unpaid_break_minutes || 0}
@@ -1213,10 +1239,9 @@ export const EmployeeSwapsPage: React.FC = () => {
                                         const shift = swap.requester_shift;
                                         const requesterName = swap.requested_by?.full_name || swap.requested_by?.email || 'Someone';
                                         const hasOffered = myActiveOfferSwapIds.has(swap.id);
-                                        
-                                        const deadline = shift?.start_at || (shift?.shift_date && shift?.start_time ? `${shift?.shift_date}T${shift?.start_time}` : '');
-                                        const tr = calculateTimeRemaining(deadline);
-                                        const isExpired = tr.isExpired;
+
+                                        // Offer close = shift start − 4h (T−4h lockout), tz-correct.
+                                        const isExpired = getSwapClose(shift, now).isClosed;
 
                                         return (
                                             <tr
@@ -1401,9 +1426,8 @@ export const EmployeeSwapsPage: React.FC = () => {
                                         const myOffer = ((swap as any).swap_offers || []).find((o: any) => o.offerer_id === userId || o.offerer?.id === userId);
                                         const ownerName = swap.requested_by?.full_name || swap.requested_by?.email || 'Someone';
 
-                                        const deadline = shift?.start_at || (shift?.shift_date && shift?.start_time ? `${shift?.shift_date}T${shift?.start_time}` : '');
-                                        const tr = calculateTimeRemaining(deadline);
-                                        const isExpired = tr.isExpired;
+                                        // Offer close = shift start − 4h (T−4h lockout), tz-correct.
+                                        const isExpired = getSwapClose(shift, now).isClosed;
 
                                         const deriveOfferStatus = () => {
                                             if (isExpired) return { label: 'Expired', color: 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/40' };
@@ -1601,10 +1625,9 @@ export const EmployeeSwapsPage: React.FC = () => {
                                 <tbody>
                                     {filteredMySwaps.map(swap => {
                                         const shift = swap.requester_shift;
-                                        
-                                        const deadline = shift?.start_at || (shift?.shift_date && shift?.start_time ? `${shift?.shift_date}T${shift?.start_time}` : '');
-                                        const tr = calculateTimeRemaining(deadline);
-                                        const isExpired = tr.isExpired;
+
+                                        // Offer close = shift start − 4h (T−4h lockout), tz-correct.
+                                        const isExpired = getSwapClose(shift, now).isClosed;
 
                                         return (
                                             <tr
@@ -1786,10 +1809,10 @@ export const EmployeeSwapsPage: React.FC = () => {
                             const statusCfg = STATUS_CONFIG[swap.status] ?? STATUS_CONFIG.EXPIRED;
                             const StatusIcon = statusCfg.icon;
 
-                            const deadline = shift?.start_at || (shift?.shift_date && shift?.start_time ? `${shift.shift_date}T${shift.start_time}` : '');
-                            const tr = calculateTimeRemaining(deadline);
-                            const timerStr = formatTimeRemaining(tr);
-                            const isExpired = tr.isExpired;
+                            // Offer close = shift start − 4h (T−4h lockout), tz-correct.
+                            const { isClosed, timerText } = getSwapClose(shift, now);
+                            const timerStr = timerText ?? '';
+                            const isExpired = isClosed;
 
                             const footerActions = (
                                 <div className="flex flex-col gap-2 mt-4">
@@ -1867,9 +1890,9 @@ export const EmployeeSwapsPage: React.FC = () => {
                                         department={shift?.departments?.name || '—'}
                                         subGroup={shift?.sub_departments?.name}
                                         role={shift?.roles?.name || 'Unknown Role'}
-                                        shiftDate={shift?.shift_date}
-                                        startTime={shift?.start_time}
-                                        endTime={shift?.end_time}
+                                        shiftDate={formatShiftDate(shift, 'EEE, MMM d', shift?.shift_date || '')}
+                                        startTime={formatShiftTime(shift, 'start', 'HH:mm')}
+                                        endTime={formatShiftTime(shift, 'end', 'HH:mm')}
                                         netLength={shift?.net_length_minutes || shift?.net_length}
                                         paidBreak={shift?.paid_break_minutes}
                                         unpaidBreak={shift?.unpaid_break_minutes}

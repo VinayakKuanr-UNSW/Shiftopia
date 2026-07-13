@@ -432,13 +432,29 @@ export const swapsApi = {
     async makeOffer(swapId: string, targetV8ShiftId: string | undefined, targetId: string): Promise<void> {
         console.log('[API] Making offer on swap:', { swapId, targetV8ShiftId, targetId });
 
-        // Self-offer guard: prevent a user from offering on their own swap request
+        // Self-offer guard: prevent a user from offering on their own swap request.
+        // Also fetch the REQUESTER's shift so we can enforce §9 on the request
+        // itself — an offer must never be lodged against a shift already < 4h out,
+        // even for a giveaway offer (no offered shift).
         const { data: swapMeta, error: swapMetaErr } = await db
-            .from('shift_swaps').select('requester_id').eq('id', swapId).single();
+            .from('shift_swaps')
+            .select('requester_id, requester_shift:shifts!requester_shift_id(shift_date, start_time)')
+            .eq('id', swapId)
+            .single();
         if (swapMetaErr || !swapMeta) throw swapMetaErr || new Error('Swap request not found');
         if (swapMeta.requester_id === targetId) {
             throw new Error('You cannot make an offer on your own swap request.');
         }
+
+        // §9 Time Lock Check (requester shift): ALWAYS guard the shift being
+        // offered on — including giveaway offers with no offered_shift_id.
+        const requesterShift = Array.isArray(swapMeta.requester_shift)
+            ? swapMeta.requester_shift[0]
+            : swapMeta.requester_shift;
+        if (!requesterShift?.shift_date || !requesterShift?.start_time) {
+            throw new Error('Cannot make an offer: requester shift date/time is missing.');
+        }
+        assertNotTimeLocked(requesterShift.shift_date, requesterShift.start_time);
 
         const offerData: any = {
             swap_request_id: swapId,

@@ -16,12 +16,20 @@ import {
   isBiddingUrgent,
   ShiftUrgency,
 } from '../bidding-urgency';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Mock Date.now to `offsetMs` milliseconds before the given ISO date+time. */
+/**
+ * Mock Date.now to `offsetMs` milliseconds before the given shift date+time.
+ *
+ * The shift start is resolved as a Sydney wall-clock instant (same as
+ * computeTTS), so the offset math stays correct regardless of the process
+ * timezone. Using a local-tz `new Date()` here would drift by the tz offset on
+ * non-Sydney machines and desync from computeTTS's Sydney parsing.
+ */
 function mockNowBefore(dateIso: string, timeStr: string, offsetMs: number) {
-  const start = new Date(`${dateIso}T${timeStr}`).getTime();
+  const start = parseZonedDateTime(dateIso, timeStr).getTime(); // Sydney instant
   vi.spyOn(Date, 'now').mockReturnValue(start - offsetMs);
 }
 
@@ -47,9 +55,23 @@ describe('computeTTS', () => {
   });
 
   it('returns NaN on invalid date input (does not throw)', () => {
-    // new Date('invalidTbad') is Invalid Date, getTime() = NaN — no exception thrown
+    // parseZonedDateTime('invalid','bad') yields an Invalid Date, getTime() = NaN —
+    // no exception thrown, so the try/catch does not convert this to Infinity.
     const tts = computeTTS('invalid', 'bad');
     expect(Number.isNaN(tts)).toBe(true);
+  });
+
+  it('interprets the shift start in Sydney tz, independent of the process/browser tz', () => {
+    // Pin an ABSOLUTE instant for "now": the exact UTC moment 3h before
+    // 2030-06-15 09:00 Sydney time. June = AEST (+10:00), so 09:00 Sydney is
+    // 2030-06-14T23:00:00Z, and 3h before that is 2030-06-14T20:00:00Z.
+    const nowUtc = Date.parse('2030-06-14T20:00:00Z');
+    vi.spyOn(Date, 'now').mockReturnValue(nowUtc);
+
+    // A correct Sydney interpretation gives ~3h TTS. A naive local-tz parse would
+    // instead drift by the machine's UTC offset — this asserts we do NOT do that.
+    const tts = computeTTS(SHIFT_DATE, START_TIME);
+    expect(tts).toBeCloseTo(3 * 60 * 60 * 1000, -3);
   });
 });
 

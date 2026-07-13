@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, addDays, subDays } from 'date-fns';
+import { formatCalendarDate } from '@/modules/core/lib/date.utils';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/platform/supabase/client';
@@ -511,7 +512,7 @@ const RoleCard: React.FC<RoleCardProps> = ({
             {shift.dayLabel.slice(0, 3)}
           </span>
           <span className="text-[11px] font-mono font-bold text-foreground leading-none mt-1">
-            {format(new Date(shift.date), 'dd')}
+            {formatCalendarDate(shift.date, 'dd')}
           </span>
         </div>
 

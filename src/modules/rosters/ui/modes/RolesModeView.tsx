@@ -14,7 +14,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
-import { isSydneyPast } from '@/modules/core/lib/date.utils';
+import { isSydneyPast, todayISO } from '@/modules/core/lib/date.utils';
 import { formatCost } from '@/modules/rosters/domain/projections/utils/cost';
 import {
     Tooltip,
@@ -631,7 +631,7 @@ export const RolesModeView: React.FC<RolesModeViewProps> = ({
                 <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.14em] font-mono">Role Description</span>
               </th>
               {dates.map(date => (
-                <th key={date.toISOString()} className={cn("sticky top-0 z-20 min-w-[200px] px-3 py-3 text-center border-b border-border bg-muted/30", format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') && "bg-primary/5")}>
+                <th key={date.toISOString()} className={cn("sticky top-0 z-20 min-w-[200px] px-3 py-3 text-center border-b border-border bg-muted/30", format(date, 'yyyy-MM-dd') === todayISO() && "bg-primary/5")}>
                   <div className="text-[10px] font-bold uppercase tracking-[0.12em] font-mono text-muted-foreground">{format(date, 'EEE')}</div>
                   <div className="text-sm font-mono tabular-nums mt-0.5 text-muted-foreground/50">{format(date, 'MMM d')}</div>
                 </th>

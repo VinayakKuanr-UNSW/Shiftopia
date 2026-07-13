@@ -144,7 +144,10 @@ const num = (s) => Number(s);
  * the same shape as RATE_SCHEDULE[0] (minus the label/source/effectiveFrom
  * provenance strings, which the sync test compares separately).
  */
-export function deriveRateSetFromMigration(sql = readFileSync(MIGRATION_PATH, 'utf8')) {
+export function deriveRateSetFromMigration(
+  sql = readFileSync(MIGRATION_PATH, 'utf8'),
+  effectiveFrom = BASELINE_EFFECTIVE_FROM,
+) {
   // eba_rate cols: effective_from, classification, employment_basis,
   //                ordinary_hourly_rate, paid_hourly_rate, source
   const rateRows = parseInsertValues(sql, 'eba_rate')
@@ -155,7 +158,7 @@ export function deriveRateSetFromMigration(sql = readFileSync(MIGRATION_PATH, 'u
       ordinary_hourly_rate: num(ordinary),
       paid_hourly_rate: num(paid),
     }))
-    .filter((r) => r.effective_from === BASELINE_EFFECTIVE_FROM);
+    .filter((r) => r.effective_from === effectiveFrom);
 
   // eba_allowance cols: effective_from, code, amount, unit, source
   const allowanceRows = parseInsertValues(sql, 'eba_allowance')
@@ -165,7 +168,7 @@ export function deriveRateSetFromMigration(sql = readFileSync(MIGRATION_PATH, 'u
       amount: num(amount),
       unit,
     }))
-    .filter((r) => r.effective_from === BASELINE_EFFECTIVE_FROM);
+    .filter((r) => r.effective_from === effectiveFrom);
 
   // ── wageRates: LEVEL_1..7 + TRAINEE, permanent + casual ────────────────────
   // In the RateSet a classification's `permanent`/`casual` value is the rate
@@ -206,7 +209,7 @@ export function deriveRateSetFromMigration(sql = readFileSync(MIGRATION_PATH, 'u
   }
 
   return {
-    effectiveFrom: BASELINE_EFFECTIVE_FROM,
+    effectiveFrom,
     defaultRate,
     wageRates,
     allowances,

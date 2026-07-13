@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { format } from 'date-fns';
 import { motion } from 'framer-motion';
+import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { LucideIcon } from 'lucide-react';
 import { ScopeFilterBanner } from './ScopeFilterBanner';
 import { ScopeSelection } from '@/platform/auth/types';
@@ -60,11 +60,11 @@ export const PersonalPageHeader: React.FC<PersonalPageHeaderProps> = ({
                     <div className="text-right">
                         <div className="flex items-center justify-end gap-3 mb-1">
                             <p className="text-3xl font-mono font-black tabular-nums leading-none text-slate-800 dark:text-foreground">
-                                {format(now, 'HH:mm')}
+                                {formatInTimezone(now, SYDNEY_TZ, 'HH:mm')}
                             </p>
                         </div>
                         <p className="text-xs font-mono tabular-nums text-slate-400 dark:text-muted-foreground">
-                            :{format(now, 'ss')}
+                            :{formatInTimezone(now, SYDNEY_TZ, 'ss')}
                         </p>
                     </div>
                     {rightActions && (

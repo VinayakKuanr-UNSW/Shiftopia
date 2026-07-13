@@ -75,10 +75,11 @@ describe('computeEmployeePeriodGrossPay — cl 40.1 rest-gap penalty', () => {
       shift({ shiftId: 's1', shiftDate: '2026-07-06', startTime: '15:00', endTime: '23:00', rate: null }),
       shift({ shiftId: 's2', shiftDate: '2026-07-07', startTime: '07:00', endTime: '15:00', rate: null }),
     ];
-    // classificationLevel LEVEL_3 permanent = 27.23 — the sweep must price the
+    // classificationLevel LEVEL_3 permanent = 28.62 (FY26/27 rates, in force from
+    // 6 Jul 2026 — these shifts are dated 6/7 Jul 2026) — the sweep must price the
     // floor from the PRICED ordinary rate, not the (null) input rate.
     const period = computeEmployeePeriodGrossPay('e1', inputs, bounds);
-    expect(line(period.lines, 'rest_gap_penalty')!.amount).toBeCloseTo((2 * 27.23 - 27.23) * 8, 2);
+    expect(line(period.lines, 'rest_gap_penalty')!.amount).toBeCloseTo((2 * 28.62 - 28.62) * 8, 2);
   });
 
   it('no additional uplift if the shift is already earning >= double time (PH 2.5×)', () => {

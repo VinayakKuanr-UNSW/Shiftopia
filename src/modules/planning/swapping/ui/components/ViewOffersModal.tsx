@@ -49,6 +49,7 @@ import {
     AlertCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatCalendarDate } from '@/modules/core/lib/date.utils';
 import { SwapOffer, swapsApi } from '../../api/swaps.api';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/modules/core/lib/utils';
@@ -232,7 +233,7 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                             <div className={cn('flex-1 p-4 rounded-2xl border flex flex-col items-center gap-2 text-center', getGroupColor(offer.offered_shift?.group_type || offer.offered_shift?.roles?.group_type || offer.offered_shift?.roles?.groupType, offer.offered_shift?.departments?.name))}>
                                                 <span className="text-[9px] font-black uppercase tracking-widest opacity-60">They Give</span>
                                                 <div className="text-xs font-black text-foreground">
-                                                    {offer.offered_shift ? format(new Date(offer.offered_shift.shiftDate), 'EEE, MMM d') : 'N/A'}
+                                                    {offer.offered_shift ? formatCalendarDate(offer.offered_shift.shiftDate, 'EEE, MMM d') : 'N/A'}
                                                 </div>
                                                 <div className="text-[10px] font-bold opacity-70">
                                                     {offer.offered_shift ? `${formatTime(offer.offered_shift.startTime)} – ${formatTime(offer.offered_shift.endTime)}` : 'N/A'}
@@ -244,7 +245,7 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                             <div className={cn('flex-1 p-4 rounded-2xl border flex flex-col items-center gap-2 text-center', getGroupColor((myShift as any)?.group_type || (myShift as any)?.roles?.group_type || (myShift as any)?.roles?.groupType, (myShift as any)?.departments?.name))}>
                                                 <span className="text-[9px] font-black uppercase tracking-widest opacity-60">You Give</span>
                                                 <div className="text-xs font-black text-foreground">
-                                                    {myShift ? format(new Date(myShift.shiftDate), 'EEE, MMM d') : 'N/A'}
+                                                    {myShift ? formatCalendarDate(myShift.shiftDate, 'EEE, MMM d') : 'N/A'}
                                                 </div>
                                                 <div className="text-[10px] font-bold opacity-70">
                                                     {myShift ? `${formatTime(myShift.startTime)} – ${formatTime(myShift.endTime)}` : 'N/A'}
@@ -404,7 +405,7 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                             <div className="flex items-center gap-3 text-[10px] font-bold text-muted-foreground tracking-tight">
                                                 <div className="flex items-center gap-1">
                                                     <Calendar className="h-3 w-3 opacity-50" />
-                                                    {offer.offered_shift ? format(new Date(offer.offered_shift.shiftDate), 'MMM d') : 'N/A'}
+                                                    {offer.offered_shift ? formatCalendarDate(offer.offered_shift.shiftDate, 'MMM d') : 'N/A'}
                                                 </div>
                                                 <div className="flex items-center gap-1">
                                                     <Clock className="h-3 w-3 opacity-50" />
@@ -464,7 +465,7 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                                     <span className="text-[9px] font-black uppercase tracking-widest opacity-60">They Give</span>
                                                     <div className="text-center">
                                                         <div className="text-sm font-black text-foreground">
-                                                            {selectedOffer.offered_shift ? format(new Date(selectedOffer.offered_shift.shiftDate), 'EEE, MMM d') : 'N/A'}
+                                                            {selectedOffer.offered_shift ? formatCalendarDate(selectedOffer.offered_shift.shiftDate, 'EEE, MMM d') : 'N/A'}
                                                         </div>
                                                         <div className="text-[11px] font-bold opacity-80">
                                                             {selectedOffer.offered_shift ? `${formatTime(selectedOffer.offered_shift.startTime)} - ${formatTime(selectedOffer.offered_shift.endTime)}` : 'N/A'}
@@ -484,7 +485,7 @@ export const ViewOffersModal: React.FC<ViewOffersModalProps> = ({
                                                     <span className="text-[9px] font-black uppercase tracking-widest opacity-60">You Give</span>
                                                     <div className="text-center">
                                                         <div className="text-sm font-black text-foreground">
-                                                            {myShift ? format(new Date(myShift.shiftDate), 'EEE, MMM d') : 'N/A'}
+                                                            {myShift ? formatCalendarDate(myShift.shiftDate, 'EEE, MMM d') : 'N/A'}
                                                         </div>
                                                         <div className="text-[11px] font-bold opacity-80">
                                                             {myShift ? `${formatTime(myShift.startTime)} - ${formatTime(myShift.endTime)}` : 'N/A'}

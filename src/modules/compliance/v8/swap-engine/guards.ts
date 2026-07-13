@@ -19,6 +19,7 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
+import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 // =============================================================================
 // TYPES
@@ -138,7 +139,7 @@ async function checkShiftsNotLocked(shiftIds: string[]): Promise<GuardViolation[
             if (hoursUntil >= 0 && hoursUntil < 4) {
                 violations.push({
                     code: 'SHIFT_LOCKED',
-                    message: `Shift starting at ${shiftStart.toLocaleString()} starts in less than 4 hours and is time-locked.`,
+                    message: `Shift starting at ${formatInTimezone(shiftStart, SYDNEY_TZ, 'd MMM yyyy, HH:mm')} (AEST/AEDT) starts in less than 4 hours and is time-locked.`,
                     entity_id: row.id,
                 });
             }

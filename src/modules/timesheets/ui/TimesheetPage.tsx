@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { format, startOfWeek, startOfMonth } from 'date-fns';
-import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { formatInTimezone, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { Clock, RefreshCw, ListFilter } from 'lucide-react';
 import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
 
@@ -188,7 +188,7 @@ export const TimesheetPage: React.FC = () => {
                 const endMs = s.rawEndAt
                     ? new Date(s.rawEndAt).getTime()
                     : (() => {
-                          const end = new Date(`${s.shiftDate}T${s.scheduledEnd}`);
+                          const end = parseZonedDateTime(s.shiftDate, s.scheduledEnd, SYDNEY_TZ);
                           if (s.scheduledEnd < s.scheduledStart) end.setDate(end.getDate() + 1);
                           return end.getTime();
                       })();

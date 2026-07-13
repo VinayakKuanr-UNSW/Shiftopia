@@ -18,7 +18,7 @@ import {
   BarChart3, Filter, ArrowUp, ArrowDown, XCircle, AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
-import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { CustomDateRangePicker } from '@/modules/core/ui/components/CustomDateRangePicker';
 import { useAuth } from '@/platform/auth/useAuth';
 import { supabase } from '@/platform/supabase/client';
@@ -81,14 +81,21 @@ type StatusFilter = 'all' | 'checked_in' | 'late' | 'no_show' | 'unknown';
 
 function toMs(shift: Shift, type: 'start' | 'end'): number {
   if (type === 'start') {
-    // Always prefer local string combination as it is the direct user input.
-    // UTC fields (start_at) are secondary and may be stale after an edit.
-    return new Date(`${shift.shift_date}T${shift.start_time}`).getTime();
+    // Prefer the canonical absolute instant (start_at) when present; otherwise
+    // parse the naive shift_date + start_time as an Australia/Sydney wall-clock
+    // so the epoch is correct regardless of the viewer's browser timezone.
+    return shift.start_at
+      ? new Date(shift.start_at).getTime()
+      : parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ).getTime();
   }
 
   // Handle end time with overnight support
-  const end = new Date(`${shift.shift_date}T${shift.end_time}`);
-  if (shift.is_overnight) {
+  const end = shift.end_at
+    ? new Date(shift.end_at)
+    : parseZonedDateTime(shift.shift_date, shift.end_time, SYDNEY_TZ);
+  // start_at/end_at already encode the overnight rollover; only the naive-parse
+  // fallback needs the +1 day bump.
+  if (!shift.end_at && shift.is_overnight) {
     end.setDate(end.getDate() + 1);
   }
   return end.getTime();

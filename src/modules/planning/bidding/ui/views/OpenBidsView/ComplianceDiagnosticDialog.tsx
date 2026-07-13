@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { format, addDays, subDays } from 'date-fns';
+import { formatCalendarDate } from '@/modules/core/lib/date.utils';
 import {
     Loader2,
     ShieldCheck,
@@ -204,7 +205,7 @@ export const ComplianceDiagnosticDialog: React.FC<ComplianceDiagnosticDialogProp
                         <div className="flex items-center gap-3 text-[11px] font-black uppercase tracking-widest">
                             <Calendar className="h-4 w-4 text-primary/40" />
                             <span className="text-muted-foreground/50">Date:</span>
-                            <span className="text-foreground">{format(new Date(shift.date), 'EEE, MMM d')}</span>
+                            <span className="text-foreground">{formatCalendarDate(shift.date, 'EEE, MMM d')}</span>
                         </div>
                         <div className="flex items-center gap-3 text-[11px] font-black uppercase tracking-widest">
                             <Clock className="h-4 w-4 text-primary/40" />

@@ -54,8 +54,12 @@ export function getApprenticeMultiplier(options: CostCalculatorOptions): number 
  * Schedule 6 — Supported Wage System (reference only).
  * SWS pay = the assessed-capacity percentage of the relevant minimum wage
  * (§1.4.1), with a hard floor of $90/week (§1.4.2). The engine applies the
- * percentage inline (`is_sws` branch in standard.ts); the $90 floor is a known
- * un-modelled gap (it needs weekly hours, which the per-shift engine lacks).
+ * percentage inline (`is_sws` branch in standard.ts) and NOW enforces the $90/wk
+ * floor WHEN the caller supplies the member's total ordinary hours for the week
+ * (`swsWeeklyHours`): the floor becomes SWS_MIN_WEEKLY / swsWeeklyHours and the
+ * rate is lifted to the greater of it and the assessed rate. Without that weekly
+ * hours input the floor is a documented no-op (the roster pipeline does not yet
+ * compute per-member weekly SWS hours — the remaining connection point).
  */
 export const SWS_MIN_WEEKLY = 90;
 /** Assessed-capacity → % of relevant minimum wage (identity map, §1.4.1). */

@@ -1,5 +1,6 @@
 import React from 'react';
 import { format } from 'date-fns';
+import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { Pin, Paperclip, Download } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
@@ -87,7 +88,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message, compact }) =>
                 </Badge>
               </div>
               <p className="text-xs md:text-sm text-slate-400 dark:text-blue-200/40 mt-0.5 md:mt-1 font-medium">
-                {format(new Date(message.createdAt), compact ? "MMM d, h:mm a" : "EEEE, MMM d, yyyy 'at' h:mm a")}
+                {formatInTimezone(new Date(message.createdAt), SYDNEY_TZ, compact ? "MMM d, h:mm a" : "EEEE, MMM d, yyyy 'at' h:mm a")}
               </p>
             </div>
           </div>

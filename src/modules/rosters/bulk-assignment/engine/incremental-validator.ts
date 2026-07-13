@@ -19,6 +19,7 @@
 
 import type { CandidateShift, EmployeeInfo, ShiftViolation, SimulatedRoster } from '../types';
 import { shiftEndMinutes, shiftStartMinutes } from './shift-sorter';
+import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 // =============================================================================
 // OVERLAP DETECTION
@@ -48,10 +49,10 @@ function checkPastShift(shift: CandidateShift): ShiftViolation | null {
     if (shift.start_at) {
         startTime = new Date(shift.start_at).getTime();
     } else {
-        // Fallback to shift_date + start_time. 
-        // IMPORTANT: We must parse this in the same way the browser/user expects.
-        // ${date}T${time} without Z is parsed as local time.
-        startTime = new Date(`${shift.shift_date}T${shift.start_time}`).getTime();
+        // Fallback to shift_date + start_time, interpreted in Australia/Sydney
+        // (AEST/AEDT) — NOT the viewer's browser tz — to match the shift's authored
+        // wall-clock. `new Date(`${date}T${time}`)` would parse in local time.
+        startTime = parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ).getTime();
     }
 
     if (!isNaN(startTime) && startTime <= now) {

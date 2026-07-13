@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback, startTransition } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/platform/supabase/client';
-import { getSydneyNow, isSydneyPast, isSydneyStarted } from '@/modules/core/lib/date.utils';
+import { isSydneyPast, isSydneyStarted, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import {
   Plus,
   Check,
@@ -2246,12 +2246,10 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     const startTimeStr = shift.rawShift.start_time;
     const shiftDateStr = shift.rawShift.shift_date;
 
-    // Simple started check for local UX (matching modal logic)
-    const [h, m] = startTimeStr.split(':').map(Number);
-    const shiftStart = parseISO(shiftDateStr);
-    shiftStart.setHours(h, m, 0, 0);
+    // Started check in Sydney (AEST/AEDT) — independent of the viewer's browser tz.
+    const shiftStart = parseZonedDateTime(shiftDateStr, startTimeStr, SYDNEY_TZ);
 
-    if (getSydneyNow() >= shiftStart && shift.rawShift.lifecycle_status !== 'Published') {
+    if (new Date() >= shiftStart && shift.rawShift.lifecycle_status !== 'Published') {
       toast({
         title: 'Shift Locked',
         description: 'This shift has already started and cannot be edited. You can only delete it from the menu.',
@@ -2363,9 +2361,13 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
       return;
     }
 
-    // BUSINESS POLICY: prevent publishing unassigned shifts within 4h of start
-    const shiftStart = new Date(shift.rawShift.start_at || `${shift.rawShift.shift_date}T${shift.rawShift.start_time}`);
-    const now = getSydneyNow();
+    // BUSINESS POLICY: prevent publishing unassigned shifts within 4h of start.
+    // Resolve the start as a real instant in Sydney (naive fallback would parse in
+    // the viewer's browser tz); compare against the real current instant.
+    const shiftStart = shift.rawShift.start_at
+      ? new Date(shift.rawShift.start_at)
+      : parseZonedDateTime(shift.rawShift.shift_date, shift.rawShift.start_time, SYDNEY_TZ);
+    const now = new Date();
     const hoursToStart = differenceInHours(shiftStart, now);
     if (hoursToStart < 4 && (!shift.rawShift.assigned_employee_id || shift.rawShift.assignment_status === 'unassigned')) {
       toast({
@@ -2456,11 +2458,10 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     // Strict Locking Check (Includes past TIME on current day + 4h rule)
     const isLocked = shift.isLocked;
 
-    const shiftStart = new Date(date);
-    const [h, m] = shift.startTime.split(':').map(Number);
-    shiftStart.setHours(h, m, 0, 0);
+    // Sydney (AEST/AEDT) start instant, independent of the viewer's browser tz.
+    const shiftStart = parseZonedDateTime(format(date, 'yyyy-MM-dd'), shift.startTime, SYDNEY_TZ);
 
-    const now = getSydneyNow();
+    const now = new Date();
     const hoursToStart = differenceInHours(shiftStart, now);
     const minutesToStart = differenceInMinutes(shiftStart, now);
     const isEmergency = hoursToStart < 4;

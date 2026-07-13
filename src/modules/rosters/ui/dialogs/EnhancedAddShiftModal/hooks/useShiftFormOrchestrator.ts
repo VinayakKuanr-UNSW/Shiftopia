@@ -26,7 +26,7 @@ import { useCreateShift, useUpdateShift, useUnpublishShift } from '@/modules/ros
 import { shiftKeys, rosterKeys } from '@/modules/rosters/api/queryKeys';
 import { applyShiftOp } from '@/modules/rosters/api/shifts.api';
 import { mapShiftOpResultToUx, type ShiftOpResult } from '@/modules/rosters/domain/shift-ops.contract';
-import { formatInTimezone, isPastInTimezone, isPublicHoliday, parseZonedDateTime } from '@/modules/core/lib/date.utils';
+import { formatInTimezone, isPastInTimezone, isPublicHoliday, parseZonedDateTime, todayISO } from '@/modules/core/lib/date.utils';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 import type { TemplateGroupType } from '@/modules/rosters/domain/shift.entity';
 import { calculateShiftLength, isDateInPast, isShiftStarted } from '../utils';
@@ -466,7 +466,7 @@ export function useShiftFormOrchestrator({
 
         const shiftDateStr = watchShiftDate 
             ? format(watchShiftDate, 'yyyy-MM-dd') 
-            : format(new Date(), 'yyyy-MM-dd');
+            : todayISO();
 
         return {
             employee_id: watchEmployeeId ?? '',
@@ -535,7 +535,7 @@ export function useShiftFormOrchestrator({
             if (!input) {
                 // If the form is incomplete, don't throw a red error. 
                 // Return a skeleton that the engine can process silently or that the UI can label as "Pending".
-                const mockDateStr = watchShiftDate ? format(watchShiftDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
+                const mockDateStr = watchShiftDate ? format(watchShiftDate, 'yyyy-MM-dd') : todayISO();
                 return [{
                     employee_id: watchEmployeeId || 'incomplete',
                     employee_context: {

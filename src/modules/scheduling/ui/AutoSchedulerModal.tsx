@@ -32,6 +32,7 @@ import {
 import { Input } from '@/modules/core/ui/primitives/input';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { format } from 'date-fns';
+import { formatCalendarDate } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
 import { AutoSchedulerInsights } from './AutoSchedulerInsights';
 import { WhyThisPerson } from './WhyThisPerson';
@@ -1213,7 +1214,7 @@ export function AutoSchedulerModal({
                                                                 <div className="flex items-center justify-between">
                                                                     <div className="flex flex-col">
                                                                         <div className="flex items-center gap-2">
-                                                                            <span className="text-[8px] font-black uppercase text-muted-foreground/40 tracking-widest">{format(new Date(audit.shiftDate), 'EEE dd MMM')}</span>
+                                                                            <span className="text-[8px] font-black uppercase text-muted-foreground/40 tracking-widest">{formatCalendarDate(audit.shiftDate, 'EEE dd MMM')}</span>
                                                                             {audit.roleName && <Badge variant="outline" className="h-3.5 px-1.5 text-[7px] border-border bg-muted text-muted-foreground uppercase font-black">{audit.roleName}</Badge>}
                                                                         </div>
                                                                         <span className="text-xs font-bold text-foreground">{audit.startTime} – {audit.endTime}</span>

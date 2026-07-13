@@ -7,6 +7,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { cn } from '@/modules/core/lib/utils';
+import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import {
     FormControl,
     FormField,
@@ -208,10 +209,9 @@ export const AssignmentStep: React.FC<AssignmentStepProps> = ({
                 {(() => {
                     let isLocked = false;
                     if (existingShift && existingShift.shift_date && existingShift.start_time) {
-                        const [h, m] = existingShift.start_time.split(':').map(Number);
-                        const shiftStart = new Date(existingShift.shift_date);
-                        shiftStart.setHours(h, m, 0, 0);
-                        const now = new Date(); // approximate, enough for UI warning
+                        // Sydney (AEST/AEDT) start instant — independent of the viewer's browser tz.
+                        const shiftStart = parseZonedDateTime(existingShift.shift_date, existingShift.start_time, SYDNEY_TZ);
+                        const now = new Date();
                         const diffMs = shiftStart.getTime() - now.getTime();
                         const diffHours = diffMs / (1000 * 60 * 60);
                         if (diffHours >= 0 && diffHours <= 4) isLocked = true;

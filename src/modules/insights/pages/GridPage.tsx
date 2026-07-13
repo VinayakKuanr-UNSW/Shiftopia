@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
 import { format, eachDayOfInterval, startOfYear, endOfYear, getISOWeek } from 'date-fns';
+import { todayISO } from '@/modules/core/lib/date.utils';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useEmployees, useShiftsByDateRange } from '@/modules/rosters/state/useRosterShifts';
 import {
@@ -282,7 +283,7 @@ const GridPage: React.FC = () => {
     // Auto-scroll to today
     React.useEffect(() => {
         if (!isLoading && paginatedEmployees.length > 0) {
-            const todayStr = format(new Date(), 'yyyy-MM-dd');
+            const todayStr = todayISO();
             const el = document.getElementById(`col-${todayStr}`);
             if (el && scrollContainerRef.current)
                 el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
@@ -441,7 +442,7 @@ const GridPage: React.FC = () => {
                                     <React.Fragment key={week.weekNum}>
                                         {week.days.map(day => {
                                             const dateStr = format(day, 'yyyy-MM-dd');
-                                            const isToday = dateStr === format(new Date(), 'yyyy-MM-dd');
+                                            const isToday = dateStr === todayISO();
                                             return (
                                                 <th
                                                     key={dateStr}

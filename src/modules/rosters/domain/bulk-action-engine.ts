@@ -11,7 +11,7 @@
  */
 
 import type { Shift } from './shift.entity';
-import { getSydneyNow, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { getTimeRule } from './shift-ui';
 
 // ============================================================
@@ -54,7 +54,9 @@ export function preflightPublish(shifts: Shift[]): BulkPreflightSummary {
     const blocked: Array<{ id: string; reason: string }> = [];
     const warned: Array<{ id: string; reason: string }> = [];
 
-    const now = getSydneyNow();
+    // Real "now" instant. shiftStartAt below is the absolute instant of the shift's
+    // Sydney wall-clock start, so comparing against real now is correct in any tz.
+    const now = new Date();
 
     for (const s of shifts) {
         const shiftStartAt = parseZonedDateTime(s.shift_date, s.start_time, SYDNEY_TZ);
@@ -89,7 +91,9 @@ export function preflightUnpublish(shifts: Shift[]): BulkPreflightSummary {
     const blocked: Array<{ id: string; reason: string }> = [];
     const warned: Array<{ id: string; reason: string }> = [];
 
-    const now = getSydneyNow();
+    // Real "now" instant. shiftStartAt below is the absolute instant of the shift's
+    // Sydney wall-clock start, so comparing against real now is correct in any tz.
+    const now = new Date();
 
     for (const s of shifts) {
         const shiftStartAt = parseZonedDateTime(s.shift_date, s.start_time, SYDNEY_TZ);
@@ -144,7 +148,9 @@ export function preflightUnassign(shifts: Shift[]): BulkPreflightSummary {
     const eligibleIds: string[] = [];
     const blocked: Array<{ id: string; reason: string }> = [];
 
-    const now = getSydneyNow();
+    // Real "now" instant. shiftStartAt below is the absolute instant of the shift's
+    // Sydney wall-clock start, so comparing against real now is correct in any tz.
+    const now = new Date();
 
     for (const s of shifts) {
         const shiftStartAt = parseZonedDateTime(s.shift_date, s.start_time, SYDNEY_TZ);
@@ -228,7 +234,10 @@ export function planPublishRoster(shifts: Shift[]): PublishRosterPlan {
     const deadIds: string[] = [];
     let alreadyPublishedCount = 0;
 
-    const nowMs = getSydneyNow().getTime();
+    // Real epoch for absolute-instant math. getSydneyNow().getTime() would be a
+    // wall-clock-shifted (fake) epoch and, subtracted from a real start_at epoch,
+    // skews TTS by the viewer's offset on any non-Sydney runtime.
+    const nowMs = Date.now();
 
     for (const s of shifts) {
         if (!s.deleted_at && !s.is_cancelled && s.lifecycle_status === 'Published') {

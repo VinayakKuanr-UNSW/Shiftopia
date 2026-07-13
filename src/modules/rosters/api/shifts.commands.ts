@@ -1,5 +1,5 @@
 import { supabase } from '@/platform/supabase/client';
-import { getSydneyNow, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { processInChunks } from '../domain/bulk-action-engine';
 import { Shift, isValidUuid, safeUuid, calculateMinutesBetweenTimes } from '../domain/shift.entity';
 import { CreateShiftData, UpdateShiftData } from './shifts.dto';
@@ -192,7 +192,7 @@ export const shiftsCommands = {
         // Prevent modification if the shift is in the past
         const currentShift = await shiftsQueries.getShiftById(shiftId);
         if (currentShift) {
-            const now = getSydneyNow();
+            const now = new Date();
             const shiftStartAt = parseZonedDateTime(currentShift.shift_date, currentShift.start_time, SYDNEY_TZ);
             if (now >= shiftStartAt) {
                 throw new Error('Cannot edit a shift that is in the past.');
@@ -543,7 +543,7 @@ export const shiftsCommands = {
         const shift = await shiftsQueries.getShiftById(shiftId);
 
         if (shift) {
-            const now = getSydneyNow();
+            const now = new Date();
             const shiftStartAt = parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ);
             if (now >= shiftStartAt) {
                 throw new Error('Cannot publish a shift that is in the past.');
@@ -554,7 +554,7 @@ export const shiftsCommands = {
         const ttsMs = shift?.start_at
             ? new Date(shift.start_at).getTime() - Date.now()
             : shift
-                ? new Date(`${shift.shift_date}T${shift.start_time}`).getTime() - Date.now()
+                ? parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ).getTime() - Date.now()
                 : Number.POSITIVE_INFINITY;
         const isAssigned = !!shift?.assigned_employee_id && isValidUuid(shift.assigned_employee_id);
 
@@ -627,7 +627,7 @@ export const shiftsCommands = {
                     const ttsUnassigned = shift?.start_at
                         ? new Date(shift.start_at).getTime() - Date.now()
                         : shift
-                            ? new Date(`${shift.shift_date}T${shift.start_time}`).getTime() - Date.now()
+                            ? parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ).getTime() - Date.now()
                             : Number.POSITIVE_INFINITY;
                     if (ttsUnassigned <= FOUR_H_MS) {
                         return {
@@ -656,7 +656,7 @@ export const shiftsCommands = {
                 // Flag assigned shifts within the 4h lock window for emergency publish
                 const ttsMs = shift.start_at
                     ? new Date(shift.start_at).getTime() - Date.now()
-                    : new Date(`${shift.shift_date}T${shift.start_time}`).getTime() - Date.now();
+                    : parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ).getTime() - Date.now();
                 if (ttsMs > 0 && ttsMs < FOUR_H_MS) {
                     emergencySet.add(id);
                 }
@@ -841,7 +841,7 @@ export const shiftsCommands = {
     async unpublishShift(shiftId: string, reason?: string) {
         const shift = await shiftsQueries.getShiftById(shiftId);
         if (shift) {
-            const now = getSydneyNow();
+            const now = new Date();
             const shiftStartAt = parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ);
             if (now >= shiftStartAt) {
                 throw new Error('Cannot unpublish a shift that is in the past.');
@@ -1089,7 +1089,7 @@ export const shiftsCommands = {
         if (shift) {
             const tts = shift.start_at
                 ? new Date(shift.start_at).getTime() - Date.now()
-                : new Date(`${shift.shift_date}T${shift.start_time}`).getTime() - Date.now();
+                : parseZonedDateTime(shift.shift_date, shift.start_time, SYDNEY_TZ).getTime() - Date.now();
 
             if (tts <= 4 * 60 * 60 * 1000) {
                 // Window closed — expire the offer, notify manager for emergency assignment

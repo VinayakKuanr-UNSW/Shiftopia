@@ -21,6 +21,7 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import CreateSwapRequestModal from './CreateSwapRequestModal';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
+import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
 import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
 import {
@@ -96,8 +97,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   const isPast = React.useMemo(() => {
     if (!shiftData?.shift?.shift_date || !shiftData?.shift?.end_time) return false;
     try {
-      const endStr = `${shiftData.shift.shift_date}T${shiftData.shift.end_time}`;
-      return new Date(endStr).getTime() < Date.now();
+      return parseZonedDateTime(shiftData.shift.shift_date, shiftData.shift.end_time, SYDNEY_TZ).getTime() < Date.now();
     } catch {
       return false;
     }

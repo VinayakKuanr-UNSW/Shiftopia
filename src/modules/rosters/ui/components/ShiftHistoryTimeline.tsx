@@ -54,6 +54,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
+import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { FSM_COLOR_HEX, FSM_STATE_META, type ShiftFSMStateInfo } from '../../domain/shift-fsm';
 import { shiftsQueries } from '../../api/shifts.queries';
 import type {
@@ -387,39 +388,27 @@ function formatValue(value: unknown): string {
 function dayKey(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  // Australia/Sydney calendar day — independent of the viewer's browser tz.
+  return formatInTimezone(d, SYDNEY_TZ, 'yyyy-MM-dd');
 }
 
 function formatDayHeading(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  return formatInTimezone(d, SYDNEY_TZ, 'EEE, MMM d, yyyy');
 }
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return formatInTimezone(d, SYDNEY_TZ, 'HH:mm');
 }
 
 /** Precise HH:MM:SS (24h) for the per-event row — the audit format wants seconds. */
 function formatClock(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
+  return formatInTimezone(d, SYDNEY_TZ, 'HH:mm:ss');
 }
 
 // ─── Layout constant ─────────────────────────────────────────────────────────

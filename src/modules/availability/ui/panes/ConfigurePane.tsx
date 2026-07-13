@@ -18,6 +18,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { format, parseISO } from 'date-fns';
+import { todayISO } from '@/modules/core/lib/date.utils';
 import { Calendar, Clock, Repeat, AlertCircle, Save, X } from 'lucide-react';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
@@ -77,7 +78,7 @@ const WEEKDAYS = [
 ];
 
 const DEFAULT_FORM_STATE: FormState = {
-  startDate: format(new Date(), 'yyyy-MM-dd'),
+  startDate: todayISO(),
   startTime: '09:00',
   endTime: '17:00',
   repeatEnabled: false,

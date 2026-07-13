@@ -18,6 +18,7 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
+import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import {
   fetchV8EmployeeContext,
   fetchEmployeeShiftsV2,
@@ -88,7 +89,7 @@ const TERMINAL_STATUSES: PlanningRequestStatus[] = [
  * of the current moment. All mutating operations call this guard.
  */
 function assertNotTimeLocked(shiftDate: string, startTime: string): void {
-  const shiftStart = new Date(`${shiftDate}T${startTime}`);
+  const shiftStart = parseZonedDateTime(shiftDate, startTime, SYDNEY_TZ);
   const lockBoundary = new Date(Date.now() + TIME_LOCK_HOURS * 60 * 60 * 1000);
   if (shiftStart <= lockBoundary) {
     throw createError(

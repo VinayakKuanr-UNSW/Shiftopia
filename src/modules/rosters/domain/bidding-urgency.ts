@@ -9,6 +9,8 @@
  * "On bidding" is any bidding_status other than 'not_on_bidding' and 'bidding_closed_no_winner'.
  */
 
+import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+
 export type ShiftUrgency = 'normal' | 'urgent' | 'emergent';
 /** @deprecated use ShiftUrgency */
 export type BiddingUrgency = ShiftUrgency;
@@ -20,10 +22,17 @@ const TWENTY_FOUR_H_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Returns milliseconds until shift start. Negative if shift has already started.
+ *
+ * The naive `${shiftDate}T${startTime}` string carries no UTC offset, so
+ * `new Date(...)` would interpret it in the BROWSER's local timezone — wrong on
+ * any non-Sydney machine. We instead resolve the wall-clock shift start in the
+ * roster's timezone (Sydney by default) so TTS/urgency is tz-independent.
+ * `tz` may be overridden for multi-region rosters. Parse failures are treated
+ * as far-future (Infinity) so a bad row never spuriously locks a shift.
  */
-export function computeTTS(shiftDate: string, startTime: string): number {
+export function computeTTS(shiftDate: string, startTime: string, tz: string = SYDNEY_TZ): number {
   try {
-    const start = new Date(`${shiftDate}T${startTime}`);
+    const start = parseZonedDateTime(shiftDate, startTime, tz); // interprets wall-clock in `tz`
     return start.getTime() - Date.now();
   } catch {
     return Infinity; // treat parse errors as far-future

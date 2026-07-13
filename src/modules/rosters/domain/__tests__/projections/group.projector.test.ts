@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 import { projectGroup } from '../../projections/projectors/group.projector';
 import type { Shift } from '../../shift.entity';
 import type { WorkerShiftDTO } from '../../projections/worker/protocol';
@@ -189,8 +190,9 @@ describe('projectGroup — projected shift fields', () => {
   });
 
   it('correctly maps isUrgent from bidding_status', () => {
-    // Shift is at 2025-03-15T09:00. Mock now = 12h before → TTS = 12h → urgent window (4–24h).
-    const shiftStart = new Date('2025-03-15T09:00:00').getTime();
+    // Shift is at 2025-03-15T09:00 Sydney. Mock now = 12h before → TTS = 12h → urgent (4–24h).
+    // Anchor in Australia/Sydney to match computeShiftUrgency, so the test is tz-independent.
+    const shiftStart = parseZonedDateTime('2025-03-15', '09:00').getTime();
     vi.spyOn(Date, 'now').mockReturnValue(shiftStart - 12 * 60 * 60 * 1000);
     try {
       const shifts = [makeShift({ group_type: 'convention_centre', bidding_status: 'on_bidding_urgent' })];

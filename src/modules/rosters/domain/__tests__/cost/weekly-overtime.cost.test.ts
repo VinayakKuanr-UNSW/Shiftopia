@@ -26,7 +26,7 @@ const base = (o: Partial<CostCalculatorOptions>): CostCalculatorOptions => ({
   scheduled_length_minutes: 480,
   is_overnight: false,
   is_cancelled: false,
-  shift_date: '2026-07-06', // Monday
+  shift_date: '2026-06-29', // Monday (before the 6 Jul 2026 FY26/27 +5.1% increase)
   employmentType: 'Full-Time',
   ...o,
 });

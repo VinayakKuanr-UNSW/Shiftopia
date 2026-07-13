@@ -2,6 +2,7 @@ import { supabase } from '@/platform/supabase/client';
 import { Shift } from '@/modules/rosters';
 import { applyShiftOp } from '@/modules/rosters/api/shifts.api';
 import { mapShiftOpResultToUx, type ShiftOpUx } from '@/modules/rosters/domain/shift-ops.contract';
+import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { Bid, BidStatus } from '../model/bid.types';
 
 // --- Helper Functions ---
@@ -255,7 +256,7 @@ export const biddingApi = {
                 const s = bidRow.shift as any;
                 const tts = s.start_at
                     ? new Date(s.start_at).getTime() - Date.now()
-                    : new Date(`${s.shift_date}T${s.start_time}`).getTime() - Date.now();
+                    : parseZonedDateTime(s.shift_date, s.start_time, SYDNEY_TZ).getTime() - Date.now();
 
                 if (tts <= 4 * 60 * 60 * 1000) {
                     throw new Error(

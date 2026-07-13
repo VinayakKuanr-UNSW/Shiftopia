@@ -177,7 +177,8 @@ describe('initiate swap — createSwapRequest', () => {
 describe('peer offers a swap — makeOffer', () => {
     it('submits an offer with the peer shift attached', async () => {
         h.enqueue(
-            { data: { requester_id: EMP_A }, error: null },                          // self-offer guard fetch
+            // self-offer guard + requester-shift time-lock fetch (requester shift is > 4h out)
+            { data: { requester_id: EMP_A, requester_shift: { shift_date: FUTURE_DATE, start_time: '09:00' } }, error: null },
             { data: { shift_date: FUTURE_DATE, start_time: '10:00' }, error: null }, // time-lock on offered shift
             { error: null },                                                         // swap_offers insert
         );
@@ -193,9 +194,10 @@ describe('peer offers a swap — makeOffer', () => {
         });
     });
 
-    it('giveaway offer (no shift) skips the offered-shift time lock', async () => {
+    it('giveaway offer (no shift) skips the offered-shift time lock but still guards the requester shift', async () => {
         h.enqueue(
-            { data: { requester_id: EMP_A }, error: null },
+            // requester shift is > 4h out — giveaway offer is allowed
+            { data: { requester_id: EMP_A, requester_shift: { shift_date: FUTURE_DATE, start_time: '09:00' } }, error: null },
             { error: null }, // insert
         );
 
@@ -207,7 +209,8 @@ describe('peer offers a swap — makeOffer', () => {
     });
 
     it('blocks offering on your own swap request', async () => {
-        h.enqueue({ data: { requester_id: EMP_B }, error: null }); // requester == offerer
+        // requester == offerer (requester shift is future, but the self-offer guard fires first)
+        h.enqueue({ data: { requester_id: EMP_B, requester_shift: { shift_date: FUTURE_DATE, start_time: '09:00' } }, error: null });
 
         await expect(swapsApi.makeOffer(SWAP_ID, SHIFT_B, EMP_B))
             .rejects.toThrow(/your own swap request/);
@@ -216,11 +219,40 @@ describe('peer offers a swap — makeOffer', () => {
 
     it('§9 time lock: refuses an offered shift starting < 4h away', async () => {
         h.enqueue(
-            { data: { requester_id: EMP_A }, error: null },
+            { data: { requester_id: EMP_A, requester_shift: { shift_date: FUTURE_DATE, start_time: '09:00' } }, error: null },
             { data: { shift_date: PAST_DATE, start_time: '10:00' }, error: null },
         );
 
         await expect(swapsApi.makeOffer(SWAP_ID, SHIFT_B, EMP_B)).rejects.toThrow(/Time locked/);
+        expect(opsFor('swap_offers', 'insert')).toHaveLength(0);
+    });
+
+    it('§9 time lock: refuses ANY offer (even giveaway) when the REQUESTER shift starts < 4h away', async () => {
+        // requester shift is already inside the 4h lock — Fix 4: the offer must be rejected
+        // regardless of whether an offered shift is attached.
+        h.enqueue({ data: { requester_id: EMP_A, requester_shift: { shift_date: PAST_DATE, start_time: '10:00' } }, error: null });
+
+        await expect(swapsApi.makeOffer(SWAP_ID, undefined, EMP_B)).rejects.toThrow(/Time locked/);
+        expect(opsFor('swap_offers', 'insert')).toHaveLength(0);
+    });
+
+    it('handles the requester-shift join arriving as an array', async () => {
+        // PostgREST embeds can surface as arrays; the guard must unwrap [0].
+        h.enqueue(
+            { data: { requester_id: EMP_A, requester_shift: [{ shift_date: FUTURE_DATE, start_time: '09:00' }] }, error: null },
+            { error: null }, // insert
+        );
+
+        await swapsApi.makeOffer(SWAP_ID, undefined, EMP_B);
+
+        expect(opsFor('swap_offers', 'insert')).toHaveLength(1);
+    });
+
+    it('fails closed when the requester shift date/time is missing', async () => {
+        h.enqueue({ data: { requester_id: EMP_A, requester_shift: null }, error: null });
+
+        await expect(swapsApi.makeOffer(SWAP_ID, undefined, EMP_B))
+            .rejects.toThrow(/requester shift date\/time is missing/);
         expect(opsFor('swap_offers', 'insert')).toHaveLength(0);
     });
 });

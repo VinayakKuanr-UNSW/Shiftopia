@@ -24,7 +24,9 @@ import {
   startOfMonth, endOfMonth,
   eachDayOfInterval,
   format,
+  parseISO,
 } from 'date-fns';
+import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 // ── Re-exported types (match what was exported from RosterUIContext) ──────────
 
@@ -142,7 +144,7 @@ export const useRosterStore = create<RosterState>()(
       selectedV8ShiftIds: new Set(),
 
       // ── Session-only (today, not persisted) ────────────────────────────────
-      _selectedDateISO: format(new Date(), 'yyyy-MM-dd'),
+      _selectedDateISO: formatInTimezone(new Date(), SYDNEY_TZ, 'yyyy-MM-dd'),
       isDnDModeActive: false,
       showUnfilledPanel: false,
       showFatigueHeatmap: false,
@@ -221,7 +223,10 @@ export const useRosterStore = create<RosterState>()(
       // ── Navigation ─────────────────────────────────────────────────────────
       navigatePrevious: () => {
         const { viewType, _selectedDateISO } = get();
-        const date = new Date(_selectedDateISO);
+        // _selectedDateISO is a 'yyyy-MM-dd' calendar key. parseISO gives
+        // local-midnight (no UTC-midnight day drift for viewers west of GMT);
+        // this is pure calendar arithmetic that re-emits a 'yyyy-MM-dd' key.
+        const date = parseISO(_selectedDateISO);
         const next = (() => {
           switch (viewType) {
             case 'day': return subDays(date, 1);
@@ -240,7 +245,8 @@ export const useRosterStore = create<RosterState>()(
 
       navigateNext: () => {
         const { viewType, _selectedDateISO } = get();
-        const date = new Date(_selectedDateISO);
+        // parseISO → local-midnight calendar arithmetic (see navigatePrevious).
+        const date = parseISO(_selectedDateISO);
         const next = (() => {
           switch (viewType) {
             case 'day': return addDays(date, 1);
@@ -258,7 +264,7 @@ export const useRosterStore = create<RosterState>()(
       },
 
       navigateToToday: () =>
-        set({ _selectedDateISO: format(new Date(), 'yyyy-MM-dd') }),
+        set({ _selectedDateISO: formatInTimezone(new Date(), SYDNEY_TZ, 'yyyy-MM-dd') }),
     }),
 
     {
@@ -286,8 +292,11 @@ export const useRosterStore = create<RosterState>()(
 // Call these with useRosterStore(selectXxx) for granular subscriptions.
 
 /** The selected date as a real Date object. Derived from the ISO string. */
+// parseISO of the 'yyyy-MM-dd' calendar key yields local-midnight, so the
+// selected day never drifts a day west of GMT (new Date('yyyy-MM-dd') is
+// UTC-midnight and would).
 export const selectSelectedDate = (s: RosterState): Date =>
-  new Date(s._selectedDateISO);
+  parseISO(s._selectedDateISO);
 
 /** Backward-compat: first selected department (single-select legacy API) */
 export const selectDepartmentId = (s: RosterState): string | null =>
@@ -312,7 +321,8 @@ export const selectHasActiveFilters = (s: RosterState): boolean =>
 
 /** Date range for the current viewType + selectedDate */
 export const selectDateRange = (s: RosterState): DateRange => {
-  const date = new Date(s._selectedDateISO);
+  // Local-midnight parse of the calendar key — see selectSelectedDate.
+  const date = parseISO(s._selectedDateISO);
   switch (s.viewType) {
     case 'day':
       return { from: date, to: date };

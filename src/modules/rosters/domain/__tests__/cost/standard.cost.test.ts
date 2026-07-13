@@ -22,7 +22,7 @@ const base = (o: Partial<CostCalculatorOptions>): CostCalculatorOptions => ({
   scheduled_length_minutes: 480,
   is_overnight: false,
   is_cancelled: false,
-  shift_date: '2026-07-06', // Monday
+  shift_date: '2026-06-29', // Monday (before the 6 Jul 2026 FY26/27 +5.1% increase)
   employmentType: 'Full-Time',
   ...o,
 });
@@ -459,5 +459,42 @@ describe('L1 — leave pay (cl. 38 annual-leave loading / NES personal-carer)', 
     expect(r.overtimeCost).toBe(0);
     expect(r.allowanceCost).toBe(0);
     expect(r.totalCost).toBeCloseTo(282, 5);
+  });
+});
+
+describe('SWS — Schedule 6 minimum weekly floor (cl 1.4.2)', () => {
+  it('lifts the assessed-capacity rate to the $90/week floor when weekly hours are supplied', () => {
+    // 10% of $30 = $3.00/h assessed; weekly floor = $90 / 20h = $4.50/h ⇒ floored up.
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 480, scheduled_length_minutes: 480,
+        is_sws: true, sws_capacity_percentage: 10, swsWeeklyHours: 20,
+      }),
+    );
+    expect(r.breakdown.baseRate).toBeCloseTo(4.5, 5);
+    expect(r.ordinaryCost).toBeCloseTo(8 * 4.5, 5); // 8h weekday ordinary, no penalty
+  });
+
+  it('does NOT lower the rate when the assessed rate already clears the floor', () => {
+    // 50% of $30 = $15.00/h; weekly floor $90 / 20h = $4.50/h ⇒ floor does not bind.
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 480, scheduled_length_minutes: 480,
+        is_sws: true, sws_capacity_percentage: 50, swsWeeklyHours: 20,
+      }),
+    );
+    expect(r.breakdown.baseRate).toBeCloseTo(15, 5);
+  });
+
+  it('is a no-op (safe-by-default) when weekly hours are not supplied', () => {
+    // Without swsWeeklyHours the per-shift engine cannot know the weekly total, so
+    // the floor cannot be enforced — the assessed 10% ($3.00/h) rate stands.
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 480, scheduled_length_minutes: 480,
+        is_sws: true, sws_capacity_percentage: 10,
+      }),
+    );
+    expect(r.breakdown.baseRate).toBeCloseTo(3, 5);
   });
 });

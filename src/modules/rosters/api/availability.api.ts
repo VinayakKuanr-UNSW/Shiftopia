@@ -14,6 +14,7 @@
 
 import { supabase } from '@/platform/supabase/client';
 import { format, eachDayOfInterval } from 'date-fns';
+import { todayISO } from '@/modules/core/lib/date.utils';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 import {
     AvailabilityWindow,
@@ -143,7 +144,7 @@ export async function getResolvedAvailabilities(
     // means "not generated" (unknown), not "declared unavailable". Skip those so
     // we don't paint the past days of a month view bright red; future days with
     // no slot are genuine unavailable days per the person's weekly pattern.
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const todayStr = todayISO();
 
     for (const profileId of validIds) {
         if (!declaredSet.has(profileId)) continue; // no rules → leave null

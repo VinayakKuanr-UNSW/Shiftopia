@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, addDays, subDays } from 'date-fns';
+import { todayISO } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { Input } from '@/modules/core/ui/primitives/input';
@@ -198,7 +199,7 @@ export const TimesheetMobileView: React.FC<TimesheetMobileViewProps> = ({
                             <div className="px-2 font-black text-[12px] text-foreground flex items-center justify-center gap-1.5 min-w-[105px]">
                                 <span className={cn(
                                     'w-1.5 h-1.5 rounded-full shrink-0',
-                                    format(selectedDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
+                                    format(selectedDate, 'yyyy-MM-dd') === todayISO()
                                         ? 'bg-primary'
                                         : 'bg-transparent',
                                 )} />

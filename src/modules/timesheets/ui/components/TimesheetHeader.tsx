@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Input } from '@/modules/core/ui/primitives/input';
 import { format, addDays, subDays } from 'date-fns';
+import { todayISO } from '@/modules/core/lib/date.utils';
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/modules/core/ui/primitives/dropdown-menu';
@@ -71,7 +72,7 @@ export const TimesheetFunctionBar: React.FC<TimesheetFunctionBarProps> = ({
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [draftFilters, setDraftFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
 
-    const isToday = format(selectedDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+    const isToday = format(selectedDate, 'yyyy-MM-dd') === todayISO();
 
     // Sync draft to applied state whenever the popover opens
     useEffect(() => {

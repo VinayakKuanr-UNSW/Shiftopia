@@ -14,9 +14,11 @@ import {
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
 
-describe('rate-schedule — baseline mirrors constants.ts (behaviour-preserving)', () => {
+describe('rate-schedule — 2025 baseline mirrors constants.ts (behaviour-preserving)', () => {
   it('the 2025 set exposes the exact constants values', () => {
+    // A date before the FY2026/27 increase (6 Jul 2026) resolves to the baseline.
     const rs = resolveRateSet('2025-07-01');
+    expect(rs.effectiveFrom).toBe('2025-01-01');
     expect(rs.wageRates.LEVEL_1.casual).toBe(WAGE_RATES.LEVEL_1.casual);
     expect(rs.wageRates.LEVEL_7.permanent).toBe(WAGE_RATES.LEVEL_7.permanent);
     expect(rs.defaultRate).toBe(DEFAULT_RATE);
@@ -27,10 +29,30 @@ describe('rate-schedule — baseline mirrors constants.ts (behaviour-preserving)
   });
 });
 
+describe('rate-schedule — FY2026/27 (+5.1%, from 6 Jul 2026)', () => {
+  it('exposes the published FY26/27 Schedule 2 values (not a naive ×1.051)', () => {
+    const rs = resolveRateSet('2026-07-06');
+    expect(rs.effectiveFrom).toBe('2026-07-06');
+    expect(rs.wageRates.LEVEL_1.permanent).toBe(26.96);
+    expect(rs.wageRates.LEVEL_1.casual).toBe(33.70);
+    expect(rs.wageRates.LEVEL_7.casual).toBe(44.92);
+    expect(rs.wageRates.LEVEL_3.casual).toBe(35.77);   // ×1.051 would be 35.78
+    expect(rs.defaultRate).toBe(33.70);
+    expect(rs.allowances.meal).toBe(14.30);
+    expect(rs.allowances.proteinSpill).toBe(7.53);      // ×1.051 would be 7.54
+    expect(rs.security.annualisedHourly.level4).toBe(36.39); // ×1.051 would be 36.40
+    expect(rs.security.ordinaryFromAnnualised[36.39]).toBe(30.26);
+  });
+});
+
 describe('resolveRateSet — effective-dated resolution', () => {
-  it('current and future dates resolve to the 2025 set until a later entry exists', () => {
-    expect(resolveRateSet('2026-07-06').label).toBe(RATE_SCHEDULE[0].label);
-    expect(resolveRateSet('2030-01-01').label).toBe(RATE_SCHEDULE[0].label);
+  it('the day BEFORE the FY26 increase still resolves to the 2025 baseline', () => {
+    expect(resolveRateSet('2026-07-05').effectiveFrom).toBe('2025-01-01');
+  });
+
+  it('on/after 6 Jul 2026 resolves to the FY2026/27 set (inclusive lower bound)', () => {
+    expect(resolveRateSet('2026-07-06').effectiveFrom).toBe('2026-07-06');
+    expect(resolveRateSet('2030-01-01').effectiveFrom).toBe('2026-07-06');
   });
 
   it('a date before the earliest entry falls back to the earliest set', () => {
@@ -43,7 +65,7 @@ describe('resolveRateSet — effective-dated resolution', () => {
   });
 
   it('strips a time component before comparing', () => {
-    expect(resolveRateSet('2026-07-06T09:00:00').label).toBe(RATE_SCHEDULE[0].label);
+    expect(resolveRateSet('2026-07-06T09:00:00').effectiveFrom).toBe('2026-07-06');
   });
 
   it('selects the latest applicable entry from a multi-year schedule (inclusive boundary)', () => {
