@@ -16,6 +16,31 @@ def _auth_disabled() -> bool:
     return os.getenv('ML_AUTH_DISABLED', '').lower() in ('1', 'true', 'yes')
 
 
+def _is_production() -> bool:
+    env = (
+        os.getenv('APP_ENV')
+        or os.getenv('ENVIRONMENT')
+        or os.getenv('DEPLOY_ENV')
+        or os.getenv('VERCEL_ENV')
+        or ''
+    )
+    return env.strip().lower() in ('production', 'prod')
+
+
+def assert_auth_safe() -> None:
+    """Fail closed at startup. Call once during app lifespan.
+
+    Refuses to boot the ML service with the auth bypass enabled in a production
+    environment, so a prod deploy inheriting the dev default cannot run open.
+    """
+    if _auth_disabled() and _is_production():
+        raise RuntimeError(
+            'ML_AUTH_DISABLED=true is not permitted in production '
+            '(APP_ENV/ENVIRONMENT/DEPLOY_ENV/VERCEL_ENV). Set ML_JWT_SECRET '
+            '(or SUPABASE_JWT_SECRET) and clear the bypass flag.'
+        )
+
+
 def _jwt_secret() -> str:
     secret = os.getenv('ML_JWT_SECRET') or os.getenv('SUPABASE_JWT_SECRET')
     if not secret:

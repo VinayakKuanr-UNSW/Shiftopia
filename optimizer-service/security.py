@@ -50,6 +50,23 @@ AUTH_DISABLED = _env_bool('OPTIMIZER_AUTH_DISABLED', False)
 JWT_SECRET = os.environ.get('SUPABASE_JWT_SECRET', '').strip()
 JWT_AUDIENCE = os.environ.get('SUPABASE_JWT_AUDIENCE', 'authenticated')
 
+
+def _is_production() -> bool:
+    """True when the deploy environment declares itself production.
+
+    Checked against the common markers so a prod deploy that inherits the
+    docker-compose dev default (OPTIMIZER_AUTH_DISABLED=true) cannot silently
+    run open — install() turns this into a hard startup failure.
+    """
+    env = (
+        os.environ.get('APP_ENV')
+        or os.environ.get('ENVIRONMENT')
+        or os.environ.get('DEPLOY_ENV')
+        or os.environ.get('VERCEL_ENV')
+        or ''
+    )
+    return env.strip().lower() in ('production', 'prod')
+
 CORS_ALLOWLIST = [
     o.strip() for o in os.environ.get(
         'OPTIMIZER_CORS_ORIGINS',
@@ -216,6 +233,15 @@ def install(app: FastAPI) -> None:
             logger.exception('OpenTelemetry setup failed; continuing without tracing')
     else:
         logger.info('OpenTelemetry disabled (OTEL_EXPORTER_OTLP_ENDPOINT not set)')
+
+    # ── Fail closed: refuse to start unauthenticated in production ──────────
+    if AUTH_DISABLED and _is_production():
+        raise RuntimeError(
+            'OPTIMIZER_AUTH_DISABLED=true is not permitted when the environment '
+            '(APP_ENV/ENVIRONMENT/DEPLOY_ENV/VERCEL_ENV) declares production. '
+            'Refusing to start an unauthenticated optimizer. Set a real '
+            'SUPABASE_JWT_SECRET and clear the bypass flag.',
+        )
 
     # ── Auth posture banner ────────────────────────────────────────────────
     if AUTH_DISABLED:

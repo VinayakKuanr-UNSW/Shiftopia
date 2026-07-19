@@ -46,10 +46,13 @@ jobs:
       - name: Type-check
         run: npm run type-check
 
-      # Lint is temporarily disabled — eslint 9 / @typescript-eslint version
-      # mismatch breaks rule loading. Re-enable after upgrading the plugin.
-      # - name: Lint
-      #   run: npm run lint
+      # Lint now RUNS (the eslint 9 / typescript-eslint crash was fixed by the
+      # 8.64 bump). It is non-blocking for now: ~2,600 pre-existing violations
+      # (mostly module-boundary deep imports) must be burned down before this
+      # can gate the build. Flip `continue-on-error` to false once at zero.
+      - name: Lint (non-blocking — tech-debt ratchet)
+        run: npm run lint
+        continue-on-error: true
 
       - name: Unit tests
         run: npm test
@@ -63,6 +66,32 @@ jobs:
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
           VITE_SENTRY_RELEASE: ${{ github.sha }}
         run: npm run build
+
+  rls-audit:
+    name: RLS regression guard
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - name: Guard — require SUPABASE_DB_URL
+        id: guard
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::warning::SUPABASE_DB_URL secret not set — skipping RLS guard. Add it to activate."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.guard.outputs.ok == 'true'
+
+      # psql ships on the ubuntu-latest runner image (postgresql-client).
+      - name: Run RLS guard (fails on always-true / definer-view regression)
+        if: steps.guard.outputs.ok == 'true'
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f scripts/rls_guard.sql
 
   deploy:
     name: Deploy (Vercel)

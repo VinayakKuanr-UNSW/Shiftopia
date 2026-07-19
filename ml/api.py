@@ -15,7 +15,7 @@ from pydantic import BaseModel, field_validator
 from supabase import create_client
 
 import predict
-from auth import verify_jwt
+from auth import assert_auth_safe, verify_jwt
 from observability import (
     PREDICTIONS_TOTAL,
     UNKNOWN_CATEGORIES,
@@ -36,6 +36,7 @@ MAX_BATCH_SIZE = 500
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Load models and correction factors once at startup; release on shutdown."""
+    assert_auth_safe()  # fail closed: never run the auth bypass in production
     load_all_models()
     logger.info("ML models and correction factors loaded.")
     yield
