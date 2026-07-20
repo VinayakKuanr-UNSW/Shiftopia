@@ -159,50 +159,37 @@ export const swapsApi = {
     ): Promise<ShiftSwap> {
         console.log('[API] Creating swap request:', { requesterV8ShiftId, requestedByEmployeeId, swapWithEmployeeId });
 
-        // §9 Time Lock Check: Fetch shift to verify time lock
+        // §9 Time Lock Check (client-side fast-path for a friendly error). The
+        // RPC below re-checks the lock atomically on the server.
         const { data: shift, error: shiftErr } = await supabase
             .from('shifts').select('shift_date, start_time').eq('id', requesterV8ShiftId).single();
         if (shiftErr || !shift) throw shiftErr || new Error('Shift not found');
-        const shiftStart = assertNotTimeLocked(shift.shift_date, shift.start_time);
-        const expiresAt = new Date(shiftStart.getTime() - TIME_LOCK_HOURS * 60 * 60 * 1000);
+        assertNotTimeLocked(shift.shift_date, shift.start_time);
 
-        const { data, error } = await db
-            .from('shift_swaps')
-            .insert({
-                requester_shift_id: requesterV8ShiftId,
-                requester_id: requestedByEmployeeId,
-                target_id: swapWithEmployeeId,
-                reason: reason,
-                status: 'OPEN', // T1: S4 → S9, OPEN
-                expires_at: expiresAt.toISOString(),
-            })
-            .select()
-            .single();
-
-        if (error) {
-            console.error('[API] Error creating swap request:', error);
-            throw error;
+        // Atomic create via the definer RPC: inserts the OPEN request (the
+        // trg_set_swap_expires_at trigger stamps expires_at) AND flips the shift
+        // to TradeRequested (S4 → S9) in a single transaction — closing the
+        // orphaned-state hole the old two-step client write had. The server
+        // derives the requester from auth.uid() and verifies shift ownership,
+        // so requestedByEmployeeId is no longer trusted from the client.
+        void requestedByEmployeeId;
+        const { data: rpcResult, error: rpcError } = await db.rpc('sm_create_swap_request', {
+            p_requester_shift_id: requesterV8ShiftId,
+            p_target_id: swapWithEmployeeId,
+            p_reason: reason,
+        });
+        if (rpcError) {
+            console.error('[API] Error creating swap request:', rpcError);
+            throw rpcError;
+        }
+        if (!rpcResult?.success) {
+            throw new Error(rpcResult?.error ?? 'Failed to create swap request');
         }
 
-        // Update shift status to TradeRequested to reflect S9 state (Published + TradeRequested)
-        if (data) {
-            const { error: shiftUpdateError } = await db
-                .from('shifts')
-                .update({
-                    trading_status: 'TradeRequested',
-                    trade_requested_at: new Date().toISOString()
-                })
-                .eq('id', requesterV8ShiftId);
-
-            if (shiftUpdateError) {
-                console.error('[API] Failed to update shift trading status:', shiftUpdateError);
-                // Note: ideally we would rollback the swap request creation here,
-                // but for now we log the error as this is a non-transactional client-side operation.
-            }
-
-            }
-
-        return data;
+        const { data: created, error: fetchErr } = await db
+            .from('shift_swaps').select('*').eq('id', rpcResult.swap_id).single();
+        if (fetchErr) throw fetchErr;
+        return created;
     },
 
     // ----------------------------------------------------------------
@@ -786,36 +773,16 @@ export const swapsApi = {
     async cancelSwapRequest(swapId: string): Promise<void> {
         console.log('[API] Cancelling swap:', swapId);
 
-        // §4 T7: Only allowed from OPEN
-        const { data, error: fetchErr } = await db
-            .from('shift_swaps').select('status, requester_shift_id').eq('id', swapId).single();
-        if (fetchErr || !data) throw fetchErr || new Error('Swap not found');
-        if (data.status !== 'OPEN') {
-            throw new Error(`Cannot cancel swap in state '${data.status}'. Must be OPEN.`);
-        }
-
-        const { error } = await db
-            .from('shift_swaps')
-            .update({ status: 'CANCELLED' })
-            .eq('id', swapId)
-            .eq('status', 'OPEN');
-
+        // §4 T7: atomic cancel via the definer RPC — flips the swap to CANCELLED
+        // and reverts the shift to NoTrade (S9 → S4) in one transaction, with the
+        // OPEN-only state guard (returns "Must be OPEN") and requester/manager
+        // authorization enforced server-side.
+        const { data: rpcResult, error } = await db.rpc('sm_cancel_swap_request', {
+            p_swap_id: swapId,
+        });
         if (error) throw error;
-
-        // Revert shift status to NoTrade (S4) as the trade was cancelled
-        if (data.requester_shift_id) {
-            const { error: shiftUpdateError } = await db
-                .from('shifts')
-                .update({
-                    trading_status: 'NoTrade',
-                    trade_requested_at: null
-                })
-                .eq('id', data.requester_shift_id);
-
-            if (shiftUpdateError) {
-                console.error('[API] Failed to revert shift trading status on cancellation:', shiftUpdateError);
-            }
-
+        if (!rpcResult?.success) {
+            throw new Error(rpcResult?.error ?? 'Failed to cancel swap');
         }
     },
 

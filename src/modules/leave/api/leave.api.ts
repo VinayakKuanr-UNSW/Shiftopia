@@ -210,6 +210,22 @@ export async function createLeaveRequest(
     }
   }
 
+  // Overlap guard (H5) — friendly pre-check for the common case. The DB EXCLUDE
+  // constraint `leave_requests_no_overlap` is the authoritative guarantee that
+  // also closes the concurrent-submit race. Two ranges overlap (inclusive) iff
+  // existing.start <= new.end AND existing.end >= new.start.
+  const { data: overlaps } = await (supabase as any)
+    .from('leave_requests')
+    .select('id')
+    .eq('employee_id', employeeId)
+    .in('status', ['pending', 'approved'])
+    .lte('start_date', input.endDate)
+    .gte('end_date', input.startDate)
+    .limit(1);
+  if (overlaps && overlaps.length > 0) {
+    return { error: 'You already have a pending or approved leave request that overlaps these dates.' };
+  }
+
   const { data, error } = await (supabase as any)
     .from('leave_requests')
     .insert({
@@ -225,7 +241,14 @@ export async function createLeaveRequest(
     .select()
     .single();
 
-  if (error) return { error: error.message };
+  if (error) {
+    // 23P01 = exclusion_violation: the overlap constraint fired (lost the race
+    // with a concurrent submit). Surface the same friendly message.
+    if ((error as { code?: string }).code === '23P01') {
+      return { error: 'You already have a pending or approved leave request that overlaps these dates.' };
+    }
+    return { error: error.message };
+  }
   return { data: mapRequestRow(data) };
 }
 
@@ -251,17 +274,25 @@ export async function approveLeaveRequest(
   if (req.status !== 'pending') return { error: `Cannot approve a ${req.status} request` };
   if (req.employee_id === approverId) return { error: 'Cannot approve your own leave request' };
 
-  // Update request status.
-  const { error: updateErr } = await (supabase as any)
+  // Update request status. The `.eq('status','pending')` is the authoritative
+  // guard (the fetch-then-check above is only a fast-path and is TOCTOU): under a
+  // concurrent approve/cancel/reject the UPDATE matches zero rows, so we never
+  // double-deduct balance or resurrect a cancelled/rejected request into approved.
+  const { data: updatedRows, error: updateErr } = await (supabase as any)
     .from('leave_requests')
     .update({
       status: 'approved',
       approved_by: approverId,
       approval_date: new Date().toISOString(),
     })
-    .eq('id', requestId);
+    .eq('id', requestId)
+    .eq('status', 'pending')
+    .select('id');
 
   if (updateErr) return { error: updateErr.message };
+  if (!updatedRows || updatedRows.length === 0) {
+    return { error: 'This request is no longer pending (it may have just been actioned by someone else).' };
+  }
 
   // The DB trigger `trg_leave_balance_deduction` will atomically deduct the balance.
 
