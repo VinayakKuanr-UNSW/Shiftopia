@@ -52,6 +52,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modu
 import { getBidPriority } from '../utils/bid-priority';
 import { getDeptColor, getRowClass } from '../utils/bid-dept-styles';
 import { getParticipationStatus } from '../utils/bid-participation';
+import { useRealtimeInvalidate } from '@/platform/supabase/hooks/useRealtimeInvalidate';
 import type { ShiftData, BidData, ShiftOpportunity } from '../types';
 
 // ============================================================================
@@ -131,6 +132,17 @@ export const EmployeeBidsPage: React.FC = () => {
         enabled: !!user,
         staleTime: 60_000, // 1 minute staleTime
     });
+
+    // Realtime: refresh my bids live when shift_bids change (RLS-scoped to own).
+    useRealtimeInvalidate(
+        `bids-rt-${user?.id ?? ''}`,
+        ['shift_bids'],
+        () => {
+            queryClient.invalidateQueries({ queryKey: ['myBids'] });
+            queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
+        },
+        !!user,
+    );
 
     // ========================================================================
     // BUCKET A: ELIGIBILITY SCAN (5-min cache)

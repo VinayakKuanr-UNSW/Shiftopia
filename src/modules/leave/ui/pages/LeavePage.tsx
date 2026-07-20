@@ -52,6 +52,7 @@ import {
   unassignConflictingShifts,
 } from '../../api/leave.api';
 import { formatLeaveConflictWarning } from '../../domain/leave-conflicts';
+import { useRealtimeInvalidate } from '@/platform/supabase/hooks/useRealtimeInvalidate';
 
 type Tab = 'balances' | 'requests' | 'new' | 'approvals';
 
@@ -134,6 +135,16 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
   }, [employeeId, isManager]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Realtime: reload balances/requests (and, for managers, team requests) live
+  // when leave rows change — Leave previously had no polling at all. RLS-scoped,
+  // so a manager only wakes on leave they are allowed to see.
+  useRealtimeInvalidate(
+    `leave-rt-${employeeId}`,
+    ['leave_requests', 'leave_balances'],
+    loadData,
+    !!employeeId,
+  );
 
   // Auto-calculate hours from date range (7.6h/day × working days)
   useEffect(() => {
