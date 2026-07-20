@@ -727,9 +727,16 @@ export const swapsApi = {
         // marks the swap APPROVED, and version-guards the requester shift — closing
         // the concurrent double-approve hole the old direct update had (it lacked a
         // status guard). S10 ↔ MANAGER_PENDING is kept in sync by sm_accept_trade.
+        // Optimistic-concurrency basis must be the version the view was loaded at
+        // (a stale view should correctly conflict). Never silently fall back to 0
+        // — that forces a confusing VERSION_CONFLICT since versions start at 1.
+        const expectedVersion = swap.originalShift?.version;
+        if (expectedVersion == null) {
+            throw new Error('Could not determine the shift version. Please refresh and try again.');
+        }
         const approveResult = await applyShiftOp({
             shiftId: swap.original_shift_id,
-            expectedVersion: swap.originalShift?.version ?? 0,
+            expectedVersion,
             op: 'approve_trade',
             payload: { compliance_ok: true },
         });
@@ -759,9 +766,13 @@ export const swapsApi = {
         const requesterShift = Array.isArray(data.requester_shift)
             ? data.requester_shift[0]
             : data.requester_shift;
+        const expectedVersion = requesterShift?.version;
+        if (expectedVersion == null) {
+            throw new Error('Could not determine the shift version. Please refresh and try again.');
+        }
         const result = await applyShiftOp({
             shiftId: data.requester_shift_id,
-            expectedVersion: requesterShift?.version ?? 0,
+            expectedVersion,
             op: 'reject_trade',
             payload: { reason: reason ?? 'Manager Action' },
         });

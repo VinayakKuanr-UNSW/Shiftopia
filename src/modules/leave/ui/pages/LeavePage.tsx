@@ -99,6 +99,8 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
   const [unassigning, setUnassigning] = useState(false);
   /** Result copy after a batch unassign (success or partial-success summary). */
   const [unassignResult, setUnassignResult] = useState<string | null>(null);
+  /** Error copy for approve/reject/cancel actions (previously swallowed). */
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // New request form state
   const [formType, setFormType] = useState<LeaveTypeCode>('annual');
@@ -182,8 +184,11 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
   const handleApprove = async (requestId: string) => {
     setApprovalConflict(null);
     setUnassignResult(null);
+    setActionError(null);
     const result = await approveLeaveRequest(requestId, employeeId);
-    if (!result.error) {
+    if (result.error) {
+      setActionError(result.error);
+    } else {
       // Approval succeeded — surface any shifts still rostered inside the leave
       // range so the manager can unassign them in one click (otherwise the
       // employee is later falsely marked No-Show).
@@ -214,12 +219,16 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
   };
 
   const handleReject = async (requestId: string) => {
-    await rejectLeaveRequest(requestId, employeeId, 'Declined by manager');
+    setActionError(null);
+    const result = await rejectLeaveRequest(requestId, employeeId, 'Declined by manager');
+    if (result.error) setActionError(result.error);
     loadData();
   };
 
   const handleCancel = async (requestId: string) => {
-    await cancelLeaveRequest(requestId);
+    setActionError(null);
+    const result = await cancelLeaveRequest(requestId);
+    if (result.error) setActionError(result.error);
     loadData();
   };
 
@@ -273,6 +282,19 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
           </div>
         ) : (
           <>
+            {actionError && (
+              <div className="mb-3 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
+                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-500" />
+                <p className="flex-1 text-xs text-red-600 dark:text-red-400">{actionError}</p>
+                <button
+                  onClick={() => setActionError(null)}
+                  className="rounded-lg p-0.5 text-red-500/70 transition-colors hover:text-red-600 dark:hover:text-red-400"
+                  title="Dismiss"
+                >
+                  <XCircle className="h-4 w-4" />
+                </button>
+              </div>
+            )}
             {activeTab === 'balances' && (
               <BalancesView balances={balances} requests={myRequests} />
             )}
