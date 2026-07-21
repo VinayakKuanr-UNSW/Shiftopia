@@ -26,6 +26,7 @@ import {
     Gavel,
     History,
     Briefcase,
+    Phone,
 } from 'lucide-react';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { Avatar, AvatarFallback } from '@/modules/core/ui/primitives/avatar';
@@ -54,6 +55,7 @@ import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } fr
 import { estimateDetailedCostFromShift } from '../../domain/projections/utils/cost';
 import ShiftHistoryTimeline from './ShiftHistoryTimeline';
 import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
+import { useReserveListPanelStore } from '@/modules/reserve-list';
 
 // ============================================================================
 // HISTORY OVERLAY COMPONENT
@@ -335,6 +337,12 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
         if (ctx.urgency === 'urgent' || ctx.urgency === 'emergent') return 'urgent';
         return 'standard';
     }, [ctx.urgency, isBiddingActive]);
+
+    // Reserve List: TTS<4h + unassigned shifts show a Phone action in place of
+    // the marketplace (bidding) indicator — manager-only emergency staffing
+    // workflow (docs/audits/reserve-list-audit-and-implementation-plan.md).
+    const isEmergentUnassigned = ctx.urgency === 'emergent' && !shift.assigned_employee_id && !shift.is_cancelled;
+    const openReserveList = useReserveListPanelStore((s) => s.open);
 
     const stateDisplay = useMemo(
         () => getShiftStateDisplay(ctx.state),
@@ -645,25 +653,46 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                         </div>
                     )}
 
-                    {/* Bidding Icon — floating in bottom right */}
-                    {isBiddingActive && biddingUrgency && (
+                    {/* Reserve List Icon — replaces the marketplace/bidding indicator
+                        for TTS<4h unassigned shifts (manager-only emergency staffing). */}
+                    {isEmergentUnassigned ? (
                         <div className="absolute bottom-1.5 right-1.5 z-30">
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <div className={cn(
-                                        "p-1.5 rounded-lg border flex items-center justify-center shadow-sm cursor-help hover:scale-105 transition-all duration-300",
-                                        biddingUrgency === 'urgent' && "bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400",
-                                        biddingUrgency === 'standard' && "bg-blue-500/15 border-blue-500/30 text-blue-600 dark:text-blue-400"
-                                    )}>
-                                        <Gavel className="h-4.5 w-4.5" />
-                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); openReserveList(shift.id); }}
+                                        className="p-1.5 rounded-lg border flex items-center justify-center shadow-sm cursor-pointer hover:scale-105 transition-all duration-300 bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400 animate-pulse"
+                                    >
+                                        <Phone className="h-4.5 w-4.5" />
+                                    </button>
                                 </TooltipTrigger>
                                 <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[10px] font-bold">
-                                    {biddingUrgency === 'urgent' && 'Urgent Bidding Active'}
-                                    {biddingUrgency === 'standard' && 'Bidding Active'}
+                                    Emergency — Open Reserve List
                                 </TooltipContent>
                             </Tooltip>
                         </div>
+                    ) : (
+                        /* Bidding Icon — floating in bottom right */
+                        isBiddingActive && biddingUrgency && (
+                            <div className="absolute bottom-1.5 right-1.5 z-30">
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <div className={cn(
+                                            "p-1.5 rounded-lg border flex items-center justify-center shadow-sm cursor-help hover:scale-105 transition-all duration-300",
+                                            biddingUrgency === 'urgent' && "bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400",
+                                            biddingUrgency === 'standard' && "bg-blue-500/15 border-blue-500/30 text-blue-600 dark:text-blue-400"
+                                        )}>
+                                            <Gavel className="h-4.5 w-4.5" />
+                                        </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[10px] font-bold">
+                                        {biddingUrgency === 'urgent' && 'Urgent Bidding Active'}
+                                        {biddingUrgency === 'standard' && 'Bidding Active'}
+                                    </TooltipContent>
+                                </Tooltip>
+                            </div>
+                        )
                     )}
                 </div>
             </div>
@@ -730,6 +759,12 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
         if (ctx.urgency === 'urgent' || ctx.urgency === 'emergent') return 'urgent';
         return 'standard';
     }, [ctx.urgency, isBiddingActive]);
+
+    // Reserve List: TTS<4h + unassigned shifts show a Phone action in place of
+    // the marketplace (bidding) indicator — manager-only emergency staffing
+    // workflow (docs/audits/reserve-list-audit-and-implementation-plan.md).
+    const isEmergentUnassigned = ctx.urgency === 'emergent' && !shift.assigned_employee_id && !shift.is_cancelled;
+    const openReserveList = useReserveListPanelStore((s) => s.open);
 
     const fsmLock = getLockState(ctx.state);
     const isFullyLocked = isLocked || fsmLock.fullyLocked;
@@ -892,8 +927,26 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     </div>
                 </div>
 
-                {/* Bidding Icon — floating in bottom right */}
-                {biddingUrgency && (
+                {/* Reserve List Icon — replaces the marketplace/bidding indicator
+                    for TTS<4h unassigned shifts (manager-only emergency staffing). */}
+                {isEmergentUnassigned ? (
+                    <div className="absolute bottom-2 right-2 z-30">
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); openReserveList(shift.id); }}
+                                    className="p-1.5 rounded-lg border flex items-center justify-center shadow-sm cursor-pointer hover:scale-105 transition-all duration-300 bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400 animate-pulse"
+                                >
+                                    <Phone className="h-4.5 w-4.5" />
+                                </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[10px] font-bold">
+                                Emergency — Open Reserve List
+                            </TooltipContent>
+                        </Tooltip>
+                    </div>
+                ) : biddingUrgency && (
                     <div className="absolute bottom-2 right-2 z-30">
                         <Tooltip>
                             <TooltipTrigger asChild>
@@ -1051,8 +1104,26 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                         <p className="text-xs text-muted-foreground italic truncate">{shift.notes}</p>
                     ) : null}
 
-                    {/* Bidding Icon — floating in bottom right */}
-                    {biddingUrgency && (
+                    {/* Reserve List Icon — replaces the marketplace/bidding indicator
+                        for TTS<4h unassigned shifts (manager-only emergency staffing). */}
+                    {isEmergentUnassigned ? (
+                        <div className="absolute bottom-2 right-2 z-30">
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); openReserveList(shift.id); }}
+                                        className="p-1.5 rounded-lg border flex items-center justify-center shadow-sm cursor-pointer hover:scale-105 transition-all duration-300 bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400 animate-pulse"
+                                    >
+                                        <Phone className="h-4.5 w-4.5" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[10px] font-bold">
+                                    Emergency — Open Reserve List
+                                </TooltipContent>
+                            </Tooltip>
+                        </div>
+                    ) : biddingUrgency && (
                         <div className="absolute bottom-2 right-2 z-30">
                             <Tooltip>
                                 <TooltipTrigger asChild>

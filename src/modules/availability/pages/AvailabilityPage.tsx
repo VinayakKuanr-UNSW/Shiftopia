@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { addMonths, subMonths } from 'date-fns';
-import { CalendarDays, ChevronLeft, ChevronRight, Plus, RefreshCw } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Phone, Plus, RefreshCw } from 'lucide-react';
 import { useAvailability } from '../state/useAvailability';
 import { useAvailabilityEditing } from '../state/useAvailabilityEditing';
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { Button } from '@/modules/core/ui/primitives/button';
+import { Switch } from '@/modules/core/ui/primitives/switch';
+import { useReserveListOptIn } from '@/modules/reserve-list/state/useReserveListOptIn';
 import { format } from 'date-fns';
 import { AvailabilityScreen } from '../ui/AvailabilityScreen';
 import { pageVariants } from '@/modules/core/ui/motion/presets';
@@ -54,9 +56,28 @@ export const AvailabilityPage: React.FC = () => {
 
   const availabilityData = useAvailability({ month: currentMonth });
   const editingData = useAvailabilityEditing();
+  const reserveListOptIn = useReserveListOptIn();
 
   const handlePrevMonth = () => setCurrentMonth((prev) => subMonths(prev, 1));
   const handleNextMonth = () => setCurrentMonth((prev) => addMonths(prev, 1));
+
+  const handleReserveListToggle = async (checked: boolean) => {
+    try {
+      await reserveListOptIn.setOptIn(checked);
+      toast({
+        title: checked ? 'Reserve List: opted in' : 'Reserve List: opted out',
+        description: checked
+          ? 'You may now be contacted for emergency replacement shifts.'
+          : 'You will no longer appear in emergency replacement searches.',
+      });
+    } catch {
+      toast({
+        title: 'Could not update Reserve List preference',
+        description: 'Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const handleRefresh = async () => {
     await Promise.all([availabilityData.refreshRules(), availabilityData.refreshSlots()]);
@@ -154,6 +175,30 @@ export const AvailabilityPage: React.FC = () => {
               >
                 <RefreshCw className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
               </Button>
+
+              <div className="h-6 w-px bg-border/20 flex-shrink-0 mx-1" />
+
+              {/* Reserve List opt-in — OFF by default; controls whether this
+                  employee can be found in a manager's emergency Reserve List
+                  search (docs/audits/reserve-list-audit-and-implementation-plan.md §8). */}
+              <div
+                className={cn(
+                  "flex items-center gap-2 flex-shrink-0 h-9 lg:h-11 px-3 lg:px-4 rounded-xl transition-all",
+                  isDark ? "bg-[#111827]/60" : "bg-white shadow-sm"
+                )}
+                title="When on, you may be contacted for emergency replacement shifts (starting within 4 hours)."
+              >
+                <Phone className={cn("h-3.5 w-3.5 lg:h-4 lg:w-4 flex-shrink-0", isDark ? "text-muted-foreground" : "text-slate-500")} />
+                <span className="hidden sm:inline text-[9px] lg:text-[10px] font-black uppercase tracking-wider text-foreground whitespace-nowrap">
+                  Reserve List
+                </span>
+                <Switch
+                  checked={reserveListOptIn.optIn}
+                  onCheckedChange={handleReserveListToggle}
+                  disabled={reserveListOptIn.loading || reserveListOptIn.saving}
+                  aria-label="Reserve List opt-in"
+                />
+              </div>
             </div>
           </div>
         }

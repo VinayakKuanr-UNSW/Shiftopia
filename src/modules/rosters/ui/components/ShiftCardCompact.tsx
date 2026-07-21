@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
-import { Clock, MoreHorizontal, Gavel, ArrowLeftRight, Ban, X, Check, Flame, Edit, Megaphone, Hourglass, CheckCircle, XCircle, UserPlus, UserCheck, Users, MailOpen, BadgeCheck, Zap, Circle, Lock, Minus, Handshake, ShieldCheck } from 'lucide-react';
+import { Clock, MoreHorizontal, Gavel, ArrowLeftRight, Ban, X, Check, Flame, Edit, Megaphone, Hourglass, CheckCircle, XCircle, UserPlus, UserCheck, Users, MailOpen, BadgeCheck, Zap, Circle, Lock, Minus, Handshake, ShieldCheck, Phone } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/modules/core/ui/primitives/avatar';
 import {
   Tooltip,
@@ -16,6 +16,7 @@ import { computeShiftUrgency } from '../../domain/bidding-urgency';
 import { getProtectionContext, getShiftStatusIcons } from '../../domain/shift-ui';
 import { EditingPresenceBadge } from './EditingPresenceBadge';
 import type { ShiftEditor } from '../hooks/useShiftEditingPresence';
+import { useReserveListPanelStore } from '@/modules/reserve-list';
 
 /* ============================================================
    TYPES
@@ -148,8 +149,15 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
     rawShift.shift_date || shift.shiftDate || '',
     rawShift.start_time || shift.startTime || ''
   );
-  
-  const statusIcons = useMemo(() => 
+
+  // Reserve List: TTS<4h + unassigned shifts show a Phone action in place of
+  // the marketplace (bidding) indicator — manager-only emergency staffing
+  // workflow (docs/audits/reserve-list-audit-and-implementation-plan.md).
+  const isAssignedForReserveList = !!(shift.employeeName || shift.assignedEmployeeId);
+  const isEmergentUnassigned = urgency === 'emergent' && !isAssignedForReserveList && !isCancelled;
+  const openReserveList = useReserveListPanelStore((s) => s.open);
+
+  const statusIcons = useMemo(() =>
     showStatusIcons ? getShiftStatusIcons(rawShift as any) : [], 
   [rawShift, showStatusIcons]);
 
@@ -287,9 +295,22 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
               </span>
             </div>
 
-            {/* 5. BIDDING */}
+            {/* 5. BIDDING (or Reserve List for TTS<4h unassigned shifts) */}
             <div className="flex flex-col items-center gap-1">
-              {(() => {
+              {isEmergentUnassigned ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); openReserveList(shift.id); }}
+                      className="flex items-center justify-center rounded hover:scale-110 transition-transform"
+                    >
+                      <Phone className="w-4 h-4 text-rose-500 animate-pulse" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="text-[10px] py-1 px-2">Emergency — Open Reserve List</TooltipContent>
+                </Tooltip>
+              ) : (() => {
                 const b = rawShift.bidding_status;
                 const isActiveBidding = b === 'on_bidding' || b === 'on_bidding_normal' || b === 'on_bidding_urgent';
                 if (!isActiveBidding) return <Ban className="w-4 h-4 text-gray-400" />;
@@ -300,13 +321,13 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
                 if (urg === 'urgent')   return <Flame className="w-4 h-4 text-orange-500 animate-pulse" />;
                 return <Gavel className="w-4 h-4 text-blue-500" />;
               })()}
-              <span className={cn("text-[9px] font-bold truncate w-full text-center", (() => {
+              <span className={cn("text-[9px] font-bold truncate w-full text-center", isEmergentUnassigned ? 'text-rose-500' : (() => {
                 const b = rawShift.bidding_status;
                 const isActiveBidding = b === 'on_bidding' || b === 'on_bidding_normal' || b === 'on_bidding_urgent';
                 if (isActiveBidding && stateId === 'S5' && computeShiftUrgency(rawShift.shift_date, rawShift.start_time) === 'emergent') return 'text-rose-500';
                 return 'text-muted-foreground';
               })())}>
-                {(() => {
+                {isEmergentUnassigned ? 'ReserveList' : (() => {
                   const b = rawShift.bidding_status;
                   const isActiveBidding = b === 'on_bidding' || b === 'on_bidding_normal' || b === 'on_bidding_urgent';
                   if (!isActiveBidding) return 'NotOnBidding';
