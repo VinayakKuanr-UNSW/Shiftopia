@@ -2,9 +2,13 @@
  * ReserveListPanel — manager-only emergency staffing workflow.
  *
  * Custom overlay (mirrors ShiftWizardModal's convention: NOT a Radix Dialog,
- * so nested portaled dropdowns/tooltips keep working; z-40 so they layer
- * above it). Mounted once in RostersPlannerPage, opened from any shift card
- * via useReserveListPanelStore.open(shiftId).
+ * so nested portaled dropdowns/tooltips keep working). z-[60] — deliberately
+ * above DrillDownPanel's z-50, since the Phone icon that opens this panel
+ * lives on cards rendered *inside* DrillDownPanel (its "comfortable" shift
+ * card variant); at z-40 (ShiftWizardModal's convention) this panel opened
+ * silently behind DrillDownPanel and was invisible. Mounted once in
+ * RostersPlannerPage, opened from any shift card via
+ * useReserveListPanelStore.open(shiftId).
  *
  * Every open + every "Refresh" press runs a fresh, uncached search
  * (getReserveListCandidates) — see
@@ -160,7 +164,7 @@ const ReserveListPanelInner: React.FC<{ shiftId: string; onClose: () => void }> 
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in-0 duration-200"
+      className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in-0 duration-200"
       role="dialog"
       aria-modal="true"
       aria-label="Reserve List"

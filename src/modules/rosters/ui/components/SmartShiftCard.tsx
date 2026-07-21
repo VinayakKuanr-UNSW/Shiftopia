@@ -1206,6 +1206,15 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
         [ctx.state],
     );
 
+    // Reserve List: TTS<4h + unassigned shifts get a Phone action — manager-only
+    // emergency staffing workflow (docs/audits/reserve-list-audit-and-implementation-plan.md).
+    // This is the card variant actually rendered by DrillDownPanel's per-shift
+    // grid (the manager's default click-through from the Bucket View summary),
+    // so unlike Compact/Detailed there's no existing bidding badge to swap out —
+    // the Phone icon is added to the action row instead.
+    const isEmergentUnassigned = ctx.urgency === 'emergent' && !shift.assigned_employee_id && !shift.is_cancelled;
+    const openReserveList = useReserveListPanelStore((s) => s.open);
+
     const costBreakdown = useMemo(() => estimateDetailedCostFromShift(shift), [shift]);
 
     const timeRange = `${formatTime(shift.start_time)}–${formatTime(shift.end_time)}`;
@@ -1238,6 +1247,22 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
                         </div>
                     ) : <span />}
                     <div onClick={(e) => e.stopPropagation()} className="relative z-30 shrink-0 flex items-center">
+                        {isEmergentUnassigned && (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        type="button"
+                                        onClick={() => openReserveList(shift.id)}
+                                        className="h-8 w-8 flex items-center justify-center rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:scale-105 transition-all mr-0.5"
+                                    >
+                                        <Phone className="h-4 w-4 animate-pulse" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[10px] font-bold">
+                                    Emergency — Open Reserve List
+                                </TooltipContent>
+                            </Tooltip>
+                        )}
                         <ShiftHistoryButton
                             shiftId={shift.id}
                             triggerClassName="h-8 w-8 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 rounded-lg transition-colors"
