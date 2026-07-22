@@ -61,11 +61,11 @@ export const TimesheetPage: React.FC = () => {
     const [viewMode, setViewMode] = useState<'table' | 'timecard'>('timecard');
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'no_show'>('all');
-
+    const EMPTY_DECISIONS_MAP = useMemo(() => new Map<string, AutoPilotDecision>(), []);
     const [shifts, setShifts] = useState<TimesheetShiftRow[]>([]);
     const [loading, setLoading] = useState(false);
     // AutoPilot bot decisions, keyed by shift id — drives the per-row chip.
-    const [autoDecisions, setAutoDecisions] = useState<Map<string, AutoPilotDecision>>(new Map());
+    const [autoDecisions, setAutoDecisions] = useState<Map<string, AutoPilotDecision>>(EMPTY_DECISIONS_MAP);
 
     const { toast } = useToast();
 
@@ -89,10 +89,10 @@ export const TimesheetPage: React.FC = () => {
             if (autoPilotAdapter?.getDecisionsForEntities && data.length > 0) {
                 autoPilotAdapter
                     .getDecisionsForEntities(data.map(s => s.shiftId))
-                    .then(setAutoDecisions)
-                    .catch(() => setAutoDecisions(new Map()));
+                    .then(m => setAutoDecisions(m.size === 0 ? EMPTY_DECISIONS_MAP : m))
+                    .catch(() => setAutoDecisions(EMPTY_DECISIONS_MAP));
             } else {
-                setAutoDecisions(new Map());
+                setAutoDecisions(EMPTY_DECISIONS_MAP);
             }
         } catch (error) {
             console.error('Error loading shifts:', error);

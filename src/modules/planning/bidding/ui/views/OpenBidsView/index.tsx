@@ -718,10 +718,14 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     expired:  shifts.filter(s => s.toggle === 'expired').length,
   }), [shifts]);
 
+  // ── AutoPilot bot decisions static empty fallback reference ─────────────────
+  const EMPTY_DECISIONS_MAP = useMemo(() => new Map<string, AutoPilotDecision>(), []);
+
   // Report counts up to controlling parent (GoldStandardHeader filter chips).
+  const countsKey = `${counts.standard}-${counts.urgent}-${counts.resolved}-${counts.expired}`;
   useEffect(() => {
     onCountsChange?.(counts);
-  }, [counts, onCountsChange]);
+  }, [countsKey, onCountsChange]);
 
   const activeSearchQuery = externalSearchQuery !== undefined ? externalSearchQuery : searchQuery;
 
@@ -736,7 +740,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
       );
     }
     return result;
-  }, [shifts, activeToggle, searchQuery]);
+  }, [shifts, activeToggle, activeSearchQuery]);
 
   // If the expanded shift is no longer visible under the active toggle/search
   // (toggle switched, search narrowed, or it moved to "Resolved" after being
@@ -751,23 +755,27 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
   }, [filteredShifts, expandedV8ShiftId]);
 
   // ── AutoPilot bot decisions, keyed by shift id — per-row RoleCard chip. ──
-  const [autoDecisions, setAutoDecisions] = useState<Map<string, AutoPilotDecision>>(new Map());
+  const [autoDecisions, setAutoDecisions] = useState<Map<string, AutoPilotDecision>>(EMPTY_DECISIONS_MAP);
   const bidAutoPilotAdapter = useMemo(
     () => (organizationId ? createBidAutoPilotAdapter({ organizationId }) : null),
     [organizationId],
   );
   useEffect(() => {
     if (!bidAutoPilotAdapter?.getDecisionsForEntities || filteredShifts.length === 0) {
-      setAutoDecisions(new Map());
+      setAutoDecisions(EMPTY_DECISIONS_MAP);
       return;
     }
     let cancelled = false;
     bidAutoPilotAdapter
       .getDecisionsForEntities(filteredShifts.map(s => s.id))
-      .then(m => { if (!cancelled) setAutoDecisions(m); })
-      .catch(() => { if (!cancelled) setAutoDecisions(new Map()); });
+      .then(m => {
+        if (!cancelled) setAutoDecisions(m.size === 0 ? EMPTY_DECISIONS_MAP : m);
+      })
+      .catch(() => {
+        if (!cancelled) setAutoDecisions(EMPTY_DECISIONS_MAP);
+      });
     return () => { cancelled = true; };
-  }, [bidAutoPilotAdapter, filteredShifts]);
+  }, [bidAutoPilotAdapter, filteredShifts, EMPTY_DECISIONS_MAP]);
 
   // ── Compliance Panel ───────────────────────────────────────────────────────
   const bidsPanel = useBidsCompliancePanel(selectedBid, expandedShift, toast);

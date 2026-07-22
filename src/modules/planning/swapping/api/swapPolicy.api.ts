@@ -83,20 +83,38 @@ const DECISION_SELECT = `
     )
 `;
 
+const isTableMissingError = (err: any) =>
+    err && (
+        err.code === '42P01' ||
+        err.status === 404 ||
+        err.code === 'PGRST204' ||
+        (typeof err.message === 'string' && (err.message.includes('does not exist') || err.message.includes('not found')))
+    );
+
+const EMPTY_MAP = new Map<string, SwapAutoDecision>();
+
 export const swapPolicyApi = {
     /**
      * Fetch the org-default policy row (department_id IS NULL). Returns null when the org
      * has never opted in.
      */
     async getOrgPolicy(organizationId: string): Promise<SwapApprovalPolicy | null> {
-        const { data, error } = await db
-            .from('swap_approval_rules')
-            .select('*')
-            .eq('organization_id', organizationId)
-            .is('department_id', null)
-            .maybeSingle();
-        if (error) throw error;
-        return data as SwapApprovalPolicy | null;
+        try {
+            const { data, error } = await db
+                .from('swap_approval_rules')
+                .select('*')
+                .eq('organization_id', organizationId)
+                .is('department_id', null)
+                .maybeSingle();
+            if (error) {
+                if (isTableMissingError(error)) return null;
+                throw error;
+            }
+            return data as SwapApprovalPolicy | null;
+        } catch (err) {
+            if (isTableMissingError(err)) return null;
+            throw err;
+        }
     },
 
     /**
@@ -141,31 +159,47 @@ export const swapPolicyApi = {
 
     /** Recent bot decisions (newest first) for the shadow-comparison feed. */
     async getRecentDecisions(limit = 25): Promise<SwapAutoDecision[]> {
-        const { data, error } = await db
-            .from('swap_decisions')
-            .select(DECISION_SELECT)
-            .order('created_at', { ascending: false })
-            .limit(limit);
-        if (error) throw error;
-        return (data || []) as SwapAutoDecision[];
+        try {
+            const { data, error } = await db
+                .from('swap_decisions')
+                .select(DECISION_SELECT)
+                .order('created_at', { ascending: false })
+                .limit(limit);
+            if (error) {
+                if (isTableMissingError(error)) return [];
+                throw error;
+            }
+            return (data || []) as SwapAutoDecision[];
+        } catch (err) {
+            if (isTableMissingError(err)) return [];
+            throw err;
+        }
     },
 
     /** Latest decision per swap, for per-request chips. */
     async getDecisionsForSwaps(swapIds: string[]): Promise<Map<string, SwapAutoDecision>> {
-        const map = new Map<string, SwapAutoDecision>();
-        if (swapIds.length === 0) return map;
+        if (swapIds.length === 0) return EMPTY_MAP;
+        try {
+            const { data, error } = await db
+                .from('swap_decisions')
+                .select(DECISION_SELECT)
+                .in('swap_id', swapIds)
+                .order('created_at', { ascending: false });
+            if (error) {
+                if (isTableMissingError(error)) return EMPTY_MAP;
+                throw error;
+            }
+            if (!data || data.length === 0) return EMPTY_MAP;
 
-        const { data, error } = await db
-            .from('swap_decisions')
-            .select(DECISION_SELECT)
-            .in('swap_id', swapIds)
-            .order('created_at', { ascending: false });
-        if (error) throw error;
-
-        for (const row of (data || []) as SwapAutoDecision[]) {
-            if (!map.has(row.swap_id)) map.set(row.swap_id, row);
+            const map = new Map<string, SwapAutoDecision>();
+            for (const row of (data || []) as SwapAutoDecision[]) {
+                if (!map.has(row.swap_id)) map.set(row.swap_id, row);
+            }
+            return map;
+        } catch (err) {
+            if (isTableMissingError(err)) return EMPTY_MAP;
+            throw err;
         }
-        return map;
     },
 
     /**

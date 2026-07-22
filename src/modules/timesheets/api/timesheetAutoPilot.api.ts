@@ -118,6 +118,16 @@ export interface TimesheetAutoPilotDeps {
     userId?: string | null;
 }
 
+const isTableMissingError = (err: any) =>
+    err && (
+        err.code === '42P01' ||
+        err.status === 404 ||
+        err.code === 'PGRST204' ||
+        (typeof err.message === 'string' && (err.message.includes('does not exist') || err.message.includes('not found')))
+    );
+
+const EMPTY_MAP = new Map<string, AutoPilotDecision>();
+
 export function createTimesheetAutoPilotAdapter({ organizationId, userId }: TimesheetAutoPilotDeps): AutoPilotAdapter {
     return {
         copy: TIMESHEET_AUTOPILOT_COPY,
@@ -125,14 +135,22 @@ export function createTimesheetAutoPilotAdapter({ organizationId, userId }: Time
         supportsRevert: true,
 
         async getPolicy(): Promise<AutoPilotPolicy | null> {
-            const { data, error } = await db
-                .from('timesheet_approval_rules')
-                .select('*')
-                .eq('organization_id', organizationId)
-                .is('department_id', null)
-                .maybeSingle();
-            if (error) throw error;
-            return rowToPolicy(data as TimesheetPolicyRow | null);
+            try {
+                const { data, error } = await db
+                    .from('timesheet_approval_rules')
+                    .select('*')
+                    .eq('organization_id', organizationId)
+                    .is('department_id', null)
+                    .maybeSingle();
+                if (error) {
+                    if (isTableMissingError(error)) return null;
+                    throw error;
+                }
+                return rowToPolicy(data as TimesheetPolicyRow | null);
+            } catch (err) {
+                if (isTableMissingError(err)) return null;
+                throw err;
+            }
         },
 
         async savePolicy(next: AutoPilotPolicy): Promise<AutoPilotPolicy> {
@@ -175,28 +193,45 @@ export function createTimesheetAutoPilotAdapter({ organizationId, userId }: Time
         },
 
         async getRecentDecisions(limit: number): Promise<AutoPilotDecision[]> {
-            const { data, error } = await db
-                .from('timesheet_decisions')
-                .select(DECISION_SELECT)
-                .order('created_at', { ascending: false })
-                .limit(limit);
-            if (error) throw error;
-            return ((data || []) as TimesheetDecisionRow[]).map(rowToDecision);
+            try {
+                const { data, error } = await db
+                    .from('timesheet_decisions')
+                    .select(DECISION_SELECT)
+                    .order('created_at', { ascending: false })
+                    .limit(limit);
+                if (error) {
+                    if (isTableMissingError(error)) return [];
+                    throw error;
+                }
+                return ((data || []) as TimesheetDecisionRow[]).map(rowToDecision);
+            } catch (err) {
+                if (isTableMissingError(err)) return [];
+                throw err;
+            }
         },
 
         async getDecisionsForEntities(shiftIds: string[]): Promise<Map<string, AutoPilotDecision>> {
-            const map = new Map<string, AutoPilotDecision>();
-            if (shiftIds.length === 0) return map;
-            const { data, error } = await db
-                .from('timesheet_decisions')
-                .select(DECISION_SELECT)
-                .in('shift_id', shiftIds)
-                .order('created_at', { ascending: false });
-            if (error) throw error;
-            for (const row of (data || []) as TimesheetDecisionRow[]) {
-                if (!map.has(row.shift_id)) map.set(row.shift_id, rowToDecision(row));
+            if (shiftIds.length === 0) return EMPTY_MAP;
+            try {
+                const { data, error } = await db
+                    .from('timesheet_decisions')
+                    .select(DECISION_SELECT)
+                    .in('shift_id', shiftIds)
+                    .order('created_at', { ascending: false });
+                if (error) {
+                    if (isTableMissingError(error)) return EMPTY_MAP;
+                    throw error;
+                }
+                if (!data || data.length === 0) return EMPTY_MAP;
+                const map = new Map<string, AutoPilotDecision>();
+                for (const row of (data || []) as TimesheetDecisionRow[]) {
+                    if (!map.has(row.shift_id)) map.set(row.shift_id, rowToDecision(row));
+                }
+                return map;
+            } catch (err) {
+                if (isTableMissingError(err)) return EMPTY_MAP;
+                throw err;
             }
-            return map;
         },
 
         async revert(decision: AutoPilotDecision): Promise<void> {

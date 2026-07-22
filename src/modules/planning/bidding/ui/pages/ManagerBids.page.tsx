@@ -95,12 +95,14 @@ export const ManagerBidsPage: React.FC = () => {
             onClick={autoAssign.run}
             disabled={autoAssign.isRunning}
             size="sm"
-            className="h-9 px-4 text-[10px] font-black uppercase tracking-wider rounded-xl shadow-lg shadow-primary/15"
+            variant="outline"
+            className="h-9 px-3 text-[10px] font-black uppercase tracking-wider rounded-2xl border-border bg-muted/30 hover:bg-muted/50 text-foreground flex-shrink-0"
+            title="Manually trigger a batch run of safe bid assignments right now"
         >
             {autoAssign.isRunning ? (
-                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Assigning…</>
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Assigning…</>
             ) : (
-                <><Zap className="h-3.5 w-3.5 mr-2" /> Auto-Assign Safe Bids</>
+                <><Zap className="h-3.5 w-3.5 mr-1.5 text-amber-400" /> Run Batch</>
             )}
         </Button>
     );
@@ -125,11 +127,11 @@ export const ManagerBidsPage: React.FC = () => {
                     setStartDate(start);
                     setEndDate(end);
                 }}
-                filters={toggleChips}
                 functionBarChildren={
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                         {autoPilotAdapter && <AutoPilotControl adapter={autoPilotAdapter} />}
                         {autoAssignButton}
+                        {toggleChips}
                     </div>
                 }
             />
