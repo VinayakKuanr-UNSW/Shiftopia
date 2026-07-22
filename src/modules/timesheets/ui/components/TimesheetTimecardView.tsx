@@ -4,9 +4,11 @@ import { cn } from '@/modules/core/lib/utils';
 import { TimesheetMobileCard } from './TimesheetMobileCard';
 import type { TimesheetRow } from '../../model/timesheet.types';
 import { Button } from '@/modules/core/ui/primitives/button';
+import type { AutoPilotDecision } from '@/modules/core/autopilot';
 
 interface TimesheetTimecardViewProps {
     entries: TimesheetRow[];
+    autoDecisions?: Map<string, AutoPilotDecision>;
     selectedIds: string[];
     isSelectMode: boolean;
     onToggleSelect: (id: string) => void;
@@ -21,6 +23,7 @@ interface TimesheetTimecardViewProps {
 
 export const TimesheetTimecardView: React.FC<TimesheetTimecardViewProps> = ({
     entries,
+    autoDecisions,
     selectedIds,
     isSelectMode,
     onToggleSelect,
@@ -102,6 +105,7 @@ export const TimesheetTimecardView: React.FC<TimesheetTimecardViewProps> = ({
                         <TimesheetMobileCard
                             key={entry.id}
                             entry={entry}
+                            autoDecision={autoDecisions?.get(String(entry.id))}
                             isSelected={selectedIds.includes(String(entry.id))}
                             isSelectMode={isSelectMode}
                             onToggleSelect={() => onToggleSelect(String(entry.id))}

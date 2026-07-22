@@ -47,6 +47,8 @@ import { calculateTimeRemaining, formatTimeRemaining } from './utils';
 import type { BidToggle, ManagerBidShift, EmployeeBid, ToggleCounts } from './types';
 import { useManagerBidShifts } from './useOpenShifts';
 import { useShiftBids } from './useShiftBids';
+import { AutoPilotDecisionChip, type AutoPilotDecision } from '@/modules/core/autopilot';
+import { createBidAutoPilotAdapter, BID_AUTOPILOT_COPY } from '../../../api/bidAutoPilot.api';
 import { useTimeTicker } from './useTimeTicker';
 import { getAvailabilitySlots } from '@/modules/availability/api/availability.api';
 import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
@@ -460,10 +462,11 @@ interface RoleCardProps {
   shift: ManagerBidShift;
   isSelected: boolean;
   onSelect: () => void;
+  autoDecision?: AutoPilotDecision;
 }
 
 const RoleCard: React.FC<RoleCardProps> = ({
-  shift, isSelected, onSelect,
+  shift, isSelected, onSelect, autoDecision,
 }) => {
   const groupVariant = getGroupVariant(shift.groupType, shift.department);
   const theme = GROUP_THEME[groupVariant];
@@ -543,16 +546,19 @@ const RoleCard: React.FC<RoleCardProps> = ({
 
       {/* Right side: Bids & Status */}
       <div className="flex items-center gap-2 shrink-0">
+        {autoDecision && (
+          <AutoPilotDecisionChip decision={autoDecision} copy={BID_AUTOPILOT_COPY} />
+        )}
         <div className={cn(
           "flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-black tabular-nums transition-all",
-          isSelected 
-            ? "bg-primary text-primary-foreground border-primary" 
+          isSelected
+            ? "bg-primary text-primary-foreground border-primary"
             : "bg-muted/50 text-muted-foreground/60 border-transparent group-hover:border-border/50"
         )}>
           <Users className="h-2.5 w-2.5" />
           <span>{shift.bidCount}</span>
         </div>
-        
+
         {isResolved && (
           <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
         )}
@@ -743,6 +749,25 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
       setDrawerBidId(null);
     }
   }, [filteredShifts, expandedV8ShiftId]);
+
+  // ── AutoPilot bot decisions, keyed by shift id — per-row RoleCard chip. ──
+  const [autoDecisions, setAutoDecisions] = useState<Map<string, AutoPilotDecision>>(new Map());
+  const bidAutoPilotAdapter = useMemo(
+    () => (organizationId ? createBidAutoPilotAdapter({ organizationId }) : null),
+    [organizationId],
+  );
+  useEffect(() => {
+    if (!bidAutoPilotAdapter?.getDecisionsForEntities || filteredShifts.length === 0) {
+      setAutoDecisions(new Map());
+      return;
+    }
+    let cancelled = false;
+    bidAutoPilotAdapter
+      .getDecisionsForEntities(filteredShifts.map(s => s.id))
+      .then(m => { if (!cancelled) setAutoDecisions(m); })
+      .catch(() => { if (!cancelled) setAutoDecisions(new Map()); });
+    return () => { cancelled = true; };
+  }, [bidAutoPilotAdapter, filteredShifts]);
 
   // ── Compliance Panel ───────────────────────────────────────────────────────
   const bidsPanel = useBidsCompliancePanel(selectedBid, expandedShift, toast);
@@ -1193,6 +1218,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                               shift={s}
                               isSelected={expandedV8ShiftId === s.id}
                               onSelect={() => handleExpand(s.id)}
+                              autoDecision={autoDecisions.get(s.id)}
                             />
                           ))}
                         </motion.div>
@@ -1430,6 +1456,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                         shift={s}
                         isSelected={expandedV8ShiftId === s.id}
                         onSelect={() => handleExpand(s.id)}
+                        autoDecision={autoDecisions.get(s.id)}
                       />
                     ))}
                   </motion.div>

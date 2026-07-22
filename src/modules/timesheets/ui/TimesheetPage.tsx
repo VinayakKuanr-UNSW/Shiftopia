@@ -25,6 +25,8 @@ import {
     type AttendanceInput,
 } from '@/modules/rosters/domain/attendance-metrics';
 import { AttendanceMetricsBar } from '@/modules/rosters/ui/components/AttendanceMetricsBar';
+import { AutoPilotControl, type AutoPilotDecision } from '@/modules/core/autopilot';
+import { createTimesheetAutoPilotAdapter } from '../api/timesheetAutoPilot.api';
 
 /**
  * TimesheetPage
@@ -45,6 +47,14 @@ export const TimesheetPage: React.FC = () => {
     const selectedDepartmentId   = scope.dept_ids?.[0] || null;
     const selectedSubDepartmentId = scope.subdept_ids?.[0] || null;
 
+    // AutoPilot (auto-verify) — shadow-first policy control, managers only.
+    const autoPilotAdapter = useMemo(
+        () => (selectedOrganizationId
+            ? createTimesheetAutoPilotAdapter({ organizationId: selectedOrganizationId, userId: user?.id })
+            : null),
+        [selectedOrganizationId, user?.id],
+    );
+
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
     const [viewType, setViewType] = useState<ViewType>('day');
     const [range, setRange] = useState<DateRange>(computeRange(new Date(), 'day'));
@@ -54,6 +64,8 @@ export const TimesheetPage: React.FC = () => {
 
     const [shifts, setShifts] = useState<TimesheetShiftRow[]>([]);
     const [loading, setLoading] = useState(false);
+    // AutoPilot bot decisions, keyed by shift id — drives the per-row chip.
+    const [autoDecisions, setAutoDecisions] = useState<Map<string, AutoPilotDecision>>(new Map());
 
     const { toast } = useToast();
 
@@ -72,6 +84,16 @@ export const TimesheetPage: React.FC = () => {
             };
             const data = await getShiftsForTimesheet(startStr, filters, endStr);
             setShifts(data);
+
+            // Overlay AutoPilot decisions (best-effort; feature may be un-provisioned).
+            if (autoPilotAdapter?.getDecisionsForEntities && data.length > 0) {
+                autoPilotAdapter
+                    .getDecisionsForEntities(data.map(s => s.shiftId))
+                    .then(setAutoDecisions)
+                    .catch(() => setAutoDecisions(new Map()));
+            } else {
+                setAutoDecisions(new Map());
+            }
         } catch (error) {
             console.error('Error loading shifts:', error);
             toast({
@@ -82,7 +104,7 @@ export const TimesheetPage: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [range, selectedOrganizationId, selectedDepartmentId, selectedSubDepartmentId, searchQuery, toast]);
+    }, [range, selectedOrganizationId, selectedDepartmentId, selectedSubDepartmentId, searchQuery, toast, autoPilotAdapter]);
 
     useEffect(() => {
         if (selectedOrganizationId) loadShifts();
@@ -212,7 +234,16 @@ export const TimesheetPage: React.FC = () => {
             ...updates,
             status: updates.timesheetStatus?.toLowerCase(),
         });
-        if (success) { toast({ title: 'Entry Updated' }); await loadShifts(); }
+        if (success) {
+            toast({ title: 'Entry Updated' });
+        } else {
+            toast({
+                title: 'Update failed',
+                description: 'This entry could not be saved — if you were approving it, it likely still has a missing clock-in/out that needs an adjusted time first.',
+                variant: 'destructive',
+            });
+        }
+        await loadShifts();
     };
 
     const handleBulkAction = async (ids: string[], action: 'approve' | 'reject') => {
@@ -221,7 +252,18 @@ export const TimesheetPage: React.FC = () => {
             ids, user?.id || '',
             action === 'approve' ? 'approved' : 'rejected',
         );
-        if (result.success) { toast({ title: 'Bulk action complete' }); await loadShifts(); }
+        if (result.success) { toast({ title: 'Bulk action complete', description: `${result.success} shift(s) updated.` }); }
+        // A failure here is most often the completeness guard refusing to approve
+        // a shift with a missing clock-in/out — surface it instead of going quiet,
+        // since a silent skip would look identical to success from the manager's seat.
+        if (result.failed > 0) {
+            toast({
+                title: 'Some shifts were not updated',
+                description: `${result.failed} shift(s) could not be ${action === 'approve' ? 'approved' : 'rejected'} — likely a missing clock-in/out that needs an adjusted time first.`,
+                variant: 'destructive',
+            });
+        }
+        if (result.success || result.failed) await loadShifts();
     };
 
     const handleMarkNoShow = async (shiftId: string) => {
@@ -274,6 +316,9 @@ export const TimesheetPage: React.FC = () => {
                 }
                 functionBarChildren={
                     <div className="flex items-center gap-2">
+                        {canEdit && autoPilotAdapter && (
+                            <AutoPilotControl adapter={autoPilotAdapter} onChanged={handleRefresh} />
+                        )}
                         <div className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-foreground/[0.03] border border-foreground/[0.05]">
                             <ListFilter className="h-3 w-3 text-muted-foreground/40" />
                             <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40 mr-1">Status</span>
@@ -309,6 +354,7 @@ export const TimesheetPage: React.FC = () => {
                         )}
                         <TimesheetTable
                             entries={entries}
+                            autoDecisions={autoDecisions}
                             selectedDate={selectedDate}
                             onDateChange={setSelectedDate}
                             readOnly={!canEdit}

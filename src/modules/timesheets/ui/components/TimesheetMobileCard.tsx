@@ -19,6 +19,8 @@ import {
 } from '@/modules/core/ui/primitives/dialog';
 import { getProtectionContext } from '@/modules/rosters/domain/shift-ui';
 import { TimesheetStatusBadge } from './TimesheetStatusBadge';
+import { AutoPilotDecisionChip, type AutoPilotDecision } from '@/modules/core/autopilot';
+import { TIMESHEET_AUTOPILOT_COPY } from '../../api/timesheetAutoPilot.api';
 import { getGroupColor } from '@/modules/rosters/model/roster.types';
 import type { TimesheetRow } from '../../model/timesheet.types';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
@@ -27,6 +29,7 @@ import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 interface TimesheetMobileCardProps {
     entry: TimesheetRow;
+    autoDecision?: AutoPilotDecision;
     isSelected: boolean;
     isSelectMode: boolean;
     onToggleSelect: () => void;
@@ -129,6 +132,7 @@ function getDisplayStatus(entry: TimesheetRow): { label: string; variant: string
 
 export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCardProps>(({
     entry,
+    autoDecision,
     isSelected,
     isSelectMode,
     onToggleSelect,
@@ -347,16 +351,21 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 start_time: entry.scheduledStart,
                 end_time: entry.scheduledEnd,
             }}
-            topContent={isSelectMode && (
-                <button
-                    onClick={onToggleSelect}
-                    className={cn(
-                        "shrink-0 h-10 w-10 rounded-xl border-2 flex items-center justify-center transition-all",
-                        isSelected ? "bg-primary border-primary shadow-lg" : "border-foreground/10 bg-foreground/5"
+            topContent={(isSelectMode || autoDecision) && (
+                <div className="flex items-center gap-2">
+                    {isSelectMode && (
+                        <button
+                            onClick={onToggleSelect}
+                            className={cn(
+                                "shrink-0 h-10 w-10 rounded-xl border-2 flex items-center justify-center transition-all",
+                                isSelected ? "bg-primary border-primary shadow-lg" : "border-foreground/10 bg-foreground/5"
+                            )}
+                        >
+                            {isSelected && <CheckSquare className="w-5 h-5 text-white" />}
+                        </button>
                     )}
-                >
-                    {isSelected && <CheckSquare className="w-5 h-5 text-white" />}
-                </button>
+                    {autoDecision && <AutoPilotDecisionChip decision={autoDecision} copy={TIMESHEET_AUTOPILOT_COPY} />}
+                </div>
             )}
             footerActions={
                 <div className="flex flex-col gap-3">

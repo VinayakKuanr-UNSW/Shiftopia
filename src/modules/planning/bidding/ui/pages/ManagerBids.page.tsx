@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { OpenBidsView } from '../views/OpenBidsView';
 import type { BidToggle, ToggleCounts } from '../views/OpenBidsView/types';
 import { useAuth } from '@/platform/auth/useAuth';
@@ -8,6 +8,8 @@ import { Gavel, Flame, Clock, CheckCircle, CircleSlash, Zap, Loader2 } from 'luc
 import { cn } from '@/modules/core/lib/utils';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { AutoPilotControl } from '@/modules/core/autopilot';
+import { createBidAutoPilotAdapter } from '../../api/bidAutoPilot.api';
 
 const TOGGLE_CONFIG: Record<BidToggle, { label: string; Icon: typeof Flame; activeClass: string }> = {
     standard: { label: 'Standard', Icon: Clock,       activeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
@@ -17,9 +19,15 @@ const TOGGLE_CONFIG: Record<BidToggle, { label: string; Icon: typeof Flame; acti
 };
 
 export const ManagerBidsPage: React.FC = () => {
-    const { activeContract } = useAuth();
+    const { activeContract, user } = useAuth();
     const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
     const { isDark } = useTheme();
+
+    const bidOrgId = scope.org_ids[0] ?? null;
+    const autoPilotAdapter = useMemo(
+        () => (bidOrgId ? createBidAutoPilotAdapter({ organizationId: bidOrgId, userId: user?.id }) : null),
+        [bidOrgId, user?.id],
+    );
 
     const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
     const [searchQuery, setSearchQuery] = useState('');
@@ -118,7 +126,12 @@ export const ManagerBidsPage: React.FC = () => {
                     setEndDate(end);
                 }}
                 filters={toggleChips}
-                functionBarChildren={autoAssignButton}
+                functionBarChildren={
+                    <div className="flex items-center gap-2">
+                        {autoPilotAdapter && <AutoPilotControl adapter={autoPilotAdapter} />}
+                        {autoAssignButton}
+                    </div>
+                }
             />
 
             {/* ── BODY ── */}

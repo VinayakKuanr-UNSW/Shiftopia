@@ -19,11 +19,14 @@ import {
 import { exportTimesheetXLSX, exportTimesheetPDF } from "./timesheet.export";
 import { isEntryReviewable } from "./TimesheetTable.utils";
 import { COST_ESTIMATE_LABEL, COST_ESTIMATE_DISCLAIMER } from "@/modules/rosters/domain/projections/utils/cost/constants";
+import type { AutoPilotDecision } from "@/modules/core/autopilot";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface TimesheetTableProps {
     entries: TimesheetRow[];
+    /** AutoPilot bot decisions keyed by shift id (= entry.id) — per-row chip. */
+    autoDecisions?: Map<string, AutoPilotDecision>;
     selectedDate: Date;
     readOnly?: boolean;
     viewMode: "table" | "timecard";
@@ -44,6 +47,7 @@ interface TimesheetTableProps {
 
 export const TimesheetTable: React.FC<TimesheetTableProps> = ({
     entries,
+    autoDecisions,
     selectedDate,
     readOnly = false,
     viewMode,
@@ -249,6 +253,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                 {viewMode === "timecard" && (
                     <TimesheetTimecardView
                         entries={sortedEntries}
+                        autoDecisions={autoDecisions}
                         selectedIds={selectedIds}
                         isSelectMode={isSelectMode}
                         onToggleSelect={handleToggleSelect}
@@ -359,6 +364,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                             <TimesheetRowComponent
                                                 key={entry.id}
                                                 entry={entry}
+                                                autoDecision={autoDecisions?.get(String(entry.id))}
                                                 readOnly={readOnly}
                                                 isSelected={selectedIds.includes(String(entry.id))}
                                                 onToggleSelect={() => handleToggleSelect(String(entry.id))}

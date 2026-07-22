@@ -17,6 +17,8 @@ import {
     Pencil,
 } from "lucide-react";
 import { TimesheetStatusBadge } from "./TimesheetStatusBadge";
+import { AutoPilotDecisionChip, type AutoPilotDecision } from "@/modules/core/autopilot";
+import { TIMESHEET_AUTOPILOT_COPY } from "../../api/timesheetAutoPilot.api";
 
 
 import { cn } from "@/modules/core/lib/utils";
@@ -43,6 +45,7 @@ import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters
 
 interface TimesheetRowProps {
     entry: TimesheetRowType;
+    autoDecision?: AutoPilotDecision;
     readOnly?: boolean;
     isSelected?: boolean;
     onToggleSelect?: () => void;
@@ -53,6 +56,7 @@ interface TimesheetRowProps {
 
 export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     entry,
+    autoDecision,
     readOnly = false,
     isSelected = false,
     onToggleSelect,
@@ -621,6 +625,9 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                 {/* Live Rules */}
                 <td className={`${cellClass} border-r border-border/30`}>
                     <div className="flex flex-col gap-1 items-start">
+                        {autoDecision && (
+                            <AutoPilotDecisionChip decision={autoDecision} copy={TIMESHEET_AUTOPILOT_COPY} />
+                        )}
                         {[liveRuleBadges.arrival, liveRuleBadges.departure].map((badge, i) => badge && (
                             <span
                                 key={i}

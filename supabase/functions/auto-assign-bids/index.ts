@@ -73,6 +73,11 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 
+// AutoPilot autonomous drain (POST /tick): shared secret / service-role auth,
+// no user JWT. Mirrors auto-approve-swaps / auto-verify-timesheets.
+const WORKER_SECRET = Deno.env.get('WORKER_SECRET');
+const TICK_BATCH = Number(Deno.env.get('BID_WORKER_BATCH_SIZE') ?? '10') || 10;
+
 // The deployed compliance engine we delegate to (per-bidder, over HTTP).
 const COMPLIANCE_FN_URL = `${SUPABASE_URL ?? ''}/functions/v1/evaluate-compliance`;
 
@@ -80,7 +85,7 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers':
-    'Content-Type, Authorization, X-Client-Info, Apikey',
+    'Content-Type, Authorization, X-Client-Info, Apikey, X-Worker-Secret',
 };
 
 // Manager cert levels that authorize an org/dept-scoped run (00 §8, project memory).
@@ -198,6 +203,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const service = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
       auth: { persistSession: false },
     });
+
+    // ── POST /tick — autonomous queue drain (cron/service-role, no user JWT). ──
+    // Authorized by the shared worker secret or a service-role bearer, BEFORE the
+    // interactive JWT gate below. This is the AutoPilot shadow/live pipeline.
+    if (req.method === 'POST' && path === '/tick') {
+      if (!isTickAuthorized(req)) {
+        return json(401, { error: 'UNAUTHORIZED', code: 'UNAUTHORIZED' });
+      }
+      return await handleTick(service);
+    }
 
     // ── Authn: resolve the caller from their JWT (forwarded Authorization). ──
     const authedUser = await resolveCaller(req);
@@ -840,6 +855,187 @@ async function loadFairnessDebts(
     return { debts, f3Degraded: false };
   } catch {
     return { debts: new Map(), f3Degraded: true };
+  }
+}
+
+// =============================================================================
+// AUTOPILOT — POST /tick autonomous queue drain (shadow/live)
+//
+// Drains bid_review_queue: for each queued shift, reuse decideShift() (first
+// compliance-clear bidder via evaluate-compliance) to PICK a winner, then hand
+// it to sm_bid_auto_decide, which owns the commit (idempotency / kill-switch /
+// shadow → in LIVE delegates to the hardened sm_select_bid_winner). This worker
+// never writes shifts directly.
+// =============================================================================
+
+const AUTOPILOT_ENGINE_VERSION = 'auto-assign-bids/tick@1.0.0';
+
+interface TickSummary {
+  claimed: number;
+  committed: number;
+  shadow: number;
+  manual_review: number;
+  done: number;
+  retried: number;
+  errors: number;
+}
+
+interface BidQueueRow {
+  id: string;
+  shift_id: string;
+  idempotency_key: string;
+}
+
+interface BidPolicy {
+  enabled: boolean;
+  shadow_mode: boolean;
+  version: number;
+  auto_assign_warnings: boolean;
+}
+
+function isTickAuthorized(req: Request): boolean {
+  const secret = req.headers.get('X-Worker-Secret');
+  if (WORKER_SECRET && secret && secret === WORKER_SECRET) return true;
+  const auth = req.headers.get('Authorization') ?? '';
+  if (SERVICE_ROLE_KEY && auth === `Bearer ${SERVICE_ROLE_KEY}`) return true;
+  return false;
+}
+
+async function handleTick(service: SupabaseClient): Promise<Response> {
+  const workerId = `bid-worker:${crypto.randomUUID()}`;
+  const summary: TickSummary = { claimed: 0, committed: 0, shadow: 0, manual_review: 0, done: 0, retried: 0, errors: 0 };
+
+  const { data: claimedData, error: claimErr } = await service.rpc('sm_bid_queue_claim', {
+    p_worker: workerId,
+    p_limit: TICK_BATCH,
+  });
+  if (claimErr) return json(500, { error: `claim failed: ${claimErr.message}`, code: 'CLAIM_FAILED' });
+
+  const claimed = (claimedData ?? []) as BidQueueRow[];
+  summary.claimed = claimed.length;
+  for (const row of claimed) await processTickRow(service, row, summary);
+  return json(200, summary);
+}
+
+async function bidQueueComplete(service: SupabaseClient, id: string, status: 'DONE' | 'RETRY', error?: string): Promise<void> {
+  await service.rpc('sm_bid_queue_complete', { p_id: id, p_status: status, p_error: error ?? null });
+}
+
+async function resolveBidPolicy(service: SupabaseClient, orgId: string, deptId: string | null): Promise<BidPolicy | null> {
+  const { data } = await service
+    .from('bid_approval_rules')
+    .select('enabled, shadow_mode, version, auto_assign_warnings, department_id')
+    .eq('organization_id', orgId)
+    .or(`department_id.eq.${deptId ?? '00000000-0000-0000-0000-000000000000'},department_id.is.null`)
+    .order('department_id', { ascending: false, nullsFirst: false })
+    .limit(1);
+  return ((data ?? [])[0] as (BidPolicy & { department_id: string | null }) | undefined) ?? null;
+}
+
+/** Single-shift snapshot for the tick — the shift is bidding_closed, so we load
+ *  it by id directly (loadSnapshot only sees ACTIVE_BIDDING shifts). */
+async function loadShiftForTick(service: SupabaseClient, shiftId: string): Promise<Snapshot> {
+  const empty: Snapshot = {
+    shifts: [], shiftById: new Map(), bidsByShift: new Map(), names: new Map(), debts: new Map(), f3Degraded: false,
+  };
+
+  const { data: shiftData } = await service
+    .from('shifts')
+    .select('id, version, shift_date, start_time, end_time, scheduled_start, role_id, required_skills, required_licenses, unpaid_break_minutes, organization_id, department_id, sub_department_id')
+    .eq('id', shiftId)
+    .maybeSingle();
+  if (!shiftData) return empty;
+  const shift = shiftData as ShiftRow;
+
+  const { data: bidData } = await service
+    .from('shift_bids')
+    .select('id, shift_id, employee_id, created_at, priority_score')
+    .eq('shift_id', shiftId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true });
+  const bids = (bidData ?? []) as BidRow[];
+
+  const bidderIds = [...new Set(bids.map((b) => b.employee_id))];
+  const names = new Map<string, string>();
+  let debts = new Map<string, number>();
+  let f3Degraded = false;
+  if (bidderIds.length > 0) {
+    const { data: profiles } = await service.from('profiles').select('id, full_name').in('id', bidderIds);
+    for (const p of (profiles ?? []) as Array<{ id: string; full_name: string | null }>) {
+      if (p.full_name) names.set(p.id, p.full_name);
+    }
+    const res = await loadFairnessDebts(service, shift.organization_id, bidderIds);
+    debts = res.debts;
+    f3Degraded = res.f3Degraded;
+  }
+
+  // Order bidders by F3 debt desc, then FIFO (stable) — same as loadSnapshot.
+  const ordered = debts.size > 0
+    ? [...bids].sort((a, b) => (debts.get(b.employee_id) ?? 0) - (debts.get(a.employee_id) ?? 0))
+    : bids;
+
+  return {
+    shifts: [shift],
+    shiftById: new Map([[shift.id, shift]]),
+    bidsByShift: new Map([[shift.id, ordered]]),
+    names,
+    debts,
+    f3Degraded,
+  };
+}
+
+async function processTickRow(service: SupabaseClient, row: BidQueueRow, summary: TickSummary): Promise<void> {
+  try {
+    const snap = await loadShiftForTick(service, row.shift_id);
+    const shift = snap.shiftById.get(row.shift_id);
+    if (!shift) {
+      await bidQueueComplete(service, row.id, 'DONE', 'shift gone');
+      summary.done++;
+      return;
+    }
+
+    const policy = await resolveBidPolicy(service, shift.organization_id, shift.department_id);
+    if (!policy || !policy.enabled) {
+      await bidQueueComplete(service, row.id, 'DONE', 'no enabled policy');
+      summary.done++;
+      return;
+    }
+
+    // Reuse the request-run selection brain: first compliance-clear bidder.
+    const decision = await decideShift(shift, snap, { reject_warnings: !policy.auto_assign_warnings });
+    const winnerId = decision.outcome === 'ASSIGNED' ? decision.winner?.employee_id ?? null : null;
+    const kind = winnerId ? 'AUTO_APPROVE' : 'MANUAL_REVIEW';
+    const winnerName = decision.winner?.name ?? null;
+    const subtitle = `${winnerName ?? 'no eligible bidder'} · ${shift.shift_date}`;
+
+    const { data: decideData, error: decideErr } = await service.rpc('sm_bid_auto_decide', {
+      p_shift_id: row.shift_id,
+      p_idempotency_key: row.idempotency_key,
+      p_payload: {
+        decision: kind,
+        winner_id: winnerId,
+        reason: decision.reason,
+        subtitle,
+        engine_version: AUTOPILOT_ENGINE_VERSION,
+        policy_version: policy.version,
+        expected_version: shift.version,
+        eligibility: { outcome: decision.outcome, runners_up: decision.runners_up ?? [] },
+      },
+    });
+    if (decideErr) throw decideErr;
+
+    const code = (decideData as { code?: string })?.code ?? 'UNKNOWN';
+    if (code === 'COMMITTED') summary.committed++;
+    else if (code === 'SHADOW') summary.shadow++;
+    else if (code === 'MANUAL_REVIEW') summary.manual_review++;
+
+    await bidQueueComplete(service, row.id, 'DONE', code);
+    summary.done++;
+  } catch (e) {
+    summary.errors++;
+    summary.retried++;
+    console.error('[auto-assign-bids/tick] row failed', row.shift_id, e);
+    await bidQueueComplete(service, row.id, 'RETRY', String(e));
   }
 }
 

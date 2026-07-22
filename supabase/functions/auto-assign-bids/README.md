@@ -14,6 +14,42 @@ and §8 (API), bound by `docs/implementation/00-contracts-and-conventions.md`
 
 ---
 
+## AutoPilot — `POST /tick` (autonomous shadow/live) — ⚠️ NOT DEPLOYED
+
+Beyond the interactive `POST /` run (manager JWT), this function now also hosts
+the **Open Bids AutoPilot** drain, the bid analogue of `auto-approve-swaps` /
+`auto-verify-timesheets`:
+
+```
+shift bidding closes with no winner
+   │  (trg_enqueue_bid_auto_assign, gated to an ENABLED bid_approval_rules policy)
+   ▼
+bid_review_queue (PENDING)
+   │  cron → POST /tick → sm_bid_queue_claim (SKIP LOCKED)
+   ▼
+decideShift()  (reused: first compliance-clear bidder via evaluate-compliance)
+   ▼
+sm_bid_auto_decide  →  bid_decisions (+ audit)
+   │  SHADOW → log only    LIVE → commit via hardened sm_select_bid_winner
+   ▼
+sm_bid_queue_complete (DONE | backoff/DLQ)
+```
+
+`POST /tick` is authorized by the shared `WORKER_SECRET` (`X-Worker-Secret`) or a
+service-role bearer — **no user JWT** — checked before the interactive JWT gate.
+It reuses the same `decideShift` / `evaluateCompliance` / F3 selection brain, so
+only compliance-clear winners are ever proposed; `sm_bid_auto_decide` in LIVE
+still re-validates through the hardened winner RPC (state / winner-pending / 4h).
+
+Bring-up (shadow-first): apply
+`supabase/migrations/20260722110000_bid_auto_assign_shadow.sql`, redeploy this
+function, set `WORKER_SECRET`, schedule a ~1-min `pg_cron` POST to `/tick`, then
+insert one `bid_approval_rules` row (`enabled=true, shadow_mode=true`) for an org.
+Go-live per org = `shadow_mode=false`; kill-switch = `enabled=false`; undo a
+committed auto-assignment = `sm_bid_auto_revert(decision_id, actor)`.
+
+---
+
 ## ✅ DEPLOYMENT STATUS — APPROACH A (self-contained worker)
 
 This function was refactored to **approach A** (2026-06-24): the vendored v8 TS
