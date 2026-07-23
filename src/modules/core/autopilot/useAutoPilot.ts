@@ -8,12 +8,11 @@ import {
 } from './types';
 
 /**
- * A mutable copy of the policy the popover edits. Kept flat: `enabled` +
- * `shadow_mode` plus every declared field key.
+ * A mutable copy of the policy the popover edits. Kept flat: `enabled` plus
+ * every declared field key.
  */
 export interface AutoPilotDraft {
     enabled: boolean;
-    shadow_mode: boolean;
     fields: Record<string, number | boolean>;
 }
 
@@ -28,14 +27,12 @@ const draftFromPolicy = (
     }
     return {
         enabled: p?.enabled ?? false,
-        shadow_mode: p?.shadow_mode ?? true,
         fields,
     };
 };
 
 const draftToPolicy = (draft: AutoPilotDraft, base: AutoPilotPolicy | null): AutoPilotPolicy => ({
     enabled: draft.enabled,
-    shadow_mode: draft.shadow_mode,
     version: base?.version ?? 0,
     fields: { ...draft.fields },
 });
@@ -56,7 +53,7 @@ export function useAutoPilot(adapter: AutoPilotAdapter, open: boolean) {
 
     const isDirty = useMemo(() => {
         const base = draftFromPolicy(adapter, policy);
-        if (draft.enabled !== base.enabled || draft.shadow_mode !== base.shadow_mode) return true;
+        if (draft.enabled !== base.enabled) return true;
         return adapter.policyFields.some(f => draft.fields[f.key] !== base.fields[f.key]);
     }, [adapter, draft, policy]);
 
@@ -112,11 +109,24 @@ export function useAutoPilot(adapter: AutoPilotAdapter, open: boolean) {
             setDraft(draftFromPolicy(adapter, saved));
             toast({ title: `${adapter.copy.buttonLabel} policy saved` });
             return true;
-        } catch (error) {
+        } catch (error: any) {
             console.error('[AutoPilot] save failed:', error);
+            const isMissingTable = error && (
+                error.code === '42P01' ||
+                error.status === 404 ||
+                (typeof error.code === 'string' && error.code.startsWith('PGRST')) ||
+                (typeof error.message === 'string' && (
+                    error.message.includes('does not exist') ||
+                    error.message.includes('not found') ||
+                    error.message.includes('Could not find') ||
+                    error.message.includes('schema cache')
+                ))
+            );
             toast({
-                title: 'Save failed',
-                description: error instanceof Error ? error.message : 'Could not save the policy.',
+                title: isMissingTable ? 'Database Table Not Provisioned' : 'Save failed',
+                description: isMissingTable
+                    ? 'The database table for this feature is not provisioned on Supabase yet. Run DB migration to enable.'
+                    : error instanceof Error ? error.message : 'Could not save the policy.',
                 variant: 'destructive',
             });
             return false;

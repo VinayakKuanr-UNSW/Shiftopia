@@ -13,11 +13,11 @@ import {
  * `<AutoPilotControl>` renders. Mirrors the swap auto-approve policy API.
  *
  * Rule: zero-variance clean punches (evaluated in the auto-verify-timesheets
- * Edge worker). Backend is shadow-first: enabled=false / shadow_mode=true.
+ * Edge worker). AutoPilot is a per-org ON/OFF switch (enabled=false default).
  */
 
 // Tables are not in the generated types yet (added by migration
-// 20260722100000_timesheet_auto_verify_shadow.sql) — same `as any` bridge the
+// 20260722100000_timesheet_auto_verify.sql) — same `as any` bridge the
 // swap policy API uses.
 const db = supabase as any;
 
@@ -26,11 +26,10 @@ export const TIMESHEET_AUTOPILOT_COPY: AutoPilotCopy = {
     buttonTitle: 'Auto-verify timesheets',
     title: 'Auto-Verify Timesheets',
     subtitle: 'Bot verifies zero-variance timesheets',
-    liveWarning:
-        'Live mode approves clean-punch timesheets without a manager. Only shifts with clock-in/out within tolerance, ' +
-        'no overtime and no manual edits are auto-verified — everything else still routes to you. Review the shadow feed below first.',
+    onWarning:
+        'Turning AutoPilot on approves clean-punch timesheets without a manager. Only shifts with clock-in/out within ' +
+        'tolerance, no overtime and no manual edits are auto-verified — everything else still routes to you.',
     emptyFeedHint: 'They appear as shifts finish and become reviewable.',
-    verbs: { approve: 'verify', reject: 'reject', review: 'review' },
     committedLabels: { approve: 'Auto-verified', reject: 'Auto-rejected' },
 };
 
@@ -57,14 +56,13 @@ const POLICY_FIELDS: AutoPilotPolicyField[] = [
 ];
 
 const DECISION_SELECT =
-    'id, shift_id, decision, reason, shadow, committed, reverted_at, engine_version, subtitle, employee_id, work_date, variance_snapshot, created_at';
+    'id, shift_id, decision, reason, committed, reverted_at, engine_version, subtitle, employee_id, work_date, variance_snapshot, created_at';
 
 interface TimesheetPolicyRow {
     id: string;
     organization_id: string;
     department_id: string | null;
     enabled: boolean;
-    shadow_mode: boolean;
     tolerance_minutes: number;
     require_no_overtime: boolean;
     max_auto_per_employee_per_week: number;
@@ -76,7 +74,6 @@ interface TimesheetDecisionRow {
     shift_id: string;
     decision: AutoPilotDecision['kind'];
     reason: string | null;
-    shadow: boolean;
     committed: boolean;
     reverted_at: string | null;
     engine_version: string;
@@ -91,7 +88,6 @@ const rowToPolicy = (row: TimesheetPolicyRow | null): AutoPilotPolicy | null =>
     row
         ? {
               enabled: row.enabled,
-              shadow_mode: row.shadow_mode,
               version: row.version,
               fields: {
                   tolerance_minutes: row.tolerance_minutes ?? 5,
@@ -105,7 +101,6 @@ const rowToDecision = (row: TimesheetDecisionRow): AutoPilotDecision => ({
     entityId: row.shift_id,
     kind: row.decision,
     reason: row.reason,
-    shadow: row.shadow,
     committed: row.committed,
     revertedAt: row.reverted_at,
     engineVersion: row.engine_version,
@@ -123,7 +118,14 @@ const isTableMissingError = (err: any) =>
         err.code === '42P01' ||
         err.status === 404 ||
         err.code === 'PGRST204' ||
-        (typeof err.message === 'string' && (err.message.includes('does not exist') || err.message.includes('not found')))
+        err.code === 'PGRST200' ||
+        (typeof err.code === 'string' && err.code.startsWith('PGRST')) ||
+        (typeof err.message === 'string' && (
+            err.message.includes('does not exist') ||
+            err.message.includes('not found') ||
+            err.message.includes('Could not find') ||
+            err.message.includes('schema cache')
+        ))
     );
 
 const EMPTY_MAP = new Map<string, AutoPilotDecision>();
@@ -156,7 +158,6 @@ export function createTimesheetAutoPilotAdapter({ organizationId, userId }: Time
         async savePolicy(next: AutoPilotPolicy): Promise<AutoPilotPolicy> {
             const patch = {
                 enabled: next.enabled,
-                shadow_mode: next.shadow_mode,
                 tolerance_minutes: Number(next.fields.tolerance_minutes ?? 5),
                 require_no_overtime: !!next.fields.require_no_overtime,
                 updated_by: userId ?? null,

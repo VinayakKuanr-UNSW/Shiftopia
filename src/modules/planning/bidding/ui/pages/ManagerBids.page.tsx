@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { OpenBidsView } from '../views/OpenBidsView';
 import type { BidToggle, ToggleCounts } from '../views/OpenBidsView/types';
 import { useAuth } from '@/platform/auth/useAuth';
@@ -11,11 +12,18 @@ import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { AutoPilotControl } from '@/modules/core/autopilot';
 import { createBidAutoPilotAdapter } from '../../api/bidAutoPilot.api';
 
-const TOGGLE_CONFIG: Record<BidToggle, { label: string; Icon: typeof Flame; activeClass: string }> = {
-    standard: { label: 'Standard', Icon: Clock,       activeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
-    urgent:   { label: 'Urgent',   Icon: Flame,       activeClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' },
-    resolved: { label: 'Resolved', Icon: CheckCircle, activeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
-    expired:  { label: 'Expired',  Icon: CircleSlash, activeClass: 'bg-slate-500/15 text-slate-400 border-slate-500/30' },
+const BID_TOGGLE_TABS: { id: BidToggle; label: string; icon: typeof Flame; accent: string }[] = [
+    { id: 'standard', label: 'Standard', icon: Clock,       accent: 'amber' },
+    { id: 'urgent',   label: 'Urgent',   icon: Flame,       accent: 'rose' },
+    { id: 'resolved', label: 'Resolved', icon: CheckCircle, accent: 'emerald' },
+    { id: 'expired',  label: 'Expired',  icon: CircleSlash, accent: 'slate' },
+];
+
+const bidAccentMap: Record<string, { bg: string; text: string; ring: string }> = {
+    amber:   { bg: 'bg-amber-500/10',   text: 'text-amber-600 dark:text-amber-400',     ring: 'ring-amber-500/20' },
+    rose:    { bg: 'bg-rose-500/10',    text: 'text-rose-600 dark:text-rose-400',       ring: 'ring-rose-500/20' },
+    emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', ring: 'ring-emerald-500/20' },
+    slate:   { bg: 'bg-muted/50',       text: 'text-muted-foreground',                 ring: 'ring-border' },
 };
 
 export const ManagerBidsPage: React.FC = () => {
@@ -60,30 +68,37 @@ export const ManagerBidsPage: React.FC = () => {
     }
 
     const toggleChips = (
-        <div className={cn(
-            "flex items-center gap-1 p-1 h-9 rounded-lg",
-            isDark ? "bg-[#111827]/60" : "bg-slate-200/50"
-        )}>
-            {(Object.keys(TOGGLE_CONFIG) as BidToggle[]).map(key => {
-                const conf = TOGGLE_CONFIG[key];
-                const active = activeToggle === key;
-                const ChipIcon = conf.Icon;
+        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/30 border border-border flex-nowrap overflow-x-auto scrollbar-hide">
+            {BID_TOGGLE_TABS.map(tab => {
+                const isActive = activeToggle === tab.id;
+                const colors = bidAccentMap[tab.accent];
+                const TabIcon = tab.icon;
                 return (
                     <button
-                        key={key}
-                        onClick={() => setActiveToggle(key)}
+                        key={tab.id}
+                        onClick={() => setActiveToggle(tab.id)}
                         className={cn(
-                            'flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[10px] font-black uppercase tracking-wider transition-all border',
-                            active
-                                ? `${conf.activeClass}`
-                                : 'border-transparent text-muted-foreground/50 hover:text-foreground hover:bg-muted/30'
+                            'relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-black transition-all duration-300',
+                            isActive
+                                ? `${colors.bg} ${colors.text} shadow-sm`
+                                : 'text-muted-foreground/50 hover:text-foreground hover:bg-muted/50'
                         )}
                     >
-                        <ChipIcon className="h-3 w-3" />
-                        <span className="hidden sm:inline">{conf.label}</span>
-                        <span className="inline-flex items-center justify-center h-4 min-w-[18px] px-1 rounded-full bg-foreground/10 text-[9px] font-black tabular-nums">
-                            {counts[key]}
+                        <TabIcon className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">{tab.label}</span>
+                        <span className={cn(
+                            'min-w-[18px] h-[18px] rounded-full text-[9px] font-black flex items-center justify-center px-1',
+                            isActive ? `${colors.bg} ${colors.text} ring-1 ${colors.ring}` : 'bg-muted text-muted-foreground/40'
+                        )}>
+                            {counts[tab.id]}
                         </span>
+                        {isActive && (
+                            <motion.div
+                                layoutId="activeBidTab"
+                                className={`absolute inset-0 rounded-xl ring-1 ${colors.ring}`}
+                                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                            />
+                        )}
                     </button>
                 );
             })}

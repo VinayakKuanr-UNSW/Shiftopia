@@ -18,8 +18,7 @@ import { useAutoPilot } from './useAutoPilot';
 
 const MODE_STYLES: Record<AutoPilotMode, { badge: string; label: string }> = {
     OFF: { badge: 'bg-muted text-muted-foreground/50 border-border', label: 'Off' },
-    SHADOW: { badge: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20', label: 'Shadow' },
-    LIVE: { badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20', label: 'Live' },
+    ON: { badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20', label: 'On' },
 };
 
 /* ============================================================ FEED ROW */
@@ -44,11 +43,6 @@ const DecisionFeedRow: React.FC<{
                     {decision.kind.replace('_', ' ')}
                     {decision.target && <span className="text-foreground/50"> → {decision.target}</span>}
                 </span>
-                {decision.shadow && (
-                    <span className="text-[8px] font-black font-mono uppercase px-1.5 py-0 rounded-full border border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                        Shadow
-                    </span>
-                )}
                 {decision.committed && !decision.revertedAt && (
                     <span className="text-[8px] font-black font-mono uppercase px-1.5 py-0 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                         Committed
@@ -167,41 +161,13 @@ export const AutoPilotControl: React.FC<AutoPilotControlProps> = ({ adapter, rea
                 <div className="px-4 py-3 flex flex-col gap-3 border-b border-border/50">
                     <label className="flex items-center justify-between gap-3 cursor-pointer">
                         <div className="flex flex-col">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-foreground/80">Enabled</span>
-                            <span className="text-[9px] text-muted-foreground/50">New entities are queued for the bot</span>
+                            <span className="text-[10px] font-black uppercase tracking-wider text-foreground/80">AutoPilot</span>
+                            <span className="text-[9px] text-muted-foreground/50">
+                                {draft.enabled ? 'The bot acts automatically' : 'Off — every decision stays manual'}
+                            </span>
                         </div>
                         <Switch checked={draft.enabled} onCheckedChange={v => setDraft(d => ({ ...d, enabled: v }))} />
                     </label>
-
-                    {/* Shadow / Live segmented switch */}
-                    <div className={cn('flex flex-col gap-1.5', !draft.enabled && 'opacity-40 pointer-events-none')}>
-                        <span className="text-[10px] font-black uppercase tracking-wider text-foreground/80">Mode</span>
-                        <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/30 border border-border">
-                            {(['SHADOW', 'LIVE'] as const).map(m => {
-                                const active = (m === 'SHADOW') === draft.shadow_mode;
-                                return (
-                                    <button
-                                        key={m}
-                                        onClick={() => setDraft(d => ({ ...d, shadow_mode: m === 'SHADOW' }))}
-                                        className={cn(
-                                            'flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all',
-                                            active
-                                                ? m === 'LIVE'
-                                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/20'
-                                                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/20'
-                                                : 'text-muted-foreground/50 hover:text-foreground',
-                                        )}
-                                    >
-                                        {m === 'SHADOW' ? <Eye className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
-                                        {m === 'SHADOW' ? 'Shadow' : 'Live'}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        <span className="text-[9px] text-muted-foreground/50 leading-relaxed">
-                            Shadow: the bot only logs what it <em>would</em> do. Live: decisions are committed automatically.
-                        </span>
-                    </div>
 
                     {/* Domain-specific policy fields */}
                     {policyFields.map(f => {
@@ -242,12 +208,12 @@ export const AutoPilotControl: React.FC<AutoPilotControlProps> = ({ adapter, rea
                         );
                     })}
 
-                    {/* Going-live warning */}
-                    {isDirty && draftMode === 'LIVE' && mode !== 'LIVE' && (
+                    {/* Turning-ON warning */}
+                    {isDirty && draftMode === 'ON' && mode !== 'ON' && (
                         <div className="flex items-start gap-2 px-3 py-2 rounded-xl border border-amber-500/20 bg-amber-500/5">
                             <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
                             <span className="text-[9px] text-amber-600 dark:text-amber-400 leading-relaxed font-medium">
-                                {copy.liveWarning}
+                                {copy.onWarning}
                             </span>
                         </div>
                     )}

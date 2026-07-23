@@ -9,10 +9,10 @@ import {
 
 /**
  * Open Bids AutoPilot adapter — maps `bid_approval_rules` / `bid_decisions`
- * (migration 20260722110000_bid_auto_assign_shadow.sql) onto the generic
+ * (migration 20260722110000_bid_auto_assign.sql) onto the generic
  * {@link AutoPilotAdapter}. The worker picks a compliance-clear winner when a
  * shift's bidding closes with no winner; this adapter configures + observes it.
- * Shadow-first: enabled=false / shadow_mode=true.
+ * AutoPilot is a per-org ON/OFF switch (enabled=false default).
  */
 
 const db = supabase as any;
@@ -22,11 +22,10 @@ export const BID_AUTOPILOT_COPY: AutoPilotCopy = {
     buttonTitle: 'Auto-assign bid winners',
     title: 'Auto-Assign Bids',
     subtitle: 'Bot assigns a winner when bidding closes',
-    liveWarning:
-        'Live mode assigns the first compliance-clear bidder without a manager when bidding closes with no winner. ' +
-        'The commit still passes the hardened winner gateway (state, winner-pending and 4h lock). Review the shadow feed below before going live.',
+    onWarning:
+        'Turning AutoPilot on assigns the first compliance-clear bidder without a manager when bidding closes with no ' +
+        'winner. The commit still passes the hardened winner gateway (state, winner-pending and 4h lock).',
     emptyFeedHint: 'They appear as shifts finish bidding with no winner.',
-    verbs: { approve: 'assign', reject: 'reject', review: 'review' },
     committedLabels: { approve: 'Auto-assigned', reject: 'Auto-rejected' },
 };
 
@@ -42,14 +41,13 @@ const POLICY_FIELDS: AutoPilotPolicyField[] = [
 ];
 
 const DECISION_SELECT =
-    'id, shift_id, winner_id, decision, reason, shadow, committed, reverted_at, engine_version, subtitle, created_at';
+    'id, shift_id, winner_id, decision, reason, committed, reverted_at, engine_version, subtitle, created_at';
 
 interface BidPolicyRow {
     id: string;
     organization_id: string;
     department_id: string | null;
     enabled: boolean;
-    shadow_mode: boolean;
     auto_assign_warnings: boolean;
     version: number;
 }
@@ -60,7 +58,6 @@ interface BidDecisionRow {
     winner_id: string | null;
     decision: AutoPilotDecision['kind'];
     reason: string | null;
-    shadow: boolean;
     committed: boolean;
     reverted_at: string | null;
     engine_version: string;
@@ -72,7 +69,6 @@ const rowToPolicy = (row: BidPolicyRow | null): AutoPilotPolicy | null =>
     row
         ? {
               enabled: row.enabled,
-              shadow_mode: row.shadow_mode,
               version: row.version,
               fields: { auto_assign_warnings: row.auto_assign_warnings ?? false },
           }
@@ -83,7 +79,6 @@ const rowToDecision = (row: BidDecisionRow): AutoPilotDecision => ({
     entityId: row.shift_id,
     kind: row.decision,
     reason: row.reason,
-    shadow: row.shadow,
     committed: row.committed,
     revertedAt: row.reverted_at,
     engineVersion: row.engine_version,
@@ -101,7 +96,14 @@ const isTableMissingError = (err: any) =>
         err.code === '42P01' ||
         err.status === 404 ||
         err.code === 'PGRST204' ||
-        (typeof err.message === 'string' && (err.message.includes('does not exist') || err.message.includes('not found')))
+        err.code === 'PGRST200' ||
+        (typeof err.code === 'string' && err.code.startsWith('PGRST')) ||
+        (typeof err.message === 'string' && (
+            err.message.includes('does not exist') ||
+            err.message.includes('not found') ||
+            err.message.includes('Could not find') ||
+            err.message.includes('schema cache')
+        ))
     );
 
 const EMPTY_MAP = new Map<string, AutoPilotDecision>();
@@ -134,7 +136,6 @@ export function createBidAutoPilotAdapter({ organizationId, userId }: BidAutoPil
         async savePolicy(next: AutoPilotPolicy): Promise<AutoPilotPolicy> {
             const patch = {
                 enabled: next.enabled,
-                shadow_mode: next.shadow_mode,
                 auto_assign_warnings: !!next.fields.auto_assign_warnings,
                 updated_by: userId ?? null,
                 updated_at: new Date().toISOString(),

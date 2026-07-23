@@ -3,7 +3,7 @@
  * (auto-approve), Open Bids (auto-assign) and Timesheets (auto-verify).
  *
  * A domain provides an {@link AutoPilotAdapter}; the generic control renders the
- * OFF / SHADOW / LIVE badge, policy popover and decision feed identically.
+ * ON / OFF badge, policy popover and recent-actions feed identically.
  */
 export { AutoPilotControl } from './AutoPilotControl';
 export { AutoPilotDecisionChip } from './AutoPilotDecisionChip';

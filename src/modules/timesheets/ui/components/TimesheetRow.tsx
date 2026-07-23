@@ -19,6 +19,7 @@ import {
 import { TimesheetStatusBadge } from "./TimesheetStatusBadge";
 import { AutoPilotDecisionChip, type AutoPilotDecision } from "@/modules/core/autopilot";
 import { TIMESHEET_AUTOPILOT_COPY } from "../../api/timesheetAutoPilot.api";
+import { TimesheetHistoryPopover } from "./TimesheetHistoryPopover";
 
 
 import { cn } from "@/modules/core/lib/utils";
@@ -625,9 +626,12 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                 {/* Live Rules */}
                 <td className={`${cellClass} border-r border-border/30`}>
                     <div className="flex flex-col gap-1 items-start">
-                        {autoDecision && (
-                            <AutoPilotDecisionChip decision={autoDecision} copy={TIMESHEET_AUTOPILOT_COPY} />
-                        )}
+                        <div className="flex items-center gap-1">
+                            {autoDecision && (
+                                <AutoPilotDecisionChip decision={autoDecision} copy={TIMESHEET_AUTOPILOT_COPY} />
+                            )}
+                            <TimesheetHistoryPopover shiftId={String(entry.id)} />
+                        </div>
                         {[liveRuleBadges.arrival, liveRuleBadges.departure].map((badge, i) => badge && (
                             <span
                                 key={i}

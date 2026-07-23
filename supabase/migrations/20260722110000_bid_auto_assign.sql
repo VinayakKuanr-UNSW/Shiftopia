@@ -1,20 +1,19 @@
 -- ============================================================================
--- Open Bids AutoPilot — auto-assign (shadow-first)
+-- Open Bids AutoPilot — auto-assign (ON/OFF)
 --
 -- Brings Open Bids up to the same autonomous pipeline as swap auto-approve and
--- timesheet auto-verify:
+-- timesheet auto-verify. AutoPilot is a per-org ON/OFF switch (no shadow mode).
 --   shift bidding closes with no winner  ──(enqueue trigger, gated to enabled)──▶
 --   bid_review_queue  ──(auto-assign-bids /tick worker + cron)──▶
 --   sm_bid_auto_decide  ──▶  bid_decisions (+ audit) / commit via sm_select_bid_winner
 --
 -- The WINNER is chosen by the worker (first compliance-clear bidder in F3/FIFO
 -- order, via the deployed evaluate-compliance engine). This RPC is the commit
--- gateway: idempotency / kill-switch / shadow, then in LIVE it delegates to the
--- hardened sm_select_bid_winner (FOUND / FSM / winner-pending / 4h-TTS guards +
+-- gateway: idempotency / kill-switch, then delegates to the hardened
+-- sm_select_bid_winner (FOUND / FSM / winner-pending / 4h-TTS guards +
 -- version-CAS + shift_events audit). The worker never writes shifts directly.
 --
--- Safety mirrors the swap/timesheet shadow migrations: enabled=false /
--- shadow_mode=true defaults; enqueue trigger EXCEPTION -> RETURN NEW (never
+-- Safety: enabled=false default; enqueue trigger EXCEPTION -> RETURN NEW (never
 -- blocks a shift); gated to an enabled policy (inert until opt-in);
 -- extensions.digest() schema-qualified. Reuses the generic autopilot_* enums.
 -- ============================================================================
@@ -36,7 +35,6 @@ CREATE TABLE IF NOT EXISTS public.bid_approval_rules (
     organization_id       uuid NOT NULL,
     department_id         uuid,
     enabled               boolean DEFAULT false NOT NULL,
-    shadow_mode           boolean DEFAULT true  NOT NULL,
     auto_assign_warnings  boolean DEFAULT false NOT NULL,
     rules                 jsonb DEFAULT '{}'::jsonb NOT NULL,
     version               integer DEFAULT 1 NOT NULL,
@@ -64,7 +62,6 @@ CREATE TABLE IF NOT EXISTS public.bid_decisions (
     policy_version    integer NOT NULL,
     engine_version    text NOT NULL,
     subtitle          text,
-    shadow            boolean DEFAULT false NOT NULL,
     committed         boolean DEFAULT false NOT NULL,
     reverted_at       timestamptz,
     reverted_by       uuid,
@@ -224,7 +221,7 @@ BEGIN
   RETURN jsonb_build_object('ok', true, 'code', 'SETTLED');
 END; $$;
 
--- ── Decide RPC — commit gateway; delegates the LIVE write to sm_select_bid_winner ─
+-- ── Decide RPC — ON/OFF commit gateway; delegates the write to sm_select_bid_winner ─
 CREATE OR REPLACE FUNCTION public.sm_bid_auto_decide(
     p_shift_id uuid, p_idempotency_key text, p_payload jsonb DEFAULT '{}'::jsonb)
     RETURNS jsonb
@@ -235,7 +232,6 @@ DECLARE
   v_shift public.shifts%ROWTYPE;
   v_policy public.bid_approval_rules%ROWTYPE;
   v_decision public.autopilot_decision_kind;
-  v_shadow boolean := true;
   v_winner uuid;
   v_gateway jsonb;
   v_decision_id uuid;
@@ -269,13 +265,12 @@ BEGIN
     RETURN jsonb_build_object('ok', true, 'code', 'DISABLED');
   END IF;
 
-  v_shadow := COALESCE(v_policy.shadow_mode, true);
   v_decision := COALESCE((p_payload->>'decision')::public.autopilot_decision_kind, 'MANUAL_REVIEW');
   v_winner := NULLIF(p_payload->>'winner_id', '')::uuid;
 
   INSERT INTO public.bid_decisions(
     shift_id, winner_id, idempotency_key, decision, reason, detail, eligibility,
-    shift_version, policy_version, engine_version, subtitle, shadow, committed)
+    shift_version, policy_version, engine_version, subtitle, committed)
   VALUES (
     p_shift_id, v_winner, p_idempotency_key, v_decision,
     p_payload->>'reason',
@@ -284,16 +279,10 @@ BEGIN
     (p_payload->>'expected_version')::int,
     COALESCE((p_payload->>'policy_version')::int, v_policy.version),
     COALESCE(p_payload->>'engine_version', 'unknown'),
-    p_payload->>'subtitle', v_shadow, false)
+    p_payload->>'subtitle', false)
   RETURNING id INTO v_decision_id;
 
-  IF v_shadow THEN
-    INSERT INTO public.bid_audit_log (shift_id, decision_id, event_type, actor, detail)
-    VALUES (p_shift_id, v_decision_id, 'SHADOW_SUPPRESSED', 'system', jsonb_build_object('would_be', v_decision, 'winner', v_winner));
-    RETURN jsonb_build_object('ok', true, 'code', 'SHADOW', 'decision', v_decision, 'decision_id', v_decision_id);
-  END IF;
-
-  -- LIVE: only AUTO_APPROVE with a winner commits, via the hardened winner RPC
+  -- ON: only AUTO_APPROVE with a winner commits, via the hardened winner RPC
   -- (FOUND / FSM / winner-pending / 4h-TTS + version-CAS + shift_events).
   IF v_decision = 'AUTO_APPROVE' AND v_winner IS NOT NULL THEN
     v_gateway := public.sm_select_bid_winner(p_shift_id, v_winner, NULL);
@@ -440,5 +429,5 @@ GRANT EXECUTE ON FUNCTION public.sm_bid_auto_revert(uuid, uuid)        TO authen
 GRANT EXECUTE ON FUNCTION public.sm_bid_queue_claim(text, integer)     TO service_role;
 GRANT EXECUTE ON FUNCTION public.sm_bid_queue_complete(uuid, text, text) TO service_role;
 
-COMMENT ON TABLE public.bid_approval_rules IS 'Per-org Open Bids AutoPilot policy (auto-assign). enabled/shadow_mode drive OFF/SHADOW/LIVE. Shadow-first defaults.';
-COMMENT ON FUNCTION public.sm_bid_auto_decide(uuid, text, jsonb) IS 'Commit gateway for bid auto-assign: idempotency + kill-switch + shadow; in LIVE delegates the winner commit to the hardened sm_select_bid_winner. Worker supplies the compliance-clear winner.';
+COMMENT ON TABLE public.bid_approval_rules IS 'Per-org Open Bids AutoPilot policy (auto-assign). enabled = ON (bot acts) / OFF. No shadow mode.';
+COMMENT ON FUNCTION public.sm_bid_auto_decide(uuid, text, jsonb) IS 'ON/OFF commit gateway for bid auto-assign: idempotency + kill-switch; delegates the winner commit to the hardened sm_select_bid_winner. Worker supplies the compliance-clear winner.';

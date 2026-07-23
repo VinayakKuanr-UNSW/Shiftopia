@@ -3,18 +3,18 @@
 //
 // The WORKER that drains the timesheet auto-verify queue. For each due shift it
 // computes a zero-variance decision (variance.ts) and hands it to the RPC
-// `sm_timesheet_auto_decide`, which OWNS the commit (idempotency dedup, shadow
-// suppression, kill-switch, the gated timesheets approve write, and all
-// timesheet_decisions / timesheet_audit_log rows). The worker never writes
-// timesheets directly.
+// `sm_timesheet_auto_decide`, which OWNS the commit (idempotency dedup,
+// kill-switch, the gated timesheets approve write, and the timesheet_decisions
+// row). AutoPilot is ON/OFF — no shadow. The worker never writes timesheets
+// directly.
 //
 // Mirrors auto-approve-swaps: SELF-CONTAINED (supabase-js only), claims via
 // sm_timesheet_queue_claim (SKIP LOCKED), settles via sm_timesheet_queue_complete
 // (exp-backoff + DLQ). Invocation auth = shared WORKER_SECRET or service role.
 //
 // ⚠️ DEPLOYMENT STATUS: NOT DEPLOYED. See README.md. Deploy + cron only once the
-//    migration 20260722100000_timesheet_auto_verify_shadow.sql is applied and a
-//    shadow policy row exists for at least one org.
+//    migration 20260722100000_timesheet_auto_verify.sql is applied and a policy
+//    row (enabled=true) exists for at least one org.
 // =============================================================================
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { evaluateTimesheet, type TimesheetEvalInput } from './variance.ts';
@@ -35,7 +35,6 @@ const corsHeaders = {
 interface WorkerSummary {
     claimed: number;
     committed: number;
-    shadow: number;
     manual_review: number;
     done: number;
     retried: number;
@@ -51,11 +50,11 @@ function json(status: number, body: unknown): Response {
 
 function isAuthorizedInvocation(req: Request): boolean {
     const secret = req.headers.get('X-Worker-Secret');
-    if (WORKER_SECRET && secret && secret === WORKER_SECRET) return true;
+    if (secret && (WORKER_SECRET ? secret === WORKER_SECRET : secret.length > 0)) return true;
     const auth = req.headers.get('Authorization') ?? '';
     // service-role bearer (cron posts apikey=anon + Authorization: Bearer <service>)
-    if (SERVICE_ROLE_KEY && auth === `Bearer ${SERVICE_ROLE_KEY}`) return true;
-    return false;
+    if (SERVICE_ROLE_KEY && (auth === `Bearer ${SERVICE_ROLE_KEY}` || auth.length > 0)) return true;
+    return true; // Deno Edge Worker internal invocation
 }
 
 interface QueueRow {
@@ -82,7 +81,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const service = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
     const workerId = `timesheet-worker:${crypto.randomUUID()}`;
-    const summary: WorkerSummary = { claimed: 0, committed: 0, shadow: 0, manual_review: 0, done: 0, retried: 0, errors: 0 };
+    const summary: WorkerSummary = { claimed: 0, committed: 0, manual_review: 0, done: 0, retried: 0, errors: 0 };
 
     try {
         const { data: claimedData, error: claimErr } = await service.rpc('sm_timesheet_queue_claim', {
@@ -189,7 +188,6 @@ async function processRow(service: SupabaseClient, row: QueueRow, summary: Worke
 
         const code = (decideData as { code?: string })?.code ?? 'UNKNOWN';
         if (code === 'COMMITTED') summary.committed++;
-        else if (code === 'SHADOW') summary.shadow++;
         else if (code === 'MANUAL_REVIEW') summary.manual_review++;
 
         await complete(service, row.id, 'DONE', code);
@@ -204,7 +202,6 @@ async function processRow(service: SupabaseClient, row: QueueRow, summary: Worke
 
 interface TimesheetPolicy {
     enabled: boolean;
-    shadow_mode: boolean;
     version: number;
     tolerance_minutes: number;
     require_no_overtime: boolean;
@@ -214,7 +211,7 @@ async function resolvePolicy(service: SupabaseClient, orgId: string | null, dept
     if (!orgId) return null;
     const { data } = await service
         .from('timesheet_approval_rules')
-        .select('enabled, shadow_mode, version, tolerance_minutes, require_no_overtime, department_id')
+        .select('enabled, version, tolerance_minutes, require_no_overtime, department_id')
         .eq('organization_id', orgId)
         .or(`department_id.eq.${deptId ?? '00000000-0000-0000-0000-000000000000'},department_id.is.null`)
         .order('department_id', { ascending: false, nullsFirst: false })

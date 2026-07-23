@@ -206,7 +206,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // ── POST /tick — autonomous queue drain (cron/service-role, no user JWT). ──
     // Authorized by the shared worker secret or a service-role bearer, BEFORE the
-    // interactive JWT gate below. This is the AutoPilot shadow/live pipeline.
+    // interactive JWT gate below. This is the AutoPilot ON/OFF pipeline.
     if (req.method === 'POST' && path === '/tick') {
       if (!isTickAuthorized(req)) {
         return json(401, { error: 'UNAUTHORIZED', code: 'UNAUTHORIZED' });
@@ -859,13 +859,13 @@ async function loadFairnessDebts(
 }
 
 // =============================================================================
-// AUTOPILOT — POST /tick autonomous queue drain (shadow/live)
+// AUTOPILOT — POST /tick autonomous queue drain (ON/OFF)
 //
 // Drains bid_review_queue: for each queued shift, reuse decideShift() (first
 // compliance-clear bidder via evaluate-compliance) to PICK a winner, then hand
-// it to sm_bid_auto_decide, which owns the commit (idempotency / kill-switch /
-// shadow → in LIVE delegates to the hardened sm_select_bid_winner). This worker
-// never writes shifts directly.
+// it to sm_bid_auto_decide, which owns the commit (idempotency / kill-switch,
+// then delegates to the hardened sm_select_bid_winner). This worker never
+// writes shifts directly.
 // =============================================================================
 
 const AUTOPILOT_ENGINE_VERSION = 'auto-assign-bids/tick@1.0.0';
@@ -873,7 +873,6 @@ const AUTOPILOT_ENGINE_VERSION = 'auto-assign-bids/tick@1.0.0';
 interface TickSummary {
   claimed: number;
   committed: number;
-  shadow: number;
   manual_review: number;
   done: number;
   retried: number;
@@ -888,7 +887,6 @@ interface BidQueueRow {
 
 interface BidPolicy {
   enabled: boolean;
-  shadow_mode: boolean;
   version: number;
   auto_assign_warnings: boolean;
 }
@@ -903,7 +901,7 @@ function isTickAuthorized(req: Request): boolean {
 
 async function handleTick(service: SupabaseClient): Promise<Response> {
   const workerId = `bid-worker:${crypto.randomUUID()}`;
-  const summary: TickSummary = { claimed: 0, committed: 0, shadow: 0, manual_review: 0, done: 0, retried: 0, errors: 0 };
+  const summary: TickSummary = { claimed: 0, committed: 0, manual_review: 0, done: 0, retried: 0, errors: 0 };
 
   const { data: claimedData, error: claimErr } = await service.rpc('sm_bid_queue_claim', {
     p_worker: workerId,
@@ -924,7 +922,7 @@ async function bidQueueComplete(service: SupabaseClient, id: string, status: 'DO
 async function resolveBidPolicy(service: SupabaseClient, orgId: string, deptId: string | null): Promise<BidPolicy | null> {
   const { data } = await service
     .from('bid_approval_rules')
-    .select('enabled, shadow_mode, version, auto_assign_warnings, department_id')
+    .select('enabled, version, auto_assign_warnings, department_id')
     .eq('organization_id', orgId)
     .or(`department_id.eq.${deptId ?? '00000000-0000-0000-0000-000000000000'},department_id.is.null`)
     .order('department_id', { ascending: false, nullsFirst: false })
@@ -1026,7 +1024,6 @@ async function processTickRow(service: SupabaseClient, row: BidQueueRow, summary
 
     const code = (decideData as { code?: string })?.code ?? 'UNKNOWN';
     if (code === 'COMMITTED') summary.committed++;
-    else if (code === 'SHADOW') summary.shadow++;
     else if (code === 'MANUAL_REVIEW') summary.manual_review++;
 
     await bidQueueComplete(service, row.id, 'DONE', code);

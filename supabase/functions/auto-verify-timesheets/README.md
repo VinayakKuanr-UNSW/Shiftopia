@@ -19,11 +19,16 @@ timesheet_review_queue (PENDING)
 evaluateTimesheet()  (variance.ts, pure)
    │  AUTO_APPROVE | MANUAL_REVIEW
    ▼
-sm_timesheet_auto_decide  →  timesheet_decisions (+ audit)
-   │  SHADOW → log only     LIVE → gated `timesheets` approve write
+sm_timesheet_auto_decide  →  timesheet_decisions (bot log)
+   │  AUTO_APPROVE → gated `timesheets` approve write (tagged AUTO_APPROVED
+   │                 in the lifecycle audit via the app.timesheet.autopilot GUC)
    ▼
 sm_timesheet_queue_complete (DONE | backoff/DLQ)
 ```
+
+AutoPilot is a per-org **ON/OFF** switch — no shadow mode. When ON the bot acts;
+when OFF nothing is queued. The lifecycle audit (`timesheet_audit_log`) records
+bot + manual approvals + edits regardless, via a trigger on `timesheets`.
 
 ## Rule — zero-variance clean punches
 
@@ -38,20 +43,20 @@ Because the rule compares absolute instants (`shifts.start_at/end_at` vs
 
 ## ⚠️ DEPLOYMENT STATUS — NOT DEPLOYED
 
-Shadow-first, nothing is live. Bring-up order:
+Nothing is live. Bring-up order:
 
-1. Apply `supabase/migrations/20260722100000_timesheet_auto_verify_shadow.sql`.
+1. Apply `supabase/migrations/20260722100000_timesheet_auto_verify.sql`.
 2. `supabase functions deploy auto-verify-timesheets` (verify_jwt = off; auth is
    `WORKER_SECRET` / service-role, checked in `isAuthorizedInvocation`).
 3. `supabase secrets set WORKER_SECRET=<value>` (match the Vault secret the cron uses).
 4. Schedule a ~1-minute `pg_cron` POST (apikey = anon + `X-Worker-Secret`, or a
    service-role bearer) — mirror the `auto-approve-swaps-tick` job.
-5. Insert one `timesheet_approval_rules` row for a chosen org
-   (`enabled=true, shadow_mode=true`) to start the shadow soak.
+5. Turn AutoPilot **ON** for a chosen org (`timesheet_approval_rules` row with
+   `enabled=true`) from the Timesheets page control.
 
-Observe via `timesheet_decisions` / `timesheet_audit_log`. Go-live per org = set
-`shadow_mode=false`. Kill-switch = `enabled=false`. Undo a committed
-auto-verification = `sm_timesheet_auto_revert(decision_id, actor)`.
+Observe via `timesheet_decisions` / `timesheet_audit_log`. Kill-switch =
+`enabled=false`. Undo a committed auto-verification =
+`sm_timesheet_auto_revert(decision_id, actor)`.
 
 ## Env
 

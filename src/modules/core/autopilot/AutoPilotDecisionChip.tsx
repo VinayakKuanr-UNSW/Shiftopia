@@ -13,21 +13,6 @@ const chipPresentation = (
     if (d.revertedAt) {
         return { label: 'Auto-decision undone', cls: 'bg-muted text-muted-foreground/60 border-border' };
     }
-    if (d.shadow) {
-        const verb =
-            d.kind === 'AUTO_APPROVE'
-                ? copy.verbs.approve
-                : d.kind === 'AUTO_REJECT'
-                    ? copy.verbs.reject
-                    : copy.verbs.review;
-        const tone =
-            d.kind === 'AUTO_APPROVE'
-                ? 'text-emerald-600 dark:text-emerald-400 border-emerald-500/20 bg-emerald-500/5'
-                : d.kind === 'AUTO_REJECT'
-                    ? 'text-rose-600 dark:text-rose-400 border-rose-500/20 bg-rose-500/5'
-                    : 'text-amber-600 dark:text-amber-400 border-amber-500/20 bg-amber-500/5';
-        return { label: `Bot: would ${verb}`, cls: tone };
-    }
     if (d.committed && d.kind === 'AUTO_APPROVE') {
         return { label: copy.committedLabels.approve, cls: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' };
     }

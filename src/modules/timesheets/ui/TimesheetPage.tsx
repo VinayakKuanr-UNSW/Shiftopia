@@ -1,8 +1,23 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { format, startOfWeek, startOfMonth } from 'date-fns';
 import { formatInTimezone, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
-import { Clock, RefreshCw, ListFilter } from 'lucide-react';
-import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
+import { Clock, CheckCircle, XCircle, UserX, Shield } from 'lucide-react';
+
+const TIMESHEET_STATUS_TABS = [
+    { id: 'all', label: 'All', icon: Shield, accent: 'slate' },
+    { id: 'pending', label: 'Pending', icon: Clock, accent: 'amber' },
+    { id: 'approved', label: 'Approved', icon: CheckCircle, accent: 'emerald' },
+    { id: 'rejected', label: 'Rejected', icon: XCircle, accent: 'red' },
+    { id: 'no_show', label: 'No-Show', icon: UserX, accent: 'slate' },
+] as const;
+
+const timesheetAccentMap: Record<string, { bg: string; text: string; ring: string }> = {
+    amber:   { bg: 'bg-amber-500/10',   text: 'text-amber-600 dark:text-amber-400',     ring: 'ring-amber-500/20' },
+    emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', ring: 'ring-emerald-500/20' },
+    red:     { bg: 'bg-rose-500/10',    text: 'text-rose-600 dark:text-rose-400',       ring: 'ring-rose-500/20' },
+    slate:   { bg: 'bg-muted/50',       text: 'text-muted-foreground',                 ring: 'ring-border' },
+};
 
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';
@@ -195,6 +210,27 @@ export const TimesheetPage: React.FC = () => {
         rejectedReason: shift.rejectedReason,
     })), [shifts, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // ── Status counts for filter tabs ──────────────────────────────────────────
+    const statusCounts = useMemo(() => {
+        const counts = { all: 0, pending: 0, approved: 0, rejected: 0, no_show: 0 };
+        for (const shift of shifts) {
+            const isDraft = shift.lifecycleStatus === 'Draft';
+            const isUnassigned = !shift.employeeId || shift.employeeName?.toLowerCase().includes('unassigned');
+            if (isDraft || isUnassigned) continue;
+            counts.all++;
+
+            const tsStatus = shift.timesheetStatus?.toLowerCase() || 'draft';
+            const attStatus = shift.attendanceStatus?.toLowerCase() || null;
+
+            if (tsStatus === 'draft' || tsStatus === 'submitted') counts.pending++;
+            else if (tsStatus === 'approved') counts.approved++;
+            else if (tsStatus === 'rejected') counts.rejected++;
+
+            if (attStatus === 'no_show' || tsStatus === 'no_show') counts.no_show++;
+        }
+        return counts;
+    }, [shifts]);
+
     // ── Attendance scorecard ─────────────────────────────────────────────────────
     // Same 9 metrics/definitions as My Attendance + Insights, aggregated over the
     // full loaded set (assigned, non-draft) — independent of the status toggle.
@@ -315,26 +351,44 @@ export const TimesheetPage: React.FC = () => {
                     />
                 }
                 functionBarChildren={
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                         {canEdit && autoPilotAdapter && (
                             <AutoPilotControl adapter={autoPilotAdapter} onChanged={handleRefresh} />
                         )}
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-foreground/[0.03] border border-foreground/[0.05]">
-                            <ListFilter className="h-3 w-3 text-muted-foreground/40" />
-                            <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40 mr-1">Status</span>
-                            
-                            <ToggleGroup 
-                                type="single" 
-                                value={statusFilter} 
-                                onValueChange={(val) => val && setStatusFilter(val as any)}
-                                className="bg-transparent"
-                            >
-                                <ToggleGroupItem value="all" className="h-7 px-3 text-[9px] font-black uppercase tracking-widest rounded-lg">All</ToggleGroupItem>
-                                <ToggleGroupItem value="pending" className="h-7 px-3 text-[9px] font-black uppercase tracking-widest rounded-lg data-[state=on]:bg-amber-500/10 data-[state=on]:text-amber-500">Pending</ToggleGroupItem>
-                                <ToggleGroupItem value="approved" className="h-7 px-3 text-[9px] font-black uppercase tracking-widest rounded-lg data-[state=on]:bg-emerald-500/10 data-[state=on]:text-emerald-500">Approved</ToggleGroupItem>
-                                <ToggleGroupItem value="rejected" className="h-7 px-3 text-[9px] font-black uppercase tracking-widest rounded-lg data-[state=on]:bg-rose-500/10 data-[state=on]:text-rose-500">Rejected</ToggleGroupItem>
-                                <ToggleGroupItem value="no_show" className="h-7 px-3 text-[9px] font-black uppercase tracking-widest rounded-lg data-[state=on]:bg-slate-500/20">No-Show</ToggleGroupItem>
-                            </ToggleGroup>
+                        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/30 border border-border flex-nowrap overflow-x-auto scrollbar-hide">
+                            {TIMESHEET_STATUS_TABS.map(tab => {
+                                const isActive = statusFilter === tab.id;
+                                const colors = timesheetAccentMap[tab.accent];
+                                const TabIcon = tab.icon;
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setStatusFilter(tab.id as any)}
+                                        className={cn(
+                                            'relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-black transition-all duration-300',
+                                            isActive
+                                                ? `${colors.bg} ${colors.text} shadow-sm`
+                                                : 'text-muted-foreground/50 hover:text-foreground hover:bg-muted/50'
+                                        )}
+                                    >
+                                        <TabIcon className="h-3.5 w-3.5" />
+                                        <span className="hidden sm:inline">{tab.label}</span>
+                                        <span className={cn(
+                                            'min-w-[18px] h-[18px] rounded-full text-[9px] font-black flex items-center justify-center px-1',
+                                            isActive ? `${colors.bg} ${colors.text} ring-1 ${colors.ring}` : 'bg-muted text-muted-foreground/40'
+                                        )}>
+                                            {statusCounts[tab.id as keyof typeof statusCounts]}
+                                        </span>
+                                        {isActive && (
+                                            <motion.div
+                                                layoutId="activeTimesheetTab"
+                                                className={`absolute inset-0 rounded-xl ring-1 ${colors.ring}`}
+                                                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                                            />
+                                        )}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 }

@@ -1,24 +1,27 @@
 -- ============================================================================
--- Timesheets AutoPilot — auto-verify (shadow-first)
+-- Timesheets AutoPilot — auto-verify (ON/OFF) + lifecycle audit
 --
--- Brings Timesheets up to the same autonomous pipeline as swap auto-approve:
+-- AutoPilot is a simple per-org ON/OFF switch (no shadow mode — a point-in-time
+-- "would-decide" log is obsolete because the real action re-evaluates at commit).
+-- When ON, the worker auto-approves zero-variance timesheets; everything else
+-- routes to a manager.
+--
 --   shift becomes timesheet-reviewable  ──(enqueue trigger, gated to enabled)──▶
---   timesheet_review_queue  ──(auto-verify-timesheets Edge worker + cron)──▶
---   sm_timesheet_auto_decide  ──▶  timesheet_decisions (+ audit) / commit approval
+--   timesheet_review_queue  ──(auto-verify-timesheets worker + cron)──▶
+--   sm_timesheet_auto_decide  ──▶ timesheet_decisions (bot log) + commits approval
 --
--- Rule: ZERO-VARIANCE CLEAN PUNCHES (evaluated in the worker; see variance.ts).
---   AUTO_APPROVE only when: terminal attendance state AND clock-in/out within
---   tolerance of schedule AND no overtime AND no manual billable edits.
---   Everything else -> MANUAL_REVIEW. Timesheets are never auto-rejected.
+-- LIFECYCLE AUDIT: `timesheet_audit_log` is the single provenance timeline for
+-- every timesheet — CREATED / SUBMITTED / AUTO_APPROVED / MANUALLY_APPROVED /
+-- REJECTED / EDITED / REOPENED / NO_SHOW — populated by a trigger on `timesheets`
+-- so NO write path can bypass it (bot, manual API, edits all land here). Bot vs
+-- manual is disambiguated by a session GUC the decide RPC sets (mirrors the
+-- existing app.audit.via_gateway pattern). This audit is independent of AutoPilot
+-- — it records manual approvals + edits even when AutoPilot is OFF.
 --
--- Safety, mirroring swap_auto_approve_shadow:
---   * enabled=false / shadow_mode=true defaults  -> logs only, never commits
---   * enqueue trigger wrapped EXCEPTION -> RETURN NEW  -> can NEVER block a shift
---   * gated to enqueue only when an ENABLED policy exists  -> inert until opt-in
---   * extensions.digest() schema-qualified (pgcrypto lives in extensions)
---   * approval commit still passes through trg_enforce_timesheet_review_gate
---
--- Reuses generic autopilot_* enums so Open Bids can share them later.
+-- Safety: enabled=false default; enqueue trigger EXCEPTION -> RETURN NEW (never
+-- blocks a shift); gated to an enabled policy (inert until opt-in);
+-- extensions.digest() schema-qualified; approval commit still passes
+-- trg_enforce_timesheet_review_gate.
 -- ============================================================================
 
 -- ── Generic AutoPilot enums (shared across domains) ─────────────────────────
@@ -32,13 +35,12 @@ BEGIN
   END IF;
 END $$;
 
--- ── Policy ──────────────────────────────────────────────────────────────────
+-- ── Policy (ON/OFF; no shadow_mode) ─────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.timesheet_approval_rules (
     id                             uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
     organization_id                uuid NOT NULL,
     department_id                  uuid,
     enabled                        boolean DEFAULT false NOT NULL,
-    shadow_mode                    boolean DEFAULT true  NOT NULL,
     tolerance_minutes              integer DEFAULT 5  NOT NULL,
     max_auto_per_employee_per_week integer DEFAULT 20 NOT NULL,
     require_no_overtime            boolean DEFAULT true NOT NULL,
@@ -51,14 +53,12 @@ CREATE TABLE IF NOT EXISTS public.timesheet_approval_rules (
     CONSTRAINT timesheet_rules_max_auto_check  CHECK (max_auto_per_employee_per_week >= 0),
     CONSTRAINT timesheet_rules_rules_is_object CHECK (jsonb_typeof(rules) = 'object')
 );
-
--- one org-default row (department_id IS NULL) + at most one row per dept
 CREATE UNIQUE INDEX IF NOT EXISTS timesheet_rules_org_default_uniq
     ON public.timesheet_approval_rules (organization_id) WHERE department_id IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS timesheet_rules_org_dept_uniq
     ON public.timesheet_approval_rules (organization_id, department_id) WHERE department_id IS NOT NULL;
 
--- ── Decisions (one row per bot evaluation) ─────────────────────────────────
+-- ── Bot decision log (no shadow) ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.timesheet_decisions (
     id                uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
     shift_id          uuid NOT NULL,
@@ -73,7 +73,6 @@ CREATE TABLE IF NOT EXISTS public.timesheet_decisions (
     employee_id       uuid,
     work_date         date,
     subtitle          text,
-    shadow            boolean DEFAULT false NOT NULL,
     committed         boolean DEFAULT false NOT NULL,
     reverted_at       timestamptz,
     reverted_by       uuid,
@@ -82,19 +81,22 @@ CREATE TABLE IF NOT EXISTS public.timesheet_decisions (
 CREATE INDEX IF NOT EXISTS timesheet_decisions_shift_idx   ON public.timesheet_decisions (shift_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS timesheet_decisions_created_idx ON public.timesheet_decisions (created_at DESC);
 
--- ── Append-only audit log ───────────────────────────────────────────────────
+-- ── Unified lifecycle audit / provenance timeline (append-only) ─────────────
 CREATE TABLE IF NOT EXISTS public.timesheet_audit_log (
-    id          uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    shift_id    uuid NOT NULL,
-    decision_id uuid,
-    event_type  text NOT NULL,
-    actor       text DEFAULT 'system' NOT NULL,
-    detail      jsonb DEFAULT '{}'::jsonb NOT NULL,
-    created_at  timestamptz DEFAULT now() NOT NULL
+    id           uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    timesheet_id uuid,
+    shift_id     uuid NOT NULL,
+    event_type   text NOT NULL,   -- CREATED SUBMITTED AUTO_APPROVED MANUALLY_APPROVED REJECTED EDITED REOPENED REVERTED NO_SHOW
+    source       text NOT NULL DEFAULT 'system',  -- bot | manager | employee | system
+    actor        uuid,
+    actor_label  text,
+    detail       jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at   timestamptz DEFAULT now() NOT NULL
 );
+CREATE INDEX IF NOT EXISTS timesheet_audit_ts_idx    ON public.timesheet_audit_log (timesheet_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS timesheet_audit_shift_idx ON public.timesheet_audit_log (shift_id, created_at DESC);
 
--- ── Work queue (SKIP LOCKED, exp-backoff, DLQ) ─────────────────────────────
+-- ── Work queue ──────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.timesheet_review_queue (
     id              uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
     shift_id        uuid NOT NULL,
@@ -130,11 +132,100 @@ CREATE TRIGGER trg_bump_timesheet_policy_version
     BEFORE UPDATE ON public.timesheet_approval_rules
     FOR EACH ROW EXECUTE FUNCTION public.fn_bump_timesheet_policy_version();
 
--- ── Enqueue trigger: a shift crossing into a timesheet-reviewable terminal
---    state, when an ENABLED policy exists for its scope. Best-effort: never
---    blocks the parent shift write. (Pure time-based no-show crossings that
---    arrive with no shift UPDATE are handled at MANUAL_REVIEW by the worker's
---    periodic scan; they are not auto-approvable anyway.)
+-- ── LIFECYCLE PROVENANCE trigger on timesheets (captures every write path) ──
+-- SECURITY DEFINER so it can append to the audit log regardless of the writer's
+-- RLS. Best-effort: an audit failure must never block a timesheet write.
+CREATE OR REPLACE FUNCTION public.fn_timesheet_provenance() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'pg_catalog'
+    AS $$
+DECLARE
+  v_actor uuid := auth.uid();
+  v_autopilot text := NULLIF(current_setting('app.timesheet.autopilot', true), '');  -- decision_id when the bot is acting
+  v_revert boolean := COALESCE(current_setting('app.timesheet.revert', true), '') = '1';  -- undo of a bot auto-verify
+  v_new text := lower(COALESCE(NEW.status::text, ''));
+  v_old text := '';   -- OLD is NULL on INSERT; assigned in the UPDATE path only
+  v_human_source text := CASE WHEN v_actor IS NULL THEN 'system' ELSE 'manager' END;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    INSERT INTO public.timesheet_audit_log (timesheet_id, shift_id, event_type, source, actor, detail)
+    VALUES (NEW.id, NEW.shift_id,
+            CASE WHEN v_new = 'submitted' THEN 'SUBMITTED' WHEN v_new = 'no_show' THEN 'NO_SHOW' ELSE 'CREATED' END,
+            CASE WHEN v_actor IS NULL THEN 'system' ELSE 'employee' END, v_actor,
+            jsonb_build_object('status', v_new));
+    RETURN NEW;
+  END IF;
+
+  v_old := lower(COALESCE(OLD.status::text, ''));  -- safe here: UPDATE only
+
+  -- Status transitions
+  IF v_new IS DISTINCT FROM v_old THEN
+    IF v_new = 'approved' THEN
+      IF v_autopilot IS NOT NULL THEN
+        INSERT INTO public.timesheet_audit_log (timesheet_id, shift_id, event_type, source, actor, detail)
+        VALUES (NEW.id, NEW.shift_id, 'AUTO_APPROVED', 'bot', NULL,
+                jsonb_build_object('decision_id', v_autopilot));
+      ELSE
+        INSERT INTO public.timesheet_audit_log (timesheet_id, shift_id, event_type, source, actor, detail)
+        VALUES (NEW.id, NEW.shift_id, 'MANUALLY_APPROVED', v_human_source, v_actor,
+                jsonb_build_object('from', v_old));
+      END IF;
+    ELSIF v_new = 'rejected' THEN
+      INSERT INTO public.timesheet_audit_log (timesheet_id, shift_id, event_type, source, actor, detail)
+      VALUES (NEW.id, NEW.shift_id, 'REJECTED', v_human_source, v_actor,
+              jsonb_build_object('reason', NEW.rejected_reason));
+    ELSIF v_new = 'no_show' THEN
+      INSERT INTO public.timesheet_audit_log (timesheet_id, shift_id, event_type, source, actor, detail)
+      VALUES (NEW.id, NEW.shift_id, 'NO_SHOW', v_human_source, v_actor, '{}'::jsonb);
+    ELSIF v_old = 'approved' AND v_new IN ('submitted', 'draft') THEN
+      -- A manager reopening an approved timesheet vs the auto-verify undo path.
+      INSERT INTO public.timesheet_audit_log (timesheet_id, shift_id, event_type, source, actor, detail)
+      VALUES (NEW.id, NEW.shift_id, CASE WHEN v_revert THEN 'REVERTED' ELSE 'REOPENED' END, v_human_source, v_actor,
+              jsonb_build_object('to', v_new));
+    ELSIF v_new = 'submitted' THEN
+      INSERT INTO public.timesheet_audit_log (timesheet_id, shift_id, event_type, source, actor, detail)
+      VALUES (NEW.id, NEW.shift_id, 'SUBMITTED', CASE WHEN v_actor IS NULL THEN 'system' ELSE 'employee' END, v_actor, '{}'::jsonb);
+    END IF;
+  END IF;
+
+  -- Billable-time / break edits (independent of a status change)
+  IF NEW.start_time IS DISTINCT FROM OLD.start_time
+     OR NEW.end_time IS DISTINCT FROM OLD.end_time
+     OR NEW.paid_break_minutes IS DISTINCT FROM OLD.paid_break_minutes
+     OR NEW.unpaid_break_minutes IS DISTINCT FROM OLD.unpaid_break_minutes THEN
+    INSERT INTO public.timesheet_audit_log (timesheet_id, shift_id, event_type, source, actor, detail)
+    VALUES (NEW.id, NEW.shift_id, 'EDITED', v_human_source, v_actor,
+            jsonb_build_object(
+              'before', jsonb_build_object('start_time', OLD.start_time, 'end_time', OLD.end_time,
+                                           'paid_break', OLD.paid_break_minutes, 'unpaid_break', OLD.unpaid_break_minutes),
+              'after',  jsonb_build_object('start_time', NEW.start_time, 'end_time', NEW.end_time,
+                                           'paid_break', NEW.paid_break_minutes, 'unpaid_break', NEW.unpaid_break_minutes)));
+  END IF;
+
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'fn_timesheet_provenance swallowed (timesheet=%): %', NEW.id, SQLERRM;
+  RETURN NEW;
+END; $$;
+
+DROP TRIGGER IF EXISTS trg_timesheet_provenance ON public.timesheets;
+CREATE TRIGGER trg_timesheet_provenance
+    AFTER INSERT OR UPDATE ON public.timesheets
+    FOR EACH ROW EXECUTE FUNCTION public.fn_timesheet_provenance();
+
+-- ── Append-only guard on the audit log ──────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.fn_timesheet_audit_append_only() RETURNS trigger
+    LANGUAGE plpgsql SET search_path TO 'public', 'pg_catalog'
+    AS $$
+BEGIN
+  RAISE EXCEPTION 'timesheet_audit_log is append-only (% blocked)', TG_OP;
+END; $$;
+
+DROP TRIGGER IF EXISTS trg_timesheet_audit_append_only ON public.timesheet_audit_log;
+CREATE TRIGGER trg_timesheet_audit_append_only
+    BEFORE UPDATE OR DELETE ON public.timesheet_audit_log
+    FOR EACH ROW EXECUTE FUNCTION public.fn_timesheet_audit_append_only();
+
+-- ── Enqueue trigger: shift crossing into a timesheet-reviewable terminal state ─
 CREATE OR REPLACE FUNCTION public.enqueue_timesheet_auto_verify() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'pg_catalog'
     AS $$
@@ -145,9 +236,6 @@ DECLARE
   v_enabled boolean;
   v_idem text;
 BEGIN
-  -- reviewable predicate, inlined (mirrors is_shift_timesheet_reviewable).
-  -- COALESCE to false so a NULL attendance_status / start_at can never leave the
-  -- expression NULL and slip past the "not a fresh crossing" guard below.
   v_new_ok := COALESCE(
                 (NEW.attendance_status IN ('no_show','auto_clock_out'))
                 OR NEW.actual_end IS NOT NULL
@@ -160,10 +248,9 @@ BEGIN
                 false);
 
   IF NOT v_new_ok OR v_old_ok THEN
-    RETURN NEW;  -- not a fresh crossing into reviewable
+    RETURN NEW;
   END IF;
 
-  -- GATE: enqueue only when an ENABLED policy exists for this scope (dept beats org).
   SELECT version, enabled INTO v_pol_ver, v_enabled
   FROM public.timesheet_approval_rules
   WHERE organization_id = NEW.organization_id
@@ -185,9 +272,6 @@ BEGIN
   INSERT INTO public.timesheet_review_queue (shift_id, idempotency_key)
   VALUES (NEW.id, v_idem)
   ON CONFLICT (shift_id, idempotency_key) DO NOTHING;
-
-  INSERT INTO public.timesheet_audit_log (shift_id, event_type, actor, detail)
-  VALUES (NEW.id, 'ENQUEUED', 'system', jsonb_build_object('idempotency_key', v_idem, 'policy_version', v_pol_ver));
 
   RETURN NEW;
 EXCEPTION WHEN OTHERS THEN
@@ -245,7 +329,7 @@ BEGIN
   RETURN jsonb_build_object('ok', true, 'code', 'SETTLED');
 END; $$;
 
--- ── Decide RPC — the commit gateway (idempotency / kill-switch / shadow) ─────
+-- ── Decide RPC — ON/OFF commit gateway (idempotency / kill-switch, no shadow) ─
 CREATE OR REPLACE FUNCTION public.sm_timesheet_auto_decide(
     p_shift_id uuid, p_idempotency_key text, p_payload jsonb DEFAULT '{}'::jsonb)
     RETURNS jsonb
@@ -256,12 +340,10 @@ DECLARE
   v_shift public.shifts%ROWTYPE;
   v_policy public.timesheet_approval_rules%ROWTYPE;
   v_decision public.autopilot_decision_kind;
-  v_shadow boolean := true;
   v_ts_id uuid;
   v_decision_id uuid;
   v_existing uuid;
 BEGIN
-  -- authz: manager (gamma+) or service-role/system (auth.uid() null)
   IF v_caller IS NOT NULL AND NOT (
        public.is_admin()
        OR EXISTS (SELECT 1 FROM public.app_access_certificates c
@@ -280,8 +362,6 @@ BEGIN
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'code', 'GONE'); END IF;
 
   IF NOT public.is_shift_timesheet_reviewable(p_shift_id) THEN
-    INSERT INTO public.timesheet_audit_log (shift_id, event_type, actor, detail)
-    VALUES (p_shift_id, 'SKIPPED_NOT_REVIEWABLE', 'system', '{}'::jsonb);
     RETURN jsonb_build_object('ok', true, 'code', 'NOT_REVIEWABLE');
   END IF;
 
@@ -291,19 +371,15 @@ BEGIN
   ORDER BY department_id NULLS LAST LIMIT 1;
 
   IF NOT FOUND OR v_policy.enabled IS NOT TRUE THEN
-    INSERT INTO public.timesheet_audit_log (shift_id, event_type, actor, detail)
-    VALUES (p_shift_id, 'KILLSWITCH_OFF', 'system', jsonb_build_object('policy_found', FOUND));
     RETURN jsonb_build_object('ok', true, 'code', 'DISABLED');
   END IF;
 
-  v_shadow := COALESCE(v_policy.shadow_mode, true);
   v_decision := COALESCE((p_payload->>'decision')::public.autopilot_decision_kind, 'MANUAL_REVIEW');
-
   SELECT id INTO v_ts_id FROM public.timesheets WHERE shift_id = p_shift_id ORDER BY updated_at DESC NULLS LAST LIMIT 1;
 
   INSERT INTO public.timesheet_decisions(
     shift_id, timesheet_id, idempotency_key, decision, reason, detail, variance_snapshot,
-    policy_version, engine_version, employee_id, work_date, subtitle, shadow, committed)
+    policy_version, engine_version, employee_id, work_date, subtitle, committed)
   VALUES (
     p_shift_id, v_ts_id, p_idempotency_key, v_decision,
     p_payload->>'reason',
@@ -311,26 +387,20 @@ BEGIN
     COALESCE(p_payload->'variance_snapshot', '{}'::jsonb),
     COALESCE((p_payload->>'policy_version')::int, v_policy.version),
     COALESCE(p_payload->>'engine_version', 'unknown'),
-    v_shift.assigned_employee_id, v_shift.shift_date, p_payload->>'subtitle',
-    v_shadow, false)
+    v_shift.assigned_employee_id, v_shift.shift_date, p_payload->>'subtitle', false)
   RETURNING id INTO v_decision_id;
 
-  -- SHADOW: log only, never touch the timesheet
-  IF v_shadow THEN
-    INSERT INTO public.timesheet_audit_log (shift_id, decision_id, event_type, actor, detail)
-    VALUES (p_shift_id, v_decision_id, 'SHADOW_SUPPRESSED', 'system', jsonb_build_object('would_be', v_decision));
-    RETURN jsonb_build_object('ok', true, 'code', 'SHADOW', 'decision', v_decision, 'decision_id', v_decision_id);
-  END IF;
-
-  -- LIVE: only AUTO_APPROVE commits; anything else routes to a human.
+  -- AUTO_APPROVE with a timesheet row → commit. The GUC lets the provenance
+  -- trigger tag the resulting write AUTO_APPROVED (source=bot) + link this decision.
   IF v_decision = 'AUTO_APPROVE' AND v_ts_id IS NOT NULL THEN
-    -- Passes through trg_enforce_timesheet_review_gate (reviewable => allowed).
+    PERFORM set_config('app.timesheet.autopilot', v_decision_id::text, true);
     UPDATE public.timesheets
        SET status = 'approved',
            approved_at = now(),
            notes = COALESCE(NULLIF(notes, ''), 'Auto-verified: zero-variance clean punches'),
            updated_at = now()
      WHERE id = v_ts_id;
+    PERFORM set_config('app.timesheet.autopilot', '', true);
 
     UPDATE public.shifts
        SET lifecycle_status = 'Completed', updated_at = now()
@@ -338,15 +408,9 @@ BEGIN
        AND lifecycle_status NOT IN ('Completed', 'Cancelled', 'Draft');
 
     UPDATE public.timesheet_decisions SET committed = true WHERE id = v_decision_id;
-    INSERT INTO public.timesheet_audit_log (shift_id, decision_id, event_type, actor, detail)
-    VALUES (p_shift_id, v_decision_id, 'COMMITTED', 'system', jsonb_build_object('timesheet_id', v_ts_id));
     RETURN jsonb_build_object('ok', true, 'code', 'COMMITTED', 'decision', v_decision, 'decision_id', v_decision_id);
   END IF;
 
-  -- AUTO_APPROVE with no timesheet row, or MANUAL_REVIEW / AUTO_REJECT -> human.
-  INSERT INTO public.timesheet_audit_log (shift_id, decision_id, event_type, actor, detail)
-  VALUES (p_shift_id, v_decision_id, 'DECIDED_MANUAL_REVIEW', 'system',
-          jsonb_build_object('decision', v_decision, 'had_timesheet', v_ts_id IS NOT NULL));
   RETURN jsonb_build_object('ok', true, 'code', 'MANUAL_REVIEW', 'decision', v_decision, 'decision_id', v_decision_id);
 
 EXCEPTION WHEN OTHERS THEN
@@ -382,34 +446,23 @@ BEGIN
   END IF;
 
   IF v_dec.timesheet_id IS NOT NULL THEN
+    -- approved -> submitted; the GUC makes the provenance trigger log REVERTED
+    -- (rather than REOPENED) for this write — one accurate audit row, not two.
+    PERFORM set_config('app.timesheet.revert', '1', true);
     UPDATE public.timesheets
        SET status = 'submitted', approved_at = NULL, approved_by = NULL, updated_at = now()
      WHERE id = v_dec.timesheet_id AND status = 'approved';
+    PERFORM set_config('app.timesheet.revert', '', true);
   END IF;
 
   UPDATE public.timesheet_decisions SET reverted_at = now(), reverted_by = p_actor WHERE id = p_decision_id;
-  INSERT INTO public.timesheet_audit_log (shift_id, decision_id, event_type, actor, detail)
-  VALUES (v_dec.shift_id, p_decision_id, 'REVERTED', p_actor::text, jsonb_build_object('by', p_actor));
   RETURN jsonb_build_object('ok', true, 'code', 'REVERTED', 'decision_id', p_decision_id);
 EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'sm_timesheet_auto_revert failed (decision=%): %', p_decision_id, SQLERRM;
   RETURN jsonb_build_object('ok', false, 'code', 'ERROR', 'error', SQLERRM);
 END; $$;
 
--- ── Append-only guard on the audit log ──────────────────────────────────────
-CREATE OR REPLACE FUNCTION public.fn_timesheet_audit_append_only() RETURNS trigger
-    LANGUAGE plpgsql SET search_path TO 'public', 'pg_catalog'
-    AS $$
-BEGIN
-  RAISE EXCEPTION 'timesheet_audit_log is append-only (% blocked)', TG_OP;
-END; $$;
-
-DROP TRIGGER IF EXISTS trg_timesheet_audit_append_only ON public.timesheet_audit_log;
-CREATE TRIGGER trg_timesheet_audit_append_only
-    BEFORE UPDATE OR DELETE ON public.timesheet_audit_log
-    FOR EACH ROW EXECUTE FUNCTION public.fn_timesheet_audit_append_only();
-
--- ── RLS (mirrors swap_* : gamma+ read on decisions/audit; org-scoped ALL on rules) ─
+-- ── RLS (gamma+ read on decisions/audit; org-scoped ALL on rules) ───────────
 ALTER TABLE public.timesheet_approval_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.timesheet_decisions      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.timesheet_audit_log      ENABLE ROW LEVEL SECURITY;
@@ -442,15 +495,13 @@ CREATE POLICY timesheet_audit_read ON public.timesheet_audit_log FOR SELECT
      WHERE c.user_id = auth.uid() AND c.is_active = true
        AND c.access_level IN ('gamma','delta','epsilon','zeta')));
 
--- queue has RLS enabled with NO policy: reachable only via SECURITY DEFINER RPCs / service_role.
-
 -- ── Grants (RLS is the gate; anon revoked on functions) ─────────────────────
 GRANT SELECT, INSERT, UPDATE ON TABLE public.timesheet_approval_rules TO authenticated, service_role;
-GRANT SELECT           ON TABLE public.timesheet_decisions      TO authenticated;
-GRANT SELECT, INSERT, UPDATE ON TABLE public.timesheet_decisions TO service_role;
-GRANT SELECT           ON TABLE public.timesheet_audit_log      TO authenticated;
-GRANT SELECT, INSERT   ON TABLE public.timesheet_audit_log      TO service_role;
-GRANT SELECT, INSERT, UPDATE ON TABLE public.timesheet_review_queue TO service_role;
+GRANT SELECT                 ON TABLE public.timesheet_decisions      TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.timesheet_decisions      TO service_role;
+GRANT SELECT                 ON TABLE public.timesheet_audit_log      TO authenticated;
+GRANT SELECT, INSERT         ON TABLE public.timesheet_audit_log      TO service_role;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.timesheet_review_queue   TO service_role;
 
 REVOKE ALL ON FUNCTION public.sm_timesheet_auto_decide(uuid, text, jsonb) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.sm_timesheet_auto_revert(uuid, uuid)        FROM PUBLIC, anon;
@@ -462,5 +513,6 @@ GRANT EXECUTE ON FUNCTION public.sm_timesheet_auto_revert(uuid, uuid)        TO 
 GRANT EXECUTE ON FUNCTION public.sm_timesheet_queue_claim(text, integer)     TO service_role;
 GRANT EXECUTE ON FUNCTION public.sm_timesheet_queue_complete(uuid, text, text) TO service_role;
 
-COMMENT ON TABLE public.timesheet_approval_rules IS 'Per-org Timesheets AutoPilot policy (auto-verify). enabled/shadow_mode drive OFF/SHADOW/LIVE. Shadow-first defaults.';
-COMMENT ON FUNCTION public.sm_timesheet_auto_decide(uuid, text, jsonb) IS 'Commit gateway for timesheet auto-verify: idempotency + kill-switch + shadow; commits AUTO_APPROVE via the gated timesheets write. Worker supplies decision + variance snapshot.';
+COMMENT ON TABLE public.timesheet_approval_rules IS 'Per-org Timesheets AutoPilot policy (auto-verify). enabled = ON (bot acts) / OFF. No shadow mode.';
+COMMENT ON TABLE public.timesheet_audit_log IS 'Append-only lifecycle provenance for every timesheet (bot + manual approvals + edits), populated by trg_timesheet_provenance. Independent of AutoPilot.';
+COMMENT ON FUNCTION public.sm_timesheet_auto_decide(uuid, text, jsonb) IS 'ON/OFF commit gateway for timesheet auto-verify: idempotency + kill-switch; commits AUTO_APPROVE via the gated timesheets write (tagged AUTO_APPROVED by the provenance trigger via the app.timesheet.autopilot GUC).';

@@ -21,6 +21,7 @@ import { getProtectionContext } from '@/modules/rosters/domain/shift-ui';
 import { TimesheetStatusBadge } from './TimesheetStatusBadge';
 import { AutoPilotDecisionChip, type AutoPilotDecision } from '@/modules/core/autopilot';
 import { TIMESHEET_AUTOPILOT_COPY } from '../../api/timesheetAutoPilot.api';
+import { TimesheetHistoryPopover } from './TimesheetHistoryPopover';
 import { getGroupColor } from '@/modules/rosters/model/roster.types';
 import type { TimesheetRow } from '../../model/timesheet.types';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
@@ -351,7 +352,7 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                 start_time: entry.scheduledStart,
                 end_time: entry.scheduledEnd,
             }}
-            topContent={(isSelectMode || autoDecision) && (
+            topContent={
                 <div className="flex items-center gap-2">
                     {isSelectMode && (
                         <button
@@ -365,8 +366,9 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
                         </button>
                     )}
                     {autoDecision && <AutoPilotDecisionChip decision={autoDecision} copy={TIMESHEET_AUTOPILOT_COPY} />}
+                    <TimesheetHistoryPopover shiftId={String(entry.id)} />
                 </div>
-            )}
+            }
             footerActions={
                 <div className="flex flex-col gap-3">
                     {isEditing ? (

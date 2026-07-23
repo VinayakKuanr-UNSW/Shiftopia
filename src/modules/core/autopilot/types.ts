@@ -2,28 +2,31 @@
  * AutoPilot — the shared shape behind every "auto-decision" surface.
  *
  * Swap Requests (auto-approve), Open Bids (auto-assign) and Timesheets
- * (auto-verify) all run the same shadow-first pipeline: a per-org policy with an
- * OFF / SHADOW / LIVE mode, an autonomous worker that logs a decision per entity,
- * and a manager-facing control that configures the policy + reviews the decision
- * feed (with undo for committed auto-approvals).
+ * (auto-verify) all run the same pipeline: a per-org policy with a simple
+ * ON / OFF switch, an autonomous worker that acts when ON, and a manager-facing
+ * control that configures the policy + reviews the recent-actions feed (with
+ * undo for committed auto-approvals).
+ *
+ * There is no "shadow" mode: a point-in-time "would-decide" log is obsolete
+ * because the real action re-evaluates at commit anyway. ON = the bot acts;
+ * OFF = it doesn't.
  *
  * Each domain provides a thin {@link AutoPilotAdapter} that maps its own tables
  * onto these normalized types; the generic `<AutoPilotControl>` and
  * `<AutoPilotDecisionChip>` render every domain identically.
  */
 
-export type AutoPilotMode = 'OFF' | 'SHADOW' | 'LIVE';
+export type AutoPilotMode = 'OFF' | 'ON';
 
 export type AutoPilotDecisionKind = 'AUTO_APPROVE' | 'MANUAL_REVIEW' | 'AUTO_REJECT';
 
 /**
- * Normalized policy. Every domain shares `enabled` / `shadow_mode` / `version`;
- * domain-specific knobs (tolerance, per-week caps, warning handling …) live in
- * `fields`, keyed by the same `key`s the adapter declares in `policyFields`.
+ * Normalized policy. Every domain shares `enabled` / `version`; domain-specific
+ * knobs (tolerance, per-week caps, warning handling …) live in `fields`, keyed
+ * by the same `key`s the adapter declares in `policyFields`.
  */
 export interface AutoPilotPolicy {
     enabled: boolean;
-    shadow_mode: boolean;
     version: number;
     fields: Record<string, number | boolean>;
 }
@@ -31,14 +34,12 @@ export interface AutoPilotPolicy {
 /** A blank policy for an org that has never opted in — badge shows OFF. */
 export const emptyPolicy = (fields: Record<string, number | boolean> = {}): AutoPilotPolicy => ({
     enabled: false,
-    shadow_mode: true,
     version: 0,
     fields,
 });
 
-export const policyMode = (
-    p: Pick<AutoPilotPolicy, 'enabled' | 'shadow_mode'> | null,
-): AutoPilotMode => (!p || !p.enabled ? 'OFF' : p.shadow_mode ? 'SHADOW' : 'LIVE');
+export const policyMode = (p: Pick<AutoPilotPolicy, 'enabled'> | null): AutoPilotMode =>
+    p && p.enabled ? 'ON' : 'OFF';
 
 /**
  * Normalized decision for the feed + per-row chip. The adapter maps its raw
@@ -51,7 +52,6 @@ export interface AutoPilotDecision {
     entityId: string;
     kind: AutoPilotDecisionKind;
     reason: string | null;
-    shadow: boolean;
     committed: boolean;
     revertedAt: string | null;
     engineVersion: string;
@@ -62,7 +62,7 @@ export interface AutoPilotDecision {
     target?: string | null;
 }
 
-/** A committed live auto-approval that hasn't been undone yet. */
+/** A committed auto-approval that hasn't been undone yet. */
 export const isDecisionRevertable = (d: AutoPilotDecision): boolean =>
     d.kind === 'AUTO_APPROVE' && d.committed && !d.revertedAt;
 
@@ -95,12 +95,10 @@ export interface AutoPilotCopy {
     title: string;
     /** popover subtitle (one line under the title) */
     subtitle: string;
-    /** shown in the amber going-LIVE warning box */
-    liveWarning: string;
+    /** shown in the amber warning box when turning the policy ON */
+    onWarning: string;
     /** empty-feed helper line */
     emptyFeedHint: string;
-    /** verbs used to phrase shadow "would …" chips */
-    verbs: { approve: string; reject: string; review: string };
     /** committed-decision chip labels */
     committedLabels: { approve: string; reject: string };
 }

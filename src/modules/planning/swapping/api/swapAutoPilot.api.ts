@@ -20,11 +20,10 @@ export const SWAP_AUTOPILOT_COPY: AutoPilotCopy = {
     buttonTitle: 'Auto-approve swap requests',
     title: 'Auto-Approve Swaps',
     subtitle: 'Bot decides manager-pending swaps',
-    liveWarning:
-        'Live mode lets the bot approve and reject swaps without a manager. Its compliance check covers overlap, ' +
-        '48h weekly, 11h rest and qualifications — a subset of the full rule set. Review the shadow feed below before going live.',
+    onWarning:
+        'Turning AutoPilot on lets the bot approve and reject swaps without a manager. Its compliance check covers ' +
+        'overlap, 48h weekly, 11h rest and qualifications — a subset of the full rule set.',
     emptyFeedHint: 'They appear as swaps reach manager review.',
-    verbs: { approve: 'approve', reject: 'reject', review: 'review' },
     committedLabels: { approve: 'Auto-approved', reject: 'Auto-rejected' },
 };
 
@@ -65,7 +64,6 @@ export const swapDecisionToAutoPilot = (d: SwapAutoDecision): AutoPilotDecision 
     entityId: d.swap_id,
     kind: d.decision,
     reason: d.reason,
-    shadow: d.shadow,
     committed: d.committed,
     revertedAt: d.reverted_at,
     engineVersion: d.engine_version,
@@ -77,7 +75,6 @@ const policyToAutoPilot = (p: SwapApprovalPolicy | null): AutoPilotPolicy | null
     p
         ? {
               enabled: p.enabled,
-              shadow_mode: p.shadow_mode,
               version: p.version,
               fields: {
                   auto_approve_warnings: p.auto_approve_warnings,
@@ -102,11 +99,13 @@ export function createSwapAutoPilotAdapter({ organizationId, userId }: SwapAutoP
         },
 
         async savePolicy(next: AutoPilotPolicy): Promise<AutoPilotPolicy> {
+            // No shadow_mode: enabled = the bot acts. (The swap de-shadow migration
+            // makes sm_swap_auto_decide ignore shadow_mode entirely.)
             const saved = await swapPolicyApi.saveOrgPolicy(
                 organizationId,
                 {
                     enabled: next.enabled,
-                    shadow_mode: next.shadow_mode,
+                    shadow_mode: false,
                     auto_approve_warnings: !!next.fields.auto_approve_warnings,
                     max_auto_per_employee_per_week: Number(next.fields.max_auto_per_employee_per_week ?? 3),
                 },

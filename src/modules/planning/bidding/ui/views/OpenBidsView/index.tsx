@@ -1113,7 +1113,15 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
 
   // Expose auto-assign to controlling parent (so the button lives in
   // GoldStandardHeader, not duplicated inside the view).
+  // Ref-guard: only notify parent when the exposed values truly change — avoids
+  // the parent doing setState with a new object on every child render.
+  const lastAutoAssignRef = useRef<{ run: (() => void) | null; isRunning: boolean }>({ run: null, isRunning: false });
   useEffect(() => {
+    if (
+      lastAutoAssignRef.current.run === handleAutoAssign &&
+      lastAutoAssignRef.current.isRunning === isAutoAssigning
+    ) return;
+    lastAutoAssignRef.current = { run: handleAutoAssign, isRunning: isAutoAssigning };
     onAutoAssignReady?.({ run: handleAutoAssign, isRunning: isAutoAssigning });
   }, [handleAutoAssign, isAutoAssigning, onAutoAssignReady]);
 
