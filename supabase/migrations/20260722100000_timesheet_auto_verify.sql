@@ -411,6 +411,14 @@ BEGIN
     RETURN jsonb_build_object('ok', true, 'code', 'COMMITTED', 'decision', v_decision, 'decision_id', v_decision_id);
   END IF;
 
+  -- Not auto-approved: record the bot's "needs a manager" call in the shift's own
+  -- history timeline (source=bot), so provenance lives on the shift, not in a
+  -- separate global list. (Committed auto-approvals are logged AUTO_APPROVED by
+  -- trg_timesheet_provenance instead.)
+  INSERT INTO public.timesheet_audit_log (timesheet_id, shift_id, event_type, source, actor, detail)
+  VALUES (v_ts_id, p_shift_id, 'BOT_REVIEW', 'bot', NULL,
+          jsonb_build_object('decision_id', v_decision_id, 'reason', p_payload->>'reason'));
+
   RETURN jsonb_build_object('ok', true, 'code', 'MANUAL_REVIEW', 'decision', v_decision, 'decision_id', v_decision_id);
 
 EXCEPTION WHEN OTHERS THEN

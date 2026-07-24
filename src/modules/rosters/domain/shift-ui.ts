@@ -681,6 +681,64 @@ export function getLiveRuleBadges(shift: ShiftDotInput): LiveRuleBadges {
     return { arrival, departure };
 }
 
+/** Arrival / departure halves of the Payroll Rules model. */
+export type PayrollRule = 'Paid Early' | 'On Roster' | 'Late Start' | 'Short' | 'Overtime';
+
+/** The two-badge Payroll Rules result — billable IN vs start, billable OUT vs end. */
+export interface PayrollRuleBadges {
+    arrival: ShiftRuleBadge | null;
+    departure: ShiftRuleBadge | null;
+}
+
+/**
+ * Payroll Rules — the two-badge sibling of {@link getLiveRuleBadges}, but driven
+ * by the BILLABLE window (the resolved adjusted times: manager edit → snapped
+ * actual → auto) rather than the raw attendance clocks. This is the whole point
+ * of the split:
+ *
+ *   • Live Rules answer "what actually happened?" (from actual_start/actual_end).
+ *   • Payroll Rules answer "what are we paying?"   (from the billable times).
+ *
+ * So an employee who clocks in 12m late (Live: `Late In`) but is paid from 09:00
+ * after 15-min snapping reads `On Roster` here; a manager who caps an over-run
+ * so the paid window ends on time reads `On Roster` even though Live shows a late
+ * clock-out. Overtime is a first-class payroll signal (billable OUT past the
+ * rostered end), and a paid window that falls short of the roster reads `Short`.
+ *
+ *   • arrival   — billable IN vs scheduled start: Paid Early / On Roster / Late Start
+ *   • departure — billable OUT vs scheduled end : Short / On Roster / Overtime
+ *
+ * A side with no resolvable billable time (e.g. an auto clock-out with no real
+ * out, or a no-show) yields no badge — never fabricated. Returns both null when
+ * the schedule can't be parsed. Reuses the Live Rule palette so the two columns
+ * are visually comparable at a glance.
+ */
+export function getPayrollRuleBadges(shift: ShiftDotInput): PayrollRuleBadges {
+    const empty: PayrollRuleBadges = { arrival: null, departure: null };
+    const { start, end } = resolveScheduleMs(shift);
+    if (start === null) return empty;
+
+    const bIn = parseToMs(shift.adjusted_start, shift.shift_date);   // billable in
+    let bOut = parseToMs(shift.adjusted_end, shift.shift_date);      // billable out
+    // Overnight: a billable out landing before the start rolled onto the next day,
+    // mirroring the scheduled-end and manual-out overnight handling above.
+    if (bOut !== null && bOut < start - GRACE_MS) bOut += 24 * 60 * 60 * 1000;
+
+    const arrival: ShiftRuleBadge | null =
+        bIn === null ? null
+        : bIn < start - GRACE_MS ? { label: 'Paid Early', color: LR.earlyIn }
+        : bIn > start + GRACE_MS ? { label: 'Late Start', color: LR.lateIn }
+        : { label: 'On Roster', color: LR.onTimeIn };
+
+    const departure: ShiftRuleBadge | null =
+        (bOut === null || end === null) ? null
+        : bOut > end + GRACE_MS ? { label: 'Overtime', color: LR.overtime }
+        : bOut < end - GRACE_MS ? { label: 'Short', color: LR.earlyOut }
+        : { label: 'On Roster', color: LR.onTimeOut };
+
+    return { arrival, departure };
+}
+
 /**
  * Single-badge Live Rule — backward-compatible adapter over
  * {@link getLiveRuleBadges}. Surfaces the most significant half (departure

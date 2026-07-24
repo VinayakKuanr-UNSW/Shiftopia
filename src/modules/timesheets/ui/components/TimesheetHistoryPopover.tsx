@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
-    Bot, History, Pencil, Plus, RotateCcw, Send, ShieldCheck, Undo2, UserCheck, UserX, XCircle,
+    Bot, Eye, History, Pencil, Plus, RotateCcw, Send, ShieldCheck, Undo2, UserCheck, UserX, XCircle,
 } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
@@ -17,6 +17,7 @@ const EVENT_META: Record<string, { label: string; Icon: typeof History; cls: str
     CREATED:           { label: 'Created',           Icon: Plus,        cls: 'text-muted-foreground' },
     SUBMITTED:         { label: 'Submitted',         Icon: Send,        cls: 'text-sky-500' },
     AUTO_APPROVED:     { label: 'Auto-verified',     Icon: Bot,         cls: 'text-emerald-500' },
+    BOT_REVIEW:        { label: 'AutoPilot: needs review', Icon: Eye,   cls: 'text-amber-500' },
     MANUALLY_APPROVED: { label: 'Approved',          Icon: UserCheck,   cls: 'text-emerald-500' },
     REJECTED:          { label: 'Rejected',          Icon: XCircle,     cls: 'text-rose-500' },
     EDITED:            { label: 'Edited',            Icon: Pencil,      cls: 'text-amber-500' },
@@ -77,7 +78,7 @@ const EventRow: React.FC<{ event: TimesheetAuditEvent }> = ({ event }) => {
                 </div>
                 <span className="text-[9px] font-mono text-foreground/60 truncate">{who}</span>
                 {event.eventType === 'EDITED' && <EditDetail detail={event.detail} />}
-                {event.eventType === 'REJECTED' && typeof event.detail?.reason === 'string' && (
+                {(event.eventType === 'REJECTED' || event.eventType === 'BOT_REVIEW') && typeof event.detail?.reason === 'string' && (
                     <span className="text-[9px] text-muted-foreground/70 italic">{String(event.detail.reason)}</span>
                 )}
                 <span className="text-[8px] font-mono text-muted-foreground/40 uppercase tracking-wider">

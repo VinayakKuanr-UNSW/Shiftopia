@@ -4,7 +4,6 @@ import {
     type AutoPilotAdapter,
     type AutoPilotDecision,
     type AutoPilotPolicy,
-    emptyPolicy,
 } from './types';
 
 /**
@@ -78,9 +77,11 @@ export function useAutoPilot(adapter: AutoPilotAdapter, open: boolean) {
     const load = useCallback(async () => {
         setIsLoading(true);
         try {
+            // Timesheets embed decisions in each shift's history, so skip the feed.
+            const wantFeed = adapter.showDecisionFeed !== false;
             const [p, feed] = await Promise.all([
                 adapter.getPolicy(),
-                adapter.getRecentDecisions(20),
+                wantFeed ? adapter.getRecentDecisions(20) : Promise.resolve([]),
             ]);
             setPolicy(p);
             setDraft(draftFromPolicy(adapter, p));

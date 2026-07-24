@@ -17,7 +17,7 @@
 //    row (enabled=true) exists for at least one org.
 // =============================================================================
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { evaluateTimesheet, type TimesheetEvalInput } from './variance.ts';
+import { evaluateTimesheet, isWithinAutopilotWindow, PUNCH_TOLERANCE_MIN, type TimesheetEvalInput } from './variance.ts';
 
 const ENGINE_VERSION = 'auto-verify-timesheets@1.0.0';
 
@@ -78,6 +78,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
         return json(500, { error: 'Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY', code: 'CONFIG' });
     }
     if (!isAuthorizedInvocation(req)) return json(401, { error: 'UNAUTHORIZED', code: 'UNAUTHORIZED' });
+
+    // Fixed off-office window: the worker only drains 18:00-06:00 Australia/Sydney.
+    // Outside it we claim nothing, so daytime completions stay queued (managers
+    // get first crack) and are swept the same night. The decide RPC re-guards.
+    if (!isWithinAutopilotWindow()) {
+        return json(200, { skipped: true, reason: 'outside_autopilot_window' });
+    }
 
     const service = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
     const workerId = `timesheet-worker:${crypto.randomUUID()}`;
@@ -144,10 +151,8 @@ async function processRow(service: SupabaseClient, row: QueueRow, summary: Worke
             .limit(1)
             .maybeSingle();
 
-        // ── Compute the zero-variance decision (pure). ──
+        // ── Compute the zero-variance decision (pure; fixed ±7.5m tolerance). ──
         const input: TimesheetEvalInput = {
-            toleranceMinutes: policy.tolerance_minutes ?? 5,
-            requireNoOvertime: policy.require_no_overtime ?? true,
             attendanceStatus: shift.attendance_status ?? null,
             timesheetStatus: timesheet?.status ?? null,
             hasManualEdit: !!(timesheet?.start_time || timesheet?.end_time),
@@ -180,7 +185,7 @@ async function processRow(service: SupabaseClient, row: QueueRow, summary: Worke
                 variance_snapshot: {
                     variance_in_min: evalResult.varianceInMin,
                     variance_out_min: evalResult.varianceOutMin,
-                    tolerance_minutes: input.toleranceMinutes,
+                    tolerance_minutes: PUNCH_TOLERANCE_MIN,
                 },
             },
         });
@@ -189,6 +194,13 @@ async function processRow(service: SupabaseClient, row: QueueRow, summary: Worke
         const code = (decideData as { code?: string })?.code ?? 'UNKNOWN';
         if (code === 'COMMITTED') summary.committed++;
         else if (code === 'MANUAL_REVIEW') summary.manual_review++;
+
+        // If we crossed 06:00 mid-drain, leave the row queued for the next night.
+        if (code === 'OUTSIDE_WINDOW') {
+            await complete(service, row.id, 'RETRY', code);
+            summary.retried++;
+            return;
+        }
 
         await complete(service, row.id, 'DONE', code);
         summary.done++;
@@ -203,15 +215,15 @@ async function processRow(service: SupabaseClient, row: QueueRow, summary: Worke
 interface TimesheetPolicy {
     enabled: boolean;
     version: number;
-    tolerance_minutes: number;
-    require_no_overtime: boolean;
 }
 
+// Policy is now a pure ON/OFF switch — tolerance (±7.5m) and the 18:00-06:00
+// window are fixed in code, not read from the row.
 async function resolvePolicy(service: SupabaseClient, orgId: string | null, deptId: string | null): Promise<TimesheetPolicy | null> {
     if (!orgId) return null;
     const { data } = await service
         .from('timesheet_approval_rules')
-        .select('enabled, version, tolerance_minutes, require_no_overtime, department_id')
+        .select('enabled, version, department_id')
         .eq('organization_id', orgId)
         .or(`department_id.eq.${deptId ?? '00000000-0000-0000-0000-000000000000'},department_id.is.null`)
         .order('department_id', { ascending: false, nullsFirst: false })

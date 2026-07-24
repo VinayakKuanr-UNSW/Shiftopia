@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Bot, Eye, RefreshCw, ShieldCheck, ShieldX, Undo2, Zap } from 'lucide-react';
+import { AlertTriangle, Bot, Eye, Info, RefreshCw, ShieldCheck, ShieldX, Undo2, Zap } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
 import { Switch } from '@/modules/core/ui/primitives/switch';
@@ -93,12 +93,14 @@ interface AutoPilotControlProps {
 
 export const AutoPilotControl: React.FC<AutoPilotControlProps> = ({ adapter, ready = true, onChanged }) => {
     const [open, setOpen] = useState(false);
+    const [showInfo, setShowInfo] = useState(false);
     const {
         isLoading, isSaving, revertingId,
         policy, draft, setDraft, decisions, isDirty, load, save, revert,
     } = useAutoPilot(adapter, open);
 
     const { copy, policyFields, supportsRevert } = adapter;
+    const howItWorks = copy.howItWorks ?? [];
     const mode = policyMode(policy);
     const draftMode = policyMode(draft);
     const modeStyle = MODE_STYLES[mode];
@@ -146,16 +148,54 @@ export const AutoPilotControl: React.FC<AutoPilotControlProps> = ({ adapter, rea
                             <span className="text-[9px] font-mono text-muted-foreground/50 uppercase tracking-wider">{copy.subtitle}</span>
                         </div>
                     </div>
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={load}
-                        disabled={isLoading}
-                        className="h-7 w-7 p-0 rounded-lg text-muted-foreground/60 hover:text-foreground"
-                    >
-                        <RefreshCw className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')} />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                        {howItWorks.length > 0 && (
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setShowInfo(v => !v)}
+                                title="How AutoPilot works"
+                                aria-label="How AutoPilot works"
+                                aria-pressed={showInfo}
+                                className={cn(
+                                    'h-7 w-7 p-0 rounded-lg text-muted-foreground/60 hover:text-foreground',
+                                    showInfo && 'text-primary bg-primary/10',
+                                )}
+                            >
+                                <Info className="h-3.5 w-3.5" />
+                            </Button>
+                        )}
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={load}
+                            disabled={isLoading}
+                            className="h-7 w-7 p-0 rounded-lg text-muted-foreground/60 hover:text-foreground"
+                        >
+                            <RefreshCw className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')} />
+                        </Button>
+                    </div>
                 </div>
+
+                {/* How-it-works explainer (toggled by the "i") */}
+                {howItWorks.length > 0 && showInfo && (
+                    <div className="px-4 py-3 border-b border-border/50 bg-muted/10">
+                        <div className="flex items-center gap-1.5 mb-2">
+                            <Info className="h-3 w-3 text-primary" />
+                            <span className="text-[9px] font-black font-mono uppercase tracking-[0.2em] text-muted-foreground/60">
+                                How AutoPilot works
+                            </span>
+                        </div>
+                        <ul className="flex flex-col gap-1.5">
+                            {howItWorks.map((line, i) => (
+                                <li key={i} className="flex items-start gap-2 text-[10px] leading-relaxed text-muted-foreground/80">
+                                    <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-primary/60" />
+                                    <span>{line}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
 
                 {/* Policy controls */}
                 <div className="px-4 py-3 flex flex-col gap-3 border-b border-border/50">
@@ -230,30 +270,32 @@ export const AutoPilotControl: React.FC<AutoPilotControlProps> = ({ adapter, rea
                     )}
                 </div>
 
-                {/* Decision feed */}
-                <div className="px-4 py-3 flex flex-col gap-2 max-h-[280px] overflow-y-auto custom-scrollbar">
-                    <span className="text-[9px] font-black font-mono uppercase tracking-[0.2em] text-muted-foreground/50">
-                        Recent bot decisions
-                    </span>
-                    {decisions.length === 0 ? (
-                        <div className="flex flex-col items-center gap-1.5 py-5 text-center">
-                            <Bot className="h-5 w-5 text-muted-foreground/20" />
-                            <span className="text-[10px] text-muted-foreground/40 font-mono">
-                                No decisions yet. {mode === 'OFF' ? 'Enable the policy to start.' : copy.emptyFeedHint}
-                            </span>
-                        </div>
-                    ) : (
-                        decisions.map(d => (
-                            <DecisionFeedRow
-                                key={d.id}
-                                decision={d}
-                                canRevert={supportsRevert && !!adapter.revert}
-                                onRevert={dec => revert(dec, onChanged)}
-                                isReverting={revertingId === d.id}
-                            />
-                        ))
-                    )}
-                </div>
+                {/* Decision feed — hidden for domains that carry per-entity history */}
+                {adapter.showDecisionFeed !== false ? (
+                    <div className="px-4 py-3 flex flex-col gap-2 max-h-[280px] overflow-y-auto custom-scrollbar">
+                        <span className="text-[9px] font-black font-mono uppercase tracking-[0.2em] text-muted-foreground/50">
+                            Recent bot decisions
+                        </span>
+                        {decisions.length === 0 ? (
+                            <div className="flex flex-col items-center gap-1.5 py-5 text-center">
+                                <Bot className="h-5 w-5 text-muted-foreground/20" />
+                                <span className="text-[10px] text-muted-foreground/40 font-mono">
+                                    No decisions yet. {mode === 'OFF' ? 'Enable the policy to start.' : copy.emptyFeedHint}
+                                </span>
+                            </div>
+                        ) : (
+                            decisions.map((d) => (
+                                <DecisionFeedRow
+                                    key={d.id}
+                                    decision={d}
+                                    canRevert={supportsRevert && !!adapter.revert}
+                                    onRevert={(dec) => revert(dec, onChanged)}
+                                    isReverting={revertingId === d.id}
+                                />
+                            ))
+                        )}
+                    </div>
+                ) : null}
             </PopoverContent>
         </Popover>
     );

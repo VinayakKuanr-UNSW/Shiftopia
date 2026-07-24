@@ -12,6 +12,8 @@ import {
     Zap,
     Lock,
     Flame,
+    User,
+    Bot,
 } from 'lucide-react';
 import {
     Tooltip,
@@ -60,8 +62,26 @@ export interface SharedShiftCardProps {
     clockOut?: string | null;
     adjustedStart?: string | null;
     adjustedEnd?: string | null;
+    /** Billable-time provenance (F16) — drives the 🕒/👤/🤖 icons on the billable row. */
+    adjustedStartSource?: 'manual' | 'snapped' | 'auto' | null;
+    adjustedEndSource?: 'manual' | 'snapped' | 'auto' | null;
     estimatedPay?: React.ReactNode;
 }
+
+/* Billable-time provenance icon (F16), shared with the desktop timesheet table. */
+const BILLABLE_SOURCE_META = {
+    manual: { Icon: User, cls: 'text-indigo-500', label: 'Manager adjusted' },
+    snapped: { Icon: Clock, cls: 'text-sky-500', label: 'Snapped to nearest 15 min' },
+    auto: { Icon: Bot, cls: 'text-amber-500', label: 'Auto clock-out (needs review)' },
+} as const;
+
+const BillableSourceIcon: React.FC<{ source?: 'manual' | 'snapped' | 'auto' | null; hasValue: boolean }> = ({ source, hasValue }) => {
+    if (!source || (source !== 'auto' && !hasValue)) return null;
+    const meta = BILLABLE_SOURCE_META[source];
+    if (!meta) return null;
+    const { Icon, cls, label } = meta;
+    return <Icon className={cn('inline-block h-3 w-3 ml-0.5 align-middle', cls)} aria-label={label} />;
+};
 
 const DataRow: React.FC<{
     label: string;
@@ -116,6 +136,8 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
     clockOut,
     adjustedStart,
     adjustedEnd,
+    adjustedStartSource,
+    adjustedEndSource,
     estimatedPay,
 }, ref) => {
     const protection = React.useMemo(() => getProtectionContext(
@@ -270,9 +292,19 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                                     />
                                 )}
                                 {(adjustedStart || adjustedEnd) && (
-                                    <DataRow 
-                                        label="Billable In / Out" 
-                                        value={`${adjustedStart || '--:--'} – ${adjustedEnd || '--:--'}`} 
+                                    <DataRow
+                                        label="Billable In / Out"
+                                        value={
+                                            (adjustedStartSource || adjustedEndSource) ? (
+                                                <span className="inline-flex items-center">
+                                                    {adjustedStart || '--:--'}
+                                                    <BillableSourceIcon source={adjustedStartSource} hasValue={!!adjustedStart} />
+                                                    <span className="mx-0.5">–</span>
+                                                    {adjustedEnd || '--:--'}
+                                                    <BillableSourceIcon source={adjustedEndSource} hasValue={!!adjustedEnd} />
+                                                </span>
+                                            ) : `${adjustedStart || '--:--'} – ${adjustedEnd || '--:--'}`
+                                        }
                                         accentColor="text-indigo-500"
                                     />
                                 )}

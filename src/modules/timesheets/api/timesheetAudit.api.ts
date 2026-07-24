@@ -15,6 +15,7 @@ export type TimesheetAuditEventType =
     | 'CREATED'
     | 'SUBMITTED'
     | 'AUTO_APPROVED'
+    | 'BOT_REVIEW'
     | 'MANUALLY_APPROVED'
     | 'REJECTED'
     | 'EDITED'
@@ -44,18 +45,24 @@ interface AuditRow {
     created_at: string;
 }
 
-/** True when the table simply isn't provisioned yet (feature not migrated). */
+/** True when the table or column simply isn't provisioned yet (feature not migrated). */
 const isTableMissingError = (err: any): boolean =>
     !!err && (
-        err.code === '42P01' ||
+        err.status === 400 ||
         err.status === 404 ||
+        err.code === '42P01' ||
+        err.code === '42703' ||
         (typeof err.code === 'string' && err.code.startsWith('PGRST')) ||
         (typeof err.message === 'string' && (
             err.message.includes('does not exist') ||
             err.message.includes('Could not find') ||
-            err.message.includes('schema cache')
+            err.message.includes('schema cache') ||
+            err.message.includes('column')
         ))
     );
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isUuid = (id: string | null | undefined): id is string => !!id && UUID_REGEX.test(id);
 
 /** Full provenance timeline for one shift's timesheet, newest first. */
 export async function getTimesheetAuditTrail(shiftId: string): Promise<TimesheetAuditEvent[]> {
@@ -63,7 +70,7 @@ export async function getTimesheetAuditTrail(shiftId: string): Promise<Timesheet
     try {
         const { data, error } = await db
             .from('timesheet_audit_log')
-            .select('id, event_type, source, actor, actor_label, detail, created_at')
+            .select('*')
             .eq('shift_id', shiftId)
             .order('created_at', { ascending: false });
         if (error) {
@@ -73,8 +80,8 @@ export async function getTimesheetAuditTrail(shiftId: string): Promise<Timesheet
         const rows = (data || []) as AuditRow[];
         if (rows.length === 0) return [];
 
-        // Resolve actor names (one batched lookup).
-        const actorIds = Array.from(new Set(rows.map(r => r.actor).filter((id): id is string => !!id)));
+        // Resolve actor names (one batched lookup for valid UUIDs only, filtering out string tokens like 'system').
+        const actorIds = Array.from(new Set(rows.map(r => r.actor).filter(isUuid)));
         const names = new Map<string, string>();
         if (actorIds.length > 0) {
             const { data: profiles } = await db

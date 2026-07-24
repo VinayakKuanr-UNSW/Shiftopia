@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { getTimeRule, getLiveRule, getLiveRuleBadges, isTimesheetReviewable } from '../shift-ui';
+import { getTimeRule, getLiveRule, getLiveRuleBadges, getPayrollRuleBadges, isTimesheetReviewable } from '../shift-ui';
 import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 
 // ─── Time Rules ────────────────────────────────────────────────────────────────
@@ -234,6 +234,59 @@ describe('getLiveRuleBadges - two-badge arrival/departure model', () => {
 
     it('returns both null when the start time is unparseable', () => {
         expect(getLiveRuleBadges({ lifecycle_status: 'Published' })).toEqual({ arrival: null, departure: null });
+    });
+});
+
+describe('getPayrollRuleBadges - billable-window two-badge model', () => {
+    const iso = (offsetMs: number) => new Date(Date.now() + offsetMs).toISOString();
+    const HOUR = 60 * 60 * 1000;
+    const MIN = 60 * 1000;
+    // Scheduled 8h ago → 1h ago.
+    const sched = { lifecycle_status: 'Completed', start_at: iso(-8 * HOUR), end_at: iso(-1 * HOUR) };
+    const arrival = (s: Parameters<typeof getPayrollRuleBadges>[0]) => getPayrollRuleBadges(s).arrival?.label;
+    const departure = (s: Parameters<typeof getPayrollRuleBadges>[0]) => getPayrollRuleBadges(s).departure?.label;
+
+    it('On Roster + On Roster when billable matches the roster', () => {
+        const s = { ...sched, adjusted_start: iso(-8 * HOUR), adjusted_end: iso(-1 * HOUR) };
+        expect(arrival(s)).toBe('On Roster');
+        expect(departure(s)).toBe('On Roster');
+    });
+
+    it('Overtime when the billable OUT runs past the rostered end', () => {
+        const s = { ...sched, adjusted_start: iso(-8 * HOUR), adjusted_end: iso(-1 * HOUR + 40 * MIN) };
+        expect(departure(s)).toBe('Overtime');
+    });
+
+    it('Short when the billable OUT falls before the rostered end', () => {
+        const s = { ...sched, adjusted_start: iso(-8 * HOUR), adjusted_end: iso(-2 * HOUR) };
+        expect(departure(s)).toBe('Short');
+    });
+
+    it('Paid Early / Late Start on the IN side', () => {
+        expect(arrival({ ...sched, adjusted_start: iso(-8 * HOUR - 30 * MIN) })).toBe('Paid Early');
+        expect(arrival({ ...sched, adjusted_start: iso(-8 * HOUR + 30 * MIN) })).toBe('Late Start');
+    });
+
+    it('no badge for a side with no resolvable billable time', () => {
+        // Auto clock-out / no-show: no billable OUT → no departure badge (never fabricated).
+        const s = { ...sched, adjusted_start: iso(-8 * HOUR), adjusted_end: null };
+        expect(arrival(s)).toBe('On Roster');
+        expect(getPayrollRuleBadges(s).departure).toBeNull();
+    });
+
+    it('DIVERGES from Live Rules: late actual clock-in but on-roster billable', () => {
+        // Actual clock-in 20m late (Live: Late In) but billable snapped to the roster.
+        const s = {
+            ...sched,
+            actual_start: iso(-8 * HOUR + 20 * MIN), actual_end: iso(-1 * HOUR + 2 * MIN),
+            adjusted_start: iso(-8 * HOUR), adjusted_end: iso(-1 * HOUR),
+        };
+        expect(getLiveRuleBadges(s).arrival?.label).toBe('Late In');   // attendance truth
+        expect(getPayrollRuleBadges(s).arrival?.label).toBe('On Roster'); // what we pay
+    });
+
+    it('returns both null when the schedule is unparseable', () => {
+        expect(getPayrollRuleBadges({ lifecycle_status: 'Completed' })).toEqual({ arrival: null, departure: null });
     });
 });
 

@@ -295,7 +295,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                         <th colSpan={2} className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
                                             Payroll & Diff
                                         </th>
-                                        <th colSpan={2} className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
+                                        <th colSpan={3} className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center border-b-2 border-border/50 border-r border-border/30">
                                             Statuses
                                         </th>
                                         <th className="p-3 border-b-2 border-border/50"></th>
@@ -337,7 +337,8 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                         <SortableHeader field="differential" label="Diff" className="border-r border-border/30" />
                                         {/* Statuses */}
                                         <SortableHeader field="liveStatus" label="Time Rules" />
-                                        <SortableHeader field="timesheetStatus" label="Live Rules" className="border-r border-border/30" />
+                                        <SortableHeader field="timesheetStatus" label="Live Rules" />
+                                        <th className="p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 border-b border-border/50 text-left border-r border-border/30" title="Billable window vs roster — what payroll pays">Payroll Rules</th>
                                         {/* Actions */}
                                         <th className="p-3 text-[10px] font-black uppercase tracking-widest text-foreground/70 text-center border-b border-border/50">
                                             Actions
@@ -347,7 +348,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                 <tbody>
                                     {sortedEntries.length === 0 ? (
                                         <tr>
-                                            <td colSpan={showDate ? 24 : 23} className="p-20 text-center text-muted-foreground">
+                                            <td colSpan={showDate ? 25 : 24} className="p-20 text-center text-muted-foreground">
                                                 <div className="flex flex-col items-center gap-4">
                                                     <div className="h-16 w-16 rounded-full bg-muted/20 flex items-center justify-center">
                                                         <XCircle className="h-8 w-8 text-muted-foreground/40" />

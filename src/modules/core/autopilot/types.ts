@@ -101,6 +101,12 @@ export interface AutoPilotCopy {
     emptyFeedHint: string;
     /** committed-decision chip labels */
     committedLabels: { approve: string; reject: string };
+    /**
+     * Optional "how it works" bullets. When present the control shows an "i"
+     * info button that toggles a short explainer panel (e.g. the fixed window,
+     * tolerance and what routes to a manager). Domain-agnostic.
+     */
+    howItWorks?: string[];
 }
 
 /**
@@ -112,6 +118,13 @@ export interface AutoPilotAdapter {
     policyFields: AutoPilotPolicyField[];
     /** whether committed auto-approvals can be undone (drives the Undo button) */
     supportsRevert: boolean;
+    /**
+     * Whether to show the recent-decisions feed inside the control popover.
+     * Default true. Timesheets set this false because each shift carries its own
+     * history timeline (the per-row History popover), so a separate global list
+     * would be redundant.
+     */
+    showDecisionFeed?: boolean;
 
     getPolicy(): Promise<AutoPilotPolicy | null>;
     savePolicy(next: AutoPilotPolicy): Promise<AutoPilotPolicy>;

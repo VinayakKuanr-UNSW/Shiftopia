@@ -1,6 +1,11 @@
 import { type ShiftDotInput, isTimesheetReviewable } from '@/modules/rosters/domain/shift-ui';
-import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { type TimesheetRow } from '../../model/timesheet.types';
+import { isShiftFinished } from '../../domain/billable-time';
+
+// Re-exported for existing consumers (TimesheetRow.tsx, TimesheetMobileCard.tsx,
+// grossPay.read.api.ts) — the canonical implementation now lives in
+// ../../domain/billable-time, shared with the payroll pricing path.
+export { isShiftFinished };
 
 /**
  * Maps a UI {@link TimesheetRow} entry to the {@link ShiftDotInput} shape the
@@ -83,42 +88,3 @@ export const calculateHoursBetween = (startStr?: string, endStr?: string): numbe
     }
 };
 
-/**
- * Robust check to determine if a shift is physically over.
- * Accounts for date, time, and overnight status.
- */
-export const isShiftFinished = (
-    date: string | Date, 
-    scheduledStart: string, 
-    scheduledEnd: string,
-    actualEnd?: string | null
-): boolean => {
-    // If they have physically clocked out, the shift is "finished" for processing
-    // whichever is earlier rule.
-    if (actualEnd && actualEnd !== '-' && actualEnd !== '—') return true;
-
-    if (!scheduledEnd || scheduledEnd === '-') return false;
-
-    try {
-        // Evaluate shift times against the Sydney wall-clock they were authored in,
-        // regardless of the viewer's browser timezone. `date` is the authored
-        // calendar date (yyyy-MM-dd); if a Date sneaks in, coerce to that key.
-        const dateStr = typeof date === 'string'
-            ? date
-            : formatInTimezone(date, SYDNEY_TZ, 'yyyy-MM-dd');
-
-        const startInstant = parseZonedDateTime(dateStr, scheduledStart, SYDNEY_TZ);
-        let endInstant = parseZonedDateTime(dateStr, scheduledEnd, SYDNEY_TZ);
-
-        // Handle overnight shifts: parseZonedDateTime gives the SAME-day instant,
-        // so when end is at/before start, the shift ends the next day (+24h).
-        if (endInstant.getTime() <= startInstant.getTime()) {
-            endInstant = new Date(endInstant.getTime() + 24 * 60 * 60 * 1000);
-        }
-
-        return Date.now() >= endInstant.getTime();
-    } catch (e) {
-        console.error("Error parsing shift end time for finished check", e);
-        return true;
-    }
-};

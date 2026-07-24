@@ -69,8 +69,15 @@ export interface TimesheetRow {
      * false → auto-snapped from Actual (or fell back to Scheduled). Display dimmed.
      */
     isAdjustedManual: boolean;
-    adjustedStartSource?: 'manual' | 'snapped' | null;
-    adjustedEndSource?: 'manual' | 'snapped' | null;
+    adjustedStartSource?: 'manual' | 'snapped' | 'auto' | null;
+    adjustedEndSource?: 'manual' | 'snapped' | 'auto' | null;
+    /** manager billable/break edit count (F7) — drives the 📝 badge */
+    editCount?: number;
+    /** optimistic-lock row version at load time (F18); passed back as a CAS guard */
+    version?: number | null;
+    /** manager-selected reasons when billable varies from roster (per side) */
+    arrivalVarianceReason?: string | null;
+    departureVarianceReason?: string | null;
     length: string; // Auto-calculated
     paidBreak: string;
     unpaidBreak: string;

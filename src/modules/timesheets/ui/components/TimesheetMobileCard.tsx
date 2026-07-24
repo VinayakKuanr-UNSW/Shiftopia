@@ -27,6 +27,8 @@ import type { TimesheetRow } from '../../model/timesheet.types';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { isShiftFinished, isEntryReviewable, cleanTime } from './TimesheetTable.utils';
 import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from '../../domain/variance-reasons';
+import { validateBillableEdit, billableVarianceVsRoster } from '../../domain/billable-edit';
 
 interface TimesheetMobileCardProps {
     entry: TimesheetRow;
@@ -153,6 +155,14 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
     const [localPaidBreak, setLocalPaidBreak] = useState(entry.paidBreak || '0');
     const [localUnpaidBreak, setLocalUnpaidBreak] = useState(entry.unpaidBreak || '0');
 
+    // Billable variance-reason flow (mirrors the desktop row).
+    const [varianceOpen, setVarianceOpen] = useState(false);
+    const [pendingSave, setPendingSave] = useState<
+        null | { payload: Record<string, any>; needArrival: boolean; needDeparture: boolean }
+    >(null);
+    const [arrivalReason, setArrivalReason] = useState('');
+    const [departureReason, setDepartureReason] = useState('');
+
     const { toast } = useToast();
 
     const handleStartEditing = () => {
@@ -263,6 +273,18 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
     const handleApprove = () => {
         if (!canAction) return;
         if (reviewLocked) { reviewLockedToast(); return; }
+        // Approval-time variance gate: resolved billable varies from roster with no
+        // reason on record → require one first.
+        const variance = billableVarianceVsRoster(entry.adjustedStart, entry.adjustedEnd, entry.scheduledStart, entry.scheduledEnd);
+        const needArrival = variance.arrival && !entry.arrivalVarianceReason;
+        const needDeparture = variance.departure && !entry.departureVarianceReason;
+        if (needArrival || needDeparture) {
+            setArrivalReason(entry.arrivalVarianceReason || '');
+            setDepartureReason(entry.departureVarianceReason || '');
+            setPendingSave({ payload: { timesheetStatus: 'approved' }, needArrival, needDeparture });
+            setVarianceOpen(true);
+            return;
+        }
         onSave?.(String(entry.id), { timesheetStatus: 'approved' } as any);
         toast({ title: 'Approved', description: `Timesheet approved for ${entry.employee}.` });
     };
@@ -275,24 +297,62 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
     };
 
     const handleSaveAdjustment = () => {
-        const formatTimeStr = (t: string) => {
-            if (/^\d{3,4}$/.test(t)) {
-                return t.length === 3 ? `0${t.slice(0, 1)}:${t.slice(1)}` : `${t.slice(0, 2)}:${t.slice(2)}`;
-            }
-            return t;
-        };
-        const finalStart = formatTimeStr(localAdjStart);
-        const finalEnd = formatTimeStr(localAdjEnd);
+        const v = validateBillableEdit({
+            editedStart: localAdjStart,
+            editedEnd: localAdjEnd,
+            initialStart: entry.adjustedStart || '',
+            initialEnd: entry.adjustedEnd || '',
+            scheduledStart: entry.scheduledStart,
+            scheduledEnd: entry.scheduledEnd,
+            unpaidBreakMinutes: parseFloat(localUnpaidBreak) || 0,
+        });
+        if (!v.ok) {
+            toast({ title: 'Check the edit', description: v.error!, variant: 'destructive' });
+            return;
+        }
 
-        onSave?.(String(entry.id), {
-            adjustedStart: finalStart,
-            adjustedEnd: finalEnd,
+        const payload: Record<string, any> = {
+            adjustedStart: v.normalizedStart,
+            adjustedEnd: v.normalizedEnd,
             paidBreak: localPaidBreak,
             unpaidBreak: localUnpaidBreak,
             isAdjustedManual: true,
-        } as any);
+        };
+        if (v.startChanged && !v.needArrivalReason) payload.arrivalVarianceReason = null;
+        if (v.endChanged && !v.needDepartureReason) payload.departureVarianceReason = null;
+
+        if (v.needArrivalReason || v.needDepartureReason) {
+            setArrivalReason(v.needArrivalReason ? entry.arrivalVarianceReason || '' : '');
+            setDepartureReason(v.needDepartureReason ? entry.departureVarianceReason || '' : '');
+            setPendingSave({ payload, needArrival: v.needArrivalReason, needDeparture: v.needDepartureReason });
+            setVarianceOpen(true);
+            return;
+        }
+
+        onSave?.(String(entry.id), payload as any);
         setIsEditing(false);
         toast({ title: 'Record Updated', description: 'Timesheet data has been updated.' });
+    };
+
+    const confirmVarianceSave = () => {
+        if (!pendingSave) return;
+        const { payload, needArrival, needDeparture } = pendingSave;
+        if ((needArrival && !arrivalReason) || (needDeparture && !departureReason)) return;
+        onSave?.(String(entry.id), {
+            ...payload,
+            ...(needArrival ? { arrivalVarianceReason: arrivalReason } : {}),
+            ...(needDeparture ? { departureVarianceReason: departureReason } : {}),
+        } as any);
+        const isApproval = payload.timesheetStatus === 'approved';
+        toast({
+            title: isApproval ? 'Approved' : 'Record Updated',
+            description: isApproval
+                ? `Timesheet approved for ${entry.employee}.`
+                : 'Timesheet data has been updated.',
+        });
+        setVarianceOpen(false);
+        setPendingSave(null);
+        setIsEditing(false);
     };
 
     return (
@@ -330,8 +390,10 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
             employeeName={entry.employee}
             clockIn={formatTime(entry.clockIn)}
             clockOut={formatTime(entry.clockOut)}
-            adjustedStart={formatTime(entry.adjustedStart) + (entry.adjustedStartSource === 'manual' && entry.adjustedStart ? ' *' : '')}
-            adjustedEnd={formatTime(entry.adjustedEnd) + (entry.adjustedEndSource === 'manual' && entry.adjustedEnd ? ' *' : '')}
+            adjustedStart={formatTime(entry.adjustedStart)}
+            adjustedEnd={formatTime(entry.adjustedEnd)}
+            adjustedStartSource={entry.adjustedStartSource}
+            adjustedEndSource={entry.adjustedEndSource}
             shiftData={{
                 lifecycle_status: entry.liveStatus,
                 assignment_outcome: entry.attendanceStatus,
@@ -497,6 +559,67 @@ export const TimesheetMobileCard = forwardRef<HTMLDivElement, TimesheetMobileCar
             )}
             ref={ref}
         />
+
+        {/* Billable variance reason modal */}
+        <Dialog open={varianceOpen} onOpenChange={open => { setVarianceOpen(open); if (!open) setPendingSave(null); }}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Billable variance — reason required</DialogTitle>
+                    <DialogDescription>
+                        The billable time for <strong>{entry.employee}</strong> differs from the roster by more than
+                        {' '}{VARIANCE_GRACE_MIN} minutes. Record why, so payroll and audit have it.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 my-2">
+                    {pendingSave?.needArrival && (
+                        <div className="space-y-1.5">
+                            <Label htmlFor="m-arrival-variance" className="text-sm font-semibold">
+                                Arrival variance reason <span className="text-red-500">*</span>
+                            </Label>
+                            <select
+                                id="m-arrival-variance"
+                                value={arrivalReason}
+                                onChange={e => setArrivalReason(e.target.value)}
+                                className="w-full h-11 px-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+                            >
+                                <option value="" disabled>Select a reason…</option>
+                                {ARRIVAL_VARIANCE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+                            </select>
+                        </div>
+                    )}
+                    {pendingSave?.needDeparture && (
+                        <div className="space-y-1.5">
+                            <Label htmlFor="m-departure-variance" className="text-sm font-semibold">
+                                Departure variance reason <span className="text-red-500">*</span>
+                            </Label>
+                            <select
+                                id="m-departure-variance"
+                                value={departureReason}
+                                onChange={e => setDepartureReason(e.target.value)}
+                                className="w-full h-11 px-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+                            >
+                                <option value="" disabled>Select a reason…</option>
+                                {DEPARTURE_VARIANCE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+                            </select>
+                        </div>
+                    )}
+                </div>
+
+                <DialogFooter className="gap-2">
+                    <Button variant="outline" onClick={() => { setVarianceOpen(false); setPendingSave(null); }}>
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={confirmVarianceSave}
+                        disabled={(!!pendingSave?.needArrival && !arrivalReason) || (!!pendingSave?.needDeparture && !departureReason)}
+                    >
+                        <Check className="h-4 w-4 mr-1.5" />
+                        Save with reason
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
         </>
     );
 });

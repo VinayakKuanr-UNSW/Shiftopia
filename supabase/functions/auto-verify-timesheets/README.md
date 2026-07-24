@@ -30,22 +30,45 @@ AutoPilot is a per-org **ON/OFF** switch — no shadow mode. When ON the bot act
 when OFF nothing is queued. The lifecycle audit (`timesheet_audit_log`) records
 bot + manual approvals + edits regardless, via a trigger on `timesheets`.
 
-## Rule — zero-variance clean punches
+## Rule — zero-variance clean punches (fixed, not configurable)
 
 `AUTO_APPROVE` only when: the shift is at a terminal attendance state, **both**
 actual clock instants exist, there are **no** manual billable edits, and both
-clock-in and clock-out land within `tolerance_minutes` of schedule (default ±5,
-no material overtime). Everything else → `MANUAL_REVIEW`. Timesheets are **never**
-auto-rejected. The rule is unit-tested in `__tests__/variance.test.ts`.
+clock-in and clock-out land within the fixed **±7.5 min** of schedule
+(`PUNCH_TOLERANCE_MIN`). On approval the bot **only flips status to approved** —
+it does **not** write billable times. Billable is derived by the system-wide
+resolver (`billable-time.ts` / grossPay) as the actual punch rounded to the
+nearest 15 min, identical to manual review; within ±7.5 min of a quarter-hour
+roster that equals the scheduled shift anyway. Overtime is not evaluated (a
+late-out past +7.5m already fails the bound). Everything else → `MANUAL_REVIEW`;
+timesheets are **never** auto-rejected. Rule unit-tested in
+`__tests__/variance.test.ts`.
 
 Because the rule compares absolute instants (`shifts.start_at/end_at` vs
-`actual_start/actual_end`), it needs **no** timezone parsing.
+`actual_end`), basic variance needs no timezone parsing.
+
+## Fixed window — 6 PM – 6 AM Australia/Sydney
+
+The window is **fixed and non-configurable** (no per-org schedule columns):
+- **Enqueue any time.** `trg_enqueue_timesheet_auto_verify` queues a shift the
+  moment it becomes reviewable whenever AutoPilot is **ON**, regardless of the
+  time of day.
+- **Drain only overnight.** The worker returns early (claims nothing) outside
+  18:00–06:00 `Australia/Sydney` (`isWithinAutopilotWindow`, DST-safe), and
+  `is_timesheet_autopilot_active` / `sm_timesheet_auto_decide` re-guard the same
+  window server-side. So daytime completions **wait in the queue** — managers get
+  first crack during office hours — and the bot sweeps whatever clean ones are
+  left **that night**. No separate backlog RPC is needed.
+- A decision a manager **undoes** is never re-verified (`PREVIOUSLY_REVERTED`).
 
 ## ⚠️ DEPLOYMENT STATUS — NOT DEPLOYED
 
 Nothing is live. Bring-up order:
 
-1. Apply `supabase/migrations/20260722100000_timesheet_auto_verify.sql`.
+1. Apply the migrations, in order:
+   `20260722100000_timesheet_auto_verify.sql`,
+   `20260723130000_timesheet_autopilot_fixed_window.sql` (supersedes the
+   configurable windowing in `20260723120000`).
 2. `supabase functions deploy auto-verify-timesheets` (verify_jwt = off; auth is
    `WORKER_SECRET` / service-role, checked in `isAuthorizedInvocation`).
 3. `supabase secrets set WORKER_SECRET=<value>` (match the Vault secret the cron uses).

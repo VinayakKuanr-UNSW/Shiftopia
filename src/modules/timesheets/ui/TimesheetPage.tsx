@@ -28,6 +28,7 @@ import { TimesheetTable } from './components/TimesheetTable';
 import {
     getShiftsForTimesheet,
     updateTimesheetEntry,
+    TimesheetConflictError,
     bulkUpdateTimesheetStatus,
     TimesheetShiftRow,
     TimesheetFilters,
@@ -266,18 +267,34 @@ export const TimesheetPage: React.FC = () => {
 
     const handleSaveEntry = async (id: string, updates: any) => {
         if (!canEdit) return;
-        const success = await updateTimesheetEntry(id, {
-            ...updates,
-            status: updates.timesheetStatus?.toLowerCase(),
-        });
-        if (success) {
-            toast({ title: 'Entry Updated' });
-        } else {
-            toast({
-                title: 'Update failed',
-                description: 'This entry could not be saved — if you were approving it, it likely still has a missing clock-in/out that needs an adjusted time first.',
-                variant: 'destructive',
-            });
+        // Optimistic-lock (F18): pass the version this row was loaded with so a
+        // concurrent edit by another manager is caught instead of clobbered.
+        const loaded = shifts.find((s) => String(s.id) === String(id));
+        try {
+            const success = await updateTimesheetEntry(
+                id,
+                { ...updates, status: updates.timesheetStatus?.toLowerCase() },
+                { expectedVersion: loaded?.version ?? null },
+            );
+            if (success) {
+                toast({ title: 'Entry Updated' });
+            } else {
+                toast({
+                    title: 'Update failed',
+                    description: 'This entry could not be saved — if you were approving it, it likely still has a missing clock-in/out that needs an adjusted time first.',
+                    variant: 'destructive',
+                });
+            }
+        } catch (err) {
+            if (err instanceof TimesheetConflictError) {
+                toast({
+                    title: 'Changed by someone else',
+                    description: 'This timesheet was updated by another manager. Refreshing to the latest — review and re-apply your change.',
+                    variant: 'destructive',
+                });
+            } else {
+                toast({ title: 'Update failed', description: 'Something went wrong saving this entry.', variant: 'destructive' });
+            }
         }
         await loadShifts();
     };

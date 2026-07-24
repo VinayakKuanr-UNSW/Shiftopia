@@ -22,38 +22,27 @@ import {
 const db = supabase as any;
 
 export const TIMESHEET_AUTOPILOT_COPY: AutoPilotCopy = {
-    buttonLabel: 'Auto-Verify',
-    buttonTitle: 'Auto-verify timesheets',
-    title: 'Auto-Verify Timesheets',
+    buttonLabel: 'Autopilot',
+    buttonTitle: 'Timesheet AutoPilot',
+    title: 'Autopilot',
     subtitle: 'Bot verifies zero-variance timesheets',
     onWarning:
-        'Turning AutoPilot on approves clean-punch timesheets without a manager. Only shifts with clock-in/out within ' +
-        'tolerance, no overtime and no manual edits are auto-verified — everything else still routes to you.',
+        'Turning AutoPilot on approves clean-punch timesheets overnight without a manager. Only shifts with clock-in and ' +
+        'clock-out within ±7.5 min of schedule (and no manual edits) are auto-verified — everything else routes to you.',
     emptyFeedHint: 'They appear as shifts finish and become reviewable.',
     committedLabels: { approve: 'Auto-verified', reject: 'Auto-rejected' },
+    howItWorks: [
+        'When ON, the bot runs only 6 PM – 6 AM (Australia/Sydney). During office hours it stays off and you review timesheets yourself.',
+        'A shift is picked up the moment it becomes reviewable (clock-out, auto clock-out or no-show). Daytime completions wait in the queue and are swept that night.',
+        'Clean punches — both clock-in and clock-out within ±7.5 min of the roster — are auto-approved. Billable time is the actual punch rounded to the nearest 15 min, exactly as in manual review.',
+        'Anything else (bigger variance, missing punch, auto clock-out, no-show or a manual edit) is left for you and shows up in that shift’s History as “needs review”.',
+        'Timesheets are never auto-rejected, and a decision you undo is never re-verified by the bot.',
+    ],
 };
 
-const POLICY_FIELDS: AutoPilotPolicyField[] = [
-    {
-        key: 'tolerance_minutes',
-        type: 'number',
-        label: 'Punch tolerance',
-        hint: 'Max clock-in/out variance vs schedule',
-        default: 5,
-        min: 0,
-        max: 240,
-        unit: 'min',
-        gatedByEnabled: true,
-    },
-    {
-        key: 'require_no_overtime',
-        type: 'toggle',
-        label: 'No overtime',
-        hint: 'Only auto-verify shifts with no overtime',
-        default: true,
-        gatedByEnabled: true,
-    },
-];
+// No configurable knobs: the ±7.5 min tolerance and 6 PM–6 AM window are fixed
+// in the worker/DB. The control is a pure ON/OFF switch plus the "i" explainer.
+const POLICY_FIELDS: AutoPilotPolicyField[] = [];
 
 const DECISION_SELECT =
     'id, shift_id, decision, reason, committed, reverted_at, engine_version, subtitle, employee_id, work_date, variance_snapshot, created_at';
@@ -63,9 +52,6 @@ interface TimesheetPolicyRow {
     organization_id: string;
     department_id: string | null;
     enabled: boolean;
-    tolerance_minutes: number;
-    require_no_overtime: boolean;
-    max_auto_per_employee_per_week: number;
     version: number;
 }
 
@@ -85,16 +71,7 @@ interface TimesheetDecisionRow {
 }
 
 const rowToPolicy = (row: TimesheetPolicyRow | null): AutoPilotPolicy | null =>
-    row
-        ? {
-              enabled: row.enabled,
-              version: row.version,
-              fields: {
-                  tolerance_minutes: row.tolerance_minutes ?? 5,
-                  require_no_overtime: row.require_no_overtime ?? true,
-              },
-          }
-        : null;
+    row ? { enabled: row.enabled, version: row.version, fields: {} } : null;
 
 const rowToDecision = (row: TimesheetDecisionRow): AutoPilotDecision => ({
     id: row.id,
@@ -116,6 +93,8 @@ export interface TimesheetAutoPilotDeps {
 const isTableMissingError = (err: any) =>
     err && (
         err.code === '42P01' ||
+        err.code === '42703' ||
+        err.status === 400 ||
         err.status === 404 ||
         err.code === 'PGRST204' ||
         err.code === 'PGRST200' ||
@@ -124,7 +103,8 @@ const isTableMissingError = (err: any) =>
             err.message.includes('does not exist') ||
             err.message.includes('not found') ||
             err.message.includes('Could not find') ||
-            err.message.includes('schema cache')
+            err.message.includes('schema cache') ||
+            err.message.includes('column')
         ))
     );
 
@@ -135,6 +115,9 @@ export function createTimesheetAutoPilotAdapter({ organizationId, userId }: Time
         copy: TIMESHEET_AUTOPILOT_COPY,
         policyFields: POLICY_FIELDS,
         supportsRevert: true,
+        // Bot decisions live in each shift's own history (the per-row History
+        // popover), so no separate global list in the control popover.
+        showDecisionFeed: false,
 
         async getPolicy(): Promise<AutoPilotPolicy | null> {
             try {
@@ -156,16 +139,15 @@ export function createTimesheetAutoPilotAdapter({ organizationId, userId }: Time
         },
 
         async savePolicy(next: AutoPilotPolicy): Promise<AutoPilotPolicy> {
+            // Pure ON/OFF: tolerance (±7.5m) and the 6 PM–6 AM window are fixed
+            // server-side, so we only ever write `enabled`. Other columns keep
+            // their table defaults on insert.
             const patch = {
                 enabled: next.enabled,
-                tolerance_minutes: Number(next.fields.tolerance_minutes ?? 5),
-                require_no_overtime: !!next.fields.require_no_overtime,
                 updated_by: userId ?? null,
                 updated_at: new Date().toISOString(),
             };
 
-            // Update-by-id when it exists (partial unique index makes upsert-onConflict
-            // unreliable here), insert otherwise — mirrors swapPolicyApi.saveOrgPolicy.
             const { data: existing } = await db
                 .from('timesheet_approval_rules')
                 .select('id')
@@ -178,7 +160,7 @@ export function createTimesheetAutoPilotAdapter({ organizationId, userId }: Time
                     .from('timesheet_approval_rules')
                     .update(patch)
                     .eq('id', existing.id)
-                    .select()
+                    .select('id, organization_id, department_id, enabled, version')
                     .single();
                 if (error) throw error;
                 return rowToPolicy(data as TimesheetPolicyRow)!;
@@ -187,7 +169,7 @@ export function createTimesheetAutoPilotAdapter({ organizationId, userId }: Time
             const { data, error } = await db
                 .from('timesheet_approval_rules')
                 .insert({ organization_id: organizationId, department_id: null, ...patch })
-                .select()
+                .select('id, organization_id, department_id, enabled, version')
                 .single();
             if (error) throw error;
             return rowToPolicy(data as TimesheetPolicyRow)!;
