@@ -8,7 +8,7 @@
 // gateway approve_trade/reject_trade, and all swap_decisions/swap_audit_log
 // writes). The worker never writes shifts directly.
 //
-// Implements docs/implementation/02-auto-approve-swaps.md (§1 queue, §2 matrix,
+// Implements docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/02-auto-approve-swaps.md (§1 queue, §2 matrix,
 // §3 eligibility, §4 abuse) bound by 00-contracts-and-conventions.md
 // (D3/D4/D5, idempotency §5, enums §6, RPC contracts).
 //

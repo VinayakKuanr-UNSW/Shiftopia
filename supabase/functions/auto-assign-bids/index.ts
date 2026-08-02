@@ -3,7 +3,7 @@
 //
 // Drains open-for-bidding shifts in a manager-supplied scope and commits a winner
 // for each through the existing sm_select_bid_winner / sm_apply_shift_op gateway
-// with version-CAS. Implements docs/implementation/01-auto-assign-bids-refactor.md
+// with version-CAS. Implements docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/01-auto-assign-bids-refactor.md
 // §2 (orchestration) + §8 (API), bound by 00-contracts-and-conventions.md
 // (D1–D5, §5–§7).
 //

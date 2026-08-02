@@ -8,8 +8,8 @@ F3 fairness debts), then **decides each shift per-bidder by calling the deployed
 `evaluate-compliance` Edge Function over HTTP** — the first bidder whose result
 is not `'violated'` wins.
 
-Implements `docs/implementation/01-auto-assign-bids-refactor.md` §2 (orchestration)
-and §8 (API), bound by `docs/implementation/00-contracts-and-conventions.md`
+Implements `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/01-auto-assign-bids-refactor.md` §2 (orchestration)
+and §8 (API), bound by `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/00-contracts-and-conventions.md`
 (decisions D1–D5; idempotency §5; enums §6; routes §7).
 
 ---
@@ -100,7 +100,7 @@ because the deployed `sm_select_bid_winner` gateway re-enforces its own P0 guard
 > **Status:** self-contained scaffold. The draft migration that creates
 > `assignment_runs` / `assignment_decisions` / `assignment_events` and the
 > `sm_assignment_run_*` RPCs lives at
-> `docs/implementation/migrations-draft/0001_assignment_audit_and_engine.sql`
+> `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/migrations-draft/0001_assignment_audit_and_engine.sql`
 > and must be promoted to prod **before** this function will work end-to-end.
 > `evaluate-compliance` is already deployed in prod.
 
