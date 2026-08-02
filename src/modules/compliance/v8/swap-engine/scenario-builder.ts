@@ -85,6 +85,13 @@ export class ScenarioBuilder {
                 received_shift: partyB.shift_to_give,
                 given_shift: partyA.shift_to_give,
                 is_student_visa: partyA.is_student_visa,
+                // Audit C-4: these were previously dropped here, so every
+                // party reached the constraint engine with contract_type
+                // undefined and was silently treated as CASUAL.
+                contract_type: partyA.contract_type,
+                contracted_weekly_hours: partyA.contracted_weekly_hours,
+                leave_days: partyA.leave_days,
+                is_security_role: partyA.is_security_role,
             },
             partyB: {
                 employee_id: partyB.employee_id,
@@ -93,6 +100,10 @@ export class ScenarioBuilder {
                 received_shift: partyA.shift_to_give,
                 given_shift: partyB.shift_to_give,
                 is_student_visa: partyB.is_student_visa,
+                contract_type: partyB.contract_type,
+                contracted_weekly_hours: partyB.contracted_weekly_hours,
+                leave_days: partyB.leave_days,
+                is_security_role: partyB.is_security_role,
             },
         };
     }
@@ -138,6 +149,12 @@ export class ScenarioBuilder {
             hypothetical_schedule: hypotheticalSchedules[i],
             received_shift: parties[(i - 1 + n) % n].shift_to_give,
             given_shift: party.shift_to_give,
+            is_student_visa: party.is_student_visa,
+            // Audit C-4: same propagation fix as build() above.
+            contract_type: party.contract_type,
+            contracted_weekly_hours: party.contracted_weekly_hours,
+            leave_days: party.leave_days,
+            is_security_role: party.is_security_role,
         }));
 
         // Build adjacent pairs for incremental evaluation

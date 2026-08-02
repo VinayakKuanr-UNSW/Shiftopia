@@ -61,6 +61,19 @@ export interface V8Employee {
      * exclusion still applies to auto-scheduling).
      */
     leave_days?:             string[];
+    /**
+     * True when the employee's role is Security (EBA Schedule 3). Combined
+     * with `contract_type === 'FULL_TIME'`, this switches
+     * V8_ORD_HOURS_AVG from the general cl 35 structure (38h/week, 4-week
+     * cycle) to Schedule 3 §3's own structure (42h/week — 38 ordinary + 4
+     * "reasonable additional" — over an 8-week rotating cycle). Audit H-5:
+     * Security previously had no discriminator anywhere in this engine and
+     * was evaluated against the general cap, which a lawful 42h-average
+     * roster can legitimately exceed. Part-time/casual event security
+     * (Sch 3 §5) follow the general PT/casual structure unchanged, so this
+     * flag alone (without FULL_TIME) has no effect.
+     */
+    is_security_role?:      boolean;
 }
 
 export interface QualificationV2 {
@@ -83,7 +96,10 @@ export interface V8Config {
     /** Ordinary Hours Averaging */
     ord_avg_cycle_weeks:    number;   // default 4
     ord_avg_weekly_limit:   number;   // default 38
-    
+    /** Schedule 3 §3 — Full-Time Security's own averaging structure. */
+    security_ord_avg_cycle_weeks:  number; // default 8
+    security_ord_avg_weekly_limit: number; // default 42 (38 ordinary + 4 reasonable additional)
+
     /** Daily Limits */
     max_daily_hours:        number;   // default 12
     
@@ -101,6 +117,8 @@ export interface V8Config {
 export const DEFAULT_V8_CONFIG: V8Config = {
     ord_avg_cycle_weeks:    4,
     ord_avg_weekly_limit:   38,
+    security_ord_avg_cycle_weeks:  8,
+    security_ord_avg_weekly_limit: 42,
     max_daily_hours:        12,
     min_rest_gap_minutes:   600,
     max_consecutive_days:   6,

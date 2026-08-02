@@ -20,6 +20,7 @@
 
 import { supabase } from '@/platform/supabase/client';
 import { formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
 
 // =============================================================================
 // TYPES
@@ -157,11 +158,19 @@ async function checkShiftsNotLocked(shiftIds: string[]): Promise<GuardViolation[
 async function checkNoConcurrentSwap(shiftIds: string[], currentSwapId?: string): Promise<GuardViolation[]> {
     const violations: GuardViolation[] = [];
 
+    // Audit L-14: shiftIds is interpolated straight into a raw PostgREST
+    // filter string — validate every entry is a genuine UUID first so this
+    // can never carry through stray commas/parens (filter-injection) even if
+    // a future caller passes something less trustworthy than today's
+    // DB-sourced shift ids.
+    const cleanShiftIds = shiftIds.filter(isValidUuid);
+    if (cleanShiftIds.length === 0) return violations;
+
     let query = (supabase as any)
         .from('shift_swaps')
         .select('id, requester_shift_id, target_shift_id, status')
         .in('status', ['OPEN', 'MANAGER_PENDING'])
-        .or(`requester_shift_id.in.(${shiftIds.join(',')}),target_shift_id.in.(${shiftIds.join(',')})`);
+        .or(`requester_shift_id.in.(${cleanShiftIds.join(',')}),target_shift_id.in.(${cleanShiftIds.join(',')})`);
 
     if (currentSwapId) {
         query = query.neq('id', currentSwapId);

@@ -1,10 +1,14 @@
 import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
 import { shiftDurationMinutes } from '../utils/time';
 
+/** cl 36 — a meal break must not exceed 60 minutes (audit L-6). */
+const MEAL_BREAK_MAX_MINUTES = 60;
+
 /**
  * V8 Rule: Meal Breaks
- * 
- * EBA Requirement: A meal break must be taken after no more than 5 hours (300 mins) worked.
+ *
+ * EBA Requirement: A meal break must be taken after no more than 5 hours (300 mins) worked,
+ * and (cl 36) must not exceed 60 minutes.
  */
 export const mealBreakRule: V8RuleEvaluator = (ctx) => {
     const { shifts } = ctx;
@@ -37,6 +41,25 @@ export const mealBreakRule: V8RuleEvaluator = (ctx) => {
                     }
                 });
             }
+        }
+
+        // AUDIT FIX L-6: only the 30-minute floor was ever checked — cl 36
+        // also caps a meal break at 60 minutes. Independent of shift length,
+        // since an over-length break is a data/scheduling issue either way.
+        if ((s.unpaid_break_minutes || 0) > MEAL_BREAK_MAX_MINUTES) {
+            violations.push({
+                rule_id: 'V8_MEAL_BREAK_CEILING',
+                rule_name: 'Meal Break Ceiling',
+                status: 'WARNING',
+                summary: `Meal break exceeds 60 minutes`,
+                details: `Shift on ${s.date} has a ${s.unpaid_break_minutes}-minute unpaid break — cl 36 caps a meal break at ${MEAL_BREAK_MAX_MINUTES} minutes.`,
+                affected_shifts: [s.id],
+                blocking: false,
+                calculation: {
+                    break_minutes: s.unpaid_break_minutes || 0,
+                    max_break_minutes: MEAL_BREAK_MAX_MINUTES,
+                },
+            });
         }
     }
 

@@ -17,11 +17,19 @@ import { shiftDurationMinutes } from '../utils/time';
  *     so it is a warning — NOT a block on the contracted figure.
  *
  * Casuals have no ordinary-hours contract and are excluded.
+ *
+ * Full-Time SECURITY (EBA Schedule 3 §3) is a discriminated exception: they
+ * run a 42h/week average (38 ordinary + 4 "reasonable additional") over an
+ * 8-week rotating cycle, not the general 38h/4-week structure — audit H-5.
+ * Part-time/casual event security (Sch 3 §5) are unaffected; they use the
+ * general structure like any other PT/casual employee.
  */
 export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
     const { employee, shifts, config } = ctx;
 
     if (employee.contract_type === 'CASUAL') return [];
+
+    const isFtSecurity = !!employee.is_security_role && employee.contract_type === 'FULL_TIME';
 
     // 1. Daily net ordinary hours, attributed to the shift's start date.
     const dailyHours = new Map<string, number>();
@@ -68,10 +76,12 @@ export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
             return d >= start && d <= end;
         }).map(s => s.id);
 
-    const weeklyLimit = config.ord_avg_weekly_limit;   // 38 — the statutory ceiling (NOT contracted)
-    const cycleWeeks = config.ord_avg_cycle_weeks;     // 4
-    const cycleDays = cycleWeeks * 7;                  // 28
-    const cycleLimit = cycleWeeks * weeklyLimit;       // 152h
+    // Sch 3 §3 — Full-Time Security: 42h/week over an 8-week cycle instead
+    // of the general 38h/week over a 4-week cycle.
+    const weeklyLimit = isFtSecurity ? config.security_ord_avg_weekly_limit : config.ord_avg_weekly_limit;
+    const cycleWeeks = isFtSecurity ? config.security_ord_avg_cycle_weeks : config.ord_avg_cycle_weeks;
+    const cycleDays = cycleWeeks * 7;                  // 28 general / 56 security
+    const cycleLimit = cycleWeeks * weeklyLimit;       // 152h general / 336h security
 
     // 3. HARD CAP — declared work cycle. BLOCKING dominates; return it alone.
     const cycle = worstWindow(cycleDays);
@@ -85,7 +95,7 @@ export const ordinaryHoursAvgRule: V8RuleEvaluator = (ctx) => {
             details:
                 `Employee worked ${cycle.hours.toFixed(1)}h in the ${cycleDays}-day window from ` +
                 `${cycle.start} to ${cycle.end} — an average of ${avg.toFixed(1)}h/week, over the ` +
-                `${weeklyLimit}h/week ordinary-hours ceiling (ICC EBA cl. 35).`,
+                `${weeklyLimit}h/week ordinary-hours ceiling (${isFtSecurity ? 'ICC EBA Schedule 3 §3' : 'ICC EBA cl. 35'}).`,
             affected_shifts: shiftsInRange(cycle.start, cycle.end),
             blocking: true,
             calculation: {

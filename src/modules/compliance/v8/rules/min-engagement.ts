@@ -1,20 +1,49 @@
 import { V8RuleContext, V8Hit, V8RuleEvaluator } from '../types';
 import { shiftDurationMinutes } from '../utils/time';
 
+/** Day-type inputs the EBA minimum-engagement tiers key off. */
+export interface MinEngagementThresholdInput {
+    isTraining?: boolean;
+    isSunday?: boolean;
+    isPublicHoliday?: boolean;
+}
+
+export interface MinEngagementThreshold {
+    requiredMins: number;
+    reason: string;
+}
+
+/**
+ * The single source of truth for the EBA minimum-engagement tier table
+ * (mirrors the form's `minShiftHours`). Shared by the scheduling-time
+ * {@link minEngagementRule} below AND the timesheets billable-floor
+ * (`src/modules/timesheets/domain/billable-time.ts`'s `applyMinEngagementFloor`)
+ * so the numbers and precedence can never drift between the two enforcement
+ * points.
+ *
+ * - Training:               Minimum 2 hours (120 mins) — takes precedence
+ * - Standard weekday:       Minimum 3 hours (180 mins)
+ * - Sunday/Public Holiday:  Minimum 4 hours (240 mins)
+ *
+ * Precedence: the training exemption wins over the Sunday/PH uplift (training
+ * shifts are 2h regardless of the day).
+ */
+export function requiredMinEngagementMinutes(input: MinEngagementThresholdInput): MinEngagementThreshold {
+    if (input.isTraining) {
+        return { requiredMins: 120, reason: 'training shifts' };
+    }
+    if (input.isSunday || input.isPublicHoliday) {
+        return { requiredMins: 240, reason: 'Sundays/Public Holidays' };
+    }
+    return { requiredMins: 180, reason: 'standard days' };
+}
+
 /**
  * V8 Rule: Minimum Engagement
  *
  * The single source of truth for minimum shift duration. (Formerly split
  * across this rule and the redundant `minShiftLengthRule` / R02 — collapsed
  * into one so a too-short shift surfaces as a single blocker.)
- *
- * EBA Requirements (mirrors the form's `minShiftHours`):
- * - Training:               Minimum 2 hours (120 mins) — takes precedence
- * - Standard weekday:       Minimum 3 hours (180 mins)
- * - Sunday/Public Holiday:  Minimum 4 hours (240 mins)
- *
- * Precedence: the training exemption wins over the Sunday/PH uplift so the
- * engine agrees with the UI (training shifts are 2h regardless of the day).
  */
 export const minEngagementRule: V8RuleEvaluator = (ctx) => {
     const { shifts } = ctx;
@@ -31,18 +60,11 @@ export const minEngagementRule: V8RuleEvaluator = (ctx) => {
         const isTraining = s.is_training === true;
         const isHoliday = !!(s.is_sunday || s.is_public_holiday);
 
-        let requiredMins: number;
-        let reason: string;
-        if (isTraining) {
-            requiredMins = 120; // Training 2h (overrides the Sunday/PH uplift)
-            reason = 'training shifts';
-        } else if (isHoliday) {
-            requiredMins = 240; // Sun/PH 4h
-            reason = 'Sundays/Public Holidays';
-        } else {
-            requiredMins = 180; // Standard weekday 3h
-            reason = 'standard days';
-        }
+        const { requiredMins, reason } = requiredMinEngagementMinutes({
+            isTraining,
+            isSunday: s.is_sunday,
+            isPublicHoliday: s.is_public_holiday,
+        });
 
         if (totalMins < requiredMins) {
             violations.push({

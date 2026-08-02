@@ -43,6 +43,7 @@ export class V8SwapEngine {
             contract_type: toV8ContractType(scenario.partyA.contract_type ?? 'CASUAL'),
             contracted_weekly_hours: scenario.partyA.contracted_weekly_hours ?? 38,
             leave_days: scenario.partyA.leave_days,
+            is_security_role: scenario.partyA.is_security_role,
         };
         const shiftsA: V8Shift[] = scenario.partyA.hypothetical_schedule.map(s => ({
             ...s,
@@ -63,9 +64,14 @@ export class V8SwapEngine {
             const empB: V8Employee = {
                 id: scenario.partyB.employee_id,
                 name: scenario.partyB.name,
-                contract_type: 'CASUAL',
-                contracted_weekly_hours: 38,
+                // Audit C-4: this was hardcoded to 'CASUAL' regardless of the
+                // party's real contract, silently exempting FT/PT employees
+                // from V8_ORD_HOURS_AVG and the split-shift rule on every
+                // swap. Mirror Party A's handling above.
+                contract_type: toV8ContractType(scenario.partyB.contract_type ?? 'CASUAL'),
+                contracted_weekly_hours: scenario.partyB.contracted_weekly_hours ?? 38,
                 leave_days: scenario.partyB.leave_days,
+                is_security_role: scenario.partyB.is_security_role,
             };
             const shiftsB: V8Shift[] = scenario.partyB.hypothetical_schedule.map(s => ({
                 ...s,

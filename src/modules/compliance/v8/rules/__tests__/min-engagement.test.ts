@@ -1,6 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { minEngagementRule } from '../min-engagement';
+import { minEngagementRule, requiredMinEngagementMinutes } from '../min-engagement';
 import { buildContext, buildShift } from './_helpers';
+
+// Shared with the timesheets billable-floor (applyMinEngagementFloor) — this
+// is the single source of truth for the tier table, tested directly here.
+describe('requiredMinEngagementMinutes', () => {
+  it('returns the standard 3h floor by default', () => {
+    expect(requiredMinEngagementMinutes({})).toEqual({ requiredMins: 180, reason: 'standard days' });
+  });
+
+  it('returns the 4h Sunday/PH floor', () => {
+    expect(requiredMinEngagementMinutes({ isSunday: true }).requiredMins).toBe(240);
+    expect(requiredMinEngagementMinutes({ isPublicHoliday: true }).requiredMins).toBe(240);
+  });
+
+  it('returns the 2h training floor, winning over the Sunday/PH uplift', () => {
+    expect(requiredMinEngagementMinutes({ isTraining: true }).requiredMins).toBe(120);
+    expect(requiredMinEngagementMinutes({ isTraining: true, isSunday: true }).requiredMins).toBe(120);
+  });
+});
 
 describe('minEngagementRule', () => {
   it('passes a 3-hour standard shift', () => {
