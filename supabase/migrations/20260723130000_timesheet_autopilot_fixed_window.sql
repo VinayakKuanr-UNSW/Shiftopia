@@ -180,13 +180,18 @@ BEGIN
        OR NEW.end_time IS DISTINCT FROM OLD.end_time
        OR NEW.paid_break_minutes IS DISTINCT FROM OLD.paid_break_minutes
        OR NEW.unpaid_break_minutes IS DISTINCT FROM OLD.unpaid_break_minutes) THEN
+    -- Variance reasons (added by 20260724004000) are captured here too; plpgsql
+    -- late-binds the column refs, so referencing them before that migration
+    -- applies is safe (and the block's EXCEPTION handler covers the gap anyway).
     INSERT INTO public.timesheet_audit_log (timesheet_id, shift_id, event_type, source, actor, detail)
     VALUES (NEW.id, NEW.shift_id, 'EDITED', v_human_source, v_actor,
             jsonb_build_object(
               'before', jsonb_build_object('start_time', OLD.start_time, 'end_time', OLD.end_time,
                                            'paid_break', OLD.paid_break_minutes, 'unpaid_break', OLD.unpaid_break_minutes),
               'after',  jsonb_build_object('start_time', NEW.start_time, 'end_time', NEW.end_time,
-                                           'paid_break', NEW.paid_break_minutes, 'unpaid_break', NEW.unpaid_break_minutes)));
+                                           'paid_break', NEW.paid_break_minutes, 'unpaid_break', NEW.unpaid_break_minutes),
+              'arrival_variance_reason',   NEW.arrival_variance_reason,
+              'departure_variance_reason', NEW.departure_variance_reason));
   END IF;
 
   RETURN NEW;
