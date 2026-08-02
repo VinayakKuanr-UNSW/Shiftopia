@@ -179,6 +179,48 @@ describe('computeEmployeePeriodGrossPay — weekly overtime driven by the shift 
   });
 });
 
+describe('computeEmployeePeriodGrossPay — weekly-OT lead-in seeding across a mid-week window (audit H-7)', () => {
+  const leadIn = [
+    shift({ shiftId: 'mon', shiftDate: '2026-07-06', startTime: '09:00', endTime: '17:00', netMinutes: 480, scheduledLengthMinutes: 480 }),
+    shift({ shiftId: 'tue', shiftDate: '2026-07-07', startTime: '09:00', endTime: '17:00', netMinutes: 480, scheduledLengthMinutes: 480 }),
+  ];
+  const inWindow = [
+    shift({ shiftId: 'wed', shiftDate: '2026-07-08', startTime: '09:00', endTime: '17:00', netMinutes: 480, scheduledLengthMinutes: 480 }),
+    shift({ shiftId: 'thu', shiftDate: '2026-07-09', startTime: '09:00', endTime: '17:00', netMinutes: 480, scheduledLengthMinutes: 480 }),
+    shift({ shiftId: 'fri', shiftDate: '2026-07-10', startTime: '09:00', endTime: '17:00', netMinutes: 480, scheduledLengthMinutes: 480 }),
+  ];
+  const bounds = { periodStart: '2026-07-08', periodEnd: '2026-07-10' }; // Wed–Fri only
+
+  it('BUG reproduction: a mid-week window with no lead-in context under-detects weekly OT', () => {
+    // Employee actually worked Mon+Tue (16h) before this window too, but the
+    // caller only supplied the window's own 24h — the pre-fix behaviour.
+    const period = computeEmployeePeriodGrossPay('e1', inWindow, bounds);
+    expect(line(period.lines, 'overtime')).toBeUndefined();
+    expect(period.paidHours).toBeCloseTo(24, 5);
+  });
+
+  it('FIXED: lead-in shifts + leadInStart correctly detect the 2h weekly OT (cl 42)', () => {
+    const period = computeEmployeePeriodGrossPay(
+      'e1',
+      [...leadIn, ...inWindow],
+      bounds,
+      { leadInStart: '2026-07-06' }, // Monday of the touched ISO week
+    );
+    // Week total = 16h lead-in (unbilled, already paid in a prior run) + 24h
+    // in-window = 40h → the last 2h of Friday's shift is weekly OT.
+    expect(line(period.lines, 'ordinary')!.hours).toBeCloseTo(22, 5);
+    expect(line(period.lines, 'overtime')!.hours).toBeCloseTo(2, 5);
+    // The lead-in days must NEVER be billed in this period's output.
+    expect(period.paidHours).toBeCloseTo(24, 5);
+    expect(period.shiftCount).toBe(3);
+  });
+
+  it('leadInStart is a no-op when it is not earlier than periodStart', () => {
+    const period = computeEmployeePeriodGrossPay('e1', inWindow, bounds, { leadInStart: '2026-07-08' });
+    expect(line(period.lines, 'overtime')).toBeUndefined();
+  });
+});
+
 describe('isoWeekKey', () => {
   it('anchors every weekday to the same Monday', () => {
     expect(isoWeekKey('2026-07-06')).toBe('2026-07-06'); // Monday

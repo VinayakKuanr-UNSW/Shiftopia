@@ -46,6 +46,7 @@ export const GrossPayPage: React.FC<GrossPayPageProps> = ({ bounds, employeeName
   const [range, setRange] = useState<PeriodBounds>(() => bounds ?? currentWeekBounds());
   const { scope, setScope, isGammaLocked } = useScopeFilter('managerial');
 
+  const [approvedOnly, setApprovedOnly] = useState(true);
   // A caller-supplied fixed period locks the selector out.
   const controlled = !!bounds;
   const effectiveBounds = controlled ? bounds! : range;
@@ -56,6 +57,7 @@ export const GrossPayPage: React.FC<GrossPayPageProps> = ({ bounds, employeeName
       orgIds: scope.org_ids.length ? scope.org_ids : undefined,
       deptIds: scope.dept_ids.length ? scope.dept_ids : undefined,
       subDeptIds: scope.subdept_ids.length ? scope.subdept_ids : undefined,
+      approvedOnly,
     }
   });
 
@@ -74,6 +76,15 @@ export const GrossPayPage: React.FC<GrossPayPageProps> = ({ bounds, employeeName
         functionBar={
           !controlled ? (
             <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={!approvedOnly}
+                  onChange={(e) => setApprovedOnly(!e.target.checked)}
+                  className="rounded border-slate-300 text-primary focus:ring-primary dark:border-white/15 dark:bg-slate-800"
+                />
+                Preview Unapproved
+              </label>
               <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
                 From
                 <input

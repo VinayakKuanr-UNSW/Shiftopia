@@ -20,7 +20,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase as prodSupabase } from '@/platform/supabase/client';
-import type { ExistingShiftRef } from '../types';
+import type { ExistingShiftRef, OptimizerEmployee } from '../types';
 import type { ShiftMeta, EmployeeMeta } from '../optimizer/solution-parser';
 
 // =============================================================================
@@ -351,6 +351,122 @@ export class RosterFetcher {
         if (result.size > 0) {
             console.info('[RosterFetcher] Approved leave: %d employee(s) have leave dates inside the window (hard-excluded)', result.size);
         }
+        return result;
+    }
+
+    // ── Employee contract details (compliance audit finding — 2026-08-02) ────
+
+    /**
+     * Resolves each employee's Schedule 1/2 classification level, Schedule
+     * 3 Security status, and Schedule 4/5/6 (apprentice/trainee/SWS) wage
+     * category from their Active `user_contracts` row(s) — the real, RLS-
+     * exposed `public.user_contracts` view over `hr.user_contracts` (140
+     * populated rows in production as of 2026-08-02, 100% coverage on
+     * `remuneration_level`/`role_id`).
+     *
+     * Previously the AutoScheduler had no path to this data at all: neither
+     * live UI caller ever populated `employeeDetails`, so `det?.level` was
+     * always undefined and every employee was priced off the classification-
+     * blind default rate. This closes that gap directly, and supersedes the
+     * P0.4 best-effort `deriveSecurityRoleIds()` heuristic (which could only
+     * guess Security status from shift role names appearing in the CURRENT
+     * batch) with a definitive answer from the employee's actual contract.
+     *
+     * An employee with more than one Active contract (multi-skilled staff)
+     * is represented by: the HIGHEST `remuneration_level` among their
+     * contracts (a reasonable "top" classification for rate-ranking
+     * purposes), `is_security_role` true if ANY contract's role is
+     * Security-named, and the apprentice/trainee/SWS fields from whichever
+     * contract has one of those flags set (mirroring the mutual exclusivity
+     * `useContractForm.ts` already enforces at entry).
+     */
+    async fetchEmployeeContractDetails(
+        employees: EmployeeMeta[],
+    ): Promise<Map<string, Partial<OptimizerEmployee>>> {
+        const result = new Map<string, Partial<OptimizerEmployee>>();
+        if (employees.length === 0) return result;
+
+        const employeeIds = employees.map(e => e.id);
+
+        const { data, error } = await this.supabase
+            .from('user_contracts')
+            .select(`
+                user_id, role_id, remuneration_level,
+                is_apprentice, apprentice_type, apprentice_year, has_completed_year_12,
+                is_trainee, trainee_category, trainee_level, trainee_exit_year,
+                trainee_years_out, trainee_aqf_level, trainee_year,
+                is_training_on_job, prefers_sba_loading,
+                is_sws, sws_capacity_percentage
+            `)
+            .in('user_id', employeeIds)
+            .eq('status', 'Active');
+
+        if (error) {
+            console.warn('[RosterFetcher] user_contracts fetch failed — AutoScheduler will use classification-blind default rates this run', error);
+            return result;
+        }
+
+        const rows = (data ?? []) as any[];
+        if (rows.length === 0) return result;
+
+        // ── Resolve Security status from each contract's role name ──────────
+        const roleIds = Array.from(new Set(rows.map(r => r.role_id).filter(Boolean)));
+        const securityRoleIds = new Set<string>();
+        if (roleIds.length > 0) {
+            const { data: roleRows, error: roleErr } = await this.supabase
+                .from('roles')
+                .select('id, name')
+                .in('id', roleIds);
+            if (roleErr) {
+                console.warn('[RosterFetcher] roles lookup failed — Security status will not be resolved from contracts this run', roleErr);
+            } else {
+                for (const r of (roleRows ?? []) as any[]) {
+                    if (/security/i.test(r?.name || '')) securityRoleIds.add(r.id);
+                }
+            }
+        }
+
+        const byEmployee = new Map<string, any[]>();
+        for (const row of rows) {
+            const uid = row.user_id as string | null;
+            if (!uid) continue;
+            const list = byEmployee.get(uid) ?? [];
+            list.push(row);
+            byEmployee.set(uid, list);
+        }
+
+        for (const [employeeId, contracts] of byEmployee) {
+            const isSecurityRole = contracts.some(c => c.role_id && securityRoleIds.has(c.role_id));
+            const specialCategory = contracts.find(c => c.is_apprentice || c.is_trainee || c.is_sws);
+            const topLevelContract = [...contracts].sort(
+                (a, b) => (b.remuneration_level ?? -1) - (a.remuneration_level ?? -1),
+            )[0];
+
+            const details: Partial<OptimizerEmployee> = {
+                level: topLevelContract?.remuneration_level ?? undefined,
+                is_security_role: isSecurityRole,
+            };
+            if (specialCategory) {
+                details.is_apprentice = specialCategory.is_apprentice ?? false;
+                details.apprentice_type = specialCategory.apprentice_type ?? undefined;
+                details.apprentice_year = specialCategory.apprentice_year ?? undefined;
+                details.has_completed_year_12 = specialCategory.has_completed_year_12 ?? false;
+                details.is_trainee = specialCategory.is_trainee ?? false;
+                details.trainee_category = specialCategory.trainee_category ?? undefined;
+                details.trainee_level = specialCategory.trainee_level ?? undefined;
+                details.trainee_exit_year = specialCategory.trainee_exit_year ?? undefined;
+                details.trainee_years_out = specialCategory.trainee_years_out ?? undefined;
+                details.trainee_aqf_level = specialCategory.trainee_aqf_level ?? undefined;
+                details.trainee_year = specialCategory.trainee_year ?? undefined;
+                details.is_training_on_job = specialCategory.is_training_on_job ?? false;
+                details.prefers_sba_loading = specialCategory.prefers_sba_loading ?? false;
+                details.is_sws = specialCategory.is_sws ?? false;
+                details.sws_capacity_percentage = specialCategory.sws_capacity_percentage ?? undefined;
+            }
+            result.set(employeeId, details);
+        }
+
+        console.info('[RosterFetcher] Contract details: %d/%d employee(s) resolved from Active user_contracts', result.size, employees.length);
         return result;
     }
 }

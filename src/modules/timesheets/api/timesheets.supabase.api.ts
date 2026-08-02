@@ -4,8 +4,19 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
-import { isShiftFinished } from '../ui/components/TimesheetTable.utils';
 import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { getShiftDayType } from '@/modules/core/lib/holidays';
+import {
+    snapToQuarterHour,
+    isShiftFinished,
+    resolveBillableSide,
+    calculateNetMinutes,
+    applyMinEngagementFloor,
+} from '../domain/billable-time';
+
+// Re-exported for existing external consumers (AttendancePage.tsx et al.) —
+// the canonical implementation now lives in ../domain/billable-time.
+export { snapToQuarterHour, isShiftFinished };
 
 
 export interface TimesheetShiftRow {
@@ -47,8 +58,8 @@ export interface TimesheetShiftRow {
     // Adjusted times (manager edits)
     adjustedStart: string | null;
     adjustedEnd: string | null;
-    adjustedStartSource: 'manual' | 'snapped' | null;
-    adjustedEndSource: 'manual' | 'snapped' | null;
+    adjustedStartSource: 'manual' | 'snapped' | 'auto' | null;
+    adjustedEndSource: 'manual' | 'snapped' | 'auto' | null;
     isAdjustedManual: boolean;
 
     // Breaks
@@ -60,6 +71,16 @@ export interface TimesheetShiftRow {
     // Calculated
     scheduledLengthMinutes: number;
     netLengthMinutes: number;
+    /** True when netLengthMinutes was raised to the EBA minimum-engagement floor. */
+    wasToppedUpToMinEngagement: boolean;
+    /** The EBA minimum (minutes) that applied, or null when the floor doesn't apply (no-show/cancelled). */
+    requiredEngagementMinutes: number | null;
+    /** Training-shift flag (drives the 2h EBA tier) — needed downstream for edit-form floor validation. */
+    isTraining: boolean;
+    /** Raw `profiles.employment_type` — feeds the min-engagement floor and the pay-estimate calls. */
+    employmentType: string | null;
+    /** Role name (lowercased) includes 'security' — selects the Security Sch 3 floor tiers. */
+    isSecurityRole: boolean;
 
     // Status
     shiftStatus: string;
@@ -84,6 +105,14 @@ export interface TimesheetShiftRow {
     // Manager notes (override reason on approve / rejection reason)
     notes: string | null;
     rejectedReason: string | null;
+
+    // Audit / concurrency
+    editCount: number;           // F7 — manager billable/break edit count (📝 badge)
+    version: number | null;      // F18 — optimistic-lock row version at load time
+
+    // Billable variance reasons (per-side; null when on-roster)
+    arrivalVarianceReason: string | null;
+    departureVarianceReason: string | null;
 }
 
 export interface TimesheetFilters {
@@ -101,44 +130,6 @@ export interface TimesheetFilters {
 /**
  * Fetch shifts for timesheet display
  */
-
-/**
- * Snap an HH:MM[:SS] or ISO datetime string to the nearest 15-minute boundary.
- * e.g. "09:07:00" → "09:00", "09:08" → "09:15", "09:52" → "09:45"
- * Seconds participate in the rounding ("09:07:59" is nearer 09:15 than 09:00).
- * ISO timestamps are read as VENUE wall-clock time (Australia/Sydney), not the
- * browser's, so every viewer snaps to the same billable time.
- * Returns null if value is falsy or unparseable.
- */
-export function snapToQuarterHour(value: string | null | undefined): string | null {
-    if (!value) return null;
-
-    let h: number;
-    let m: number;
-    let s: number;
-
-    if (value.includes('T') || (value.length > 8 && value.includes('-'))) {
-        // ISO datetime → extract Sydney wall-clock components
-        const d = new Date(value);
-        if (isNaN(d.getTime())) return null;
-        const [hh, mm, ss] = formatInTimezone(d, SYDNEY_TZ, 'HH:mm:ss').split(':').map(Number);
-        h = hh; m = mm; s = ss;
-    } else {
-        // Plain HH:MM or HH:MM:SS string
-        const parts = value.split(':').map(Number);
-        if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
-        h = parts[0];
-        m = parts[1];
-        s = parts.length > 2 && !isNaN(parts[2]) ? parts[2] : 0;
-    }
-
-    const snapped = Math.round((m + s / 60) / 15) * 15;
-    if (snapped === 60) {
-        const nextH = (h + 1) % 24;
-        return `${nextH.toString().padStart(2, '0')}:00`;
-    }
-    return `${h.toString().padStart(2, '0')}:${snapped.toString().padStart(2, '0')}`;
-}
 
 export async function getShiftsForTimesheet(
     startDate: string,
@@ -170,6 +161,7 @@ export async function getShiftsForTimesheet(
                 net_length_minutes,
                 scheduled_length_minutes,
                 remuneration_rate,
+                is_training,
                 organization_id,
                 department_id,
                 sub_department_id,
@@ -222,18 +214,19 @@ export async function getShiftsForTimesheet(
 
         // Fetch employees separately (no FK relationship in schema)
         const employeeIds: string[] = Array.from(new Set(shifts.map(s => s.assigned_employee_id).filter((id): id is string => !!id)));
-        let employeeMap = new Map<string, { first_name: string; last_name: string }>();
+        let employeeMap = new Map<string, { first_name: string; last_name: string; employment_type: string | null }>();
 
         if (employeeIds.length > 0) {
             const { data: profiles } = await supabase
                 .from('profiles')
-                .select('id, first_name, last_name')
+                .select('id, first_name, last_name, employment_type')
                 .in('id', employeeIds);
 
             if (profiles) {
                 employeeMap = new Map(profiles.map(p => [p.id, {
                     first_name: p.first_name || '',
-                    last_name: p.last_name || ''
+                    last_name: p.last_name || '',
+                    employment_type: (p as any).employment_type ?? null,
                 }]));
             }
         }
@@ -269,27 +262,40 @@ export async function getShiftsForTimesheet(
                 (scheduledMins - (shift.unpaid_break_minutes || 0));
 
             const hourlyRate = remLevel?.hourly_rate_min || shift.remuneration_rate || 0;
-            const calculatedNetMins = (() => {
-                const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time, shift.actual_end);
-                const startRaw = timesheet?.start_time || (finished ? snapToQuarterHour(shift.actual_start) : null);
-                const endRaw = timesheet?.end_time || (finished ? snapToQuarterHour(shift.actual_end) : null);
-                if (!startRaw || !endRaw || startRaw === 'NIL' || endRaw === 'NIL') return 0;
-                
-                try {
-                    const [startH, startM] = startRaw.split(':').map(Number);
-                    const [endH, endM] = endRaw.split(':').map(Number);
-                    
-                    if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM)) return 0;
-                    
-                    let diffMins = (endH * 60 + endM) - (startH * 60 + startM);
-                    if (diffMins < 0) diffMins += 24 * 60; // Overnight
-                    
-                    const unpaidBreak = timesheet?.unpaid_break_minutes !== undefined ? timesheet.unpaid_break_minutes : (shift.unpaid_break_minutes || 0);
-                    return Math.max(0, diffMins - unpaidBreak);
-                } catch {
-                    return 0;
-                }
-            })();
+
+            // Resolve each side ONCE — every field below (net minutes, adjusted
+            // start/end, and their source) derives from these two results so the
+            // tier logic can't drift between them.
+            const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time, shift.actual_end);
+            const resolvedStart = resolveBillableSide(timesheet?.start_time, shift.actual_start, finished);
+            const resolvedEnd = resolveBillableSide(timesheet?.end_time, shift.actual_end, finished);
+            const unpaidBreakForNet = timesheet?.unpaid_break_minutes !== undefined ? timesheet.unpaid_break_minutes : (shift.unpaid_break_minutes || 0);
+            const rawNetMins = calculateNetMinutes(resolvedStart, resolvedEnd, unpaidBreakForNet);
+
+            // EBA minimum-engagement floor (F-locked 2026-07-28): only applied
+            // once the billable window has actually resolved (rawNetMins !== null)
+            // — a missing punch must stay a missing punch, never get floored up to
+            // the minimum before a manager fixes it. Automatic, no exemption path.
+            // That null-check is ALSO the no-show/cancelled gate: it does NOT
+            // additionally key off attendance_status/lifecycle_status, because a
+            // manager can legitimately enter a manual billable override on a shift
+            // still flagged no-show/cancelled, and that resolved window must still
+            // get the floor (see applyMinEngagementFloor's docstring).
+            const { isSunday, isPublicHoliday } = getShiftDayType(shift.shift_date);
+            const isSecurityRoleForFloor = (role?.name ?? '').toLowerCase().includes('security');
+            const flooredNet = rawNetMins !== null
+                ? applyMinEngagementFloor(rawNetMins, {
+                      isTraining: shift.is_training === true,
+                      isSunday,
+                      isPublicHoliday,
+                      // Regex-matched against the raw DB value ('full_time',
+                      // 'flexible_part_time', ...) — resolvePaymentMinEngagementMinutes
+                      // is tolerant of snake_case, no mapping needed here.
+                      employmentType: employee?.employment_type ?? null,
+                      isSecurityRole: isSecurityRoleForFloor,
+                  })
+                : { netMinutes: 0, requiredMins: 0, wasToppedUp: false };
+            const calculatedNetMins = flooredNet.netMinutes;
 
             const currentEstimatedPay = (calculatedNetMins / 60) * hourlyRate;
 
@@ -307,19 +313,12 @@ export async function getShiftsForTimesheet(
                       return ms <= scheduledStartMs ? ms + 24 * 60 * 60 * 1000 : ms; // overnight
                   })();
             const clockInVariance = (() => {
-                const effectiveMs = timesheet?.start_time
-                    ? parseZonedDateTime(shift.shift_date, timesheet.start_time).getTime()
-                    : shift.actual_start ? new Date(shift.actual_start).getTime() : null;
+                const effectiveMs = shift.actual_start ? new Date(shift.actual_start).getTime() : null;
                 if (effectiveMs === null) return null;
                 return Math.round((effectiveMs - scheduledStartMs) / 60000);
             })();
             const clockOutVariance = (() => {
-                const effectiveMs = timesheet?.end_time
-                    ? (() => {
-                          const ms = parseZonedDateTime(shift.shift_date, timesheet.end_time).getTime();
-                          return ms < scheduledStartMs ? ms + 24 * 60 * 60 * 1000 : ms; // overnight
-                      })()
-                    : shift.actual_end ? new Date(shift.actual_end).getTime() : null;
+                const effectiveMs = shift.actual_end ? new Date(shift.actual_end).getTime() : null;
                 if (effectiveMs === null) return null;
                 return Math.round((effectiveMs - scheduledEndMs) / 60000);
             })();
@@ -359,33 +358,27 @@ export async function getShiftsForTimesheet(
                 clockIn: shift.actual_start ?? null,
                 clockOut: shift.actual_end ?? null,
 
-                // Adjusted times (billable) — two-tier logic:
-                //   1. Explicit manager edit  → timesheet.start_time / end_time  (isAdjustedManual = true)
-                //   2. Snapped actual clock   → snap actual_start AFTER scheduled end (isAdjustedManual = false)
-                adjustedStart: (() => {
-                    if (timesheet?.start_time) return timesheet.start_time;
-                    const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time, shift.actual_end);
-                    return finished ? snapToQuarterHour(shift.actual_start) : null;
-                })(),
-                adjustedEnd: (() => {
-                    if (timesheet?.end_time) return timesheet.end_time;
-                    const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time, shift.actual_end);
-                    return finished ? snapToQuarterHour(shift.actual_end) : null;
-                })(),
+                // Adjusted times (billable) — resolved once above via resolveBillableSide:
+                //   1. Explicit manager edit → timesheet.start_time / end_time  (source = 'manual')
+                //   2. Snapped actual clock  → snap actual_start/end once finished (source = 'snapped')
+                //   3. 'missing' (rendered as null here) once finished with neither —
+                //      deliberately NOT filled from the schedule, so a blank cell
+                //      keeps signalling "needs manager attention" instead of hiding it.
+                adjustedStart: resolvedStart.hhmm,
+                adjustedEnd: resolvedEnd.hhmm,
                 // Whether the manager has explicitly saved a custom adjusted time
-                adjustedStartSource: (() => {
-                    if (timesheet?.start_time) return 'manual';
-                    const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time, shift.actual_end);
-                    if (finished && shift.actual_start) return 'snapped';
-                    return null;
-                })(),
-                adjustedEndSource: (() => {
-                    if (timesheet?.end_time) return 'manual';
-                    const finished = isShiftFinished(shift.shift_date, shift.start_time, shift.end_time, shift.actual_end);
-                    if (finished && shift.actual_end) return 'snapped';
-                    return null;
-                })(),
+                adjustedStartSource: resolvedStart.source === 'missing' ? null : resolvedStart.source,
+                // An auto clock-out owns the OUT side (unless a manager overrode it):
+                // mark it 'auto' so the billable end carries the 🤖 marker instead of
+                // a bare '-'. The IN side is a real clock-in, so it's left as-is.
+                adjustedEndSource: resolvedEnd.source === 'manual'
+                    ? 'manual'
+                    : (resolvedEnd.source === 'missing' ? null : resolvedEnd.source),
                 isAdjustedManual: !!(timesheet?.start_time || timesheet?.end_time),
+                editCount: (timesheet as any)?.edit_count ?? 0,
+                version: (timesheet as any)?.version ?? null,
+                arrivalVarianceReason: (timesheet as any)?.arrival_variance_reason ?? null,
+                departureVarianceReason: (timesheet as any)?.departure_variance_reason ?? null,
 
                 paidBreakMinutes: timesheet?.paid_break_minutes !== undefined ? timesheet.paid_break_minutes : (shift.paid_break_minutes || 0),
                 unpaidBreakMinutes: timesheet?.unpaid_break_minutes !== undefined ? timesheet.unpaid_break_minutes : (shift.unpaid_break_minutes || 0),
@@ -393,6 +386,14 @@ export async function getShiftsForTimesheet(
                 unpaidBreak: String(timesheet?.unpaid_break_minutes !== undefined ? timesheet.unpaid_break_minutes : (shift.unpaid_break_minutes || 0)),
                 scheduledLengthMinutes: scheduledMins,
                 netLengthMinutes: calculatedNetMins,
+                // EBA minimum-engagement top-up (F-locked 2026-07-28): true when
+                // `calculatedNetMins` above was raised to the statutory floor
+                // because the raw billable window netted less than it.
+                wasToppedUpToMinEngagement: flooredNet.wasToppedUp,
+                requiredEngagementMinutes: flooredNet.requiredMins || null,
+                isTraining: shift.is_training === true,
+                employmentType: employee?.employment_type ?? null,
+                isSecurityRole: isSecurityRoleForFloor,
 
                 shiftStatus: shift.assignment_status || 'open',
                 lifecycleStatus: shift.lifecycle_status || 'scheduled',
@@ -462,6 +463,20 @@ function isIsoTimestamp(value: string): boolean {
 /**
  * Update timesheet entry
  */
+/**
+ * Thrown when an optimistic-lock CAS fails: the row was changed by someone else
+ * since the editor loaded it. Callers should prompt a refresh + review (F18).
+ * Only raised when an `expectedVersion` is supplied — bulk/legacy paths that
+ * don't pass one keep their prior last-write-wins behaviour.
+ */
+export class TimesheetConflictError extends Error {
+    readonly code = 'TIMESHEET_CONFLICT';
+    constructor(public readonly shiftId: string) {
+        super('This timesheet was changed by someone else. Refresh and review before saving.');
+        this.name = 'TimesheetConflictError';
+    }
+}
+
 export async function updateTimesheetEntry(
     shiftId: string,
     updates: {
@@ -477,22 +492,39 @@ export async function updateTimesheetEntry(
         approximatePay?: string;
         paidBreak?: string;
         unpaidBreak?: string;
-    }
+        arrivalVarianceReason?: string | null;
+        departureVarianceReason?: string | null;
+    },
+    opts?: { expectedVersion?: number | null; actorId?: string | null }
 ): Promise<boolean> {
     try {
         // 1. Check if timesheet exists
-        const { data: existing } = await supabase
+        const { data: existing } = await (supabase
             .from('timesheets')
-            .select('id, status')
-            .eq('shift_id', shiftId)
+            .select('id, status, start_time, end_time')
+            .eq('shift_id', shiftId) as any)
             .maybeSingle();
 
         // Always get shift details to determine default snapped/scheduled times and handle no_show status
         const { data: shift } = await supabase
             .from('shifts')
-            .select('attendance_status, start_time, end_time, actual_start, actual_end, shift_date')
+            .select('attendance_status, start_time, end_time, actual_start, actual_end, shift_date, payroll_exported')
             .eq('id', shiftId)
             .single();
+
+        // Audit H-13: once this shift's payroll has been EXPORTED
+        // (shifts.payroll_exported), the record is truly terminal — this is the
+        // real mechanism the vestigial in-memory API's 'LOCKED' status was
+        // standing in for, now backed by the live schema (shifts.payroll_exported
+        // → synced to shift_payroll_records by the DB trigger
+        // _sync_payroll_record). Nothing is allowed through here — not even a
+        // notes/reason annotation — because those numbers were already paid
+        // out; a later clarification belongs in the NEXT pay run, not a silent
+        // edit to history.
+        if (shift?.payroll_exported) {
+            console.warn(`[updateTimesheetEntry] Blocking update for shift ${shiftId} — already exported to payroll.`);
+            return false;
+        }
 
         // 2. Safety Guard: If it's already Approved, Rejected, or No-Show
         // Block updates to finalized records, UNLESS manager is editing metrics.
@@ -501,20 +533,43 @@ export async function updateTimesheetEntry(
             currentStatus = 'no_show';
         }
 
-        const isEditingMetrics = 
-            updates.adjustedStart !== undefined || 
-            updates.adjustedEnd !== undefined || 
-            updates.paidBreak !== undefined || 
+        const isEditingMetrics =
+            updates.adjustedStart !== undefined ||
+            updates.adjustedEnd !== undefined ||
+            updates.paidBreak !== undefined ||
             updates.unpaidBreak !== undefined;
 
+        // Audit H-12: notes / rejection-reason / variance-reason edits are
+        // METADATA, not a pay-affecting change — a manager annotating an
+        // approved entry, or fixing a typo in a rejection reason, must not
+        // silently no-op while the UI reports "Entry Updated". Allowed
+        // through so long as no pay-affecting field rides along and any
+        // supplied `status` is unchanged (a real status transition on a
+        // finalized record stays blocked below).
+        const touchesMetadata =
+            updates.notes !== undefined ||
+            updates.rejectedReason !== undefined ||
+            updates.arrivalVarianceReason !== undefined ||
+            updates.departureVarianceReason !== undefined;
+        const statusUnchanged = updates.status === undefined || updates.status.toLowerCase() === currentStatus;
+        const touchesPayAffecting =
+            updates.clockIn !== undefined ||
+            updates.clockOut !== undefined ||
+            updates.length !== undefined ||
+            updates.netLength !== undefined ||
+            updates.approximatePay !== undefined;
+        const isMetadataOnlyEdit = touchesMetadata && statusUnchanged && !touchesPayAffecting;
+
         if (['approved', 'rejected', 'no_show'].includes(currentStatus)) {
-            if (!isEditingMetrics) {
+            if (!isEditingMetrics && !isMetadataOnlyEdit) {
                 // Allow idempotency if the only change is setting the SAME status
                 const isStatusOnly = Object.keys(updates).length === 1 && updates.status;
                 if (isStatusOnly && updates.status?.toLowerCase() === currentStatus) return true;
-                
+
                 console.warn(`[updateTimesheetEntry] Blocking update for finalized shift ${shiftId} (Current: ${currentStatus})`);
-                return true; 
+                // H-12: report the block honestly — a silent `true` here made
+                // the caller believe a discarded edit had saved.
+                return false;
             }
         }
 
@@ -596,24 +651,100 @@ export async function updateTimesheetEntry(
 
         if (updates.notes !== undefined) payload.notes = updates.notes;
         if (updates.rejectedReason !== undefined) payload.rejected_reason = updates.rejectedReason;
-        
+
+        // Billable variance reasons (null clears them when a side is back on-roster)
+        if (updates.arrivalVarianceReason !== undefined) payload.arrival_variance_reason = updates.arrivalVarianceReason || null;
+        if (updates.departureVarianceReason !== undefined) payload.departure_variance_reason = updates.departureVarianceReason || null;
+
         // Breaks (minutes)
         if (updates.paidBreak !== undefined) payload.paid_break_minutes = parseInt(updates.paidBreak, 10) || 0;
         if (updates.unpaidBreak !== undefined) payload.unpaid_break_minutes = parseInt(updates.unpaidBreak, 10) || 0;
         
-        // NEW: Support for direct metric overrides (e.g. from No-Show marking)
-        if (updates.length !== undefined) payload.length = updates.length;
-        if (updates.netLength !== undefined) payload.net_length = updates.netLength;
-        if (updates.approximatePay !== undefined) payload.approximate_pay = updates.approximatePay;
+        // NOTE: Length / Net / Pay are DERIVED on read (billable minutes × rate);
+        // the `timesheets` table has NO length/net_length/approximate_pay columns,
+        // so writing them 400s (PGRST204) and fails the whole save. The
+        // updates.length/netLength/approximatePay fields are intentionally ignored.
+
+        // 4. Completeness guard: refuse to move a FINISHED shift to 'approved'
+        // while either side of the billable window is still unresolved (no
+        // manager edit AND no actual clock time — e.g. a forgotten clock-out).
+        // Approving it anyway used to let the payroll adapter silently price
+        // the missing side from the SCHEDULED time with no record that the
+        // clock-out never happened. This is the one place that must catch it —
+        // downstream pricing trusts an 'approved' status to mean real hours.
+        if (payload.status === 'approved') {
+            const finishedForApproval = isShiftFinished(
+                shift?.shift_date ?? '', shift?.start_time ?? '', shift?.end_time ?? '', shift?.actual_end,
+            );
+            const effectiveManualStart = payload.start_time !== undefined ? payload.start_time : (existing?.start_time ?? null);
+            const effectiveManualEnd = payload.end_time !== undefined ? payload.end_time : (existing?.end_time ?? null);
+            const approvalStart = resolveBillableSide(effectiveManualStart, shift?.actual_start, finishedForApproval);
+            const approvalEnd = resolveBillableSide(effectiveManualEnd, shift?.actual_end, finishedForApproval);
+
+            if (approvalStart.source === 'missing' || approvalEnd.source === 'missing') {
+                console.error(
+                    `[updateTimesheetEntry] Refusing to approve shift ${shiftId}: missing ` +
+                    `${approvalStart.source === 'missing' ? 'clock-in' : 'clock-out'} time. ` +
+                    `Enter an adjusted time before approving.`,
+                );
+                return false;
+            }
+        }
+
+        // Stamp who/when on a manual approval; clear the stamps on a reopen. The
+        // auto-verify RPC already stamps these for bot approvals — manual ones
+        // used to leave approved_at/approved_by NULL, blinding payroll/reporting
+        // to who signed off and when.
+        if (payload.status === 'approved') {
+            payload.approved_at = new Date().toISOString();
+            if (opts?.actorId) payload.approved_by = opts.actorId;
+        } else if (payload.status === 'submitted' || payload.status === 'draft') {
+            payload.approved_at = null;
+            payload.approved_by = null;
+        }
 
         if (existing) {
-            // Update existing
-            const { error } = await supabase
+            // App-level optimistic-lock bump: prod has the `version` column but no
+            // bump trigger, so increment it here alongside the CAS guard below.
+            // Forward-compatible with a future trigger (both land on
+            // expectedVersion+1). Only the guarded path bumps; bulk/legacy writes
+            // stay last-write-wins by design.
+            if (opts?.expectedVersion != null) {
+                payload.version = opts.expectedVersion + 1;
+            }
+            // Update existing — with an optimistic-lock CAS when the caller passed
+            // the version it loaded. A stale version matches zero rows (no error),
+            // which we surface as a conflict instead of clobbering the newer row.
+            let updateQuery = supabase
                 .from('timesheets')
                 .update(payload)
                 .eq('id', existing.id);
+            if (opts?.expectedVersion != null) {
+                updateQuery = updateQuery.eq('version', opts.expectedVersion);
+            }
+            let { data: updatedRows, error } = await updateQuery.select('id');
+
+            // Graceful fallback if variance columns are unmapped in PostgREST schema cache
+            if (error?.code === 'PGRST204' && (payload.arrival_variance_reason !== undefined || payload.departure_variance_reason !== undefined)) {
+                const fallbackPayload = { ...payload };
+                delete fallbackPayload.arrival_variance_reason;
+                delete fallbackPayload.departure_variance_reason;
+                let retryQuery = supabase
+                    .from('timesheets')
+                    .update(fallbackPayload)
+                    .eq('id', existing.id);
+                if (opts?.expectedVersion != null) {
+                    retryQuery = retryQuery.eq('version', opts.expectedVersion);
+                }
+                const retryRes = await retryQuery.select('id');
+                updatedRows = retryRes.data;
+                error = retryRes.error;
+            }
 
             if (error) throw error;
+            if (opts?.expectedVersion != null && (!updatedRows || updatedRows.length === 0)) {
+                throw new TimesheetConflictError(shiftId);
+            }
         } else {
             // Get shift details for new timesheet
             const { data: shift } = await supabase
@@ -633,7 +764,7 @@ export async function updateTimesheetEntry(
                 ? (isIsoTimestamp(updates.clockOut) ? updates.clockOut : null)
                 : (shift.actual_end ?? shift.end_at ?? null);
 
-            const { error: insertError } = await supabase
+            let insertRes = await supabase
                 .from('timesheets')
                 .insert({
                     shift_id: shiftId,
@@ -645,7 +776,26 @@ export async function updateTimesheetEntry(
                     status: (updates.status || 'draft').toLowerCase(),
                     ...payload,
                 });
-            if (insertError) throw insertError;
+
+            if (insertRes.error?.code === 'PGRST204' && (payload.arrival_variance_reason !== undefined || payload.departure_variance_reason !== undefined)) {
+                const fallbackPayload = { ...payload };
+                delete fallbackPayload.arrival_variance_reason;
+                delete fallbackPayload.departure_variance_reason;
+                insertRes = await supabase
+                    .from('timesheets')
+                    .insert({
+                        shift_id: shiftId,
+                        employee_id: shift.assigned_employee_id,
+                        profile_id: shift.assigned_employee_id,
+                        work_date: shift.shift_date,
+                        clock_in: clockInTs,
+                        ...(clockOutTs ? { clock_out: clockOutTs } : {}),
+                        status: (updates.status || 'draft').toLowerCase(),
+                        ...fallbackPayload,
+                    });
+            }
+
+            if (insertRes.error) throw insertRes.error;
         }
 
         // Cleanup: If approved, mark shift as Completed
@@ -664,8 +814,14 @@ export async function updateTimesheetEntry(
             }
         }
 
+        // Provenance is owned by the DB trigger `trg_timesheet_provenance` (migration
+        // 20260725100000): it fires on every timesheets write and appends the
+        // lifecycle event (MANUALLY_APPROVED / REJECTED / EDITED / REOPENED / NO_SHOW)
+        // to the append-only timesheet_audit_log. No client-side insert here — that
+        // would double-log every event.
         return true;
     } catch (error) {
+        if (error instanceof TimesheetConflictError) throw error;  // let the caller prompt a refresh
         console.error('[updateTimesheetEntry] Error:', error);
         return false;
     }
@@ -674,28 +830,51 @@ export async function updateTimesheetEntry(
 /**
  * Bulk approve timesheets
  */
+/**
+ * AUDIT FIX M-14: bulk approve/reject previously called `updateTimesheetEntry`
+ * with no `expectedVersion` at all, which deliberately skips the optimistic-
+ * lock CAS (the "legacy/bulk path" the single-row F18 fix carved out) — so a
+ * bulk action could silently clobber a concurrent single-row edit by another
+ * manager with no conflict signal. `expectedVersions` is optional and keyed
+ * by shiftId; when supplied (the live TimesheetPage caller now does), each
+ * row gets the SAME CAS protection single-row edits already have. Omitting it
+ * preserves the exact prior last-write-wins behaviour for any other caller.
+ */
 export async function bulkUpdateTimesheetStatus(
     ids: string[],
     userId: string,
-    status: 'approved' | 'rejected'
-): Promise<{ success: number; failed: number }> {
+    status: 'approved' | 'rejected',
+    expectedVersions?: Record<string, number | null | undefined>,
+): Promise<{ success: number; failed: number; conflicted: number }> {
     let success = 0;
     let failed = 0;
+    let conflicted = 0;
 
     for (const shiftId of ids) {
-        const result = await updateTimesheetEntry(shiftId, { 
-            status,
-            notes: `Bulk ${status} by manager`
-        });
+        try {
+            const result = await updateTimesheetEntry(shiftId, {
+                status,
+                notes: `Bulk ${status} by manager`,
+                // Bulk reject still records a reason (single-row reject requires one),
+                // so the employee always sees WHY a timesheet was rejected.
+                ...(status === 'rejected' ? { rejectedReason: 'Bulk rejected by manager' } : {}),
+            }, { actorId: userId, expectedVersion: expectedVersions?.[shiftId] ?? null });
 
-        if (result) {
-            success++;
-        } else {
-            failed++;
+            if (result) {
+                success++;
+            } else {
+                failed++;
+            }
+        } catch (err) {
+            if (err instanceof TimesheetConflictError) {
+                conflicted++;
+            } else {
+                failed++;
+            }
         }
     }
 
-    return { success, failed };
+    return { success, failed, conflicted };
 }
 
 /**
@@ -722,14 +901,15 @@ export async function markShiftAsNoShow(
             return false;
         }
 
-        // NEW: Ensure a timesheet entry exists with status 'no_show' AND zero hours/pay
-        await updateTimesheetEntry(shiftId, { 
+        // Ensure a timesheet row exists at status 'no_show'. Zero hours/pay is
+        // derived on read — there are no length/net/pay columns to write.
+        const tsOk = await updateTimesheetEntry(shiftId, {
             status: 'no_show',
-            length: '0.00',
-            netLength: '0.00',
-            approximatePay: '$0.00',
-            notes: 'Marked as No-Show by manager'
-        });
+            notes: 'Marked as No-Show by manager',
+        }, { actorId: userId });
+        if (!tsOk) {
+            console.warn(`[markShiftAsNoShow] shift ${shiftId} marked no-show, but its timesheet row could not be written.`);
+        }
 
         return true;
     } catch (error) {

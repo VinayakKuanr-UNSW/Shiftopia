@@ -15,8 +15,13 @@ import {
     ShieldCheck,
     RotateCcw,
     Pencil,
+    Clock,
+    User,
+    Bot,
+    TrendingUp,
 } from "lucide-react";
 import { TimesheetStatusBadge } from "./TimesheetStatusBadge";
+import { TimesheetHistoryPopover } from "./TimesheetHistoryPopover";
 
 
 import { cn } from "@/modules/core/lib/utils";
@@ -32,14 +37,53 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
     DialogDescription, DialogFooter,
 } from '@/modules/core/ui/primitives/dialog';
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/modules/core/ui/primitives/select';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { Label } from '@/modules/core/ui/primitives/label';
 import type { TimesheetRow as TimesheetRowType } from "../../model/timesheet.types";
 import { calculateHoursBetween, formatHours, formatDifferential, isShiftFinished, timesheetEntryToShiftInput } from "./TimesheetTable.utils";
 import { parseZonedDateTime, SYDNEY_TZ } from "@/modules/core/lib/date.utils";
-import { getProtectionContext, getTimeRule, getLiveRuleBadges, isTimesheetReviewable } from "@/modules/rosters/domain/shift-ui";
+import { getProtectionContext, getTimeRule, getLiveRuleBadges, getPayrollRuleBadges, isTimesheetReviewable } from "@/modules/rosters/domain/shift-ui";
+import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from "../../domain/variance-reasons";
+import { validateBillableEdit, billableVarianceVsRoster } from "../../domain/billable-edit";
+import { getShiftDayType } from "@/modules/core/lib/holidays";
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
+import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
 import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
+
+/* Billable-time provenance icons (F16) — explicit iconography, not a bare `*`. */
+type BillableSource = 'manual' | 'snapped' | 'auto' | null | undefined;
+const BILLABLE_SOURCE_META = {
+    manual: { Icon: User, cls: 'text-indigo-600 dark:text-indigo-400', label: 'Manager adjusted' },
+    snapped: { Icon: Clock, cls: 'text-sky-600 dark:text-sky-400', label: 'Snapped to nearest 15 min' },
+    auto: { Icon: Bot, cls: 'text-amber-600 dark:text-amber-400', label: 'Auto clock-out (needs review)' },
+} as const;
+
+const BillableSourceIcon: React.FC<{
+    source: BillableSource;
+    hasValue: boolean;
+    varianceReason?: string | null;
+    labelPrefix?: string;
+}> = ({ source, hasValue, varianceReason, labelPrefix }) => {
+    const effectiveSource = source || (varianceReason ? 'manual' : null);
+    if (!effectiveSource || (effectiveSource !== 'auto' && !hasValue && !varianceReason)) return null;
+    const meta = BILLABLE_SOURCE_META[effectiveSource] ?? BILLABLE_SOURCE_META.manual;
+    const { Icon, cls, label } = meta;
+    return (
+        <TooltipProvider>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <span className={cn('inline-flex shrink-0', cls)} aria-label={label}>
+                        <Icon className="h-3 w-3" />
+                    </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-[10px]">{label}</TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
+    );
+};
 
 interface TimesheetRowProps {
     entry: TimesheetRowType;
@@ -72,14 +116,22 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     const [rejectOpen, setRejectOpen] = useState(false);
     const [rejectReason, setRejectReason] = useState('');
 
+    // Billable variance-reason flow — required when a manager edits billable
+    // times beyond the ±grace vs roster (arrival and/or departure).
+    const [varianceOpen, setVarianceOpen] = useState(false);
+    const [pendingSave, setPendingSave] = useState<
+        null | { payload: Record<string, any>; needArrival: boolean; needDeparture: boolean }
+    >(null);
+    const [arrivalReason, setArrivalReason] = useState('');
+    const [departureReason, setDepartureReason] = useState('');
+
     const { toast } = useToast();
 
     // Decision is finalized — no more edits allowed
     const isFinalized = useMemo(() => {
         const tsStatus = (entry.timesheetStatus || '').toLowerCase();
-        const attStatus = (entry.attendanceStatus || '').toLowerCase();
-        return ['approved', 'rejected', 'no_show'].includes(tsStatus) || attStatus === 'no_show';
-    }, [entry.timesheetStatus, entry.attendanceStatus]);
+        return ['approved', 'verified', 'auto_approved', 'rejected', 'finalized'].includes(tsStatus);
+    }, [entry.timesheetStatus]);
 
     const [editedAdjusted, setEditedAdjusted] = useState({
         adjustedStart: entry.adjustedStart || "",
@@ -119,6 +171,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
 
     const timeRuleBadge = useMemo(() => getTimeRule(shiftInput), [shiftInput]);
     const liveRuleBadges = useMemo(() => getLiveRuleBadges(shiftInput), [shiftInput]);
+    const payrollRuleBadges = useMemo(() => getPayrollRuleBadges(shiftInput), [shiftInput]);
 
     // Manager review gate: approve / reject / edit are only allowed once the
     // shift reaches a terminal attendance state — No-Show, a recorded clock-out,
@@ -204,10 +257,12 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
 
     // Approve
     const doApprove = () => {
-        onSave?.(String(entry.id), {
+        const approvePayload: Record<string, any> = {
             timesheetStatus: 'approved',
             ...(overrideReason.trim() ? { notes: overrideReason.trim() } : {}),
-        } as any);
+        };
+
+        onSave?.(String(entry.id), approvePayload as any);
         toast({ title: 'Timesheet Approved', description: `Timesheet for ${entry.employee} approved.` });
         setWarningsOpen(false);
         setOverrideReason('');
@@ -254,60 +309,66 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
         setRejectOpen(true);
     };
 
-    const handleSaveAdjusted = () => {
-        // Timing validation
-        let { adjustedStart, adjustedEnd } = editedAdjusted;
-        
-        // Auto-format "1600" -> "16:00"
-        const formatTimeStr = (t: string) => {
-            if (/^\d{3,4}$/.test(t)) {
-                return t.length === 3 ? `0${t.slice(0, 1)}:${t.slice(1)}` : `${t.slice(0, 2)}:${t.slice(2)}`;
-            }
-            return t;
-        };
-        adjustedStart = formatTimeStr(adjustedStart);
-        adjustedEnd = formatTimeStr(adjustedEnd);
+    /**
+     * Validate the edit fields (shared rules) and build the save payload. Returns
+     * null (and surfaces `timingError` + a toast) on failure; otherwise the
+     * payload plus which sides need a variance reason.
+     */
+    const buildAndValidate = ():
+        | { payload: Record<string, any>; needArrival: boolean; needDeparture: boolean }
+        | null => {
+        // EBA minimum-engagement PAYMENT floor (F-locked 2026-07-28): a manager
+        // cannot save billable times netting less than the statutory minimum
+        // for this shift — same employment-type-aware resolver the cost engine
+        // and payroll adapter use (Full-Time gets no floor at all). Applies
+        // even on a no-show/cancelled-flagged entry — a manager entering a
+        // manual billable override there is choosing to pay for real time, and
+        // that window must still meet the guarantee (only a BLANK edit, which
+        // validateBillableEdit already skips the check for, means "no billable
+        // time at all").
+        const { isSunday, isPublicHoliday } = getShiftDayType(String(entry.date));
+        const requiredMinutes = resolvePaymentMinEngagementMinutes({
+            isTraining: !!entry.isTraining,
+            isSunday,
+            isPublicHoliday,
+            employmentType: entry.employmentType,
+            isSecurityRole: entry.isSecurityRole,
+        }) ?? undefined;
 
-        if (adjustedStart && adjustedEnd) {
-            const [sh, sm] = adjustedStart.split(':').map(Number);
-            const [eh, em] = adjustedEnd.split(':').map(Number);
-            if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) {
-                const msg = 'Invalid time format. Use HH:MM or HHMM.';
-                setTimingError(msg);
-                toast({ title: 'Invalid Times', description: msg, variant: 'destructive' });
-                return;
-            }
-            const startMins = sh * 60 + sm;
-            let endMins = eh * 60 + em;
-            if (endMins < startMins) endMins += 24 * 60; // overnight
-            if (endMins <= startMins) {
-                const msg = 'Adjusted end time must be after start time';
-                setTimingError(msg);
-                toast({ title: 'Invalid Times', description: msg, variant: 'destructive' });
-                return;
-            }
+        const v = validateBillableEdit({
+            editedStart: editedAdjusted.adjustedStart,
+            editedEnd: editedAdjusted.adjustedEnd,
+            initialStart: initialEdit.adjustedStart,
+            initialEnd: initialEdit.adjustedEnd,
+            scheduledStart: entry.scheduledStart,
+            scheduledEnd: entry.scheduledEnd,
+            unpaidBreakMinutes: parseFloat(editedAdjusted.unpaidBreak) || 0,
+            requiredMinutes,
+        });
+        if (!v.ok) {
+            setTimingError(v.error!);
+            toast({ title: 'Check the edit', description: v.error!, variant: 'destructive' });
+            return null;
         }
         setTimingError('');
 
-        const fakeShift = {
+        const { normalizedStart: adjustedStart, normalizedEnd: adjustedEnd, startChanged, endChanged, needArrivalReason: needArrival, needDepartureReason: needDeparture } = v;
+
+        const cost = estimateDetailedCostFromShift({
             shift_date: String(entry.date),
             start_time: adjustedStart,
             end_time: adjustedEnd,
             roles: { name: entry.role },
+            employmentType: entry.employmentType,
+            is_training: entry.isTraining,
             unpaid_break_minutes: parseFloat(editedAdjusted.unpaidBreak) || 0,
             scheduled_length_minutes: calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd) * 60,
-        };
-
-        const cost = estimateDetailedCostFromShift(fakeShift);
+        });
         const approximatePay = `$${cost.totalCost.toFixed(2)}`;
 
         // Persist ONLY the sides the manager changed — an untouched side keeps
         // its snapped/auto provenance and must not become a manual override.
-        const normTime = (t: string) => formatTimeStr(t).slice(0, 5);
-        const startChanged = normTime(adjustedStart) !== normTime(initialEdit.adjustedStart);
-        const endChanged = normTime(adjustedEnd) !== normTime(initialEdit.adjustedEnd);
-
-        onSave?.(String(entry.id), {
+        const payload: Record<string, any> = {
             ...(startChanged ? { adjustedStart } : {}),
             ...(endChanged ? { adjustedEnd } : {}),
             paidBreak: editedAdjusted.paidBreak,
@@ -316,9 +377,53 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             netLength: calculatedValues.netLength,
             differential: calculatedValues.differential,
             approximatePay,
-        });
+        };
+        // A changed side that's back on-roster clears any stale reason.
+        if (startChanged && !needArrival) payload.arrivalVarianceReason = null;
+        if (endChanged && !needDeparture) payload.departureVarianceReason = null;
+
+        return { payload, needArrival, needDeparture };
+    };
+
+    const handleSaveAdjusted = () => {
+        const result = buildAndValidate();
+        if (!result) return;
+        const { payload, needArrival, needDeparture } = result;
+
+        // Variance from roster on either side → require a reason first.
+        if (needArrival || needDeparture) {
+            setArrivalReason(needArrival ? entry.arrivalVarianceReason || '' : '');
+            setDepartureReason(needDeparture ? entry.departureVarianceReason || '' : '');
+            setPendingSave({ payload, needArrival, needDeparture });
+            setVarianceOpen(true);
+            return;
+        }
+
+        onSave?.(String(entry.id), payload as any);
         toast({ title: 'Adjusted Values Saved', description: 'Timesheet adjustments updated.' });
         setIsEditingAdjusted(false);
+    };
+
+    const confirmVarianceSave = () => {
+        if (!pendingSave) return;
+        const { payload, needArrival, needDeparture } = pendingSave;
+        if ((needArrival && !arrivalReason) || (needDeparture && !departureReason)) return; // required
+        onSave?.(String(entry.id), {
+            ...payload,
+            ...(needArrival ? { arrivalVarianceReason: arrivalReason } : {}),
+            ...(needDeparture ? { departureVarianceReason: departureReason } : {}),
+        } as any);
+        const isApproval = payload.timesheetStatus === 'approved';
+        toast({
+            title: isApproval ? 'Timesheet Approved' : 'Adjusted Values Saved',
+            description: isApproval
+                ? `Timesheet for ${entry.employee} approved with variance reasons.`
+                : 'Timesheet adjustments updated with variance reasons.',
+        });
+        setVarianceOpen(false);
+        setPendingSave(null);
+        setIsEditingAdjusted(false);
+        setOverrideReason('');
     };
 
     const handleCancelEdit = () => {
@@ -529,24 +634,23 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                             "font-medium text-foreground/80",
                             (!entry.adjustedStart || entry.adjustedStart === '-') && "bg-muted/5"
                         )}>
-                            <div className="flex flex-col">
-                                <div className="flex items-center gap-1">
-                                    {readOnly && <Lock className="h-2.5 w-2.5 text-muted-foreground/30 shrink-0" />}
-                                    <span className={cn(
-                                        "font-bold",
-                                        entry.adjustedStartSource === 'manual' ? "text-indigo-600 dark:text-indigo-400" :
-                                        entry.adjustedStartSource === 'snapped' ? "text-sky-600 dark:text-sky-400 font-bold" :
-                                        "text-muted-foreground/30 italic font-medium"
-                                    )}>
-                                        {entry.adjustedStart || '-'}
-                                        {entry.adjustedStartSource === 'manual' && entry.adjustedStart && ' *'}
-                                    </span>
-                                </div>
-                                {entry.adjustedStartSource === 'snapped' && entry.adjustedStart && (
-                                    <span className="text-[8px] font-black uppercase text-muted-foreground/30 tracking-widest leading-none">
-                                        snapped
-                                    </span>
-                                )}
+                            <div className="flex items-center gap-1">
+                                {readOnly && <Lock className="h-2.5 w-2.5 text-muted-foreground/30 shrink-0" />}
+                                <span className={cn(
+                                    "font-bold",
+                                    entry.adjustedStartSource === 'manual' ? "text-indigo-600 dark:text-indigo-400" :
+                                    entry.adjustedStartSource === 'snapped' ? "text-sky-600 dark:text-sky-400" :
+                                    entry.adjustedStartSource === 'auto' ? "text-amber-600 dark:text-amber-400" :
+                                    "text-muted-foreground/30 italic font-medium"
+                                )}>
+                                    {entry.adjustedStart || '-'}
+                                </span>
+                                <BillableSourceIcon
+                                    source={entry.adjustedStartSource}
+                                    hasValue={!!entry.adjustedStart}
+                                    varianceReason={entry.arrivalVarianceReason}
+                                    labelPrefix="Arrival"
+                                />
                             </div>
                         </td>
                         {/* Adjusted End — color coded by source */}
@@ -555,24 +659,23 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                             "font-medium text-foreground/80",
                             (!entry.adjustedEnd || entry.adjustedEnd === '-') && "bg-muted/5"
                         )}>
-                            <div className="flex flex-col">
-                                <div className="flex items-center gap-1">
-                                    {readOnly && <Lock className="h-2.5 w-2.5 text-muted-foreground/30 shrink-0" />}
-                                    <span className={cn(
-                                        "font-bold",
-                                        entry.adjustedEndSource === 'manual' ? "text-indigo-600 dark:text-indigo-400" :
-                                        entry.adjustedEndSource === 'snapped' ? "text-sky-600 dark:text-sky-400 font-bold" :
-                                        "text-muted-foreground/30 italic font-medium"
-                                    )}>
-                                        {entry.adjustedEnd || '-'}
-                                        {entry.adjustedEndSource === 'manual' && entry.adjustedEnd && ' *'}
-                                    </span>
-                                </div>
-                                {entry.adjustedEndSource === 'snapped' && entry.adjustedEnd && (
-                                    <span className="text-[8px] font-black uppercase text-muted-foreground/30 tracking-widest leading-none">
-                                        snapped
-                                    </span>
-                                )}
+                            <div className="flex items-center gap-1">
+                                {readOnly && <Lock className="h-2.5 w-2.5 text-muted-foreground/30 shrink-0" />}
+                                <span className={cn(
+                                    "font-bold",
+                                    entry.adjustedEndSource === 'manual' ? "text-indigo-600 dark:text-indigo-400" :
+                                    entry.adjustedEndSource === 'snapped' ? "text-sky-600 dark:text-sky-400" :
+                                    entry.adjustedEndSource === 'auto' ? "text-amber-600 dark:text-amber-400" :
+                                    "text-muted-foreground/30 italic font-medium"
+                                )}>
+                                    {entry.adjustedEnd || '-'}
+                                </span>
+                                <BillableSourceIcon
+                                    source={entry.adjustedEndSource}
+                                    hasValue={!!entry.adjustedEnd}
+                                    varianceReason={entry.departureVarianceReason}
+                                    labelPrefix="Departure"
+                                />
                             </div>
                         </td>
                         <td className={`${cellClass} font-black text-foreground border-r border-border/30`}>
@@ -619,8 +722,26 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                     )}
                 </td>
                 {/* Live Rules */}
-                <td className={`${cellClass} border-r border-border/30`}>
+                <td className={cellClass}>
                     <div className="flex flex-col gap-1 items-start">
+                        <div className="flex items-center gap-1">
+                            <TimesheetHistoryPopover shiftId={String(entry.id)} />
+                            {!!entry.editCount && entry.editCount > 0 && (
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <span className="inline-flex items-center gap-0.5 px-1.5 h-5 rounded-md border border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[9px] font-black font-mono cursor-default">
+                                                <Pencil className="h-2.5 w-2.5" />
+                                                {entry.editCount}
+                                            </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" className="text-[10px]">
+                                            {entry.editCount} manager {entry.editCount === 1 ? 'edit' : 'edits'} — see History
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            )}
+                        </div>
                         {[liveRuleBadges.arrival, liveRuleBadges.departure].map((badge, i) => badge && (
                             <span
                                 key={i}
@@ -645,6 +766,67 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                         </span>
                                     </TooltipTrigger>
                                     <TooltipContent className="max-w-xs">{actionNote}</TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
+                    </div>
+                </td>
+
+                {/* Payroll Rules — billable window vs roster (what we pay) */}
+                <td className={`${cellClass} border-r border-border/30`}>
+                    <div className="flex flex-col gap-1 items-start">
+                        {liveRuleBadges.arrival || liveRuleBadges.departure || payrollRuleBadges.arrival || payrollRuleBadges.departure ? (
+                            [payrollRuleBadges.arrival, payrollRuleBadges.departure].some(Boolean) ? (
+                                [payrollRuleBadges.arrival, payrollRuleBadges.departure].map((badge, i) => badge && (
+                                    <span
+                                        key={i}
+                                        className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black font-mono tracking-tight uppercase border w-fit whitespace-nowrap"
+                                        style={{
+                                            color: badge.color,
+                                            backgroundColor: `${badge.color}10`,
+                                            borderColor: `${badge.color}20`,
+                                        }}
+                                    >
+                                        {badge.label}
+                                    </span>
+                                ))
+                            ) : (
+                                <span className="text-[9px] font-mono text-muted-foreground/40 uppercase tracking-wider">No billable</span>
+                            )
+                        ) : null}
+                        {entry.wasToppedUpToMinEngagement && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span
+                                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black font-mono tracking-tight uppercase border w-fit whitespace-nowrap cursor-default"
+                                            style={{ color: '#0891B2', backgroundColor: '#0891B210', borderColor: '#0891B220' }}
+                                        >
+                                            <TrendingUp className="h-2.5 w-2.5" />
+                                            Topped Up to Min
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="max-w-xs text-[11px]">
+                                        Clocked hours were below the EBA minimum engagement
+                                        {entry.requiredEngagementMinutes ? ` (${entry.requiredEngagementMinutes / 60}h)` : ''} for this shift —
+                                        pay was automatically topped up to the guaranteed minimum.
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
+                        {(entry.arrivalVarianceReason || entry.departureVarianceReason) && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span className="inline-flex items-center gap-1 text-[8px] text-muted-foreground/60 cursor-default mt-0.5">
+                                            <MessageSquare className="h-2.5 w-2.5 shrink-0" />
+                                            <span>Variance reason</span>
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="max-w-xs text-[11px] space-y-0.5">
+                                        {entry.arrivalVarianceReason && <div><strong>Arrival:</strong> {entry.arrivalVarianceReason}</div>}
+                                        {entry.departureVarianceReason && <div><strong>Departure:</strong> {entry.departureVarianceReason}</div>}
+                                    </TooltipContent>
                                 </Tooltip>
                             </TooltipProvider>
                         )}
@@ -903,6 +1085,76 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                         >
                             <XCircle className="h-4 w-4 mr-1.5" />
                             Confirm Rejection
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Billable variance reason modal ── */}
+            <Dialog open={varianceOpen} onOpenChange={open => { setVarianceOpen(open); if (!open) setPendingSave(null); }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-amber-500" />
+                            Billable variance — reason required
+                        </DialogTitle>
+                        <DialogDescription>
+                            The billable time for <strong>{entry.employee}</strong> differs from the roster
+                            by more than {VARIANCE_GRACE_MIN} minutes. Record why, so payroll and audit have it.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 my-2">
+                        {pendingSave?.needArrival && (
+                            <div className="space-y-1.5">
+                                <Label htmlFor="arrival-variance" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                    Arrival variance reason <span className="text-red-500">*</span>
+                                </Label>
+                                <Select value={arrivalReason} onValueChange={setArrivalReason}>
+                                    <SelectTrigger id="arrival-variance" className="h-11 rounded-xl border border-border bg-muted/20 text-sm font-semibold text-foreground">
+                                        <SelectValue placeholder="Select a reason…" />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-2xl border border-border/80 bg-popover text-popover-foreground shadow-2xl z-[999] max-h-60 overflow-y-auto">
+                                        {ARRIVAL_VARIANCE_REASONS.map(r => (
+                                            <SelectItem key={r} value={r} className="rounded-xl py-2.5 text-xs font-semibold cursor-pointer">
+                                                {r}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                        {pendingSave?.needDeparture && (
+                            <div className="space-y-1.5">
+                                <Label htmlFor="departure-variance" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                    Departure variance reason <span className="text-red-500">*</span>
+                                </Label>
+                                <Select value={departureReason} onValueChange={setDepartureReason}>
+                                    <SelectTrigger id="departure-variance" className="h-11 rounded-xl border border-border bg-muted/20 text-sm font-semibold text-foreground">
+                                        <SelectValue placeholder="Select a reason…" />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-2xl border border-border/80 bg-popover text-popover-foreground shadow-2xl z-[999] max-h-60 overflow-y-auto">
+                                        {DEPARTURE_VARIANCE_REASONS.map(r => (
+                                            <SelectItem key={r} value={r} className="rounded-xl py-2.5 text-xs font-semibold cursor-pointer">
+                                                {r}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" onClick={() => { setVarianceOpen(false); setPendingSave(null); }}>
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={confirmVarianceSave}
+                            disabled={(!!pendingSave?.needArrival && !arrivalReason) || (!!pendingSave?.needDeparture && !departureReason)}
+                        >
+                            <Save className="h-4 w-4 mr-1.5" />
+                            Save with reason
                         </Button>
                     </DialogFooter>
                 </DialogContent>

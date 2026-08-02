@@ -230,10 +230,14 @@ describe('Client ⊆ DB guard parity (client must never allow what the DB forbid
 });
 
 describe('Boundary signals', () => {
-    it('hasStarted=true forbids every op from every state', () => {
+    it('hasStarted=true forbids ops except assign on unassigned states (S1/S5)', () => {
         for (const op of ALL_OPS) {
             for (const state of MATRIX_STATES) {
-                expect(isShiftOpLegal(op, { ...ctxFor(state), hasStarted: true })).toBe(false);
+                if (op === 'assign' && (state === 'S1' || state === 'S5')) {
+                    expect(isShiftOpLegal(op, { ...ctxFor(state), hasStarted: true })).toBe(true);
+                } else {
+                    expect(isShiftOpLegal(op, { ...ctxFor(state), hasStarted: true })).toBe(false);
+                }
             }
         }
     });

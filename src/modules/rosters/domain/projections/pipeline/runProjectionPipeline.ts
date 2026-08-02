@@ -28,6 +28,8 @@ import {
 } from '../cache/projection.cache';
 import type { ShiftCostBreakdown } from '../utils/cost/types';
 import type { CostCalculatorOptions } from '../utils/cost/types';
+import { detectSplitShiftEligibleIds } from '../utils/cost/split-shift-eligibility';
+import { detectRestGapBreaches } from '../utils/cost/rest-gap-breach';
 import { estimateDetailedShiftCost, extractLevel } from '../utils/cost/index';
 import type { AwardContext } from '../utils/cost/award-context';
 import { buildAwardContext } from '../utils/cost/award-context';
@@ -125,20 +127,26 @@ export function computeCostForShift(
 }
 
 /**
- * Weekly-OT-aware cost — same inputs as computeCostForShift plus the running
- * `priorOrdinaryHoursThisWeek` (cl 42). Deliberately UNCACHED: the per-shift
- * cache key (shiftId:updatedAtMs) does not encode the weekly context, so caching
- * a weekly-adjusted result would corrupt the shared entry read by the display
- * path. These are a small minority of shifts (only members already past ~38h in
- * a week), so recomputing them per projection is cheap.
+ * Cost with cross-shift context the engine can't derive per-shift in
+ * isolation — the running `priorOrdinaryHoursThisWeek` (cl 42) and/or an
+ * auto-derived split-shift allowance (cl 28.4/39, compliance audit finding —
+ * 2026-08-02). Deliberately UNCACHED: the per-shift cache key
+ * (shiftId:updatedAtMs) does not encode either piece of context, so caching
+ * an adjusted result would corrupt the shared entry read by the display
+ * path. These are a small minority of shifts (weekly-OT: only members already
+ * past ~38h in a week; split-shift: only same-day PT/Flex-PT pairs), so
+ * recomputing them per projection is cheap.
  */
-export function computeCostForShiftWeekly(
+export function computeCostForShiftAdjusted(
   shift: WorkerShiftDTO,
   netMinutes: number,
-  priorOrdinaryHoursThisWeek: number,
+  overrides: { priorOrdinaryHoursThisWeek?: number; isSplitShiftEligible?: boolean },
   ctx?: AwardContext,
 ): ShiftCostBreakdown {
   const empType = shift.targetEmploymentType;
+  const allowances = overrides.isSplitShiftEligible
+    ? { ...shift.allowances, splitShift: true }
+    : (shift.allowances ?? undefined);
   return estimateDetailedShiftCost({
     netMinutes,
     start_time: shift.startTime,
@@ -148,7 +156,7 @@ export function computeCostForShiftWeekly(
     is_overnight: shift.isOvernight,
     is_cancelled: shift.isCancelled,
     shift_date: shift.shiftDate,
-    allowances: shift.allowances ?? undefined,
+    allowances,
     isAnnualLeave: shift.isAnnualLeave,
     isPersonalLeave: shift.isPersonalLeave,
     isCarerLeave: shift.isCarerLeave,
@@ -156,7 +164,7 @@ export function computeCostForShiftWeekly(
     employmentType: (empType === 'FT' || /full/i.test(empType as string)) ? 'Full-Time' : (empType === 'PT' || /part/i.test(empType as string)) ? 'Part-Time' : (empType as any || 'Casual'),
     isSecurityRole: shift.roleName?.toLowerCase().includes('security'),
     classificationLevel: extractLevel(shift.roleName),
-    priorOrdinaryHoursThisWeek,
+    priorOrdinaryHoursThisWeek: overrides.priorOrdinaryHoursThisWeek,
   } as CostCalculatorOptions, ctx);
 }
 
@@ -268,6 +276,41 @@ function buildStats(shifts: WorkerShiftDTO[]): ProjectionStatsResult {
   // ── cl 42 weekly OT: per-employee / per-ISO-week prior-ordinary accumulation.
   const priorOrdinaryMap = buildPriorOrdinaryMap(nonCancelled);
 
+  // ── cl 28.4/39 split-shift allowance: auto-derived from same-day PT/Flex-PT
+  // pairs with a ≤3h gap (compliance audit finding — 2026-08-02). Grouped
+  // across ALL assigned shifts in this batch (by employee + date), not just
+  // one employee, since `nonCancelled` spans the whole roster view.
+  const splitShiftEligibleIds = detectSplitShiftEligibleIds(
+    nonCancelled
+      .filter(s => !!s.assignedEmployeeId)
+      .map(s => ({
+        id: s.id,
+        employeeId: s.assignedEmployeeId as string,
+        shiftDate: s.shiftDate,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        employmentType: s.targetEmploymentType,
+        isLeave: !!(s.isAnnualLeave || s.isPersonalLeave || s.isCarerLeave),
+      })),
+  );
+
+  // ── cl 40.1 rest-gap double-time: forced early recall (compliance audit
+  // finding — 2026-08-02). Applies to EVERY employment type, so — unlike
+  // split-shift — the candidate filter is not narrowed to PT/Flex-PT.
+  const restGapBreaches = detectRestGapBreaches(
+    nonCancelled
+      .filter(s => !!s.assignedEmployeeId)
+      .map(s => ({
+        id: s.id,
+        employeeId: s.assignedEmployeeId as string,
+        shiftDate: s.shiftDate,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        isWorkedWithTimes: !(s.isAnnualLeave || s.isPersonalLeave || s.isCarerLeave)
+          && !!s.startTime && !!s.endTime && netMinutesFromDTO(s) > 0,
+      })),
+  );
+
   for (const s of nonCancelled) {
     const mins = netMinutesFromDTO(s);
     totalNetMinutes += mins;
@@ -275,16 +318,33 @@ function buildStats(shifts: WorkerShiftDTO[]): ProjectionStatsResult {
     // Cost is employee-dependent — only compute for assigned shifts
     if (s.assignedEmployeeId) {
       const prior = priorOrdinaryMap.get(s.id);
-      // When a shift carries a weekly-OT prior total we price it WITHOUT the
+      const isSplitShiftEligible = splitShiftEligibleIds.has(s.id);
+      // When a shift carries cross-shift context (a weekly-OT prior total
+      // and/or an auto-derived split-shift allowance) we price it WITHOUT the
       // per-shift cache: the cache is keyed on shiftId:updatedAtMs only, so a
-      // weekly-context-dependent cost would poison the shared entry used by the
-      // display path. Shifts with no prior context keep the cached fast path.
-      const detail = prior !== undefined
-        ? computeCostForShiftWeekly(s, mins, prior, ctx)
+      // context-dependent cost would poison the shared entry used by the
+      // display path. Shifts with neither keep the cached fast path.
+      const detail = (prior !== undefined || isSplitShiftEligible)
+        ? computeCostForShiftAdjusted(s, mins, { priorOrdinaryHoursThisWeek: prior, isSplitShiftEligible }, ctx)
         : computeCostForShift(s, mins, ctx);
-      estimatedCost += detail.totalCost;
+
+      // cl 40.1 double-time floor — applied as a pure ADDITIVE top-up to the
+      // running totals (never mutates `detail`, which may be the shared
+      // cached object) so this never risks poisoning the per-shift cache.
+      let restGapPenalty = 0;
+      if (restGapBreaches.has(s.id)) {
+        const hours = detail.ordinaryHours + detail.overtimeHours;
+        const ordinaryRate = detail.breakdown.ordinaryRate;
+        const effectiveRate = hours > 0 ? detail.totalCost / hours : 0;
+        const doubleTimeRate = 2 * ordinaryRate;
+        if (ordinaryRate > 0 && effectiveRate < doubleTimeRate) {
+          restGapPenalty = Math.round((doubleTimeRate - effectiveRate) * hours * 100) / 100;
+        }
+      }
+
+      estimatedCost += detail.totalCost + restGapPenalty;
       cb.base += detail.ordinaryCost;
-      cb.penalty += detail.penaltyCost;
+      cb.penalty += detail.penaltyCost + restGapPenalty;
       cb.overtime += detail.overtimeCost;
       cb.allowance += detail.allowanceCost ?? 0;
     }

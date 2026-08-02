@@ -50,20 +50,25 @@ export const PersonalPageHeader: React.FC<PersonalPageHeaderProps> = ({
             <motion.div variants={itemVariants} className="flex items-start justify-between shrink-0 mb-4">
                 <div>
                     <div className="flex items-center gap-2 mb-0.5">
-                        <Icon className="h-6 w-6 text-primary" />
+                        <Icon className="h-6 w-6 text-primary" aria-hidden="true" />
                         <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-foreground">
                             {title}
                         </h1>
                     </div>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                    <div className="text-right">
+                    <div 
+                        className="text-right" 
+                        role="timer" 
+                        aria-live="off"
+                        aria-label={`Current venue time: ${formatInTimezone(now, SYDNEY_TZ, 'HH:mm:ss')}`}
+                    >
                         <div className="flex items-center justify-end gap-3 mb-1">
                             <p className="text-3xl font-mono font-black tabular-nums leading-none text-slate-800 dark:text-foreground">
                                 {formatInTimezone(now, SYDNEY_TZ, 'HH:mm')}
                             </p>
                         </div>
-                        <p className="text-xs font-mono tabular-nums text-slate-400 dark:text-muted-foreground">
+                        <p className="text-xs font-mono tabular-nums text-slate-400 dark:text-muted-foreground" aria-hidden="true">
                             :{formatInTimezone(now, SYDNEY_TZ, 'ss')}
                         </p>
                     </div>

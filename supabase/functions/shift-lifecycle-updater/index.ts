@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@supabase/supabase-js@2.50.0';
+import { createClient } from '@supabase/supabase-js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,50 +44,30 @@ Deno.serve(async (req: Request) => {
     let updatedCount = 0;
     const logs: string[] = [];
 
-    // ── LOGIC 1: Auto clock-out — 12.5h after the LATER of clock-in/start ──
-    // Mirrors sm_run_state_processor Pass 6 exactly:
-    //   • threshold = GREATEST(actual clock-in, scheduled start) + 12.5h
-    //   • does NOT fabricate actual_end — no clock-out happened, the raw
-    //     actual stays NULL; attendance_status = 'auto_clock_out' is the
-    //     terminal signal (unlocks manager review, drives the badge/metric)
-    //   • not gated on lifecycle = InProgress (shifts are auto-completed at
-    //     scheduled end, so hanging clock-ins are usually 'Completed')
-    const { data: hanging, error: hangingError } = await supabase
+    // ── LOGIC 1: Close shift when 12.5h after scheduled start is reached ────
+    const AUTO_CLOSE_MS = 12.5 * 60 * 60 * 1000;
+    const { data: openShifts, error: openError } = await supabase
       .from('shifts')
-      .select('id, lifecycle_status, attendance_status, start_at, actual_start, actual_end')
-      .in('attendance_status', ['checked_in', 'late'])
-      .is('actual_end', null)
-      .in('lifecycle_status', ['InProgress', 'Completed'])
+      .select('id, lifecycle_status, start_at, actual_start, actual_end')
+      .neq('lifecycle_status', 'Completed')
       .neq('is_cancelled', true);
 
-    if (hangingError) {
-      throw hangingError;
-    }
+    if (!openError) {
+      for (const shift of openShifts || []) {
+        const startMs = resolveTimeMs(shift.start_at);
+        if (startMs !== null && now.getTime() >= startMs + AUTO_CLOSE_MS) {
+          const { error: updateError } = await supabase
+            .from('shifts')
+            .update({
+              lifecycle_status: 'Completed',
+              updated_at: now.toISOString(),
+            })
+            .eq('id', shift.id);
 
-    for (const shift of hanging || []) {
-      const startMs = resolveTimeMs(shift.start_at);
-      if (startMs === null) {
-        logs.push(`[SKIP] shift ${shift.id}: cannot resolve scheduled start`);
-        continue;
-      }
-      const clockInMs = resolveTimeMs(shift.actual_start);
-      const anchorMs = Math.max(clockInMs ?? startMs, startMs); // later of the two
-      if (now.getTime() >= anchorMs + AUTO_COMPLETE_MS) {
-        const { error: updateError } = await supabase
-          .from('shifts')
-          .update({
-            lifecycle_status:  'Completed',
-            attendance_status: 'auto_clock_out',
-            attendance_note:   'Auto-completed by system (12.5hr limit)',
-            updated_at:        now.toISOString(),
-          })
-          .eq('id', shift.id);
-
-        if (updateError) {
-          logs.push(`[ERROR] shift ${shift.id} (auto-out): ${updateError.message}`);
-        } else {
-          updatedCount++;
-          logs.push(`[INFO] Auto clock-out shift ${shift.id}: attendance -> auto_clock_out (actual_end stays NULL)`);
+          if (!updateError) {
+            updatedCount++;
+            logs.push(`[INFO] Shift ${shift.id} closed at 12.5h mark: -> Completed`);
+          }
         }
       }
     }
@@ -132,11 +112,100 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ── LOGIC 3: Zero-Variance Auto-Approve Sweeper ──────────────
+    // Constantly sweeps finished shifts and automatically approves clean punches within ±7.5m
+    const PUNCH_TOLERANCE_MS = 7.5 * 60 * 1000;
+    const { data: finishedShifts, error: finishError } = await supabase
+      .from('shifts')
+      .select('id, start_at, end_at, actual_start, actual_end, shift_date, start_time, end_time, assigned_employee_id')
+      .eq('lifecycle_status', 'Completed')
+      .not('actual_start', 'is', null)
+      .not('actual_end', 'is', null)
+      .not('assigned_employee_id', 'is', null)
+      .neq('is_cancelled', true);
+
+    if (!finishError && finishedShifts && finishedShifts.length > 0) {
+      const shiftIds = finishedShifts.map((s: any) => s.id);
+      const { data: existingTimesheets } = await supabase
+        .from('timesheets')
+        .select('id, shift_id, status, start_time, end_time')
+        .in('shift_id', shiftIds);
+
+      const tsMap = new Map((existingTimesheets || []).map((t: any) => [t.shift_id, t]));
+
+      for (const shift of finishedShifts) {
+        const ts = tsMap.get(shift.id);
+        const currentTsStatus = (ts?.status || '').toLowerCase();
+
+        // Skip if already settled by human or auto-approved
+        if (['approved', 'auto_approved', 'auto_verified', 'rejected', 'denied', 'no_show'].includes(currentTsStatus)) {
+          continue;
+        }
+
+        // Skip if manual billable overrides exist
+        if (ts?.start_time || ts?.end_time) {
+          continue;
+        }
+
+        const startMs = resolveTimeMs(shift.start_at ?? `${shift.shift_date}T${shift.start_time}`);
+        const endMs = resolveTimeMs(shift.end_at ?? `${shift.shift_date}T${shift.end_time}`);
+        const clockInMs = resolveTimeMs(shift.actual_start);
+        const clockOutMs = resolveTimeMs(shift.actual_end);
+
+        if (startMs === null || endMs === null || clockInMs === null || clockOutMs === null) {
+          continue;
+        }
+
+        const varInMs = Math.abs(clockInMs - startMs);
+        const varOutMs = Math.abs(clockOutMs - endMs);
+
+        if (varInMs <= PUNCH_TOLERANCE_MS && varOutMs <= PUNCH_TOLERANCE_MS) {
+          if (ts) {
+            await supabase
+              .from('timesheets')
+              .update({ status: 'auto_approved', updated_at: now.toISOString() })
+              .eq('id', ts.id);
+          } else {
+            await supabase
+              .from('timesheets')
+              .insert({
+                shift_id: shift.id,
+                employee_id: shift.assigned_employee_id,
+                profile_id: shift.assigned_employee_id,
+                work_date: shift.shift_date,
+                clock_in: shift.actual_start,
+                clock_out: shift.actual_end,
+                status: 'auto_approved',
+                created_at: now.toISOString(),
+                updated_at: now.toISOString(),
+              });
+          }
+
+          await supabase.from('timesheet_audit_log').insert({
+            shift_id: shift.id,
+            timesheet_id: ts?.id || null,
+            event_type: 'AUTO_APPROVED',
+            source: 'system',
+            actor_label: 'Auto-Approve Sweeper',
+            detail: {
+              reason: 'Zero-variance punch within ±7.5m tolerance',
+              variance_in_min: Math.round(varInMs / 60000),
+              variance_out_min: Math.round(varOutMs / 60000),
+            },
+            created_at: now.toISOString(),
+          });
+
+          updatedCount++;
+          logs.push(`[INFO] Shift ${shift.id} auto-approved (zero variance <= 7.5m)`);
+        }
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         updatedCount,
-        totalChecked: (hanging?.length || 0) + (pendingShifts?.length || 0),
+        totalChecked: (openShifts?.length || 0) + (pendingShifts?.length || 0) + (finishedShifts?.length || 0),
         logs,
         timestamp: now.toISOString(),
       }),

@@ -6,7 +6,29 @@ import { shiftsApi } from '@/modules/rosters';
 import { applyShiftOp } from '@/modules/rosters/api/shifts.api';
 import { mapShiftOpResultToUx } from '@/modules/rosters/domain/shift-ops.contract';
 import { ShiftTimeRange, swapEvaluator, runSwapGuards, SwapGuardError } from '@/modules/compliance';
+import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
 import { addDays, subDays, format, parseISO, differenceInHours, parse } from 'date-fns';
+
+// Audit C-4: the swap engine's SwapPartyInput.contract_type uses the
+// shorthand 'FT' | 'PT' | 'CASUAL' union; fetchV8EmployeeContext (the
+// same helper the manager-approval orchestrator uses) returns the V2
+// orchestrator's 'FULL_TIME' | 'PART_TIME' | 'CASUAL' | 'STUDENT_VISA'.
+// Map between them rather than introduce a second contract-type
+// vocabulary. STUDENT_VISA workers in this venue are casual/part-time
+// by award structure and the underlying FT/PT/CASUAL value is not
+// preserved once STUDENT_VISA overrides it upstream, so fall back to
+// the safe, previously-universal default (CASUAL) for that case only.
+const toSwapEngineContractType = (
+    t: 'FULL_TIME' | 'PART_TIME' | 'CASUAL' | 'STUDENT_VISA' | null | undefined,
+): 'FT' | 'PT' | 'CASUAL' | null => {
+    switch (t) {
+        case 'FULL_TIME': return 'FT';
+        case 'PART_TIME': return 'PT';
+        case 'CASUAL': return 'CASUAL';
+        case 'STUDENT_VISA': return 'CASUAL';
+        default: return null;
+    }
+};
 
 // Type assertion helper for Supabase queries with tables not in generated types
 const db = supabase as any;
@@ -53,10 +75,16 @@ const validateSwapCompliance = async (
     const start = format(subDays(dateRef, 30), 'yyyy-MM-dd');
     const end = format(addDays(dateRef, 30), 'yyyy-MM-dd');
 
-    // Fetch rosters for BOTH parties (cross-department — no department filter)
-    const [requesterRoster, offererRoster] = await Promise.all([
+    // Fetch rosters AND real employment context for BOTH parties (cross-
+    // department — no department filter). Audit C-4: this compliance
+    // check previously never fetched contract_type/contracted_weekly_hours/
+    // leave_days at all, so every swap silently ran through the engine as
+    // if both parties were CASUAL regardless of their real employment type.
+    const [requesterRoster, offererRoster, requesterCtx, offererCtx] = await Promise.all([
         shiftsApi.getEmployeeShifts(requesterId, start, end),
         shiftsApi.getEmployeeShifts(offererId, start, end),
+        fetchV8EmployeeContext(requesterId),
+        fetchV8EmployeeContext(offererId),
     ]);
 
     // Pre-flight guards: entity validity, concurrency, locks, drift (#1, #2, #16, #20, #21)
@@ -84,12 +112,20 @@ const validateSwapCompliance = async (
             name: 'Requester',
             current_shifts: requesterRoster.map(s => ({ ...toTimeRange(s), id: s.id })) as any,
             shift_to_give: { ...toTimeRange(requesterShift), id: requesterShift.id } as any,
+            contract_type: toSwapEngineContractType(requesterCtx.contract_type),
+            contracted_weekly_hours: requesterCtx.contracted_weekly_hours || undefined,
+            leave_days: requesterCtx.leave_days,
+            is_security_role: requesterCtx.is_security_role,
         },
         partyB: {
             employee_id: offererId,
             name: 'Offerer',
             current_shifts: offererRoster.map(s => ({ ...toTimeRange(s), id: s.id })) as any,
             shift_to_give: { ...toTimeRange(offeredShift), id: offeredShift?.id } as any,
+            contract_type: toSwapEngineContractType(offererCtx.contract_type),
+            contracted_weekly_hours: offererCtx.contracted_weekly_hours || undefined,
+            leave_days: offererCtx.leave_days,
+            is_security_role: offererCtx.is_security_role,
         },
     });
 
@@ -159,50 +195,37 @@ export const swapsApi = {
     ): Promise<ShiftSwap> {
         console.log('[API] Creating swap request:', { requesterV8ShiftId, requestedByEmployeeId, swapWithEmployeeId });
 
-        // §9 Time Lock Check: Fetch shift to verify time lock
+        // §9 Time Lock Check (client-side fast-path for a friendly error). The
+        // RPC below re-checks the lock atomically on the server.
         const { data: shift, error: shiftErr } = await supabase
             .from('shifts').select('shift_date, start_time').eq('id', requesterV8ShiftId).single();
         if (shiftErr || !shift) throw shiftErr || new Error('Shift not found');
-        const shiftStart = assertNotTimeLocked(shift.shift_date, shift.start_time);
-        const expiresAt = new Date(shiftStart.getTime() - TIME_LOCK_HOURS * 60 * 60 * 1000);
+        assertNotTimeLocked(shift.shift_date, shift.start_time);
 
-        const { data, error } = await db
-            .from('shift_swaps')
-            .insert({
-                requester_shift_id: requesterV8ShiftId,
-                requester_id: requestedByEmployeeId,
-                target_id: swapWithEmployeeId,
-                reason: reason,
-                status: 'OPEN', // T1: S4 → S9, OPEN
-                expires_at: expiresAt.toISOString(),
-            })
-            .select()
-            .single();
-
-        if (error) {
-            console.error('[API] Error creating swap request:', error);
-            throw error;
+        // Atomic create via the definer RPC: inserts the OPEN request (the
+        // trg_set_swap_expires_at trigger stamps expires_at) AND flips the shift
+        // to TradeRequested (S4 → S9) in a single transaction — closing the
+        // orphaned-state hole the old two-step client write had. The server
+        // derives the requester from auth.uid() and verifies shift ownership,
+        // so requestedByEmployeeId is no longer trusted from the client.
+        void requestedByEmployeeId;
+        const { data: rpcResult, error: rpcError } = await db.rpc('sm_create_swap_request', {
+            p_requester_shift_id: requesterV8ShiftId,
+            p_target_id: swapWithEmployeeId,
+            p_reason: reason,
+        });
+        if (rpcError) {
+            console.error('[API] Error creating swap request:', rpcError);
+            throw rpcError;
+        }
+        if (!rpcResult?.success) {
+            throw new Error(rpcResult?.error ?? 'Failed to create swap request');
         }
 
-        // Update shift status to TradeRequested to reflect S9 state (Published + TradeRequested)
-        if (data) {
-            const { error: shiftUpdateError } = await db
-                .from('shifts')
-                .update({
-                    trading_status: 'TradeRequested',
-                    trade_requested_at: new Date().toISOString()
-                })
-                .eq('id', requesterV8ShiftId);
-
-            if (shiftUpdateError) {
-                console.error('[API] Failed to update shift trading status:', shiftUpdateError);
-                // Note: ideally we would rollback the swap request creation here,
-                // but for now we log the error as this is a non-transactional client-side operation.
-            }
-
-            }
-
-        return data;
+        const { data: created, error: fetchErr } = await db
+            .from('shift_swaps').select('*').eq('id', rpcResult.swap_id).single();
+        if (fetchErr) throw fetchErr;
+        return created;
     },
 
     // ----------------------------------------------------------------
@@ -740,9 +763,16 @@ export const swapsApi = {
         // marks the swap APPROVED, and version-guards the requester shift — closing
         // the concurrent double-approve hole the old direct update had (it lacked a
         // status guard). S10 ↔ MANAGER_PENDING is kept in sync by sm_accept_trade.
+        // Optimistic-concurrency basis must be the version the view was loaded at
+        // (a stale view should correctly conflict). Never silently fall back to 0
+        // — that forces a confusing VERSION_CONFLICT since versions start at 1.
+        const expectedVersion = swap.originalShift?.version;
+        if (expectedVersion == null) {
+            throw new Error('Could not determine the shift version. Please refresh and try again.');
+        }
         const approveResult = await applyShiftOp({
             shiftId: swap.original_shift_id,
-            expectedVersion: swap.originalShift?.version ?? 0,
+            expectedVersion,
             op: 'approve_trade',
             payload: { compliance_ok: true },
         });
@@ -772,9 +802,13 @@ export const swapsApi = {
         const requesterShift = Array.isArray(data.requester_shift)
             ? data.requester_shift[0]
             : data.requester_shift;
+        const expectedVersion = requesterShift?.version;
+        if (expectedVersion == null) {
+            throw new Error('Could not determine the shift version. Please refresh and try again.');
+        }
         const result = await applyShiftOp({
             shiftId: data.requester_shift_id,
-            expectedVersion: requesterShift?.version ?? 0,
+            expectedVersion,
             op: 'reject_trade',
             payload: { reason: reason ?? 'Manager Action' },
         });
@@ -786,36 +820,16 @@ export const swapsApi = {
     async cancelSwapRequest(swapId: string): Promise<void> {
         console.log('[API] Cancelling swap:', swapId);
 
-        // §4 T7: Only allowed from OPEN
-        const { data, error: fetchErr } = await db
-            .from('shift_swaps').select('status, requester_shift_id').eq('id', swapId).single();
-        if (fetchErr || !data) throw fetchErr || new Error('Swap not found');
-        if (data.status !== 'OPEN') {
-            throw new Error(`Cannot cancel swap in state '${data.status}'. Must be OPEN.`);
-        }
-
-        const { error } = await db
-            .from('shift_swaps')
-            .update({ status: 'CANCELLED' })
-            .eq('id', swapId)
-            .eq('status', 'OPEN');
-
+        // §4 T7: atomic cancel via the definer RPC — flips the swap to CANCELLED
+        // and reverts the shift to NoTrade (S9 → S4) in one transaction, with the
+        // OPEN-only state guard (returns "Must be OPEN") and requester/manager
+        // authorization enforced server-side.
+        const { data: rpcResult, error } = await db.rpc('sm_cancel_swap_request', {
+            p_swap_id: swapId,
+        });
         if (error) throw error;
-
-        // Revert shift status to NoTrade (S4) as the trade was cancelled
-        if (data.requester_shift_id) {
-            const { error: shiftUpdateError } = await db
-                .from('shifts')
-                .update({
-                    trading_status: 'NoTrade',
-                    trade_requested_at: null
-                })
-                .eq('id', data.requester_shift_id);
-
-            if (shiftUpdateError) {
-                console.error('[API] Failed to revert shift trading status on cancellation:', shiftUpdateError);
-            }
-
+        if (!rpcResult?.success) {
+            throw new Error(rpcResult?.error ?? 'Failed to cancel swap');
         }
     },
 

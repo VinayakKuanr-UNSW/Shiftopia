@@ -28,8 +28,9 @@ import { solutionParser } from './optimizer/solution-parser';
 import { bulkAssignmentController, type BulkAssignmentResult } from '@/modules/rosters/bulk-assignment';
 import { assignmentCommitter } from '@/modules/rosters/bulk-assignment/engine/assignment-committer';
 import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
-import { estimateShiftCost, extractLevel } from '../rosters/domain/projections/utils/cost';
-import { resolveRateSet } from '../rosters/domain/projections/utils/cost/rate-schedule';
+import { extractLevel } from '../rosters/domain/projections/utils/cost';
+import { estimateDetailedShiftCost as estimateDetailedShiftCostObj } from '../rosters/domain/projections/utils/cost/index';
+import { resolveRateSet, type RateSet } from '../rosters/domain/projections/utils/cost/rate-schedule';
 import { calculateFatigueWithRecovery } from '../rosters/domain/projections/utils/fatigue';
 import { calculateUtilization } from '../rosters/domain/projections/utils/fairness';
 import type { ShiftMeta, EmployeeMeta } from './optimizer/solution-parser';
@@ -71,6 +72,157 @@ const SINGLE_MODE_STRATEGY: OptimizerStrategy = {
 // Default per-employee daily working-minute cap used by the capacity pre-check
 // when employee.max_daily_minutes is not supplied. 10h = 600m.
 const DEFAULT_MAX_DAILY_MINUTES = 600;
+
+// ── Security Schedule 3 rate resolution (compliance audit finding — 2026-08-02) ──
+// Full-time Security Level 3-6 is paid the Schedule 2 §2 ANNUALISED rate, not
+// the generic Schedule 2 §1 wage table — materially higher (~15-20%) because it
+// already absorbs penalties/night/leave loading (Sch.3 §4.1(b)). Extracted as
+// small pure functions (rather than inlined in the employee-mapping closure) so
+// the derivation is independently unit-testable without standing up the whole
+// `.run()` pipeline.
+const SECURITY_ANNUALISED_LEVELS = new Set([3, 4, 5, 6]);
+
+/**
+ * Role IDs that appear on at least one Security-named shift in the current
+ * optimization batch. Used as a best-effort "is this employee Security"
+ * signal when the caller doesn't supply `employeeDetails.is_security_role`
+ * explicitly — there is no per-employee classification field on the wire
+ * today (see the audit's P2 remediation item for the structural fix).
+ */
+export function deriveSecurityRoleIds(shifts: { role_id?: string | null; roleName?: string }[]): Set<string> {
+    return new Set(
+        shifts
+            .filter(s => s.roleName?.toLowerCase().includes('security'))
+            .map(s => s.role_id)
+            .filter((id): id is string => !!id),
+    );
+}
+
+/**
+ * Resolve the Schedule 2 §2 Security annualised hourly rate for a full-time
+ * Security Level 3-6 employee, or `null` when it doesn't apply (the caller
+ * should fall back to the generic Schedule 2 §1 wage table in that case).
+ */
+export function resolveSecurityAnnualisedRate(
+    rateSet: RateSet,
+    opts: { isFullTime: boolean; isSecurityEmployee: boolean; level?: number },
+): number | null {
+    if (!opts.isFullTime || !opts.isSecurityEmployee) return null;
+    if (!opts.level || !SECURITY_ANNUALISED_LEVELS.has(opts.level)) return null;
+    const key = `level${opts.level}` as keyof RateSet['security']['annualisedHourly'];
+    return rateSet.security.annualisedHourly[key] ?? null;
+}
+
+// ── Employee contract details from hr.user_contracts (compliance audit
+// finding — 2026-08-02) ─────────────────────────────────────────────────────
+// `RosterFetcher.fetchEmployeeContractDetails()` resolves each employee's
+// real Schedule 1/2 classification level, Schedule 3 Security status, and
+// Schedule 4/5/6 (apprentice/trainee/SWS) category from their Active
+// `user_contracts` row — see the docblock on that method for the full
+// rationale. This merges that contract-derived baseline with whatever the
+// caller explicitly supplied via `employeeDetails`: the caller's fields
+// always win per-employee, per-field, since a caller-supplied value is a
+// deliberate override (e.g. a UI screen letting a manager correct a
+// classification for one run) rather than a stale/absent one.
+export function mergeEmployeeDetails(
+    contractDetails: Map<string, Partial<OptimizerEmployee>>,
+    callerSupplied: Map<string, Partial<OptimizerEmployee>> | undefined,
+): Map<string, Partial<OptimizerEmployee>> {
+    if (!callerSupplied || callerSupplied.size === 0) return contractDetails;
+    const merged = new Map<string, Partial<OptimizerEmployee>>();
+    const ids = new Set([...contractDetails.keys(), ...callerSupplied.keys()]);
+    for (const id of ids) {
+        merged.set(id, { ...contractDetails.get(id), ...callerSupplied.get(id) });
+    }
+    return merged;
+}
+
+// ── cl 42 weekly overtime for the greedy-fallback cost estimate (compliance
+// audit finding — 2026-08-02) ────────────────────────────────────────────────
+// The roster-grid projection pipeline already threads `priorOrdinaryHoursThis
+// Week` into the cost engine (post-commit); the AutoScheduler's OWN pre-commit
+// preview never did, so a manager reviewing the fallback path's "Total Cost"
+// could see a figure understating true weekly overtime. Mirrors the same
+// isoWeekKey/group/sort/accumulate pattern as
+// `projections/projectors/shared.ts`'s `buildPriorOrdinaryMap`, but combines
+// each employee's EXISTING committed roster (already fetched for the rest-gap/
+// fatigue checks) with the newly proposed shifts from this run.
+
+/** ISO-8601 week key `YYYY-Www` (Monday-anchored). Mirrors the roster pipeline's helper. */
+function isoWeekKey(dateStr: string): string {
+    const [y, m, d] = dateStr.split('T')[0].split('-').map(Number);
+    const dt = new Date(Date.UTC(y, (m || 1) - 1, d || 1));
+    const dayNum = dt.getUTCDay() || 7;
+    dt.setUTCDate(dt.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
+    const week = Math.ceil((((dt.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return `${dt.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+interface WeeklyOrdinaryEntry {
+    key: string;
+    shiftDate: string;
+    startTime: string;
+    endTime: string;
+    isExisting: boolean;
+}
+
+/**
+ * Builds `proposalShiftId -> priorOrdinaryHoursThisWeek` for the greedy
+ * fallback's re-estimate, from the union of each employee's existing
+ * committed roster and this run's newly PASSING, non-casual proposals
+ * (casual weekly OT is ambiguous under the EA — see cost/standard.ts).
+ * Existing shifts seed the running total; only proposal shift IDs are
+ * ever present in the returned map.
+ */
+export function buildGreedyFallbackPriorOrdinaryMap(
+    proposals: ValidatedProposal[],
+    existingRoster: Map<string, ExistingShiftRef[]>,
+): Map<string, number> {
+    const prior = new Map<string, number>();
+    const byEmpWeek = new Map<string, Map<string, WeeklyOrdinaryEntry[]>>();
+
+    const pushEntry = (employeeId: string, entry: WeeklyOrdinaryEntry) => {
+        const wk = isoWeekKey(entry.shiftDate);
+        let weeks = byEmpWeek.get(employeeId);
+        if (!weeks) { weeks = new Map(); byEmpWeek.set(employeeId, weeks); }
+        let list = weeks.get(wk);
+        if (!list) { list = []; weeks.set(wk, list); }
+        list.push(entry);
+    };
+
+    for (const [employeeId, shifts] of existingRoster.entries()) {
+        for (const s of shifts) {
+            pushEntry(employeeId, {
+                key: s.id, shiftDate: s.shift_date, startTime: s.start_time, endTime: s.end_time, isExisting: true,
+            });
+        }
+    }
+    for (const p of proposals) {
+        if (!p.passing || !p.employeeId) continue;
+        if (/casual/i.test(p.employmentType || '')) continue;
+        pushEntry(p.employeeId, {
+            key: p.shiftId, shiftDate: p.shiftDate, startTime: p.startTime, endTime: p.endTime, isExisting: false,
+        });
+    }
+
+    for (const weeks of byEmpWeek.values()) {
+        for (const list of weeks.values()) {
+            list.sort((a, b) =>
+                a.shiftDate === b.shiftDate ? a.startTime.localeCompare(b.startTime) : a.shiftDate.localeCompare(b.shiftDate),
+            );
+            let running = 0;
+            for (const entry of list) {
+                if (!entry.isExisting) prior.set(entry.key, running);
+                const net = durationMinutes(entry.startTime, entry.endTime) / 60;
+                const dailyOt = Math.max(0, net - 12);
+                running += Math.max(0, net - dailyOt);
+            }
+        }
+    }
+
+    return prior;
+}
 
 // Upper bound on the initial fatigue score handed to the optimizer. The raw
 // score is unbounded — a single near-38h shift yields ~450 from the
@@ -458,6 +610,14 @@ export class AutoSchedulerController {
         const leaveByEmployee = await rosterFetcher.fetchApprovedLeave(
             input.shifts, input.employees,
         );
+        // ── Contract-derived classification (compliance audit finding —
+        // 2026-08-02): real Schedule 1/2 level, Schedule 3 Security status,
+        // and Schedule 4/5/6 apprentice/trainee/SWS category from each
+        // employee's Active `user_contracts` row. Caller-supplied
+        // `employeeDetails` still wins per-field where present — see
+        // `mergeEmployeeDetails`.
+        const contractDetails = await rosterFetcher.fetchEmployeeContractDetails(input.employees);
+        const employeeDetails = mergeEmployeeDetails(contractDetails, input.employeeDetails);
         throwIfAborted();
         const totalExisting = Array.from(existingRoster.values())
             .reduce((acc, list) => acc + list.length, 0);
@@ -582,11 +742,21 @@ export class AutoSchedulerController {
         // frozen L1 snapshot. Resolved once at the window start.
         const windowRateSet = resolveRateSet(dates[0]);
 
+        // Best-effort "is this employee Security" signal for the current batch —
+        // see `deriveSecurityRoleIds`/`resolveSecurityAnnualisedRate` above.
+        const securityRoleIds = deriveSecurityRoleIds(input.shifts);
+
         const optimizerEmployees: OptimizerEmployee[] = input.employees.map(e => {
-            const det = input.employeeDetails?.get(e.id);
+            const det = employeeDetails.get(e.id);
             const isFT = e.contract_type === 'FT' || /full/i.test(e.contract_type || '');
             const isPT = e.contract_type === 'PT' || /part/i.test(e.contract_type || '');
             const isCasual = /casual/i.test(e.contract_type || '');
+
+            const isSecurityEmployee = det?.is_security_role
+                ?? (e.contracted_role_ids ?? []).some(id => securityRoleIds.has(id));
+            const securityRate = resolveSecurityAnnualisedRate(windowRateSet, {
+                isFullTime: isFT, isSecurityEmployee, level: det?.level,
+            });
 
             // Default to 38h/wk (2280m) if FT, 20h/wk (1200m) if PT, else 40h/wk max for Casuals
             const baseMax = isFT ? 2280 : isPT ? 1200 : 2400;
@@ -616,8 +786,9 @@ export class AutoSchedulerController {
                 name: e.name,
                 contract_type: e.contract_type,
                 contracted_role_ids: e.contracted_role_ids ?? [],
+                is_security_role: isSecurityEmployee,
 
-                hourly_rate: e.remuneration_rate ?? scheduleRate ?? windowRateSet.defaultRate,
+                hourly_rate: e.remuneration_rate ?? securityRate ?? scheduleRate ?? windowRateSet.defaultRate,
                 // Scale limits by the number of weeks in the request to support averaging
                 min_contract_minutes: Math.round(cappedMin),
                 max_weekly_minutes: Math.round((det?.max_weekly_minutes ?? baseMax) * weekScale),
@@ -732,7 +903,7 @@ export class AutoSchedulerController {
                 const validationStart = performance.now();
                 // Past/emergent shifts are excluded from greedy too — appended
                 // back as failed proposals so they stay visible in the UI.
-                validatedProposals = await greedyFallback(futureShifts, input.employees, input.employeeDetails ?? new Map(), existingRoster, input.strategy);
+                validatedProposals = await greedyFallback(futureShifts, input.employees, employeeDetails, existingRoster, input.strategy);
                 validatedProposals.push(...excludedProposals);
                 validationTimeMs = Math.round(performance.now() - validationStart);
                 uncoveredV8ShiftIds = validatedProposals.filter(p => !p.passing).map(p => p.shiftId);
@@ -747,7 +918,7 @@ export class AutoSchedulerController {
                 const validationStart = performance.now();
                 validatedProposals = await this._validateProposals(
                     groups,
-                    input.employeeDetails ?? new Map(),
+                    employeeDetails,
                     existingRoster
                 );
 
@@ -767,7 +938,7 @@ export class AutoSchedulerController {
                 usedFallback = true;
                 optimizerStatus = 'UNKNOWN';
                 const validationStart = performance.now();
-                validatedProposals = await greedyFallback(futureShifts, input.employees, input.employeeDetails ?? new Map(), existingRoster, input.strategy);
+                validatedProposals = await greedyFallback(futureShifts, input.employees, employeeDetails, existingRoster, input.strategy);
                 validatedProposals.push(...excludedProposals);
                 validationTimeMs = Math.round(performance.now() - validationStart);
                 uncoveredV8ShiftIds = validatedProposals.filter(p => !p.passing).map(p => p.shiftId);
@@ -795,7 +966,7 @@ export class AutoSchedulerController {
                 optimizerEmployees,
                 inputShifts: input.shifts,
                 inputEmployees: input.employees,
-                employeeDetails: input.employeeDetails ?? new Map(),
+                employeeDetails,
                 existingRoster,
                 // Availability is a HARD constraint for the auto-scheduler: unset =
                 // unavailable, and the solver may never place a shift outside a
@@ -816,12 +987,19 @@ export class AutoSchedulerController {
         // the manager has an accurate audit of the projected roster health.
         if (validatedProposals.length > 0) {
             const employeeMap = new Map(input.employees.map(e => [e.id, e]));
-            
+            // cl 42 weekly OT for the greedy-fallback re-estimate (compliance
+            // audit finding — 2026-08-02) — see buildGreedyFallbackPriorOrdinaryMap.
+            // A no-op (undefined lookups) on the optimizer path, since it's only
+            // consulted inside the `usedFallback` branch below.
+            const fallbackPriorOrdinaryMap = usedFallback
+                ? buildGreedyFallbackPriorOrdinaryMap(validatedProposals, existingRoster)
+                : new Map<string, number>();
+
             for (const p of validatedProposals) {
                 if (!p.employeeId) continue;
                 const emp = employeeMap.get(p.employeeId);
                 const shift = input.shifts.find(s => s.id === p.shiftId);
-                
+
                 // 1. Cost (dollars, AUD)
                 // On the optimizer path the solver already returned the
                 // per-assignment cost it actually optimized — it is threaded
@@ -837,30 +1015,49 @@ export class AutoSchedulerController {
                 // cost exists — in that case we DO re-estimate. Both engines
                 // return dollars, so no unit conversion is needed.
                 if (usedFallback && shift && emp) {
-                    const mins = durationMinutes(shift.start_time, shift.end_time);
-                    p.optimizerCost = estimateShiftCost(
-                        mins,
-                        shift.start_time,
-                        shift.end_time,
-                        emp.remuneration_rate ?? 25,
-                        mins,
-                        (shift as any).is_overnight ?? false,
-                        false, // is_cancelled
-                        shift.shift_date,
-                        undefined, // allowances
-                        false,
-                        false,
-                        false,
-                        undefined,
-                        emp.contract_type === 'CASUAL' || /casual/i.test(emp.contract_type || '') ? 'Casual' : /part/i.test(emp.contract_type || '') ? 'Part-Time' : 'Full-Time',
-                        shift.roleName?.toLowerCase().includes('security'),
-                        undefined, undefined, undefined, undefined, // Apprentice params
-                        undefined, undefined, undefined, undefined, // Trainee params
-                        undefined, undefined, undefined, undefined, // Trainee params
-                        undefined, undefined, undefined, undefined, // SWS params
-                        undefined,
-                        extractLevel(shift.roleName) // 19th arg: classificationLevel
-                    );
+                    // cl 36.1 vs Sch.3 §3.2/§5.3: the unpaid meal break is
+                    // deducted for general staff, but Security meal breaks are
+                    // PAID — the full clock span is priced. `durationMinutes()`
+                    // alone is the GROSS span with no break subtraction at all;
+                    // compliance audit finding (2026-08-02): this previously
+                    // priced every fallback shift's unpaid break as paid time.
+                    const empDet = employeeDetails.get(emp.id);
+                    const isSecurityShift = empDet?.is_security_role
+                        ?? (shift.roleName?.toLowerCase().includes('security') ?? false);
+                    const grossMins = durationMinutes(shift.start_time, shift.end_time);
+                    const mins = isSecurityShift
+                        ? grossMins
+                        : Math.max(0, grossMins - (shift.unpaid_break_minutes ?? 0));
+                    const employmentType = emp.contract_type === 'CASUAL' || /casual/i.test(emp.contract_type || '')
+                        ? 'Casual'
+                        : /part/i.test(emp.contract_type || '') ? 'Part-Time' : 'Full-Time';
+                    // Object-based call (replaces the former 32-positional-argument
+                    // legacy wrapper — an auditability risk the compliance audit
+                    // flagged: a silent argument-order mistake would compile
+                    // without error). Also wires cl 42 weekly OT — previously
+                    // absent from the AutoScheduler's own pre-commit estimate even
+                    // though the roster-grid projection pipeline already had it.
+                    p.optimizerCost = estimateDetailedShiftCostObj({
+                        netMinutes: mins,
+                        start_time: shift.start_time,
+                        end_time: shift.end_time,
+                        rate: emp.remuneration_rate ?? 25,
+                        scheduled_length_minutes: mins,
+                        is_overnight: (shift as any).is_overnight ?? false,
+                        is_cancelled: false,
+                        shift_date: shift.shift_date,
+                        employmentType: employmentType as any,
+                        isSecurityRole: isSecurityShift,
+                        // Prefer the employee's REAL Schedule 1/2 classification
+                        // level from their Active user_contracts row (compliance
+                        // audit finding — 2026-08-02) over extractLevel()'s
+                        // role-name guess, which is now only a fallback for
+                        // employees with no resolvable contract level.
+                        classificationLevel: (empDet?.level && empDet.level >= 1 && empDet.level <= 7)
+                            ? `LEVEL_${empDet.level}`
+                            : extractLevel(shift.roleName),
+                        priorOrdinaryHoursThisWeek: fallbackPriorOrdinaryMap.get(p.shiftId),
+                    }).totalCost;
                 }
 
                 // 2. Calculate Fatigue

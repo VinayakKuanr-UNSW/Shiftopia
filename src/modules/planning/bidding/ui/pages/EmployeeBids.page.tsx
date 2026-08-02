@@ -52,6 +52,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/modu
 import { getBidPriority } from '../utils/bid-priority';
 import { getDeptColor, getRowClass } from '../utils/bid-dept-styles';
 import { getParticipationStatus } from '../utils/bid-participation';
+import { useRealtimeInvalidate } from '@/platform/supabase/hooks/useRealtimeInvalidate';
 import type { ShiftData, BidData, ShiftOpportunity } from '../types';
 
 // ============================================================================
@@ -131,6 +132,17 @@ export const EmployeeBidsPage: React.FC = () => {
         enabled: !!user,
         staleTime: 60_000, // 1 minute staleTime
     });
+
+    // Realtime: refresh my bids live when shift_bids change (RLS-scoped to own).
+    useRealtimeInvalidate(
+        `bids-rt-${user?.id ?? ''}`,
+        ['shift_bids'],
+        () => {
+            queryClient.invalidateQueries({ queryKey: ['myBids'] });
+            queryClient.invalidateQueries({ queryKey: ['openBidShifts'] });
+        },
+        !!user,
+    );
 
     // ========================================================================
     // BUCKET A: ELIGIBILITY SCAN (5-min cache)
@@ -247,9 +259,13 @@ export const EmployeeBidsPage: React.FC = () => {
                     const map: Record<string, string> = {
                         'convention_centre': 'Convention Centre',
                         'exhibition_centre': 'Exhibition Centre',
-                        'theatre': 'Theatre'
+                        'theatre': 'Theatre',
+                        'the_cutaway': 'The Cutaway',
+                        'cutaway': 'The Cutaway',
                     };
-                    return map[t] || t.replace(/_/g, ' ');
+                    if (map[t]) return map[t];
+                    if (t.toLowerCase().includes('cutaway')) return 'The Cutaway';
+                    return t.replace(/_/g, ' ');
                 })(),
                 subGroupName: s.sub_group_name || 'General',
                 subGroup: s.sub_departments?.name || 'General',
@@ -311,9 +327,13 @@ export const EmployeeBidsPage: React.FC = () => {
                     const map: Record<string, string> = {
                         'convention_centre': 'Convention Centre',
                         'exhibition_centre': 'Exhibition Centre',
-                        'theatre': 'Theatre'
+                        'theatre': 'Theatre',
+                        'the_cutaway': 'The Cutaway',
+                        'cutaway': 'The Cutaway',
                     };
-                    return map[t] || t.replace(/_/g, ' ');
+                    if (map[t]) return map[t];
+                    if (t.toLowerCase().includes('cutaway')) return 'The Cutaway';
+                    return t.replace(/_/g, ' ');
                 })(),
                 subGroupName: s.sub_group_name || 'General',
                 subGroup: s.sub_departments?.name || 'General',
@@ -993,7 +1013,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                                 key={opp.id} 
                                                 className={cn(
                                                     "border-t border-border/50 transition-colors cursor-pointer",
-                                                    getRowClass(opp.groupType, opp.department)
+                                                    getRowClass(opp.groupType, opp.group || opp.department)
                                                 )}
                                                 onClick={() => {
                                                     if (isBulkModeActive) {

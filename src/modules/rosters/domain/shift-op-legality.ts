@@ -142,9 +142,11 @@ export const OP_LEGALITY: Record<ShiftOp, (ctx: ShiftLegalityCtx) => boolean> = 
      * over it is conservatively illegal.
      */
     assign: (ctx) => {
-        if (isStartedOrPast(ctx) || isUnknown(ctx)) return false;
+        if (isTerminal(ctx) || isUnknown(ctx)) return false;
         if (ctx.tradePending || ctx.state === 'S9' || ctx.state === 'S10') return false;
-        // Unassigned (S1/S5) → assign; assigned-but-pre-start (S2/S3/S4) → reassign.
+        // If already assigned and shift has started/in-progress, reassigning is locked.
+        if (ctx.isAssigned && isStartedOrPast(ctx)) return false;
+        // Unassigned (S1/S5) → assign (even if started); assigned-but-pre-start (S2/S3/S4) → reassign.
         return true;
     },
 

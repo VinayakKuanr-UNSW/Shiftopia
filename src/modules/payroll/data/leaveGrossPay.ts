@@ -85,6 +85,14 @@ export function leaveTypeToFlags(leaveType: string | null | undefined): LeaveFla
   if (/parental|maternity|adoption/.test(t)) return { isParentalLeave: true };
   if (/long.?service|lsl/.test(t)) return { isLongServiceLeave: true };
   if (/jury|court/.test(t)) return { isJuryDuty: true };
+  // cl 55 / cl 58 (audit H-10/H-11): both are explicitly framed as drawing
+  // "accrued PAID ANNUAL LEAVE" (not a flat-rate entitlement like personal/
+  // carer's), so they price with the same 17.5%-loading treatment as
+  // ordinary annual leave — the dedicated capped balance in the leave
+  // module is what distinguishes them for tracking/reporting, not the
+  // pricing formula.
+  if (/religious|cultural|ceremonial|naidoc/.test(t)) return { isAnnualLeave: true };
+  if (/gender.?affirmation/.test(t)) return { isAnnualLeave: true };
   return null;
 }
 
@@ -227,6 +235,20 @@ export interface LeaveEmployeeContext {
   /** e.g. 'LEVEL_3' — lets the engine resolve the effective-dated EBA rate. */
   classificationLevel?: string;
   dailyOrdinaryMinutes: number;
+  // ── Schedule 4/5/6 (H1 audit fix) ──────────────────────────────────────
+  is_apprentice?: boolean;
+  apprentice_type?: 'standard' | 'adult' | 'school_based';
+  apprentice_year?: number;
+  has_completed_year_12?: boolean;
+  is_trainee?: boolean;
+  trainee_category?: 'junior' | 'adult' | 'school_based';
+  trainee_level?: 'A' | 'B';
+  trainee_exit_year?: number;
+  trainee_years_out?: number;
+  trainee_aqf_level?: number;
+  trainee_year?: number;
+  is_sws?: boolean;
+  sws_capacity_percentage?: number;
 }
 
 /** A minimal shape of an approved leave request (from the DB). */
@@ -303,6 +325,21 @@ export function buildLeaveInputs(
       rate: ctx.rate,
       classificationLevel: ctx.classificationLevel,
       employmentType: ctx.employmentType,
+      // H1 audit fix: forward Schedule 4/5/6 fields so leave for these
+      // engagement types is priced under the correct schedule.
+      is_apprentice: ctx.is_apprentice,
+      apprentice_type: ctx.apprentice_type,
+      apprentice_year: ctx.apprentice_year,
+      has_completed_year_12: ctx.has_completed_year_12,
+      is_trainee: ctx.is_trainee,
+      trainee_category: ctx.trainee_category,
+      trainee_level: ctx.trainee_level,
+      trainee_exit_year: ctx.trainee_exit_year,
+      trainee_years_out: ctx.trainee_years_out,
+      trainee_aqf_level: ctx.trainee_aqf_level,
+      trainee_year: ctx.trainee_year,
+      is_sws: ctx.is_sws,
+      sws_capacity_percentage: ctx.sws_capacity_percentage,
       ...emitFlags,
     });
   }
@@ -492,7 +529,12 @@ async function resolveLeaveContexts(
   // zeroes ALL leave pay for the run.
   let cQuery = (supabase as any)
     .from('user_contracts')
-    .select('user_id, remuneration_level, contracted_weekly_hours, custom_hourly_rate, status, start_date, end_date')
+    .select(
+      'user_id, remuneration_level, contracted_weekly_hours, custom_hourly_rate, status, start_date, end_date, ' +
+      'is_apprentice, apprentice_type, apprentice_year, has_completed_year_12, ' +
+      'is_trainee, trainee_category, trainee_level, trainee_exit_year, trainee_years_out, trainee_aqf_level, trainee_year, ' +
+      'is_sws, sws_capacity_percentage'
+    )
     .in('user_id', employeeIds);
   if (bounds.orgIds?.length) cQuery = cQuery.in('organization_id', bounds.orgIds);
   if (bounds.deptIds?.length) cQuery = cQuery.in('department_id', bounds.deptIds);
@@ -562,6 +604,20 @@ async function resolveLeaveContexts(
       rate,
       classificationLevel,
       dailyOrdinaryMinutes,
+      // H1 audit fix: forward Schedule 4/5/6 fields.
+      is_apprentice: !!c.is_apprentice,
+      apprentice_type: c.apprentice_type ?? undefined,
+      apprentice_year: c.apprentice_year ?? undefined,
+      has_completed_year_12: !!c.has_completed_year_12,
+      is_trainee: !!c.is_trainee,
+      trainee_category: c.trainee_category ?? undefined,
+      trainee_level: c.trainee_level ?? undefined,
+      trainee_exit_year: c.trainee_exit_year ?? undefined,
+      trainee_years_out: c.trainee_years_out ?? undefined,
+      trainee_aqf_level: c.trainee_aqf_level ?? undefined,
+      trainee_year: c.trainee_year ?? undefined,
+      is_sws: !!c.is_sws,
+      sws_capacity_percentage: c.sws_capacity_percentage ?? undefined,
     });
   }
   return out;

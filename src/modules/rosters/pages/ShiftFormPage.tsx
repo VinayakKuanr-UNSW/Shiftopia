@@ -136,9 +136,7 @@ const ShiftFormPage: React.FC = () => {
                     ? 'bg-[#0a0a0c]'
                     : isPublished
                         ? 'bg-[#0c0512]'
-                        : isEmergencyAssignment
-                            ? 'bg-[#09090b]'
-                            : 'bg-card dark:bg-[#0a0c10]',
+                        : 'bg-card dark:bg-[#0a0c10]',
             )}
         >
             
@@ -197,23 +195,6 @@ const ShiftFormPage: React.FC = () => {
                                 </Button>
                             )}
 
-                            {!isPublished && !isEmergencyAssignment && (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => {
-                                        handleSubmit(form.getValues());
-                                    }}
-                                    disabled={!canSave || isLoading}
-                                    className={cn(
-                                        "h-9 lg:h-11 px-4 lg:px-6 rounded-xl font-black uppercase tracking-[0.12em] text-[10px] transition-all flex items-center gap-2",
-                                        isDark ? "border-white/10 hover:bg-white/5 text-white/80" : "border-slate-200 hover:bg-slate-100 text-slate-700"
-                                    )}
-                                >
-                                    Save Draft
-                                </Button>
-                            )}
-
                             <Button
                                 type="button"
                                 onClick={() => {
@@ -225,24 +206,18 @@ const ShiftFormPage: React.FC = () => {
                                     canSave
                                         ? isPublished
                                             ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-500/20 border border-purple-400/20'
-                                            : isEmergencyAssignment
-                                                ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20 border border-indigo-400/20'
-                                                : 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-500/20 border border-amber-400/20'
+                                            : 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-500/20 border border-amber-400/20'
                                         : 'bg-muted text-muted-foreground opacity-60 cursor-not-allowed border border-border',
                                 )}
                             >
                                 {isLoading ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : isEmergencyAssignment ? (
-                                    <Zap className="h-4 w-4" />
                                 ) : editMode ? (
                                     <Save className="h-3.5 w-3.5" />
                                 ) : (
                                     <Plus className="h-3.5 w-3.5" />
                                 )}
-                                {isEmergencyAssignment
-                                    ? (editMode ? 'Emergency Update' : 'Emergency Assign')
-                                    : (editMode ? 'Update Shift' : isPublished ? 'Publish Shift' : 'Create Shift')}
+                                {editMode ? 'Update Shift' : isPublished ? 'Publish Shift' : 'Create Shift'}
                             </Button>
                         </div>
                     </div>

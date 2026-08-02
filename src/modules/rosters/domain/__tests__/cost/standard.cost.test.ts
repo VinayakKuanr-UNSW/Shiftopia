@@ -71,6 +71,48 @@ describe('H1 — FT/PT overtime never double-counts', () => {
   });
 });
 
+describe('Audit 2026-08-02 — unpaid meal break (cl 36.1) subtracted in the start/end fallback', () => {
+  it('a caller that omits netMinutes gets the break deducted from the gross clock span', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: undefined as any, // caller omitted it entirely — triggers the fallback
+        scheduled_length_minutes: 0,
+        start_time: '09:00', end_time: '17:00', // 8h gross
+        unpaid_break_minutes: 30,
+      }),
+    );
+    expect(r.ordinaryHours).toBe(7.5); // 8h − 30min break, not 8h
+    expect(r.overtimeHours).toBe(0);
+    expect(r.totalCost).toBeCloseTo(7.5 * 30, 5);
+  });
+
+  it('no unpaid_break_minutes supplied leaves the fallback unchanged (defaults to 0)', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: undefined as any,
+        scheduled_length_minutes: 0,
+        start_time: '09:00', end_time: '17:00',
+      }),
+    );
+    expect(r.ordinaryHours).toBe(8);
+  });
+
+  it('an explicit netMinutes (the normal caller contract) is never touched by unpaid_break_minutes', () => {
+    // Guards against accidentally double-subtracting for callers who already
+    // net the break out themselves before calling — the field must only be
+    // consulted in the start/end fallback branch, never alongside netMinutes.
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 450, // caller already net of the break
+        scheduled_length_minutes: 450,
+        start_time: '09:00', end_time: '17:00',
+        unpaid_break_minutes: 30,
+      }),
+    );
+    expect(r.ordinaryHours).toBe(7.5);
+  });
+});
+
 describe('C3 — weekend/PH penalty and night allowance are not cumulative (cl. 41.4 = MAX)', () => {
   // Phase 3 supersedes the earlier "zero the night allowance on a penalty day"
   // stance. cl 41.4 means pay the GREATER of the penalty loading and the night
@@ -351,6 +393,55 @@ describe('HD — higher duties (cl. 29)', () => {
   });
 });
 
+describe('Audit 2026-08-02 — adult apprentice years 2-4 (Sch.4 §1.3: greater of Level 1 or junior %)', () => {
+  // EA 2025 baseline (shift_date 2026-06-29): Level 4 permanent $28.79, Level 1 permanent $25.65.
+  it('year 2: Level 1 ($25.65) beats junior 60% of Level 4 ($17.27) — NOT a flat 100% of Level 4', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 480, scheduled_length_minutes: 480, start_time: '09:00', end_time: '17:00',
+        rate: null, classificationLevel: 'LEVEL_4',
+        is_apprentice: true, apprentice_type: 'adult', apprentice_year: 2,
+      } as Partial<CostCalculatorOptions>),
+    );
+    expect(r.breakdown.baseRate).toBeCloseTo(25.65, 2);
+    expect(r.breakdown.baseRate).toBeLessThan(28.79); // the old (buggy) flat-100%-of-Level-4 figure
+  });
+
+  it('year 3: Level 1 ($25.65) still beats junior 75% of Level 4 ($21.59)', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 480, scheduled_length_minutes: 480, start_time: '09:00', end_time: '17:00',
+        rate: null, classificationLevel: 'LEVEL_4',
+        is_apprentice: true, apprentice_type: 'adult', apprentice_year: 3,
+      } as Partial<CostCalculatorOptions>),
+    );
+    expect(r.breakdown.baseRate).toBeCloseTo(25.65, 2);
+  });
+
+  it('year 4: junior 95% of Level 4 ($27.35) now beats Level 1 ($25.65) — the floor flips', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 480, scheduled_length_minutes: 480, start_time: '09:00', end_time: '17:00',
+        rate: null, classificationLevel: 'LEVEL_4',
+        is_apprentice: true, apprentice_type: 'adult', apprentice_year: 4,
+      } as Partial<CostCalculatorOptions>),
+    );
+    expect(r.breakdown.baseRate).toBeCloseTo(28.79 * 0.95, 2); // 27.3505
+    expect(r.breakdown.baseRate).toBeLessThan(28.79); // still below flat 100%, per cl 1.3's actual formula
+  });
+
+  it('year 1 is unchanged — still 80% of Level 4 (cl 1.2, unaffected by the years-2-4 fix)', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 480, scheduled_length_minutes: 480, start_time: '09:00', end_time: '17:00',
+        rate: null, classificationLevel: 'LEVEL_4',
+        is_apprentice: true, apprentice_type: 'adult', apprentice_year: 1,
+      } as Partial<CostCalculatorOptions>),
+    );
+    expect(r.breakdown.baseRate).toBeCloseTo(28.79 * 0.80, 2);
+  });
+});
+
 describe('OT-split — overnight overtime day-split (cl. 42)', () => {
   it('prices only the OT hours ON a public-holiday day at 2.5x', () => {
     // FT, scheduled 2h, net 10h ⇒ 8h daily OT. Start 22:00 on 2026-01-25 (Sun);
@@ -496,5 +587,101 @@ describe('SWS — Schedule 6 minimum weekly floor (cl 1.4.2)', () => {
       }),
     );
     expect(r.breakdown.baseRate).toBeCloseTo(3, 5);
+  });
+});
+
+describe('audit M-1 — multi-hire engagements get a reduced 2h minimum (cl 13.1(e))', () => {
+  it('a 1h multi-hire PT engagement starting within 1h of the usual finish floors at 2h, not the standard 3h', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 60, scheduled_length_minutes: 60, employmentType: 'Part-Time',
+        start_time: '09:00', end_time: '10:00', shift_type: 'MULTI_HIRE',
+        multiHireStartsWithinUsualFinishWindow: true,
+      } as any),
+    );
+    expect(r.ordinaryHours).toBe(2);
+  });
+
+  it('the same 1h engagement WITHOUT the multi-hire flag still floors at the standard 3h', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 60, scheduled_length_minutes: 60, employmentType: 'Part-Time',
+        start_time: '09:00', end_time: '10:00',
+      }),
+    );
+    expect(r.ordinaryHours).toBe(3);
+  });
+
+  it('audit fix (2026-08-02): multi-hire WITHOUT the "starts within 1h of usual finish" precondition falls to the standard 3h, not 2h', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 60, scheduled_length_minutes: 60, employmentType: 'Part-Time',
+        start_time: '09:00', end_time: '10:00', shift_type: 'MULTI_HIRE',
+        // multiHireStartsWithinUsualFinishWindow intentionally omitted
+      } as any),
+    );
+    expect(r.ordinaryHours).toBe(3);
+  });
+
+  it('a multi-hire engagement already at/above 2h is unaffected', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 150, scheduled_length_minutes: 150, employmentType: 'Part-Time',
+        start_time: '09:00', end_time: '11:30', shift_type: 'MULTI_HIRE',
+        multiHireStartsWithinUsualFinishWindow: true,
+      } as any),
+    );
+    expect(r.ordinaryHours).toBe(2.5);
+  });
+});
+
+describe('audit M-5 — casual meal allowance fires off hours past ROSTERED finish, not just past the 12h cap', () => {
+  it('a casual working 2h past their rostered finish (still under the 12h cap) now gets the meal allowance', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 600, scheduled_length_minutes: 480, employmentType: 'Casual', rate: 37.5,
+        start_time: '09:00', end_time: '19:00',
+      }),
+    );
+    expect(r.allowanceCost).toBeGreaterThan(0);
+  });
+
+  it('a casual working less than 2h past their rostered finish still gets no meal allowance', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 510, scheduled_length_minutes: 480, employmentType: 'Casual', rate: 37.5,
+        start_time: '09:00', end_time: '17:30',
+      }),
+    );
+    expect(r.allowanceCost).toBe(0);
+  });
+
+  it('an explicit meal: false still suppresses it regardless of the trigger', () => {
+    const r = estimateDetailedShiftCost(
+      base({
+        netMinutes: 600, scheduled_length_minutes: 480, employmentType: 'Casual', rate: 37.5,
+        start_time: '09:00', end_time: '19:00', allowances: { meal: false },
+      }),
+    );
+    expect(r.allowanceCost).toBe(0);
+  });
+});
+
+describe('audit L-1 — first-aid allowance prices off FLOORED (paid) ordinary hours', () => {
+  it('a 1h engagement floored to 3h pays first-aid for 3h, not 1h', () => {
+    const withFirstAid = estimateDetailedShiftCost(
+      base({
+        netMinutes: 60, scheduled_length_minutes: 60, employmentType: 'Part-Time',
+        start_time: '09:00', end_time: '10:00', allowances: { firstAid: true, meal: false },
+      }),
+    );
+    const withoutFirstAid = estimateDetailedShiftCost(
+      base({
+        netMinutes: 60, scheduled_length_minutes: 60, employmentType: 'Part-Time',
+        start_time: '09:00', end_time: '10:00', allowances: { meal: false },
+      }),
+    );
+    const firstAidCost = withFirstAid.allowanceCost - withoutFirstAid.allowanceCost;
+    expect(firstAidCost).toBeCloseTo(3 * 0.56, 5); // 3h floor × $0.56/h (pre-FY26/27 rate)
   });
 });

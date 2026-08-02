@@ -19,6 +19,12 @@ export interface ShiftCostBreakdown {
     nightHours?: number;
     nightAllowanceCost?: number;
   };
+  /** AUDIT FIX L4: per-day-type hour/cost split populated by both engines, so
+   *  the line-item decomposition reads it instead of re-deriving from scratch. */
+  penaltyBreakdown?: {
+    satHours: number; sunHours: number; phHours: number;
+    satCost: number; sunCost: number; phCost: number;
+  };
 }
 
 export interface CostCalculatorOptions {
@@ -29,6 +35,16 @@ export interface CostCalculatorOptions {
   scheduled_length_minutes: number;
   is_overnight: boolean;
   is_cancelled: boolean;
+  /**
+   * Unpaid meal break (cl 36.1), in minutes. Only consulted by the Standard
+   * engine's OWN start/end-time fallback derivation (when `netMinutes` isn't
+   * supplied) — every caller that already computes `netMinutes` itself must
+   * subtract the break there instead (the "single source of truth" contract
+   * on `netMinutes` below). Security shifts never subtract this: Sch.3
+   * §3.2/§5.3 meal breaks are PAID, so `cost/security.ts` deliberately never
+   * reads this field (compliance audit finding — 2026-08-02).
+   */
+  unpaid_break_minutes?: number;
   shift_date: string;
   allowances?: {
     meal?: boolean;
@@ -52,6 +68,14 @@ export interface CostCalculatorOptions {
   previousWage?: number;
   employmentType?: 'Full-Time' | 'Part-Time' | 'Casual' | 'Flexible Part-Time';
   isSecurityRole?: boolean;
+  /**
+   * True when this occurrence is a TRAINING shift (`shifts.is_training`) —
+   * drops the minimum-engagement PAYMENT floor to 2h, mirroring the
+   * scheduling-time rule. NOT the same concept as `is_trainee` below (a
+   * Schedule 5 Trainee WAGE CLASSIFICATION) — a trainee can work a
+   * non-training shift, and a non-trainee can work a training shift.
+   */
+  is_training_shift?: boolean;
   
   // Apprentice Support (Schedule 4)
   is_apprentice?: boolean;
@@ -95,6 +119,27 @@ export interface CostCalculatorOptions {
   // underpay. Only affects the classification/rate path (not apprentice /
   // trainee / SWS). Key form matches classificationLevel (e.g. 'LEVEL_5').
   higherDutiesLevel?: string;
+
+  // ── Multi-hire engagements (cl 13.1(e)) ──────────────────────────────────
+  // A genuinely separate same-day hire (typically a different role) gets a
+  // reduced 2h minimum engagement instead of the standard 3h/4h floor, but
+  // ONLY when it commences within one (1) hour of the Team Member's usual
+  // rostered finish time (cl 13.1(e))— see `multiHireStartsWithinUsualFinishWindow`
+  // below. Mirrors `V8Shift.shift_type` in the compliance engine (audit M-1)
+  // — NOT yet populated by any live adapter (no `shifts.shift_type` column
+  // exists), so this is currently a no-op in production; wired ahead of the
+  // data existing, same pattern as the H-13 payroll-export writers.
+  shift_type?: 'NORMAL' | 'MULTI_HIRE';
+  /**
+   * cl 13.1(e)'s precondition for the multi-hire 2h floor. Only consulted
+   * when `shift_type === 'MULTI_HIRE'`. Like `shift_type` itself, nothing
+   * currently populates this (it requires knowing the employee's OTHER
+   * engagement's finish time on the same day, a cross-shift lookup not yet
+   * wired anywhere) — compliance audit finding (2026-08-02): previously the
+   * 2h floor applied to every multi-hire engagement unconditionally,
+   * regardless of this precondition.
+   */
+  multiHireStartsWithinUsualFinishWindow?: boolean;
 
   // ── Weekly overtime (cl 42) ──────────────────────────────────────────────
   // Ordinary hours this member has ALREADY accumulated earlier in the same ISO

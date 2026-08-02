@@ -2,7 +2,7 @@
 // auto-approve-swaps — Decision Matrix (PURE)
 //
 // Resolves the §2 core matrix + post-gates of
-// docs/implementation/02-auto-approve-swaps.md into a single
+// docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/02-auto-approve-swaps.md into a single
 // AUTO_APPROVE | MANUAL_REVIEW | AUTO_REJECT verdict.
 //
 // Aggregate resolution order is REJECT > REVIEW > APPROVE (02 §2.2).

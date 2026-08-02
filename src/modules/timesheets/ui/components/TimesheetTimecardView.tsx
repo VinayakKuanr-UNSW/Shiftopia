@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Clock, CheckSquare, Square } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { TimesheetMobileCard } from './TimesheetMobileCard';
 import type { TimesheetRow } from '../../model/timesheet.types';
 import { Button } from '@/modules/core/ui/primitives/button';
+import { isTodayBucketKey, type GroupBucket } from '@/modules/core/lib/row-grouping';
+import { GroupSectionHeader } from '@/modules/core/ui/components/GroupSectionHeader';
 
 interface TimesheetTimecardViewProps {
-    entries: TimesheetRow[];
+    buckets: GroupBucket<TimesheetRow>[];
     selectedIds: string[];
     isSelectMode: boolean;
     onToggleSelect: (id: string) => void;
@@ -20,7 +22,7 @@ interface TimesheetTimecardViewProps {
 }
 
 export const TimesheetTimecardView: React.FC<TimesheetTimecardViewProps> = ({
-    entries,
+    buckets,
     selectedIds,
     isSelectMode,
     onToggleSelect,
@@ -32,7 +34,9 @@ export const TimesheetTimecardView: React.FC<TimesheetTimecardViewProps> = ({
     readOnly = false,
     onClearFilters,
 }) => {
-    if (entries.length === 0) {
+    const totalCount = useMemo(() => buckets.reduce((n, b) => n + b.items.length, 0), [buckets]);
+
+    if (totalCount === 0) {
         return (
             <div
                 className="flex flex-col items-center justify-center py-24 px-6 text-center"
@@ -64,7 +68,7 @@ export const TimesheetTimecardView: React.FC<TimesheetTimecardViewProps> = ({
     const allSelected = totalSelectable > 0 && selectedIds.length === totalSelectable;
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 pb-12">
             {isSelectMode && (
                 <div
                     className="overflow-hidden"
@@ -97,20 +101,32 @@ export const TimesheetTimecardView: React.FC<TimesheetTimecardViewProps> = ({
                 </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5 pb-12">
-                {entries.map((entry) => (
-                        <TimesheetMobileCard
-                            key={entry.id}
-                            entry={entry}
-                            isSelected={selectedIds.includes(String(entry.id))}
-                            isSelectMode={isSelectMode}
-                            onToggleSelect={() => onToggleSelect(String(entry.id))}
-                            onSave={onSaveEntry}
-                            onMarkNoShow={onMarkNoShow}
-                            readOnly={readOnly}
+            {buckets.map((bucket) => (
+                <div key={bucket.key}>
+                    {bucket.label && (
+                        <GroupSectionHeader
+                            label={bucket.label}
+                            count={bucket.items.length}
+                            itemNoun="entry"
+                            emphasized={isTodayBucketKey(bucket.key)}
                         />
-                ))}
-            </div>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
+                        {bucket.items.map((entry) => (
+                            <TimesheetMobileCard
+                                key={entry.id}
+                                entry={entry}
+                                isSelected={selectedIds.includes(String(entry.id))}
+                                isSelectMode={isSelectMode}
+                                onToggleSelect={() => onToggleSelect(String(entry.id))}
+                                onSave={onSaveEntry}
+                                onMarkNoShow={onMarkNoShow}
+                                readOnly={readOnly}
+                            />
+                        ))}
+                    </div>
+                </div>
+            ))}
         </div>
     );
 };

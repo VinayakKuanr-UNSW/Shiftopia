@@ -44,6 +44,17 @@ export const RoleStep: React.FC<RoleStepProps> = ({
     const watchIsAnnualLeave = form.watch('isAnnualLeave');
     const watchIsPersonalLeave = form.watch('isPersonalLeave');
     const watchIsCarerLeave = form.watch('isCarerLeave');
+    const watchAssignedEmployeeId = form.watch('assigned_employee_id');
+
+    // Same bug fixed elsewhere: the legacy positional wrapper silently defaults
+    // employmentType to "Casual" when omitted, overpricing FT/PT staff with a
+    // casual loading. contract_type is already fetched by getEmployees(), just
+    // wasn't threaded through this preview.
+    const assignedEmployee = employees.find((e) => e.id === watchAssignedEmployeeId);
+    const employmentType = assignedEmployee?.contract_type === 'FT' ? 'Full-Time'
+        : assignedEmployee?.contract_type === 'PT' ? 'Part-Time'
+        : assignedEmployee?.contract_type === 'CASUAL' ? 'Casual'
+        : undefined;
 
     const estimatedCost = estimateShiftCost(
         netLength,
@@ -57,7 +68,9 @@ export const RoleStep: React.FC<RoleStepProps> = ({
         watchAllowances,
         watchIsAnnualLeave,
         watchIsPersonalLeave,
-        watchIsCarerLeave
+        watchIsCarerLeave,
+        undefined, // previousWage
+        employmentType
     );
 
     return (

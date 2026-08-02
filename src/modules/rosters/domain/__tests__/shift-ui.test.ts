@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { getTimeRule, getLiveRule, getLiveRuleBadges, isTimesheetReviewable } from '../shift-ui';
+import { getTimeRule, getLiveRule, getLiveRuleBadges, getPayrollRuleBadges, isTimesheetReviewable } from '../shift-ui';
 import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 
 // ─── Time Rules ────────────────────────────────────────────────────────────────
@@ -33,6 +33,45 @@ describe('getTimeRule - 5-state schedule lifecycle', () => {
             .toBe('Closed');
     });
 
+    it('Closed when unassigned and past scheduled end, even though still Published/InProgress and well inside 12.5h-from-start', () => {
+        // Reproduces the reported bug: an unassigned, never-clocked-in shift whose
+        // 5h window ended an hour ago must not still read Live for another ~11.5h.
+        expect(getTimeRule({ lifecycle_status: 'Published', start_at: iso(-6 * HOUR), end_at: iso(-1 * HOUR) })?.label)
+            .toBe('Closed');
+    });
+
+    it('Closed when attendance_status is no_show, even before the 12.5h-from-start horizon', () => {
+        expect(getTimeRule({ lifecycle_status: 'Published', attendance_status: 'no_show', start_at: iso(-2 * HOUR), end_at: iso(+1 * HOUR) })?.label)
+            .toBe('Closed');
+    });
+
+    it('auto-clockout anchor does not fire early for an early clock-in (matches pre-fix behavior)', () => {
+        // Long (24h) shift so scheduled end is still in the future — isolates the
+        // 12.5h-from-anchor check from the end-time check.
+        // actual_start 1h before scheduled start; anchor = GREATEST(ci, start) = start.
+        // Just before start + 12.5h it must still be Live...
+        expect(getTimeRule({ lifecycle_status: 'InProgress', start_at: iso(-12.4 * HOUR), end_at: iso(+10 * HOUR), actual_start: iso(-13.4 * HOUR) })?.label)
+            .toBe('Live');
+        // ...and Closed once past start + 12.5h.
+        expect(getTimeRule({ lifecycle_status: 'InProgress', start_at: iso(-12.6 * HOUR), end_at: iso(+10 * HOUR), actual_start: iso(-13.6 * HOUR) })?.label)
+            .toBe('Closed');
+    });
+
+    it('auto-clockout anchor extends for a late clock-in past the old flat start+12.5h horizon', () => {
+        // Long (24h) shift so scheduled end is still in the future. start was 13h
+        // ago (old flat horizon of start+12.5h has already passed), but actual_start
+        // was 2h after start, so the GREATEST anchor is start+2h, meaning the 12.5h
+        // horizon is still 1.5h away — must still read Live.
+        expect(getTimeRule({ lifecycle_status: 'InProgress', start_at: iso(-13 * HOUR), end_at: iso(+10 * HOUR), actual_start: iso(-11 * HOUR) })?.label)
+            .toBe('Live');
+    });
+
+    it('Time Rules and Payroll Rules agree on the reported bug scenario', () => {
+        const shift = { lifecycle_status: 'Published', start_at: iso(-6 * HOUR), end_at: iso(-1 * HOUR) };
+        expect(getTimeRule(shift)?.label).toBe('Closed');
+        expect(getPayrollRuleBadges(shift).arrival?.label).toBe('No Show');
+    });
+
     it('Closed when clocked out early, even though still inside the scheduled window', () => {
         // Worker clocked out (actual_end set) an hour into an 8h shift — must not read Live.
         expect(getTimeRule({ lifecycle_status: 'Completed', start_at: iso(-1 * HOUR), end_at: iso(+7 * HOUR), actual_end: iso(-0.5 * HOUR) })?.label)
@@ -58,10 +97,7 @@ describe('getTimeRule - 5-state schedule lifecycle', () => {
             .toBe('Live');
     });
 
-    it('Closed when auto clocked out', () => {
-        expect(getTimeRule({ lifecycle_status: 'Published', start_at: iso(-5 * HOUR), end_at: iso(+3 * HOUR), attendance_status: 'auto_clock_out' })?.label)
-            .toBe('Closed');
-    });
+
 
     it('does NOT treat actual_end "-" as Closed', () => {
         expect(getTimeRule({ lifecycle_status: 'Published', start_at: iso(+5 * HOUR), end_at: iso(+13 * HOUR), actual_end: '-' })?.label)
@@ -156,72 +192,21 @@ describe('getLiveRuleBadges - two-badge arrival/departure model', () => {
         expect(departure(s)).toBe('Working Overtime');
     });
 
-    it('Auto Clock-Out departure wins on attendance_status flag', () => {
-        const s = { lifecycle_status: 'Completed', attendance_status: 'auto_clock_out',
+    it('Shift past end before 12.5h mark reads Working Overtime', () => {
+        const s = { lifecycle_status: 'InProgress', attendance_status: 'checked_in',
+            start_at: iso(-6 * HOUR), end_at: iso(-1 * HOUR), actual_start: iso(-6 * HOUR) };
+        expect(arrival(s)).toBe('On Time In');
+        expect(departure(s)).toBe('Working Overtime');
+    });
+
+    it('Shift at or past 12.5h from start without clock-out reads Missing departure', () => {
+        const s = { lifecycle_status: 'Completed', attendance_status: 'checked_in',
             start_at: iso(-13 * HOUR), end_at: iso(-5 * HOUR), actual_start: iso(-13 * HOUR) };
         expect(arrival(s)).toBe('On Time In');
-        expect(departure(s)).toBe('Auto Clock-Out');
+        expect(departure(s)).toBe('Missing');
     });
 
-    // ── Per-side manual overrides ───────────────────────────────────────────────
-    it('editing only the In stars the arrival — departure keeps its actual-clock rule', () => {
-        const badges = getLiveRuleBadges({ lifecycle_status: 'Completed',
-            start_at: iso(-8 * HOUR), end_at: iso(-1 * HOUR),
-            actual_start: iso(-8 * HOUR + 2 * MIN), actual_end: iso(-1 * HOUR + 1 * MIN),
-            adjusted_start: iso(-8 * HOUR + 20 * MIN), adjusted_end: iso(-1 * HOUR + 1 * MIN),
-            adjusted_start_is_manual: true, adjusted_end_is_manual: false });
-        expect(badges.arrival?.label).toBe('Late In*');
-        expect(badges.departure?.label).toBe('On Time Out'); // no star
-    });
-
-    it('editing only the Out stars the departure — arrival keeps its actual-clock rule', () => {
-        const badges = getLiveRuleBadges({ lifecycle_status: 'Completed',
-            start_at: iso(-8 * HOUR), end_at: iso(-1 * HOUR),
-            actual_start: iso(-8 * HOUR + 2 * MIN), actual_end: iso(-1 * HOUR + 1 * MIN),
-            adjusted_start: iso(-8 * HOUR + 2 * MIN), adjusted_end: iso(-2 * HOUR),
-            adjusted_start_is_manual: false, adjusted_end_is_manual: true });
-        expect(badges.arrival?.label).toBe('On Time In'); // no star
-        expect(badges.departure?.label).toBe('Early Out*');
-    });
-
-    it('manual In override applies even when there is no adjusted/actual end (overridden no-show)', () => {
-        const badges = getLiveRuleBadges({ lifecycle_status: 'Completed', attendance_status: 'no_show',
-            start_at: iso(-8 * HOUR), end_at: iso(-1 * HOUR),
-            adjusted_start: iso(-8 * HOUR + 1 * MIN),
-            adjusted_start_is_manual: true, adjusted_end_is_manual: false });
-        expect(badges.arrival?.label).toBe('On Time In*');
-        expect(badges.departure).toBeNull();
-    });
-
-    // ── Auto clock-out horizon = LATER of clock-in and scheduled start ─────────
-    it('late clock-in extends Working Overtime past start + 12.5h', () => {
-        // start 13h ago, clocked in 1h late (12h ago) → horizon = clock-in + 12.5h
-        // = 30 min from now, so the employee is still Working Overtime.
-        const s = { lifecycle_status: 'Completed', attendance_status: 'checked_in',
-            start_at: iso(-13 * HOUR), end_at: iso(-5 * HOUR), actual_start: iso(-12 * HOUR) };
-        expect(departure(s)).toBe('Working Overtime');
-        expect(isTimesheetReviewable(s)).toBe(false); // overtime is non-terminal
-    });
-
-    it('early clock-in anchors the horizon to scheduled start (whichever is later)', () => {
-        // clocked in 1h early, start 13h ago → horizon = start + 12.5h = 30 min
-        // ago... auto clock-out should already have fired server-side; client
-        // shows no overtime badge past the horizon.
-        const s = { lifecycle_status: 'Completed', attendance_status: 'checked_in',
-            start_at: iso(-13 * HOUR), end_at: iso(-5 * HOUR), actual_start: iso(-14 * HOUR) };
-        expect(departure(s)).toBeUndefined();
-    });
-
-    it('legacy both-sides flag re-derives both halves with a * suffix', () => {
-        const badges = getLiveRuleBadges({ lifecycle_status: 'Completed', attendance_status: 'no_show',
-            adjusted_is_manual: true,
-            start_at: iso(-8 * HOUR), end_at: iso(-1 * HOUR),
-            adjusted_start: iso(-8 * HOUR + 20 * MIN), adjusted_end: iso(-2 * HOUR) });
-        expect(badges.arrival?.label).toBe('Late In*');
-        expect(badges.departure?.label).toBe('Early Out*');
-    });
-
-    it('auto/snapped billable times do NOT get a * (no manual override)', () => {
+    it('auto/snapped billable times do NOT alter raw actual clocking live rules', () => {
         // adjusted times present but not manually committed → derive from actual clock punches
         const badges = getLiveRuleBadges({ lifecycle_status: 'Completed',
             adjusted_is_manual: false,
@@ -234,6 +219,67 @@ describe('getLiveRuleBadges - two-badge arrival/departure model', () => {
 
     it('returns both null when the start time is unparseable', () => {
         expect(getLiveRuleBadges({ lifecycle_status: 'Published' })).toEqual({ arrival: null, departure: null });
+    });
+});
+
+describe('getPayrollRuleBadges - billable-window two-badge model', () => {
+    const iso = (offsetMs: number) => new Date(Date.now() + offsetMs).toISOString();
+    const HOUR = 60 * 60 * 1000;
+    const MIN = 60 * 1000;
+    // Scheduled 8h ago → 1h ago.
+    const sched = { lifecycle_status: 'Completed', start_at: iso(-8 * HOUR), end_at: iso(-1 * HOUR) };
+    const arrival = (s: Parameters<typeof getPayrollRuleBadges>[0]) => getPayrollRuleBadges(s).arrival?.label;
+    const departure = (s: Parameters<typeof getPayrollRuleBadges>[0]) => getPayrollRuleBadges(s).departure?.label;
+
+    it('On Time In + On Time Out when billable matches the roster', () => {
+        const s = { ...sched, adjusted_start: iso(-8 * HOUR), adjusted_end: iso(-1 * HOUR) };
+        expect(arrival(s)).toBe('On Time In');
+        expect(departure(s)).toBe('On Time Out');
+    });
+
+    it('Late Out when the billable OUT runs past the rostered end', () => {
+        const s = { ...sched, adjusted_start: iso(-8 * HOUR), adjusted_end: iso(-1 * HOUR + 40 * MIN) };
+        expect(departure(s)).toBe('Late Out');
+    });
+
+    it('Early Out when the billable OUT falls before the rostered end', () => {
+        const s = { ...sched, adjusted_start: iso(-8 * HOUR), adjusted_end: iso(-2 * HOUR) };
+        expect(departure(s)).toBe('Early Out');
+    });
+
+    it('Early In / Late In on the IN side', () => {
+        expect(arrival({ ...sched, adjusted_start: iso(-8 * HOUR - 30 * MIN) })).toBe('Early In');
+        expect(arrival({ ...sched, adjusted_start: iso(-8 * HOUR + 30 * MIN) })).toBe('Late In');
+    });
+
+    it('returns Missing departure for unadjusted end on an ended shift', () => {
+        const sMid = { ...sched, adjusted_start: iso(-8 * HOUR), adjusted_end: null };
+        expect(arrival(sMid)).toBe('On Time In');
+        expect(getPayrollRuleBadges(sMid).departure?.label).toBe('Missing');
+
+        const sLate = { lifecycle_status: 'Completed', start_at: iso(-13 * HOUR), end_at: iso(-5 * HOUR), adjusted_start: iso(-13 * HOUR), adjusted_end: null };
+        expect(getPayrollRuleBadges(sLate).departure?.label).toBe('Missing');
+    });
+
+    it('returns No Show arrival and null departure when both billable sides are missing on an ended shift', () => {
+        const sNoShow = { ...sched, adjusted_start: null, adjusted_end: null };
+        expect(getPayrollRuleBadges(sNoShow).arrival?.label).toBe('No Show');
+        expect(getPayrollRuleBadges(sNoShow).departure).toBeNull();
+    });
+
+    it('mirrors Live Rules labels but from billable times', () => {
+        // Actual clock-in 20m late (Live: Late In) but billable snapped to the roster.
+        const s = {
+            ...sched,
+            actual_start: iso(-8 * HOUR + 20 * MIN), actual_end: iso(-1 * HOUR + 2 * MIN),
+            adjusted_start: iso(-8 * HOUR), adjusted_end: iso(-1 * HOUR),
+        };
+        expect(getLiveRuleBadges(s).arrival?.label).toBe('Late In');      // attendance truth
+        expect(getPayrollRuleBadges(s).arrival?.label).toBe('On Time In'); // billable truth (same label vocabulary)
+    });
+
+    it('returns both null when the schedule is unparseable', () => {
+        expect(getPayrollRuleBadges({ lifecycle_status: 'Completed' })).toEqual({ arrival: null, departure: null });
     });
 });
 
@@ -252,11 +298,11 @@ describe('getLiveRule - single-badge adapter (departure wins over arrival)', () 
             actual_start: iso(-1 * HOUR + 20 * MIN) })?.label).toBe('Late In');
     });
 
-    it('keeps the * suffix so manual overrides are still detectable', () => {
-        expect(getLiveRule({ lifecycle_status: 'Completed', attendance_status: 'no_show',
-            adjusted_is_manual: true, start_at: iso(-8 * HOUR), end_at: iso(-1 * HOUR),
-            adjusted_start: iso(-8 * HOUR + 2 * MIN), adjusted_end: iso(-1 * HOUR + 2 * MIN) })?.label.endsWith('*'))
-            .toBe(true);
+    it('surfaces actual clocking rule via getLiveRule', () => {
+        expect(getLiveRule({ lifecycle_status: 'Completed',
+            start_at: iso(-8 * HOUR), end_at: iso(-1 * HOUR),
+            actual_start: iso(-8 * HOUR + 2 * MIN), actual_end: iso(-1 * HOUR + 2 * MIN) })?.label)
+            .toBe('On Time Out');
     });
 });
 

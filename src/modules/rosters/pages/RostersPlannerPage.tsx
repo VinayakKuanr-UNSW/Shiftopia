@@ -29,6 +29,8 @@ import type { ShiftContext } from '@/modules/rosters/ui/dialogs/EnhancedAddShift
 import { BulkActionsToolbar, type BulkActionResult, type BulkPublishValidationResult } from '@/modules/rosters/ui/components/BulkActionsToolbar';
 import { RosterModals, type RosterModalsHandle } from '@/modules/rosters/ui/components/RosterModals';
 import { ShiftWizardModal } from '@/modules/rosters/ui/dialogs/EnhancedAddShiftModal/ShiftWizardModal';
+import { useShiftFormModalStore } from '@/modules/rosters/state/useShiftFormModalStore';
+import { ReserveListPanel } from '@/modules/reserve-list';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
 import { useShallow } from 'zustand/react/shallow';
 import { DndAssignModal } from '@/modules/rosters/ui/dialogs/DndAssignModal';
@@ -204,6 +206,7 @@ const NewRostersPage: React.FC = () => {
     groupType: string;
     subGroupName?: string;
   }>({ isOpen: false, date: '', groupType: '' });
+  const isShiftFormOpen = useShiftFormModalStore((s) => s.isOpen);
 
   const selectedCount = selectedV8ShiftIds.size;
 
@@ -1450,6 +1453,9 @@ const NewRostersPage: React.FC = () => {
       {/* Add/Edit Shift wizard — centered modal overlay (opened via useShiftFormNav store) */}
       <ShiftWizardModal />
 
+      {/* Reserve List — manager-only emergency staffing (opened via useReserveListPanelStore) */}
+      <ReserveListPanel />
+
       {/* DnD Assignment Modal */}
       {pendingDndAssign && (
         <DndAssignModal
@@ -1467,9 +1473,14 @@ const NewRostersPage: React.FC = () => {
         />
       )}
 
-      {/* Drill-Down Panel (Phase 4 of Millions-of-Shifts endgame) */}
+      {/* Drill-Down Panel (Phase 4 of Millions-of-Shifts endgame).
+          isOpen is suppressed (not the underlying state) while the Add/Edit
+          Shift wizard is open — the wizard sits at z-40, below this panel's
+          z-50 backdrop, so it must be visually hidden rather than closed.
+          Hiding via CSS (not unmounting) lets it reappear automatically,
+          scroll position and selection intact, once the wizard closes. */}
       <DrillDownPanel
-        isOpen={drillDownState.isOpen}
+        isOpen={drillDownState.isOpen && !isShiftFormOpen}
         onClose={() => setDrillDownState({ ...drillDownState, isOpen: false })}
         date={drillDownState.date}
         groupType={drillDownState.groupType}

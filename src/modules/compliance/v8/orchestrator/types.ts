@@ -47,6 +47,8 @@ export interface V8EmployeeContext {
     qualifications?:          import('../types').QualificationV2[];
     /** YYYY-MM-DD dates with approved leave (audit F1 — V8_LEAVE_CONFLICT). */
     leave_days?:              string[];
+    /** EBA Schedule 3 — see V8Employee.is_security_role (audit H-5). */
+    is_security_role?:        boolean;
 }
 
 export interface V8OrchestratorInput {

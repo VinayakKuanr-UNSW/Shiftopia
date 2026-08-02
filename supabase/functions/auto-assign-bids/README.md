@@ -8,9 +8,45 @@ F3 fairness debts), then **decides each shift per-bidder by calling the deployed
 `evaluate-compliance` Edge Function over HTTP** — the first bidder whose result
 is not `'violated'` wins.
 
-Implements `docs/implementation/01-auto-assign-bids-refactor.md` §2 (orchestration)
-and §8 (API), bound by `docs/implementation/00-contracts-and-conventions.md`
+Implements `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/01-auto-assign-bids-refactor.md` §2 (orchestration)
+and §8 (API), bound by `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/00-contracts-and-conventions.md`
 (decisions D1–D5; idempotency §5; enums §6; routes §7).
+
+---
+
+## AutoPilot — `POST /tick` (autonomous ON/OFF) — ⚠️ NOT DEPLOYED
+
+Beyond the interactive `POST /` run (manager JWT), this function now also hosts
+the **Open Bids AutoPilot** drain, the bid analogue of `auto-approve-swaps` /
+`auto-verify-timesheets`:
+
+```
+shift bidding closes with no winner
+   │  (trg_enqueue_bid_auto_assign, gated to an ENABLED bid_approval_rules policy)
+   ▼
+bid_review_queue (PENDING)
+   │  cron → POST /tick → sm_bid_queue_claim (SKIP LOCKED)
+   ▼
+decideShift()  (reused: first compliance-clear bidder via evaluate-compliance)
+   ▼
+sm_bid_auto_decide  →  bid_decisions (+ audit)
+   │  AUTO_APPROVE → commit via hardened sm_select_bid_winner
+   ▼
+sm_bid_queue_complete (DONE | backoff/DLQ)
+```
+
+AutoPilot is a per-org **ON/OFF** switch — no shadow mode. `POST /tick` is
+authorized by the shared `WORKER_SECRET` (`X-Worker-Secret`) or a service-role
+bearer — **no user JWT** — checked before the interactive JWT gate. It reuses the
+same `decideShift` / `evaluateCompliance` / F3 selection brain, so only
+compliance-clear winners are ever proposed; `sm_bid_auto_decide` still
+re-validates through the hardened winner RPC (state / winner-pending / 4h).
+
+Bring-up: apply `supabase/migrations/20260722110000_bid_auto_assign.sql`, redeploy
+this function, set `WORKER_SECRET`, schedule a ~1-min `pg_cron` POST to `/tick`,
+then turn AutoPilot **ON** for an org (`bid_approval_rules` row with
+`enabled=true`). Kill-switch = `enabled=false`; undo a committed auto-assignment =
+`sm_bid_auto_revert(decision_id, actor)`.
 
 ---
 
@@ -64,7 +100,7 @@ because the deployed `sm_select_bid_winner` gateway re-enforces its own P0 guard
 > **Status:** self-contained scaffold. The draft migration that creates
 > `assignment_runs` / `assignment_decisions` / `assignment_events` and the
 > `sm_assignment_run_*` RPCs lives at
-> `docs/implementation/migrations-draft/0001_assignment_audit_and_engine.sql`
+> `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/migrations-draft/0001_assignment_audit_and_engine.sql`
 > and must be promoted to prod **before** this function will work end-to-end.
 > `evaluate-compliance` is already deployed in prod.
 

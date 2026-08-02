@@ -1,8 +1,9 @@
 // =============================================================================
 // auto-approve-swaps — Eligibility Engine (PURE)
 //
-// Deterministic pure function implementing docs/implementation/02-auto-approve
-// -swaps.md §3 (role / cert / location / pay+payroll-delta / duration / fatigue
+// Deterministic pure function implementing
+// docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/02-auto-approve-swaps.md
+// §3 (role / cert / location / pay+payroll-delta / duration / fatigue
 // / overtime / overlap / coverage / availability) + §3.11 confidence.
 //
 // It does NOT re-implement compliance/fatigue — those come from `swapEvaluator`

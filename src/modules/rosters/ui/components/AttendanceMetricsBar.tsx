@@ -31,7 +31,7 @@ interface AttendanceMetricsBarProps {
 }
 
 export const AttendanceMetricsBar: React.FC<AttendanceMetricsBarProps> = ({ metrics, className }) => {
-  // Order matches the canonical scorecard list.
+  // Order matches the canonical scorecard list (9 parameters).
   const rates: RateTile[] = [
     { label: 'Early In', value: metrics.earlyClockInPct, thresholdKey: 'early_clock_in_rate' },
     { label: 'On-Time In', value: metrics.onTimeInPct, thresholdKey: 'on_time_in_rate' },
@@ -39,7 +39,7 @@ export const AttendanceMetricsBar: React.FC<AttendanceMetricsBarProps> = ({ metr
     { label: 'Early Out', value: metrics.earlyClockOutPct, thresholdKey: 'early_clock_out_rate' },
     { label: 'On-Time Out', value: metrics.onTimeOutPct, thresholdKey: 'on_time_out_rate' },
     { label: 'Late Out', value: metrics.lateClockOutPct, thresholdKey: 'late_clock_out_rate' },
-    { label: 'Auto Out', value: metrics.autoClockOutPct, thresholdKey: 'auto_clock_out_rate' },
+    { label: 'Missing Out', value: metrics.autoClockOutPct, thresholdKey: 'auto_clock_out_rate' },
     { label: 'No-Show', value: metrics.noShowPct, thresholdKey: 'no_show_rate' },
   ];
 

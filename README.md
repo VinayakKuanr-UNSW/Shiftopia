@@ -105,7 +105,7 @@ docker compose up -d
 
 ## Architecture
 
-See [docs/architecture-overview.md](docs/architecture-overview.md) for detailed architecture documentation.
+See [docs/rulebook/02-architecture.md](docs/rulebook/02-architecture.md) for current architecture documentation.
 
 ### Key Flows
 
@@ -123,14 +123,15 @@ See [.env.example](.env.example) for all configuration options including:
 
 ## Documentation
 
+Full index: **[docs/README.md](docs/README.md)** — start there for anything beyond the quick links below.
+
 | Document | Description |
 |----------|-------------|
-| [Architecture Overview](docs/architecture-overview.md) | System architecture and module ownership |
-| [DDD Module Standards](docs/ddd-module-standards.md) | Domain-driven design conventions |
-| [Autoscheduler Guide](docs/autoscheduler.md) | OR-Tools optimizer documentation |
-| [Operational Runbook](docs/operational-runbook.md) | Production operations guide |
-| [Release Checklist](docs/release-checklist.md) | Pre-release verification steps |
-| [Hardening Report](HARDENING_2026-04-29.md) | Security & performance hardening pass |
+| [Business Rulebook](docs/rulebook/README.md) | Canonical cross-cutting spec: architecture, business rules, workflows, FSMs, RBAC, compliance engine, production audit |
+| [DDD Module Standards](docs/architecture/ddd-module-standards.md) | Domain-driven design conventions |
+| [Autoscheduler docs](docs/modules/autoscheduler/) | OR-Tools optimizer service — audit, hardening, schema contracts |
+| [Operational Runbook](docs/operations/operational-runbook.md) | Production operations guide |
+| [Release Checklist](docs/operations/release-checklist.md) | Pre-release verification steps |
 
 ## License
 

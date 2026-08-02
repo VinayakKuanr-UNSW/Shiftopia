@@ -21,14 +21,36 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import CreateSwapRequestModal from './CreateSwapRequestModal';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
 import { computeShiftUrgency } from '@/modules/rosters/domain/bidding-urgency';
-import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
+import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
 import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_TITLE, COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
+import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShiftGrossPay';
+import { useAuth } from '@/platform/auth/useAuth';
+import { getShiftDayType } from '@/modules/core/lib/holidays';
 import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from '@/modules/core/ui/primitives/tooltip';
+    resolveBillableSide,
+    calculateNetMinutes,
+    applyMinEngagementFloor,
+    isShiftFinished as isShiftFinishedForBillable,
+} from '@/modules/timesheets/domain/billable-time';
+
+// Sydney-tz-safe "h:mm a" formatter for the raw actual-clock / resolved-billable
+// wall-clock values ('HH:MM' or ISO) — mirrors the Timesheets card's own
+// formatting so the two surfaces read identically, without the browser-local
+// `Date.getHours()` shortcut that other ad-hoc formatters in this codebase use.
+function formatWallClock(value: string | null | undefined): string | null {
+    if (!value) return null;
+    if (value.includes('T') || (value.length > 8 && value.includes('-'))) {
+        const d = new Date(value);
+        if (isNaN(d.getTime())) return null;
+        return formatInTimezone(d, SYDNEY_TZ, 'h:mm a');
+    }
+    const parts = value.split(':').map(Number);
+    if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
+    const h = parts[0], m = parts[1];
+    return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+}
 
 interface ShiftWithDetails {
   shift: Shift;
@@ -85,6 +107,7 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
   shiftData,
 }) => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const { mySwapRequests, myActiveOfferDetails, isLoadingOfferDetails } = useSwaps();
 
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
@@ -145,30 +168,134 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
 
   const urgency = computeShiftUrgency(shiftData?.shift.shift_date || '', shiftData?.shift.start_time || '', (shiftData?.shift as any)?.start_at);
 
-  const groupVariant = (() => {
-    if (!shiftData?.shift) return 'default' as const;
-    const s = shiftData.shift;
-    if (s.group_type === 'convention_centre') return 'convention' as const;
-    if (s.group_type === 'exhibition_centre') return 'exhibition' as const;
-    if (s.group_type === 'theatre') return 'theatre' as const;
-    if (s.group_type === 'the_cutaway') return 'cutaway' as const;
-
-    const name = (s.departments?.name || '').toLowerCase();
-    if (name.includes('convention')) return 'convention' as const;
-    if (name.includes('exhibition')) return 'exhibition' as const;
-    if (name.includes('theatre') || name.includes('theater')) return 'theatre' as const;
-    if (name.includes('cutaway')) return 'cutaway' as const;
-    return 'default' as const;
-  })();
+  const groupVariant = React.useMemo(() => {
+    if (!shiftData) return 'default' as const;
+    return resolveGroupVariant(
+      shiftData.shift,
+      shiftData.groupName || shiftData.shift?.departments?.name,
+      shiftData.subGroupName || shiftData.shift?.sub_departments?.name
+    );
+  }, [shiftData]);
 
   const swapLabel = 'Swap';
   const dropLabel = 'Drop';
 
+  // ── Billable window resolution ──────────────────────────────────────────
+  // Same three-tier rule (manager edit → snapped actual → missing) the
+  // Timesheets card uses — reusing the canonical resolver directly so the two
+  // surfaces can never diverge on what "billable" means for this shift.
+  const isFinishedForBillable = React.useMemo(() => {
+    if (!shiftData?.shift) return false;
+    return isShiftFinishedForBillable(
+      shiftData.shift.shift_date,
+      shiftData.shift.start_time,
+      shiftData.shift.end_time,
+      (shiftData.shift as any).actual_end ?? null,
+    );
+  }, [shiftData?.shift]);
+
+  const resolvedBillableStart = React.useMemo(
+    () => resolveBillableSide(
+      (shiftData?.shift as any)?.adjusted_start ?? null,
+      (shiftData?.shift as any)?.actual_start ?? null,
+      isFinishedForBillable,
+    ),
+    [shiftData?.shift, isFinishedForBillable],
+  );
+  const resolvedBillableEnd = React.useMemo(
+    () => resolveBillableSide(
+      (shiftData?.shift as any)?.adjusted_end ?? null,
+      (shiftData?.shift as any)?.actual_end ?? null,
+      isFinishedForBillable,
+    ),
+    [shiftData?.shift, isFinishedForBillable],
+  );
+
+  // EBA minimum-engagement PAYMENT floor — same resolver the Timesheets card
+  // and the cost engines use, so a shift never shows a different billable
+  // floor decision depending which screen you view it from.
+  const billableFloor = React.useMemo(() => {
+    if (!shiftData?.shift) return null;
+    const rawNetMins = calculateNetMinutes(resolvedBillableStart, resolvedBillableEnd, unpaidBreak);
+    if (rawNetMins === null) return null;
+    const { isSunday, isPublicHoliday } = getShiftDayType(shiftData.shift.shift_date);
+    const isSecurityRoleForFloor = (shiftData.shift.roles?.name ?? '').toLowerCase().includes('security');
+    return applyMinEngagementFloor(rawNetMins, {
+      isTraining: (shiftData.shift as any).is_training === true,
+      isSunday,
+      isPublicHoliday,
+      employmentType: user?.employmentType ?? null,
+      isSecurityRole: isSecurityRoleForFloor,
+    });
+  }, [resolvedBillableStart, resolvedBillableEnd, unpaidBreak, shiftData?.shift, user?.employmentType]);
+
+  // Augmented shiftData passed to SharedShiftCard: the raw shift row's
+  // adjusted_start/end only carry a MANAGER EDIT (tier 1) — merge in the
+  // fully-resolved (tier 2 snapped) window so the Live/Payroll Rule badges
+  // read the same "billable" truth as the Timesheets card, not just tier 1.
+  const shiftDataForCard = React.useMemo(() => {
+    if (!shiftData?.shift) return shiftData?.shift;
+    return {
+      ...shiftData.shift,
+      adjusted_start: resolvedBillableStart.hhmm,
+      adjusted_end: resolvedBillableEnd.hhmm,
+      adjusted_start_source: resolvedBillableStart.source === 'missing' ? null : resolvedBillableStart.source,
+      adjusted_end_source: resolvedBillableEnd.source === 'missing' ? null : resolvedBillableEnd.source,
+    };
+  }, [shiftData?.shift, resolvedBillableStart, resolvedBillableEnd]);
+
   // ── Cost Calculation ──────────────────────────────────────────────────────
+  // Scheduled (rostered) estimate — the raw `shift` row never carries the
+  // assigned employee's employment type, which silently defaulted this to
+  // "Casual" pricing for everyone (wrong classification/rate). Supply the
+  // viewing employee's own type from auth, same as the Timesheets card does.
   const costBreakdown = React.useMemo(() => {
     if (!shiftData?.shift) return ZERO_COST_BREAKDOWN;
-    return estimateDetailedCostFromShift(shiftData.shift);
-  }, [shiftData?.shift]);
+    return estimateDetailedCostFromShift({
+      ...shiftData.shift,
+      employmentType: user?.employmentType,
+    } as any);
+  }, [shiftData?.shift, user?.employmentType]);
+
+  // Billable (actual/payroll) estimate — priced off the resolved billable
+  // window above, at the EBA-floored net minutes, mirroring the Timesheets
+  // card's `billableCost`. Only resolves once both sides have a real value.
+  const billableCostBreakdown = React.useMemo(() => {
+    if (!shiftData?.shift || !resolvedBillableStart.hhmm || !resolvedBillableEnd.hhmm || billableFloor == null) return null;
+    try {
+      return estimateDetailedCostFromShift({
+        shift_date: shiftData.shift.shift_date,
+        start_time: resolvedBillableStart.hhmm,
+        end_time: resolvedBillableEnd.hhmm,
+        roles: shiftData.shift.roles,
+        employmentType: user?.employmentType,
+        is_training: (shiftData.shift as any).is_training,
+        unpaid_break_minutes: unpaidBreak,
+        scheduled_length_minutes: (shiftData.shift as any).scheduled_length_minutes ?? netLengthMinutes,
+      }, billableFloor.netMinutes);
+    } catch {
+      return null;
+    }
+  }, [shiftData?.shift, resolvedBillableStart, resolvedBillableEnd, billableFloor, unpaidBreak, user?.employmentType, netLengthMinutes]);
+
+  // Itemised rate-breakdown lines for both figures, via the SAME builder the
+  // Timesheets card uses, so `estimatedPay`/`billablePay` below are plain
+  // "$123.45" strings (not the bespoke Tooltip JSX this dialog used to build)
+  // — that's what SharedShiftCard's own Variance section needs to compute a
+  // Pay delta; a ReactNode there can't be parsed and silently shows "--".
+  const isSecurityRoleForCost = (shiftData?.shift?.roles?.name ?? '').toLowerCase().includes('security');
+  const estimatedPayLines = React.useMemo(
+    () => shiftData?.shift
+      ? buildOrdinaryEarningsLines(costBreakdown, { isSecurityRole: isSecurityRoleForCost, shiftDate: shiftData.shift.shift_date, startTime: shiftData.shift.start_time })
+      : [],
+    [costBreakdown, isSecurityRoleForCost, shiftData?.shift],
+  );
+  const billablePayLines = React.useMemo(
+    () => billableCostBreakdown
+      ? buildOrdinaryEarningsLines(billableCostBreakdown, { isSecurityRole: isSecurityRoleForCost, shiftDate: shiftData!.shift.shift_date, startTime: resolvedBillableStart.hhmm ?? undefined })
+      : [],
+    [billableCostBreakdown, isSecurityRoleForCost, shiftData, resolvedBillableStart],
+  );
 
   if (!shiftData) return null;
   const { shift, groupName, groupColor, subGroupName } = shiftData;
@@ -204,6 +331,13 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
     );
   };
 
+  const assignedEmployeeName =
+    (shift as any).employeeName ||
+    (shift.employees ? `${shift.employees.first_name || ''} ${shift.employees.last_name || ''}`.trim() : null) ||
+    user?.fullName ||
+    user?.name ||
+    undefined;
+
   return (
     <>
       <ResponsiveDialog
@@ -224,36 +358,36 @@ const ShiftDetailsDialog: React.FC<ShiftDetailsDialogProps> = ({
           <SharedShiftCard
             variant="timecard"
             isFlat={true}
+            customColor={groupColor}
             organization={shift.organizations?.name || ''}
             department={shift.departments?.name || ''}
             subGroup={shift.sub_departments?.name || subGroupName}
             role={shift.roles?.name || 'Shift'}
+            employeeName={assignedEmployeeName}
             shiftDate={format(shiftDate, 'EEE, MMM d, yyyy')}
-            startTime={shift.start_time.slice(0, 5)}
-            endTime={shift.end_time.slice(0, 5)}
+            startTime={formatWallClock(shift.start_time) ?? shift.start_time.slice(0, 5)}
+            endTime={formatWallClock(shift.end_time) ?? shift.end_time.slice(0, 5)}
             netLength={netLengthMinutes}
             paidBreak={paidBreak}
             unpaidBreak={unpaidBreak}
             urgency={urgency}
             groupVariant={groupVariant}
             isPast={isPast}
-            shiftData={shift}
+            shiftData={shiftDataForCard}
             lifecycleStatus={shift.lifecycle_status}
             className="pb-8" // Add some bottom padding for mobile drawers
-            estimatedPay={(
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center justify-end gap-1.5 cursor-help group/pay">
-                    <span className="text-[14px] font-black text-emerald-500 tabular-nums">
-                      ${(costBreakdown.totalCost || 0).toFixed(2)}
-                    </span>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-2xl" side="top">
-                  <CostBreakdownTooltip breakdown={costBreakdown} />
-                </TooltipContent>
-              </Tooltip>
-            )}
+            clockIn={formatWallClock((shift as any).actual_start)}
+            clockOut={formatWallClock((shift as any).actual_end)}
+            adjustedStart={formatWallClock(resolvedBillableStart.hhmm)}
+            adjustedEnd={formatWallClock(resolvedBillableEnd.hhmm)}
+            adjustedStartSource={resolvedBillableStart.source === 'missing' ? null : resolvedBillableStart.source}
+            adjustedEndSource={resolvedBillableEnd.source === 'missing' ? null : resolvedBillableEnd.source}
+            wasToppedUpToMinEngagement={billableFloor?.wasToppedUp}
+            requiredEngagementMinutes={billableFloor?.requiredMins || null}
+            estimatedPay={`$${(costBreakdown.totalCost || 0).toFixed(2)}`}
+            estimatedPayBreakdown={estimatedPayLines}
+            billablePay={billableCostBreakdown ? `$${(billableCostBreakdown.totalCost || 0).toFixed(2)}` : null}
+            billablePayBreakdown={billablePayLines}
             statusIcons={null}
             footerActions={
               <div className="flex flex-col gap-2 w-full">

@@ -1,18 +1,45 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { format, startOfWeek, startOfMonth } from 'date-fns';
 import { formatInTimezone, parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
-import { Clock, RefreshCw, ListFilter } from 'lucide-react';
-import { ToggleGroup, ToggleGroupItem } from '@/modules/core/ui/primitives/toggle-group';
+import { Clock, CheckCircle, XCircle, UserX, Shield, Bot, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+
+const TIMESHEET_STATUS_TABS = [
+    { id: 'all', label: 'All', icon: Shield, accent: 'slate' },
+    { id: 'pending', label: 'Pending', icon: Clock, accent: 'amber' },
+    { id: 'auto_approved', label: 'Auto-Approved', icon: Bot, accent: 'emerald' },
+    { id: 'approved', label: 'Approved', icon: CheckCircle, accent: 'emerald' },
+    { id: 'denied', label: 'Denied', icon: XCircle, accent: 'red' },
+    { id: 'no_show', label: 'No-Show', icon: UserX, accent: 'slate' },
+] as const;
+
+const timesheetAccentMap: Record<string, { bg: string; text: string; ring: string }> = {
+    amber:   { bg: 'bg-amber-500/10',   text: 'text-amber-600 dark:text-amber-400',     ring: 'ring-amber-500/20' },
+    emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', ring: 'ring-emerald-500/20' },
+    red:     { bg: 'bg-rose-500/10',    text: 'text-rose-600 dark:text-rose-400',       ring: 'ring-rose-500/20' },
+    slate:   { bg: 'bg-muted/50',       text: 'text-muted-foreground',                 ring: 'ring-border' },
+};
 
 import { useToast } from '@/modules/core/hooks/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
-import { UnifiedRosterNavigator, ViewType, DateRange, computeRange } from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
+import { UnifiedRosterNavigator, ViewType, DateRange, computeRange, navigateDate, formatRangeLabel } from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
+import { useBreakpoint } from '@/modules/core/hooks/useBreakpoint';
 import { TimesheetTable } from './components/TimesheetTable';
+import {
+    TimesheetFilterDrawer,
+    ActiveFilters,
+    EMPTY_FILTERS,
+    countActiveFilters,
+} from './components/TimesheetFilterDrawer';
+import { GroupBySelector } from '@/modules/core/ui/components/GroupBySelector';
+import type { RowGroupBy } from '@/modules/core/lib/row-grouping';
+import { TIMESHEET_GROUP_BY_OPTIONS } from '../domain/timesheet-grouping';
 import {
     getShiftsForTimesheet,
     updateTimesheetEntry,
+    TimesheetConflictError,
     bulkUpdateTimesheetStatus,
     TimesheetShiftRow,
     TimesheetFilters,
@@ -29,8 +56,7 @@ import { AttendanceMetricsBar } from '@/modules/rosters/ui/components/Attendance
 /**
  * TimesheetPage
  *
- * Owns: scope, date, search query, raw data fetch.
- * Categorical filters (group, subgroup, role, status) are managed inside TimesheetTable.
+ * Owns: scope, date, search query, filter state, raw data fetch.
  */
 export const TimesheetPage: React.FC = () => {
     const { isDark } = useTheme();
@@ -50,8 +76,10 @@ export const TimesheetPage: React.FC = () => {
     const [range, setRange] = useState<DateRange>(computeRange(new Date(), 'day'));
     const [viewMode, setViewMode] = useState<'table' | 'timecard'>('timecard');
     const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'no_show'>('all');
-
+    const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'auto_approved' | 'approved' | 'denied' | 'no_show'>('all');
+    const [groupBy, setGroupBy] = useState<RowGroupBy>('date');
+    const [appliedFilters, setAppliedFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
+    const activeFilterCount = useMemo(() => countActiveFilters(appliedFilters), [appliedFilters]);
     const [shifts, setShifts] = useState<TimesheetShiftRow[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -119,9 +147,10 @@ export const TimesheetPage: React.FC = () => {
             const tsStatus = shift.timesheetStatus?.toLowerCase() || 'draft';
             const attStatus = shift.attendanceStatus?.toLowerCase() || null;
 
-            if (statusFilter === 'pending') return tsStatus === 'draft' || tsStatus === 'submitted';
+            if (statusFilter === 'pending') return tsStatus === 'draft' || tsStatus === 'submitted' || tsStatus === 'pending';
+            if (statusFilter === 'auto_approved') return tsStatus === 'auto_approved' || tsStatus === 'auto_verified';
             if (statusFilter === 'approved') return tsStatus === 'approved';
-            if (statusFilter === 'rejected') return tsStatus === 'rejected';
+            if (statusFilter === 'denied') return tsStatus === 'denied' || tsStatus === 'rejected';
             if (statusFilter === 'no_show') return attStatus === 'no_show' || tsStatus === 'no_show';
             
             return true;
@@ -158,6 +187,7 @@ export const TimesheetPage: React.FC = () => {
         isAdjustedManual: shift.isAdjustedManual,
         length: formatMinutes(shift.scheduledLengthMinutes),
         netLength: formatMinutes(shift.netLengthMinutes),
+        netLengthMinutes: shift.netLengthMinutes,
         paidBreak: String(shift.paidBreakMinutes),
         unpaidBreak: String(shift.unpaidBreakMinutes),
         approximatePay: shift.estimatedPay ? `$${shift.estimatedPay.toFixed(2)}` : '-',
@@ -171,7 +201,36 @@ export const TimesheetPage: React.FC = () => {
         liveStatus: shift.lifecycleStatus || '',
         notes: shift.notes,
         rejectedReason: shift.rejectedReason,
+        arrivalVarianceReason: shift.arrivalVarianceReason,
+        departureVarianceReason: shift.departureVarianceReason,
+        isTraining: shift.isTraining,
+        wasToppedUpToMinEngagement: shift.wasToppedUpToMinEngagement,
+        requiredEngagementMinutes: shift.requiredEngagementMinutes,
+        employmentType: shift.employmentType,
+        isSecurityRole: shift.isSecurityRole,
     })), [shifts, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // ── Status counts for filter tabs ──────────────────────────────────────────
+    const statusCounts = useMemo(() => {
+        const counts = { all: 0, pending: 0, auto_approved: 0, approved: 0, denied: 0, no_show: 0 };
+        for (const shift of shifts) {
+            const isDraft = shift.lifecycleStatus === 'Draft';
+            const isUnassigned = !shift.employeeId || shift.employeeName?.toLowerCase().includes('unassigned');
+            if (isDraft || isUnassigned) continue;
+            counts.all++;
+
+            const tsStatus = shift.timesheetStatus?.toLowerCase() || 'draft';
+            const attStatus = shift.attendanceStatus?.toLowerCase() || null;
+
+            if (tsStatus === 'draft' || tsStatus === 'submitted' || tsStatus === 'pending') counts.pending++;
+            else if (tsStatus === 'auto_approved' || tsStatus === 'auto_verified') counts.auto_approved++;
+            else if (tsStatus === 'approved') counts.approved++;
+            else if (tsStatus === 'denied' || tsStatus === 'rejected') counts.denied++;
+
+            if (attStatus === 'no_show' || tsStatus === 'no_show') counts.no_show++;
+        }
+        return counts;
+    }, [shifts]);
 
     // ── Attendance scorecard ─────────────────────────────────────────────────────
     // Same 9 metrics/definitions as My Attendance + Insights, aggregated over the
@@ -208,20 +267,72 @@ export const TimesheetPage: React.FC = () => {
 
     const handleSaveEntry = async (id: string, updates: any) => {
         if (!canEdit) return;
-        const success = await updateTimesheetEntry(id, {
-            ...updates,
-            status: updates.timesheetStatus?.toLowerCase(),
-        });
-        if (success) { toast({ title: 'Entry Updated' }); await loadShifts(); }
+        // Optimistic-lock (F18): pass the version this row was loaded with so a
+        // concurrent edit by another manager is caught instead of clobbered.
+        const loaded = shifts.find((s) => String(s.id) === String(id));
+        try {
+            const success = await updateTimesheetEntry(
+                id,
+                { ...updates, status: updates.timesheetStatus?.toLowerCase() },
+                { expectedVersion: loaded?.version ?? null, actorId: user?.id ?? null },
+            );
+            if (success) {
+                toast({ title: 'Entry Updated' });
+            } else {
+                toast({
+                    title: 'Update failed',
+                    description: 'This entry could not be saved — if you were approving it, it likely still has a missing clock-in/out that needs an adjusted time first.',
+                    variant: 'destructive',
+                });
+            }
+        } catch (err) {
+            if (err instanceof TimesheetConflictError) {
+                toast({
+                    title: 'Changed by someone else',
+                    description: 'This timesheet was updated by another manager. Refreshing to the latest — review and re-apply your change.',
+                    variant: 'destructive',
+                });
+            } else {
+                toast({ title: 'Update failed', description: 'Something went wrong saving this entry.', variant: 'destructive' });
+            }
+        }
+        await loadShifts();
     };
 
     const handleBulkAction = async (ids: string[], action: 'approve' | 'reject') => {
         if (!canEdit) return;
+        // Audit M-14: pass each row's loaded version so bulk actions get the
+        // same optimistic-lock CAS protection single-row edits already have —
+        // previously a bulk action could silently clobber a concurrent edit.
+        const expectedVersions: Record<string, number | null | undefined> = {};
+        for (const id of ids) {
+            const loaded = shifts.find((s) => String(s.id) === String(id));
+            expectedVersions[id] = loaded?.version ?? null;
+        }
         const result = await bulkUpdateTimesheetStatus(
             ids, user?.id || '',
             action === 'approve' ? 'approved' : 'rejected',
+            expectedVersions,
         );
-        if (result.success) { toast({ title: 'Bulk action complete' }); await loadShifts(); }
+        if (result.success) { toast({ title: 'Bulk action complete', description: `${result.success} shift(s) updated.` }); }
+        // A failure here is most often the completeness guard refusing to approve
+        // a shift with a missing clock-in/out — surface it instead of going quiet,
+        // since a silent skip would look identical to success from the manager's seat.
+        if (result.failed > 0) {
+            toast({
+                title: 'Some shifts were not updated',
+                description: `${result.failed} shift(s) could not be ${action === 'approve' ? 'approved' : 'rejected'} — likely a missing clock-in/out that needs an adjusted time first.`,
+                variant: 'destructive',
+            });
+        }
+        if (result.conflicted > 0) {
+            toast({
+                title: 'Some shifts changed since you loaded them',
+                description: `${result.conflicted} shift(s) were updated by another manager — refreshing to the latest; review and re-apply if still needed.`,
+                variant: 'destructive',
+            });
+        }
+        if (result.success || result.failed || result.conflicted) await loadShifts();
     };
 
     const handleMarkNoShow = async (shiftId: string) => {
@@ -231,6 +342,35 @@ export const TimesheetPage: React.FC = () => {
     };
 
 
+    // ── View type change handler (shared desktop & mobile) ──────────────────
+    const handleViewTypeChange = useCallback((view: ViewType) => {
+        let newDate = selectedDate;
+        if (view === 'week') {
+            newDate = startOfWeek(selectedDate, { weekStartsOn: 1 });
+        } else if (view === 'month') {
+            newDate = startOfMonth(selectedDate);
+        }
+        setSelectedDate(newDate);
+        setViewType(view);
+        setRange(computeRange(newDate, view));
+    }, [selectedDate]);
+
+    // ── Mobile compact date nav helpers ─────────────────────────────────────
+    const mobileRange = useMemo(() => computeRange(selectedDate, viewType), [selectedDate, viewType]);
+    const mobileDateLabel = useMemo(() => formatRangeLabel(mobileRange, viewType), [mobileRange, viewType]);
+    const VIEW_SHORT: Record<ViewType, string> = { day: 'D', '3day': '3D', week: 'W', month: 'M' };
+
+    const handleMobilePrev = useCallback(() => {
+        const newDate = navigateDate(selectedDate, viewType, -1);
+        setSelectedDate(newDate);
+        setRange(computeRange(newDate, viewType));
+    }, [selectedDate, viewType]);
+
+    const handleMobileNext = useCallback(() => {
+        const newDate = navigateDate(selectedDate, viewType, 1);
+        setSelectedDate(newDate);
+        setRange(computeRange(newDate, viewType));
+    }, [selectedDate, viewType]);
 
     // ── Render ─────────────────────────────────────────────────────────────────
     return (
@@ -251,45 +391,113 @@ export const TimesheetPage: React.FC = () => {
                 onRefresh={handleRefresh}
                 isLoading={loading}
                 leftContent={
-                    <UnifiedRosterNavigator
-                        variant="full"
-                        date={selectedDate}
-                        viewType={viewType}
-                        onChange={(date, newRange) => {
-                            setSelectedDate(date);
-                            setRange(newRange);
-                        }}
-                        onViewTypeChange={(view) => {
-                            let newDate = selectedDate;
-                            if (view === 'week') {
-                                newDate = startOfWeek(selectedDate, { weekStartsOn: 1 });
-                            } else if (view === 'month') {
-                                newDate = startOfMonth(selectedDate);
-                            }
-                            setSelectedDate(newDate);
-                            setViewType(view);
-                            setRange(computeRange(newDate, view));
-                        }}
-                    />
+                    <>
+                        {/* Mobile: compact date nav with short labels */}
+                        <div className="md:hidden flex items-center gap-1.5" role="region" aria-label="Date period selector">
+                            <button
+                                type="button"
+                                onClick={handleMobilePrev}
+                                aria-label="Previous date period"
+                                className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all active:scale-90 touch-manipulation"
+                            >
+                                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                            <span 
+                                className="text-[11px] font-black text-foreground whitespace-nowrap min-w-[65px] text-center"
+                                aria-label={`Current date period: ${mobileDateLabel}`}
+                            >
+                                {mobileDateLabel}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={handleMobileNext}
+                                aria-label="Next date period"
+                                className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all active:scale-90 touch-manipulation"
+                            >
+                                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                        </div>
+                        {/* Desktop: full navigator with view tabs + date picker */}
+                        <div className="hidden md:block">
+                            <UnifiedRosterNavigator
+                                variant="full"
+                                date={selectedDate}
+                                viewType={viewType}
+                                onChange={(date, newRange) => {
+                                    setSelectedDate(date);
+                                    setRange(newRange);
+                                }}
+                                onViewTypeChange={handleViewTypeChange}
+                            />
+                        </div>
+                    </>
+                }
+                filters={
+                    <>
+                        <TimesheetFilterDrawer
+                            entries={entries}
+                            appliedFilters={appliedFilters}
+                            onApply={setAppliedFilters}
+                            activeCount={activeFilterCount}
+                            statusFilter={statusFilter}
+                            onStatusFilterChange={(s) => setStatusFilter(s as any)}
+                            statusCounts={statusCounts}
+                            statusOptions={TIMESHEET_STATUS_TABS.map(t => ({ id: t.id, label: t.label }))}
+                            statusSectionLabel="Timesheet Status"
+                            viewType={viewType}
+                            onViewTypeChange={(v) => handleViewTypeChange(v as ViewType)}
+                        />
+                        <GroupBySelector value={groupBy} onChange={setGroupBy} options={TIMESHEET_GROUP_BY_OPTIONS} />
+                    </>
                 }
                 functionBarChildren={
-                    <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-foreground/[0.03] border border-foreground/[0.05]">
-                            <ListFilter className="h-3 w-3 text-muted-foreground/40" />
-                            <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40 mr-1">Status</span>
-                            
-                            <ToggleGroup 
-                                type="single" 
-                                value={statusFilter} 
-                                onValueChange={(val) => val && setStatusFilter(val as any)}
-                                className="bg-transparent"
-                            >
-                                <ToggleGroupItem value="all" className="h-7 px-3 text-[9px] font-black uppercase tracking-widest rounded-lg">All</ToggleGroupItem>
-                                <ToggleGroupItem value="pending" className="h-7 px-3 text-[9px] font-black uppercase tracking-widest rounded-lg data-[state=on]:bg-amber-500/10 data-[state=on]:text-amber-500">Pending</ToggleGroupItem>
-                                <ToggleGroupItem value="approved" className="h-7 px-3 text-[9px] font-black uppercase tracking-widest rounded-lg data-[state=on]:bg-emerald-500/10 data-[state=on]:text-emerald-500">Approved</ToggleGroupItem>
-                                <ToggleGroupItem value="rejected" className="h-7 px-3 text-[9px] font-black uppercase tracking-widest rounded-lg data-[state=on]:bg-rose-500/10 data-[state=on]:text-rose-500">Rejected</ToggleGroupItem>
-                                <ToggleGroupItem value="no_show" className="h-7 px-3 text-[9px] font-black uppercase tracking-widest rounded-lg data-[state=on]:bg-slate-500/20">No-Show</ToggleGroupItem>
-                            </ToggleGroup>
+                    <div className="hidden md:flex items-center gap-2 flex-shrink-0">
+                        <div 
+                            className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/30 border border-border flex-nowrap overflow-x-auto scrollbar-hide"
+                            role="tablist"
+                            aria-label="Filter timesheets by status"
+                        >
+                            {TIMESHEET_STATUS_TABS.map(tab => {
+                                const isActive = statusFilter === tab.id;
+                                const colors = timesheetAccentMap[tab.accent];
+                                const TabIcon = tab.icon;
+                                const count = statusCounts[tab.id as keyof typeof statusCounts];
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={isActive}
+                                        aria-label={`Status filter ${tab.label}: ${count} shifts`}
+                                        onClick={() => setStatusFilter(tab.id as any)}
+                                        className={cn(
+                                            'relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-[11px] font-black transition-all duration-300 touch-manipulation',
+                                            isActive
+                                                ? `${colors.bg} ${colors.text} shadow-sm`
+                                                : 'text-muted-foreground/60 hover:text-foreground hover:bg-muted/50'
+                                        )}
+                                    >
+                                        <TabIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                                        <span className="hidden sm:inline">{tab.label}</span>
+                                        <span 
+                                            className={cn(
+                                                'min-w-[18px] h-[18px] rounded-full text-[9px] font-black flex items-center justify-center px-1',
+                                                isActive ? `${colors.bg} ${colors.text} ring-1 ${colors.ring}` : 'bg-muted text-muted-foreground/60'
+                                            )}
+                                            aria-hidden="true"
+                                        >
+                                            {count}
+                                        </span>
+                                        {isActive && (
+                                            <motion.div
+                                                layoutId="activeTimesheetTab"
+                                                className={`absolute inset-0 rounded-xl ring-1 ${colors.ring}`}
+                                                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                                            />
+                                        )}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 }
@@ -316,6 +524,10 @@ export const TimesheetPage: React.FC = () => {
                             onViewChange={setViewMode}
                             searchQuery={searchQuery}
                             setSearchQuery={setSearchQuery}
+                            appliedFilters={appliedFilters}
+                            onApplyFilters={setAppliedFilters}
+                            activeFilterCount={activeFilterCount}
+                            groupBy={groupBy}
                             onSaveEntry={handleSaveEntry}
                             onBulkAction={handleBulkAction}
                             onMarkNoShow={handleMarkNoShow}

@@ -163,13 +163,15 @@ export const BidOpportunityCard: React.FC<Props> = ({
         </div>
     ) : undefined;
 
-    const costBreakdown = rawShift ? estimateDetailedCostFromShift(rawShift as any) : ZERO_COST_BREAKDOWN;
     const isPast = shiftStart.getTime() < Date.now();
 
     return (
         <motion.div key={opp.id} {...listItemSpring} whileHover={{ y: -2, transition: { duration: 0.15 } }} whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}>
             <SharedShiftCard
                 variant="timecard"
+                hideActualClocking={true}
+                hidePayrollSection={true}
+                defaultExpandedSections={{ scheduled: true }}
                 organization={opp.organization}
                 department={opp.department}
                 subGroup={opp.subGroup}
@@ -194,20 +196,6 @@ export const BidOpportunityCard: React.FC<Props> = ({
                 footerActions={footerActions}
                 topContent={topContent}
                 shiftData={rawShift}
-                estimatedPay={(
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex items-center justify-end gap-1.5 cursor-help group/pay">
-                        <span className="text-[14px] font-black text-emerald-500 tabular-nums">
-                          ${(costBreakdown.totalCost || 0).toFixed(2)}
-                        </span>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-2xl" side="top">
-                      <CostBreakdownTooltip breakdown={costBreakdown} />
-                    </TooltipContent>
-                  </Tooltip>
-                )}
             />
         </motion.div>
     );

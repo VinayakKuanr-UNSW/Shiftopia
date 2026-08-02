@@ -1,7 +1,7 @@
 // =============================================================================
 // auto-approve-swaps — shared types (payload / response / queue / engine)
 //
-// Mirrors docs/implementation/02-auto-approve-swaps.md (§2 decision matrix,
+// Mirrors docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/02-auto-approve-swaps.md (§2 decision matrix,
 // §3 eligibility) and 00-contracts-and-conventions.md (§5 idempotency,
 // §6 decision enum). These shapes are shared by:
 //   - index.ts        (Deno worker — DB + crypto)

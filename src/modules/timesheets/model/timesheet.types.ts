@@ -69,12 +69,21 @@ export interface TimesheetRow {
      * false → auto-snapped from Actual (or fell back to Scheduled). Display dimmed.
      */
     isAdjustedManual: boolean;
-    adjustedStartSource?: 'manual' | 'snapped' | null;
-    adjustedEndSource?: 'manual' | 'snapped' | null;
+    adjustedStartSource?: 'manual' | 'snapped' | 'auto' | null;
+    adjustedEndSource?: 'manual' | 'snapped' | 'auto' | null;
+    /** manager billable/break edit count (F7) — drives the 📝 badge */
+    editCount?: number;
+    /** optimistic-lock row version at load time (F18); passed back as a CAS guard */
+    version?: number | null;
+    /** manager-selected reasons when billable varies from roster (per side) */
+    arrivalVarianceReason?: string | null;
+    departureVarianceReason?: string | null;
     length: string; // Auto-calculated
     paidBreak: string;
     unpaidBreak: string;
     netLength: string; // Auto-calculated
+    /** Raw minutes behind `netLength` (already EBA-floored) — feeds the Billable Pay estimate. */
+    netLengthMinutes?: number;
     // Payroll
     approximatePay: string;
     // Differential
@@ -100,6 +109,19 @@ export interface TimesheetRow {
     rawStartAt?: string | null;
     rawEndAt?: string | null;
     groupType?: 'convention_centre' | 'exhibition_centre' | 'theatre' | string | null;
+
+    // EBA minimum-engagement floor (F-locked 2026-07-28) — automatic, no
+    // manager override. See src/modules/timesheets/domain/billable-time.ts.
+    /** Training-shift flag — drives the 2h EBA tier instead of 3h/4h. */
+    isTraining?: boolean;
+    /** True when netLength was raised to the EBA minimum-engagement floor. */
+    wasToppedUpToMinEngagement?: boolean;
+    /** The EBA minimum (minutes) that applied, or null when it doesn't (no-show/cancelled). */
+    requiredEngagementMinutes?: number | null;
+    /** Raw `profiles.employment_type` — feeds the min-engagement floor and pay-estimate calls. */
+    employmentType?: string | null;
+    /** Role name (lowercased) includes 'security' — selects the Security Sch 3 pay tiers. */
+    isSecurityRole?: boolean;
 }
 
 /**

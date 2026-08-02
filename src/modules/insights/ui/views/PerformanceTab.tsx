@@ -135,7 +135,7 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
         { key: 'engagement_score', label: 'Engagement Score', group: 'Overall', isRate: true, thresholdKey: 'engagement_score' },
     ];
 
-    const { data: rows = [], isLoading } = useQuarterlyReport(selectedYear, selectedQuarter, scope);
+    const { data: rows = [], isLoading, isError, error, refetch } = useQuarterlyReport(selectedYear, selectedQuarter, scope);
 
     /* ─── Filtering & Sorting ─── */
     const filteredRows = useMemo(() => {
@@ -267,7 +267,7 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
                                     <p className={cn('text-3xl font-black tabular-nums tracking-tight', statusTextColor[st])}>
                                         {s.value.toFixed(1)}%
                                     </p>
-                                    <p className="text-[10px] text-muted-foreground/50 mt-1 font-medium">Company Average</p>
+                                    <p className="text-[10px] text-muted-foreground/50 mt-1 font-medium">Team Average · Selected Scope</p>
                                 </div>
                             );
                         })}
@@ -306,11 +306,24 @@ export default function PerformanceTab({ scope, selectedYear, selectedQuarter }:
                     <div className="flex items-center justify-center h-48">
                         <p className="text-muted-foreground text-sm animate-pulse">Loading report…</p>
                     </div>
+                ) : isError ? (
+                    <div className="flex flex-col items-center justify-center h-48 gap-2">
+                        <p className="text-red-500 text-sm font-semibold">Couldn't load the performance report.</p>
+                        <p className="text-muted-foreground text-xs max-w-sm text-center">
+                            {error instanceof Error ? error.message : 'An unexpected error occurred.'}
+                        </p>
+                        <button
+                            onClick={() => refetch()}
+                            className="mt-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                        >
+                            Retry
+                        </button>
+                    </div>
                 ) : filteredRows.length === 0 ? (
                     <div className="flex items-center justify-center h-48">
                         <p className="text-muted-foreground text-sm">
-                            {rows.length === 0 
-                                ? 'No data for this quarter. Click "Refresh All" to populate.' 
+                            {rows.length === 0
+                                ? 'No activity recorded for this quarter yet.'
                                 : 'No users match your search query.'}
                         </p>
                     </div>

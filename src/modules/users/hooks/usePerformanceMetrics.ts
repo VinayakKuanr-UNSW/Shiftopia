@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/platform/supabase/client';
 import type { ScopeSelection } from '@/platform/auth/types';
+import { getNowInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
 
 import {
     PerformanceMetrics,
@@ -154,7 +155,9 @@ export const getMetricStatus = (metricType: string, value: number): 'good' | 'wa
 // Quarter helpers
 // ---------------------------------------------------------------------------
 export const getCurrentQuarter = () => {
-    const now = new Date();
+    // Sydney-zoned, not the viewer's device clock — a manager overseas
+    // shouldn't default to a different quarter than the roster itself uses.
+    const now = getNowInTimezone(SYDNEY_TZ);
     return {
         year: now.getFullYear(),
         quarter: Math.floor(now.getMonth() / 3) + 1,
@@ -202,25 +205,122 @@ export const formatQuarter = (quarterYear: string): string => {
     return `${q} ${year}`;
 };
 
+const parseQuarterYear = (quarterYear: string): { year: number; quarter: number } | null => {
+    // Live per-employee computation needs a concrete quarter — 'ALL_TIME'
+    // (a special case the old snapshot writer supported) isn't offered by
+    // any current quarter picker in the app, so it isn't supported here.
+    const [qPart, yearPart] = quarterYear.split('_');
+    const quarter = parseInt((qPart ?? '').replace('Q', ''), 10);
+    const year = parseInt(yearPart ?? '', 10);
+    if (!quarter || quarter < 1 || quarter > 4 || !year) return null;
+    return { year, quarter };
+};
+
+interface EmployeeQuarterlyPerformanceRow {
+    employee_id: string;
+    total_offers: number;
+    accepted: number;
+    rejected: number;
+    expired: number;
+    assigned: number;
+    emergency_assigned: number;
+    completed: number;
+    no_show: number;
+    swap_out: number;
+    acceptance_rate: number;
+    rejection_rate: number;
+    ignorance_rate: number;
+    cancel_rate: number;
+    late_cancel_rate: number;
+    no_show_rate: number;
+    swap_rate: number;
+    reliability_score: number;
+    late_clock_in_rate: number;
+    early_clock_out_rate: number;
+    attendance_compliance_rate: number;
+    total_bids: number;
+    bids_accepted: number;
+    bid_success_rate: number;
+    trade_requests: number;
+    performance_score: number;
+    engagement_score: number;
+    calculated_at: string;
+}
+
 // ---------------------------------------------------------------------------
-// usePerformanceMetrics — reads from employee_performance_metrics table
-// Signature: (employeeId: string, quarterYear: string) — 2 args
+// usePerformanceMetrics — live per-employee read via get_employee_quarterly_performance
+// Signature: (employeeId: string, quarterYear: string) — 2 args, unchanged
+//
+// Previously read the employee_performance_metrics snapshot table, which was
+// only ever updated when this component's own "Refresh" button ran
+// compute_employee_quarter_metrics(). The Insights "Team Performance" report
+// computes the same metrics live on every load, so the two could show
+// different numbers for the same employee/quarter. Both now go through the
+// same always-live computation.
 // ---------------------------------------------------------------------------
 export const usePerformanceMetrics = (employeeId: string, quarterYear: string) => {
+    const parsed = parseQuarterYear(quarterYear);
     return useQuery({
         queryKey: ['performance_metrics', employeeId, quarterYear],
         queryFn: async () => {
-            const { data, error } = await supabase
-                .from('employee_performance_metrics')
-                .select('*')
-                .eq('employee_id', employeeId)
-                .eq('quarter_year', quarterYear)
-                .maybeSingle();
-
+            if (!parsed) return null;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data, error } = await (supabase as any).rpc('get_employee_quarterly_performance', {
+                p_employee_id: employeeId,
+                p_year: parsed.year,
+                p_quarter: parsed.quarter,
+            });
             if (error) throw error;
-            return data as EmployeeMetricsSnapshot | null;
+
+            const row: EmployeeQuarterlyPerformanceRow | undefined = Array.isArray(data) ? data[0] : data;
+            if (!row) return null;
+
+            const range = getQuarterDateRange(quarterYear);
+            const snapshot = {
+                id: row.employee_id,
+                employee_id: row.employee_id,
+                period_start: range ? range.start.toISOString() : '',
+                period_end: range ? range.end.toISOString() : '',
+                quarter_year: quarterYear,
+                is_locked: false,
+                total_offers: row.total_offers,
+                shifts_offered: row.total_offers, // real DB column name PerformanceSection.tsx reads via `(m as any)`
+                shifts_accepted: row.accepted,
+                shifts_rejected: row.rejected,
+                shifts_assigned: row.assigned,
+                emergency_assignments: row.emergency_assigned,
+                shifts_worked: row.completed,
+                shifts_swapped: row.swap_out,
+                shifts_dropped: row.no_show,
+                standard_cancellations: 0,
+                late_cancellations: 0,
+                no_shows: row.no_show,
+                offer_expirations: row.expired,
+                early_clock_outs: 0,
+                late_clock_ins: 0,
+                auto_clock_outs: 0,
+                acceptance_rate: row.acceptance_rate,
+                drop_rate: row.cancel_rate,
+                rejection_rate: row.rejection_rate,
+                offer_expiration_rate: row.ignorance_rate,
+                cancellation_rate_standard: row.cancel_rate,
+                cancellation_rate_late: row.late_cancel_rate,
+                swap_ratio: row.swap_rate,
+                reliability_score: row.reliability_score,
+                late_clock_in_rate: row.late_clock_in_rate,
+                early_clock_out_rate: row.early_clock_out_rate,
+                auto_clock_out_rate: 0,
+                no_show_rate: row.no_show_rate,
+                // attendance_compliance_rate (worked AND not late-in AND not early-out) is
+                // what "punctuality" actually means here — the snapshot table had a
+                // punctuality_rate column that compute_employee_quarter_metrics() never
+                // wrote to, so it silently stayed at its DEFAULT 100 for every employee.
+                punctuality_rate: row.attendance_compliance_rate,
+                calculated_at: row.calculated_at,
+            };
+            return snapshot as EmployeeMetricsSnapshot;
         },
-        enabled: !!employeeId && !!quarterYear,
+        enabled: !!employeeId && !!quarterYear && !!parsed,
     });
 };
 
@@ -244,17 +344,6 @@ export const useQuarterlyReport = (year: number, quarter: number, scope: ScopeSe
         },
         enabled: !!year && !!quarter && !!scope,
     });
-};
-
-// ---------------------------------------------------------------------------
-// refreshAllPerformanceMetrics — calls refresh_all_performance_metrics RPC
-// ---------------------------------------------------------------------------
-export const refreshAllPerformanceMetrics = async (): Promise<void> => {
-    // Cast through any because refresh_all_performance_metrics is not in the
-    // generated RPC type registry but the function exists in the deployed DB.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any).rpc('refresh_all_performance_metrics');
-    if (error) throw error;
 };
 
 // ---------------------------------------------------------------------------

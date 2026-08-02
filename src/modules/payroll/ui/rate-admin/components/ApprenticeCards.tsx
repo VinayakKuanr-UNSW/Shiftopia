@@ -9,8 +9,9 @@ import React from 'react';
 import { Wrench, HeartHandshake, Info } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import {
-  APPRENTICE_MATRIX, SWS_CAPACITY_STEPS, SWS_MIN_WEEKLY,
+  APPRENTICE_MATRIX, SWS_CAPACITY_STEPS, SWS_MIN_WEEKLY, getAdultApprenticeEffectivePct,
 } from '@/modules/rosters/domain/projections/utils/cost/apprentice_matrix';
+import { resolveRateSet } from '@/modules/rosters/domain/projections/utils/cost/rate-schedule';
 
 const money = (n: number) => `$${n.toFixed(2)}`;
 const pct = (n: number) => `${Math.round(n * 100)}%`;
@@ -73,8 +74,14 @@ const ApprenticeCard: React.FC<ApprenticeCardProps> = ({ title, subtitle, years,
 
 const ApprenticeCards: React.FC = () => {
   const standard = APPRENTICE_MATRIX.standard;
-  const adult = APPRENTICE_MATRIX.adult;
   const schoolBased = APPRENTICE_MATRIX.school_based;
+  // cl 1.3 (years 2-4): the adult apprentice floor is "greater of Level 1 or
+  // the junior %-table rate," not a fixed percentage — resolved against
+  // TODAY's effective-dated rate set purely for this display. hasYr12=false
+  // is used for the comparison; with the current published rate tables it
+  // makes no numeric difference (Level 1 wins years 2-3 either way, and the
+  // year-4 junior % is identical for both branches).
+  const todayRateSet = resolveRateSet(new Date().toISOString().slice(0, 10));
 
   const cards: ApprenticeCardProps[] = [
     {
@@ -95,10 +102,10 @@ const ApprenticeCards: React.FC = () => {
     },
     {
       title: 'Adult Apprentice',
-      subtitle: 'All apprentices aged 21+',
+      subtitle: 'All apprentices aged 21+ — years 2-4 shown are the greater of Level 1 or the junior rate, as of today',
       years: [1, 2, 3, 4].map((y) => ({
         year: y,
-        value: (adult as Record<number, number>)[y] ?? null,
+        value: getAdultApprenticeEffectivePct(todayRateSet, y as 1 | 2 | 3 | 4, false),
       })),
     },
     {

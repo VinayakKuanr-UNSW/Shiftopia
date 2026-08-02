@@ -46,11 +46,29 @@ describe('getTraineeBaseRate (baseline 2025)', () => {
     expect(getTraineeBaseRate({ category: 'junior', level: 'A', exitYear: 12, yearsOut: 0, aqfLevel: 3, yearOfTraineeship: 1, isPartTime: false }, '2025-06-01')).toBeCloseTo(551.10 / 38, 6);
   });
 
-  it('applies the +3.8% Cert IV uplift', () => {
+  // AUDIT FIX H4: adult AQF IV rates are already the published Schedule 5
+  // figures — the +3.8% formula is junior-only (cl 1.4.3/1.5.4).
+  it('does NOT apply the +3.8% Cert IV uplift to ADULT trainees (H4)', () => {
     const base = getTraineeBaseRate({ category: 'adult', level: 'A', aqfLevel: 3, yearOfTraineeship: 1, isPartTime: true }, '2025-06-01');
     const certIv = getTraineeBaseRate({ category: 'adult', level: 'A', aqfLevel: 4, yearOfTraineeship: 1, isPartTime: true }, '2025-06-01');
     expect(base).toBe(29.19);
-    expect(certIv).toBeCloseTo(29.19 * 1.038, 6);
+    // Adult AQF IV is the SAME published table rate — no 3.8% uplift.
+    expect(certIv).toBe(29.19);
+  });
+
+  it('DOES apply the +3.8% Cert IV uplift to JUNIOR trainees', () => {
+    const base = getTraineeBaseRate({ category: 'junior', level: 'A', exitYear: 10, yearsOut: 0, aqfLevel: 3, yearOfTraineeship: 1, isPartTime: true }, '2025-06-01');
+    const certIv = getTraineeBaseRate({ category: 'junior', level: 'A', exitYear: 10, yearsOut: 0, aqfLevel: 4, yearOfTraineeship: 1, isPartTime: true }, '2025-06-01');
+    expect(base).toBe(13.84);
+    expect(certIv).toBeCloseTo(13.84 * 1.038, 6);
+  });
+
+  it('does NOT apply the +3.8% Cert IV uplift to SCHOOL-BASED trainees (L5)', () => {
+    const base = getTraineeBaseRate({ category: 'school_based', level: 'A', exitYear: 12, aqfLevel: 3, yearOfTraineeship: 1, isPartTime: true }, '2025-06-01');
+    const certIv = getTraineeBaseRate({ category: 'school_based', level: 'A', exitYear: 12, aqfLevel: 4, yearOfTraineeship: 1, isPartTime: true }, '2025-06-01');
+    // School-based hourly (cl 1.5.3) has no AQF-level differentiation.
+    expect(base).toBe(15.25);
+    expect(certIv).toBe(15.25);
   });
 });
 

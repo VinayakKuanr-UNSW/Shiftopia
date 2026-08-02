@@ -9,9 +9,21 @@
  */
 
 import type { LeavePolicy, LeaveTypeCode, LeaveBalance, LeaveRequest } from '../model/leave.types';
+import { isPublicHoliday } from '@/modules/core/lib/holidays';
 
 const HOURS_PER_DAY = 7.6;   // 38h / 5 days
 const DAYS_PER_WEEK = 5;
+
+// Schedule 3 §8.2/8.3 — Full-Time Security gets a DIFFERENT, more generous
+// entitlement than general staff: 210h (5 weeks) annual leave and 84h
+// personal/carer's leave, vs. the general 152h/76h. The DB accrual function
+// (`accrue_leave_balances`, migration 20260710120000_leave_module.sql)
+// already branches on this correctly; these constants and
+// `getLeavePolicies()` below are the frontend mirror of that same rule
+// (audit H-9: the frontend previously always used the general 152h/76h
+// rates for every employment type, including Security).
+const SECURITY_ANNUAL_HOURS_PER_YEAR = 210;
+const SECURITY_PERSONAL_HOURS_PER_YEAR = 84;
 
 /** Full policy table — one entry per leave type. */
 export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
@@ -137,7 +149,59 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
     clause: 'By arrangement',
     description: 'Unpaid leave — by mutual agreement between the employer and the employee.',
   },
+  religious_cultural: {
+    leaveType: 'religious_cultural',
+    accrualRateHoursPerYear: null, // capped, granted up front — not progressively accrued
+    maxBalanceHours: 38,           // 5 days × 7.6h
+    requiresCertificate: false,
+    certificateThresholdDays: null,
+    paidForCasual: false,
+    balanceTracked: true,
+    grantedUpFront: true,          // resets to the full 38h every 1 January, not on accrual
+    clause: 'cl 55',
+    description: 'Religious, cultural & ceremonial leave (incl. NAIDOC) — up to 5 days paid per calendar year, drawn from this dedicated balance. An unpaid alternative is also available via a general Unpaid Leave request.',
+  },
+  gender_affirmation: {
+    leaveType: 'gender_affirmation',
+    accrualRateHoursPerYear: null,
+    maxBalanceHours: 76,           // 10 days × 7.6h
+    requiresCertificate: false,
+    certificateThresholdDays: null,
+    paidForCasual: false,
+    balanceTracked: true,
+    grantedUpFront: true,          // resets to the full 76h every 1 January
+    clause: 'cl 58',
+    description: 'Gender affirmation leave — up to 10 days paid per calendar year, drawn from this dedicated balance. An unpaid alternative is also available via a general Unpaid Leave request.',
+  },
 };
+
+/**
+ * Resolve the policy table for a specific employee. Identical to
+ * `LEAVE_POLICIES` except for Full-Time Security's annual/personal accrual
+ * rates (Sch 3 §8.2/8.3), which are the SAME condition
+ * `accrue_leave_balances()` uses server-side: employment_status contains
+ * "full" AND the employee's role name contains "security". Callers resolve
+ * that boolean once (see `leave.api.ts#isFullTimeSecurityEmployee`) and pass
+ * it here rather than duplicating the DB join client-side.
+ */
+export function getLeavePolicies(isFullTimeSecurity: boolean): Record<LeaveTypeCode, LeavePolicy> {
+  if (!isFullTimeSecurity) return LEAVE_POLICIES;
+  return {
+    ...LEAVE_POLICIES,
+    annual: {
+      ...LEAVE_POLICIES.annual,
+      accrualRateHoursPerYear: SECURITY_ANNUAL_HOURS_PER_YEAR,
+      clause: 'Sch 3 §8.2',
+      description: 'Annual leave — Full-Time Security: 210h (5 weeks) per year of continuous service (Schedule 3 §8.2), not the general 152h rate.',
+    },
+    personal: {
+      ...LEAVE_POLICIES.personal,
+      accrualRateHoursPerYear: SECURITY_PERSONAL_HOURS_PER_YEAR,
+      clause: 'Sch 3 §8.3',
+      description: 'Personal / sick leave — Full-Time Security: 84h per year (Schedule 3 §8.3), not the general 76h rate. Certificate required for absences exceeding 2 consecutive days.',
+    },
+  };
+}
 
 /**
  * Project a leave balance forward in time, accounting for accrual and
@@ -147,6 +211,9 @@ export const LEAVE_POLICIES: Record<LeaveTypeCode, LeavePolicy> = {
  * @param requests      All requests (pending + approved) that consume this balance
  * @param projectionDate  YYYY-MM-DD to project to
  * @param serviceStartDate YYYY-MM-DD — the employee's continuous service start
+ * @param policies      Policy table to project against — pass
+ *                       `getLeavePolicies(isFullTimeSecurity)` for a
+ *                       role-aware projection; defaults to the general table.
  * @returns Projected balance in hours at the projection date
  */
 export function projectBalance(
@@ -154,8 +221,9 @@ export function projectBalance(
   requests: LeaveRequest[],
   projectionDate: string,
   serviceStartDate: string,
+  policies: Record<LeaveTypeCode, LeavePolicy> = LEAVE_POLICIES,
 ): number {
-  const policy = LEAVE_POLICIES[balance.leaveType];
+  const policy = policies[balance.leaveType];
   if (!policy) return balance.balanceHours;
 
   // No accrual for per-occasion types or upfront granted types.
@@ -189,15 +257,64 @@ export function projectBalance(
   return Math.round(result * 100) / 100;
 }
 
+/** Adjacency context for the cl 45.4 certificate rule (audit M-12). */
+export interface CertificateAdjacency {
+  /** The day immediately before the leave start, or immediately after the
+   *  leave end, is a Saturday or Sunday. */
+  adjacentToWeekend?: boolean;
+  /** The day immediately before the leave start, or immediately after the
+   *  leave end, is a public holiday. */
+  adjacentToPublicHoliday?: boolean;
+}
+
 /**
  * Whether a certificate is required for a leave request based on the
  * number of consecutive days requested.
+ *
+ * AUDIT FIX M-12: cl 45.4's evidence requirement isn't only about the raw
+ * day-count — a single day of personal leave taken immediately before or
+ * after a weekend or public holiday (the classic "long weekend" pattern) is
+ * treated the same as exceeding the day-count threshold, since it has the
+ * same practical effect of extending time off without evidence. Previously
+ * this only compared `consecutiveDays` to the threshold, so a Friday-only or
+ * Monday-only absence never triggered the certificate requirement regardless
+ * of adjacency. `adjacency` is optional and defaults to no adjacency
+ * (unchanged prior behaviour) so existing callers that don't yet compute it
+ * are unaffected.
  */
-export function isCertificateRequired(leaveType: LeaveTypeCode, consecutiveDays: number): boolean {
+export function isCertificateRequired(
+  leaveType: LeaveTypeCode,
+  consecutiveDays: number,
+  adjacency: CertificateAdjacency = {},
+): boolean {
   const policy = LEAVE_POLICIES[leaveType];
   if (!policy?.requiresCertificate) return false;
   if (policy.certificateThresholdDays == null) return true; // always required (jury, parental)
+  if (adjacency.adjacentToWeekend || adjacency.adjacentToPublicHoliday) return true;
   return consecutiveDays > policy.certificateThresholdDays;
+}
+
+/**
+ * Compute {@link CertificateAdjacency} for a leave request's date range — the
+ * day immediately before `startDate` and immediately after `endDate`
+ * (YYYY-MM-DD, both LOCAL date parts, never `.toISOString()`).
+ */
+export function computeCertificateAdjacency(startDate: string, endDate: string): CertificateAdjacency {
+  const start = new Date(startDate + 'T00:00:00');
+  const end = new Date(endDate + 'T00:00:00');
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return {};
+
+  const dayBefore = new Date(start);
+  dayBefore.setDate(dayBefore.getDate() - 1);
+  const dayAfter = new Date(end);
+  dayAfter.setDate(dayAfter.getDate() + 1);
+
+  const isWeekend = (d: Date) => d.getDay() === 0 || d.getDay() === 6;
+
+  return {
+    adjacentToWeekend: isWeekend(dayBefore) || isWeekend(dayAfter),
+    adjacentToPublicHoliday: isPublicHoliday(dayBefore) || isPublicHoliday(dayAfter),
+  };
 }
 
 /**

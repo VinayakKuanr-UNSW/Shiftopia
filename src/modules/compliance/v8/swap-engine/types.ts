@@ -22,6 +22,8 @@ export interface SwapParty {
     contracted_weekly_hours?:  number;
     /** YYYY-MM-DD dates with APPROVED leave (audit F1 — V8_LEAVE_CONFLICT). */
     leave_days?:               string[];
+    /** EBA Schedule 3 §3 — see V8Employee.is_security_role (audit H-5). */
+    is_security_role?:         boolean;
 }
 
 export interface SwapScenario {
@@ -35,6 +37,18 @@ export interface SwapPartyInput {
     current_shifts:  RosterShift[];
     shift_to_give:   RosterShift;
     is_student_visa?: boolean;
+    /**
+     * Employment status of this party. Must be supplied by the caller —
+     * absent/null is treated as CASUAL by the engine (audit C-4: this was
+     * previously never populated by any caller, so every party was
+     * silently evaluated as CASUAL regardless of their real contract).
+     */
+    contract_type?:            'FT' | 'PT' | 'CASUAL' | null;
+    contracted_weekly_hours?:  number;
+    /** YYYY-MM-DD dates with APPROVED leave (audit F1 — V8_LEAVE_CONFLICT). */
+    leave_days?:               string[];
+    /** EBA Schedule 3 §3 — see V8Employee.is_security_role (audit H-5). */
+    is_security_role?:         boolean;
 }
 
 export interface SwapEvaluationInput {

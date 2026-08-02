@@ -2,6 +2,7 @@ import React from 'react';
 import { cn } from '@/modules/core/lib/utils';
 import { Shift } from '@/modules/rosters';
 import { ShiftRuleHeader } from '@/modules/rosters/ui/components/ShiftRuleHeader';
+import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
 
 interface ShiftPillProps {
   shift: Shift;
@@ -23,13 +24,8 @@ const ShiftPill: React.FC<ShiftPillProps> = ({
   style,
 }) => {
   const groupVariant = React.useMemo(() => {
-    const name = groupColor.toLowerCase();
-    if (name.includes('convention')) return 'convention';
-    if (name.includes('exhibition')) return 'exhibition';
-    if (name.includes('theatre')) return 'theatre';
-    if (name.includes('cutaway')) return 'cutaway';
-    return 'default';
-  }, [groupColor]);
+    return resolveGroupVariant(shift, groupColor || groupName, subGroupName);
+  }, [shift, groupColor, groupName, subGroupName]);
 
   const theme = React.useMemo(() => {
     switch (groupVariant) {
@@ -115,8 +111,6 @@ const ShiftPill: React.FC<ShiftPillProps> = ({
           <span className={cn("text-[13px] font-black leading-tight break-words uppercase tracking-tight", theme.text)}>
             {shift.roles?.name || 'Shift'}
           </span>
-
-          <ShiftRuleHeader shift={shift} variant="compact" className="mt-1" />
 
           {/* Only show more info if there is enough height */}
           {parseInt(style?.height as string) > 70 && (

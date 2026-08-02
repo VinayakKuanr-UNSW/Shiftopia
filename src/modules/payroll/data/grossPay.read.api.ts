@@ -3,11 +3,12 @@
  * `GrossPayShiftInput[]` the pure gross-pay engine prices, and (convenience)
  * into one `PeriodGrossPay` per employee for a pay period.
  *
- * MONEY-CRITICAL parity: the billable-hours + rate logic here is a faithful copy
- * of the existing timesheet reader (`timesheets/api/timesheets.supabase.api.ts`)
- * two-tier rule — manager edit ELSE snapped actual (only once the shift is
- * finished) — so gross pay is priced from the SAME billable minutes the manager
- * reviewed. All I/O lives in the fetchers; `mapShiftRowToGrossPayInput` is pure.
+ * MONEY-CRITICAL parity: the billable-hours logic delegates to the SAME
+ * resolver the timesheet reader uses (`timesheets/domain/billable-time.ts`) —
+ * manager edit ELSE snapped actual (only once the shift is finished) — so
+ * gross pay is priced from the exact billable minutes the manager reviewed,
+ * not a hand-copied re-implementation that can drift from it. All I/O lives
+ * in the fetchers; `mapShiftRowToGrossPayInput` is pure.
  *
  * DATA GAPS (documented, not fabricated — see the field comments below):
  *   • leave flags on the SHIFT mapper stay false — leave has no shift-level
@@ -23,10 +24,17 @@
  */
 
 import { supabase } from '@/platform/supabase/client';
-import { isShiftFinished } from '@/modules/timesheets/ui/components/TimesheetTable.utils';
-import { snapToQuarterHour } from '@/modules/timesheets/api/timesheets.supabase.api';
+import {
+  isShiftFinished,
+  resolveBillableSide,
+  calculateNetMinutes,
+  applyMinEngagementFloor,
+  type BillableSide,
+} from '@/modules/timesheets/domain/billable-time';
+import { getShiftDayType } from '@/modules/core/lib/holidays';
 import {
   computeEmployeePeriodGrossPay,
+  isoWeekKey,
   type PeriodBounds,
   type PeriodGrossPay,
 } from '../index';
@@ -83,30 +91,22 @@ const APPROVED_STATUSES = new Set(['approved', 'locked']);
 
 // ───────────────────────── pure helpers ───────────────────────────────────
 
+/** `dateStr` (YYYY-MM-DD) shifted by `delta` days, computed on LOCAL date parts. */
+function addDays(dateStr: string, delta: number): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + delta);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 /** PostgREST embeds can be a single object OR a one-element array — normalize. */
 function firstEmbed<T>(v: T | T[] | null | undefined): T | null {
   if (Array.isArray(v)) return v.length > 0 ? v[0] : null;
   return v ?? null;
 }
 
-/** Parse 'HH:MM[:SS]' to minutes-since-midnight, or null if unparseable. */
-function timeToMinutes(value: string | null | undefined): number | null {
-  if (!value || value === 'NIL' || value === '-' || value === '—') return null;
-  const parts = value.split(':');
-  if (parts.length < 2) return null;
-  const h = Number(parts[0]);
-  const m = Number(parts[1]);
-  if (Number.isNaN(h) || Number.isNaN(m)) return null;
-  return h * 60 + m;
-}
-
-/** Minutes-since-midnight back to canonical 'HH:MM'. */
-function minutesToHHMM(mins: number): string {
-  const norm = ((mins % 1440) + 1440) % 1440;
-  const h = Math.floor(norm / 60);
-  const m = norm % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-}
 
 /**
  * Map the DB `profiles.employment_type` value to the award engine's union type.
@@ -175,6 +175,10 @@ export function mapShiftRowToGrossPayInput(
   const subGroupName = rosterSubgroup?.name || undefined;
   const groupName = rosterSubgroup?.roster_group?.name || undefined;
   const roleName = role?.name || undefined;
+  // Hoisted above the min-engagement floor block below (which needs both) —
+  // also reused for the final returned GrossPayShiftInput further down.
+  const isSecurityRole = (role?.name ?? '').toLowerCase().includes('security');
+  const employmentType = mapEmploymentType(row._employmentType);
 
   // ── not-worked flags ─────────────────────────────────────────────────────
   const tsStatus = (ts?.status ?? '').toLowerCase();
@@ -187,7 +191,8 @@ export function mapShiftRowToGrossPayInput(
     assignStatus === 'declined' ||
     assignStatus === 'unassigned';
 
-  // ── two-tier billable times (parity with the timesheet reader) ────────────
+  // ── billable times — delegates to the SAME resolver the timesheet reader
+  // uses, so pricing can't drift from what the manager actually reviewed ────
   const finished = isShiftFinished(
     row.shift_date,
     row.start_time ?? '',
@@ -199,30 +204,57 @@ export function mapShiftRowToGrossPayInput(
   const managerEditedEnd = !!ts?.end_time;
   const managerEdited = managerEditedStart || managerEditedEnd;
 
-  const adjustedStartRaw =
-    ts?.start_time ?? (finished ? snapToQuarterHour(row.actual_start ?? null) : null) ?? row.start_time;
-  const adjustedEndRaw =
-    ts?.end_time ?? (finished ? snapToQuarterHour(row.actual_end ?? null) : null) ?? row.end_time;
+  const resolvedStart = resolveBillableSide(ts?.start_time, row.actual_start, finished);
+  const resolvedEnd = resolveBillableSide(ts?.end_time, row.actual_end, finished);
 
-  const startMins = timeToMinutes(adjustedStartRaw);
-  const endMins = timeToMinutes(adjustedEndRaw);
+  // A resolver 'missing' (finished, no edit, no actual — e.g. forgot to clock
+  // out) still gets a SCHEDULED estimate here for preview/estimate mode, but
+  // — unlike the old code — it is never mislabeled as 'actual' pay (see
+  // hoursSource below), and a shift in this state can no longer reach
+  // 'approved' status at all (guarded in timesheets.supabase.api.ts), so a
+  // real pay-run (approvedOnly=true) will simply never see it.
+  const startForCalc: BillableSide = resolvedStart.hhmm
+    ? resolvedStart
+    : { hhmm: row.start_time ?? null, source: resolvedStart.source };
+  const endForCalc: BillableSide = resolvedEnd.hhmm
+    ? resolvedEnd
+    : { hhmm: row.end_time ?? null, source: resolvedEnd.source };
 
   const unpaidBreak =
     ts?.unpaid_break_minutes != null
       ? ts.unpaid_break_minutes
       : (row.unpaid_break_minutes ?? 0);
 
-  let netMinutes = 0;
-  let startTime: string | undefined;
-  let endTime: string | undefined;
+  // Overnight rollover is a pure sign check on these RESOLVED times inside
+  // calculateNetMinutes — it deliberately ignores row.is_overnight (the
+  // ORIGINAL schedule's flag). OR-ing that stale flag in used to double-count
+  // 24h whenever a manager corrected an overnight-scheduled shift to real
+  // times that didn't cross midnight (e.g. an early finish before midnight).
+  const rawNetMinutes = calculateNetMinutes(startForCalc, endForCalc, unpaidBreak);
 
-  if (startMins != null && endMins != null) {
-    let diff = endMins - startMins;
-    if (diff < 0 || row.is_overnight) diff += 24 * 60; // overnight roll-forward
-    netMinutes = Math.max(0, diff - (unpaidBreak || 0));
-    startTime = minutesToHHMM(startMins);
-    endTime = minutesToHHMM(endMins);
-  }
+  // EBA minimum-engagement floor (F-locked 2026-07-28): the SAME resolver both
+  // the timesheet reader and this payroll adapter share also applies the
+  // statutory floor, so pricing and the timesheet's displayed net minutes can
+  // never disagree. Automatic, no exemption path — see billable-time.ts.
+  // Gated purely on rawNetMinutes !== null (a resolved billable window), NOT
+  // on isNoShow/isCancelled: a manager can legitimately enter a manual
+  // billable override on a shift still flagged no-show/cancelled, and that
+  // resolved window must still get the floor. The isNoShow/isCancelled flags
+  // below still do their existing job — computeShiftGrossPay's own
+  // NOT_WORKED short-circuit zeroes pay when there's genuinely no resolved
+  // window, independent of this floor.
+  const { isSunday, isPublicHoliday } = getShiftDayType(row.shift_date);
+  const netMinutes = rawNetMinutes !== null
+    ? applyMinEngagementFloor(rawNetMinutes, {
+        isTraining: row.is_training === true,
+        isSunday,
+        isPublicHoliday,
+        employmentType,
+        isSecurityRole,
+      }).netMinutes
+    : 0;
+  const startTime = startForCalc.hhmm ?? undefined;
+  const endTime = endForCalc.hhmm ?? undefined;
 
   // ── rate & classification ─────────────────────────────────────────────────
   // MONEY-CRITICAL. The old sourcing was `hourly_rate_min ?? remuneration_rate`,
@@ -254,12 +286,15 @@ export function mapShiftRowToGrossPayInput(
     row.remuneration_rate
       ?? (classificationLevel ? null : (remLevel?.hourly_rate_min ?? null));
 
-  const isSecurityRole = (role?.name ?? '').toLowerCase().includes('security');
-
   // ── hours provenance ──────────────────────────────────────────────────────
+  // 'actual' requires BOTH sides to have genuinely snapped from a real clock
+  // time. The old check only tested `row.actual_start != null`, so a shift
+  // with a clock-IN but no clock-OUT (start snaps, end silently falls back to
+  // the schedule above) was mislabeled 'actual' even though half its billable
+  // window was fabricated from the roster, not attendance.
   const hoursSource: GrossPayHoursSource = managerEdited
     ? 'adjusted'
-    : (finished && row.actual_start != null)
+    : (finished && resolvedStart.source === 'snapped' && resolvedEnd.source === 'snapped')
       ? 'actual'
       : 'scheduled_fallback';
 
@@ -284,9 +319,10 @@ export function mapShiftRowToGrossPayInput(
     isCarerLeave: false,
 
     rate,
-    employmentType: mapEmploymentType(row._employmentType),
+    employmentType,
     classificationLevel,
     isSecurityRole,
+    isTrainingShift: row.is_training === true,
 
     employeeName,
     roleName,
@@ -294,12 +330,58 @@ export function mapShiftRowToGrossPayInput(
     subGroupName,
 
 
-    // DATA GAP — meal/first-aid/split-shift allowances aren't represented on
-    // approved timesheet data; do NOT fabricate them.
-    allowances: undefined,
+    // Audit H-6: first-aid duty (cl 28.2) now has a real per-shift data
+    // source (shifts.is_first_aid_duty). Split-shift (cl 39/28.4) is
+    // auto-derived from the employee's own same-day shift pattern by the
+    // period aggregator (which has cross-shift visibility this per-row
+    // mapper doesn't) — see aggregatePeriodGrossPay.ts. Protein-spill
+    // (cl 28.3) is deliberately still not represented: it's an ad-hoc
+    // per-incident event, not a plannable per-shift flag, and needs its own
+    // incident-capture UX rather than reusing this shape.
+    allowances: row.is_first_aid_duty ? { firstAid: true } : undefined,
 
     // priorOrdinaryHoursThisWeek is sequenced by computeEmployeePeriodGrossPay.
     higherDutiesLevel,
+
+    // ── Schedule 4/5/6 engagement fields (H1 audit fix) ─────────────────
+    is_apprentice: row._isApprentice,
+    apprentice_type: row._apprenticeType,
+    apprentice_year: row._apprenticeYear,
+    has_completed_year_12: row._hasCompletedYear12,
+    is_trainee: row._isTrainee,
+    trainee_category: row._traineeCategory,
+    trainee_level: row._traineeLevel,
+    trainee_exit_year: row._traineeExitYear,
+    trainee_years_out: row._traineeYearsOut,
+    trainee_aqf_level: row._traineeAqfLevel,
+    trainee_year: row._traineeYear,
+    is_sws: row._isSws,
+    sws_capacity_percentage: row._swsCapacityPercentage,
+    timesheetStatus: ts?.status ?? null,
+    lifecycleStatus: row.lifecycle_status ?? null,
+    rawShift: {
+      lifecycle_status: row.lifecycle_status,
+      attendance_status: row.attendance_status,
+      actual_start: row.actual_start,
+      actual_end: row.actual_end,
+      adjusted_start: ts?.start_time ?? null,
+      adjusted_end: ts?.end_time ?? null,
+      adjusted_start_source: ts?.start_time ? 'manual' : null,
+      adjusted_end_source: ts?.end_time ? 'manual' : null,
+      adjusted_start_is_manual: !!ts?.start_time,
+      adjusted_end_is_manual: !!ts?.end_time,
+      adjusted_is_manual: !!(ts?.start_time || ts?.end_time),
+      start_at: row.start_at,
+      end_at: row.end_at,
+      shift_date: row.shift_date,
+      start_time: row.start_time,
+      end_time: row.end_time,
+      assigned_employee_id: row.assigned_employee_id,
+      assignment_status: row.assignment_status,
+      assignment_outcome: (row as any).assignment_outcome,
+      trading_status: (row as any).trading_status,
+      is_cancelled: !!(row as any).is_cancelled,
+    },
   };
 }
 
@@ -344,7 +426,12 @@ async function fetchHydratedShiftRows(
       remuneration_rate,
       remuneration_level,
       assigned_employee_id,
+      assignment_outcome,
+      trading_status,
+      is_cancelled,
       role_id,
+      is_first_aid_duty,
+      is_training,
       roles(id, name, remuneration_level),
       remuneration_levels(level_number, level_name, hourly_rate_min),
       assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
@@ -391,12 +478,20 @@ async function fetchHydratedShiftRows(
     new Set(rows.map((r) => r.assigned_employee_id).filter((id): id is string => !!id)),
   );
   const empTypeById = new Map<string, string | null>();
-  const contractLevelById = new Map<string, number | null>();
+  // H1 audit fix: store the full contract row per employee so apprentice/trainee/SWS
+  // fields travel to the mapper alongside the remuneration level.
+  const contractByEmployee = new Map<string, any>();
 
   if (employeeIds.length > 0) {
     const [pRes, cRes] = await Promise.all([
       supabase.from('profiles').select('id, employment_type').in('id', employeeIds),
-      supabase.from('user_contracts').select('user_id, remuneration_level').in('user_id', employeeIds).eq('status', 'Active')
+      // H1 audit fix: fetch apprentice/trainee/SWS columns that AddContractDialog writes.
+      supabase.from('user_contracts').select(
+        'user_id, remuneration_level, ' +
+        'is_apprentice, apprentice_type, apprentice_year, has_completed_year_12, ' +
+        'is_trainee, trainee_category, trainee_level, trainee_exit_year, trainee_years_out, trainee_aqf_level, trainee_year, ' +
+        'is_sws, sws_capacity_percentage'
+      ).in('user_id', employeeIds).eq('status', 'Active')
     ]);
 
     if (pRes.error) console.error('[grossPay.read] profiles query error:', pRes.error);
@@ -406,7 +501,7 @@ async function fetchHydratedShiftRows(
 
     if (cRes.error) console.error('[grossPay.read] user_contracts query error:', cRes.error);
     for (const c of cRes.data ?? []) {
-      contractLevelById.set((c as any).user_id, (c as any).remuneration_level ?? null);
+      contractByEmployee.set((c as any).user_id, c);
     }
   }
 
@@ -415,9 +510,24 @@ async function fetchHydratedShiftRows(
     r._employmentType = r.assigned_employee_id
       ? (empTypeById.get(r.assigned_employee_id) ?? null)
       : null;
-    r._contractRemunerationLevel = r.assigned_employee_id
-      ? (contractLevelById.get(r.assigned_employee_id) ?? null)
-      : null;
+    const contract = r.assigned_employee_id ? contractByEmployee.get(r.assigned_employee_id) : null;
+    r._contractRemunerationLevel = contract?.remuneration_level ?? null;
+    // H1 audit fix: apprentice/trainee/SWS fields from the active contract.
+    if (contract) {
+      r._isApprentice = !!contract.is_apprentice;
+      r._apprenticeType = contract.apprentice_type ?? undefined;
+      r._apprenticeYear = contract.apprentice_year ?? undefined;
+      r._hasCompletedYear12 = !!contract.has_completed_year_12;
+      r._isTrainee = !!contract.is_trainee;
+      r._traineeCategory = contract.trainee_category ?? undefined;
+      r._traineeLevel = contract.trainee_level ?? undefined;
+      r._traineeExitYear = contract.trainee_exit_year ?? undefined;
+      r._traineeYearsOut = contract.trainee_years_out ?? undefined;
+      r._traineeAqfLevel = contract.trainee_aqf_level ?? undefined;
+      r._traineeYear = contract.trainee_year ?? undefined;
+      r._isSws = !!contract.is_sws;
+      r._swsCapacityPercentage = contract.sws_capacity_percentage ?? undefined;
+    }
   }
   return rows;
 }
@@ -478,6 +588,22 @@ export async function getPeriodGrossPay(
 ): Promise<PeriodGrossPay[]> {
   const shiftInputs = await getGrossPayInputsForPeriod(bounds, opts);
 
+  // Audit H-7: when the window's start falls mid-ISO-week (any custom report
+  // range, not just Monday-anchored pay periods), fetch the lead-in days —
+  // from that week's Monday up to periodStart-1 — purely so
+  // computeEmployeePeriodGrossPay can seed weekly-ordinary-hours correctly.
+  // Without this, hours worked earlier that same week but outside the window
+  // are invisible, so cl 42 weekly overtime (>38h/week) under-detects for the
+  // window's first partial week.
+  const leadInStart = isoWeekKey(bounds.periodStart);
+  const leadInInputs =
+    leadInStart < bounds.periodStart
+      ? await getGrossPayInputsForPeriod(
+          { ...bounds, periodStart: leadInStart, periodEnd: addDays(bounds.periodStart, -1) },
+          opts,
+        )
+      : [];
+
   // Approved leave is an ABSENCE, not a shift, so it is synthesised separately
   // and merged in. A leave day is dropped when the same employee already has a
   // shift on that date (a worked shift takes precedence over leave).
@@ -504,7 +630,7 @@ export async function getPeriodGrossPay(
   const mergedLeave = leaveInputs.filter((i) => !workedKeys.has(`${i.employeeId}:${i.shiftDate}`));
 
   const byEmployee = new Map<string, GrossPayShiftInput[]>();
-  for (const input of [...keptShifts, ...mergedLeave]) {
+  for (const input of [...keptShifts, ...mergedLeave, ...leadInInputs]) {
     const arr = byEmployee.get(input.employeeId);
     if (arr) arr.push(input);
     else byEmployee.set(input.employeeId, [input]);
@@ -516,7 +642,7 @@ export async function getPeriodGrossPay(
   };
   const results: PeriodGrossPay[] = [];
   for (const [employeeId, empInputs] of byEmployee) {
-    results.push(computeEmployeePeriodGrossPay(employeeId, empInputs, periodBounds));
+    results.push(computeEmployeePeriodGrossPay(employeeId, empInputs, periodBounds, { leadInStart }));
   }
   return results;
 }

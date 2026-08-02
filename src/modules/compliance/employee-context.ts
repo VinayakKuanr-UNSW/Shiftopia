@@ -161,6 +161,23 @@ export async function fetchV8EmployeeContext(
     // Derive assigned_role_ids from contracts for backward compat.
     const assigned_role_ids = [...new Set(contracts.map(c => c.role_id))];
 
+    // audit H-5 — Schedule 3 §3: does this employee hold a Security role on
+    // any of their Active contracts? (The FULL_TIME gate that actually
+    // switches the hours structure lives in the V8 rule itself, not here —
+    // this is a pure role-based fact.) Fail-open to false on error so a
+    // lookup hiccup can only ever make the general (more common) hours
+    // structure apply, never accidentally exempt someone from it.
+    let is_security_role = false;
+    if (assigned_role_ids.length > 0) {
+        const { data: roleRows, error: roleErr } = await supabase
+            .from('roles')
+            .select('name')
+            .in('id', assigned_role_ids);
+        if (!roleErr) {
+            is_security_role = (roleRows ?? []).some((r: any) => /security/i.test(r?.name || ''));
+        }
+    }
+
     const contracted_weekly_hours = rawContracts.length > 0
         ? Math.max(...rawContracts.map((c: any) => Number(c.contracted_weekly_hours) || 0))
         : 0;
@@ -202,6 +219,7 @@ export async function fetchV8EmployeeContext(
         contracts,
         qualifications,
         leave_days,
+        is_security_role,
     };
 
     // Cache the result

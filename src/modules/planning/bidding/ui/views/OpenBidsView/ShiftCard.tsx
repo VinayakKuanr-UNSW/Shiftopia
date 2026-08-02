@@ -59,6 +59,9 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
   return (
     <SharedShiftCard
         variant="timecard"
+        hideActualClocking={true}
+        hidePayrollSection={true}
+        defaultExpandedSections={{ scheduled: true }}
         groupVariant={groupVariant}
         organization={shift.location}
         department={shift.department}

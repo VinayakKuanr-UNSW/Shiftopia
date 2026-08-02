@@ -6,20 +6,19 @@
  *  - Logs   → D / 3D / W / M attendance history, calendar picker, filters, totals
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { motion, type Variants } from 'framer-motion';
 import {
-  format, parseISO, isToday, startOfWeek, endOfWeek,
+  format, parseISO, startOfWeek, startOfMonth,
 } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import {
   Fingerprint, MapPin, Loader2, UserX, LogIn, LogOut,
   CheckCircle, Timer,
-  BarChart3, Filter, ArrowUp, ArrowDown, XCircle, AlertTriangle,
+  BarChart3, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
 import { parseZonedDateTime, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
-import { CustomDateRangePicker } from '@/modules/core/ui/components/CustomDateRangePicker';
 import { useAuth } from '@/platform/auth/useAuth';
 import { supabase } from '@/platform/supabase/client';
 import { shiftsQueries } from '@/modules/rosters/api/shifts.queries';
@@ -28,17 +27,17 @@ import { useClockIn, useClockOut } from '@/modules/rosters/state/useClockInOut';
 import { useSettings } from '@/modules/settings/hooks/useSettings';
 import { TimesheetMobileCard } from '@/modules/timesheets/ui/components/TimesheetMobileCard';
 import type { TimesheetRow } from '@/modules/timesheets/model/timesheet.types';
-import { snapToQuarterHour } from '@/modules/timesheets/api/timesheets.supabase.api';
+import {
+  resolveBillableSide,
+  calculateNetMinutes,
+  applyMinEngagementFloor,
+  isShiftFinished as isShiftFinishedForBillable,
+} from '@/modules/timesheets/domain/billable-time';
+import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { Button } from '@/modules/core/ui/primitives/button';
-import { Textarea } from '@/modules/core/ui/primitives/textarea';
-import { Label } from '@/modules/core/ui/primitives/label';
-import { ResponsiveDialog } from '@/modules/core/ui/components/ResponsiveDialog';
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from '@/modules/core/ui/primitives/popover';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/modules/core/ui/primitives/select';
 import type { Shift, AttendanceStatus } from '@/modules/rosters/domain/shift.entity';
 import {
   captureGPS,
@@ -50,12 +49,30 @@ import {
   type GPSAnalysis,
 } from '@/modules/rosters/utils/gps';
 
-import { PersonalPageHeader } from '@/modules/core/ui/components/PersonalPageHeader';
-import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { UnifiedModuleFunctionBar } from '@/modules/core/ui/components/UnifiedModuleFunctionBar';
+import { useScopeFilter } from '@/platform/auth/useScopeFilter';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
-import { TimesheetRow as TimesheetRowComponent } from '@/modules/timesheets/ui/components/TimesheetRow';
-import { TimesheetTable } from '@/modules/timesheets/ui/components/TimesheetTable';
+import {
+  UnifiedRosterNavigator, type ViewType, type DateRange,
+  computeRange, navigateDate, formatRangeLabel,
+} from '@/modules/rosters/ui/components/UnifiedRosterNavigator';
+import {
+  TimesheetFilterDrawer,
+  type ActiveFilters,
+  EMPTY_FILTERS,
+  countActiveFilters,
+  applyTimesheetFilters,
+} from '@/modules/timesheets/ui/components/TimesheetFilterDrawer';
+import { GroupBySelector } from '@/modules/core/ui/components/GroupBySelector';
+import { GroupSectionHeader } from '@/modules/core/ui/components/GroupSectionHeader';
+import { groupRows, isTodayBucketKey, type RowGroupBy } from '@/modules/core/lib/row-grouping';
+import {
+  extractAttendanceGroupFields,
+  attendanceGroupLabelFor,
+  ATTENDANCE_GROUP_BY_OPTIONS,
+  ATTENDANCE_STATUS_LABELS,
+} from '@/modules/rosters/domain/attendance-grouping';
 import {
   computeAttendanceMetrics,
   type AttendanceInput,
@@ -128,6 +145,80 @@ function getShiftTiming(shift: Shift, now: Date): ShiftTiming {
   return 'before_window';
 }
 
+// ── Shift → TimesheetRow mapping (shared by the card + page-level filter/group) ──
+
+/**
+ * Billable window resolution — same three-tier rule (manager edit → snapped
+ * actual → missing) the Timesheets card uses, via the canonical resolver, so
+ * this self-service view can't drift from the manager-facing one. Hoisted to
+ * module scope so both AttendanceCard's per-shift render AND the page-level
+ * filter/Group By pipeline use the exact same mapping.
+ */
+function shiftToTimesheetRow(shift: Shift, employmentType: string | null): TimesheetRow {
+  const finished = isShiftFinishedForBillable(
+    shift.shift_date,
+    shift.start_time,
+    shift.end_time,
+    shift.actual_end ?? null,
+  );
+  const resolvedStart = resolveBillableSide(shift.adjusted_start ?? null, shift.actual_start ?? null, finished);
+  const resolvedEnd = resolveBillableSide(shift.adjusted_end ?? null, shift.actual_end ?? null, finished);
+  const rawNetMins = calculateNetMinutes(resolvedStart, resolvedEnd, shift.unpaid_break_minutes || 0);
+  const isSecurityRoleForFloor = (shift.roles?.name ?? '').toLowerCase().includes('security');
+  const floored = rawNetMins !== null
+    ? applyMinEngagementFloor(rawNetMins, {
+        isTraining: shift.is_training === true,
+        ...getShiftDayType(shift.shift_date),
+        employmentType,
+        isSecurityRole: isSecurityRoleForFloor,
+      })
+    : null;
+  return {
+    id: shift.id,
+    date: shift.shift_date,
+    employeeId: shift.assigned_employee_id || '',
+    employee: shift.assigned_profiles ? `${shift.assigned_profiles.first_name || ''} ${shift.assigned_profiles.last_name || ''}`.trim() : 'Unknown',
+    organization: shift.organizations?.name || '',
+    department: shift.departments?.name || '',
+    subDepartment: shift.sub_departments?.name || '',
+    group: shift.roster_subgroup?.roster_group?.name || shift.group_type || '',
+    subGroup: shift.sub_group_name || '',
+    role: shift.roles?.name || '',
+    remunerationLevel: (shift.remuneration_levels?.level_name && !shift.remuneration_levels.level_name.toLowerCase().includes('team lead') && !shift.remuneration_levels.level_name.toLowerCase().includes('operational control')) ? shift.remuneration_levels.level_name : '',
+    scheduledStart: shift.start_time,
+    scheduledEnd: shift.end_time,
+    clockIn: shift.actual_start || '',
+    clockOut: shift.actual_end || '',
+    adjustedStart: resolvedStart.hhmm ?? '',
+    adjustedEnd: resolvedEnd.hhmm ?? '',
+    adjustedStartSource: resolvedStart.source === 'missing' ? null : resolvedStart.source,
+    adjustedEndSource: resolvedEnd.source === 'missing' ? null : resolvedEnd.source,
+    isAdjustedManual: !!(shift.timesheet_start_time || shift.timesheet_end_time),
+    rawActualStart: shift.actual_start,
+    rawActualEnd: shift.actual_end,
+    rawStartAt: typeof shift.start_at === 'string' ? shift.start_at : shift.start_at ? new Date(shift.start_at).toISOString() : null,
+    rawEndAt: typeof shift.end_at === 'string' ? shift.end_at : shift.end_at ? new Date(shift.end_at).toISOString() : null,
+    length: String(shift.scheduled_length_minutes || 0),
+    paidBreak: String(shift.paid_break_minutes || 0),
+    unpaidBreak: String(shift.unpaid_break_minutes || 0),
+    netLength: String(shift.net_length_minutes || 0),
+    netLengthMinutes: floored?.netMinutes ?? undefined,
+    wasToppedUpToMinEngagement: floored?.wasToppedUp,
+    requiredEngagementMinutes: floored?.requiredMins || null,
+    employmentType,
+    isTraining: shift.is_training === true,
+    isSecurityRole: isSecurityRoleForFloor,
+    approximatePay: '',
+    differential: '0',
+    liveStatus: shift.lifecycle_status || '',
+    timesheetStatus: shift.timesheet_status || 'draft',
+    attendanceStatus: shift.attendance_status,
+    notes: shift.timesheet_notes,
+    rejectedReason: shift.timesheet_rejected_reason,
+    groupType: shift.group_type,
+  };
+}
+
 // ── Unified Attendance Card (combines history + live clocking) ───────────────
 
 interface AttendanceCardProps {
@@ -137,6 +228,7 @@ interface AttendanceCardProps {
 }
 
 const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupColoring }) => {
+  const { user } = useAuth();
   const clockIn  = useClockIn();
   const clockOut = useClockOut();
 
@@ -147,9 +239,7 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
 
   const timing   = getShiftTiming(shift, now);
   const status   = (shift.attendance_status ?? 'unknown') as AttendanceStatus;
-  // Canonical auto clock-out signal is attendance_status; the legacy Pass-5
-  // note ('auto_clocked_out') is kept for historical rows.
-  const isAutoClockOut = shift.attendance_status === 'auto_clock_out' || shift.attendance_note === 'auto_clocked_out';
+  const isAutoClockOut = false;
 
   const canClockIn  = status === 'unknown' && timing === 'in_window' && !shift.actual_end;
   const canClockOut = (status === 'checked_in' || status === 'late') && !shift.actual_end && timing !== 'before_window';
@@ -273,7 +363,7 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
             onClick={() => clockIn.mutate({ shiftId: shift.id, preCapture: gpsCapture })}
             disabled={clockIn.isPending || gpsCapturing || !gpsCapture}
             title={!gpsCapture && !gpsCapturing ? 'Waiting for GPS fix…' : undefined}
-            className="flex-1 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 rounded-xl font-bold text-xs disabled:opacity-50">
+            className="flex-1 bg-purple-600 hover:bg-purple-700 text-white dark:bg-purple-600 dark:hover:bg-purple-700 dark:text-white border-0 shadow-none rounded-xl font-bold text-xs disabled:opacity-50 transition-colors">
             {clockIn.isPending
               ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />In…</>
               : gpsCapturing
@@ -285,7 +375,7 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
           <Button size="sm"
             onClick={() => clockOut.mutate({ shiftId: shift.id })}
             disabled={clockOut.isPending}
-            className="flex-1 bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20 rounded-xl font-bold text-xs shadow-none">
+            className="flex-1 bg-purple-600 hover:bg-purple-700 text-white dark:bg-purple-600 dark:hover:bg-purple-700 dark:text-white border-0 shadow-none rounded-xl font-bold text-xs disabled:opacity-50 transition-colors">
             {clockOut.isPending
               ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Out…</>
               : <><LogOut className="h-3.5 w-3.5 mr-1.5" />Clock Out</>}
@@ -296,53 +386,15 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ shift, now, useGroupCol
     </div>
   ) : null;
 
-  // Map to TimesheetRow structure for the shared card component
-  const timesheetEntry: TimesheetRow = useMemo(() => {
-    return {
-      id: shift.id,
-      date: shift.shift_date,
-      employeeId: shift.assigned_employee_id || '',
-      employee: shift.assigned_profiles ? `${shift.assigned_profiles.first_name || ''} ${shift.assigned_profiles.last_name || ''}`.trim() : 'Unknown',
-      organization: shift.organizations?.name || '',
-      department: shift.departments?.name || '',
-      subDepartment: shift.sub_departments?.name || '',
-      group: shift.roster_subgroup?.roster_group?.name || shift.group_type || '',
-      subGroup: shift.sub_group_name || '',
-      role: shift.roles?.name || '',
-      remunerationLevel: (shift.remuneration_levels?.level_name && !shift.remuneration_levels.level_name.toLowerCase().includes('team lead') && !shift.remuneration_levels.level_name.toLowerCase().includes('operational control')) ? shift.remuneration_levels.level_name : '',
-      scheduledStart: shift.start_time,
-      scheduledEnd: shift.end_time,
-      clockIn: shift.actual_start || '',
-      clockOut: shift.actual_end || '',
-      adjustedStart: (() => {
-          if (shift.timesheet_start_time) return shift.timesheet_start_time;
-          return snapToQuarterHour(shift.actual_start) ?? '';
-      })(),
-      adjustedEnd: (() => {
-          if (shift.timesheet_end_time) return shift.timesheet_end_time;
-          return snapToQuarterHour(shift.actual_end) ?? '';
-      })(),
-      adjustedStartSource: shift.timesheet_start_time ? 'manual' : (shift.actual_start ? 'snapped' : null),
-      adjustedEndSource: shift.timesheet_end_time ? 'manual' : (shift.actual_end ? 'snapped' : null),
-      isAdjustedManual: !!(shift.timesheet_start_time || shift.timesheet_end_time),
-      rawActualStart: shift.actual_start,
-      rawActualEnd: shift.actual_end,
-      rawStartAt: typeof shift.start_at === 'string' ? shift.start_at : shift.start_at ? new Date(shift.start_at).toISOString() : null,
-      rawEndAt: typeof shift.end_at === 'string' ? shift.end_at : shift.end_at ? new Date(shift.end_at).toISOString() : null,
-      length: String(shift.scheduled_length_minutes || 0),
-      paidBreak: String(shift.paid_break_minutes || 0),
-      unpaidBreak: String(shift.unpaid_break_minutes || 0),
-      netLength: String(shift.net_length_minutes || 0),
-      approximatePay: '',
-      differential: '0', 
-      liveStatus: shift.lifecycle_status || '',
-      timesheetStatus: shift.timesheet_status || 'draft',
-      attendanceStatus: shift.attendance_status,
-      notes: shift.timesheet_notes,
-      rejectedReason: shift.timesheet_rejected_reason,
-      groupType: shift.group_type,
-    };
-  }, [shift]);
+  // Map to TimesheetRow structure for the shared card component — hoisted to
+  // module scope (see shiftToTimesheetRow below) so the page-level filter/
+  // Group By pipeline uses the exact same mapping instead of a second,
+  // divergent copy (a prior version of this file hand-copied a similar-
+  // looking but sentinel-blind mapper and silently priced everyone as Casual).
+  const timesheetEntry: TimesheetRow = useMemo(
+    () => shiftToTimesheetRow(shift, user?.employmentType ?? null),
+    [shift, user?.employmentType],
+  );
 
   return (
     <TimesheetMobileCard
@@ -376,17 +428,8 @@ function shiftToAttendanceInput(shift: Shift, nowMs: number): AttendanceInput {
   const scheduledStartMs = shift.start_at ? new Date(shift.start_at).getTime() : toMs(shift, 'start');
   const scheduledEndMs   = shift.end_at   ? new Date(shift.end_at).getTime()   : toMs(shift, 'end');
 
-  // A manually adjusted billable time overrides the raw clock for its own
-  // side — the `*` on the Live Rules badge must flow into the metrics too.
-  const effectiveInMs = shift.timesheet_start_time && shift.shift_date
-    ? parseZonedDateTime(shift.shift_date, shift.timesheet_start_time).getTime()
-    : shift.actual_start ? new Date(shift.actual_start).getTime() : null;
-  const effectiveOutMs = shift.timesheet_end_time && shift.shift_date
-    ? (() => {
-        const ms = parseZonedDateTime(shift.shift_date, shift.timesheet_end_time).getTime();
-        return ms < scheduledStartMs ? ms + 24 * 60 * 60 * 1000 : ms; // overnight
-      })()
-    : shift.actual_end ? new Date(shift.actual_end).getTime() : null;
+  const effectiveInMs = shift.actual_start ? new Date(shift.actual_start).getTime() : null;
+  const effectiveOutMs = shift.actual_end ? new Date(shift.actual_end).getTime() : null;
 
   const clockInVarianceMin = effectiveInMs !== null
     ? Math.round((effectiveInMs - scheduledStartMs) / 60000)
@@ -403,74 +446,40 @@ function shiftToAttendanceInput(shift: Shift, nowMs: number): AttendanceInput {
   };
 }
 
-// ── Status Filter Drawer ────────────────────────────────────────────────────────
+// ── Attendance status tabs (mirrors TIMESHEET_STATUS_TABS on /timesheet) ───────
 
-interface StatusFilterDrawerProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  current: StatusFilter;
-  onSelect: (filter: StatusFilter) => void;
-}
+const ATTENDANCE_STATUS_TABS: { id: StatusFilter; label: string; icon: React.FC<any>; accent: 'slate' | 'emerald' | 'amber' | 'red' }[] = [
+  { id: 'all', label: ATTENDANCE_STATUS_LABELS.all, icon: BarChart3, accent: 'slate' },
+  { id: 'checked_in', label: ATTENDANCE_STATUS_LABELS.checked_in, icon: CheckCircle, accent: 'emerald' },
+  { id: 'late', label: ATTENDANCE_STATUS_LABELS.late, icon: Timer, accent: 'amber' },
+  { id: 'no_show', label: ATTENDANCE_STATUS_LABELS.no_show, icon: UserX, accent: 'red' },
+  { id: 'unknown', label: ATTENDANCE_STATUS_LABELS.unknown, icon: Fingerprint, accent: 'slate' },
+];
 
-const StatusFilterDrawer: React.FC<StatusFilterDrawerProps> = ({ open, onOpenChange, current, onSelect }) => {
-  const options: { value: StatusFilter; label: string; icon: React.FC<any>; color: string }[] = [
-    { value: 'all', label: 'All statuses', icon: BarChart3, color: 'text-muted-foreground' },
-    { value: 'checked_in', label: 'Completed', icon: CheckCircle, color: 'text-emerald-500' },
-    { value: 'late', label: 'Late In', icon: Timer, color: 'text-amber-500' },
-    { value: 'no_show', label: 'No Show', icon: UserX, color: 'text-rose-500' },
-    { value: 'unknown', label: 'No Record', icon: Fingerprint, color: 'text-muted-foreground' },
-  ];
-
-  return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
-      <ResponsiveDialog.Header>
-        <ResponsiveDialog.Title>Filter by Status</ResponsiveDialog.Title>
-        <ResponsiveDialog.Description>Show records with a specific attendance status</ResponsiveDialog.Description>
-      </ResponsiveDialog.Header>
-      <ResponsiveDialog.Body className="p-4 pt-0">
-        <div className="grid grid-cols-1 gap-2">
-          {options.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => {
-                onSelect(opt.value);
-                onOpenChange(false);
-              }}
-              className={cn(
-                "flex items-center gap-3 w-full p-4 rounded-xl border text-sm font-bold transition-all",
-                current === opt.value
-                  ? "bg-primary/10 border-primary text-primary"
-                  : "bg-muted/30 border-transparent text-muted-foreground hover:bg-muted/50"
-              )}
-            >
-              <opt.icon className={cn("h-5 w-5", opt.color)} />
-              <span>{opt.label}</span>
-              {current === opt.value && <div className="ml-auto h-2 w-2 rounded-full bg-primary" />}
-            </button>
-          ))}
-        </div>
-      </ResponsiveDialog.Body>
-    </ResponsiveDialog>
-  );
+const attendanceAccentMap: Record<string, { bg: string; text: string; ring: string }> = {
+  amber:   { bg: 'bg-amber-500/10',   text: 'text-amber-600 dark:text-amber-400',     ring: 'ring-amber-500/20' },
+  emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', ring: 'ring-emerald-500/20' },
+  red:     { bg: 'bg-rose-500/10',    text: 'text-rose-600 dark:text-rose-400',       ring: 'ring-rose-500/20' },
+  slate:   { bg: 'bg-muted/50',       text: 'text-muted-foreground',                 ring: 'ring-border' },
 };
 
 const AttendancePage: React.FC = () => {
   const { user } = useAuth();
   const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
 
-  const [startDate, setStartDate] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [endDate, setEndDate]     = useState<Date>(() => endOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [viewType, setViewType] = useState<ViewType>('week');
+  const [range, setRange] = useState<DateRange>(() => computeRange(new Date(), 'week'));
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
-  const [sortField, setSortField] = useState<keyof TimesheetRow | null>(null);
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+  const [groupBy, setGroupBy] = useState<RowGroupBy>('date');
+  const [appliedFilters, setAppliedFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
+  const activeFilterCount = useMemo(() => countActiveFilters(appliedFilters), [appliedFilters]);
   const { isDark } = useTheme();
   const { orgBranding } = useSettings();
   const useGroupColoring = (orgBranding as any)?.enable_group_coloring || false;
 
-  const rangeStart = format(startDate, 'yyyy-MM-dd');
-  const rangeEnd   = format(endDate,   'yyyy-MM-dd');
+  const rangeStart = format(range.start, 'yyyy-MM-dd');
+  const rangeEnd   = format(range.end,   'yyyy-MM-dd');
 
   // Consider current date for short polling interval if viewing current range
   const now = new Date();
@@ -508,43 +517,44 @@ const AttendancePage: React.FC = () => {
     };
   }, [user?.id, refetch]);
 
-  const filteredLogs = useMemo(() => {
+  // ── View type change handler (shared desktop & mobile) ──────────────────
+  const handleViewTypeChange = useCallback((view: ViewType) => {
+    let newDate = selectedDate;
+    if (view === 'week') {
+      newDate = startOfWeek(selectedDate, { weekStartsOn: 1 });
+    } else if (view === 'month') {
+      newDate = startOfMonth(selectedDate);
+    }
+    setSelectedDate(newDate);
+    setViewType(view);
+    setRange(computeRange(newDate, view));
+  }, [selectedDate]);
+
+  // ── Mobile compact date nav helpers ─────────────────────────────────────
+  const mobileRange = useMemo(() => computeRange(selectedDate, viewType), [selectedDate, viewType]);
+  const mobileDateLabel = useMemo(() => formatRangeLabel(mobileRange, viewType), [mobileRange, viewType]);
+
+  const handleMobilePrev = useCallback(() => {
+    const newDate = navigateDate(selectedDate, viewType, -1);
+    setSelectedDate(newDate);
+    setRange(computeRange(newDate, viewType));
+  }, [selectedDate, viewType]);
+
+  const handleMobileNext = useCallback(() => {
+    const newDate = navigateDate(selectedDate, viewType, 1);
+    setSelectedDate(newDate);
+    setRange(computeRange(newDate, viewType));
+  }, [selectedDate, viewType]);
+
+  // Scope-filtered shifts, most-recent-first — the shared basis for status
+  // counts, the categorical filter drawer, and the final filtered/grouped log.
+  const scopedLogs = useMemo(() => {
     let sorted = [...logShifts].sort((a, b) => {
-      // Show most recent dates first in the unified log
       const d = b.shift_date.localeCompare(a.shift_date);
-      // For same date, sort chronologically
       return d !== 0 ? d : a.start_time.localeCompare(b.start_time);
     });
 
-    // ── Apply Client-Side Sorting if set ───────────────────────────────────────
-    if (sortField) {
-        sorted.sort((a, b) => {
-            // Map Shift back to TimesheetRow-like access for sorting
-            const getVal = (s: Shift, field: keyof TimesheetRow) => {
-                if (field === 'date') return s.shift_date;
-                if (field === 'employee') return `${s.assigned_profiles?.first_name || ''} ${s.assigned_profiles?.last_name || ''}`;
-                if (field === 'role') return s.roles?.name || '';
-                if (field === 'scheduledStart') return s.start_time;
-                if (field === 'scheduledEnd') return s.end_time;
-                if (field === 'clockIn') return s.actual_start || '';
-                if (field === 'clockOut') return s.actual_end || '';
-                // Add more as needed or just fallback
-                return (s as any)[field] || '';
-            };
-
-            const av = getVal(a, sortField);
-            const bv = getVal(b, sortField);
-
-            if (typeof av === "string" && typeof bv === "string")
-                return sortDirection === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
-            if (typeof av === "number" && typeof bv === "number")
-                return sortDirection === "asc" ? av - bv : bv - av;
-            return 0;
-        });
-    }
-
-    // 1. Apply Scope Filters (Organization, Department, Sub-Department)
-    if (scope && sorted.length > 0) {
+    if (scope) {
       if (scope.org_ids?.length > 0) {
         sorted = sorted.filter(s => s.organization_id && scope.org_ids.includes(s.organization_id));
       }
@@ -560,62 +570,46 @@ const AttendancePage: React.FC = () => {
         });
       }
     }
+    return sorted;
+  }, [logShifts, scope]);
 
-    if (statusFilter === 'all') return sorted;
-    return sorted.filter(s => (s.attendance_status ?? 'unknown') === statusFilter);
-  }, [logShifts, statusFilter, scope]);
+  // TimesheetRow-shaped projection — feeds the shared categorical filter
+  // drawer (Group/Sub-Group/Role) and Group By, via the same mapper
+  // AttendanceCard renders from (see shiftToTimesheetRow above).
+  const filterRows = useMemo(
+    () => scopedLogs.map((s) => shiftToTimesheetRow(s, user?.employmentType ?? null)),
+    [scopedLogs, user?.employmentType],
+  );
 
-  const groupedLogs = useMemo(() => {
-    const groups: { date: string; shifts: Shift[] }[] = [];
-    let cur = '';
-    for (const s of filteredLogs) {
-      if (s.shift_date !== cur) { cur = s.shift_date; groups.push({ date: cur, shifts: [] }); }
-      groups[groups.length - 1].shifts.push(s);
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: 0, checked_in: 0, late: 0, no_show: 0, unknown: 0 };
+    for (const s of scopedLogs) {
+      counts.all++;
+      const st = s.attendance_status ?? 'unknown';
+      counts[st] = (counts[st] ?? 0) + 1;
     }
-    return groups;
-  }, [filteredLogs]);
+    return counts;
+  }, [scopedLogs]);
 
-  // Map to TimesheetRow structure for the table view
-  const timesheetEntries: TimesheetRow[] = useMemo(() => {
-    return filteredLogs.map(shift => ({
-      id: shift.id,
-      date: shift.shift_date,
-      employeeId: shift.assigned_employee_id || '',
-      employee: shift.assigned_profiles ? `${shift.assigned_profiles.first_name || ''} ${shift.assigned_profiles.last_name || ''}`.trim() : 'Unknown',
-      organization: shift.organizations?.name || '',
-      department: shift.departments?.name || '',
-      subDepartment: shift.sub_departments?.name || '',
-      group: shift.roster_subgroup?.roster_group?.name || shift.group_type || '',
-      subGroup: shift.sub_group_name || '',
-      role: shift.roles?.name || '',
-      remunerationLevel: (shift.remuneration_levels?.level_name && !shift.remuneration_levels.level_name.toLowerCase().includes('team lead') && !shift.remuneration_levels.level_name.toLowerCase().includes('operational control')) ? shift.remuneration_levels.level_name : '',
-      scheduledStart: shift.start_time,
-      scheduledEnd: shift.end_time,
-      clockIn: shift.actual_start || '',
-      clockOut: shift.actual_end || '',
-      adjustedStart: shift.timesheet_start_time || snapToQuarterHour(shift.actual_start) || '',
-      adjustedEnd: shift.timesheet_end_time || snapToQuarterHour(shift.actual_end) || '',
-      adjustedStartSource: shift.timesheet_start_time ? 'manual' : (shift.actual_start ? 'snapped' : null),
-      adjustedEndSource: shift.timesheet_end_time ? 'manual' : (shift.actual_end ? 'snapped' : null),
-      isAdjustedManual: !!(shift.timesheet_start_time || shift.timesheet_end_time),
-      rawActualStart: shift.actual_start,
-      rawActualEnd: shift.actual_end,
-      rawStartAt: typeof shift.start_at === 'string' ? shift.start_at : shift.start_at ? new Date(shift.start_at).toISOString() : null,
-      rawEndAt: typeof shift.end_at === 'string' ? shift.end_at : shift.end_at ? new Date(shift.end_at).toISOString() : null,
-      length: String(shift.scheduled_length_minutes || 0),
-      paidBreak: String(shift.paid_break_minutes || 0),
-      unpaidBreak: String(shift.unpaid_break_minutes || 0),
-      netLength: String(shift.net_length_minutes || 0),
-      approximatePay: '',
-      differential: '0', 
-      liveStatus: shift.lifecycle_status || '',
-      timesheetStatus: shift.timesheet_status || 'draft',
-      attendanceStatus: shift.attendance_status,
-      notes: shift.timesheet_notes,
-      rejectedReason: shift.timesheet_rejected_reason,
-      groupType: shift.group_type,
-    }));
-  }, [filteredLogs]);
+  const categoryFilteredIds = useMemo(() => {
+    // No search query on this page — Attendance is always scoped to the
+    // single logged-in employee, so a name/employee search has nothing to do.
+    const rows = applyTimesheetFilters(filterRows, appliedFilters, '');
+    return new Set(rows.map((r) => String(r.id)));
+  }, [filterRows, appliedFilters]);
+
+  const filteredLogs = useMemo(() => {
+    let rows = scopedLogs.filter((s) => categoryFilteredIds.has(String(s.id)));
+    if (statusFilter !== 'all') {
+      rows = rows.filter((s) => (s.attendance_status ?? 'unknown') === statusFilter);
+    }
+    return rows;
+  }, [scopedLogs, categoryFilteredIds, statusFilter]);
+
+  const groupedBuckets = useMemo(
+    () => groupRows(filteredLogs, groupBy, extractAttendanceGroupFields, attendanceGroupLabelFor),
+    [filteredLogs, groupBy],
+  );
 
   // Attendance scorecard — same 9 metrics/definitions as Timesheets + Insights.
   // Computed over the full fetched range (not the status filter) so the totals are stable.
@@ -633,85 +627,90 @@ const AttendancePage: React.FC = () => {
       className="h-full flex flex-col overflow-hidden p-4 lg:p-6 space-y-4"
     >
       {/* ── Unified Header ────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30">
-        <div className={cn(
-            "rounded-[32px] p-4 lg:p-6 transition-all border",
-            isDark 
-                ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
-                : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
-        )}>
-          {/* Row 1 & 2: Identity & Scope Filter */}
-          <PersonalPageHeader
-            title="My Attendance"
-            Icon={Fingerprint}
-            scope={scope}
-            setScope={setScope}
-            isGammaLocked={isGammaLocked}
-            className="mb-4 lg:mb-6"
-          />
-
-          {/* Row 3: Function Bar */}
+      <GoldStandardHeader
+        title="My Attendance"
+        Icon={Fingerprint}
+        scope={scope}
+        setScope={setScope}
+        isGammaLocked={isGammaLocked}
+        mode="personal"
+        className="p-0"
+        functionBar={
           <UnifiedModuleFunctionBar
             transparent
-            startDate={startDate}
-            endDate={endDate}
-            onDateChange={(start, end) => {
-              setStartDate(start);
-              setEndDate(end);
-            }}
-            viewMode={viewMode}
-            onViewModeChange={(v) => setViewMode(v as 'card' | 'table')}
+            hideViewModeToggle
             onRefresh={() => refetch()}
             isLoading={logsLoading}
             className="mt-1"
-            filters={
+            leftContent={
               <>
-                {/* Mobile: icon-only, 44×44 ARIA-compliant touch target */}
-                <button
-                  onClick={() => setFilterDrawerOpen(true)}
-                  aria-label="Filter by status"
-                  className={cn(
-                    'md:hidden h-11 w-full flex items-center justify-center rounded-xl transition-all active:scale-95',
-                    statusFilter !== 'all'
-                      ? isDark ? 'bg-primary/15 text-primary ring-1 ring-primary/30' : 'bg-primary/10 text-primary ring-1 ring-primary/20'
-                      : isDark ? 'bg-white/5 text-white/70 active:bg-white/10' : 'bg-slate-100 text-slate-600 active:bg-slate-200',
-                  )}
-                >
-                  <Filter className="h-5 w-5" />
-                </button>
-                {/* Desktop: full text button */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setFilterDrawerOpen(true)}
-                  className={cn(
-                    'hidden md:flex h-10 lg:h-11 px-4 rounded-xl font-black uppercase text-[10px] tracking-wider transition-all shadow-sm',
-                    isDark ? "bg-[#111827]/60 border-white/5" : "bg-slate-100 border-slate-200/50",
-                    statusFilter !== 'all' && (isDark ? 'bg-primary/10 border-primary/20 text-primary' : 'bg-primary/5 border-primary/10 text-primary'),
-                  )}
-                >
-                  <Filter className="h-3.5 w-3.5 mr-2 opacity-50" />
-                  <span>Filter</span>
-                </Button>
-
-                <StatusFilterDrawer
-                  open={filterDrawerOpen}
-                  onOpenChange={setFilterDrawerOpen}
-                  current={statusFilter}
-                  onSelect={setStatusFilter}
-                />
+                {/* Mobile: compact prev/next + label */}
+                <div className="md:hidden flex items-center gap-1.5" role="region" aria-label="Date period selector">
+                  <button
+                    type="button"
+                    onClick={handleMobilePrev}
+                    aria-label="Previous date period"
+                    className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all active:scale-90 touch-manipulation"
+                  >
+                    <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                  <span
+                    className="text-[11px] font-black text-foreground whitespace-nowrap min-w-[65px] text-center"
+                    aria-label={`Current date period: ${mobileDateLabel}`}
+                  >
+                    {mobileDateLabel}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleMobileNext}
+                    aria-label="Next date period"
+                    className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all active:scale-90 touch-manipulation"
+                  >
+                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+                {/* Desktop: full Day/3-Day/Week/Month navigator */}
+                <div className="hidden md:block">
+                  <UnifiedRosterNavigator
+                    variant="full"
+                    date={selectedDate}
+                    viewType={viewType}
+                    onChange={(date, newRange) => { setSelectedDate(date); setRange(newRange); }}
+                    onViewTypeChange={handleViewTypeChange}
+                  />
+                </div>
               </>
             }
-          />
-        </div>
-      </div>
+            filters={
+              <>
+                <TimesheetFilterDrawer
+                  entries={filterRows}
+                  appliedFilters={appliedFilters}
+                  onApply={setAppliedFilters}
+                  activeCount={activeFilterCount}
+                  statusFilter={statusFilter}
+                  onStatusFilterChange={(s) => setStatusFilter(s as StatusFilter)}
+                  statusCounts={statusCounts}
+                  statusOptions={ATTENDANCE_STATUS_TABS.map(t => ({ id: t.id, label: t.label }))}
+                  statusSectionLabel="Attendance Status"
+                  viewType={viewType}
+                  onViewTypeChange={(v) => handleViewTypeChange(v as ViewType)}
+                />
+                <GroupBySelector value={groupBy} onChange={setGroupBy} options={ATTENDANCE_GROUP_BY_OPTIONS} />
+              </>
+            }
+          >
+
+          </UnifiedModuleFunctionBar>
+        }
+      />
 
       {/* ── Main Content Area ─────────────────────────────────────────── */}
       <div className="flex-1 min-h-0 overflow-hidden">
         <div className={cn(
             "h-full rounded-[32px] overflow-hidden transition-all border flex flex-col",
-            isDark 
-                ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20" 
+            isDark
+                ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20"
                 : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
         )}>
           {logsLoading ? (
@@ -726,58 +725,34 @@ const AttendancePage: React.FC = () => {
           ) : (
             <div className={cn(
               "flex-1 min-h-0 overflow-y-auto space-y-4 px-4 lg:px-6 py-4 pb-32 scrollbar-none",
-              groupedLogs.length === 0 && "flex flex-col items-center justify-center pb-4"
+              filteredLogs.length === 0 && "flex flex-col items-center justify-center pb-4"
             )}>
               {/* Attendance scorecard */}
               {logShifts.length > 0 && <AttendanceMetricsBar metrics={attendanceMetrics} />}
 
-
-              {viewMode === 'card' ? (
-                groupedLogs.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center text-center gap-3">
-                    <BarChart3 className="h-10 w-10 text-muted-foreground/40" />
-                    <p className="text-base font-bold text-foreground">No attendance records</p>
-                    <p className="text-sm text-muted-foreground">
-                      {statusFilter !== 'all' ? 'Try removing the filter' : 'No shifts found for this period'}
-                    </p>
-                  </div>
-                ) : (
-                  groupedLogs.map(({ date, shifts }) => {
-                    const d = parseISO(date);
-                    const isTodayDate = isToday(d);
-                    return (
-                      <div key={date}>
-                        {/* Day header */}
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className={cn(
-                            'text-xs font-black uppercase tracking-widest font-mono',
-                            isTodayDate ? 'text-emerald-500' : 'text-muted-foreground',
-                          )}>
-                            {isTodayDate ? 'Today' : format(d, 'EEEE')}
-                          </div>
-                          <div className="text-xs text-muted-foreground font-mono">{format(d, 'd MMMM yyyy')}</div>
-                          <div className="flex-1 h-px bg-border" />
-                          <div className="text-[10px] text-muted-foreground/60 font-mono">{shifts.length} shift{shifts.length > 1 ? 's' : ''}</div>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5 mb-4">
-                          {shifts.map(s => <AttendanceCard key={s.id} shift={s} now={now} useGroupColoring={useGroupColoring} />)}
-                        </div>
-                      </div>
-                    );
-                  })
-                )
-              ) : (
-                <div className="flex-1 min-h-0">
-                  <TimesheetTable
-                    entries={timesheetEntries}
-                    selectedDate={startDate}
-                    readOnly={true}
-                    viewMode="table"
-                    onViewChange={() => {}}
-                    hideTopControls={true}
-                    showDate={true}
-                  />
+              {filteredLogs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center text-center gap-3">
+                  <BarChart3 className="h-10 w-10 text-muted-foreground/40" />
+                  <p className="text-base font-bold text-foreground">No attendance records</p>
+                  <p className="text-sm text-muted-foreground">
+                    {statusFilter !== 'all' || activeFilterCount > 0 ? 'Try removing a filter' : 'No shifts found for this period'}
+                  </p>
                 </div>
+              ) : (
+                groupedBuckets.map((bucket) => (
+                  <div key={bucket.key}>
+                    {bucket.label && (
+                      <GroupSectionHeader
+                        label={bucket.label}
+                        count={bucket.items.length}
+                        emphasized={isTodayBucketKey(bucket.key)}
+                      />
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5 mb-4">
+                      {bucket.items.map(s => <AttendanceCard key={s.id} shift={s} now={now} useGroupColoring={useGroupColoring} />)}
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           )}

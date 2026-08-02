@@ -47,6 +47,8 @@ import { calculateTimeRemaining, formatTimeRemaining } from './utils';
 import type { BidToggle, ManagerBidShift, EmployeeBid, ToggleCounts } from './types';
 import { useManagerBidShifts } from './useOpenShifts';
 import { useShiftBids } from './useShiftBids';
+import { AutoPilotDecisionChip, type AutoPilotDecision } from '@/modules/core/autopilot';
+import { createBidAutoPilotAdapter, BID_AUTOPILOT_COPY } from '../../../api/bidAutoPilot.api';
 import { useTimeTicker } from './useTimeTicker';
 import { getAvailabilitySlots } from '@/modules/availability/api/availability.api';
 import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
@@ -460,10 +462,11 @@ interface RoleCardProps {
   shift: ManagerBidShift;
   isSelected: boolean;
   onSelect: () => void;
+  autoDecision?: AutoPilotDecision;
 }
 
 const RoleCard: React.FC<RoleCardProps> = ({
-  shift, isSelected, onSelect,
+  shift, isSelected, onSelect, autoDecision,
 }) => {
   const groupVariant = getGroupVariant(shift.groupType, shift.department);
   const theme = GROUP_THEME[groupVariant];
@@ -543,16 +546,19 @@ const RoleCard: React.FC<RoleCardProps> = ({
 
       {/* Right side: Bids & Status */}
       <div className="flex items-center gap-2 shrink-0">
+        {autoDecision && (
+          <AutoPilotDecisionChip decision={autoDecision} copy={BID_AUTOPILOT_COPY} />
+        )}
         <div className={cn(
           "flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-black tabular-nums transition-all",
-          isSelected 
-            ? "bg-primary text-primary-foreground border-primary" 
+          isSelected
+            ? "bg-primary text-primary-foreground border-primary"
             : "bg-muted/50 text-muted-foreground/60 border-transparent group-hover:border-border/50"
         )}>
           <Users className="h-2.5 w-2.5" />
           <span>{shift.bidCount}</span>
         </div>
-        
+
         {isResolved && (
           <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
         )}
@@ -712,10 +718,14 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     expired:  shifts.filter(s => s.toggle === 'expired').length,
   }), [shifts]);
 
+  // ── AutoPilot bot decisions static empty fallback reference ─────────────────
+  const EMPTY_DECISIONS_MAP = useMemo(() => new Map<string, AutoPilotDecision>(), []);
+
   // Report counts up to controlling parent (GoldStandardHeader filter chips).
+  const countsKey = `${counts.standard}-${counts.urgent}-${counts.resolved}-${counts.expired}`;
   useEffect(() => {
     onCountsChange?.(counts);
-  }, [counts, onCountsChange]);
+  }, [countsKey, onCountsChange]);
 
   const activeSearchQuery = externalSearchQuery !== undefined ? externalSearchQuery : searchQuery;
 
@@ -730,7 +740,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
       );
     }
     return result;
-  }, [shifts, activeToggle, searchQuery]);
+  }, [shifts, activeToggle, activeSearchQuery]);
 
   // If the expanded shift is no longer visible under the active toggle/search
   // (toggle switched, search narrowed, or it moved to "Resolved" after being
@@ -743,6 +753,29 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
       setDrawerBidId(null);
     }
   }, [filteredShifts, expandedV8ShiftId]);
+
+  // ── AutoPilot bot decisions, keyed by shift id — per-row RoleCard chip. ──
+  const [autoDecisions, setAutoDecisions] = useState<Map<string, AutoPilotDecision>>(EMPTY_DECISIONS_MAP);
+  const bidAutoPilotAdapter = useMemo(
+    () => (organizationId ? createBidAutoPilotAdapter({ organizationId }) : null),
+    [organizationId],
+  );
+  useEffect(() => {
+    if (!bidAutoPilotAdapter?.getDecisionsForEntities || filteredShifts.length === 0) {
+      setAutoDecisions(EMPTY_DECISIONS_MAP);
+      return;
+    }
+    let cancelled = false;
+    bidAutoPilotAdapter
+      .getDecisionsForEntities(filteredShifts.map(s => s.id))
+      .then(m => {
+        if (!cancelled) setAutoDecisions(m.size === 0 ? EMPTY_DECISIONS_MAP : m);
+      })
+      .catch(() => {
+        if (!cancelled) setAutoDecisions(EMPTY_DECISIONS_MAP);
+      });
+    return () => { cancelled = true; };
+  }, [bidAutoPilotAdapter, filteredShifts, EMPTY_DECISIONS_MAP]);
 
   // ── Compliance Panel ───────────────────────────────────────────────────────
   const bidsPanel = useBidsCompliancePanel(selectedBid, expandedShift, toast);
@@ -1080,7 +1113,15 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
 
   // Expose auto-assign to controlling parent (so the button lives in
   // GoldStandardHeader, not duplicated inside the view).
+  // Ref-guard: only notify parent when the exposed values truly change — avoids
+  // the parent doing setState with a new object on every child render.
+  const lastAutoAssignRef = useRef<{ run: (() => void) | null; isRunning: boolean }>({ run: null, isRunning: false });
   useEffect(() => {
+    if (
+      lastAutoAssignRef.current.run === handleAutoAssign &&
+      lastAutoAssignRef.current.isRunning === isAutoAssigning
+    ) return;
+    lastAutoAssignRef.current = { run: handleAutoAssign, isRunning: isAutoAssigning };
     onAutoAssignReady?.({ run: handleAutoAssign, isRunning: isAutoAssigning });
   }, [handleAutoAssign, isAutoAssigning, onAutoAssignReady]);
 
@@ -1193,6 +1234,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                               shift={s}
                               isSelected={expandedV8ShiftId === s.id}
                               onSelect={() => handleExpand(s.id)}
+                              autoDecision={autoDecisions.get(s.id)}
                             />
                           ))}
                         </motion.div>
@@ -1430,6 +1472,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                         shift={s}
                         isSelected={expandedV8ShiftId === s.id}
                         onSelect={() => handleExpand(s.id)}
+                        autoDecision={autoDecisions.get(s.id)}
                       />
                     ))}
                   </motion.div>

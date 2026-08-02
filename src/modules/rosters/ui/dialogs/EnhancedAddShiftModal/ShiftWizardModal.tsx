@@ -116,13 +116,9 @@ const ShiftWizardModalInner: React.FC<{ opts: OpenShiftFormOptions; onClose: () 
         ? 'bg-[#0a0a0c] border-slate-800/50'
         : isPublished
             ? 'bg-[#0c0512] border-purple-900/30 shadow-2xl'
-            : isEmergencyAssignment
-                ? 'bg-[#0c0506] border-red-500/25 shadow-2xl'
-                : 'bg-card dark:bg-[#0a0c10] border-border/50 shadow-2xl';
+            : 'bg-card dark:bg-[#0a0c10] border-border/50 shadow-2xl';
 
-    const primaryLabel = isEmergencyAssignment
-        ? (editMode ? 'Emergency Update' : 'Emergency Assign')
-        : (editMode ? 'Update Shift' : isPublished ? 'Publish Shift' : 'Create Shift');
+    const primaryLabel = editMode ? 'Update Shift' : isPublished ? 'Publish Shift' : 'Create Shift';
 
     return (
         <>
@@ -149,9 +145,8 @@ const ShiftWizardModalInner: React.FC<{ opts: OpenShiftFormOptions; onClose: () 
                         <div className="flex items-center gap-2.5">
                             <div className={cn(
                                 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl',
-                                isEmergencyAssignment ? 'bg-red-500/10 text-red-500'
-                                    : isPublished ? 'bg-purple-500/10 text-purple-500'
-                                        : 'bg-amber-500/10 text-amber-500',
+                                isPublished ? 'bg-purple-500/10 text-purple-500'
+                                    : 'bg-amber-500/10 text-amber-500',
                             )}>
                                 {editMode ? <CalendarCheck className="h-4 w-4" /> : <CalendarPlus className="h-4 w-4" />}
                             </div>
@@ -173,21 +168,6 @@ const ShiftWizardModalInner: React.FC<{ opts: OpenShiftFormOptions; onClose: () 
                                 </Button>
                             )}
 
-                            {!isPublished && !isEmergencyAssignment && (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => handleSubmit(form.getValues())}
-                                    disabled={!canSave || isLoading}
-                                    className={cn(
-                                        'h-9 rounded-xl px-4 text-[10px] font-black uppercase tracking-[0.12em] transition-all',
-                                        isDark ? 'border-white/10 text-white/80 hover:bg-white/5' : 'border-slate-200 text-slate-700 hover:bg-slate-100',
-                                    )}
-                                >
-                                    Save Draft
-                                </Button>
-                            )}
-
                             <Button
                                 type="button"
                                 onClick={() => handleSubmit(form.getValues())}
@@ -197,16 +177,13 @@ const ShiftWizardModalInner: React.FC<{ opts: OpenShiftFormOptions; onClose: () 
                                     canSave
                                         ? isPublished
                                             ? 'border border-purple-400/20 bg-purple-600 text-white shadow-purple-500/20 hover:bg-purple-500'
-                                            : isEmergencyAssignment
-                                                ? 'border border-red-400/20 bg-red-600 text-white shadow-red-500/20 hover:bg-red-500'
-                                                : 'border border-amber-400/20 bg-amber-600 text-white shadow-amber-500/20 hover:bg-amber-500'
+                                            : 'border border-amber-400/20 bg-amber-600 text-white shadow-amber-500/20 hover:bg-amber-500'
                                         : 'cursor-not-allowed border border-border bg-muted text-muted-foreground opacity-60',
                                 )}
                             >
                                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" />
-                                    : isEmergencyAssignment ? <Zap className="h-4 w-4" />
-                                        : editMode ? <Save className="h-3.5 w-3.5" />
-                                            : <Plus className="h-3.5 w-3.5" />}
+                                    : editMode ? <Save className="h-3.5 w-3.5" />
+                                        : <Plus className="h-3.5 w-3.5" />}
                                 <span className="hidden sm:inline">{primaryLabel}</span>
                             </Button>
 

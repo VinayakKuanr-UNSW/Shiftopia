@@ -4,6 +4,7 @@ import { useToast } from '@/modules/core/hooks/use-toast';
 import { useAuth } from '@/platform/auth/useAuth';
 import { useOrgSelection } from '@/modules/core/contexts/OrgSelectionContext';
 import { shiftKeys } from '@/modules/rosters/api/queryKeys';
+import { useRealtimeInvalidate } from '@/platform/supabase/hooks/useRealtimeInvalidate';
 
 /**
  * Hook for managing shift swaps with real database data
@@ -264,6 +265,22 @@ export const useSwaps = (scopeOverrides?: {
             console.error('Reject swap error:', error);
         },
     });
+
+    // Realtime: refresh swap lists live when shift_swaps / swap_offers change
+    // (RLS-scoped, so only rows this user may read trigger an invalidation).
+    useRealtimeInvalidate(
+        `swaps-rt-${userId}`,
+        ['shift_swaps', 'swap_offers'],
+        () => {
+            queryClient.invalidateQueries({ queryKey: ['mySwapRequests'] });
+            queryClient.invalidateQueries({ queryKey: ['availableSwaps'] });
+            queryClient.invalidateQueries({ queryKey: ['pendingSwapApprovals'] });
+            queryClient.invalidateQueries({ queryKey: ['myActiveOffers'] });
+            queryClient.invalidateQueries({ queryKey: ['myActiveOfferDetails'] });
+            queryClient.invalidateQueries({ queryKey: ['swapOffers'] });
+        },
+        !!userId,
+    );
 
     return {
         // Queries

@@ -1,8 +1,8 @@
 // =============================================================================
 // auto-assign-bids — Request / Response wire types
 //
-// Mirrors docs/implementation/01-auto-assign-bids-refactor.md §8 (API design)
-// and docs/implementation/00-contracts-and-conventions.md §6 (decision enums),
+// Mirrors docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/01-auto-assign-bids-refactor.md §8 (API design)
+// and docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/00-contracts-and-conventions.md §6 (decision enums),
 // §7 (routes). These are the ONLY shapes that cross the HTTP boundary; the
 // internal snapshot/decision types live inline in index.ts.
 //

@@ -34,6 +34,8 @@ export function runV8ComplexBridge(
         qualifications: input.employee_context.qualifications,
         // audit F1 — approved-leave dates for V8_LEAVE_CONFLICT (optional).
         leave_days: input.employee_context.leave_days,
+        // audit H-5 — Schedule 3 §3 Full-Time Security hours structure.
+        is_security_role: input.employee_context.is_security_role,
     };
 
     // Shifts being added/changed by this operation — the only ones that pure

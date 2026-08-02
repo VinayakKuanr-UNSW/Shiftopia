@@ -4,6 +4,8 @@ import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCar
 import { format } from 'date-fns';
 import { getNowInTimezone, SYDNEY_TZ, formatCalendarDate } from '@/modules/core/lib/date.utils';
 import { useIsMobile } from '@/modules/core/hooks/use-mobile';
+import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
+import { useAuth } from '@/platform/auth/useAuth';
 import ShiftPill from './ShiftPill';
 
 interface MyRosterShiftProps {
@@ -26,6 +28,7 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
   style,
 }) => {
   const isMobile = useIsMobile();
+  const { user } = useAuth();
 
   // Calculate if shift is in the past
   const isPast = React.useMemo(() => {
@@ -42,19 +45,27 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
       const resolvedEndH = endH === 0 ? 24 : endH;
       const currentMinutes = nowH * 60 + nowM;
       const endMinutes = resolvedEndH * 60 + endM;
-      return endMinutes < currentMinutes;
+      return currentMinutes > endMinutes;
     } catch {
       return false;
     }
   }, [shift.shift_date, shift.end_time]);
 
-  const p = (t: string) => {
-    if (!t) return 0;
-    const [h, m] = t.split(':').map(Number);
-    return h * 60 + m;
-  };
-  const gross = p(shift.end_time) - p(shift.start_time);
-  const netLength = Math.max(0, gross - (shift.unpaid_break_minutes ?? 0));
+  const netLength = React.useMemo(() => {
+    if (!shift.start_time || !shift.end_time) return 0;
+    const [sh, sm] = shift.start_time.split(':').map(Number);
+    const [eh, em] = shift.end_time.split(':').map(Number);
+    let gross = (eh * 60 + em) - (sh * 60 + sm);
+    if (gross < 0) gross += 1440;
+    return Math.max(0, gross - (shift.unpaid_break_minutes ?? 0));
+  }, [shift.start_time, shift.end_time, shift.unpaid_break_minutes]);
+
+  const assignedEmployeeName =
+    (shift as any).employeeName ||
+    (shift.employees ? `${shift.employees.first_name || ''} ${shift.employees.last_name || ''}`.trim() : null) ||
+    user?.fullName ||
+    user?.name ||
+    undefined;
 
   // Determine if we should show the compact "Pill" design.
   // 1. In any Grid View (D/3D/W) where 'style.height' is passed (both Desktop & Mobile)
@@ -85,6 +96,7 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
         department={groupName}
         subGroup={subGroupName}
         role={shift.roles?.name || 'Shift'}
+        employeeName={assignedEmployeeName}
         shiftDate={formatCalendarDate(shift.shift_date, 'EEE, MMM d')}
         startTime={shift.start_time.slice(0, 5)}
         endTime={shift.end_time.slice(0, 5)}
@@ -93,12 +105,7 @@ const MyRosterShift: React.FC<MyRosterShiftProps> = ({
         unpaidBreak={shift.unpaid_break_minutes ?? 0}
         isPast={isPast}
         lifecycleStatus={shift.lifecycle_status}
-        groupVariant={
-          groupColor.toLowerCase().includes('convention') ? 'convention' :
-          groupColor.toLowerCase().includes('exhibition') ? 'exhibition' :
-          groupColor.toLowerCase().includes('theatre') ? 'theatre' :
-          groupColor.toLowerCase().includes('cutaway') ? 'cutaway' : 'default'
-        }
+        groupVariant={resolveGroupVariant(shift, groupColor || groupName, subGroupName)}
         onClick={onClick}
         shiftData={shift}
         className="h-full"

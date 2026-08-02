@@ -83,6 +83,8 @@ function mockSupabase(opts: {
     singleRpc?: MockResp;
     availabilitySlots?: MockResp;
     availabilityRules?: MockResp;
+    userContracts?: MockResp;
+    roles?: MockResp;
 }): any {
     return {
         rpc: vi.fn().mockImplementation((name: string) => {
@@ -95,7 +97,7 @@ function mockSupabase(opts: {
             return Promise.resolve({ data: null, error: { message: 'unknown rpc' } });
         }),
         from: vi.fn().mockImplementation((table: string) => {
-            // Chainable mock — `.select().in().gte().lte()` and
+            // Chainable mock — `.select().in().gte().lte().eq()` and
             // `.select().in().limit()` both resolve to the same final
             // promise. Each builder method returns `self` until awaited.
             let resp: MockResp;
@@ -103,12 +105,17 @@ function mockSupabase(opts: {
                 resp = opts.availabilitySlots ?? { data: [], error: null };
             } else if (table === 'availability_rules') {
                 resp = opts.availabilityRules ?? { data: [], error: null };
+            } else if (table === 'user_contracts') {
+                resp = opts.userContracts ?? { data: [], error: null };
+            } else if (table === 'roles') {
+                resp = opts.roles ?? { data: [], error: null };
             } else {
                 resp = { data: null, error: { message: `unknown table ${table}` } };
             }
             const builder: any = {
                 select: () => builder,
                 in: () => builder,
+                eq: () => builder,
                 gte: () => builder,
                 lte: () => builder,
                 limit: () => builder,
@@ -338,5 +345,283 @@ describe('RosterFetcher.fetchAvailability', () => {
             expect(result.get(emp.id)!.slots).toEqual([]);
         }
         warnSpy.mockRestore();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// fetchEmployeeContractDetails
+// ---------------------------------------------------------------------------
+
+describe('RosterFetcher.fetchEmployeeContractDetails', () => {
+    it('returns empty map for empty employee list', async () => {
+        const fetcher = new RosterFetcher(mockSupabase({}));
+        const result = await fetcher.fetchEmployeeContractDetails([]);
+        expect(result.size).toBe(0);
+    });
+
+    it('resolves a single employee with a single Active contract', async () => {
+        const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: {
+                data: [{
+                    user_id: 'e1', role_id: 'role-A', remuneration_level: 3,
+                    is_apprentice: false, is_trainee: false, is_sws: false,
+                }],
+                error: null,
+            },
+            roles: {
+                data: [{ id: 'role-A', name: 'Event Coordinator' }],
+                error: null,
+            },
+        }));
+
+        const result = await fetcher.fetchEmployeeContractDetails([employee('e1')]);
+
+        expect(result.size).toBe(1);
+        const details = result.get('e1')!;
+        expect(details.level).toBe(3);
+        expect(details.is_security_role).toBe(false);
+        // No special category flags expected
+        expect(details.is_apprentice).toBeUndefined();
+        expect(details.is_trainee).toBeUndefined();
+        expect(details.is_sws).toBeUndefined();
+        infoSpy.mockRestore();
+    });
+
+    it('picks the HIGHEST remuneration_level across multiple contracts', async () => {
+        const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: {
+                data: [
+                    { user_id: 'e1', role_id: 'role-A', remuneration_level: 2, is_apprentice: false, is_trainee: false, is_sws: false },
+                    { user_id: 'e1', role_id: 'role-B', remuneration_level: 5, is_apprentice: false, is_trainee: false, is_sws: false },
+                    { user_id: 'e1', role_id: 'role-C', remuneration_level: 3, is_apprentice: false, is_trainee: false, is_sws: false },
+                ],
+                error: null,
+            },
+            roles: {
+                data: [
+                    { id: 'role-A', name: 'Cleaner' },
+                    { id: 'role-B', name: 'Supervisor' },
+                    { id: 'role-C', name: 'Usher' },
+                ],
+                error: null,
+            },
+        }));
+
+        const result = await fetcher.fetchEmployeeContractDetails([employee('e1')]);
+        expect(result.get('e1')!.level).toBe(5);
+        infoSpy.mockRestore();
+    });
+
+    it('detects Security status from role name (case-insensitive)', async () => {
+        const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: {
+                data: [
+                    { user_id: 'e1', role_id: 'role-sec', remuneration_level: 4, is_apprentice: false, is_trainee: false, is_sws: false },
+                ],
+                error: null,
+            },
+            roles: {
+                data: [{ id: 'role-sec', name: 'Security Officer Level 4' }],
+                error: null,
+            },
+        }));
+
+        const result = await fetcher.fetchEmployeeContractDetails([employee('e1')]);
+        expect(result.get('e1')!.is_security_role).toBe(true);
+        infoSpy.mockRestore();
+    });
+
+    it('sets is_security_role true if ANY of multiple contracts is Security', async () => {
+        const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: {
+                data: [
+                    { user_id: 'e1', role_id: 'role-gen', remuneration_level: 2, is_apprentice: false, is_trainee: false, is_sws: false },
+                    { user_id: 'e1', role_id: 'role-sec', remuneration_level: 4, is_apprentice: false, is_trainee: false, is_sws: false },
+                ],
+                error: null,
+            },
+            roles: {
+                data: [
+                    { id: 'role-gen', name: 'Event Crew' },
+                    { id: 'role-sec', name: 'Security Guard' },
+                ],
+                error: null,
+            },
+        }));
+
+        const result = await fetcher.fetchEmployeeContractDetails([employee('e1')]);
+        expect(result.get('e1')!.is_security_role).toBe(true);
+        // Highest level across both contracts
+        expect(result.get('e1')!.level).toBe(4);
+        infoSpy.mockRestore();
+    });
+
+    it('surfaces apprentice fields from the special-category contract', async () => {
+        const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: {
+                data: [{
+                    user_id: 'e1', role_id: 'role-A', remuneration_level: 1,
+                    is_apprentice: true, apprentice_type: 'adult', apprentice_year: 2,
+                    has_completed_year_12: true,
+                    is_trainee: false, is_sws: false,
+                }],
+                error: null,
+            },
+            roles: {
+                data: [{ id: 'role-A', name: 'Apprentice Cook' }],
+                error: null,
+            },
+        }));
+
+        const result = await fetcher.fetchEmployeeContractDetails([employee('e1')]);
+        const details = result.get('e1')!;
+        expect(details.is_apprentice).toBe(true);
+        expect(details.apprentice_type).toBe('adult');
+        expect(details.apprentice_year).toBe(2);
+        expect(details.has_completed_year_12).toBe(true);
+        expect(details.is_trainee).toBe(false);
+        expect(details.is_sws).toBe(false);
+        infoSpy.mockRestore();
+    });
+
+    it('surfaces trainee fields from the special-category contract', async () => {
+        const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: {
+                data: [{
+                    user_id: 'e1', role_id: 'role-A', remuneration_level: 0,
+                    is_apprentice: false, is_trainee: true,
+                    trainee_category: 'junior', trainee_level: 'A',
+                    trainee_exit_year: 12, trainee_years_out: 1,
+                    trainee_aqf_level: 2, trainee_year: 1,
+                    is_training_on_job: true, prefers_sba_loading: false,
+                    is_sws: false,
+                }],
+                error: null,
+            },
+            roles: {
+                data: [{ id: 'role-A', name: 'Trainee Assistant' }],
+                error: null,
+            },
+        }));
+
+        const result = await fetcher.fetchEmployeeContractDetails([employee('e1')]);
+        const details = result.get('e1')!;
+        expect(details.is_trainee).toBe(true);
+        expect(details.trainee_category).toBe('junior');
+        expect(details.trainee_level).toBe('A');
+        expect(details.trainee_exit_year).toBe(12);
+        expect(details.trainee_years_out).toBe(1);
+        expect(details.trainee_aqf_level).toBe(2);
+        expect(details.trainee_year).toBe(1);
+        expect(details.is_training_on_job).toBe(true);
+        expect(details.prefers_sba_loading).toBe(false);
+        infoSpy.mockRestore();
+    });
+
+    it('surfaces SWS fields from the special-category contract', async () => {
+        const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: {
+                data: [{
+                    user_id: 'e1', role_id: 'role-A', remuneration_level: 1,
+                    is_apprentice: false, is_trainee: false,
+                    is_sws: true, sws_capacity_percentage: 70,
+                }],
+                error: null,
+            },
+            roles: {
+                data: [{ id: 'role-A', name: 'General Assistant' }],
+                error: null,
+            },
+        }));
+
+        const result = await fetcher.fetchEmployeeContractDetails([employee('e1')]);
+        const details = result.get('e1')!;
+        expect(details.is_sws).toBe(true);
+        expect(details.sws_capacity_percentage).toBe(70);
+        expect(details.is_apprentice).toBe(false);
+        expect(details.is_trainee).toBe(false);
+        infoSpy.mockRestore();
+    });
+
+    it('returns empty map on user_contracts query failure (graceful degradation)', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: { data: null, error: { message: 'RLS denied' } },
+        }));
+
+        const result = await fetcher.fetchEmployeeContractDetails([employee('e1')]);
+        expect(result.size).toBe(0);
+        expect(warnSpy).toHaveBeenCalledWith(
+            expect.stringContaining('user_contracts fetch failed'),
+            expect.objectContaining({ message: 'RLS denied' }),
+        );
+        warnSpy.mockRestore();
+    });
+
+    it('resolves Security status even if roles lookup fails (graceful degradation)', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: {
+                data: [{
+                    user_id: 'e1', role_id: 'role-sec', remuneration_level: 4,
+                    is_apprentice: false, is_trainee: false, is_sws: false,
+                }],
+                error: null,
+            },
+            roles: { data: null, error: { message: 'roles table down' } },
+        }));
+
+        const result = await fetcher.fetchEmployeeContractDetails([employee('e1')]);
+        // Level is still resolved from the contract row
+        expect(result.get('e1')!.level).toBe(4);
+        // Security status can't be determined without roles — defaults to false
+        expect(result.get('e1')!.is_security_role).toBe(false);
+        warnSpy.mockRestore();
+        infoSpy.mockRestore();
+    });
+
+    it('handles multiple employees in one call', async () => {
+        const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: {
+                data: [
+                    { user_id: 'e1', role_id: 'role-A', remuneration_level: 2, is_apprentice: false, is_trainee: false, is_sws: false },
+                    { user_id: 'e2', role_id: 'role-B', remuneration_level: 5, is_apprentice: false, is_trainee: false, is_sws: false },
+                ],
+                error: null,
+            },
+            roles: {
+                data: [
+                    { id: 'role-A', name: 'Usher' },
+                    { id: 'role-B', name: 'Security Control Room' },
+                ],
+                error: null,
+            },
+        }));
+
+        const result = await fetcher.fetchEmployeeContractDetails([employee('e1'), employee('e2')]);
+        expect(result.size).toBe(2);
+        expect(result.get('e1')!.level).toBe(2);
+        expect(result.get('e1')!.is_security_role).toBe(false);
+        expect(result.get('e2')!.level).toBe(5);
+        expect(result.get('e2')!.is_security_role).toBe(true);
+        infoSpy.mockRestore();
+    });
+
+    it('returns empty map when no Active contracts exist for these employees', async () => {
+        const fetcher = new RosterFetcher(mockSupabase({
+            userContracts: { data: [], error: null },
+        }));
+
+        const result = await fetcher.fetchEmployeeContractDetails([employee('e1')]);
+        expect(result.size).toBe(0);
     });
 });

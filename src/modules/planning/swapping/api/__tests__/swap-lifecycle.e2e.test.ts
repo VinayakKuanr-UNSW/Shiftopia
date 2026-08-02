@@ -97,7 +97,6 @@ vi.mock('@/modules/compliance', () => {
 });
 
 import { swapsApi } from '../swaps.api';
-import { parseZonedDateTime } from '@/modules/core/lib/date.utils';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -135,38 +134,32 @@ beforeEach(() => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('initiate swap — createSwapRequest', () => {
-    it('creates an OPEN request, stamps expires_at = start − 4h, flips shift to TradeRequested', async () => {
+    it('creates an OPEN request atomically via sm_create_swap_request and returns the row', async () => {
         const swapRow = { id: SWAP_ID, status: 'OPEN', requester_shift_id: SHIFT_A, requester_id: EMP_A };
+        h.rpc.fn = vi.fn(async () => ({ data: { success: true, swap_id: SWAP_ID }, error: null }));
         h.enqueue(
-            { data: { shift_date: FUTURE_DATE, start_time: '09:00' }, error: null }, // time-lock fetch
-            { data: swapRow, error: null },                                          // insert → single
-            { error: null },                                                         // shifts update
+            { data: { shift_date: FUTURE_DATE, start_time: '09:00' }, error: null }, // client time-lock fetch
+            { data: swapRow, error: null },                                          // shift_swaps select → single
         );
 
         const result = await swapsApi.createSwapRequest(SHIFT_A, EMP_A, null, 'family thing');
         expect(result.status).toBe('OPEN');
 
-        // shift_swaps insert payload: OPEN + correct expiry (start − 4h)
-        const insert = opsFor('shift_swaps', 'insert')[0];
-        expect(insert).toBeTruthy();
-        const payload = insert.args[0] as Record<string, unknown>;
-        expect(payload.status).toBe('OPEN');
-        expect(payload.requester_shift_id).toBe(SHIFT_A);
-        expect(payload.requester_id).toBe(EMP_A);
-        const expectedExpiry = new Date(parseZonedDateTime(FUTURE_DATE, '09:00').getTime() - 4 * 3600_000);
-        expect(payload.expires_at).toBe(expectedExpiry.toISOString());
-
-        // shift transitions S4 → S9 (TradeRequested)
-        const shiftUpdate = opsFor('shifts', 'update')[0];
-        expect((shiftUpdate.args[0] as any).trading_status).toBe('TradeRequested');
-        expect((shiftUpdate.args[0] as any).trade_requested_at).toBeTruthy();
+        // The insert (shift_swaps OPEN + expires_at trigger) and the shift flip to
+        // TradeRequested (S4 → S9) now happen server-side in ONE transaction — the
+        // API delegates to the definer RPC rather than doing a two-step client write.
+        expect(h.rpc.fn).toHaveBeenCalledWith('sm_create_swap_request', expect.objectContaining({
+            p_requester_shift_id: SHIFT_A,
+            p_target_id: null,
+            p_reason: 'family thing',
+        }));
     });
 
     it('§9 time lock: refuses to initiate on a shift starting < 4h away', async () => {
         h.enqueue({ data: { shift_date: PAST_DATE, start_time: '09:00' }, error: null });
 
         await expect(swapsApi.createSwapRequest(SHIFT_A, EMP_A)).rejects.toThrow(/Time locked/);
-        expect(opsFor('shift_swaps', 'insert')).toHaveLength(0); // nothing written
+        expect(h.rpc.fn).not.toHaveBeenCalled(); // client pre-check fails — RPC never reached
     });
 });
 
@@ -439,27 +432,23 @@ describe('manager rejects — rejectSwapRequest', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('requester cancels — cancelSwapRequest', () => {
-    it('cancels an OPEN swap and reverts the shift to NoTrade (S9 → S4)', async () => {
-        h.enqueue(
-            { data: { status: 'OPEN', requester_shift_id: SHIFT_A }, error: null },
-            { error: null }, // shift_swaps → CANCELLED
-            { error: null }, // shifts → NoTrade
-        );
+    it('cancels an OPEN swap atomically via sm_cancel_swap_request', async () => {
+        h.rpc.fn = vi.fn(async () => ({ data: { success: true }, error: null }));
 
         await swapsApi.cancelSwapRequest(SWAP_ID);
 
-        expect(opsFor('shift_swaps', 'update')[0].args[0]).toMatchObject({ status: 'CANCELLED' });
-        expect(opsFor('shifts', 'update')[0].args[0]).toMatchObject({
-            trading_status: 'NoTrade',
-            trade_requested_at: null,
-        });
+        // Flip to CANCELLED + revert the shift to NoTrade now happen server-side in
+        // one transaction (with the OPEN-only guard + requester authz).
+        expect(h.rpc.fn).toHaveBeenCalledWith('sm_cancel_swap_request', { p_swap_id: SWAP_ID });
     });
 
-    it('state guard: cancel is only legal from OPEN (not once a peer was selected)', async () => {
-        h.enqueue({ data: { status: 'MANAGER_PENDING', requester_shift_id: SHIFT_A }, error: null });
+    it('state guard: cancel is only legal from OPEN (server returns "Must be OPEN")', async () => {
+        h.rpc.fn = vi.fn(async () => ({
+            data: { success: false, code: 'SWAP_NOT_OPEN', error: 'Cannot cancel swap in state MANAGER_PENDING. Must be OPEN.' },
+            error: null,
+        }));
 
         await expect(swapsApi.cancelSwapRequest(SWAP_ID)).rejects.toThrow(/Must be OPEN/);
-        expect(opsFor('shift_swaps', 'update')).toHaveLength(0);
     });
 });
 

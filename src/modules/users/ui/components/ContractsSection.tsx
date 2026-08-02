@@ -26,6 +26,8 @@ import { AccessCertificateDialog } from './AddAccessCertificateDialog';
 import { useAuth } from '@/platform/auth/useAuth';
 import { cn } from '@/modules/core/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getCasualConversionStatus } from '../../domain/casualConversion';
+import { getSwsTrialStatus } from '../../domain/swsTrial';
 
 interface SectionProps {
     employeeId: string;
@@ -122,7 +124,21 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                             <p className="text-sm font-medium">No active contracts found</p>
                         </div>
                     ) : (
-                        contracts?.map((contract) => (
+                        contracts?.map((contract) => {
+                            // Fair Work Act s15A / cl 12.5(g) — a casual with 6+ months on
+                            // this contract may request conversion to full/part-time.
+                            const conversion = getCasualConversionStatus({
+                                employmentStatus: contract.employment_status,
+                                contractStatus: contract.status,
+                                startDate: contract.start_date,
+                            });
+                            // Schedule 6 §1.10 — SWS trial period is capped at 12 weeks (audit M-3).
+                            const swsTrial = getSwsTrialStatus({
+                                isSws: contract.is_sws,
+                                isSwsTrial: contract.is_sws_trial,
+                                swsTrialStartDate: contract.sws_trial_start_date,
+                            });
+                            return (
                             <motion.div
                                 key={contract.id}
                                 initial={{ opacity: 0, scale: 0.95 }}
@@ -134,9 +150,29 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                                         <h4 className="font-bold text-lg text-foreground capitalize">
                                             {contract.roles?.name || 'Unknown Role'}
                                         </h4>
-                                        <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 rounded-lg">
-                                            {contract.employment_status || 'Casual'}
-                                        </Badge>
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 rounded-lg">
+                                                {contract.employment_status || 'Casual'}
+                                            </Badge>
+                                            {conversion.eligible && (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 rounded-lg"
+                                                    title={`${conversion.tenureMonths} months' continuous service — eligible to request conversion to full-time or part-time (Fair Work Act s15A / cl 12.5(g))`}
+                                                >
+                                                    Conversion eligible
+                                                </Badge>
+                                            )}
+                                            {swsTrial.overrun && (
+                                                <Badge
+                                                    variant="destructive"
+                                                    className="rounded-lg"
+                                                    title={`${swsTrial.weeksElapsed} weeks into an SWS trial — the 12-week cap (Schedule 6 §1.10) has been reached; convert to a permanent SWS assessment or remove the trial flag`}
+                                                >
+                                                    SWS trial overrun
+                                                </Badge>
+                                            )}
+                                        </div>
                                     </div>
                                     {isAuthorizedAdmin && (
                                         <div className="flex gap-1">
@@ -179,7 +215,8 @@ export const UserContractsSection: React.FC<SectionProps> = ({ employeeId, emplo
                                     )}
                                 </div>
                             </motion.div>
-                        ))
+                            );
+                        })
                     )}
                 </div>
             </CardContent>

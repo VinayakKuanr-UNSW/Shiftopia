@@ -138,6 +138,9 @@ export const BidOpportunityDrawer: React.FC<Props> = ({
 
                                 <SharedShiftCard
                                     variant="timecard"
+                                    hideActualClocking={true}
+                                    hidePayrollSection={true}
+                                    defaultExpandedSections={{ scheduled: true }}
                                     organization={opp.organization}
                                     department={opp.department}
                                     subGroup={opp.subGroup}
@@ -163,20 +166,6 @@ export const BidOpportunityDrawer: React.FC<Props> = ({
                                     isFlat={false}
                                     className="shadow-2xl border-white/10"
                                     shiftData={rawShift}
-                                    estimatedPay={(
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <div className="flex items-center justify-end gap-1.5 cursor-help group/pay">
-                                            <span className="text-[14px] font-black text-emerald-500 tabular-nums">
-                                              ${(costBreakdown.totalCost || 0).toFixed(2)}
-                                            </span>
-                                          </div>
-                                        </TooltipTrigger>
-                                        <TooltipContent className="bg-slate-900 text-white border-white/10 shadow-2xl" side="top">
-                                          <CostBreakdownTooltip breakdown={costBreakdown} />
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    )}
                                 />
 
                                 <div className="px-2 pb-4">

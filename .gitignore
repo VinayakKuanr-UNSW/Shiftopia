@@ -35,3 +35,9 @@ __pycache__/
 
 # Claude Code agent worktrees — transient; never commit as gitlinks
 .claude/worktrees/
+
+# graphify: keep the graph.json data artifact (tracked by convention), but ignore
+# machine-local pointers and the large regenerable HTML viewer
+graphify-out/.graphify_root
+graphify-out/.graphify_python
+graphify-out/graph.html

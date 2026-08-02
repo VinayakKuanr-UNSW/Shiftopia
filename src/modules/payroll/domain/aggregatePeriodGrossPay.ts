@@ -6,6 +6,13 @@
 
 import type { EarningsCode, EarningsLine, PeriodGrossPay, ShiftGrossPay } from '../model/gross-pay.types';
 import { computeShiftGrossPay, type GrossPayShiftInput } from './computeShiftGrossPay';
+import {
+  detectSplitShiftEligibleIds,
+} from '../../rosters/domain/projections/utils/cost/split-shift-eligibility';
+import {
+  detectRestGapBreaches,
+  DEFAULT_MIN_REST_GAP_MINUTES,
+} from '../../rosters/domain/projections/utils/cost/rest-gap-breach';
 
 function round2(x: number): number {
   if (!Number.isFinite(x)) return 0;
@@ -23,8 +30,6 @@ const CODE_ORDER: EarningsCode[] = [
 
 /** cl 40.1 — double-time floor multiplier for rest-gap breach hours. */
 const DOUBLE_TIME_MULTIPLIER = 2.0;
-/** Default minimum rest gap (10h = 600min, cl 40.1). */
-const DEFAULT_MIN_REST_GAP_MINUTES = 600;
 
 export interface PeriodBounds {
   periodId?: string;
@@ -48,6 +53,34 @@ export function isoWeekKey(dateStr: string): string {
 
 function isCasual(employmentType?: string): boolean {
   return /casual/i.test(employmentType || '');
+}
+
+/**
+ * cl 39.1 / 28.4 — auto-derive the split-shift allowance from the
+ * employee's own shift pattern. Delegates to `detectSplitShiftEligibleIds`
+ * (the single source of truth shared with the live roster/AutoScheduler cost
+ * pipeline — compliance audit finding, 2026-08-02) so this aggregator and
+ * the roster grid can never disagree about which shift earns the allowance.
+ */
+function detectSplitShiftMarks(inputs: GrossPayShiftInput[]): Set<string> {
+  return detectSplitShiftEligibleIds(inputs.map((i) => ({
+    id: i.shiftId,
+    employeeId: i.employeeId,
+    shiftDate: i.shiftDate,
+    startTime: i.startTime,
+    endTime: i.endTime,
+    employmentType: i.employmentType,
+    isLeave: isLeaveInput(i),
+  })));
+}
+
+/** True if an input represents a paid absence rather than worked time. */
+function isLeaveInput(input: GrossPayShiftInput): boolean {
+  return !!(
+    input.isAnnualLeave || input.isPersonalLeave || input.isCarerLeave
+    || input.isParentalLeave || input.isLongServiceLeave || input.isJuryDuty
+    || input.isSupportingCarer || input.isFdvLeave || input.isPublicHolidayNotWorked
+  );
 }
 
 /**
@@ -107,6 +140,20 @@ export function aggregatePeriodGrossPay(
 export interface PeriodConfig {
   /** Minimum rest gap in minutes (default 600 = 10h, cl 40.1). */
   minRestGapMinutes?: number;
+  /**
+   * Earliest shift date to include for WEEKLY-OT SEQUENCING context only
+   * (cl 42 / audit H-7). When a report window starts mid-ISO-week, hours
+   * worked earlier that same week but before `bounds.periodStart` still count
+   * toward the 38h/week threshold — omitting them makes overtime
+   * under-detect for the window's first partial week. Pass the Monday of
+   * `bounds.periodStart`'s ISO week (e.g. via `isoWeekKey`) and include
+   * those lead-in days in `inputs`; they are priced for their effect on
+   * `weeklyOrdinary` (and, as a side benefit, the cl 40.1 rest-gap sweep)
+   * but are NEVER included in the returned period's lines/grossPay/
+   * paidHours — those were already paid in a prior run. Defaults to
+   * `bounds.periodStart` (no lead-in) when omitted or not earlier than it.
+   */
+  leadInStart?: string;
 }
 
 /**
@@ -129,14 +176,36 @@ export function computeEmployeePeriodGrossPay(
   bounds: PeriodBounds,
   config?: PeriodConfig,
 ): PeriodGrossPay {
+  const seqStart = config?.leadInStart && config.leadInStart < bounds.periodStart
+    ? config.leadInStart
+    : bounds.periodStart;
+
   const ordered = inputs
-    .filter((i) => i.employeeId === employeeId && i.shiftDate >= bounds.periodStart && i.shiftDate <= bounds.periodEnd)
+    .filter((i) => i.employeeId === employeeId && i.shiftDate >= seqStart && i.shiftDate <= bounds.periodEnd)
     .sort((a, b) => (a.shiftDate === b.shiftDate
       ? (a.startTime ?? '').localeCompare(b.startTime ?? '')
       : a.shiftDate.localeCompare(b.shiftDate)));
 
   const weeklyOrdinary = new Map<string, number>();
   const priced: ShiftGrossPay[] = [];
+
+  // Sch 6 §1.4.2 SWS $90/week floor: needs the WHOLE week's worked hours
+  // up front (not a running mid-week total like weeklyOrdinary above), so
+  // every shift in that week gets the same floor-hourly denominator
+  // regardless of processing order. Leave/absence days are excluded — the
+  // floor is about the weekly WAGE for hours worked, not paid absences.
+  // Same cross-period-boundary caveat as weekly overtime: a week split
+  // across two pay periods only sees the hours inside THIS period's bounds.
+  const swsWeeklyTotalHours = new Map<string, number>();
+  for (const input of ordered) {
+    if (!input.is_sws || isLeaveInput(input)) continue;
+    const hours = (input.netMinutes || input.scheduledLengthMinutes || 0) / 60;
+    if (hours <= 0) continue;
+    const week = isoWeekKey(input.shiftDate);
+    swsWeeklyTotalHours.set(week, (swsWeeklyTotalHours.get(week) ?? 0) + hours);
+  }
+
+  const splitShiftMarks = detectSplitShiftMarks(ordered);
 
   for (const input of ordered) {
     const casual = isCasual(input.employmentType);
@@ -149,7 +218,11 @@ export function computeEmployeePeriodGrossPay(
     }
 
     const priorFromWeek = casual ? undefined : weeklyOrdinary.get(week)!;
-    const result = computeShiftGrossPay({ ...input, priorOrdinaryHoursThisWeek: priorFromWeek });
+    const swsWeeklyHours = input.is_sws ? swsWeeklyTotalHours.get(week) : undefined;
+    const allowances = splitShiftMarks.has(input.shiftId)
+      ? { ...input.allowances, splitShift: true }
+      : input.allowances;
+    const result = computeShiftGrossPay({ ...input, priorOrdinaryHoursThisWeek: priorFromWeek, swsWeeklyHours, allowances });
     priced.push(result);
 
     // Accumulate the ordinary hours the engine actually billed (post weekly
@@ -171,28 +244,6 @@ export function computeEmployeePeriodGrossPay(
   return aggregatePeriodGrossPay(employeeId, priced, bounds);
 }
 
-/**
- * Parse HH:MM → minutes-since-midnight. Returns 0 for malformed input.
- */
-function hmToMinutes(hm?: string): number {
-  if (!hm) return 0;
-  const [h, m] = hm.split(':').map(Number);
-  return (h || 0) * 60 + (m || 0);
-}
-
-/**
- * Absolute start/end minutes for a shift input (day-based offset). Handles
- * cross-midnight: if end ≤ start, end is pushed +1440.
- */
-function shiftInterval(input: GrossPayShiftInput): { startAbs: number; endAbs: number } {
-  const dayMs = Date.parse(input.shiftDate + 'T00:00:00');
-  const base = Number.isNaN(dayMs) ? 0 : Math.round(dayMs / 86_400_000) * 1440;
-  const start = hmToMinutes(input.startTime);
-  let end = hmToMinutes(input.endTime);
-  if (end <= start) end += 1440; // cross-midnight
-  return { startAbs: base + start, endAbs: base + end };
-}
-
 /** A priced shift is a real WORKED attendance only if it has clock times and paid hours. */
 function isWorkedWithTimes(input: GrossPayShiftInput, result: ShiftGrossPay): boolean {
   return !result.isLeave
@@ -205,17 +256,16 @@ function isWorkedWithTimes(input: GrossPayShiftInput, result: ShiftGrossPay): bo
  * cl 40.1: a member who resumes work without the minimum break (10h; 8h by
  * written agreement / multi-hire via `minGapMinutes`) is paid DOUBLE TIME until
  * released from duty — modelled as a whole-shift floor of 2× the ordinary rate,
- * added as a `rest_gap_penalty` line for the shortfall.
+ * added as a `rest_gap_penalty` line for the shortfall. Applies to casuals too
+ * — cl 40.1 covers every Team Member; the 2× floor is on the DE-LOADED
+ * ordinary rate (the loading is absorbed, mirroring the cl 42.2 overtime
+ * treatment), taken from the PRICED result so it works when the input rate
+ * was null (classification-resolved live path).
  *
- * The gap is measured from the last WORKED shift with real clock times — a
- * synthesised leave/PH day has no times (its interval would fabricate a
- * midnight "end" and poison the gap) and an absence IS rest, so leave days
- * advance nothing. Same-day pairs are split-shift / multi-hire territory
- * (cl 39 / 40.3), not the cl 40.1 day-to-day break. Applies to casuals too —
- * cl 40.1 covers every Team Member; the 2× floor is on the DE-LOADED ordinary
- * rate (the loading is absorbed, mirroring the cl 42.2 overtime treatment),
- * taken from the PRICED result so it works when the input rate was null
- * (classification-resolved live path).
+ * Breach DETECTION is delegated to `detectRestGapBreaches` — the single
+ * source of truth shared with the live roster/AutoScheduler cost pipeline
+ * (compliance audit finding, 2026-08-02) — this function only computes the
+ * dollar top-up, which needs this module's own priced `ShiftGrossPay` shape.
  */
 function applyRestGapPenalty(
   priced: ShiftGrossPay[],
@@ -224,38 +274,38 @@ function applyRestGapPenalty(
 ): void {
   if (priced.length < 2) return;
 
-  let lastWorked = -1; // index of the last real worked-with-times shift
+  const breaches = detectRestGapBreaches(
+    ordered.map((input, i) => ({
+      id: input.shiftId,
+      employeeId: input.employeeId,
+      shiftDate: input.shiftDate,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      isWorkedWithTimes: isWorkedWithTimes(input, priced[i]),
+    })),
+    minGapMinutes,
+  );
+
   for (let i = 0; i < priced.length; i++) {
-    if (!isWorkedWithTimes(ordered[i], priced[i])) continue; // leave/no-times never triggers or anchors
+    if (!breaches.has(ordered[i].shiftId)) continue;
 
-    if (lastWorked >= 0 && ordered[lastWorked].shiftDate !== ordered[i].shiftDate) {
-      const prevEnd = shiftInterval(ordered[lastWorked]).endAbs;
-      const curStart = shiftInterval(ordered[i]).startAbs;
-      const gap = curStart - prevEnd;
+    const hours = priced[i].paidHours;
+    const ordinaryRate = priced[i].ordinaryRate ?? 0;
+    const effectiveRate = hours > 0 ? priced[i].grossPay / hours : 0;
+    const doubleTimeRate = DOUBLE_TIME_MULTIPLIER * ordinaryRate;
 
-      // Overlaps (< 0) are data errors owned by the no-overlap compliance rule.
-      if (gap >= 0 && gap < minGapMinutes) {
-        const hours = priced[i].paidHours;
-        const ordinaryRate = priced[i].ordinaryRate ?? 0;
-        const effectiveRate = hours > 0 ? priced[i].grossPay / hours : 0;
-        const doubleTimeRate = DOUBLE_TIME_MULTIPLIER * ordinaryRate;
-
-        if (ordinaryRate > 0 && effectiveRate < doubleTimeRate) {
-          const penalty = round2((doubleTimeRate - effectiveRate) * hours);
-          if (penalty > 0) {
-            priced[i].lines.push({
-              code: 'rest_gap_penalty',
-              description: 'Insufficient rest break — double time (cl 40.1)',
-              hours,
-              amount: penalty,
-            });
-            priced[i].grossPay = round2(priced[i].grossPay + penalty);
-            priced[i].restGapPenaltyAmount = penalty;
-          }
-        }
+    if (ordinaryRate > 0 && effectiveRate < doubleTimeRate) {
+      const penalty = round2((doubleTimeRate - effectiveRate) * hours);
+      if (penalty > 0) {
+        priced[i].lines.push({
+          code: 'rest_gap_penalty',
+          description: 'Insufficient rest break — double time (cl 40.1)',
+          hours,
+          amount: penalty,
+        });
+        priced[i].grossPay = round2(priced[i].grossPay + penalty);
+        priced[i].restGapPenaltyAmount = penalty;
       }
     }
-
-    lastWorked = i;
   }
 }

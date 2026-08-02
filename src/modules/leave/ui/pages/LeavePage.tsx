@@ -36,9 +36,10 @@ import type {
 } from '../../model/leave.types';
 import { LEAVE_TYPE_LABELS } from '../../model/leave.types';
 import {
-  LEAVE_POLICIES,
+  getLeavePolicies,
   projectBalance,
   isCertificateRequired,
+  computeCertificateAdjacency,
   BALANCE_TRACKED_TYPES,
 } from '../../domain/leave-policy';
 import {
@@ -50,8 +51,11 @@ import {
   rejectLeaveRequest,
   cancelLeaveRequest,
   unassignConflictingShifts,
+  isFullTimeSecurityEmployee,
 } from '../../api/leave.api';
+import type { LeavePolicy } from '../../model/leave.types';
 import { formatLeaveConflictWarning } from '../../domain/leave-conflicts';
+import { useRealtimeInvalidate } from '@/platform/supabase/hooks/useRealtimeInvalidate';
 
 type Tab = 'balances' | 'requests' | 'new' | 'approvals';
 
@@ -87,6 +91,11 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
   const [myRequests, setMyRequests] = useState<LeaveRequest[]>([]);
   const [teamRequests, setTeamRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  // Sch 3 §8.2/8.3 — Full-Time Security accrues 210h annual / 84h personal,
+  // not the general 152h/76h (audit H-9). Resolved once per load, mirroring
+  // the same condition the DB accrual function uses.
+  const [isFtSecurity, setIsFtSecurity] = useState(false);
+  const policies = useMemo(() => getLeavePolicies(isFtSecurity), [isFtSecurity]);
   /**
    * Post-approval roster-conflict state: the warning copy plus the shift IDs
    * still rostered inside the approved leave range, so the manager can unassign
@@ -99,6 +108,8 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
   const [unassigning, setUnassigning] = useState(false);
   /** Result copy after a batch unassign (success or partial-success summary). */
   const [unassignResult, setUnassignResult] = useState<string | null>(null);
+  /** Error copy for approve/reject/cancel actions (previously swallowed). */
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // New request form state
   const [formType, setFormType] = useState<LeaveTypeCode>('annual');
@@ -116,14 +127,16 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
     if (!employeeId) return;
     setLoading(true);
     try {
-      const [bals, reqs, team] = await Promise.all([
+      const [bals, reqs, team, ftSecurity] = await Promise.all([
         getLeaveBalances(employeeId),
         getLeaveRequests(employeeId),
         isManager ? getTeamLeaveRequests({ status: 'pending' }) : Promise.resolve([]),
+        isFullTimeSecurityEmployee(employeeId),
       ]);
       setBalances(bals);
       setMyRequests(reqs);
       setTeamRequests(team);
+      setIsFtSecurity(ftSecurity);
     } catch (e) {
       console.error('[LeavePage] loadData error:', e);
     } finally {
@@ -132,6 +145,16 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
   }, [employeeId, isManager]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Realtime: reload balances/requests (and, for managers, team requests) live
+  // when leave rows change — Leave previously had no polling at all. RLS-scoped,
+  // so a manager only wakes on leave they are allowed to see.
+  useRealtimeInvalidate(
+    `leave-rt-${employeeId}`,
+    ['leave_requests', 'leave_balances'],
+    loadData,
+    !!employeeId,
+  );
 
   // Auto-calculate hours from date range (7.6h/day × working days)
   useEffect(() => {
@@ -182,8 +205,11 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
   const handleApprove = async (requestId: string) => {
     setApprovalConflict(null);
     setUnassignResult(null);
+    setActionError(null);
     const result = await approveLeaveRequest(requestId, employeeId);
-    if (!result.error) {
+    if (result.error) {
+      setActionError(result.error);
+    } else {
       // Approval succeeded — surface any shifts still rostered inside the leave
       // range so the manager can unassign them in one click (otherwise the
       // employee is later falsely marked No-Show).
@@ -214,12 +240,16 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
   };
 
   const handleReject = async (requestId: string) => {
-    await rejectLeaveRequest(requestId, employeeId, 'Declined by manager');
+    setActionError(null);
+    const result = await rejectLeaveRequest(requestId, employeeId, 'Declined by manager');
+    if (result.error) setActionError(result.error);
     loadData();
   };
 
   const handleCancel = async (requestId: string) => {
-    await cancelLeaveRequest(requestId);
+    setActionError(null);
+    const result = await cancelLeaveRequest(requestId);
+    if (result.error) setActionError(result.error);
     loadData();
   };
 
@@ -273,8 +303,21 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
           </div>
         ) : (
           <>
+            {actionError && (
+              <div className="mb-3 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3">
+                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-500" />
+                <p className="flex-1 text-xs text-red-600 dark:text-red-400">{actionError}</p>
+                <button
+                  onClick={() => setActionError(null)}
+                  className="rounded-lg p-0.5 text-red-500/70 transition-colors hover:text-red-600 dark:hover:text-red-400"
+                  title="Dismiss"
+                >
+                  <XCircle className="h-4 w-4" />
+                </button>
+              </div>
+            )}
             {activeTab === 'balances' && (
-              <BalancesView balances={balances} requests={myRequests} />
+              <BalancesView balances={balances} requests={myRequests} policies={policies} />
             )}
             {activeTab === 'requests' && (
               <RequestsView requests={myRequests} onCancel={handleCancel} />
@@ -296,6 +339,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
                 formSubmitting={formSubmitting}
                 onSubmit={handleSubmit}
                 balances={balances}
+                policies={policies}
               />
             )}
             {activeTab === 'approvals' && isManager && (
@@ -325,17 +369,18 @@ const LeavePage: React.FC<LeavePageProps> = ({ tab: initialTab }) => {
 const BalancesView: React.FC<{
   balances: LeaveBalance[];
   requests: LeaveRequest[];
-}> = ({ balances, requests }) => {
+  policies: Record<LeaveTypeCode, LeavePolicy>;
+}> = ({ balances, requests, policies }) => {
   const today = new Date().toISOString().split('T')[0];
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {BALANCE_TRACKED_TYPES.map((type) => {
         const bal = balances.find((b) => b.leaveType === type);
-        const policy = LEAVE_POLICIES[type];
+        const policy = policies[type];
         const gradient = BALANCE_GRADIENTS[type] ?? 'from-slate-500/20 to-slate-600/10';
         const projected = bal
-          ? projectBalance(bal, requests, today, bal.asOfDate)
+          ? projectBalance(bal, requests, today, bal.asOfDate, policies)
           : 0;
 
         return (
@@ -468,6 +513,7 @@ const NewRequestForm: React.FC<{
   formSubmitting: boolean;
   onSubmit: (e: React.FormEvent) => void;
   balances: LeaveBalance[];
+  policies: Record<LeaveTypeCode, LeavePolicy>;
 }> = ({
   formType, setFormType,
   formStart, setFormStart,
@@ -475,12 +521,12 @@ const NewRequestForm: React.FC<{
   formHours, setFormHours,
   formReason, setFormReason,
   formError, formSuccess, formSubmitting,
-  onSubmit, balances,
+  onSubmit, balances, policies,
 }) => {
-  const policy = LEAVE_POLICIES[formType];
+  const policy = policies[formType];
   const balance = balances.find((b) => b.leaveType === formType);
   const certRequired = formStart && formEnd
-    ? isCertificateRequired(formType, daysBetween(formStart, formEnd))
+    ? isCertificateRequired(formType, daysBetween(formStart, formEnd), computeCertificateAdjacency(formStart, formEnd))
     : false;
 
   return (

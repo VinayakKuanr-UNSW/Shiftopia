@@ -2,8 +2,6 @@ import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/modules/core/ui/primitives/card';
 import { usePerformanceMetrics, getMetricStatus, EMPTY_METRICS } from '@/modules/users/hooks/usePerformanceMetrics';
 import { BarChart3, RefreshCw, Shield, Inbox, CheckCircle2, CalendarCheck } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/platform/supabase/client';
 import { cn } from '@/modules/core/lib/utils';
 
 interface PerformanceSectionProps {
@@ -83,25 +81,16 @@ const SectionHeader = ({
 
 /* ═══════════════════════════ MAIN COMPONENT ═══════════════════════════ */
 const PerformanceSection: React.FC<PerformanceSectionProps> = ({ employeeId, quarterYear }) => {
-    const queryClient = useQueryClient();
     const [isRefreshing, setIsRefreshing] = React.useState(false);
 
-    const { data: fetchedMetrics, isLoading } = usePerformanceMetrics(employeeId, quarterYear);
+    const { data: fetchedMetrics, isLoading, refetch } = usePerformanceMetrics(employeeId, quarterYear);
 
+    // Metrics are computed live on every fetch, so "refresh" just re-runs the
+    // query rather than writing to a separate snapshot table first.
     const handleRefresh = async () => {
         setIsRefreshing(true);
         try {
-            const { error } = await supabase.rpc('compute_employee_quarter_metrics', {
-                p_employee_id: employeeId,
-                p_quarter_year: quarterYear,
-            });
-            if (error) throw error;
-
-            await queryClient.invalidateQueries({
-                queryKey: ['performance_metrics', employeeId, quarterYear]
-            });
-        } catch (error) {
-            console.error('Error refreshing metrics:', error);
+            await refetch();
         } finally {
             setIsRefreshing(false);
         }

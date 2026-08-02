@@ -572,29 +572,48 @@ export const shiftsCommands = {
         // flow (S3) and publish straight to Confirmed (S4). sm_publish_shift never sets
         // assignment_outcome, so an assigned draft would otherwise land in S3 and the
         // shift-state-processor cron would immediately expire S3 → S2, a stuck loop.
+        //
+        // Routed through sm_apply_shift_op('publish') — the gateway itself detects the
+        // TTS<4h + assigned case and does the emergency-confirm write server-side (see
+        // migration 20260721013000). This used to be a direct, unprotected
+        // `supabase.from('shifts').update()` here with no row lock and no version CAS;
+        // that gap is what docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md §6
+        // flagged as the exact race Reserve List needed closed before it could be safe.
         if (isAssigned && ttsMs > 0 && ttsMs < FOUR_HOURS_MS) {
-            const user = await requireUser();
-            // is_draft / is_published / is_on_bidding are DB-generated columns
-            // (GENERATED ALWAYS AS) — they cannot be set explicitly. The DB
-            // derives them from lifecycle_status and bidding_status automatically.
-            const { error } = await supabase
-                .from('shifts')
-                .update({
-                    lifecycle_status:   'Published',
-                    assignment_outcome: 'confirmed',
-                    fulfillment_status: 'scheduled',
-                    bidding_status:     'not_on_bidding',
-                    // Skipping the offer step because TTS < 4h IS the emergency
-                    // signal — stamp emergency_assigned_at so fn_capture_shift_event
-                    // emits EMERGENCY_ASSIGNED (powers the Emergency Assigned metric)
-                    // while the shift still lands in S4 (Confirmed).
-                    emergency_assigned_at: new Date().toISOString(),
-                    updated_at:         new Date().toISOString(),
-                    last_modified_by:   user.id,
-                })
-                .eq('id', shiftId);
-            if (error) throw new Error(error.message);
-            return { success: true };
+            const envelope = await callRpc(
+                'sm_apply_shift_op',
+                {
+                    p_shift_id: shiftId,
+                    p_expected_version: shift!.version,
+                    p_op: 'publish',
+                    p_payload: { reason: 'Emergency publish' },
+                    p_idempotency_key: null,
+                },
+                ApplyShiftOpResponseSchema,
+            );
+
+            switch (envelope.code) {
+                case 'APPLIED':
+                case 'IDEMPOTENT_REPLAY':
+                    return { success: true };
+                case 'VERSION_CONFLICT':
+                    throw new Error(
+                        'This shift was modified by someone else (concurrent modification). ' +
+                        'Reload and try again.',
+                    );
+                case 'ILLEGAL_TRANSITION':
+                    throw new Error(
+                        `Publishing is not allowed in the shift's current state (${envelope.current_state ?? 'unknown'}).`,
+                    );
+                case 'FORBIDDEN':
+                    throw new Error('You do not have permission to publish this shift.');
+                case 'GONE':
+                    throw new Error('Shift not found or has been deleted.');
+                case 'WRITE_REJECTED':
+                    throw new Error(`Emergency publish was rejected: ${envelope.note ?? 'unknown reason'}.`);
+                default:
+                    throw new Error(envelope.error ?? 'Failed to publish shift.');
+            }
         }
 
         const result = await callAuthenticatedRpc(
@@ -781,35 +800,53 @@ export const shiftsCommands = {
             }
         }
 
-        // Emergency path — direct update: publish + confirm atomically (S2 → S4)
-        // is_draft / is_published / is_on_bidding are generated columns — omitted.
+        // Emergency path — publish + confirm atomically (S2 → S4) via the audited
+        // gateway. sm_apply_shift_op('publish') detects the TTS<4h + assigned case
+        // and does the emergency-confirm write server-side (migration 20260721013000),
+        // with a real row lock + version CAS. This used to be a direct, unprotected
+        // `supabase.from('shifts').update()` here — the exact gap
+        // docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md §6 flagged as
+        // needing to close before Reserve List's own writes could rely on the same
+        // pattern. One RPC call per shift (mirrors bulkUnassignShifts below), since
+        // the gateway is single-shift by design.
         if (emergencyIds.length > 0) {
-            const user = await requireUser();
-            const { error, data } = await supabase
+            const { data: preState } = await supabase
                 .from('shifts')
-                .update({
-                    lifecycle_status:   'Published',
-                    assignment_outcome: 'confirmed',
-                    fulfillment_status: 'scheduled',
-                    bidding_status:     'not_on_bidding',
-                    // TTS < 4h emergency publish — stamp emergency_assigned_at so the
-                    // confirm transition is captured as EMERGENCY_ASSIGNED (metric),
-                    // while still landing in S4 (Confirmed). See publishShift above.
-                    emergency_assigned_at: new Date().toISOString(),
-                    updated_at:         new Date().toISOString(),
-                    last_modified_by:   user.id,
-                })
-                .in('id', emergencyIds)
-                .select('id');
-            if (error) {
-                emergencyIds.forEach(id => dbFailed.push({ id, reason: error.message }));
-            } else {
-                const succeededIds = new Set((data ?? []).map((r: { id: string }) => r.id));
-                emergencyIds.forEach(id => {
-                    if (succeededIds.has(id)) publishedIds.push(id);
-                    else dbFailed.push({ id, reason: 'Row not updated' });
-                });
-            }
+                .select('id, version')
+                .in('id', emergencyIds);
+            const versionById = new Map(
+                (preState ?? []).map((s: { id: string; version: number }) => [s.id, s.version]),
+            );
+
+            await Promise.all(
+                emergencyIds.map(async (id) => {
+                    const version = versionById.get(id);
+                    if (version === undefined) {
+                        dbFailed.push({ id, reason: 'Shift not found' });
+                        return;
+                    }
+                    try {
+                        const envelope = await callRpc(
+                            'sm_apply_shift_op',
+                            {
+                                p_shift_id: id,
+                                p_expected_version: version,
+                                p_op: 'publish',
+                                p_payload: { reason: 'Emergency publish' },
+                                p_idempotency_key: null,
+                            },
+                            ApplyShiftOpResponseSchema,
+                        );
+                        if (envelope.code === 'APPLIED' || envelope.code === 'IDEMPOTENT_REPLAY') {
+                            publishedIds.push(id);
+                        } else {
+                            dbFailed.push({ id, reason: envelope.note ?? envelope.error ?? envelope.code });
+                        }
+                    } catch (e: any) {
+                        dbFailed.push({ id, reason: e?.message ?? 'Emergency publish failed' });
+                    }
+                }),
+            );
         }
 
         return { publishedIds, complianceFailed, dbFailed };

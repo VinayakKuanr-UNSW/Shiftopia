@@ -1202,6 +1202,167 @@ def test_is_saturday_derived_from_shift_date():
     assert fri.is_saturday is False
 
 
+def test_assignment_cost_casual_weekend_ph_uses_flat_eba_percentage():
+    """Compliance audit finding #1 (2026-08-02): a Casual's `hourly_rate` is
+    ALREADY loaded with the 25% casual loading (cl 12.5(b)). cl 41.1/41.2/41.3
+    publish the casual Saturday/Sunday/PH rates as flat percentages of the
+    ORDINARY (de-loaded) rate — 150% / 175% / 275% — which already include that
+    loading. Multiplying the loaded rate by the permanent percentage (125% /
+    150% / 250%) double-counts the loading and overstates the true cost.
+
+    ordinary = loaded / 1.25, so the expected cost is
+    ordinary * {1.50, 1.75, 2.75}, NOT loaded * {1.25, 1.50, 2.50}.
+    """
+    from model_builder import ScheduleModelBuilder
+    loaded_rate = 32.06  # EA 2025 Schedule 2 §1 — Level 1 casual rate
+    ordinary_rate = loaded_rate / 1.25  # 25.648 — the de-loaded ordinary rate
+    emp = make_employee("c1", employment_type="Casual", hourly_rate=loaded_rate)
+
+    weekday = make_shift("w", "2026-05-15", "09:00", "17:00")  # Friday, 8h
+    saturday = make_shift("sat", "2026-05-16", "09:00", "17:00")
+    sunday = make_shift("sun", "2026-05-17", "09:00", "17:00")
+    sunday.is_sunday = True
+    ph = make_shift("ph", "2026-05-15", "09:00", "17:00")
+    ph.is_public_holiday = True
+
+    weekday_cents = ScheduleModelBuilder._assignment_cost_cents(emp, weekday)
+    sat_cents = ScheduleModelBuilder._assignment_cost_cents(emp, saturday)
+    sun_cents = ScheduleModelBuilder._assignment_cost_cents(emp, sunday)
+    ph_cents = ScheduleModelBuilder._assignment_cost_cents(emp, ph)
+
+    hours = 8.0
+    assert weekday_cents == int(round(hours * loaded_rate * 100))
+    assert sat_cents == int(round(hours * ordinary_rate * 1.50 * 100))
+    assert sun_cents == int(round(hours * ordinary_rate * 1.75 * 100))
+    assert ph_cents == int(round(hours * ordinary_rate * 2.75 * 100))
+
+    # The old (buggy) formula multiplied the LOADED rate by the PERMANENT
+    # percentage — confirm the fix no longer produces that higher figure.
+    old_buggy_sat_cents = int(round(hours * loaded_rate * 1.25 * 100))
+    assert sat_cents < old_buggy_sat_cents
+
+
+# ---------------------------------------------------------------------------
+# Compliance audit finding #2 (2026-08-02) — SC-5 overtime is tiered
+# (EBA cl 42.2: 150% first 3h, 200% thereafter), not a flat 50% surcharge.
+# ---------------------------------------------------------------------------
+
+def test_sc5_overtime_is_tiered_not_flat():
+    """$24/hr = exactly 40 cents/min (no rounding noise). min_contract_minutes=1
+    so virtually every worked minute counts as 'overtime' for SC-5 purposes.
+
+    Case A: one 181-minute shift -> overtime=180min, entirely within the 3h
+    (180min) tier1 -> SC-5 surcharge is +50% throughout.
+    Case B: one 241-minute shift -> overtime=240min = 180 tier1 + 60 tier2
+    -> the last 60 minutes surcharge at +100%, not +50%.
+
+    The marginal cost of B's extra 60 minutes (all tier2) must reflect a
+    TOTAL 200% rate (100% base via SC-1 + 100% surcharge via SC-5), not the
+    150% a flat-surcharge formula would have produced.
+    """
+    emp = make_employee("e1", hourly_rate=24.0, min_contract_minutes=1)
+
+    # Times (not a raw duration_minutes override) so every other part of the
+    # model — spread-of-hours, rest-gap pre-elimination, etc. — sees a
+    # consistent shift window instead of a mismatched nominal span.
+    out_a = solve([make_shift("a", start="09:00", end="12:01")], [emp])  # 181 min
+    out_b = solve([make_shift("b", start="09:00", end="13:01")], [emp])  # 241 min
+    assert out_a.status in ("OPTIMAL", "FEASIBLE")
+    assert out_b.status in ("OPTIMAL", "FEASIBLE")
+
+    cost_a = out_a.objective_breakdown["cost"]
+    cost_b = out_b.objective_breakdown["cost"]
+
+    # SC-1 (181*40) + SC-5 tier1-only (180*20) = 7240 + 3600 = 10840 cents.
+    assert cost_a == 10840
+    # SC-1 (241*40) + SC-5 tier1 (180*20) + tier2 (60*40) = 9640 + 3600 + 2400 = 15640 cents.
+    assert cost_b == 15640
+
+    # The 60 extra minutes in B cost 4800 cents = 80c/min = 200% of the
+    # 40c/min base rate — the tiered rate, not a flat 150%.
+    assert cost_b - cost_a == 4800
+
+    # The OLD flat-50%-surcharge formula would have priced case B's full 240
+    # overtime minutes at a uniform +50% (20c/min surcharge): 9640 + 240*20 =
+    # 14440 cents. The fix must price it HIGHER than that flat figure.
+    old_buggy_cost_b = 9640 + 240 * 20
+    assert cost_b > old_buggy_cost_b
+
+
+# ---------------------------------------------------------------------------
+# Compliance audit finding #3 (2026-08-02) — cl 43 night-shift allowance,
+# previously entirely absent from the solver's cost objective (Track B).
+# ---------------------------------------------------------------------------
+
+def test_night_allowance_applies_to_night_hours_only_permanent():
+    """A Monday-night FT shift entirely within 22:00-06:00, concluding
+    Tuesday (Mon-Thu bucket, +20%). No Sat/Sun/PH involved, so the night
+    rate (1.20x) applies throughout since it exceeds the plain 1.0x."""
+    from model_builder import ScheduleModelBuilder
+    emp = make_employee("e1", hourly_rate=20.0)
+    shift = make_shift("s", date="2026-07-06", start="23:00", end="05:00")  # Mon 23:00 -> Tue 05:00, 6h, all night
+    cents = ScheduleModelBuilder._assignment_cost_cents(emp, shift)
+    assert cents == int(round(6 * 20.0 * 1.20 * 100))  # 14400
+
+
+def test_night_allowance_partial_overlap_prices_only_the_night_portion():
+    """A shift straddling the night window: only the 22:00-24:00 portion is
+    a night hour; the daytime portion prices at the plain rate."""
+    from model_builder import ScheduleModelBuilder
+    emp = make_employee("e1", hourly_rate=20.0)
+    shift = make_shift("s", date="2026-07-06", start="20:00", end="23:00")  # Mon 20:00-23:00: 1h night (22-23), 2h day
+    cents = ScheduleModelBuilder._assignment_cost_cents(emp, shift)
+    expected = int(round((2 * 20.0 * 1.00 + 1 * 20.0 * 1.20) * 100))
+    assert cents == expected
+
+
+def test_night_allowance_not_cumulative_with_public_holiday_loading():
+    """cl 41.4: a PH-flagged shift's 250% loading already exceeds any night
+    percentage, so the whole shift prices at the flat PH rate — no
+    additional night stacking on top."""
+    from model_builder import ScheduleModelBuilder
+    emp = make_employee("e1", hourly_rate=20.0)
+    shift = make_shift("s", date="2026-07-08", start="23:00", end="05:00")  # Wed 23:00 -> Thu 05:00, all night
+    shift.is_public_holiday = True
+    cents = ScheduleModelBuilder._assignment_cost_cents(emp, shift)
+    # MAX(2.50 PH, 1.20 night) = 2.50 -> flat, no stacking.
+    assert cents == int(round(6 * 20.0 * 2.50 * 100))
+
+
+def test_night_allowance_wins_over_weekend_loading_when_greater():
+    """A shift starting Friday night and concluding Saturday morning: the
+    shift's own weekend flag reflects its Friday `shift_date` (no Sat/Sun/PH
+    loading applies to it), but the night rate is keyed to the CONCLUSION
+    day (Saturday, +50%) — which must still apply even though nothing
+    flags the shift itself as a weekend shift."""
+    from model_builder import ScheduleModelBuilder
+    emp = make_employee("e1", hourly_rate=20.0)
+    shift = make_shift("s", date="2026-07-10", start="23:00", end="05:00")  # Fri 23:00 -> Sat 05:00, all night
+    assert shift.is_saturday is False  # the shift's OWN nominal date is Friday
+    cents = ScheduleModelBuilder._assignment_cost_cents(emp, shift)
+    assert cents == int(round(6 * 20.0 * 1.50 * 100))  # Sat/Sun night bucket wins over the (absent) weekend loading
+
+
+def test_night_allowance_casual_uses_the_de_loaded_ordinary_rate():
+    """Casual $25/hr (de-loaded ordinary $20) on an all-night Tuesday-Wednesday
+    shift concludes Wednesday (Mon-Thu bucket): night rate = ordinary * 1.45 =
+    $29/hr, which beats the casual's own unloaded weekday rate of $25/hr."""
+    from model_builder import ScheduleModelBuilder
+    emp = make_employee("e1", employment_type="Casual", hourly_rate=25.0)
+    shift = make_shift("s", date="2026-07-07", start="23:00", end="05:00")  # Tue 23:00 -> Wed 05:00, all night
+    cents = ScheduleModelBuilder._assignment_cost_cents(emp, shift)
+    assert cents == int(round(6 * 29.0 * 100))
+
+
+def test_night_allowance_zero_for_a_daytime_shift():
+    """A shift entirely outside 22:00-06:00 gets no night term at all."""
+    from model_builder import ScheduleModelBuilder
+    emp = make_employee("e1", hourly_rate=20.0)
+    shift = make_shift("s", date="2026-07-06", start="09:00", end="17:00")
+    cents = ScheduleModelBuilder._assignment_cost_cents(emp, shift)
+    assert cents == int(round(8 * 20.0 * 100))
+
+
 # ---------------------------------------------------------------------------
 # Audit F1 — approved leave = hard per-day unavailability (unavailable_dates)
 # ---------------------------------------------------------------------------

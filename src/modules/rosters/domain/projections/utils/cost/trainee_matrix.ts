@@ -186,7 +186,13 @@ export function getTraineeBaseRate(req: TraineeWageRequest, shiftDate?: string |
     }
   }
 
-  if (aqfLevel === 4) rate *= 1 + set.certIvUpliftPct / 100;
+  // cl 1.4.3 / 1.5.4: the +3.8% Cert IV uplift is a FORMULA only for JUNIOR
+  // trainees ("the minimum rate for AQF IV is the … AQF III rate increased by
+  // 3.8%"). Adult rates (cl 1.4.3 / 1.5.4 adult tables) are already the
+  // published AQF IV figures — applying the formula would double-count the
+  // uplift (~3.8% overpay). School-based rates (cl 1.5.3) have no AQF-level
+  // differentiation at all. AUDIT FIX: H4 + L5.
+  if (aqfLevel === 4 && category === 'junior') rate *= 1 + set.certIvUpliftPct / 100;
 
   return rate;
 }

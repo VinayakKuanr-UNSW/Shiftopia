@@ -40,4 +40,38 @@ describe('mealBreakRule', () => {
     });
     expect(mealBreakRule(ctx)).toHaveLength(1);
   });
+
+  // Audit L-6: cl 36 also caps the meal break at 60 minutes.
+  it('warns when a break exceeds 60 minutes', () => {
+    const ctx = buildContext({
+      shifts: [
+        buildShift({ start_time: '09:00', end_time: '15:00', unpaid_break_minutes: 90 }),
+      ],
+    });
+    const hits = mealBreakRule(ctx);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].rule_id).toBe('V8_MEAL_BREAK_CEILING');
+    expect(hits[0].blocking).toBe(false);
+  });
+
+  it('does not warn at exactly 60 minutes', () => {
+    const ctx = buildContext({
+      shifts: [
+        buildShift({ start_time: '09:00', end_time: '15:00', unpaid_break_minutes: 60 }),
+      ],
+    });
+    expect(mealBreakRule(ctx)).toEqual([]);
+  });
+
+  it('applies the ceiling even on a short (<=5h) shift', () => {
+    const ctx = buildContext({
+      shifts: [
+        buildShift({ start_time: '09:00', end_time: '12:00', unpaid_break_minutes: 90 }),
+      ],
+    });
+    const hits = mealBreakRule(ctx);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].rule_id).toBe('V8_MEAL_BREAK_CEILING');
+  });
+
 });

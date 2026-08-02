@@ -186,6 +186,23 @@ describe('computeShiftGrossPay — new leave earnings codes', () => {
     expect(line(r.lines, 'jury_duty')).toBeDefined();
   });
 
+  it('audit M-11: jury duty pays the FULL ordinary rate when no court fee is recorded (safe-by-default)', () => {
+    const withoutFee = computeShiftGrossPay(baseShift({ isJuryDuty: true }));
+    const fullOrdinary = 7.6 * 30; // 7.6h @ $30
+    expect(line(withoutFee.lines, 'jury_duty')!.amount).toBeCloseTo(fullOrdinary, 5);
+  });
+
+  it('audit M-11: jury duty pays only the MAKE-UP difference once a court fee is recorded', () => {
+    const withFee = computeShiftGrossPay(baseShift({ isJuryDuty: true, courtFeeAmount: 100 }));
+    const fullOrdinary = 7.6 * 30;
+    expect(line(withFee.lines, 'jury_duty')!.amount).toBeCloseTo(fullOrdinary - 100, 5);
+  });
+
+  it('audit M-11: a court fee at/above the ordinary pay floors the make-up amount at $0, never negative', () => {
+    const r = computeShiftGrossPay(baseShift({ isJuryDuty: true, courtFeeAmount: 10000 }));
+    expect(line(r.lines, 'jury_duty')!.amount).toBe(0);
+  });
+
   it('routes supporting carer to supporting_carer code', () => {
     const r = computeShiftGrossPay(baseShift({ isSupportingCarer: true }));
     expect(r.isLeave).toBe(true);

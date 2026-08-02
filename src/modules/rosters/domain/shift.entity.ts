@@ -177,6 +177,7 @@ export interface Shift {
     assigned_profiles?: {
         first_name: string;
         last_name: string;
+        employment_type?: string | null;
     } | null;
     roster_subgroup?: {
         name: string;

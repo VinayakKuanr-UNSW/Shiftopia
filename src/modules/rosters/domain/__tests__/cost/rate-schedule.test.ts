@@ -3,6 +3,7 @@ import {
   RATE_SCHEDULE,
   resolveRateSet,
   applyCpiIncrease,
+  isRateScheduleStale,
   type RateSet,
 } from '../../projections/utils/cost/rate-schedule';
 import {
@@ -102,5 +103,30 @@ describe('applyCpiIncrease — cl 25.1 (CPI + 0.5%), pure', () => {
     expect(next.label).toBe('FY2026');
     expect(base.wageRates.LEVEL_1.casual).toBe(WAGE_RATES.LEVEL_1.casual);
     expect(base.allowances.meal).toBe(ALLOWANCE_MEAL);
+  });
+});
+
+describe('isRateScheduleStale — audit L-3 freshness alert', () => {
+  const schedule: RateSet[] = [
+    { ...RATE_SCHEDULE[0], effectiveFrom: '2026-01-01' },
+    { ...RATE_SCHEDULE[0], effectiveFrom: '2026-07-06' },
+  ];
+
+  it('is not stale shortly after the latest entry', () => {
+    expect(isRateScheduleStale(schedule, new Date('2026-08-01'))).toBe(false);
+  });
+
+  it('is not stale exactly at the 1-year mark yet', () => {
+    expect(isRateScheduleStale(schedule, new Date('2027-07-01'))).toBe(false);
+  });
+
+  it('is stale once well past a year with no successor entry', () => {
+    expect(isRateScheduleStale(schedule, new Date('2027-08-01'))).toBe(true);
+  });
+
+  it('picks the LATEST entry regardless of array order', () => {
+    const reversed = [...schedule].reverse();
+    expect(isRateScheduleStale(reversed, new Date('2027-08-01'))).toBe(true);
+    expect(isRateScheduleStale(reversed, new Date('2026-08-01'))).toBe(false);
   });
 });
