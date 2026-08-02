@@ -39,6 +39,16 @@ export interface BillableEditInput {
     scheduledStart: string;
     scheduledEnd: string;
     unpaidBreakMinutes: number;
+    /**
+     * The EBA minimum-engagement floor (minutes) for this shift, if known —
+     * pass `requiredMinEngagementMinutes(...).requiredMins` from the caller
+     * (which already has the training/day-type context). When provided, an
+     * edit that would net less than this is rejected outright: a manager can
+     * move billable times later (more hours) but never below the statutory
+     * minimum. Omit for no-show/cancelled shifts, where the floor never
+     * applies.
+     */
+    requiredMinutes?: number;
 }
 
 export interface BillableEditResult {
@@ -86,6 +96,15 @@ export function validateBillableEdit(p: BillableEditInput): BillableEditResult {
     if (p.unpaidBreakMinutes < 0) return fail('Unpaid break cannot be negative.');
     if (grossMins !== null && p.unpaidBreakMinutes > grossMins) {
         return fail('Unpaid break exceeds the shift length.');
+    }
+    // EBA minimum engagement (F-locked 2026-07-28): a manager cannot save
+    // billable times that net less than the statutory minimum for this shift
+    // — the system tops up automatically instead, there is no exemption path.
+    if (grossMins !== null && p.requiredMinutes != null) {
+        const netMins = grossMins - p.unpaidBreakMinutes;
+        if (netMins < p.requiredMinutes) {
+            return fail(`Adjusted times must net at least ${p.requiredMinutes / 60}h — the EBA minimum engagement for this shift.`);
+        }
     }
 
     const norm = (t: string) => formatTimeStr(t).slice(0, 5);

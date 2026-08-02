@@ -4,6 +4,7 @@ import {
   resolveBillableSide,
   calculateNetMinutes,
   isShiftFinished,
+  applyMinEngagementFloor,
 } from '../billable-time';
 
 describe('snapToQuarterHour', () => {
@@ -84,6 +85,70 @@ describe('calculateNetMinutes', () => {
     const start = { hhmm: '09:00', source: 'manual' as const };
     const end = { hhmm: '09:10', source: 'manual' as const };
     expect(calculateNetMinutes(start, end, 60)).toBe(0);
+  });
+});
+
+describe('applyMinEngagementFloor', () => {
+  it('tops up a standard weekday shift below the 3h floor', () => {
+    const result = applyMinEngagementFloor(75, {}); // 1h15
+    expect(result).toEqual({ netMinutes: 180, requiredMins: 180, wasToppedUp: true });
+  });
+
+  it('leaves a shift at/above the floor untouched', () => {
+    expect(applyMinEngagementFloor(180, {})).toEqual({ netMinutes: 180, requiredMins: 180, wasToppedUp: false });
+    expect(applyMinEngagementFloor(240, {})).toEqual({ netMinutes: 240, requiredMins: 180, wasToppedUp: false });
+  });
+
+  it('applies the 4h Sunday/PH floor', () => {
+    expect(applyMinEngagementFloor(100, { isSunday: true })).toEqual({ netMinutes: 240, requiredMins: 240, wasToppedUp: true });
+    expect(applyMinEngagementFloor(100, { isPublicHoliday: true })).toEqual({ netMinutes: 240, requiredMins: 240, wasToppedUp: true });
+  });
+
+  it('applies the 2h training floor, winning over the Sunday/PH uplift', () => {
+    const result = applyMinEngagementFloor(60, { isTraining: true, isSunday: true });
+    expect(result).toEqual({ netMinutes: 120, requiredMins: 120, wasToppedUp: true });
+  });
+
+  // The function itself has no no-show/cancelled concept — a genuine no-show
+  // (no manual override, no actual clock) never resolves a billable window in
+  // the first place, so callers never invoke this function for it at all
+  // (they gate on calculateNetMinutes returning null upstream, not on
+  // attendance_status/lifecycle_status here). A manual billable override on a
+  // shift STILL flagged no-show/cancelled must still get the floor:
+  it('floors a resolved window even when the shift carries a no-show/cancelled flag elsewhere', () => {
+    // e.g. attendance_status='no_show' but a manager entered a manual 7:15-9:45
+    // override anyway — that resolved 2h30m window must still hit the 3h floor.
+    expect(applyMinEngagementFloor(150, {})).toEqual({ netMinutes: 180, requiredMins: 180, wasToppedUp: true });
+  });
+
+  // F-locked 2026-07-28: shares resolvePaymentMinEngagementMinutes() with the
+  // cost engines (standard.ts/security.ts) — Full-Time is exempt entirely,
+  // and Plain Part-Time doesn't get the Sunday/PH exception.
+  it('Full-Time gets no floor at all — a short shift stays as clocked', () => {
+    const result = applyMinEngagementFloor(60, { employmentType: 'Full-Time', isSunday: true });
+    expect(result).toEqual({ netMinutes: 60, requiredMins: 0, wasToppedUp: false });
+  });
+
+  it('plain Part-Time on a Sunday floors at 3h, not 4h (no Sunday exception)', () => {
+    const result = applyMinEngagementFloor(100, { employmentType: 'Part-Time', isSunday: true });
+    expect(result).toEqual({ netMinutes: 180, requiredMins: 180, wasToppedUp: true });
+  });
+
+  it('Casual on a Sunday floors at 4h', () => {
+    const result = applyMinEngagementFloor(100, { employmentType: 'Casual', isSunday: true });
+    expect(result).toEqual({ netMinutes: 240, requiredMins: 240, wasToppedUp: true });
+  });
+
+  it('Security role uses the Schedule 3 tiers (Part-Time has no Sunday exception either)', () => {
+    const result = applyMinEngagementFloor(100, { employmentType: 'Part-Time', isSecurityRole: true, isSunday: true });
+    expect(result).toEqual({ netMinutes: 180, requiredMins: 180, wasToppedUp: true });
+  });
+
+  it('is duration-based off whatever net was already resolved, not re-anchored to any clock time', () => {
+    // A late clock-in (billable start already accounts for this upstream) —
+    // the floor only ever compares the resolved duration, never a clock time.
+    const result = applyMinEngagementFloor(45, {}); // e.g. 2:15pm-3:00pm, late start
+    expect(result.netMinutes).toBe(180);
   });
 });
 

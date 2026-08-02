@@ -15,6 +15,7 @@
  */
 
 import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/lib/date.utils';
+import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
 
 export type BillableSideSource = 'manual' | 'snapped' | 'missing';
 
@@ -164,4 +165,76 @@ export function calculateNetMinutes(
   if (diffMins < 0) diffMins += 24 * 60;
 
   return Math.max(0, diffMins - (unpaidBreakMinutes || 0));
+}
+
+/** Day-type + employment-context inputs the minimum-engagement PAYMENT floor needs. */
+export interface MinEngagementFloorInput {
+  isTraining?: boolean;
+  isSunday?: boolean;
+  isPublicHoliday?: boolean;
+  /**
+   * Full-Time is EXEMPT from this payment floor entirely (weekly-salaried, no
+   * per-engagement minimum) — distinct from the scheduling-time
+   * `V8_MIN_ENGAGEMENT` rule, which blocks rostering a short shift for any
+   * employment type. Plain Part-Time vs Flexible-Part-Time/Casual also
+   * changes whether the Sunday/PH uplift applies — see
+   * `resolvePaymentMinEngagementMinutes` for the exact tier table.
+   */
+  employmentType?: string | null;
+  /** Selects the Security Schedule 3 floor tiers instead of the general award's. */
+  isSecurityRole?: boolean;
+}
+
+export interface FlooredNetMinutes {
+  /** The value every consumer (display + payroll) should actually use. */
+  netMinutes: number;
+  /** The EBA minimum that applied (0 when no floor applies, e.g. Full-Time). */
+  requiredMins: number;
+  /** True when `netMinutes` was raised above the raw clocked/edited net. */
+  wasToppedUp: boolean;
+}
+
+/**
+ * Applies the EBA minimum-engagement PAYMENT guarantee (cl 12.3(e)/12.4(c)/
+ * 12.5(c)/56.2 — general award; Sch 3 §5.2(e)/§5.3(e) — Security) to an
+ * already-resolved billable net-minutes figure, via the SAME
+ * `resolvePaymentMinEngagementMinutes` the cost engines (`cost/standard.ts` /
+ * `cost/security.ts`) use for the $ top-up — so the timesheet's displayed
+ * hours and the priced dollars can never disagree. This is the ONE place
+ * both the timesheet display path and the payroll pricing path apply the
+ * floor — mirrors why `calculateNetMinutes`/`resolveBillableSide` live in
+ * this file.
+ *
+ * Policy (locked 2026-07-28): for any employment type the floor applies to,
+ * it is automatic and unconditional — there is no manager override /
+ * exemption path. It is duration-based off whatever the billable start
+ * actually resolved to (which may itself be late), never re-anchored to the
+ * rostered start.
+ *
+ * Callers must only invoke this once both billable sides have actually
+ * resolved (i.e. `calculateNetMinutes` returned a real number, not null) — a
+ * null/unresolved window must stay unresolved, not get floored up to the
+ * minimum before a manager has fixed a missing punch. That null-check is ALSO
+ * the correct — and only — no-show/cancelled gate: a genuine no-show/
+ * cancellation with no manual billable override never resolves a window in
+ * the first place (`resolveBillableSide` has nothing to resolve from), so
+ * `calculateNetMinutes` is null and this function is never called. Do NOT
+ * additionally gate on an `attendance_status`/`lifecycle_status` flag here —
+ * a manager CAN legitimately enter a manual billable override on a shift
+ * still flagged no-show/cancelled (e.g. correcting a bad flag, or paying for
+ * verified off-system work), and that resolved window must get the EBA floor
+ * like any other, regardless of what the attendance flag says.
+ */
+export function applyMinEngagementFloor(
+  netMinutes: number,
+  input: MinEngagementFloorInput,
+): FlooredNetMinutes {
+  const requiredMinsOrNull = resolvePaymentMinEngagementMinutes(input);
+  if (requiredMinsOrNull == null) {
+    // Full-Time — no per-engagement payment floor applies at all.
+    return { netMinutes, requiredMins: 0, wasToppedUp: false };
+  }
+  const requiredMins = requiredMinsOrNull;
+  const wasToppedUp = netMinutes < requiredMins;
+  return { netMinutes: wasToppedUp ? requiredMins : netMinutes, requiredMins, wasToppedUp };
 }

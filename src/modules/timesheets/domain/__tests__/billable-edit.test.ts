@@ -65,6 +65,45 @@ describe('validateBillableEdit', () => {
         const r = validateBillableEdit({ ...clean, editedStart: '09:00', editedEnd: '17:30', initialEnd: '17:30' });
         expect(r.needDepartureReason).toBe(false);
     });
+
+    // EBA minimum engagement (F-locked 2026-07-28): a manager cannot save
+    // billable times that net less than the statutory minimum for this shift.
+    describe('EBA minimum-engagement floor', () => {
+        it('rejects an edit that nets below the required minimum', () => {
+            const r = validateBillableEdit({
+                editedStart: '14:00', editedEnd: '15:00', initialStart: '14:00', initialEnd: '21:30',
+                scheduledStart: '14:00', scheduledEnd: '21:30', unpaidBreakMinutes: 0,
+                requiredMinutes: 180, // 3h standard-day floor
+            });
+            expect(r.ok).toBe(false);
+            expect(r.error).toMatch(/minimum engagement/i);
+        });
+
+        it('accepts an edit that nets exactly the required minimum', () => {
+            const r = validateBillableEdit({
+                editedStart: '14:00', editedEnd: '17:00', initialStart: '14:00', initialEnd: '21:30',
+                scheduledStart: '14:00', scheduledEnd: '21:30', unpaidBreakMinutes: 0,
+                requiredMinutes: 180,
+            });
+            expect(r.ok).toBe(true);
+        });
+
+        it('accepts an edit netting below 3h when the lower training floor applies', () => {
+            // 14:00-16:00 = 2h net: fails the 3h standard floor but satisfies
+            // the 2h training floor for the same duration.
+            const r = validateBillableEdit({
+                editedStart: '14:00', editedEnd: '16:00', initialStart: '14:00', initialEnd: '16:00',
+                scheduledStart: '14:00', scheduledEnd: '16:00', unpaidBreakMinutes: 0,
+                requiredMinutes: 120, // 2h training floor
+            });
+            expect(r.ok).toBe(true);
+        });
+
+        it('is a no-op when requiredMinutes is omitted (no-show/cancelled)', () => {
+            const r = validateBillableEdit({ ...clean, editedEnd: '10:00' });
+            expect(r.ok).toBe(true);
+        });
+    });
 });
 
 describe('billableVarianceVsRoster (approval gate)', () => {

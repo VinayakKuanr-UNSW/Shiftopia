@@ -82,6 +82,8 @@ export interface TimesheetRow {
     paidBreak: string;
     unpaidBreak: string;
     netLength: string; // Auto-calculated
+    /** Raw minutes behind `netLength` (already EBA-floored) — feeds the Billable Pay estimate. */
+    netLengthMinutes?: number;
     // Payroll
     approximatePay: string;
     // Differential
@@ -107,6 +109,19 @@ export interface TimesheetRow {
     rawStartAt?: string | null;
     rawEndAt?: string | null;
     groupType?: 'convention_centre' | 'exhibition_centre' | 'theatre' | string | null;
+
+    // EBA minimum-engagement floor (F-locked 2026-07-28) — automatic, no
+    // manager override. See src/modules/timesheets/domain/billable-time.ts.
+    /** Training-shift flag — drives the 2h EBA tier instead of 3h/4h. */
+    isTraining?: boolean;
+    /** True when netLength was raised to the EBA minimum-engagement floor. */
+    wasToppedUpToMinEngagement?: boolean;
+    /** The EBA minimum (minutes) that applied, or null when it doesn't (no-show/cancelled). */
+    requiredEngagementMinutes?: number | null;
+    /** Raw `profiles.employment_type` — feeds the min-engagement floor and pay-estimate calls. */
+    employmentType?: string | null;
+    /** Role name (lowercased) includes 'security' — selects the Security Sch 3 pay tiers. */
+    isSecurityRole?: boolean;
 }
 
 /**

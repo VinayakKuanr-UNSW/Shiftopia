@@ -19,20 +19,24 @@ import {
 import { exportTimesheetXLSX, exportTimesheetPDF } from "./timesheet.export";
 import { isEntryReviewable } from "./TimesheetTable.utils";
 import { COST_ESTIMATE_LABEL, COST_ESTIMATE_DISCLAIMER } from "@/modules/rosters/domain/projections/utils/cost/constants";
-import type { AutoPilotDecision } from "@/modules/core/autopilot";
+import { groupRows, isTodayBucketKey, type RowGroupBy } from "@/modules/core/lib/row-grouping";
+import { extractTimesheetGroupFields, timesheetGroupLabelFor } from "../../domain/timesheet-grouping";
+import { GroupSectionHeader } from "@/modules/core/ui/components/GroupSectionHeader";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface TimesheetTableProps {
     entries: TimesheetRow[];
-    /** AutoPilot bot decisions keyed by shift id (= entry.id) — per-row chip. */
-    autoDecisions?: Map<string, AutoPilotDecision>;
     selectedDate: Date;
     readOnly?: boolean;
     viewMode: "table" | "timecard";
     onViewChange: (view: "table" | "timecard") => void;
     searchQuery?: string;
     setSearchQuery?: (q: string) => void;
+    appliedFilters?: ActiveFilters;
+    onApplyFilters?: (f: ActiveFilters) => void;
+    activeFilterCount?: number;
+    groupBy?: RowGroupBy;
     onSaveEntry?: (id: string, updates: Partial<TimesheetRow>) => void;
     onBulkAction?: (ids: string[], action: "approve" | "reject") => void;
     onMarkNoShow?: (id: string) => void;
@@ -47,13 +51,16 @@ interface TimesheetTableProps {
 
 export const TimesheetTable: React.FC<TimesheetTableProps> = ({
     entries,
-    autoDecisions,
     selectedDate,
     readOnly = false,
     viewMode,
     onViewChange,
     searchQuery = "",
     setSearchQuery,
+    appliedFilters: propsAppliedFilters,
+    onApplyFilters: propsOnApplyFilters,
+    activeFilterCount: propsActiveFilterCount,
+    groupBy = "none",
     onSaveEntry,
     onBulkAction,
     onMarkNoShow,
@@ -63,9 +70,12 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
     hideTopControls = false,
     showDate = false,
 }) => {
-    // ── Filter state (owned here, shared to both mobile + desktop) ─────────────
-    const [appliedFilters, setAppliedFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
-    const activeFilterCount = useMemo(() => countActiveFilters(appliedFilters), [appliedFilters]);
+    // ── Filter state (can be passed from parent or owned here) ─────────────
+    const [internalFilters, setInternalFilters] = useState<ActiveFilters>(EMPTY_FILTERS);
+    const appliedFilters = propsAppliedFilters ?? internalFilters;
+    const setAppliedFilters = propsOnApplyFilters ?? setInternalFilters;
+    const calculatedFilterCount = useMemo(() => countActiveFilters(appliedFilters), [appliedFilters]);
+    const activeFilterCount = propsActiveFilterCount ?? calculatedFilterCount;
 
     // ── Sort state ─────────────────────────────────────────────────────────────
     const [sortField, setSortField] = useState<keyof TimesheetRow | null>(null);
@@ -115,23 +125,47 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
         });
     }, [filteredEntries, sortField, sortDirection]);
 
-    const SortableHeader = ({ field, label, className, title }: { field: keyof TimesheetRow, label: string, className?: string, title?: string }) => (
-        <th
-            title={title}
-            className={cn(
-                "p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 cursor-pointer hover:bg-muted/50 border-b border-border/50 text-left group transition-colors",
-                className
-            )}
-            onClick={() => handleSort(field)}
-        >
-            <div className="flex items-center gap-1">
-                {label}
-                <div className={cn("transition-opacity", sortField === field ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
-                    {getSortIndicator(field) || <ArrowDown className="h-3 w-3 text-muted-foreground/30" />}
-                </div>
-            </div>
-        </th>
+    // ── Group By (Date / Group / Sub-Group / Role / Timesheet Status / None) ──
+    const groupedBuckets = useMemo(
+        () => groupRows(sortedEntries, groupBy, extractTimesheetGroupFields, timesheetGroupLabelFor),
+        [sortedEntries, groupBy],
     );
+
+    const SortableHeader = ({ field, label, className, title }: { field: keyof TimesheetRow, label: string, className?: string, title?: string }) => {
+        const isSorted = sortField === field;
+        const currentSort = isSorted ? (sortDirection === "asc" ? "ascending" : "descending") : "none";
+        return (
+            <th
+                scope="col"
+                role="columnheader"
+                aria-sort={currentSort}
+                title={title}
+                tabIndex={0}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleSort(field);
+                    }
+                }}
+                onClick={() => handleSort(field)}
+                aria-label={`Sort by ${label}${isSorted ? `, currently sorted ${currentSort}` : ''}`}
+                className={cn(
+                    "p-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground/80 cursor-pointer hover:bg-muted/50 border-b border-border/50 text-left group transition-colors focus:outline-none focus:ring-1 focus:ring-primary/40",
+                    className
+                )}
+            >
+                <div className="flex items-center gap-1">
+                    <span>{label}</span>
+                    <div 
+                        className={cn("transition-opacity", isSorted ? "opacity-100" : "opacity-0 group-hover:opacity-100")}
+                        aria-hidden="true"
+                    >
+                        {getSortIndicator(field) || <ArrowDown className="h-3 w-3 text-muted-foreground/40" />}
+                    </div>
+                </div>
+            </th>
+        );
+    };
 
     // ── Export handlers (operate on the currently filtered + sorted view) ──────
     const handleExportXLSX = () => exportTimesheetXLSX(sortedEntries, selectedDate);
@@ -208,6 +242,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                     appliedFilters={appliedFilters}
                     onApplyFilters={setAppliedFilters}
                     activeFilterCount={activeFilterCount}
+                    groupBy={groupBy}
                     onSaveEntry={onSaveEntry}
                     onBulkAction={onBulkAction}
                     onMarkNoShow={onMarkNoShow}
@@ -252,8 +287,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                 {/* Timecard View */}
                 {viewMode === "timecard" && (
                     <TimesheetTimecardView
-                        entries={sortedEntries}
-                        autoDecisions={autoDecisions}
+                        buckets={groupedBuckets}
                         selectedIds={selectedIds}
                         isSelectMode={isSelectMode}
                         onToggleSelect={handleToggleSelect}
@@ -271,7 +305,7 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                 {viewMode === "table" && (
                     <div className="rounded-2xl border border-border/50 bg-card/30 backdrop-blur-md overflow-hidden shadow-2xl">
                         <div className="overflow-x-auto">
-                            <table className="w-full border-collapse min-w-[2200px]">
+                            <table className="w-full border-collapse min-w-[2200px]" aria-label="Timesheets detailed entry table">
                                 <thead>
                                     <tr>
                                         {/* Multi-header groups */}
@@ -361,18 +395,34 @@ export const TimesheetTable: React.FC<TimesheetTableProps> = ({
                                             </td>
                                         </tr>
                                     ) : (
-                                        sortedEntries.map((entry) => (
-                                            <TimesheetRowComponent
-                                                key={entry.id}
-                                                entry={entry}
-                                                autoDecision={autoDecisions?.get(String(entry.id))}
-                                                readOnly={readOnly}
-                                                isSelected={selectedIds.includes(String(entry.id))}
-                                                onToggleSelect={() => handleToggleSelect(String(entry.id))}
-                                                onSave={onSaveEntry}
-                                                onMarkNoShow={onMarkNoShow}
-                                                showDate={showDate}
-                                            />
+                                        groupedBuckets.map((bucket) => (
+                                            <React.Fragment key={bucket.key}>
+                                                {bucket.label && (
+                                                    <tr className="bg-muted/30">
+                                                        <td colSpan={showDate ? 25 : 24} className="px-3 py-2 border-b border-border/40">
+                                                            <GroupSectionHeader
+                                                                label={bucket.label}
+                                                                count={bucket.items.length}
+                                                                itemNoun="entry"
+                                                                emphasized={isTodayBucketKey(bucket.key)}
+                                                                className="mb-0"
+                                                            />
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                                {bucket.items.map((entry) => (
+                                                    <TimesheetRowComponent
+                                                        key={entry.id}
+                                                        entry={entry}
+                                                        readOnly={readOnly}
+                                                        isSelected={selectedIds.includes(String(entry.id))}
+                                                        onToggleSelect={() => handleToggleSelect(String(entry.id))}
+                                                        onSave={onSaveEntry}
+                                                        onMarkNoShow={onMarkNoShow}
+                                                        showDate={showDate}
+                                                    />
+                                                ))}
+                                            </React.Fragment>
                                         ))
                                     )}
                                 </tbody>

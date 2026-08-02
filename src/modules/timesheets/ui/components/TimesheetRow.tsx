@@ -18,10 +18,9 @@ import {
     Clock,
     User,
     Bot,
+    TrendingUp,
 } from "lucide-react";
 import { TimesheetStatusBadge } from "./TimesheetStatusBadge";
-import { AutoPilotDecisionChip, type AutoPilotDecision } from "@/modules/core/autopilot";
-import { TIMESHEET_AUTOPILOT_COPY } from "../../api/timesheetAutoPilot.api";
 import { TimesheetHistoryPopover } from "./TimesheetHistoryPopover";
 
 
@@ -38,6 +37,9 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle,
     DialogDescription, DialogFooter,
 } from '@/modules/core/ui/primitives/dialog';
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/modules/core/ui/primitives/select';
 import { Textarea } from '@/modules/core/ui/primitives/textarea';
 import { Label } from '@/modules/core/ui/primitives/label';
 import type { TimesheetRow as TimesheetRowType } from "../../model/timesheet.types";
@@ -46,7 +48,9 @@ import { parseZonedDateTime, SYDNEY_TZ } from "@/modules/core/lib/date.utils";
 import { getProtectionContext, getTimeRule, getLiveRuleBadges, getPayrollRuleBadges, isTimesheetReviewable } from "@/modules/rosters/domain/shift-ui";
 import { ARRIVAL_VARIANCE_REASONS, DEPARTURE_VARIANCE_REASONS, VARIANCE_GRACE_MIN } from "../../domain/variance-reasons";
 import { validateBillableEdit, billableVarianceVsRoster } from "../../domain/billable-edit";
+import { getShiftDayType } from "@/modules/core/lib/holidays";
 import { estimateDetailedCostFromShift } from '@/modules/rosters/domain/projections/utils/cost';
+import { resolvePaymentMinEngagementMinutes } from '@/modules/rosters/domain/projections/utils/cost/min-engagement-floor';
 import { ZERO_COST_BREAKDOWN, COST_ESTIMATE_DISCLAIMER } from '@/modules/rosters/domain/projections/utils/cost/constants';
 
 /* Billable-time provenance icons (F16) — explicit iconography, not a bare `*`. */
@@ -57,12 +61,15 @@ const BILLABLE_SOURCE_META = {
     auto: { Icon: Bot, cls: 'text-amber-600 dark:text-amber-400', label: 'Auto clock-out (needs review)' },
 } as const;
 
-const BillableSourceIcon: React.FC<{ source: BillableSource; hasValue: boolean }> = ({ source, hasValue }) => {
-    // Snapped/manual only mark an actual value; 'auto' shows even on a blank end
-    // (that's the whole point — it explains why the billable end is missing).
-    if (!source || (source !== 'auto' && !hasValue)) return null;
-    const meta = BILLABLE_SOURCE_META[source];
-    if (!meta) return null;
+const BillableSourceIcon: React.FC<{
+    source: BillableSource;
+    hasValue: boolean;
+    varianceReason?: string | null;
+    labelPrefix?: string;
+}> = ({ source, hasValue, varianceReason, labelPrefix }) => {
+    const effectiveSource = source || (varianceReason ? 'manual' : null);
+    if (!effectiveSource || (effectiveSource !== 'auto' && !hasValue && !varianceReason)) return null;
+    const meta = BILLABLE_SOURCE_META[effectiveSource] ?? BILLABLE_SOURCE_META.manual;
     const { Icon, cls, label } = meta;
     return (
         <TooltipProvider>
@@ -80,7 +87,6 @@ const BillableSourceIcon: React.FC<{ source: BillableSource; hasValue: boolean }
 
 interface TimesheetRowProps {
     entry: TimesheetRowType;
-    autoDecision?: AutoPilotDecision;
     readOnly?: boolean;
     isSelected?: boolean;
     onToggleSelect?: () => void;
@@ -91,7 +97,6 @@ interface TimesheetRowProps {
 
 export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     entry,
-    autoDecision,
     readOnly = false,
     isSelected = false,
     onToggleSelect,
@@ -125,9 +130,8 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     // Decision is finalized — no more edits allowed
     const isFinalized = useMemo(() => {
         const tsStatus = (entry.timesheetStatus || '').toLowerCase();
-        const attStatus = (entry.attendanceStatus || '').toLowerCase();
-        return ['approved', 'rejected', 'no_show'].includes(tsStatus) || attStatus === 'no_show';
-    }, [entry.timesheetStatus, entry.attendanceStatus]);
+        return ['approved', 'verified', 'auto_approved', 'rejected', 'finalized'].includes(tsStatus);
+    }, [entry.timesheetStatus]);
 
     const [editedAdjusted, setEditedAdjusted] = useState({
         adjustedStart: entry.adjustedStart || "",
@@ -258,22 +262,6 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             ...(overrideReason.trim() ? { notes: overrideReason.trim() } : {}),
         };
 
-        // Approval-time variance gate: the RESOLVED billable window (any source —
-        // snapped, auto, or manual) varies from roster and no reason is on record
-        // yet → require one before approving. Catches shifts the manager never
-        // edited (e.g. a snapped clock that landed off the roster).
-        const variance = billableVarianceVsRoster(entry.adjustedStart, entry.adjustedEnd, entry.scheduledStart, entry.scheduledEnd);
-        const needArrival = variance.arrival && !entry.arrivalVarianceReason;
-        const needDeparture = variance.departure && !entry.departureVarianceReason;
-        if (needArrival || needDeparture) {
-            setArrivalReason(entry.arrivalVarianceReason || '');
-            setDepartureReason(entry.departureVarianceReason || '');
-            setPendingSave({ payload: approvePayload, needArrival, needDeparture });
-            setWarningsOpen(false);
-            setVarianceOpen(true);
-            return;
-        }
-
         onSave?.(String(entry.id), approvePayload as any);
         toast({ title: 'Timesheet Approved', description: `Timesheet for ${entry.employee} approved.` });
         setWarningsOpen(false);
@@ -329,6 +317,24 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
     const buildAndValidate = ():
         | { payload: Record<string, any>; needArrival: boolean; needDeparture: boolean }
         | null => {
+        // EBA minimum-engagement PAYMENT floor (F-locked 2026-07-28): a manager
+        // cannot save billable times netting less than the statutory minimum
+        // for this shift — same employment-type-aware resolver the cost engine
+        // and payroll adapter use (Full-Time gets no floor at all). Applies
+        // even on a no-show/cancelled-flagged entry — a manager entering a
+        // manual billable override there is choosing to pay for real time, and
+        // that window must still meet the guarantee (only a BLANK edit, which
+        // validateBillableEdit already skips the check for, means "no billable
+        // time at all").
+        const { isSunday, isPublicHoliday } = getShiftDayType(String(entry.date));
+        const requiredMinutes = resolvePaymentMinEngagementMinutes({
+            isTraining: !!entry.isTraining,
+            isSunday,
+            isPublicHoliday,
+            employmentType: entry.employmentType,
+            isSecurityRole: entry.isSecurityRole,
+        }) ?? undefined;
+
         const v = validateBillableEdit({
             editedStart: editedAdjusted.adjustedStart,
             editedEnd: editedAdjusted.adjustedEnd,
@@ -337,6 +343,7 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             scheduledStart: entry.scheduledStart,
             scheduledEnd: entry.scheduledEnd,
             unpaidBreakMinutes: parseFloat(editedAdjusted.unpaidBreak) || 0,
+            requiredMinutes,
         });
         if (!v.ok) {
             setTimingError(v.error!);
@@ -352,6 +359,8 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
             start_time: adjustedStart,
             end_time: adjustedEnd,
             roles: { name: entry.role },
+            employmentType: entry.employmentType,
+            is_training: entry.isTraining,
             unpaid_break_minutes: parseFloat(editedAdjusted.unpaidBreak) || 0,
             scheduled_length_minutes: calculateHoursBetween(entry.scheduledStart, entry.scheduledEnd) * 60,
         });
@@ -636,7 +645,12 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                 )}>
                                     {entry.adjustedStart || '-'}
                                 </span>
-                                <BillableSourceIcon source={entry.adjustedStartSource} hasValue={!!entry.adjustedStart} />
+                                <BillableSourceIcon
+                                    source={entry.adjustedStartSource}
+                                    hasValue={!!entry.adjustedStart}
+                                    varianceReason={entry.arrivalVarianceReason}
+                                    labelPrefix="Arrival"
+                                />
                             </div>
                         </td>
                         {/* Adjusted End — color coded by source */}
@@ -656,7 +670,12 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                 )}>
                                     {entry.adjustedEnd || '-'}
                                 </span>
-                                <BillableSourceIcon source={entry.adjustedEndSource} hasValue={!!entry.adjustedEnd} />
+                                <BillableSourceIcon
+                                    source={entry.adjustedEndSource}
+                                    hasValue={!!entry.adjustedEnd}
+                                    varianceReason={entry.departureVarianceReason}
+                                    labelPrefix="Departure"
+                                />
                             </div>
                         </td>
                         <td className={`${cellClass} font-black text-foreground border-r border-border/30`}>
@@ -706,9 +725,6 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                 <td className={cellClass}>
                     <div className="flex flex-col gap-1 items-start">
                         <div className="flex items-center gap-1">
-                            {autoDecision && (
-                                <AutoPilotDecisionChip decision={autoDecision} copy={TIMESHEET_AUTOPILOT_COPY} />
-                            )}
                             <TimesheetHistoryPopover shiftId={String(entry.id)} />
                             {!!entry.editCount && entry.editCount > 0 && (
                                 <TooltipProvider>
@@ -778,6 +794,26 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                                 <span className="text-[9px] font-mono text-muted-foreground/40 uppercase tracking-wider">No billable</span>
                             )
                         ) : null}
+                        {entry.wasToppedUpToMinEngagement && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span
+                                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black font-mono tracking-tight uppercase border w-fit whitespace-nowrap cursor-default"
+                                            style={{ color: '#0891B2', backgroundColor: '#0891B210', borderColor: '#0891B220' }}
+                                        >
+                                            <TrendingUp className="h-2.5 w-2.5" />
+                                            Topped Up to Min
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="max-w-xs text-[11px]">
+                                        Clocked hours were below the EBA minimum engagement
+                                        {entry.requiredEngagementMinutes ? ` (${entry.requiredEngagementMinutes / 60}h)` : ''} for this shift —
+                                        pay was automatically topped up to the guaranteed minimum.
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
                         {(entry.arrivalVarianceReason || entry.departureVarianceReason) && (
                             <TooltipProvider>
                                 <Tooltip>
@@ -1071,34 +1107,40 @@ export const TimesheetRow: React.FC<TimesheetRowProps> = ({
                     <div className="space-y-4 my-2">
                         {pendingSave?.needArrival && (
                             <div className="space-y-1.5">
-                                <Label htmlFor="arrival-variance" className="text-sm font-semibold">
+                                <Label htmlFor="arrival-variance" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                     Arrival variance reason <span className="text-red-500">*</span>
                                 </Label>
-                                <select
-                                    id="arrival-variance"
-                                    value={arrivalReason}
-                                    onChange={e => setArrivalReason(e.target.value)}
-                                    className="w-full h-9 px-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
-                                >
-                                    <option value="" disabled>Select a reason…</option>
-                                    {ARRIVAL_VARIANCE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
-                                </select>
+                                <Select value={arrivalReason} onValueChange={setArrivalReason}>
+                                    <SelectTrigger id="arrival-variance" className="h-11 rounded-xl border border-border bg-muted/20 text-sm font-semibold text-foreground">
+                                        <SelectValue placeholder="Select a reason…" />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-2xl border border-border/80 bg-popover text-popover-foreground shadow-2xl z-[999] max-h-60 overflow-y-auto">
+                                        {ARRIVAL_VARIANCE_REASONS.map(r => (
+                                            <SelectItem key={r} value={r} className="rounded-xl py-2.5 text-xs font-semibold cursor-pointer">
+                                                {r}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         )}
                         {pendingSave?.needDeparture && (
                             <div className="space-y-1.5">
-                                <Label htmlFor="departure-variance" className="text-sm font-semibold">
+                                <Label htmlFor="departure-variance" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                     Departure variance reason <span className="text-red-500">*</span>
                                 </Label>
-                                <select
-                                    id="departure-variance"
-                                    value={departureReason}
-                                    onChange={e => setDepartureReason(e.target.value)}
-                                    className="w-full h-9 px-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
-                                >
-                                    <option value="" disabled>Select a reason…</option>
-                                    {DEPARTURE_VARIANCE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
-                                </select>
+                                <Select value={departureReason} onValueChange={setDepartureReason}>
+                                    <SelectTrigger id="departure-variance" className="h-11 rounded-xl border border-border bg-muted/20 text-sm font-semibold text-foreground">
+                                        <SelectValue placeholder="Select a reason…" />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-2xl border border-border/80 bg-popover text-popover-foreground shadow-2xl z-[999] max-h-60 overflow-y-auto">
+                                        {DEPARTURE_VARIANCE_REASONS.map(r => (
+                                            <SelectItem key={r} value={r} className="rounded-xl py-2.5 text-xs font-semibold cursor-pointer">
+                                                {r}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         )}
                     </div>
