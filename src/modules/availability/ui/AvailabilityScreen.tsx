@@ -205,16 +205,18 @@ export function AvailabilityScreen({
         initial="hidden"
         animate="show"
         variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
-        className="flex flex-col h-full w-full overflow-hidden"
+        className="h-full w-full overflow-hidden"
       >
-
-
-        <div className="flex-1 min-h-0 overflow-hidden px-6 pb-6">
-          <div className={cn(
-              "h-full flex overflow-hidden rounded-[24px] border border-border/50 bg-card/30"
-          )}>
+        <div
+          className={cn(
+            "h-full flex overflow-hidden rounded-[24px] border transition-all",
+            isDark
+              ? "bg-[#1c2333]/40 border-white/10 shadow-2xl shadow-black/20"
+              : "bg-white/80 backdrop-blur-md border-slate-200 shadow-xl shadow-slate-200/50"
+          )}
+        >
           {/* LEFT: Calendar */}
-          <motion.div variants={itemVariants} className="flex-[2] min-w-[400px] border-r border-border overflow-hidden">
+          <motion.div variants={itemVariants} className="flex-[2] min-w-[400px] border-r border-border/50 overflow-hidden">
             <CalendarPane
               slots={slots}
               assignedShifts={assignedShifts}
@@ -224,7 +226,7 @@ export function AvailabilityScreen({
           </motion.div>
 
           {/* MIDDLE: Logs */}
-          <motion.div variants={itemVariants} className="flex-[1.5] min-w-[280px] border-r border-border overflow-hidden">
+          <motion.div variants={itemVariants} className="flex-[1.5] min-w-[280px] border-r border-border/50 overflow-hidden">
             <LogsPane
               rules={rules}
               isLoading={isLoadingRules}
@@ -244,10 +246,9 @@ export function AvailabilityScreen({
             />
           </motion.div>
         </div>
-      </div>
-    </motion.div>
-  );
-}
+      </motion.div>
+    );
+  }
 
   // ========================================
   // RENDER: TABLET LAYOUT
@@ -259,71 +260,79 @@ export function AvailabilityScreen({
         initial="hidden"
         animate="show"
         variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
-        className="flex flex-col h-full w-full overflow-hidden bg-background"
+        className="h-full w-full overflow-hidden"
       >
+        <div
+          className={cn(
+            "h-full flex flex-col overflow-hidden rounded-[24px] border transition-all",
+            isDark
+              ? "bg-[#1c2333]/40 border-white/10 shadow-2xl shadow-black/20"
+              : "bg-white/80 backdrop-blur-md border-slate-200 shadow-xl shadow-slate-200/50"
+          )}
+        >
+          {/* TOP: Calendar */}
+          <motion.div variants={itemVariants} className="h-[45%] border-b border-border/50 overflow-hidden">
+            <CalendarPane
+              slots={slots}
+              assignedShifts={assignedShifts}
+              currentMonth={currentMonth}
+              isLoading={isLoadingSlots}
+            />
+          </motion.div>
 
+          {/* BOTTOM: Tabs for Logs/Configure */}
+          <motion.div variants={itemVariants} className="flex-1 flex flex-col overflow-hidden">
+            {/* Tab Headers */}
+            <div className="flex border-b border-border/50 bg-muted/30 flex-shrink-0">
+              <button
+                onClick={() => setBottomTab('logs')}
+                className={cn(
+                  'flex-1 py-3 px-4 text-sm font-bold transition-colors',
+                  bottomTab === 'logs'
+                    ? 'border-b-2 border-primary text-primary bg-background'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                Rules ({rules.length})
+              </button>
+              <button
+                onClick={() => setBottomTab('configure')}
+                className={cn(
+                  'flex-1 py-3 px-4 text-sm font-bold transition-colors',
+                  bottomTab === 'configure'
+                    ? 'border-b-2 border-primary text-primary bg-background'
+                    : 'text-muted-foreground hover:text-foreground',
+                  editState.mode && 'animate-pulse'
+                )}
+              >
+                Configure
+                {editState.mode && ' *'}
+              </button>
+            </div>
 
-        {/* TOP: Calendar */}
-        <motion.div variants={itemVariants} className="h-[45%] border-b border-border overflow-hidden">
-          <CalendarPane
-            slots={slots}
-            currentMonth={currentMonth}
-            isLoading={isLoadingSlots}
-          />
-        </motion.div>
-
-        {/* BOTTOM: Tabs for Logs/Configure */}
-        <motion.div variants={itemVariants} className="flex-1 flex flex-col overflow-hidden">
-          {/* Tab Headers */}
-          <div className="flex border-b border-border bg-muted/30 flex-shrink-0">
-            <button
-              onClick={() => setBottomTab('logs')}
-              className={cn(
-                'flex-1 py-3 px-4 text-sm font-bold transition-colors',
-                bottomTab === 'logs'
-                  ? 'border-b-2 border-primary text-primary bg-background'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              Rules ({rules.length})
-            </button>
-            <button
-              onClick={() => setBottomTab('configure')}
-              className={cn(
-                'flex-1 py-3 px-4 text-sm font-bold transition-colors',
-                bottomTab === 'configure'
-                  ? 'border-b-2 border-primary text-primary bg-background'
-                  : 'text-muted-foreground hover:text-foreground',
-                editState.mode && 'animate-pulse'
-              )}
-            >
-              Configure
-              {editState.mode && ' *'}
-            </button>
-          </div>
-
-          {/* Tab Content */}
-          <AnimatePresence mode="wait">
-            <motion.div key={bottomTab} {...tabTransition} className="flex-1 overflow-hidden">
-              {bottomTab === 'logs' ? (
-                <LogsPane
-                  rules={rules}
-                  isLoading={isLoadingRules}
-                  onEditRule={handleEditRule}
-                  onDeleteRule={handleDeleteRule}
-                />
-              ) : (
-                <ConfigurePane
-                  mode={editState.mode}
-                  ruleBeingEdited={editState.ruleBeingEdited}
-                  isSubmitting={editState.isSubmitting}
-                  onSubmit={handleSubmit}
-                  onCancel={handleCancel}
-                />
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </motion.div>
+            {/* Tab Content */}
+            <AnimatePresence mode="wait">
+              <motion.div key={bottomTab} {...tabTransition} className="flex-1 overflow-hidden">
+                {bottomTab === 'logs' ? (
+                  <LogsPane
+                    rules={rules}
+                    isLoading={isLoadingRules}
+                    onEditRule={handleEditRule}
+                    onDeleteRule={handleDeleteRule}
+                  />
+                ) : (
+                  <ConfigurePane
+                    mode={editState.mode}
+                    ruleBeingEdited={editState.ruleBeingEdited}
+                    isSubmitting={editState.isSubmitting}
+                    onSubmit={handleSubmit}
+                    onCancel={handleCancel}
+                  />
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </motion.div>
+        </div>
       </motion.div>
     );
   }
@@ -337,99 +346,107 @@ export function AvailabilityScreen({
       initial="hidden"
       animate="show"
       variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
-      className="flex flex-col h-full w-full overflow-hidden bg-background"
+      className="h-full w-full overflow-hidden"
     >
-
-
-      {/* Sub-navigation Tabs at the Top - Text Only Toggle */}
-      <motion.div 
-        variants={itemVariants}
-        className="flex-shrink-0 px-4 py-3 bg-background border-b border-border/50 z-10"
+      <div
+        className={cn(
+          "h-full flex flex-col overflow-hidden rounded-[20px] border transition-all relative",
+          isDark
+            ? "bg-[#1c2333]/40 border-white/10 shadow-2xl shadow-black/20"
+            : "bg-white/80 backdrop-blur-md border-slate-200 shadow-xl shadow-slate-200/50"
+        )}
       >
-        <div className="flex bg-muted/60 p-1.5 rounded-[16px] max-w-sm mx-auto">
-          <button
-            onClick={() => setActiveTab('calendar')}
-            className={cn(
-              'flex flex-1 items-center justify-center py-2.5 rounded-xl transition-all duration-300',
-              activeTab === 'calendar'
-                ? 'bg-background shadow-md text-foreground scale-[1.02]'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <span className="text-[12px] font-black uppercase tracking-widest font-heading">Calendar</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('logs')}
-            className={cn(
-              'flex flex-1 items-center justify-center py-2.5 rounded-xl transition-all duration-300',
-              activeTab === 'logs' 
-                ? 'bg-background shadow-md text-foreground scale-[1.02]' 
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <span className="text-[12px] font-black uppercase tracking-widest font-heading">Rules</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('configure')}
-            className={cn(
-              'flex flex-1 items-center justify-center py-2.5 rounded-xl transition-all duration-300',
-              activeTab === 'configure'
-                ? 'bg-background shadow-md text-foreground scale-[1.02]'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <span className="text-[12px] font-black uppercase tracking-widest font-heading">
-              Config{editState.mode && <span className="text-primary ml-1">*</span>}
-            </span>
-          </button>
-        </div>
-      </motion.div>
-
-      {/* Tab Content */}
-      <AnimatePresence mode="wait">
-        <motion.div key={activeTab} {...tabTransition} className="flex-1 overflow-hidden">
-          {activeTab === 'calendar' && (
-            <CalendarPane
-              slots={slots}
-              currentMonth={currentMonth}
-              isLoading={isLoadingSlots}
-            />
-          )}
-          {activeTab === 'logs' && (
-            <LogsPane
-              rules={rules}
-              isLoading={isLoadingRules}
-              onEditRule={handleEditRule}
-              onDeleteRule={handleDeleteRule}
-            />
-          )}
-          {activeTab === 'configure' && (
-            <ConfigurePane
-              mode={editState.mode}
-              ruleBeingEdited={editState.ruleBeingEdited}
-              isSubmitting={editState.isSubmitting}
-              onSubmit={handleSubmit}
-              onCancel={handleCancel}
-            />
-          )}
-        </motion.div>
-      </AnimatePresence>
-
-      {/* Floating Action Button (Mobile Only) */}
-      <motion.div
-        initial={{ scale: 0, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ delay: 0.5, type: 'spring' }}
-        className="fixed bottom-24 right-6 z-50 md:hidden"
-      >
-        <Button
-          onClick={startCreate}
-          size="icon"
-          className="h-16 w-16 rounded-full shadow-2xl bg-primary text-primary-foreground hover:scale-110 active:scale-95 transition-all duration-300"
+        {/* Sub-navigation Tabs at the Top - Text Only Toggle */}
+        <motion.div 
+          variants={itemVariants}
+          className="flex-shrink-0 px-4 py-3 border-b border-border/50 z-10"
         >
-          <Plus className="h-8 w-8 stroke-[3]" />
-        </Button>
-      </motion.div>
+          <div className="flex bg-muted/60 p-1.5 rounded-[16px] max-w-sm mx-auto">
+            <button
+              onClick={() => setActiveTab('calendar')}
+              className={cn(
+                'flex flex-1 items-center justify-center py-2.5 rounded-xl transition-all duration-300',
+                activeTab === 'calendar'
+                  ? 'bg-background shadow-md text-foreground scale-[1.02]'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <span className="text-[12px] font-black uppercase tracking-widest font-heading">Calendar</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('logs')}
+              className={cn(
+                'flex flex-1 items-center justify-center py-2.5 rounded-xl transition-all duration-300',
+                activeTab === 'logs' 
+                  ? 'bg-background shadow-md text-foreground scale-[1.02]' 
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <span className="text-[12px] font-black uppercase tracking-widest font-heading">Rules</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('configure')}
+              className={cn(
+                'flex flex-1 items-center justify-center py-2.5 rounded-xl transition-all duration-300',
+                activeTab === 'configure'
+                  ? 'bg-background shadow-md text-foreground scale-[1.02]'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <span className="text-[12px] font-black uppercase tracking-widest font-heading">
+                Config{editState.mode && <span className="text-primary ml-1">*</span>}
+              </span>
+            </button>
+          </div>
+        </motion.div>
+
+        {/* Tab Content */}
+        <AnimatePresence mode="wait">
+          <motion.div key={activeTab} {...tabTransition} className="flex-1 overflow-hidden">
+            {activeTab === 'calendar' && (
+              <CalendarPane
+                slots={slots}
+                assignedShifts={assignedShifts}
+                currentMonth={currentMonth}
+                isLoading={isLoadingSlots}
+              />
+            )}
+            {activeTab === 'logs' && (
+              <LogsPane
+                rules={rules}
+                isLoading={isLoadingRules}
+                onEditRule={handleEditRule}
+                onDeleteRule={handleDeleteRule}
+              />
+            )}
+            {activeTab === 'configure' && (
+              <ConfigurePane
+                mode={editState.mode}
+                ruleBeingEdited={editState.ruleBeingEdited}
+                isSubmitting={editState.isSubmitting}
+                onSubmit={handleSubmit}
+                onCancel={handleCancel}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Floating Action Button (Mobile Only) */}
+        <motion.div
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.5, type: 'spring' }}
+          className="fixed bottom-24 right-6 z-50 md:hidden"
+        >
+          <Button
+            onClick={startCreate}
+            size="icon"
+            className="h-16 w-16 rounded-full shadow-2xl bg-primary text-primary-foreground hover:scale-110 active:scale-95 transition-all duration-300"
+          >
+            <Plus className="h-8 w-8 stroke-[3]" />
+          </Button>
+        </motion.div>
+      </div>
     </motion.div>
   );
 }

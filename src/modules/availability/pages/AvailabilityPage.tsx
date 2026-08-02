@@ -180,7 +180,7 @@ export const AvailabilityPage: React.FC = () => {
 
               {/* Reserve List opt-in — OFF by default; controls whether this
                   employee can be found in a manager's emergency Reserve List
-                  search (docs/audits/reserve-list-audit-and-implementation-plan.md §8). */}
+                  search (docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md §8). */}
               <div
                 className={cn(
                   "flex items-center gap-2 flex-shrink-0 h-9 lg:h-11 px-3 lg:px-4 rounded-xl transition-all",
@@ -209,12 +209,7 @@ export const AvailabilityPage: React.FC = () => {
         variants={pageVariants}
         initial="hidden"
         animate="show"
-        className={cn(
-          "flex-1 min-h-0 overflow-hidden mx-4 lg:mx-6 mb-4 lg:mb-6 rounded-[32px] border transition-all",
-          isDark
-            ? "bg-[#1c2333]/40 border-white/5 shadow-2xl shadow-black/20"
-            : "bg-white/70 backdrop-blur-md border-white shadow-xl shadow-slate-200/50"
-        )}
+        className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6"
       >
         <AvailabilityScreen 
           layout={breakpoint === 'desktop' ? 'desktop' : breakpoint === 'tablet' ? 'tablet' : 'mobile'}
