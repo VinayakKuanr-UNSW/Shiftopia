@@ -9,6 +9,9 @@ import { determineShiftState } from '@/modules/rosters/domain/shift-state.utils'
 import { computeShiftUrgency, isOnBidding } from '@/modules/rosters/domain/bidding-urgency';
 import type { ManagerBidShift, BidToggle } from './types';
 
+/** Stable empty array so `data ?? EMPTY` doesn't allocate on every render. */
+const EMPTY_SHIFTS: ManagerBidShift[] = [];
+
 interface UseManagerBidShiftsReturn {
   shifts: ManagerBidShift[];
   isLoading: boolean;
@@ -34,10 +37,8 @@ export function useManagerBidShifts(filters: ManagerBidFilters): UseManagerBidSh
     endDate: filters.endDate || undefined,
   };
 
-  console.log('[useManagerBidShifts] Hook triggered with queryFilters:', queryFilters);
-
   const {
-    data: shifts = [],
+    data: shifts = EMPTY_SHIFTS,
     isLoading,
     refetch,
     isError,

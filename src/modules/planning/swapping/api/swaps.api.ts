@@ -6,7 +6,29 @@ import { shiftsApi } from '@/modules/rosters';
 import { applyShiftOp } from '@/modules/rosters/api/shifts.api';
 import { mapShiftOpResultToUx } from '@/modules/rosters/domain/shift-ops.contract';
 import { ShiftTimeRange, swapEvaluator, runSwapGuards, SwapGuardError } from '@/modules/compliance';
+import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
 import { addDays, subDays, format, parseISO, differenceInHours, parse } from 'date-fns';
+
+// Audit C-4: the swap engine's SwapPartyInput.contract_type uses the
+// shorthand 'FT' | 'PT' | 'CASUAL' union; fetchV8EmployeeContext (the
+// same helper the manager-approval orchestrator uses) returns the V2
+// orchestrator's 'FULL_TIME' | 'PART_TIME' | 'CASUAL' | 'STUDENT_VISA'.
+// Map between them rather than introduce a second contract-type
+// vocabulary. STUDENT_VISA workers in this venue are casual/part-time
+// by award structure and the underlying FT/PT/CASUAL value is not
+// preserved once STUDENT_VISA overrides it upstream, so fall back to
+// the safe, previously-universal default (CASUAL) for that case only.
+const toSwapEngineContractType = (
+    t: 'FULL_TIME' | 'PART_TIME' | 'CASUAL' | 'STUDENT_VISA' | null | undefined,
+): 'FT' | 'PT' | 'CASUAL' | null => {
+    switch (t) {
+        case 'FULL_TIME': return 'FT';
+        case 'PART_TIME': return 'PT';
+        case 'CASUAL': return 'CASUAL';
+        case 'STUDENT_VISA': return 'CASUAL';
+        default: return null;
+    }
+};
 
 // Type assertion helper for Supabase queries with tables not in generated types
 const db = supabase as any;
@@ -53,10 +75,16 @@ const validateSwapCompliance = async (
     const start = format(subDays(dateRef, 30), 'yyyy-MM-dd');
     const end = format(addDays(dateRef, 30), 'yyyy-MM-dd');
 
-    // Fetch rosters for BOTH parties (cross-department — no department filter)
-    const [requesterRoster, offererRoster] = await Promise.all([
+    // Fetch rosters AND real employment context for BOTH parties (cross-
+    // department — no department filter). Audit C-4: this compliance
+    // check previously never fetched contract_type/contracted_weekly_hours/
+    // leave_days at all, so every swap silently ran through the engine as
+    // if both parties were CASUAL regardless of their real employment type.
+    const [requesterRoster, offererRoster, requesterCtx, offererCtx] = await Promise.all([
         shiftsApi.getEmployeeShifts(requesterId, start, end),
         shiftsApi.getEmployeeShifts(offererId, start, end),
+        fetchV8EmployeeContext(requesterId),
+        fetchV8EmployeeContext(offererId),
     ]);
 
     // Pre-flight guards: entity validity, concurrency, locks, drift (#1, #2, #16, #20, #21)
@@ -84,12 +112,20 @@ const validateSwapCompliance = async (
             name: 'Requester',
             current_shifts: requesterRoster.map(s => ({ ...toTimeRange(s), id: s.id })) as any,
             shift_to_give: { ...toTimeRange(requesterShift), id: requesterShift.id } as any,
+            contract_type: toSwapEngineContractType(requesterCtx.contract_type),
+            contracted_weekly_hours: requesterCtx.contracted_weekly_hours || undefined,
+            leave_days: requesterCtx.leave_days,
+            is_security_role: requesterCtx.is_security_role,
         },
         partyB: {
             employee_id: offererId,
             name: 'Offerer',
             current_shifts: offererRoster.map(s => ({ ...toTimeRange(s), id: s.id })) as any,
             shift_to_give: { ...toTimeRange(offeredShift), id: offeredShift?.id } as any,
+            contract_type: toSwapEngineContractType(offererCtx.contract_type),
+            contracted_weekly_hours: offererCtx.contracted_weekly_hours || undefined,
+            leave_days: offererCtx.leave_days,
+            is_security_role: offererCtx.is_security_role,
         },
     });
 

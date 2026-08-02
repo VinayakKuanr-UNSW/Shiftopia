@@ -88,7 +88,14 @@ const isTableMissingError = (err: any) =>
         err.code === '42P01' ||
         err.status === 404 ||
         err.code === 'PGRST204' ||
-        (typeof err.message === 'string' && (err.message.includes('does not exist') || err.message.includes('not found')))
+        err.code === 'PGRST200' ||
+        (typeof err.code === 'string' && err.code.startsWith('PGRST')) ||
+        (typeof err.message === 'string' && (
+            err.message.includes('does not exist') ||
+            err.message.includes('not found') ||
+            err.message.includes('Could not find') ||
+            err.message.includes('schema cache')
+        ))
     );
 
 const EMPTY_MAP = new Map<string, SwapAutoDecision>();

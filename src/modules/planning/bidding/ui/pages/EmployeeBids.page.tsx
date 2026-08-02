@@ -259,9 +259,13 @@ export const EmployeeBidsPage: React.FC = () => {
                     const map: Record<string, string> = {
                         'convention_centre': 'Convention Centre',
                         'exhibition_centre': 'Exhibition Centre',
-                        'theatre': 'Theatre'
+                        'theatre': 'Theatre',
+                        'the_cutaway': 'The Cutaway',
+                        'cutaway': 'The Cutaway',
                     };
-                    return map[t] || t.replace(/_/g, ' ');
+                    if (map[t]) return map[t];
+                    if (t.toLowerCase().includes('cutaway')) return 'The Cutaway';
+                    return t.replace(/_/g, ' ');
                 })(),
                 subGroupName: s.sub_group_name || 'General',
                 subGroup: s.sub_departments?.name || 'General',
@@ -323,9 +327,13 @@ export const EmployeeBidsPage: React.FC = () => {
                     const map: Record<string, string> = {
                         'convention_centre': 'Convention Centre',
                         'exhibition_centre': 'Exhibition Centre',
-                        'theatre': 'Theatre'
+                        'theatre': 'Theatre',
+                        'the_cutaway': 'The Cutaway',
+                        'cutaway': 'The Cutaway',
                     };
-                    return map[t] || t.replace(/_/g, ' ');
+                    if (map[t]) return map[t];
+                    if (t.toLowerCase().includes('cutaway')) return 'The Cutaway';
+                    return t.replace(/_/g, ' ');
                 })(),
                 subGroupName: s.sub_group_name || 'General',
                 subGroup: s.sub_departments?.name || 'General',
@@ -1005,7 +1013,7 @@ export const EmployeeBidsPage: React.FC = () => {
                                                 key={opp.id} 
                                                 className={cn(
                                                     "border-t border-border/50 transition-colors cursor-pointer",
-                                                    getRowClass(opp.groupType, opp.department)
+                                                    getRowClass(opp.groupType, opp.group || opp.department)
                                                 )}
                                                 onClick={() => {
                                                     if (isBulkModeActive) {
