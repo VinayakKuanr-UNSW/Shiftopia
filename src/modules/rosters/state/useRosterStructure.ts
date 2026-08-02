@@ -43,12 +43,10 @@ async function fetchRosterStructure(
         query = query.in('department_id', filters.departmentIds.filter(id => isValidUuid(id)));
     }
 
-    if (filters?.subDepartmentIds !== undefined) {
-        if (filters.subDepartmentIds.length > 0) {
-            query = query.in('sub_department_id', filters.subDepartmentIds.filter(id => isValidUuid(id)));
-        } else {
-            // Explicitly empty array means "Global only" (sub_department_id is null)
-            query = query.is('sub_department_id', null);
+    if (filters?.subDepartmentIds && filters.subDepartmentIds.length > 0) {
+        const validSubDeptIds = filters.subDepartmentIds.filter(id => isValidUuid(id));
+        if (validSubDeptIds.length > 0) {
+            query = query.in('sub_department_id', validSubDeptIds);
         }
     }
 

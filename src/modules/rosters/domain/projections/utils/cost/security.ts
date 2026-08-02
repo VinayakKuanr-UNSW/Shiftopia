@@ -5,6 +5,7 @@ import {
 } from './constants';
 import { CostCalculatorOptions, ShiftCostBreakdown } from './types';
 import { resolveRateSet, type RateSet, type WageRateTable } from './rate-schedule';
+import { resolvePaymentMinEngagementMinutes } from './min-engagement-floor';
 import type { AwardContext } from './award-context';
 import { getDateFacts, parseTimeToMinutes, fastNightMinutes } from './award-context';
 
@@ -107,13 +108,15 @@ export function estimateDetailedShiftCost(
 
   const { netMinutes, rate, shift_date, is_overnight, previousWage, employmentType } = options;
 
-  const isLeave = !!(options.isAnnualLeave || options.isPersonalLeave || options.isCarerLeave);
+  // AUDIT FIX L2: include FDV leave (cl 46.6) — parity with the Standard engine.
+  const isLeave = !!(options.isAnnualLeave || options.isPersonalLeave || options.isCarerLeave || options.isFdvLeave);
   const isCasualType = /casual/i.test(employmentType || '');
   const isFullTimeType = /full/i.test(employmentType || '');
 
   // Casuals accrue no paid leave — their 25% loading is paid in lieu — so a
   // leave-flagged casual security shift costs nothing (audit Phase 3).
-  if (isLeave && isCasualType) return ZERO_COST_BREAKDOWN;
+  // EXCEPTION: FDV leave (cl 46.6) IS paid for casuals.
+  if (isLeave && isCasualType && !options.isFdvLeave) return ZERO_COST_BREAKDOWN;
 
   // audit Phase 2: security annualised/ordinary rates are effective-dated.
   const rateSet = resolveRateSet(shift_date);
@@ -219,11 +222,20 @@ export function estimateDetailedShiftCost(
   let penaltyCost = 0;
   let nightAllowanceCost = 0;
   let nightHours = 0;
+  // AUDIT FIX L4: per-day-type splits.
+  let pbSatH = 0, pbSunH = 0, pbPhH = 0;
+  let pbSatC = 0, pbSunC = 0, pbPhC = 0;
   if (!isAnnualised) {
     for (const seg of segments) {
       const segHours = Math.max(0, (seg.toMins - seg.fromMins) / 60);
       const segLoad = penaltyLoading(seg.day, seg.isHoliday);
-      penaltyCost += segHours * ordinaryRate * segLoad;
+      const segPenaltyCost = segHours * ordinaryRate * segLoad;
+      penaltyCost += segPenaltyCost;
+
+      // L4: per-day-type accumulation.
+      if (seg.isHoliday) { pbPhH += segHours; pbPhC += segPenaltyCost; }
+      else if (seg.day === SATURDAY) { pbSatH += segHours; pbSatC += segPenaltyCost; }
+      else if (seg.day === SUNDAY) { pbSunH += segHours; pbSunC += segPenaltyCost; }
 
       if (hasTimes) {
         const segNightHours = fastNightMinutes(seg.fromMins, seg.toMins) / 60;
@@ -242,13 +254,21 @@ export function estimateDetailedShiftCost(
   // ── Leave (annual / personal / carer) — non-annualised permanents ─────────
   // Annualised FT is salaried (leave already within the salary) and falls
   // through to normal pricing. Non-annualised: annual leave = the greater of
-  // base + 17.5% loading (cl 44.7) or the as-worked penalty value; personal /
-  // carer = ordinary base. No OT, no floor, no night allowance.
+  // base + 17.5% loading (cl 44.7) or the as-worked penalty value. AUDIT M1:
+  // the EA's printed cl 44.7 is a flat additive formula; the "greater of"
+  // comparison is a DELIBERATE BETTER-OFF-OVERALL policy, not the EA's own
+  // wording. Personal / carer = ordinary base. No OT, no floor, no night
+  // allowance.
   if (isLeave && !isAnnualised) {
     const leaveBase = ordinaryHours * finalEffectiveRate;
-    const leaveTotal = options.isAnnualLeave
-      ? Math.max(leaveBase * (1 + ANNUAL_LEAVE_LOADING), leaveBase + penaltyCost + nightAllowanceCost)
-      : leaveBase;
+    // AUDIT FIX L2: FDV leave (cl 46.6 / NES s106B) is priced as-worked
+    // (ordinaryCost + nightAllowanceCost), no 17.5% loading, no floor, no OT
+    // — parity with the Standard engine's FDV branch.
+    const leaveTotal = options.isFdvLeave
+      ? ordinaryCost + nightAllowanceCost
+      : options.isAnnualLeave
+        ? Math.max(leaveBase * (1 + ANNUAL_LEAVE_LOADING), leaveBase + penaltyCost + nightAllowanceCost)
+        : leaveBase;
     const r2 = (x: number) => Math.round(x * 100) / 100;
     return {
       totalCost: r2(leaveTotal),
@@ -272,16 +292,29 @@ export function estimateDetailedShiftCost(
   }
 
   // ── Minimum engagement (Sch 3 §5.2(e) / §5.3(e)) — PT & casual only ───────
-  // 4h on a Sunday or PH, 3h otherwise. Top-up hours are paid but not worked:
-  // priced at the engagement-day rate, no night allowance.
+  // Top-up hours are paid but not worked: priced at the engagement-day rate,
+  // no night allowance. Threshold logic lives in
+  // `resolvePaymentMinEngagementMinutes` — the SAME function the Standard
+  // engine and the timesheets billable floor use, so they can never disagree
+  // (F-locked 2026-07-28). isAnnualised is excluded by the guard below —
+  // annualised FT security has no per-engagement floor.
   let paidOrdinaryHours = ordinaryHours;
   if (!isAnnualised && netHours > 0) {
-    const floorHours = (isHoliday || shiftDay === SUNDAY) ? 4 : 3;
-    if (paidOrdinaryHours < floorHours) {
-      const topUp = floorHours - paidOrdinaryHours;
-      ordinaryCost += topUp * finalEffectiveRate;
-      penaltyCost += topUp * ordinaryRate * startPenaltyLoad;
-      paidOrdinaryHours = floorHours;
+    const floorMinutes = resolvePaymentMinEngagementMinutes({
+      employmentType,
+      isSecurityRole: true,
+      isTraining: options.is_training_shift,
+      isSunday: shiftDay === SUNDAY,
+      isPublicHoliday: isHoliday,
+    });
+    if (floorMinutes != null) {
+      const floorHours = floorMinutes / 60;
+      if (paidOrdinaryHours < floorHours) {
+        const topUp = floorHours - paidOrdinaryHours;
+        ordinaryCost += topUp * finalEffectiveRate;
+        penaltyCost += topUp * ordinaryRate * startPenaltyLoad;
+        paidOrdinaryHours = floorHours;
+      }
     }
   }
 
@@ -348,6 +381,13 @@ export function estimateDetailedShiftCost(
       isTrainee: false,
       nightHours,
       nightAllowanceCost: Math.round(nightAllowanceCost * 100) / 100,
+    },
+    // AUDIT FIX L4: single source of truth for day-type splits.
+    penaltyBreakdown: {
+      satHours: pbSatH, sunHours: pbSunH, phHours: pbPhH,
+      satCost: Math.round(pbSatC * 100) / 100,
+      sunCost: Math.round(pbSunC * 100) / 100,
+      phCost: Math.round(pbPhC * 100) / 100,
     },
   };
 }

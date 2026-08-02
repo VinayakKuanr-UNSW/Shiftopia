@@ -25,16 +25,23 @@ function isSecurityShift(options: CostCalculatorOptions | any): boolean {
   return false;
 }
 
+// Compliance audit finding (2026-08-02, Schedule 1): every caller that fails
+// to resolve a classification level from `extractLevel()` silently falls
+// through to the engine's Level-1-casual default rate, with no visibility.
+// De-duplicated per distinct unmatched role name so a large roster run (many
+// shifts sharing one unrecognised role) logs once, not once per shift.
+const warnedUnclassifiedRoles = new Set<string>();
+
 export function extractLevel(roleName?: string | null): string | undefined {
   if (!roleName) return undefined;
-  
+
   // 1. Check for explicit level shorthand L1, L2, etc.
   const match = roleName.match(/(?:L|Level\s*)(\d)/i);
   if (match) return `LEVEL_${match[1]}`;
-  
+
   // 2. Trainee detection (Maps to WAGE_RATES.TRAINEE)
   if (roleName.toLowerCase().includes('trainee')) return 'TRAINEE';
-  
+
   // 3. Common Role Mappings for ICC Sydney
   const name = roleName.toLowerCase();
   if (name.includes('supervisor')) return 'LEVEL_5';
@@ -43,7 +50,21 @@ export function extractLevel(roleName?: string | null): string | undefined {
   if (name.includes('attendant') || name.includes('crew')) return 'LEVEL_2';
   if (name.includes('assistant')) return 'LEVEL_1';
   if (name.includes('manager')) return 'LEVEL_7';
-  
+
+  // A real role name was supplied but none of the keyword patterns above
+  // matched it — every caller resolves this `undefined` to the engine's
+  // default rate (Level 1 casual), which is a silent Schedule 1
+  // misclassification risk, not a benign "no role yet" case.
+  if (!warnedUnclassifiedRoles.has(roleName)) {
+    warnedUnclassifiedRoles.add(roleName);
+    console.warn(
+      `[cost/extractLevel] Role "${roleName}" did not match any Schedule 1 classification ` +
+      'keyword — pricing will silently fall back to the default (Level 1 casual) rate. ' +
+      'Add a keyword mapping or, preferably, resolve this role\'s classification_level explicitly ' +
+      'instead of inferring it from the name.',
+    );
+  }
+
   return undefined;
 }
 
@@ -69,7 +90,11 @@ export function estimateShiftCost(
 
 // Legacy wrappers to maintain compatibility with existing call sites
 export function estimateCostFromShift(shift: any, netMinutesOverride?: number): number {
-  const mins = netMinutesOverride ?? shift.net_length_minutes ?? 0;
+  // No trailing `?? 0`: when neither an override nor a stored net-length is
+  // available, `mins` must stay `undefined` so estimateShiftCost's own
+  // start/end-time fallback runs — coercing to a synthetic 0 here would read
+  // as "genuinely zero minutes worked" and zero out the estimate.
+  const mins = netMinutesOverride ?? shift.net_length_minutes;
   return estimateShiftCost({
     netMinutes: mins,
     start_time: shift.start_time,
@@ -109,7 +134,8 @@ export function estimateDetailedCostFromShift(shift: any, netMinutesOverride?: n
     return costCache.get(shift)!;
   }
 
-  const mins = netMinutesOverride ?? shift.net_length_minutes ?? shift.netLengthMinutes ?? 0;
+  // See estimateCostFromShift above: no trailing `?? 0`, for the same reason.
+  const mins = netMinutesOverride ?? shift.net_length_minutes ?? shift.netLengthMinutes;
   const roleName = shift.roles?.name || shift.roleName;
   const empType = shift.target_employment_type || shift.employmentType;
   
@@ -134,6 +160,7 @@ export function estimateDetailedCostFromShift(shift: any, netMinutesOverride?: n
     // when a caller has already computed it; undefined leaves weekly OT off.
     priorOrdinaryHoursThisWeek: shift.priorOrdinaryHoursThisWeek,
     higherDutiesLevel: shift.higherDutiesLevel,
+    is_training_shift: shift.is_training,
   } as any);
 
   // Cache the result if no override was used

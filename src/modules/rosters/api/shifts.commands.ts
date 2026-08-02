@@ -577,7 +577,7 @@ export const shiftsCommands = {
         // TTS<4h + assigned case and does the emergency-confirm write server-side (see
         // migration 20260721013000). This used to be a direct, unprotected
         // `supabase.from('shifts').update()` here with no row lock and no version CAS;
-        // that gap is what docs/audits/reserve-list-audit-and-implementation-plan.md §6
+        // that gap is what docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md §6
         // flagged as the exact race Reserve List needed closed before it could be safe.
         if (isAssigned && ttsMs > 0 && ttsMs < FOUR_HOURS_MS) {
             const envelope = await callRpc(
@@ -805,7 +805,7 @@ export const shiftsCommands = {
         // and does the emergency-confirm write server-side (migration 20260721013000),
         // with a real row lock + version CAS. This used to be a direct, unprotected
         // `supabase.from('shifts').update()` here — the exact gap
-        // docs/audits/reserve-list-audit-and-implementation-plan.md §6 flagged as
+        // docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md §6 flagged as
         // needing to close before Reserve List's own writes could rely on the same
         // pattern. One RPC call per shift (mirrors bulkUnassignShifts below), since
         // the gateway is single-shift by design.

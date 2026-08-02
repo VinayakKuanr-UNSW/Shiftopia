@@ -253,22 +253,21 @@ export function planPublishRoster(shifts: Shift[]): PublishRosterPlan {
         // Only DRAFT shifts are in scope.
         if (s.deleted_at || s.is_cancelled || isPublishedOrTerminal) continue;
 
-        const isUnassigned = !s.assigned_employee_id;
-
-        // Dead shift — an unassigned draft whose scheduled window is already LIVE.
-        // It started with nobody on it and can never be staffed → delete.
-        if (isUnassigned && getTimeRule(s)?.label === 'Live') {
-            deadIds.push(s.id);
-            continue;
-        }
-
-        // Resolve the start instant the same way getTimeRule does (canonical
-        // start_at wins, else the wall-clock shift_date + start_time). Past-start
-        // drafts that aren't "dead" (e.g. assigned but never published) can't be
-        // published → skipped.
         const startMs = s.start_at
             ? new Date(s.start_at).getTime()
             : parseZonedDateTime(s.shift_date, s.start_time, SYDNEY_TZ).getTime();
+        const endMs = s.end_at
+            ? new Date(s.end_at).getTime()
+            : parseZonedDateTime(s.shift_date, s.end_time, SYDNEY_TZ).getTime();
+
+        const isUnassigned = !s.assigned_employee_id;
+
+        // Dead shift — an unassigned draft currently inside its scheduled window.
+        // It started with nobody on it and can never be staffed → delete.
+        if (isUnassigned && nowMs >= startMs && nowMs < endMs) {
+            deadIds.push(s.id);
+            continue;
+        }
         if (!Number.isFinite(startMs) || startMs <= nowMs) continue;
 
         const isEmergent = startMs - nowMs <= EMERGENT_WINDOW_MS;

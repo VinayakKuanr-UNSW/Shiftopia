@@ -56,7 +56,8 @@ export function classifyAttendance(input: AttendanceInput): AttendanceFlags {
   const status = (attendanceStatus ?? '').toLowerCase();
 
   const noShow = status === 'no_show';
-  const autoClockOut = status === 'auto_clock_out';
+  const hasOut = clockOutVarianceMin != null;
+  const autoClockOut = status === 'auto_clock_out' || (hasEnded && !noShow && clockInVarianceMin != null && !hasOut);
 
   // Worked = the shift has ended, it's not a no-show, and there's evidence of
   // attendance (a recognised attended status or an actual clock-in).
@@ -67,7 +68,7 @@ export function classifyAttendance(input: AttendanceInput): AttendanceFlags {
 
   // In/out buckets only apply to worked shifts that have the relevant clock time.
   const hasIn = worked && clockInVarianceMin != null;
-  const hasOut = worked && clockOutVarianceMin != null;
+  const hasOutWorked = worked && hasOut;
 
   return {
     worked,
@@ -76,9 +77,9 @@ export function classifyAttendance(input: AttendanceInput): AttendanceFlags {
     earlyIn: hasIn && clockInVarianceMin! < -g,
     onTimeIn: hasIn && clockInVarianceMin! >= -g && clockInVarianceMin! <= g,
     lateIn: hasIn && clockInVarianceMin! > g,
-    earlyOut: hasOut && clockOutVarianceMin! < -g,
-    onTimeOut: hasOut && clockOutVarianceMin! >= -g && clockOutVarianceMin! <= g,
-    lateOut: hasOut && clockOutVarianceMin! > g,
+    earlyOut: hasOutWorked && clockOutVarianceMin! < -g,
+    onTimeOut: hasOutWorked && clockOutVarianceMin! >= -g && clockOutVarianceMin! <= g,
+    lateOut: hasOutWorked && clockOutVarianceMin! > g,
   };
 }
 

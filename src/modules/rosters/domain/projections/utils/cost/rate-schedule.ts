@@ -175,7 +175,41 @@ export function resolveRateSet(
       applicable = rs;
     }
   }
+  warnIfScheduleStale(schedule);
   return applicable ?? earliest;
+}
+
+/** cl 25.1/25.2 — a new rate increase is due roughly annually (1 July). */
+const RATE_SCHEDULE_STALE_AFTER_DAYS = 370;
+
+/**
+ * Audit L-3: the CPI table correctly has only the two published increases
+ * populated (later 1 Jul 2027/28 entries are deliberately deferred until the
+ * ABS Sydney CPI figure is published — inventing a number would be worse than
+ * leaving it absent), but nothing ever alerted anyone that the schedule had
+ * gone past its last known-good entry with no successor added. Pure — takes
+ * `asOf` so it's testable without a real-time dependency.
+ */
+export function isRateScheduleStale(schedule: RateSet[] = RATE_SCHEDULE, asOf: Date = new Date()): boolean {
+  if (schedule.length === 0) return false;
+  const latest = schedule.reduce((a, b) => (b.effectiveFrom > a.effectiveFrom ? b : a));
+  const latestDate = new Date(latest.effectiveFrom + 'T00:00:00');
+  if (Number.isNaN(latestDate.getTime())) return false;
+  const daysSince = (asOf.getTime() - latestDate.getTime()) / (24 * 60 * 60 * 1000);
+  return daysSince > RATE_SCHEDULE_STALE_AFTER_DAYS;
+}
+
+let hasWarnedStale = false;
+function warnIfScheduleStale(schedule: RateSet[]): void {
+  if (hasWarnedStale) return;
+  if (isRateScheduleStale(schedule)) {
+    hasWarnedStale = true;
+    console.warn(
+      '[rate-schedule] RATE_SCHEDULE\'s latest entry is over a year old — check whether the ABS ' +
+      'Sydney CPI figure for the next 1 July cl 25.1 increase has been published and add it ' +
+      '(see the file header for how). This warning fires once per process.',
+    );
+  }
 }
 
 const r2 = (x: number): number => Math.round(x * 100) / 100;

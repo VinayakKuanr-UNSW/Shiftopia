@@ -108,7 +108,11 @@ describe('assign', () => {
         expect(isShiftOpLegal('assign', ctx({ state: 'S4', isAssigned: true }))).toBe(true);
     });
 
-    it('illegal from S11 (in progress / started)', () => {
+    it('legal from S1 (draft, unassigned) even if hasStarted=true', () => {
+        expect(isShiftOpLegal('assign', ctx({ state: 'S1', isAssigned: false, hasStarted: true }))).toBe(true);
+    });
+
+    it('illegal from S11 (in progress / assigned and started)', () => {
         expect(isShiftOpLegal('assign', ctx({ state: 'S11', isAssigned: true, hasStarted: true }))).toBe(false);
     });
 

@@ -14,6 +14,8 @@ import { netMinutesFromShift } from '../utils/duration';
 import { estimateDetailedShiftCost } from '../utils/cost/index';
 import { buildAwardContext } from '../utils/cost/award-context';
 import type { AwardContext } from '../utils/cost/award-context';
+import { detectSplitShiftEligibleIds } from '../utils/cost/split-shift-eligibility';
+import { detectRestGapBreaches } from '../utils/cost/rest-gap-breach';
 
 /**
  * Compute the top-level ProjectionStats bag from a flat Shift array.
@@ -87,6 +89,42 @@ export function buildStats(shifts: Shift[]): ProjectionStats {
   // ── cl 42 weekly OT: per-employee / per-ISO-week prior-ordinary accumulation.
   const priorOrdinaryMap = buildPriorOrdinaryMap(nonCancelled);
 
+  // ── cl 28.4/39 split-shift allowance: auto-derived from same-day PT/Flex-PT
+  // pairs with a ≤3h gap (compliance audit finding — 2026-08-02). Mirrors the
+  // WorkerShiftDTO-path wiring in runProjectionPipeline.ts so both stats
+  // surfaces agree.
+  const splitShiftEligibleIds = detectSplitShiftEligibleIds(
+    nonCancelled
+      .filter(s => !!s.assigned_employee_id)
+      .map(s => ({
+        id: s.id,
+        employeeId: s.assigned_employee_id as string,
+        shiftDate: s.shift_date,
+        startTime: s.start_time,
+        endTime: s.end_time,
+        employmentType: s.target_employment_type,
+        isLeave: !!((s as any).isAnnualLeave || (s as any).isPersonalLeave || (s as any).isCarerLeave),
+      })),
+  );
+
+  // ── cl 40.1 rest-gap double-time: forced early recall (compliance audit
+  // finding — 2026-08-02). Applies to EVERY employment type, so — unlike
+  // split-shift — the candidate filter is not narrowed to PT/Flex-PT. Mirrors
+  // the WorkerShiftDTO-path wiring in runProjectionPipeline.ts.
+  const restGapBreaches = detectRestGapBreaches(
+    nonCancelled
+      .filter(s => !!s.assigned_employee_id)
+      .map(s => ({
+        id: s.id,
+        employeeId: s.assigned_employee_id as string,
+        shiftDate: s.shift_date,
+        startTime: s.start_time,
+        endTime: s.end_time,
+        isWorkedWithTimes: !((s as any).isAnnualLeave || (s as any).isPersonalLeave || (s as any).isCarerLeave)
+          && !!s.start_time && !!s.end_time && netMinutesFromShift(s) > 0,
+      })),
+  );
+
   let totalNetMinutes = 0;
   let estimatedCost   = 0;
   const costBreakdown = {
@@ -105,6 +143,9 @@ export function buildStats(shifts: Shift[]): ProjectionStats {
     if (shift.assigned_employee_id) {
       const roleName = shift.roles?.name;
       const empType = shift.target_employment_type;
+      const allowances = splitShiftEligibleIds.has(shift.id)
+        ? { ...shift.allowances, splitShift: true }
+        : shift.allowances;
 
       const detail = estimateDetailedShiftCost({
         netMinutes: mins,
@@ -115,7 +156,7 @@ export function buildStats(shifts: Shift[]): ProjectionStats {
         is_overnight: !!shift.is_overnight,
         is_cancelled: !!shift.is_cancelled,
         shift_date: shift.shift_date,
-        allowances: shift.allowances,
+        allowances,
         isAnnualLeave: (shift as any).isAnnualLeave,
         isPersonalLeave: (shift as any).isPersonalLeave,
         isCarerLeave: (shift as any).isCarerLeave,
@@ -129,9 +170,22 @@ export function buildStats(shifts: Shift[]): ProjectionStats {
         priorOrdinaryHoursThisWeek: priorOrdinaryMap.get(shift.id),
       } as any, ctx);
 
-      estimatedCost += detail.totalCost;
+      // cl 40.1 double-time floor — a pure additive top-up on the running
+      // totals; never mutates `detail`.
+      let restGapPenalty = 0;
+      if (restGapBreaches.has(shift.id)) {
+        const hours = detail.ordinaryHours + detail.overtimeHours;
+        const ordinaryRate = detail.breakdown.ordinaryRate;
+        const effectiveRate = hours > 0 ? detail.totalCost / hours : 0;
+        const doubleTimeRate = 2 * ordinaryRate;
+        if (ordinaryRate > 0 && effectiveRate < doubleTimeRate) {
+          restGapPenalty = Math.round((doubleTimeRate - effectiveRate) * hours * 100) / 100;
+        }
+      }
+
+      estimatedCost += detail.totalCost + restGapPenalty;
       costBreakdown.base += detail.ordinaryCost;
-      costBreakdown.penalty += detail.penaltyCost;
+      costBreakdown.penalty += detail.penaltyCost + restGapPenalty;
       costBreakdown.overtime += detail.overtimeCost;
       costBreakdown.allowance += detail.allowanceCost ?? 0;
     }

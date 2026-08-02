@@ -4,6 +4,7 @@ import {
   MEAL_ALLOWANCE_OVERTIME_THRESHOLD_HOURS,
 } from './constants';
 import { resolveRateSet, type WageRateTable } from './rate-schedule';
+import { resolvePaymentMinEngagementMinutes } from './min-engagement-floor';
 import { getTraineeBaseRate } from './trainee_matrix';
 import { getApprenticeMultiplier, SWS_MIN_WEEKLY } from './apprentice_matrix';
 import type { AwardContext } from './award-context';
@@ -145,6 +146,11 @@ export function estimateDetailedShiftCost(
   }
 
   const isCasual = /casual/i.test(employmentType || '');
+  // AMBIGUITY (documented per audit — L3): cl 42.1 names only "full-time and
+  // part-time" for the "excess of rostered hours ⇒ overtime" trigger. This
+  // regex silently groups Flexible Part-Time with Part-Time. This is a
+  // defensible reading (Flexible Part-Time is a sub-type of Part-Time under
+  // cl 12.4), but the EA is not explicit. Kept as-is until the parties clarify.
   const isPartTime = /part/i.test(employmentType || '');
   
   // audit Phase 2: rates & allowances are effective-dated — resolve the set in
@@ -235,24 +241,39 @@ export function estimateDetailedShiftCost(
     }
   } 
   else if (options.is_apprentice) {
-    baseRate *= getApprenticeMultiplier(options);
+    baseRate *= getApprenticeMultiplier(options, rateSet);
   }
 
   const ordinaryRate = isCasual ? baseRate / 1.25 : baseRate;
   if (isNaN(ordinaryRate)) return ZERO_RESULT;
 
   // ── Net minutes calculation (Pure integer arithmetic) ──────────────────
-  const rawMins = netMinutes || (options as any).net_length_minutes || (options as any).netLengthMinutes;
-  let calculatedMins = typeof rawMins === 'number' ? rawMins : Number(rawMins);
-  
-  if (!calculatedMins || isNaN(calculatedMins) || calculatedMins <= 0) {
+  // `netMinutes` is the ONE source of truth here — every caller (confirmed
+  // across the codebase) either supplies it explicitly (including a genuine
+  // 0) or omits it entirely to request the schedule-derived estimate below.
+  // No other field name is ever populated on `options`, so no further
+  // fallback chain is needed; an explicit 0 must be respected as-is, since
+  // treating it as "missing" would fall through to the start/end recompute
+  // and misread equal start/end times as a midnight rollover (a full 24h).
+  let calculatedMins = typeof netMinutes === 'number' ? netMinutes : Number(netMinutes);
+
+  if (calculatedMins == null || isNaN(calculatedMins) || calculatedMins < 0) {
     if (options.start_time && options.end_time) {
       const sTime = String(options.start_time).substring(0, 5);
       const eTime = String(options.end_time).substring(0, 5);
       const sMins = parseTimeToMinutes(sTime);
       let eMins = parseTimeToMinutes(eTime);
       if (eMins <= sMins || is_overnight) eMins += 1440;
-      calculatedMins = eMins - sMins;
+      // cl 36.1 — the unpaid meal break is deducted here ONLY: a caller that
+      // already supplies `netMinutes` is expected to have net'd it out itself
+      // (see the "single source of truth" note above). Compliance audit
+      // finding: this fallback previously priced the FULL clock span,
+      // silently paying out an unpaid break whenever a caller didn't
+      // pre-compute netMinutes (e.g. the AutoScheduler greedy-fallback cost
+      // estimate — fixed at its call site too).
+      calculatedMins = Math.max(0, eMins - sMins - (options.unpaid_break_minutes || 0));
+    } else {
+      calculatedMins = 0;
     }
   }
 
@@ -375,10 +396,20 @@ export function estimateDetailedShiftCost(
   let ordinaryCost = 0;
   let nightAllowanceCost = 0;
   let nightHours = 0;
+  // AUDIT FIX L4: accumulate per-day-type splits so the line-item decomposition
+  // can read engine data instead of re-deriving from scratch.
+  let pbSatH = 0, pbSunH = 0, pbPhH = 0;
+  let pbSatC = 0, pbSunC = 0, pbPhC = 0;
   for (const seg of segments) {
     const segHours = Math.max(0, (seg.toMins - seg.fromMins) / 60);
     const segPenaltyLoad = penaltyLoading(seg.day, seg.isHoliday);
+    const segPenaltyCost = segHours * ordinaryRate * segPenaltyLoad;
     ordinaryCost += segHours * ordinaryRate * (baseMult + segPenaltyLoad);
+
+    // L4: per-day-type accumulation.
+    if (seg.isHoliday) { pbPhH += segHours; pbPhC += segPenaltyCost; }
+    else if (seg.day === SATURDAY) { pbSatH += segHours; pbSatC += segPenaltyCost; }
+    else if (seg.day === SUNDAY) { pbSunH += segHours; pbSunC += segPenaltyCost; }
 
     if (hasTimes) {
       // Worked night hours in this segment (22:00–06:00 window, integer overlap).
@@ -400,11 +431,12 @@ export function estimateDetailedShiftCost(
   // days cost nothing. EXCEPTION: family & domestic violence leave (cl 46 /
   // NES Div 11) IS paid for casuals — cl 46.6 pays "the hours the Team Member
   // is rostered on the day that the leave is taken".
-  //   • Annual leave (cl. 38): the GREATER of the ordinary rate + 17.5% loading,
-  //     or the penalty / night loadings the shift WOULD have earned if worked.
-  //     This is the safe reading of the common "17.5% or shift penalties,
-  //     whichever is greater" drafting; the alternative (flat 17.5%, no
-  //     penalties) is a one-line change if the EA is later read that way.
+  //   • Annual leave (cl. 44.7): the EA's printed clause is an additive
+  //     formula — ordinary rate + 17.5% loading. The "greater of ordinary ×
+  //     1.175 OR as-worked-with-penalties" comparison below is a DELIBERATE
+  //     BETTER-OFF-OVERALL policy, NOT the EA's own wording (AUDIT M1). If
+  //     leadership confirms it should be the flat formula, simplify to
+  //     `ordinaryLeavePay * (1 + ANNUAL_LEAVE_LOADING)` and remove the MAX.
   //   • Personal / carer's leave (NES ss96–99): paid at the ORDINARY base rate
   //     for the ordinary hours — no loading, no penalties (those attach to
   //     actual attendance).
@@ -414,8 +446,6 @@ export function estimateDetailedShiftCost(
   //     via baseMult) the 25% loading. That is exactly the
   //     `ordinaryCost + nightAllowanceCost` lump the annual-leave greater-of
   //     already compares against. No 17.5% loading, no floor, no OT.
-  // ordinaryCost here is the pre-floor per-segment penalty value (the "as worked"
-  // figure); the min-payment floor below is intentionally skipped for leave.
   if (options.isAnnualLeave || options.isPersonalLeave || options.isCarerLeave || options.isFdvLeave) {
     if (isCasual && !options.isFdvLeave) return ZERO_RESULT;
     const leaveHours = ordinaryHours; // rostered ordinary hours (no floor, no OT)
@@ -450,19 +480,30 @@ export function estimateDetailedShiftCost(
   // A part-time / flexi / casual engagement is PAID for at least the minimum
   // hours even when fewer are worked (e.g. sent home early, or a casual reports
   // to a changed/cancelled start under cl. 38.3). Full-time members are weekly-
-  // salaried with no per-engagement minimum and are excluded. Sundays and public
-  // holidays floor at 4h (cl. 56.2 / 12.x); otherwise 3h. Top-up hours are paid
-  // but not worked, so they carry the engagement-day penalty rate and no night
-  // allowance. The 2h training-on-a-non-event-day floor (12.4(c)a / 12.5(c)a) is
-  // not modelled — the engine has no is_training input — so the standard floor
-  // is used there.
-  const isFullTime = /full/i.test(employmentType || '');
+  // salaried with no per-engagement minimum and are excluded. Top-up hours are
+  // paid but not worked, so they carry the engagement-day penalty rate and no
+  // night allowance. Threshold logic (employment-type/Sunday/PH/training/
+  // multi-hire nuance) lives in `resolvePaymentMinEngagementMinutes` — the
+  // SAME function the timesheets billable floor uses, so this engine and the
+  // displayed billable hours can never disagree (F-locked 2026-07-28).
+  const isMultiHire = options.shift_type === 'MULTI_HIRE';
   let paidOrdinaryHours = ordinaryHours;
-  if (!isFullTime && netHours > 0) {
-    const floorHours = (isHoliday || dayOfWeek === SUNDAY) ? 4 : 3;
-    if (paidOrdinaryHours < floorHours) {
-      ordinaryCost += (floorHours - paidOrdinaryHours) * startPenaltyRate;
-      paidOrdinaryHours = floorHours;
+  if (netHours > 0) {
+    const floorMinutes = resolvePaymentMinEngagementMinutes({
+      employmentType,
+      isSecurityRole: false,
+      isTraining: options.is_training_shift,
+      isSunday: dayOfWeek === SUNDAY,
+      isPublicHoliday: isHoliday,
+      isMultiHire,
+      multiHireStartsWithinUsualFinishWindow: options.multiHireStartsWithinUsualFinishWindow,
+    });
+    if (floorMinutes != null) {
+      const floorHours = floorMinutes / 60;
+      if (paidOrdinaryHours < floorHours) {
+        ordinaryCost += (floorHours - paidOrdinaryHours) * startPenaltyRate;
+        paidOrdinaryHours = floorHours;
+      }
     }
   }
 
@@ -542,16 +583,39 @@ export function estimateDetailedShiftCost(
   // >38h reclassification is not "after the rostered finishing time". An
   // explicit `allowances.meal === false` means "meal was provided" (opt-out);
   // `meal: true` still forces it regardless of overtime.
+  // AUDIT FIX M-5: `dailyOvertimeHours` for a CASUAL is only hours past the 12h
+  // daily cap (see the cl 42 block above), because casual OT *pay* is
+  // genuinely capped-only under the EA. But cl 28.1's meal-allowance trigger
+  // is about hours worked past the ROSTERED finish, not about how those hours
+  // get PAID — so a casual working 2h+ past their own rostered finish but
+  // still under the 12h cap was never getting the allowance. Compute the
+  // trigger separately from the pay-rate classification: whichever is larger
+  // of (hours past the 12h cap) or (hours past the rostered finish).
+  const mealTriggerHours = scheduledHours > 0
+    ? Math.max(dailyOvertimeHours, netHours - scheduledHours)
+    : dailyOvertimeHours;
   const mealPayable =
     al?.meal === true ||
-    (al?.meal !== false && dailyOvertimeHours >= MEAL_ALLOWANCE_OVERTIME_THRESHOLD_HOURS);
+    (al?.meal !== false && mealTriggerHours >= MEAL_ALLOWANCE_OVERTIME_THRESHOLD_HOURS);
   if (mealPayable) otherAllowanceCost += rateSet.allowances.meal;                            // per occasion (cl. 28.1)
 
   if (al) {
-    if (al.firstAid) otherAllowanceCost += rateSet.allowances.firstAidPerHour * ordinaryHours; // per ordinary hour worked (cl. 28.2)
+    // AUDIT FIX L-1: price off `paidOrdinaryHours` (post minimum-engagement
+    // floor) not the pre-floor `ordinaryHours` — a topped-up engagement is
+    // PAID for the floor hours, so the per-hour first-aid allowance should
+    // track what's actually paid, consistent with every other per-hour cost
+    // in this function running after the floor is applied.
+    if (al.firstAid) otherAllowanceCost += rateSet.allowances.firstAidPerHour * paidOrdinaryHours; // per ordinary hour worked (cl. 28.2)
     if (al.proteinSpill) otherAllowanceCost += rateSet.allowances.proteinSpill;             // per shift (cl. 28.3)
-    // The split-shift allowance is NOT payable to casual Team Members (cl. 28.4).
-    if (al.splitShift && !isCasual) otherAllowanceCost += rateSet.allowances.splitShift;    // per shift (cl. 28.4)
+    // cl 39.1 / 28.4 — split shifts (and therefore the allowance) apply only
+    // to Part-Time and Flexible Part-Time Team Members; Casual is excluded
+    // by cl 39.1 and Full-Time never works a "split shift" under the EBA's
+    // own definition. Audit M-6: this previously excluded only Casual,
+    // which would have let the allowance leak to Full-Time if the flag were
+    // ever set for one.
+    if (al.splitShift && !isCasual && options.employmentType !== 'Full-Time') {
+      otherAllowanceCost += rateSet.allowances.splitShift;                                  // per shift (cl. 28.4)
+    }
   }
 
   const allowanceCost = nightAllowanceCost + otherAllowanceCost;
@@ -575,7 +639,12 @@ export function estimateDetailedShiftCost(
       isTrainee: !!options.is_trainee,
       nightHours: nightHours || 0,
       nightAllowanceCost: round2(nightAllowanceCost)
-    }
+    },
+    // AUDIT FIX L4: single source of truth for day-type splits.
+    penaltyBreakdown: {
+      satHours: pbSatH, sunHours: pbSunH, phHours: pbPhH,
+      satCost: round2(pbSatC), sunCost: round2(pbSunC), phCost: round2(pbPhC),
+    },
   };
 }
 

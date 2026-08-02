@@ -40,7 +40,7 @@ const SHIFT_DETAIL_SELECT = `
   sub_departments(id, name),
   roles(id, name),
   remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max),
-  assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
+  assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name)),
   timesheets(status, start_time, end_time)
 ` as const;
@@ -128,7 +128,7 @@ const SHIFT_SELECT = `
   sub_departments(id, name),
   roles(id, name),
   remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max),
-  assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
+  assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name)),
   timesheets(status, start_time, end_time)
 ` as const;
@@ -457,7 +457,7 @@ export const shiftsQueries = {
                   sub_departments(id, name),
                   roles(id, name),
                   remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max),
-                  assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
+                  assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
                   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name, external_id)),
                   timesheets(status, start_time, end_time)
                 `)
@@ -505,7 +505,7 @@ export const shiftsQueries = {
                   sub_departments(id, name),
                   roles(id, name),
                   remuneration_levels(level_number, level_name, hourly_rate_min, hourly_rate_max),
-                  assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
+                  assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
                   roster_subgroup:roster_subgroups(name, roster_group:roster_groups(name, external_id)),
                   timesheets(status, notes, rejected_reason, start_time, end_time)
                 `)
@@ -857,11 +857,10 @@ export const shiftsQueries = {
 
             if (filters?.subDepartmentId && isValidUuid(filters.subDepartmentId)) {
                 query = query.eq('sub_department_id', filters.subDepartmentId);
-            } else if (filters?.subDepartmentIds !== undefined) {
-                if (filters.subDepartmentIds.length > 0) {
-                    query = query.in('sub_department_id', filters.subDepartmentIds.filter(isValidUuid));
-                } else {
-                    query = query.is('sub_department_id', null);
+            } else if (filters?.subDepartmentIds && filters.subDepartmentIds.length > 0) {
+                const validSubDeptIds = filters.subDepartmentIds.filter(isValidUuid);
+                if (validSubDeptIds.length > 0) {
+                    query = query.in('sub_department_id', validSubDeptIds);
                 }
             }
 
@@ -1381,7 +1380,7 @@ export const shiftsQueries = {
                     sub_departments(name),
                     roles(name),
                     remuneration_levels(level_name, hourly_rate_min),
-                    assigned_profiles:profiles!assigned_employee_id(first_name, last_name),
+                    assigned_profiles:profiles!assigned_employee_id(first_name, last_name, employment_type),
                     shift_bids(id)
                 `)
                 .eq('organization_id', organizationId)
