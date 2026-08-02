@@ -3,6 +3,7 @@ import {
   LEAVE_POLICIES,
   projectBalance,
   isCertificateRequired,
+  computeCertificateAdjacency,
 } from '../domain/leave-policy';
 import type { LeaveBalance, LeaveRequest } from '../model/leave.types';
 
@@ -91,5 +92,50 @@ describe('isCertificateRequired', () => {
 
   it('never requires cert for annual leave', () => {
     expect(isCertificateRequired('annual', 10)).toBe(false);
+  });
+
+  // Audit M-12: a single day adjacent to a weekend/PH is treated like exceeding
+  // the day-count threshold — the classic "long weekend" pattern.
+  it('requires cert for a single personal-leave day adjacent to a weekend, even under the day-count threshold', () => {
+    expect(isCertificateRequired('personal', 1, { adjacentToWeekend: true })).toBe(true);
+  });
+
+  it('requires cert for a single personal-leave day adjacent to a public holiday', () => {
+    expect(isCertificateRequired('personal', 1, { adjacentToPublicHoliday: true })).toBe(true);
+  });
+
+  it('does not require cert when there is no adjacency and the day-count is under threshold', () => {
+    expect(isCertificateRequired('personal', 1, {})).toBe(false);
+  });
+
+  it('is backward compatible: omitting adjacency behaves exactly as before', () => {
+    expect(isCertificateRequired('personal', 1)).toBe(false);
+    expect(isCertificateRequired('personal', 3)).toBe(true);
+  });
+});
+
+describe('computeCertificateAdjacency', () => {
+  it('flags a single Friday as adjacent to the following weekend', () => {
+    const adj = computeCertificateAdjacency('2026-07-31', '2026-07-31'); // Friday
+    expect(adj.adjacentToWeekend).toBe(true);
+  });
+
+  it('flags a single Monday as adjacent to the preceding weekend', () => {
+    const adj = computeCertificateAdjacency('2026-08-03', '2026-08-03'); // Monday
+    expect(adj.adjacentToWeekend).toBe(true);
+  });
+
+  it('does not flag a mid-week day with no adjacent weekend', () => {
+    const adj = computeCertificateAdjacency('2026-07-29', '2026-07-29'); // Wednesday
+    expect(adj.adjacentToWeekend).toBe(false);
+  });
+
+  it('flags adjacency to New Year\'s Day (a certain public holiday)', () => {
+    const adj = computeCertificateAdjacency('2025-12-31', '2025-12-31');
+    expect(adj.adjacentToPublicHoliday).toBe(true);
+  });
+
+  it('handles malformed dates without throwing', () => {
+    expect(computeCertificateAdjacency('not-a-date', 'also-not-a-date')).toEqual({});
   });
 });

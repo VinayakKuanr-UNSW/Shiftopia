@@ -35,6 +35,56 @@ export async function getLeaveBalances(employeeId: string): Promise<LeaveBalance
   return (data ?? []).map(mapBalanceRow);
 }
 
+/**
+ * Whether the given employee is engaged on a casual basis. Casuals are
+ * excluded from `leave_balances` seeding entirely (they have no accrued
+ * annual/personal balance — cl 12.5(b): the 25% loading is full recompense),
+ * which matters for leave types whose entitlement basis changes for casuals
+ * (cl 45.6 carer's leave, cl 48.8 compassionate leave).
+ */
+async function isCasualEmployee(employeeId: string): Promise<boolean> {
+  const { data, error } = await (supabase as any)
+    .from('profiles')
+    .select('employment_type')
+    .eq('id', employeeId)
+    .single();
+  if (error || !data?.employment_type) return false;
+  const normalized = String(data.employment_type).toLowerCase().replace(/[-_]/g, ' ');
+  return normalized === 'casual' || normalized === 'contractual';
+}
+
+/**
+ * Whether the employee is a Full-Time Security team member (Sch 3 §8) —
+ * mirrors the exact join `accrue_leave_balances()` uses server-side:
+ * an Active contract with employment_status containing "full" whose role
+ * name contains "security". Used to select the role-aware policy table
+ * (`getLeavePolicies`) so the UI's accrual-rate display and balance
+ * projection match the DB's actual 210h/84h basis instead of always
+ * falling back to the general 152h/76h rates (audit H-9).
+ */
+export async function isFullTimeSecurityEmployee(employeeId: string): Promise<boolean> {
+  const { data: contract, error: contractErr } = await (supabase as any)
+    .from('user_contracts')
+    .select('employment_status, role_id')
+    .eq('user_id', employeeId)
+    .eq('status', 'Active')
+    .not('role_id', 'is', null)
+    .maybeSingle();
+  if (contractErr || !contract?.role_id) return false;
+
+  const employmentStatus = String(contract.employment_status ?? '').toLowerCase();
+  if (!employmentStatus.includes('full')) return false;
+
+  const { data: role, error: roleErr } = await (supabase as any)
+    .from('roles')
+    .select('name')
+    .eq('id', contract.role_id)
+    .maybeSingle();
+  if (roleErr || !role?.name) return false;
+
+  return String(role.name).toLowerCase().includes('security');
+}
+
 function mapBalanceRow(row: any): LeaveBalance {
   return {
     id: row.id,
@@ -198,9 +248,21 @@ export async function createLeaveRequest(
   const policy = LEAVE_POLICIES[input.leaveType];
   if (!policy) return { error: `Unknown leave type: ${input.leaveType}` };
 
-  // Balance check for tracked types. For 'carer', check 'personal' balance.
-  const balanceTypeToCheck = input.leaveType === 'carer' ? 'personal' : input.leaveType;
-  const policyToCheck = LEAVE_POLICIES[balanceTypeToCheck];
+  // cl 45.6 / NES s97: for a CASUAL employee, carer's leave is a standalone
+  // 2-days-per-occasion UNPAID entitlement — the same treatment cl 48.8 gives
+  // casual compassionate leave — because casuals never accrue a 'personal'
+  // balance in the first place (audit H-8: this previously hard-rejected
+  // every casual carer's-leave request with "Insufficient personal balance:
+  // 0h available"). Only a non-casual's carer request draws from 'personal'.
+  const isCasual = input.leaveType === 'carer' ? await isCasualEmployee(employeeId) : false;
+
+  // Balance check for tracked types. For 'carer', a non-casual checks
+  // 'personal'; a casual has no balance to check (skip entirely).
+  const balanceTypeToCheck =
+    input.leaveType === 'carer'
+      ? (isCasual ? null : 'personal')
+      : input.leaveType;
+  const policyToCheck = balanceTypeToCheck ? LEAVE_POLICIES[balanceTypeToCheck] : null;
 
   if (policyToCheck?.balanceTracked) {
     const balances = await getLeaveBalances(employeeId);

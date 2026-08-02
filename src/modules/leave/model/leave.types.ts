@@ -18,7 +18,9 @@ export type LeaveTypeCode =
   | 'fdv'               // cl 46, NES Div 11 — 10 days/yr paid, granted up front
   | 'supporting_carer'  // cl 52 — ONE week paid per occasion (secondary carer)
   | 'community_service' // NES ss108-112 — unpaid (except jury duty)
-  | 'unpaid';           // unpaid leave by arrangement
+  | 'unpaid'            // unpaid leave by arrangement
+  | 'religious_cultural' // cl 55 — up to 5 days/calendar year (incl. NAIDOC)
+  | 'gender_affirmation'; // cl 58 — up to 10 days/calendar year
 
 /** Human-readable labels for leave type codes. */
 export const LEAVE_TYPE_LABELS: Record<LeaveTypeCode, string> = {
@@ -33,6 +35,8 @@ export const LEAVE_TYPE_LABELS: Record<LeaveTypeCode, string> = {
   supporting_carer: 'Supporting Carer Leave',
   community_service: 'Community Service Leave',
   unpaid: 'Unpaid Leave',
+  religious_cultural: 'Religious, Cultural & Ceremonial Leave',
+  gender_affirmation: 'Gender Affirmation Leave',
 };
 
 export interface LeavePolicy {
