@@ -1,6 +1,6 @@
 # 01 — Auto-Assign Bids: Target-State Implementation Plan
 
-**Status:** Target-state design. Binds against [00-contracts-and-conventions.md](00-contracts-and-conventions.md) (decisions D1–D5, §4 names, §5 idempotency, §6 enums, §7 routes, §8 conventions) and the [audit](../audits/auto-assign-bids-audit-and-auto-approve-swaps-design.md) (§3 issues, §4 failure table, §5 state machine, §12 roadmap). The audit is assumed correct; this document designs and implements the fixes, it does not re-audit.
+**Status:** Target-state design. Binds against [00-contracts-and-conventions.md](00-contracts-and-conventions.md) (decisions D1–D5, §4 names, §5 idempotency, §6 enums, §7 routes, §8 conventions) and the [audit](AUDIT.md) (§3 issues, §4 failure table, §5 state machine, §12 roadmap). The audit is assumed correct; this document designs and implements the fixes, it does not re-audit.
 
 **Owned objects (contracts §4):** tables `assignment_runs`, `assignment_decisions`, `assignment_events`; RPCs `sm_assignment_run_start`, `sm_assignment_run_finish`, `sm_assignment_run_rollback`; Edge Function `auto-assign-bids`; deprecate `sm_select_bid_winner`. The runnable DDL/PL-pgSQL lives in [0001_assignment_audit_and_engine.sql](migrations-draft/0001_assignment_audit_and_engine.sql) (file B).
 

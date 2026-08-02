@@ -1,6 +1,6 @@
 # 02 — Auto-Approve Swap Requests (Implementation Plan)
 
-**Status:** Production implementation plan. Binds to [00-contracts-and-conventions.md](00-contracts-and-conventions.md) (D3/D4/D5, idempotency §5, enums §6, claim map §4) and extends [the audit/design §6](../audits/auto-assign-bids-audit-and-auto-approve-swaps-design.md). The cross-feature master backlog lives in doc 04 — this doc owns the **swap-specific** slice only.
+**Status:** Production implementation plan. Binds to [00-contracts-and-conventions.md](00-contracts-and-conventions.md) (D3/D4/D5, idempotency §5, enums §6, claim map §4) and extends [the audit/design §6](AUDIT.md). The cross-feature master backlog lives in doc 04 — this doc owns the **swap-specific** slice only.
 
 **Non-negotiables (from contracts):**
 - Reuse [`runSwapGuards`](../../src/modules/compliance/v8/swap-engine/guards.ts) + [`swapEvaluator.evaluate`](../../src/modules/compliance/v8/swap-engine/swap-evaluator.ts) + the [`sm_apply_shift_op`](../../supabase/migrations/20260621100200_sm_apply_shift_op.sql) gateway. **Do not build a new rule engine.** The auto-approver is orchestration + policy only.

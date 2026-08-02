@@ -1,6 +1,6 @@
 # Auto-Assign Bids Refactor + Auto-Approve Swaps — Implementation Plan (Index)
 
-**Date:** 2026-06-23 · **Mode:** Implementation architecture (the audit is in [../audits/auto-assign-bids-audit-and-auto-approve-swaps-design.md](../audits/auto-assign-bids-audit-and-auto-approve-swaps-design.md); this set moves from findings to a buildable plan).
+**Date:** 2026-06-23 · **Mode:** Implementation architecture (the audit is in [AUDIT.md](AUDIT.md); this set moves from findings to a buildable plan).
 
 This is a multi-document plan. Read [00-contracts-and-conventions.md](00-contracts-and-conventions.md) first — it is **binding** (canonical names, the gateway contract, idempotency formats, enums, P0/P1/P2 convention) and the other docs depend on it.
 
@@ -8,6 +8,7 @@ This is a multi-document plan. Read [00-contracts-and-conventions.md](00-contrac
 
 | # | Doc | Owns | Size |
 |---|---|---|---|
+| — | [AUDIT.md](AUDIT.md) | The originating adversarial audit — two divergent engines, HIGH-risk findings, 32-row failure table | read first |
 | 00 | [00-contracts-and-conventions.md](00-contracts-and-conventions.md) | Architecture decisions D1–D5, reused primitives, canonical names, idempotency, API routes | binding spec |
 | 01 | [01-auto-assign-bids-refactor.md](01-auto-assign-bids-refactor.md) | SSoT decision, server engine, 10 mandatory fixes, fairness engine, concurrency, audit, API, rollback | Part 1 |
 | 02 | [02-auto-approve-swaps.md](02-auto-approve-swaps.md) | Architecture, decision matrix, eligibility algorithms, abuse prevention, swap DB, swap backlog/deploy | Part 2 |

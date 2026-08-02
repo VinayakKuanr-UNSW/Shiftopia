@@ -251,7 +251,7 @@ No changes needed to `availability_slots`, `availability_rules`, `shift_licenses
 
 ## 14. API / frontend / backend impact
 
-**New frontend module** (per this repo's DDD module standards in `docs/ddd-module-standards.md`): recommend a `src/modules/reserve-list/` module rather than growing `src/modules/rosters/` further, containing:
+**New frontend module** (per this repo's DDD module standards in `docs/architecture/ddd-module-standards.md`): recommend a `src/modules/reserve-list/` module rather than growing `src/modules/rosters/` further, containing:
 - `api/reserveList.service.ts` — `getReserveListCandidates(shiftId)`, `assignFromReserveList(shiftId, employeeId, expectedVersion)` (thin wrapper over `sm_apply_shift_op`)
 - `ui/ReserveListPanel.tsx` — candidate list, per-row compliance status/current-hours/warnings, Assign/Refresh/Run Compliance buttons, styled per `DrillDownPanel.tsx` conventions
 - Availability page: add the `Switch`-based "Reserve List" opt-in toggle to `AvailabilityPage.tsx`

@@ -2,8 +2,8 @@
 -- 0002_swap_auto_approve.sql  —  DRAFT (expand/contract-safe)
 -- =============================================================================
 -- Owner: doc 02 (Auto-Approve Swaps). Companion to:
---   docs/implementation/02-auto-approve-swaps.md
---   docs/implementation/00-contracts-and-conventions.md  (binding names)
+--   docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/02-auto-approve-swaps.md
+--   docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/00-contracts-and-conventions.md  (binding names)
 --
 -- DO NOT place this file in supabase/migrations/. Prod is live — a human
 -- promotes drafts. This script is additive-only (expand phase): four new

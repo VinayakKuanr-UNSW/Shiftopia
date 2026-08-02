@@ -67,13 +67,13 @@ Any engine/guard exception ⇒ never auto-approve / never auto-assign that item;
 - RPCs (PG, SECURITY DEFINER): `sm_assignment_run_start(...)`, `sm_assignment_run_finish(...)`, `sm_assignment_run_rollback(p_run_id uuid)`. **DEPLOYED (prod, migration `20260623134031`):** rollback is **single-arg** — actor is derived from `auth.uid()` internally (NULL under service role = system rollback; the caller must authorize first). Earlier drafts listed a `p_actor` second arg — that is NOT the deployed signature.
 - Edge Function: `auto-assign-bids`.
 - Deprecate: `sm_select_bid_winner` (kept as a thin wrapper that calls the gateway during transition, then dropped).
-- Draft migration file: `docs/implementation/migrations-draft/0001_assignment_audit_and_engine.sql`.
+- Draft migration file: `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/migrations-draft/0001_assignment_audit_and_engine.sql`.
 
 **Owned by 02 (Auto-Approve Swaps):**
 - Tables: `swap_approval_rules`, `swap_decisions`, `swap_audit_log`, `swap_review_queue`.
 - RPCs: `sm_swap_auto_decide(p_swap_id uuid, p_idempotency_key text)`, `enqueue_swap_auto_decision()` (trigger fn), `sm_swap_auto_revert(p_decision_id uuid, p_actor uuid)`.
 - Edge Function: `auto-approve-swaps`.
-- Draft migration file: `docs/implementation/migrations-draft/0002_swap_auto_approve.sql`.
+- Draft migration file: `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/migrations-draft/0002_swap_auto_approve.sql`.
 
 > 01 must NOT define swap_* objects; 02 must NOT define assignment_* objects. Cross-references by name only.
 
@@ -100,7 +100,7 @@ Any engine/guard exception ⇒ never auto-approve / never auto-assign that item;
 
 ## 8. Conventions
 
-- Migrations: **expand/contract**, additive first, never destructive in the same deploy. New columns nullable or defaulted. Drafts live under `docs/implementation/migrations-draft/` and are **never** placed in `supabase/migrations/` by an agent (prod is live — humans promote drafts).
+- Migrations: **expand/contract**, additive first, never destructive in the same deploy. New columns nullable or defaulted. Drafts live under `docs/investigations/2026-06-24_auto-assign-bids-and-swap-approval/migrations-draft/` and are **never** placed in `supabase/migrations/` by an agent (prod is live — humans promote drafts).
 - All new RPCs are `SECURITY DEFINER`, `SET search_path = public, pg_catalog`, and authorize the caller explicitly (cert-based; `is_manager_or_above()` is BROKEN in prod — use `app_access_certificates` with `access_level` + `is_active = true`, manager column is `user_id`).
 - Priority ranks: **P0** = correctness/safety blockers (must ship before any auto action is trusted), **P1** = SSoT convergence + audit + scale, **P2** = optimization/fancy fairness/queue fan-out.
 - Engine version stamping: every decision row records `engine_version` (git short sha or semver const) and `policy_version`.
