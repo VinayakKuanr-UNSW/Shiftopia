@@ -4,7 +4,8 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Label } from '@/modules/core/ui/primitives/label';
 import { Plus, Building2, Users, ChevronRight, Briefcase, DollarSign, Loader2, Sparkles, CheckCircle2, Pencil, Clock, GraduationCap, Award, School, BookOpen, Trophy, Info, Accessibility, Scale, CalendarClock } from 'lucide-react';
 import { useReferenceData } from '../hooks/useReferenceData';
-import { useContractForm } from '../hooks/useContractForm';
+import { useContractForm, FLEXIBLE_PT_ANNUAL_HOURS_MIN, FLEXIBLE_PT_ANNUAL_HOURS_MAX } from '../hooks/useContractForm';
+import { useToast } from '@/modules/core/ui/primitives/use-toast';
 import { CommandSelector } from './CommandSelector';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/modules/core/lib/utils';
@@ -28,6 +29,7 @@ interface AddContractDialogProps {
 
 export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId, employeeName, existingContract, onSuccess }) => {
     const [open, setOpen] = useState(false);
+    const { toast } = useToast();
 
     // Hooks
     const {
@@ -117,7 +119,22 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
         .filter(r => r.sub_department_id === formData.sub_department_id)
         .map(r => ({ ...r, name: cleanRoleName(r.name) }));
 
+    // AUDIT FIX M-2: cl 12.4 bounds Flexible Part-Time annual guaranteed hours
+    // to 624-1,976h/year.
+    const isFptHoursInvalid =
+        formData.employment_status === 'Flexible Part-Time' &&
+        ((formData.annual_guaranteed_hours ?? 0) < FLEXIBLE_PT_ANNUAL_HOURS_MIN ||
+            (formData.annual_guaranteed_hours ?? 0) > FLEXIBLE_PT_ANNUAL_HOURS_MAX);
+
     const handleSubmit = async () => {
+        if (isFptHoursInvalid) {
+            toast({
+                title: 'Validation Error',
+                description: `Annual Guaranteed Hours must be between ${FLEXIBLE_PT_ANNUAL_HOURS_MIN}-${FLEXIBLE_PT_ANNUAL_HOURS_MAX}h (cl 12.4).`,
+                variant: 'destructive',
+            });
+            return;
+        }
         if (isEditMode) {
             // Implement update logic here or in useContractForm
             const { error } = await supabase
@@ -402,6 +419,11 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                                                     {formData.employment_status === 'Flexible Part-Time' ? 'hours / year' : 'hours / week'}
                                                 </div>
                                             </div>
+                                            {isFptHoursInvalid && (
+                                                <p className="text-[11px] text-destructive font-medium">
+                                                    Must be between {FLEXIBLE_PT_ANNUAL_HOURS_MIN}-{FLEXIBLE_PT_ANNUAL_HOURS_MAX}h/year (cl 12.4).
+                                                </p>
+                                            )}
                                         </motion.div>
                                     )}
                                 </motion.div>
@@ -774,7 +796,17 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                                             <div className="flex-1 space-y-2">
                                                 <Label className="text-[10px] uppercase tracking-widest text-emerald-500/50 font-bold ml-1">Trial Period</Label>
                                                 <button
-                                                    onClick={() => updateField('is_sws_trial', !formData.is_sws_trial)}
+                                                    onClick={() => {
+                                                        const next = !formData.is_sws_trial;
+                                                        updateField('is_sws_trial', next);
+                                                        // AUDIT FIX M-3: default the trial start date to today the
+                                                        // moment the trial is switched on — previously this field
+                                                        // had no input anywhere, so the 12-week cap could never be
+                                                        // computed.
+                                                        if (next && !formData.sws_trial_start_date) {
+                                                            updateField('sws_trial_start_date', new Date().toISOString().slice(0, 10));
+                                                        }
+                                                    }}
                                                     className={cn(
                                                         "w-full px-4 py-3 rounded-xl border flex items-center justify-between gap-4 transition-all h-[48px]",
                                                         formData.is_sws_trial
@@ -792,6 +824,17 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                                                     )} />
                                                 </button>
                                             </div>
+                                            {formData.is_sws_trial && (
+                                                <div className="flex-1 space-y-2">
+                                                    <Label className="text-[10px] uppercase tracking-widest text-emerald-500/50 font-bold ml-1">Trial Start Date</Label>
+                                                    <Input
+                                                        type="date"
+                                                        value={formData.sws_trial_start_date || ''}
+                                                        onChange={(e) => updateField('sws_trial_start_date', e.target.value)}
+                                                        className="bg-muted/40 border-primary/20 focus:border-primary/50 h-[48px] rounded-xl"
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10 space-y-2">
@@ -823,7 +866,7 @@ export const AddContractDialog: React.FC<AddContractDialogProps> = ({ employeeId
                         </Button>
                         <Button 
                             onClick={handleSubmit} 
-                            disabled={isSubmitting || isLoadingRefs || !isRoleSelected}
+                            disabled={isSubmitting || isLoadingRefs || !isRoleSelected || isFptHoursInvalid}
                             className={cn(
                                 "rounded-xl px-8 transition-all duration-500 font-bold shadow-lg shadow-primary/20",
                                 isRoleSelected ? "bg-primary hover:bg-primary/90 scale-100" : "bg-muted-foreground/20 scale-95 opacity-50"

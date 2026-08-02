@@ -32,6 +32,10 @@ export interface ContractFormState {
     sws_trial_start_date?: string;
 }
 
+/** cl 12.4 — Flexible Part-Time annual guaranteed hours bounds (audit M-2). */
+export const FLEXIBLE_PT_ANNUAL_HOURS_MIN = 624;
+export const FLEXIBLE_PT_ANNUAL_HOURS_MAX = 1976;
+
 const INITIAL_STATE: ContractFormState = {
     organization_id: '',
     department_id: '',
@@ -169,6 +173,15 @@ export const useContractForm = (employeeId: string, onSuccess?: () => void) => {
         if (!formData.sub_department_id) missing.push('Sub-Department');
         if (!formData.role_id) missing.push('Role');
         if (formData.remuneration_level === '') missing.push('Remuneration Level');
+        // AUDIT FIX M-2: cl 12.4 bounds Flexible Part-Time annual guaranteed
+        // hours to 624-1,976h/year — previously unvalidated, so any value
+        // (including 0 or an unrealistic figure) would silently save.
+        if (formData.employment_status === 'Flexible Part-Time') {
+            const hours = formData.annual_guaranteed_hours ?? 0;
+            if (hours < FLEXIBLE_PT_ANNUAL_HOURS_MIN || hours > FLEXIBLE_PT_ANNUAL_HOURS_MAX) {
+                missing.push(`Annual Guaranteed Hours between ${FLEXIBLE_PT_ANNUAL_HOURS_MIN}-${FLEXIBLE_PT_ANNUAL_HOURS_MAX}h (cl 12.4)`);
+            }
+        }
         return missing;
     };
 
