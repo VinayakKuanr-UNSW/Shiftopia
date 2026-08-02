@@ -89,6 +89,127 @@ def normalize_employment_type(value: Optional[str]) -> str:
     return _EMPLOYMENT_TYPE_ALIASES.get(key, 'Casual')
 
 
+# EBA cl 12.5(b): a Casual's `hourly_rate` is ALREADY loaded with the 25%
+# casual loading. cl 41.1/41.2/41.3 publish the casual Saturday/Sunday/Public
+# Holiday rates as flat percentages (150% / 175% / 275%) of the ORDINARY
+# (de-loaded) rate — those percentages already include the casual loading, they
+# are not the loaded rate multiplied again by the permanent percentage.
+CASUAL_LOADING = 1.25
+_PERMANENT_PENALTY_MULT = {'public_holiday': 2.50, 'sunday': 1.50, 'saturday': 1.25}
+_CASUAL_PENALTY_MULT = {'public_holiday': 2.75, 'sunday': 1.75, 'saturday': 1.50}
+
+
+def _penalty_day(shift: 'ShiftInput') -> Optional[str]:
+    """Which cl 41 penalty day (if any) applies to this shift. Precedence:
+    Public Holiday > Sunday > Saturday (cl 41.4 — loadings don't stack)."""
+    if shift.is_public_holiday:
+        return 'public_holiday'
+    if shift.is_sunday:
+        return 'sunday'
+    if shift.is_saturday:
+        return 'saturday'
+    return None
+
+
+def _penalty_adjusted_rate(hourly_rate: float, employment_type: str, shift: 'ShiftInput') -> float:
+    """Apply the EBA cl 41.1/41.2/41.3 Saturday/Sunday/Public-Holiday loading to
+    an employee's hourly rate for `shift`.
+
+    Casuals: de-load `hourly_rate` (÷ CASUAL_LOADING) before applying the
+    Agreement's own flat casual percentage — multiplying the already-loaded
+    rate by the PERMANENT percentage double-counts the casual loading and
+    overstates the true EBA cost by several percent (audit finding #1: this
+    previously biased the solver's cost ranking against casuals on weekends
+    and public holidays relative to their real, cheaper EBA rate).
+    FT/PT: the permanent percentage applies directly to the ordinary rate.
+    """
+    day = _penalty_day(shift)
+    if day is None:
+        return hourly_rate
+    if employment_type == 'Casual':
+        return (hourly_rate / CASUAL_LOADING) * _CASUAL_PENALTY_MULT[day]
+    return hourly_rate * _PERMANENT_PENALTY_MULT[day]
+
+
+# EBA cl 43.1/43.2 — night-shift allowance (22:00-06:00), keyed to the day
+# the shift CONCLUDES, not the day it started (compliance audit finding —
+# 2026-08-02: this clause was entirely absent from the solver's cost
+# objective; only Track A, the TS cost engine, priced it). The stated casual
+# percentages already include the 25% casual loading (cl 43.2's own
+# wording), so — mirroring the TS engine's ordinaryRate*(baseMult +
+# nightLoadOverBase) reconstruction — the allowance fraction is applied to
+# the DE-LOADED ordinary rate for casuals and the plain rate for FT/PT.
+# Weekday keys are Python's date.weekday() (Mon=0 .. Sun=6).
+_PERMANENT_NIGHT_PCT = {0: 0.20, 1: 0.20, 2: 0.20, 3: 0.20, 4: 0.25, 5: 0.50, 6: 0.50}
+_CASUAL_NIGHT_PCT = {0: 0.45, 1: 0.45, 2: 0.45, 3: 0.45, 4: 0.50, 5: 0.75, 6: 0.75}
+
+
+def _night_minutes(shift: 'ShiftInput') -> int:
+    """Minutes of `shift` overlapping the cl 43 night window (22:00-06:00),
+    including the following day's 00:00-06:00 for an overnight shift. Mirrors
+    the TS cost engine's fastNightMinutes — a pure function of the shift's
+    own start/end time-of-day, no date or solver dependency."""
+    sh, sm = (int(x) for x in shift.start_time.split(':')[:2])
+    eh, em = (int(x) for x in shift.end_time.split(':')[:2])
+    start_rel = sh * 60 + sm
+    end_rel = eh * 60 + em
+    if end_rel <= start_rel:
+        end_rel += 1440  # overnight
+
+    def _overlap(s1: int, e1: int, s2: int, e2: int) -> int:
+        return max(0, min(e1, e2) - max(s1, s2))
+
+    return (
+        _overlap(start_rel, end_rel, 0, 360)       # 00:00-06:00
+        + _overlap(start_rel, end_rel, 1320, 1440)   # 22:00-24:00
+        + _overlap(start_rel, end_rel, 1440, 1800)   # next day 00:00-06:00
+        + _overlap(start_rel, end_rel, 2760, 2880)   # next day 22:00-24:00 (rare)
+    )
+
+
+def _conclusion_weekday(shift: 'ShiftInput') -> int:
+    """0=Monday..6=Sunday — the day the shift's span CONCLUDES. cl 43.1/43.2
+    key the night rate off this day, not the day work started."""
+    y, m, d = (int(x) for x in shift.shift_date.split('-'))
+    date = datetime.date(y, m, d)
+    sh, sm = (int(x) for x in shift.start_time.split(':')[:2])
+    eh, em = (int(x) for x in shift.end_time.split(':')[:2])
+    if (eh * 60 + em) <= (sh * 60 + sm):
+        date = date + datetime.timedelta(days=1)
+    return date.weekday()
+
+
+def _night_allowance_rate(hourly_rate: float, employment_type: str, conclusion_weekday: int) -> float:
+    """Absolute $/hr rate for a night-shift hour (cl 43), inclusive of
+    ordinary pay — comparable directly against `_penalty_adjusted_rate`."""
+    if employment_type == 'Casual':
+        ordinary = hourly_rate / CASUAL_LOADING
+        return ordinary * (1 + _CASUAL_NIGHT_PCT[conclusion_weekday])
+    return hourly_rate * (1 + _PERMANENT_NIGHT_PCT[conclusion_weekday])
+
+
+def _assignment_cost_cents_with_night(hourly_rate: float, employment_type: str, shift: 'ShiftInput') -> int:
+    """Labour cost in cents for the FULL shift: cl 41.1-41.3 Sat/Sun/PH
+    loading applies to every minute, and the cl 43 night allowance
+    additionally applies — as a MAX, not cumulative (cl 41.4) — to whichever
+    portion of the shift falls in the 22:00-06:00 window. Shared by
+    `_assignment_cost_cents` (the rationale helper) and the SC-1 objective
+    term so the two can never diverge.
+    """
+    weekend_rate = _penalty_adjusted_rate(hourly_rate, employment_type, shift)
+    night_min = _night_minutes(shift)
+    if night_min <= 0:
+        return int(round((shift.duration_minutes / 60.0) * weekend_rate * 100))
+
+    non_night_min = shift.duration_minutes - night_min
+    night_rate = _night_allowance_rate(hourly_rate, employment_type, _conclusion_weekday(shift))
+    effective_night_rate = max(weekend_rate, night_rate)
+    return int(round(
+        (non_night_min / 60.0) * weekend_rate * 100
+        + (night_min / 60.0) * effective_night_rate * 100
+    ))
+
+
 @dataclass
 class ShiftInput:
     id: str
@@ -729,9 +850,11 @@ class ScheduleModelBuilder:
     @staticmethod
     def _assignment_cost_cents(emp: 'EmployeeInput', shift: 'ShiftInput') -> int:
         """Labour cost in cents for emp working shift, incl. day-of-week /
-        public-holiday award penalties (EBA cl 41.1: PH ×2.50 > Sunday ×1.50
-        > Saturday ×1.25). Mirrors the SC-1 per-assignment cost formula so
-        cost_rank in the rationale is faithful.
+        public-holiday award penalties (EBA cl 41.1/41.2/41.3: PH > Sunday >
+        Saturday) and the cl 43 night-shift allowance (MAX, not cumulative,
+        per cl 41.4). Mirrors the SC-1 per-assignment cost formula so
+        cost_rank in the rationale is faithful — see
+        `_assignment_cost_cents_with_night` (audit findings #1 and #3).
 
         Deliberately EXCLUDES weekly overtime (EBA cl 42.2, the SC-5 term):
         this helper ranks candidates for ONE shift in isolation, and whether
@@ -741,14 +864,7 @@ class ScheduleModelBuilder:
         so the rationale's cost_rank can diverge from the solver's true
         marginal cost for employees near their contract ceiling.
         """
-        rate = emp.hourly_rate
-        if shift.is_public_holiday:
-            rate *= 2.50
-        elif shift.is_sunday:
-            rate *= 1.50
-        elif shift.is_saturday:
-            rate *= 1.25
-        return int(round((shift.duration_minutes / 60.0) * rate * 100))
+        return _assignment_cost_cents_with_night(emp.hourly_rate, emp.employment_type, shift)
 
     def _assignment_rationale(self, emp: 'EmployeeInput', shift: 'ShiftInput') -> dict:
         """Per-assignment 'why this person' factors for the UI."""
@@ -1666,22 +1782,13 @@ class ScheduleModelBuilder:
             for shift in self.data.shifts:
                 var = self._x.get((emp.id, shift.id))
                 if var is not None:
-                    # Cost in cents to keep integer math
-                    base_rate = emp.hourly_rate
-                    # Standard Award Penalty Rates (ICC EBA v8, cl 41.1).
-                    # Precedence: PH > Sunday > Saturday. Saturday is ×1.25
-                    # applied uniformly (emp.hourly_rate is the employee's
-                    # flat rate; the additive penalty is treated the same
-                    # way Sunday is). Must stay identical to
-                    # _assignment_cost_cents above.
-                    if shift.is_public_holiday:
-                        base_rate *= 2.50
-                    elif shift.is_sunday:
-                        base_rate *= 1.50
-                    elif shift.is_saturday:
-                        base_rate *= 1.25
-
-                    cost_cents = int(round((shift.duration_minutes / 60.0) * base_rate * 100))
+                    # Cost in cents to keep integer math. Standard Award
+                    # Penalty Rates (ICC EBA cl 41.1/41.2/41.3, precedence
+                    # PH > Sunday > Saturday) plus the cl 43 night-shift
+                    # allowance (MAX, not cumulative, per cl 41.4) — see
+                    # `_assignment_cost_cents_with_night` (audit findings #1
+                    # and #3). Must stay identical to _assignment_cost_cents above.
+                    cost_cents = _assignment_cost_cents_with_night(emp.hourly_rate, emp.employment_type, shift)
 
                     # Apply cost weight (symmetric: 0% -> 0.5x, 50% -> 1.0x, 100% -> 2.0x)
                     cost_mult = _strategy_mult(self.data.strategy.cost_weight)
@@ -1820,9 +1927,35 @@ class ScheduleModelBuilder:
                 # Strategic Importance: 5000 (equivalent to $50 penalty)
                 _t(5000 * var, 'employment_mix')
 
-        # -- SC-5: Overtime penalty (150% rate beyond contract) ----------------
-        # For employees with min_contract_minutes, any minutes above that
-        # threshold incur a 50% surcharge on top of their hourly rate.
+        # -- SC-5: Overtime penalty (EBA cl 42.2 — tiered 150%/200%) -----------
+        # cl 42.2: overtime is 150% of the ordinary rate for the FIRST THREE
+        # hours, 200% thereafter — a TIERED surcharge, not a flat 50% on every
+        # overtime minute (compliance audit finding — 2026-08-02: the flat
+        # surcharge understated the cost of overtime runs beyond 3h, where the
+        # true marginal rate steps up from 150% to 200%). SC-1 above already
+        # charges the full base rate (including any Sat/Sun/PH multiplier) for
+        # EVERY assigned minute, so this term adds only the INCREMENTAL
+        # surcharge on top for minutes past the contract floor: +50% for the
+        # first 3h of overtime, +100% (not +50%) thereafter.
+        #
+        # Simplification (documented, unchanged from the prior version):
+        # `overtime` is a HORIZON-TOTAL (minutes past the contract floor across
+        # the whole optimization window), not a per-day figure — cl 42.3 "each
+        # day stands alone" would need a separate IntVar per (employee, day),
+        # a larger structural change tracked separately. The 3h tier boundary
+        # is therefore applied once per horizon, not once per calendar day.
+        #
+        # PH is intentionally NOT re-priced here (the removed `effective_mult`
+        # heuristic used to scale the WHOLE overtime surcharge by the highest
+        # PH/Sunday multiplier active ANYWHERE in the batch, which could
+        # inflate every employee's OT rate because of an unrelated shift
+        # elsewhere in the window): SC-1 already charges any shift flagged
+        # `is_public_holiday` at its full 250%/275% rate for every minute of
+        # THAT shift, whether or not those minutes end up counted as
+        # "overtime" here. Adding a further PH surcharge at this
+        # horizon-aggregate level — which cannot tell which specific minutes
+        # came from a PH shift — would double-count the PH premium.
+        OT_TIER1_MINUTES = 180  # 3h, cl 42.2
         for emp in self.data.employees:
             if emp.min_contract_minutes <= 0:
                 continue
@@ -1838,13 +1971,19 @@ class ScheduleModelBuilder:
             overtime = self.model.NewIntVar(0, self._minute_ub, f'ot_{emp.id[:6]}')
             self.model.AddMaxEquality(overtime, [w_var - emp.min_contract_minutes, 0])
 
-            # 3-line fix for OT/Penalty interaction:
-            # OT rate should scale with the highest penalty multiplier active in the window.
-            effective_mult = max([2.5 if s.is_public_holiday else 1.5 if s.is_sunday else 1.0 for s in self.data.shifts] + [1.0])
-            ot_rate_cents_per_min = int(round(emp.hourly_rate * effective_mult * 0.5 / 60.0 * 100))
+            tier1 = self.model.NewIntVar(0, OT_TIER1_MINUTES, f'ot_t1_{emp.id[:6]}')
+            self.model.AddMinEquality(tier1, [overtime, OT_TIER1_MINUTES])
+            tier2 = self.model.NewIntVar(0, self._minute_ub, f'ot_t2_{emp.id[:6]}')
+            self.model.AddMaxEquality(tier2, [overtime - OT_TIER1_MINUTES, 0])
 
-            if ot_rate_cents_per_min > 0:
-                _t(ot_rate_cents_per_min * overtime, 'cost')
+            rate_cents_per_min = emp.hourly_rate / 60.0 * 100
+            tier1_surcharge_cents_per_min = int(round(rate_cents_per_min * 0.5))  # +50% -> 150% total
+            tier2_surcharge_cents_per_min = int(round(rate_cents_per_min * 1.0))  # +100% -> 200% total
+
+            if tier1_surcharge_cents_per_min > 0:
+                _t(tier1_surcharge_cents_per_min * tier1, 'cost')
+            if tier2_surcharge_cents_per_min > 0:
+                _t(tier2_surcharge_cents_per_min * tier2, 'cost')
 
         # -- SC-7: Safety Penalty (Non-linear Fatigue) ------------------------
         # Uses piecewise linear approximation to simulate the exponential drain
