@@ -76,6 +76,14 @@ export interface ShiftGrossPay {
   startTime?: string;
   endTime?: string;
   employmentType?: string;
+  /** AUDIT FIX M4: distinguishes Schedule 3 (Security) from standard shifts. */
+  isSecurityRole?: boolean;
+  /** Raw timesheet status (e.g. 'draft', 'submitted', or null if no timesheet exists) */
+  timesheetStatus?: string | null;
+  /** Shift lifecycle status (e.g. 'Draft', 'Published') */
+  lifecycleStatus?: string | null;
+  /** Raw ShiftDotInput payload for the Live Rules / Time Rules engine */
+  rawShift?: any;
 }
 
 /** One gross-pay record per employee per pay period (the payroll hand-off). */

@@ -18,6 +18,8 @@ import { formatCost } from '../../rosters/domain/projections/utils/cost';
 import { EarningsLinesTable } from './EarningsLinesTable';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
+import { getTimeRule, getLiveRuleBadges } from '../../rosters/domain/shift-ui';
+import { getShiftFSMState, getShiftStateDisplay } from '../../rosters/domain/shift-fsm';
 
 export interface GrossPayPeriodViewProps {
   periods: PeriodGrossPay[];
@@ -34,7 +36,7 @@ export interface GrossPayPeriodViewProps {
   className?: string;
 }
 
-type SortKey = 'shiftDate' | 'shiftId' | 'groupName' | 'employeeName' | 'roleName' | 'employmentType' | 'startTime' | 'paidHours' | 'grossPay';
+type SortKey = 'shiftDate' | 'shiftId' | 'groupName' | 'employeeName' | 'roleName' | 'employmentType' | 'startTime' | 'paidHours' | 'grossPay' | 'hoursSource' | 'lifecycleStatus' | 'timesheetStatus' | 'state';
 type SortDir = 'asc' | 'desc';
 
 function formatHours(hours: number): string {
@@ -82,6 +84,25 @@ export const GrossPayPeriodView: React.FC<GrossPayPeriodViewProps> = ({
     copy.sort((a, b) => {
       let av = a[sortKey];
       let bv = b[sortKey];
+
+      if (sortKey === 'state') {
+        const stateA = a.rawShift ? getShiftFSMState(a.rawShift) : 'UNKNOWN';
+        const stateB = b.rawShift ? getShiftFSMState(b.rawShift) : 'UNKNOWN';
+        av = stateA;
+        bv = stateB;
+      } else if (sortKey === 'hoursSource') {
+        const ruleA = a.rawShift ? getTimeRule(a.rawShift) : null;
+        const ruleB = b.rawShift ? getTimeRule(b.rawShift) : null;
+        av = ruleA?.label ?? 'None';
+        bv = ruleB?.label ?? 'None';
+      } else if (sortKey === 'lifecycleStatus') {
+        const ruleA = a.rawShift ? getLiveRuleBadges(a.rawShift) : null;
+        const ruleB = b.rawShift ? getLiveRuleBadges(b.rawShift) : null;
+        const labelA = [ruleA?.arrival?.label, ruleA?.departure?.label].filter(Boolean).join(' ') || 'None';
+        const labelB = [ruleB?.arrival?.label, ruleB?.departure?.label].filter(Boolean).join(' ') || 'None';
+        av = labelA;
+        bv = labelB;
+      }
 
       if (av === undefined || av === null) return sortDir === 'asc' ? 1 : -1;
       if (bv === undefined || bv === null) return sortDir === 'asc' ? -1 : 1;
@@ -239,6 +260,42 @@ export const GrossPayPeriodView: React.FC<GrossPayPeriodViewProps> = ({
                     </div>
                   </th>
                   <th
+                    onClick={() => handleSort('state')}
+                    className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground cursor-pointer hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors select-none whitespace-nowrap border-r border-border/20"
+                  >
+                    <div className="flex items-center gap-1">
+                      State
+                      <SortIcon col="state" />
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('hoursSource')}
+                    className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground cursor-pointer hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors select-none whitespace-nowrap border-r border-border/20"
+                  >
+                    <div className="flex items-center gap-1">
+                      Time Rules
+                      <SortIcon col="hoursSource" />
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('lifecycleStatus')}
+                    className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground cursor-pointer hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors select-none whitespace-nowrap border-r border-border/20"
+                  >
+                    <div className="flex items-center gap-1">
+                      Live Rules
+                      <SortIcon col="lifecycleStatus" />
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => handleSort('timesheetStatus')}
+                    className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground cursor-pointer hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors select-none whitespace-nowrap border-r border-border/20"
+                  >
+                    <div className="flex items-center gap-1">
+                      Timesheet Status
+                      <SortIcon col="timesheetStatus" />
+                    </div>
+                  </th>
+                  <th
                     onClick={() => handleSort('startTime')}
                     className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground cursor-pointer hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors select-none whitespace-nowrap border-r border-border/20"
                   >
@@ -279,15 +336,84 @@ export const GrossPayPeriodView: React.FC<GrossPayPeriodViewProps> = ({
                   const role = shift.roleName || '—';
                   let contract = '—';
                   if (shift.employmentType) {
+                    // AUDIT FIX M3: mapEmploymentType returns 'Full-Time' etc.
+                    // (Title-Case-with-hyphen), not 'full_time' (snake_case).
                     const l = shift.employmentType.toLowerCase();
-                    if (l === 'full_time') contract = 'FT';
-                    else if (l === 'part_time') contract = 'PT';
+                    if (l === 'full-time') contract = 'FT';
+                    else if (l === 'flexible part-time') contract = 'Flex PT';
+                    else if (l === 'part-time') contract = 'PT';
                     else if (l === 'casual') contract = 'Casual';
                     else contract = shift.employmentType;
                   }
+                  // AUDIT FIX M4: Security shifts are priced under an entirely
+                  // different regime (annualised / Sch 3) — a payroll reviewer
+                  // needs to distinguish them visually.
+                  if ((shift as any).isSecurityRole) contract += ' · Security';
                   const timings = (shift.startTime && shift.endTime) ? `${shift.startTime}–${shift.endTime}` : '—';
                   const netLength = shift.paidHours != null ? `${shift.paidHours.toFixed(1)}h` : '—';
                   const grossPay = formatCost(shift.grossPay);
+
+                  // Resolve FSM State
+                  let stateDisplay: { id: string; label: string; color: string } | null = null;
+                  if (shift.rawShift) {
+                    const fsmState = getShiftFSMState(shift.rawShift);
+                    stateDisplay = getShiftStateDisplay(fsmState);
+                  }
+
+                  // Resolve status badges
+                  // 1. Time Rules
+                  let timeRulesLabel = 'None';
+                  let timeRulesColor = '#64748B'; // slate
+
+                  if (shift.rawShift) {
+                    const rule = getTimeRule(shift.rawShift);
+                    if (rule) {
+                      timeRulesLabel = rule.label;
+                      timeRulesColor = rule.color;
+                    }
+                  }
+
+                  // 2. Live Rules (Roster Status)
+                  let arrivalBadge: { label: string; color: string } | null = null;
+                  let departureBadge: { label: string; color: string } | null = null;
+
+                  if (shift.isLeave) {
+                    arrivalBadge = { label: 'Leave', color: '#64748B' };
+                  } else if (shift.rawShift) {
+                    const badges = getLiveRuleBadges(shift.rawShift);
+                    arrivalBadge = badges.arrival;
+                    departureBadge = badges.departure;
+                  }
+
+                  // 3. Timesheet Status
+                  let timesheetStatusLabel = 'None';
+                  let timesheetStatusClass = 'bg-slate-50 text-slate-500 ring-slate-500/10 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-400/20';
+
+                  if (shift.isLeave) {
+                    timesheetStatusLabel = 'Approved';
+                    timesheetStatusClass = 'bg-emerald-50 text-emerald-700 ring-emerald-600/10 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-emerald-400/20';
+                  } else if (shift.timesheetStatus === 'no_show') {
+                    timesheetStatusLabel = 'No Show';
+                    timesheetStatusClass = 'bg-rose-50 text-rose-700 ring-rose-600/10 dark:bg-rose-400/10 dark:text-rose-400 dark:ring-rose-400/20';
+                  } else if (shift.timesheetStatus) {
+                    const ts = shift.timesheetStatus.toLowerCase();
+                    if (ts === 'auto_approved' || ts === 'auto_verified') {
+                      timesheetStatusLabel = 'Auto-Approved';
+                      timesheetStatusClass = 'bg-emerald-50 text-emerald-700 ring-emerald-600/10 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-emerald-400/20 font-bold';
+                    } else if (ts === 'draft') {
+                      timesheetStatusLabel = 'TS Draft';
+                      timesheetStatusClass = 'bg-amber-50 text-amber-800 ring-amber-600/20 dark:bg-amber-400/10 dark:text-amber-400 dark:ring-amber-400/20';
+                    } else if (ts === 'submitted' || ts === 'pending') {
+                      timesheetStatusLabel = 'Pending';
+                      timesheetStatusClass = 'bg-purple-50 text-purple-700 ring-purple-600/10 dark:bg-purple-400/10 dark:text-purple-400 dark:ring-purple-400/20';
+                    } else if (ts === 'rejected' || ts === 'denied') {
+                      timesheetStatusLabel = 'Denied';
+                      timesheetStatusClass = 'bg-rose-50 text-rose-700 ring-rose-600/10 dark:bg-rose-400/10 dark:text-rose-400 dark:ring-rose-400/20';
+                    } else if (ts === 'approved' || ts === 'locked') {
+                      timesheetStatusLabel = 'Approved';
+                      timesheetStatusClass = 'bg-emerald-50 text-emerald-700 ring-emerald-600/10 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-emerald-400/20';
+                    }
+                  }
 
                   return (
                     <React.Fragment key={shift.shiftId}>
@@ -324,6 +450,75 @@ export const GrossPayPeriodView: React.FC<GrossPayPeriodViewProps> = ({
                         <td className="px-3 py-2.5 whitespace-nowrap text-slate-600 dark:text-slate-300 border-r border-border/10 truncate max-w-[120px]" title={contract}>
                           {contract}
                         </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap border-r border-border/10">
+                          {stateDisplay && (
+                            <span
+                              className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset whitespace-nowrap"
+                              style={{
+                                backgroundColor: stateDisplay.color + '15',
+                                color: stateDisplay.color,
+                                borderColor: stateDisplay.color + '30',
+                              }}
+                            >
+                              {stateDisplay.id} · {stateDisplay.label}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap border-r border-border/10">
+                          {timeRulesLabel && (
+                            <span
+                              className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset whitespace-nowrap"
+                              style={{
+                                backgroundColor: timeRulesColor + '15',
+                                color: timeRulesColor,
+                                borderColor: timeRulesColor + '30',
+                              }}
+                            >
+                              {timeRulesLabel}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap border-r border-border/10">
+                          <div className="flex items-center gap-1">
+                            {arrivalBadge && (
+                              <span
+                                className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset whitespace-nowrap"
+                                style={{
+                                  backgroundColor: arrivalBadge.color + '15',
+                                  color: arrivalBadge.color,
+                                  borderColor: arrivalBadge.color + '30',
+                                }}
+                              >
+                                {arrivalBadge.label}
+                              </span>
+                            )}
+                            {departureBadge && (
+                              <span
+                                className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset whitespace-nowrap"
+                                style={{
+                                  backgroundColor: departureBadge.color + '15',
+                                  color: departureBadge.color,
+                                  borderColor: departureBadge.color + '30',
+                                }}
+                              >
+                                {departureBadge.label}
+                              </span>
+                            )}
+                            {!arrivalBadge && !departureBadge && (
+                              <span className="text-slate-400 dark:text-slate-500">—</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap border-r border-border/10">
+                          {timesheetStatusLabel && (
+                            <span className={cn(
+                              "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset whitespace-nowrap",
+                              timesheetStatusClass
+                            )}>
+                              {timesheetStatusLabel}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-2.5 whitespace-nowrap text-slate-600 dark:text-slate-300 border-r border-border/10">
                           {timings}
                         </td>
@@ -337,7 +532,7 @@ export const GrossPayPeriodView: React.FC<GrossPayPeriodViewProps> = ({
                       {isOpen && (
                         <tr className="bg-slate-50/50 dark:bg-black/20">
                           <td />
-                          <td colSpan={9} className="px-6 py-4 border-b border-border/30">
+                          <td colSpan={13} className="px-6 py-4 border-b border-border/30">
                             <div className="max-w-3xl">
                               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Shift Calculations</h4>
                               <EarningsLinesTable period={{ lines: shift.lines, grossPay: shift.grossPay } as any} />

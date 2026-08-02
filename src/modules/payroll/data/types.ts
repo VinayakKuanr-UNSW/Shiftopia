@@ -65,6 +65,10 @@ export interface GrossPayShiftRow {
   remuneration_level?: number | null;
   assigned_employee_id: string | null;
   role_id?: string | null;
+  /** cl 28.2 — true when the employer appointed this employee to First Aid duty on this shift. */
+  is_first_aid_duty?: boolean | null;
+  /** Flag for training shifts — drives the EBA minimum-engagement 2h tier. */
+  is_training?: boolean | null;
 
   // PostgREST embeds — may arrive as a single object or a one-element array.
   roles?: GrossPayRoleEmbed | GrossPayRoleEmbed[] | null;
@@ -75,6 +79,23 @@ export interface GrossPayShiftRow {
   _employmentType?: string | null;
   /** The employee's substantive contract remuneration level. */
   _contractRemunerationLevel?: number | null;
+  // ── Apprentice / Trainee / SWS contract fields (H1 audit fix) ──────────
+  /** Schedule 4 apprentice. */
+  _isApprentice?: boolean;
+  _apprenticeType?: 'standard' | 'adult' | 'school_based';
+  _apprenticeYear?: number;
+  _hasCompletedYear12?: boolean;
+  /** Schedule 5 trainee. */
+  _isTrainee?: boolean;
+  _traineeCategory?: 'junior' | 'adult' | 'school_based';
+  _traineeLevel?: 'A' | 'B';
+  _traineeExitYear?: number;
+  _traineeYearsOut?: number;
+  _traineeAqfLevel?: number;
+  _traineeYear?: number;
+  /** Schedule 6 SWS. */
+  _isSws?: boolean;
+  _swsCapacityPercentage?: number;
   /** The APPROVED timesheet overlay for this shift, if any. */
   _timesheet?: GrossPayTimesheetRow | null;
 }

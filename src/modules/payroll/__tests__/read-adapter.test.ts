@@ -74,6 +74,29 @@ describe('mapShiftRowToGrossPayInput — assignment & short-circuits', () => {
     const input = mapShiftRowToGrossPayInput(row)!;
     expect(input.isCancelled).toBe(true);
   });
+
+  // REGRESSION: attendance_status='no_show' does NOT mean "no billable window
+  // exists" — a manager can enter a manual timesheet override on a shift still
+  // flagged no-show (e.g. correcting a bad flag, or paying verified off-system
+  // work). That resolved window must still get the EBA minimum-engagement
+  // floor; it must not be silently skipped just because isNoShow is also true.
+  it('still floors a manually-entered billable window on a no-show-flagged shift', () => {
+    const row = baseRow({
+      attendance_status: 'no_show',
+      actual_start: null,
+      actual_end: null,
+      _employmentType: 'casual', // the payment floor is PT/casual-only — see below
+      _timesheet: {
+        id: 't1', shift_id: 's1',
+        start_time: '07:15', end_time: '09:45', // 2h30m manual override
+        unpaid_break_minutes: 30, status: 'approved',
+      },
+    });
+    const input = mapShiftRowToGrossPayInput(row)!;
+    expect(input.isNoShow).toBe(true);
+    // 2h30m − 30m break = 2h net, below the 3h standard floor → topped up to 180.
+    expect(input.netMinutes).toBe(180);
+  });
 });
 
 describe('mapShiftRowToGrossPayInput — two-tier billable hours', () => {
@@ -182,6 +205,68 @@ describe('mapShiftRowToGrossPayInput — overnight', () => {
     const input = mapShiftRowToGrossPayInput(row)!;
     // 23:00 → 02:00 = 3h = 180 min (rolled +24h because diff was negative)
     expect(input.netMinutes).toBe(180);
+  });
+
+  // AUDIT FIX: `row.is_overnight` describes the ORIGINAL schedule, not
+  // necessarily the times a manager ends up approving. Previously the diff
+  // was rolled +24h whenever `row.is_overnight` was true REGARDLESS of the
+  // sign of the resolved diff, so a shift scheduled overnight but corrected
+  // (or clocked out early) to a same-day span got a fabricated extra day of
+  // pay. The rollover must be a pure sign check on the RESOLVED times.
+  it('does NOT roll forward when is_overnight is stale (schedule was overnight, approved times are not)', () => {
+    const row = baseRow({
+      start_time: '22:00',
+      end_time: '06:00',
+      is_overnight: true, // stale — describes the original roster, not this approval
+      unpaid_break_minutes: 0,
+      _timesheet: {
+        id: 't1', shift_id: 's1',
+        // Manager corrected the timesheet to an early finish BEFORE midnight
+        // (e.g. the event was cancelled) — this span does not cross midnight.
+        start_time: '22:00', end_time: '23:30',
+        unpaid_break_minutes: 0, status: 'approved',
+      },
+    });
+    const input = mapShiftRowToGrossPayInput(row)!;
+    expect(input.isOvernight).toBe(true); // still carried through as scheduling metadata
+    // 22:00 → 23:30 = 1.5h = 90 min (proves no bogus +1440 rollover — the old
+    // code forced that here, which would yield 1530, not this). Stays at the
+    // raw 90 min, un-floored: baseRow() defaults to Full-Time, which the EBA
+    // minimum-engagement PAYMENT floor exempts entirely (weekly-salaried, no
+    // per-engagement minimum) — see the Casual/Part-Time floor coverage in
+    // billable-time.test.ts and min-engagement-floor.test.ts instead.
+    expect(input.netMinutes).toBe(90);
+  });
+});
+
+describe('mapShiftRowToGrossPayInput — hours provenance (AUDIT FIX)', () => {
+  // A shift can be "finished" (isShiftFinished) purely because the SCHEDULED
+  // end passed, even though the employee only ever clocked IN and never
+  // clocked OUT (forgot to tap out). Pricing must not mislabel that as
+  // 'actual' — half the billable window in that case is a schedule fallback,
+  // not real attendance.
+  it('labels hoursSource "scheduled_fallback" (not "actual") when only the clock-in is real', () => {
+    const row = baseRow({
+      shift_date: '2024-01-01', // safely in the past regardless of test run date
+      actual_start: '2024-01-01T09:07:00Z',
+      actual_end: null, // never clocked out
+      _timesheet: null,
+    });
+    const input = mapShiftRowToGrossPayInput(row)!;
+    expect(input.hoursSource).toBe('scheduled_fallback');
+    // End falls back to the scheduled end time (17:00) for the estimate.
+    expect(input.endTime).toBe('17:00');
+  });
+
+  it('labels hoursSource "actual" only once BOTH sides snapped from real clock data', () => {
+    const row = baseRow({
+      shift_date: '2024-01-01',
+      actual_start: '2024-01-01T09:07:00Z',
+      actual_end: '2024-01-01T17:10:00Z',
+      _timesheet: null,
+    });
+    const input = mapShiftRowToGrossPayInput(row)!;
+    expect(input.hoursSource).toBe('actual');
   });
 });
 

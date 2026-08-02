@@ -384,6 +384,101 @@ export async function ensurePayPeriod(bounds: PayPeriodBounds): Promise<string> 
 }
 
 // ---------------------------------------------------------------------------
+// 4) markShiftsPayrollExported / finalizePayPeriod — the export-side writers
+//    that close the loop the rest of this file's comments already promised
+//    ("payroll_exported is owned by the export path") but that path never
+//    existed (audit H-13: shifts.payroll_exported and pay_periods 'locked'
+//    status had no writer anywhere, so nothing was ever actually terminal).
+// ---------------------------------------------------------------------------
+
+/**
+ * Mark shifts as exported to the external payroll system — the true
+ * payroll-safety terminal state. `updateTimesheetEntry` (the live timesheet
+ * write path) refuses ALL edits, including notes, once a shift's
+ * `payroll_exported` is true.
+ *
+ * IMPORTANT: writes `public.shifts.payroll_exported`, NOT
+ * `shift_payroll_records.payroll_exported` directly — `shifts` is the
+ * source of truth the DB trigger `_sync_payroll_record` mirrors FROM. Writing
+ * `shift_payroll_records` directly would be silently reverted the next time
+ * any actual_start/actual_end/actual_net_minutes/timesheet_id change on the
+ * shift re-fires that trigger's upsert. A follow-up update stamps
+ * `payroll_exported_at`/`payroll_exported_by` on `shift_payroll_records` —
+ * those two provenance columns exist ONLY there and the trigger's upsert
+ * never touches them, so they must be set separately, after the trigger has
+ * had a chance to create the row (upsert with onConflict is a no-op-safe
+ * insert-or-update, so ordering here is safe either way).
+ *
+ * @returns number of shifts marked exported.
+ * @throws  on any Supabase/RLS error.
+ */
+export async function markShiftsPayrollExported(
+  shiftIds: string[],
+  exportedBy: string | null = null,
+): Promise<number> {
+  if (shiftIds.length === 0) return 0;
+
+  const { data, error } = await supabase
+    .from('shifts')
+    .update({ payroll_exported: true })
+    .in('id', shiftIds)
+    .select('id');
+
+  if (error) {
+    console.error('[grossPay.write] markShiftsPayrollExported failed:', error.message);
+    throw new Error(`markShiftsPayrollExported failed: ${error.message}`);
+  }
+
+  const { error: provError } = await (supabase as any)
+    .from('shift_payroll_records')
+    .update({
+      payroll_exported_at: new Date().toISOString(),
+      payroll_exported_by: exportedBy,
+    })
+    .in('shift_id', shiftIds);
+
+  if (provError) {
+    // Non-fatal: the shifts.payroll_exported lock (the safety-critical part)
+    // already landed and is what updateTimesheetEntry enforces. Losing the
+    // provenance timestamp/actor is a reporting gap, not a payroll-safety one.
+    console.error('[grossPay.write] markShiftsPayrollExported provenance stamp failed:', provError.message);
+  }
+
+  return (data ?? []).length;
+}
+
+/**
+ * Close out a pay period once its shifts have been marked exported —
+ * transitions `pay_periods.status` to 'locked' and stamps who/when. Does NOT
+ * transition to 'paid': confirming actual disbursement is outside this
+ * layer's documented GROSS-pay-only scope (see file header).
+ *
+ * @returns true if a row was updated.
+ * @throws  on any Supabase/RLS error.
+ */
+export async function finalizePayPeriod(
+  payPeriodId: string,
+  lockedBy: string | null = null,
+): Promise<boolean> {
+  const { data, error } = await (supabase as any)
+    .from('pay_periods')
+    .update({
+      status: 'locked',
+      locked_at: new Date().toISOString(),
+      locked_by: lockedBy,
+    })
+    .eq('id', payPeriodId)
+    .select('id');
+
+  if (error) {
+    console.error('[grossPay.write] finalizePayPeriod failed:', error.message);
+    throw new Error(`finalizePayPeriod failed: ${error.message}`);
+  }
+
+  return (data ?? []).length > 0;
+}
+
+// ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 

@@ -24,6 +24,8 @@ const EXPECTED: Record<LeaveTypeCode, LeaveFlags | null> = {
   supporting_carer: { isSupportingCarer: true },
   community_service: null,                    // unpaid (NES ss108-112, except jury)
   unpaid: null,
+  religious_cultural: { isAnnualLeave: true }, // cl 55 — "accrued paid annual leave"
+  gender_affirmation: { isAnnualLeave: true }, // cl 58 — "accrued paid annual leave"
 };
 
 describe('leaveTypeToFlags × canonical LeaveTypeCode taxonomy', () => {

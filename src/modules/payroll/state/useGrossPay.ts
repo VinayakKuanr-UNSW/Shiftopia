@@ -29,6 +29,8 @@ export interface GrossPayReadOptions {
   subDeptIds?: string[];
   /** Restrict to specific employees. */
   employeeIds?: string[];
+  /** When true, only approved timesheets are priced. When false, unapproved shifts are also priced. */
+  approvedOnly?: boolean;
 }
 
 export interface UseGrossPayArgs {
@@ -56,7 +58,8 @@ export function useGrossPay({ bounds, options, enabled = true }: UseGrossPayArgs
         deptIds: options?.deptIds,
         subDeptIds: options?.subDeptIds,
       };
-      const rows = await getPeriodGrossPay(mergedBounds, { approvedOnly: false });
+      const approvedOnly = options?.approvedOnly ?? true;
+      const rows = await getPeriodGrossPay(mergedBounds, { approvedOnly });
       return rows ?? [];
     },
     // Only fire once we actually have period bounds.
