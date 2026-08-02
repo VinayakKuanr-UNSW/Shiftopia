@@ -58,6 +58,8 @@ export interface AutoPilotDecision {
     createdAt: string;
     /** entity label — e.g. "Alex ↔ Bob", "Casey · Fri 09:00–17:00" */
     subtitle: string;
+    reviewRequired?: boolean;
+    review_required?: boolean;
     /** optional winner/target label (bids), rendered as "→ X" */
     target?: string | null;
 }

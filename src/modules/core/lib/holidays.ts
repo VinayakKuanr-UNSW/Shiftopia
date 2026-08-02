@@ -28,3 +28,22 @@ export function isPublicHoliday(date: Date): boolean {
 export function getPublicHolidayName(date: Date): string | null {
   return getPublicHolidayEntry(date)?.name ?? null;
 }
+
+/**
+ * Sunday / public-holiday day-typing for a `YYYY-MM-DD` shift date, parsed on
+ * LOCAL date parts (never through a UTC `Date` constructor, which can roll the
+ * day depending on the browser/server timezone). Single source of truth for
+ * the day-type flags EBA rules key off (minimum engagement, penalty loadings)
+ * — callers should use this instead of re-deriving `getDay() === 0` /
+ * `isHoliday()` themselves.
+ */
+export function getShiftDayType(dateStr: string | null | undefined): { isSunday: boolean; isPublicHoliday: boolean } {
+  if (!dateStr) return { isSunday: false, isPublicHoliday: false };
+  const [year, month, day] = dateStr.split('-').map(Number);
+  if (!year || !month || !day) return { isSunday: false, isPublicHoliday: false };
+  const localDate = new Date(year, month - 1, day);
+  return {
+    isSunday: localDate.getDay() === 0,
+    isPublicHoliday: isPublicHoliday(localDate),
+  };
+}
