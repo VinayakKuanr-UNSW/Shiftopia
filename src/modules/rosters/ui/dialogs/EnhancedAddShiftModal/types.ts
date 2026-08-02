@@ -91,6 +91,8 @@ export interface Employee {
     last_name: string;
     full_name?: string;
     profiles?: { full_name?: string };
+    /** Already fetched by getEmployees()/EligibilityService — just wasn't typed through here. */
+    contract_type?: 'FT' | 'PT' | 'CASUAL' | null;
 }
 
 export interface Skill {

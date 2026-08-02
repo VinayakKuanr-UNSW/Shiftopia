@@ -99,17 +99,13 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                             ? "bg-[#0a0a0c] border-slate-800/50 shadow-none"
                             : isPublished
                                 ? "bg-[#0c0512] border-purple-900/30 shadow-xl"
-                                : isEmergencyAssignment
-                                    ? "bg-[#0c0506] border-red-500/25 shadow-xl"
-                                    : "bg-card dark:bg-[#0a0c10] border-border/50 shadow-xl"
+                                : "bg-card dark:bg-[#0a0c10] border-border/50 shadow-xl"
                     )}
                     aria-describedby={undefined}
                 >
                     <DialogHeader className="sr-only">
                         <DialogTitle>
-                            {isEmergencyAssignment
-                                ? (editMode ? 'Emergency Update' : 'Emergency Assign')
-                                : (editMode ? 'Update Shift' : 'Create Shift')}
+                            {editMode ? 'Update Shift' : 'Create Shift'}
                         </DialogTitle>
                     </DialogHeader>
                     <Form {...form}>
@@ -166,9 +162,7 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                                     ? "border-slate-800/40 bg-slate-950/40"
                                     : isPublished
                                         ? "border-purple-500/15 bg-purple-950/15"
-                                        : isEmergencyAssignment
-                                            ? "border-red-500/15 bg-red-950/15"
-                                            : "border-border/50 bg-card/80 dark:bg-[#0a0c10]/80"
+                                        : "border-border/50 bg-card/80 dark:bg-[#0a0c10]/80"
                             )}>
                                 <Button
                                     type="button"
@@ -201,24 +195,18 @@ export const EnhancedAddShiftModal: React.FC<EnhancedAddShiftModalProps> = (prop
                                             canSave
                                                 ? isPublished
                                                     ? "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-500/20 border border-purple-400/20"
-                                                    : isEmergencyAssignment
-                                                        ? "bg-red-600 hover:bg-red-500 text-white shadow-red-500/20 border border-red-400/20"
-                                                        : "bg-amber-600 hover:bg-amber-500 text-white shadow-amber-500/20 border border-amber-400/20"
+                                                    : "bg-amber-600 hover:bg-amber-500 text-white shadow-amber-500/20 border border-amber-400/20"
                                                 : "bg-slate-800/50 text-slate-500 cursor-not-allowed border border-white/5"
                                         )}
                                     >
                                         {isLoading ? (
                                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                        ) : isEmergencyAssignment ? (
-                                            <Zap className="h-3.5 w-3.5" />
                                         ) : editMode ? (
                                             <Save className="h-3.5 w-3.5" />
                                         ) : (
                                             <Plus className="h-3.5 w-3.5" />
                                         )}
-                                        {isEmergencyAssignment
-                                            ? (editMode ? 'Emergency Update' : 'Emergency Assign')
-                                            : (editMode ? 'Update Shift' : 'Create Shift')}
+                                        {editMode ? 'Update Shift' : 'Create Shift'}
                                     </Button>
                                 </div>
                             </div>

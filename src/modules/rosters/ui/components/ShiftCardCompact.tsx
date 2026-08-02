@@ -152,9 +152,9 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
 
   // Reserve List: TTS<4h + unassigned shifts show a Phone action in place of
   // the marketplace (bidding) indicator — manager-only emergency staffing
-  // workflow (docs/audits/reserve-list-audit-and-implementation-plan.md).
+  // workflow (docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md).
   const isAssignedForReserveList = !!(shift.employeeName || shift.assignedEmployeeId);
-  const isEmergentUnassigned = urgency === 'emergent' && !isAssignedForReserveList && !isCancelled;
+  const isEmergentUnassigned = urgency === 'emergent' && !isAssignedForReserveList && !isCancelled && !isPast;
   const openReserveList = useReserveListPanelStore((s) => s.open);
 
   const statusIcons = useMemo(() =>
@@ -177,7 +177,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
         onClick && 'cursor-pointer hover:shadow-lg',
         isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
         isDragging && 'opacity-50',
-        isPast && 'grayscale opacity-30 cursor-not-allowed',
+        isPast && 'opacity-80',
         className
       )}
       onClick={isPast ? undefined : onClick}
@@ -219,7 +219,7 @@ export const ShiftCardCompact: React.FC<ShiftCardCompactProps> = ({
       </div>
 
       {/* BODY */}
-      <div className={cn("p-3 flex flex-col gap-2 flex-1", isPast && "grayscale opacity-30")}>
+      <div className={cn("p-3 flex flex-col gap-2 flex-1", isPast && "opacity-80")}>
 
         {/* IDENTITY */}
         <div className="text-center space-y-1">

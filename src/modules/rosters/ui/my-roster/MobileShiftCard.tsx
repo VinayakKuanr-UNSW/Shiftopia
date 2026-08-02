@@ -3,6 +3,8 @@ import { format } from 'date-fns';
 import { getNowInTimezone, SYDNEY_TZ, formatCalendarDate } from '@/modules/core/lib/date.utils';
 import { Shift } from '@/modules/rosters';
 import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
+import { resolveGroupVariant } from '@/modules/rosters/domain/shift-ui';
+import { useAuth } from '@/platform/auth/useAuth';
 
 interface MobileShiftCardProps {
   shiftData: {
@@ -17,6 +19,7 @@ interface MobileShiftCardProps {
 
 export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, onClick }) => {
   const { shift, groupName, groupColor, subGroupName } = shiftData;
+  const { user } = useAuth();
 
   const isPast = React.useMemo(() => {
     if (!shift.shift_date || !shift.end_time || !shift.start_time) return false;
@@ -45,6 +48,13 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, onC
   const gross = p(shift.end_time) - p(shift.start_time);
   const netLength = Math.max(0, gross - (shift.unpaid_break_minutes ?? 0));
 
+  const assignedEmployeeName =
+    (shift as any).employeeName ||
+    (shift.employees ? `${shift.employees.first_name || ''} ${shift.employees.last_name || ''}`.trim() : null) ||
+    user?.fullName ||
+    user?.name ||
+    undefined;
+
   return (
     <div 
       className="relative cursor-pointer active:scale-[0.98] transition-transform duration-200"
@@ -58,6 +68,7 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, onC
         department={groupName}
         subGroup={subGroupName}
         role={shift.roles?.name || 'Shift'}
+        employeeName={assignedEmployeeName}
         shiftDate={formatCalendarDate(shift.shift_date, 'EEE, MMM d, yyyy')}
         startTime={shift.start_time.slice(0, 5)}
         endTime={shift.end_time.slice(0, 5)}
@@ -66,12 +77,7 @@ export const MobileShiftCard: React.FC<MobileShiftCardProps> = ({ shiftData, onC
         unpaidBreak={shift.unpaid_break_minutes ?? 0}
         isPast={isPast}
         lifecycleStatus={shift.lifecycle_status}
-        groupVariant={
-          groupColor.toLowerCase().includes('convention') ? 'convention' :
-          groupColor.toLowerCase().includes('exhibition') ? 'exhibition' :
-          groupColor.toLowerCase().includes('theatre') ? 'theatre' :
-          groupColor.toLowerCase().includes('cutaway') ? 'cutaway' : 'default'
-        }
+        groupVariant={resolveGroupVariant(shift, groupColor || groupName, subGroupName)}
         shiftData={shift}
       />
     </div>

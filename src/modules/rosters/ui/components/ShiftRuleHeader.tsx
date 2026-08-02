@@ -3,6 +3,7 @@ import { cn } from '@/modules/core/lib/utils';
 import {
     getTimeRule,
     getLiveRuleBadges,
+    getPayrollRuleBadges,
     type ShiftDotInput,
     type ShiftRuleBadge,
 } from '../../domain/shift-ui';
@@ -30,6 +31,9 @@ export interface ShiftRuleHeaderProps {
     band?: boolean;
     /** For unassigned shifts: 'hide' drops the Live Rules row (default); 'na' keeps the row and shows "N/A". */
     liveRulesUnassigned?: 'hide' | 'na';
+    /** When true, adds a "Payroll Rules" row showing the billable-window badges.
+     *  Opt-in so planner/offer cards (where billable is always empty) stay clean. */
+    showPayrollRules?: boolean;
 }
 
 /** A single labelled row, styled per variant — shared by State / Time / Live. */
@@ -70,7 +74,7 @@ const LiveBadges: React.FC<{ badges: { arrival: ShiftRuleBadge | null; departure
     );
 };
 
-const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 'compact', className, state, assigned, band, liveRulesUnassigned = 'hide' }) => {
+const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 'compact', className, state, assigned, band, liveRulesUnassigned = 'hide', showPayrollRules }) => {
     const time = useMemo(() => getTimeRule(shift), [
         shift.start_at, shift.end_at, shift.start_time, shift.end_time, shift.shift_date,
     ]);
@@ -79,6 +83,13 @@ const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 
         shift.actual_start, shift.actual_end, shift.attendance_status, shift.attendance_note,
         shift.adjusted_start, shift.adjusted_end,
     ]);
+    const payroll = useMemo(
+        () => (showPayrollRules ? getPayrollRuleBadges(shift) : { arrival: null, departure: null }),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [showPayrollRules, shift.start_at, shift.end_at, shift.start_time, shift.end_time,
+         shift.shift_date, shift.adjusted_start, shift.adjusted_end, shift.actual_start, shift.actual_end],
+    );
+    const showPayroll = showPayrollRules && !!(payroll.arrival || payroll.departure);
 
     const isDraft = shift.lifecycle_status === 'Draft';
 
@@ -151,6 +162,25 @@ const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 
                         </span>
                     </div>
                 )}
+                {showPayroll && (
+                    <div className="flex justify-between items-center gap-2">
+                        <span className={labelCls}>Payroll Rules</span>
+                        <span className={valueBandCls}>
+                            <span className="inline-flex items-center gap-1.5 justify-end">
+                                {payroll.arrival && (
+                                    <span className="inline-block h-1.5 w-1.5 rounded-full shrink-0" style={{ background: payroll.arrival.color }} />
+                                )}
+                                {payroll.arrival && (
+                                    <span style={{ color: payroll.arrival.color }}>{payroll.arrival.label}</span>
+                                )}
+                                {payroll.arrival && payroll.departure && <span className="text-muted-foreground/30">·</span>}
+                                {payroll.departure && (
+                                    <span style={{ color: payroll.departure.color }}>{payroll.departure.label}</span>
+                                )}
+                            </span>
+                        </span>
+                    </div>
+                )}
             </div>
         );
     }
@@ -183,6 +213,11 @@ const ShiftRuleHeaderImpl: React.FC<ShiftRuleHeaderProps> = ({ shift, variant = 
                     ) : (
                         <LiveBadges badges={live} size={isDetailed ? 'detailed' : 'compact'} />
                     )}
+                </RuleRow>
+            )}
+            {showPayroll && (
+                <RuleRow label="Payroll Rules" variant={variant}>
+                    <LiveBadges badges={payroll} size={isDetailed ? 'detailed' : 'compact'} />
                 </RuleRow>
             )}
         </div>

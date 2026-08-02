@@ -11,7 +11,7 @@ import {
   useBulkDeleteShifts,
 } from '@/modules/rosters/state/useRosterShifts';
 import { useRosterStore } from '@/modules/rosters/state/useRosterStore';
-import { X, Loader2, Edit2, CopyPlus, Trash2, Send, Undo2, Lock, ChevronLeft } from 'lucide-react';
+import { X, Loader2, Edit2, Trash2, Send, Undo2, Lock, ChevronLeft } from 'lucide-react';
 import { isSydneyPast, isSydneyStarted, formatCalendarDate } from '@/modules/core/lib/date.utils';
 import { cn } from '@/modules/core/lib/utils';
 import { Button } from '@/modules/core/ui/primitives/button';
@@ -281,49 +281,16 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
     }
   };
 
-  const handleCloneShift = async (shift: Shift) => {
-    try {
-      const cloneData: any = {
-        roster_id: shift.roster_id,
-        department_id: shift.department_id,
-        sub_department_id: shift.sub_department_id,
-        shift_date: shift.shift_date,
-        start_time: shift.start_time,
-        end_time: shift.end_time,
-        organization_id: shift.organization_id,
-        group_type: shift.group_type,
-        sub_group_name: shift.sub_group_name,
-        shift_group_id: (shift as any).shift_group_id,
-        shift_subgroup_id: (shift as any).shift_subgroup_id || (shift as any).roster_subgroup_id,
-        role_id: shift.role_id,
-        remuneration_level: shift.remuneration_level,
-        paid_break_minutes: shift.paid_break_minutes,
-        unpaid_break_minutes: shift.unpaid_break_minutes,
-        timezone: shift.timezone,
-        required_skills: shift.required_skills || [],
-        required_licenses: shift.required_licenses || [],
-        event_ids: shift.event_ids || [],
-        tags: shift.tags || [],
-        notes: shift.notes,
-        is_training: shift.is_training,
-      };
-
-      await createShiftMutation.mutateAsync(cloneData);
-      toast({ title: 'Shift Cloned', description: 'A new draft replica has been created (unassigned).' });
-    } catch (e: any) {
-      toast({ title: 'Clone Failed', description: e.message || 'Error', variant: 'destructive' });
-    }
-  };
 
   const activeRosterId = rosterId || filteredShifts[0]?.roster_id;
 
   // Open the Add/Edit Shift wizard as a centered modal OVER the roster grid.
   // Custom overlay (not a Radix Dialog), so nested dropdowns keep working.
   const openShiftForm = (shift: Shift | null) => {
-    if (!organizationId || !departmentId) {
+    if (!organizationId) {
       toast({
         title: 'Missing context',
-        description: 'Cannot open the shift form without an organization and department.',
+        description: 'Cannot open the shift form without an organization.',
         variant: 'destructive',
       });
       return;
@@ -346,10 +313,13 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
         rosterId: activeRosterId,
       },
     });
-    // Close this bucket modal so the wizard isn't stacked underneath it (the
-    // drill-down overlay is z-50; the wizard sits at z-40 so its z-50 dropdowns
-    // stay clickable). The wizard carries its own context, so closing is safe.
-    onClose();
+    // NOTE: this bucket modal is NOT closed here. The wizard sits at z-40
+    // (below this panel's z-50 backdrop), so the parent (RostersPlannerPage)
+    // hides this panel visually (isOpen=false via CSS opacity/pointer-events,
+    // not unmount) for as long as the wizard is open, then lets it reappear
+    // automatically — preserving scroll position and selection — once the
+    // wizard closes. See RostersPlannerPage's `isOpen={drillDownState.isOpen
+    // && !isShiftFormOpen}`.
   };
 
   return (
@@ -441,32 +411,26 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
                 const startTimeStr = shift.start_time || (shift as any).startTime || (shift as any).start || '00:00';
                 const hasStarted = isSydneyStarted(shift.shift_date, startTimeStr);
                 const isPast = isPastDate || hasStarted;
+                const isUnassigned = !shift.assigned_employee_id;
                 const isDraft = shift.lifecycle_status === 'Draft';
                 const isPublished = shift.lifecycle_status === 'Published';
                 
                 // Inline action icons (replaces the ellipsis menu). Each is
                 // disabled when the action doesn't apply to the shift's state.
                 const iconBtn = 'h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/10 disabled:opacity-25 disabled:pointer-events-none';
+                const canAssignOrEdit = isUnassigned || (isDraft && !hasStarted);
                 const actions = (
                   <div className="flex items-center gap-0.5">
                     <button
                       type="button"
-                      title={isDraft ? (hasStarted ? 'Edit locked — shift has started' : 'Edit shift') : 'Edit available for drafts only'}
-                      disabled={!isDraft || hasStarted}
+                      title={isUnassigned ? (hasStarted ? 'Assign employee to started shift' : 'Assign / edit shift') : isDraft ? (hasStarted ? 'Edit locked — shift has started' : 'Edit shift') : 'Edit available for drafts only'}
+                      disabled={!canAssignOrEdit}
                       onClick={() => openShiftForm(shift)}
                       className={cn(iconBtn, 'hover:text-white')}
                     >
-                      {isDraft && hasStarted ? <Lock className="h-4 w-4" /> : <Edit2 className="h-4 w-4" />}
+                      {!isUnassigned && isDraft && hasStarted ? <Lock className="h-4 w-4" /> : <Edit2 className="h-4 w-4" />}
                     </button>
-                    <button
-                      type="button"
-                      title={hasStarted ? 'Clone locked — shift has started' : 'Clone to draft'}
-                      disabled={hasStarted}
-                      onClick={() => handleCloneShift(shift)}
-                      className={cn(iconBtn, 'hover:text-blue-400')}
-                    >
-                      <CopyPlus className="h-4 w-4" />
-                    </button>
+
                     {isPublished ? (
                       <button
                         type="button"
@@ -507,11 +471,11 @@ export const DrillDownPanel: React.FC<DrillDownPanelProps> = ({
                       variant="comfortable"
                       groupColor={groupType}
                       groupName={groupName}
-                      isLocked={isPast}
+                      isLocked={isPast && !isUnassigned}
                       isPast={isPast}
                       isDnDActive={false}
                       isSelected={isSelected}
-                      onClick={bulkModeActive ? () => toggleShiftSelection(shift.id) : undefined}
+                      onClick={bulkModeActive ? () => toggleShiftSelection(shift.id) : () => openShiftForm(shift)}
                       headerAction={bulkModeActive ? undefined : actions}
                       onViewHistory={(id) => setHistoryShiftId(id)}
                       selectionSlot={

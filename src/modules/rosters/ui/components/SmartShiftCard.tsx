@@ -45,7 +45,6 @@ import {
     getTimeRule,
     getLiveRuleBadges,
 } from '../../domain/shift-ui';
-import { ShiftRuleHeader } from './ShiftRuleHeader';
 import { EditingPresenceBadge } from './EditingPresenceBadge';
 import { useShiftPresence } from '../presence/ShiftEditingPresenceProvider';
 import type { ShiftEditor } from '../hooks/useShiftEditingPresence';
@@ -56,6 +55,15 @@ import { estimateDetailedCostFromShift } from '../../domain/projections/utils/co
 import ShiftHistoryTimeline from './ShiftHistoryTimeline';
 import { Popover, PopoverContent, PopoverTrigger } from '@/modules/core/ui/primitives/popover';
 import { useReserveListPanelStore } from '@/modules/reserve-list';
+import { SharedShiftCard } from '@/modules/planning/ui/components/SharedShiftCard';
+import {
+    resolveBillableSide,
+    isShiftFinished as isShiftFinishedForBillable,
+    calculateNetMinutes,
+    applyMinEngagementFloor,
+} from '@/modules/timesheets/domain/billable-time';
+import { buildOrdinaryEarningsLines } from '@/modules/payroll/domain/computeShiftGrossPay';
+import { getShiftDayType } from '@/modules/core/lib/holidays';
 
 // ============================================================================
 // HISTORY OVERLAY COMPONENT
@@ -178,16 +186,6 @@ const GROUP_COLORS: Record<string, { header: string; accent: string; text: strin
     default_yellow: { header: 'bg-amber-400', accent: 'border-amber-400/30', text: 'text-amber-950', badge: 'bg-black/10' },
 };
 
-// Group-based colour convention (Convention=blue · Exhibition=emerald · Theatre=rose · The Cutaway=amber).
-// The whole card carries the group colour via a translucent tint overlay + a tinted border.
-const GROUP_TINT: Record<string, string> = {
-    blue: 'bg-blue-500/10', green: 'bg-emerald-500/10', red: 'bg-rose-500/10', orange: 'bg-orange-500/10', purple: 'bg-purple-500/10', amber: 'bg-amber-500/10',
-    convention_centre: 'bg-blue-500/10', exhibition_centre: 'bg-emerald-500/10', theatre: 'bg-rose-500/10', the_cutaway: 'bg-amber-500/10', default_yellow: 'bg-amber-500/10',
-};
-const GROUP_BORDER: Record<string, string> = {
-    blue: 'border-blue-400/30', green: 'border-emerald-400/30', red: 'border-rose-400/30', orange: 'border-orange-400/30', purple: 'border-purple-400/30', amber: 'border-amber-400/30',
-    convention_centre: 'border-blue-400/30', exhibition_centre: 'border-emerald-400/30', theatre: 'border-rose-400/30', the_cutaway: 'border-amber-400/30', default_yellow: 'border-amber-400/30',
-};
 
 function formatTime(time: string | null): string {
     if (!time) return '--:--';
@@ -340,8 +338,8 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
 
     // Reserve List: TTS<4h + unassigned shifts show a Phone action in place of
     // the marketplace (bidding) indicator — manager-only emergency staffing
-    // workflow (docs/audits/reserve-list-audit-and-implementation-plan.md).
-    const isEmergentUnassigned = ctx.urgency === 'emergent' && !shift.assigned_employee_id && !shift.is_cancelled;
+    // workflow (docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md).
+    const isEmergentUnassigned = ctx.urgency === 'emergent' && !shift.assigned_employee_id && !shift.is_cancelled && !isPast;
     const openReserveList = useReserveListPanelStore((s) => s.open);
 
     const stateDisplay = useMemo(
@@ -397,7 +395,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                     isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background bg-primary/5 dark:bg-primary/20',
                     isDragging && 'opacity-50 scale-95',
                     isDragOver && 'ring-2 ring-blue-400 ring-offset-1',
-                    isPast && (isDraft ? 'grayscale opacity-60 cursor-not-allowed' : 'grayscale opacity-80 cursor-not-allowed'),
+                    isPast && (isDraft ? 'opacity-70' : 'opacity-85'),
                     className
                 )}
                 onClick={isFullyLocked || isPast ? undefined : onClick}
@@ -489,9 +487,6 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
 
                     {/* Body */}
                     <div className="flex flex-col gap-0.5 my-1">
-                        {!dense && (
-                            <ShiftRuleHeader shift={shift} variant="compact" className="mb-0.5" state={stateDisplay} assigned={!!employeeName} />
-                        )}
                         <div className="text-[11px] font-bold text-foreground truncate leading-tight">
                             {roleName}
                         </div>
@@ -546,7 +541,7 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
                 isSelected && 'ring-2 ring-primary ring-offset-1 ring-offset-background bg-primary/5 dark:bg-primary/20',
                 isDragging && 'opacity-50 scale-95',
                 isDragOver && 'ring-2 ring-blue-400 ring-offset-1',
-                isPast && (isDraft ? 'grayscale opacity-60 cursor-not-allowed' : 'grayscale opacity-80 cursor-not-allowed'),
+                isPast && (isDraft ? 'opacity-70' : 'opacity-85'),
                 className
             )}
             onClick={isFullyLocked || isPast ? undefined : onClick}
@@ -619,7 +614,6 @@ const CompactCard: React.FC<SmartShiftCardProps> = ({
 
                 {/* Body */}
                 <div className={cn("px-3 py-1.5 flex flex-col gap-1 flex-1 relative z-[20]")}>
-                    <ShiftRuleHeader shift={shift} variant="compact" className="mb-0.5" state={stateDisplay} assigned={!!employeeName} />
                     <div className="flex flex-col items-center justify-center min-h-[24px] gap-0.5">
                         <div className="text-[11px] font-bold text-foreground truncate text-center leading-none">
                             {isPeopleMode ? roleName : (employeeName || 'Unassigned')}
@@ -762,8 +756,8 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
 
     // Reserve List: TTS<4h + unassigned shifts show a Phone action in place of
     // the marketplace (bidding) indicator — manager-only emergency staffing
-    // workflow (docs/audits/reserve-list-audit-and-implementation-plan.md).
-    const isEmergentUnassigned = ctx.urgency === 'emergent' && !shift.assigned_employee_id && !shift.is_cancelled;
+    // workflow (docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md).
+    const isEmergentUnassigned = ctx.urgency === 'emergent' && !shift.assigned_employee_id && !shift.is_cancelled && !isPast;
     const openReserveList = useReserveListPanelStore((s) => s.open);
 
     const fsmLock = getLockState(ctx.state);
@@ -815,7 +809,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                     isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background bg-primary/5 dark:bg-primary/20',
                     isDragging && 'opacity-50 scale-95',
                     isDragOver && 'ring-2 ring-blue-400 ring-offset-2',
-                    isPast && (isDraft ? 'grayscale opacity-70 cursor-not-allowed' : 'grayscale opacity-80 cursor-not-allowed'),
+                    isPast && (isDraft ? 'opacity-70' : 'opacity-85'),
                     className
                 )}
                 onClick={isFullyLocked || isPast ? undefined : onClick}
@@ -867,7 +861,6 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
 
                     {/* Body */}
                     <div className="space-y-3">
-                        <ShiftRuleHeader shift={shift} variant="detailed" state={stateDisplay} assigned={!!employeeName} />
                         <div className="flex items-center gap-3">
                             <Avatar className="h-9 w-9 border border-border">
                                 <AvatarFallback className={cn('text-xs font-bold bg-primary/20 text-primary')}>
@@ -989,7 +982,7 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
                 isSelected && 'ring-2 ring-primary ring-offset-2 ring-offset-background bg-primary/5 dark:bg-primary/20',
                 isDragging && 'opacity-50 scale-95',
                 isDragOver && 'ring-2 ring-blue-400 ring-offset-2',
-                isPast && (isDraft ? 'grayscale opacity-70 cursor-not-allowed' : 'grayscale opacity-80 cursor-not-allowed'),
+                isPast && (isDraft ? 'opacity-70' : 'opacity-85'),
                 className
             )}
             onClick={isFullyLocked || isPast ? undefined : onClick}
@@ -1045,7 +1038,6 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
 
                 {/* Body */}
                 <div className={cn("p-4 space-y-3 relative z-[20]")}>
-                    <ShiftRuleHeader shift={shift} variant="detailed" state={stateDisplay} assigned={!!employeeName} />
                     <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9 border border-border">
                             <AvatarFallback className={cn('text-xs font-bold bg-primary/20 text-primary')}>
@@ -1162,24 +1154,17 @@ const DetailedCard: React.FC<SmartShiftCardProps> = ({
 
 const ComfortableCard: React.FC<SmartShiftCardProps> = ({
     shift,
-    onClick,
     isSelected,
-    isLocked,
     isPast,
     headerAction,
-    groupColor = 'default_yellow',
+    groupName,
     selectionSlot,
     className,
     onViewHistory,
-    isPeopleMode = false,
 }) => {
-    const tint = GROUP_TINT[groupColor] || GROUP_TINT.default_yellow;
-    const groupBorder = GROUP_BORDER[groupColor] || GROUP_BORDER.default_yellow;
-
     const employeeName = shift.assigned_employee_id ? (shift as any).assigned_profiles ? `${(shift as any).assigned_profiles.first_name} ${(shift as any).assigned_profiles.last_name}` : 'Assigned' : null;
     const roleName = shift.roles?.name || 'No Role';
 
-    const statusStr = getNormalizedStatus(shift);
     const ctx = useMemo(() => getShiftUIContext({
         lifecycle_status:   shift.lifecycle_status  ?? 'Draft',
         assignment_status:  shift.assignment_status ?? 'unassigned',
@@ -1193,128 +1178,171 @@ const ComfortableCard: React.FC<SmartShiftCardProps> = ({
         actual_start:       shift.actual_start      ?? null,
     }), [shift.lifecycle_status, shift.is_cancelled, shift.assignment_status, shift.assignment_outcome, shift.trading_status, shift.scheduled_start, shift.scheduled_end, shift.start_at, shift.end_at, shift.actual_start]);
 
-    const fsmLock = getLockState(ctx.state);
-    const isFullyLocked = isLocked || fsmLock.fullyLocked;
-
-    // Centralized protection logic
-    const protection = useMemo(() => getProtectionContext({ lifecycle_status: shift.lifecycle_status }, !!isPast), [shift.lifecycle_status, isPast]);
-    const isProtected = protection.isProtected || fsmLock.partialLock;
-    const isDraft = statusStr === 'draft';
-
-    const stateDisplay = useMemo(
-        () => getShiftStateDisplay(ctx.state),
-        [ctx.state],
-    );
-
     // Reserve List: TTS<4h + unassigned shifts get a Phone action — manager-only
-    // emergency staffing workflow (docs/audits/reserve-list-audit-and-implementation-plan.md).
+    // emergency staffing workflow (docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md).
     // This is the card variant actually rendered by DrillDownPanel's per-shift
     // grid (the manager's default click-through from the Bucket View summary),
     // so unlike Compact/Detailed there's no existing bidding badge to swap out —
     // the Phone icon is added to the action row instead.
-    const isEmergentUnassigned = ctx.urgency === 'emergent' && !shift.assigned_employee_id && !shift.is_cancelled;
+    const isEmergentUnassigned = ctx.urgency === 'emergent' && !shift.assigned_employee_id && !shift.is_cancelled && !isPast;
     const openReserveList = useReserveListPanelStore((s) => s.open);
 
-    const costBreakdown = useMemo(() => estimateDetailedCostFromShift(shift), [shift]);
+    // Billable-window resolution — same three-tier rule (manager edit → snapped
+    // actual → missing) the Timesheets/My Attendance cards use, via the
+    // canonical resolver, so Payroll Rules reads the same "billable" truth
+    // here as everywhere else instead of the raw tier-1-only adjusted_start/end.
+    const billableFinished = isShiftFinishedForBillable(shift.shift_date, shift.start_time, shift.end_time, shift.actual_end ?? null);
+    const resolvedStart = useMemo(
+        () => resolveBillableSide(shift.adjusted_start ?? null, shift.actual_start ?? null, billableFinished),
+        [shift.adjusted_start, shift.actual_start, billableFinished],
+    );
+    const resolvedEnd = useMemo(
+        () => resolveBillableSide(shift.adjusted_end ?? null, shift.actual_end ?? null, billableFinished),
+        [shift.adjusted_end, shift.actual_end, billableFinished],
+    );
 
-    const timeRange = `${formatTime(shift.start_time)}–${formatTime(shift.end_time)}`;
-    const durationLabel = shift.net_length_minutes ? `${(shift.net_length_minutes / 60).toFixed(1)}H` : null;
+    // Estimated pay for the SCHEDULED roster + the BILLABLE window — same
+    // lightweight estimator + EBA min-engagement floor the Timesheets card
+    // uses (TimesheetMobileCard), so this Roster drill-down card (which
+    // shares the same SharedShiftCard UI) shows real Billable Pay + a
+    // Variance→Pay delta instead of leaving them at 'N/A'/'--'.
+    const isSecurityRole = (shift.roles?.name || '').toLowerCase().includes('security');
+    const employmentType = (shift as any).assigned_profiles?.employment_type ?? null;
 
-    const pillClass = 'inline-flex items-center rounded-full border border-slate-200/80 dark:border-white/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300';
+    const scheduledCost = useMemo(() => {
+        if (!shift.start_time || !shift.end_time) return null;
+        try {
+            return estimateDetailedCostFromShift({
+                shift_date: shift.shift_date,
+                start_time: shift.start_time,
+                end_time: shift.end_time,
+                roles: { name: roleName },
+                employmentType,
+                is_training: shift.is_training,
+                unpaid_break_minutes: shift.unpaid_break_minutes || 0,
+                scheduled_length_minutes: shift.scheduled_length_minutes ?? 0,
+            });
+        } catch {
+            return null;
+        }
+    }, [shift.shift_date, shift.start_time, shift.end_time, roleName, employmentType, shift.is_training, shift.unpaid_break_minutes, shift.scheduled_length_minutes]);
+    const estimatedPay = scheduledCost ? `$${scheduledCost.totalCost.toFixed(2)}` : null;
+    const estimatedPayBreakdown = useMemo(
+        () => scheduledCost
+            ? buildOrdinaryEarningsLines(scheduledCost, { isSecurityRole, shiftDate: shift.shift_date, startTime: shift.start_time })
+            : [],
+        [scheduledCost, isSecurityRole, shift.shift_date, shift.start_time],
+    );
+
+    const billableNetMinutes = useMemo(() => {
+        const rawNet = calculateNetMinutes(resolvedStart, resolvedEnd, shift.unpaid_break_minutes || 0);
+        if (rawNet === null) return null;
+        const { isSunday, isPublicHoliday } = getShiftDayType(shift.shift_date);
+        return applyMinEngagementFloor(rawNet, {
+            isTraining: shift.is_training === true,
+            isSunday,
+            isPublicHoliday,
+            employmentType,
+            isSecurityRole,
+        }).netMinutes;
+    }, [resolvedStart, resolvedEnd, shift.unpaid_break_minutes, shift.shift_date, shift.is_training, employmentType, isSecurityRole]);
+
+    const billableCost = useMemo(() => {
+        if (!resolvedStart.hhmm || !resolvedEnd.hhmm || billableNetMinutes == null) return null;
+        try {
+            return estimateDetailedCostFromShift({
+                shift_date: shift.shift_date,
+                start_time: resolvedStart.hhmm,
+                end_time: resolvedEnd.hhmm,
+                roles: { name: roleName },
+                employmentType,
+                is_training: shift.is_training,
+                unpaid_break_minutes: shift.unpaid_break_minutes || 0,
+                scheduled_length_minutes: shift.scheduled_length_minutes ?? 0,
+            }, billableNetMinutes);
+        } catch {
+            return null;
+        }
+    }, [shift.shift_date, resolvedStart.hhmm, resolvedEnd.hhmm, billableNetMinutes, roleName, employmentType, shift.is_training, shift.unpaid_break_minutes, shift.scheduled_length_minutes]);
+    const billablePay = billableCost ? `$${billableCost.totalCost.toFixed(2)}` : null;
+    const billablePayBreakdown = useMemo(
+        () => billableCost
+            ? buildOrdinaryEarningsLines(billableCost, { isSecurityRole, shiftDate: shift.shift_date, startTime: resolvedStart.hhmm ?? undefined })
+            : [],
+        [billableCost, isSecurityRole, shift.shift_date, resolvedStart.hhmm],
+    );
+
+    const shiftDataForCard = useMemo(() => ({
+        ...shift,
+        adjusted_start: resolvedStart.hhmm,
+        adjusted_end: resolvedEnd.hhmm,
+    }), [shift, resolvedStart, resolvedEnd]);
+
+    const topContent = (
+        <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 shrink-0">
+            {selectionSlot}
+            {isEmergentUnassigned && (
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <button
+                            type="button"
+                            onClick={() => openReserveList(shift.id)}
+                            className="h-8 w-8 flex items-center justify-center rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:scale-105 transition-all"
+                        >
+                            <Phone className="h-4 w-4 animate-pulse" />
+                        </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[10px] font-bold">
+                        Emergency — Open Reserve List
+                    </TooltipContent>
+                </Tooltip>
+            )}
+            <ShiftHistoryButton
+                shiftId={shift.id}
+                triggerClassName="h-8 w-8 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 rounded-lg transition-colors"
+                iconClassName="h-4 w-4 text-slate-400"
+                onViewHistory={onViewHistory}
+            />
+        </div>
+    );
 
     return (
-        <CardShell
-            className={cn(
-                'relative group/card rounded-2xl overflow-hidden bg-white dark:bg-[#0f1525] border-2 p-4 transition-all duration-300',
-                isSelected ? 'border-primary' : groupBorder,
-                'shadow-[0_10px_40px_-12px_rgba(0,0,0,0.5)]',
-                onClick && !isFullyLocked && !isPast && 'cursor-pointer',
-                isSelected && 'bg-primary/[0.04]',
-                isPast && (isDraft ? 'grayscale opacity-70 cursor-not-allowed' : 'grayscale opacity-80 cursor-not-allowed'),
-                className,
-            )}
-            onClick={isFullyLocked || isPast ? undefined : onClick}
-        >
-            {/* Group-colour tint over the whole card */}
-            <div className={cn('absolute inset-0 pointer-events-none', tint)} aria-hidden="true" />
-
-            <div className="relative z-[20] flex flex-col">
-                {/* A — Selection + action icons (group/sub-group shown in the modal header) */}
-                <div className="flex justify-between items-center gap-2 min-h-[28px]">
-                    {selectionSlot ? (
-                        <div onClick={(e) => e.stopPropagation()} className="shrink-0 flex items-center">
-                            {selectionSlot}
-                        </div>
-                    ) : <span />}
-                    <div onClick={(e) => e.stopPropagation()} className="relative z-30 shrink-0 flex items-center">
-                        {isEmergentUnassigned && (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <button
-                                        type="button"
-                                        onClick={() => openReserveList(shift.id)}
-                                        className="h-8 w-8 flex items-center justify-center rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:scale-105 transition-all mr-0.5"
-                                    >
-                                        <Phone className="h-4 w-4 animate-pulse" />
-                                    </button>
-                                </TooltipTrigger>
-                                <TooltipContent className="bg-slate-900 text-white border-none py-1.5 px-3 text-[10px] font-bold">
-                                    Emergency — Open Reserve List
-                                </TooltipContent>
-                            </Tooltip>
-                        )}
-                        <ShiftHistoryButton
-                            shiftId={shift.id}
-                            triggerClassName="h-8 w-8 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 rounded-lg transition-colors"
-                            iconClassName="h-4 w-4 text-slate-400"
-                            onViewHistory={onViewHistory}
-                        />
-                        {headerAction || (!isFullyLocked && (
-                            <button className="h-8 w-8 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 rounded-lg transition-colors -mr-1">
-                                <MoreHorizontal className="h-4 w-4 text-slate-400" />
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {/* B — Title (assignee / Unassigned) — full width so it always fits */}
-                <div className={cn(
-                    'mt-1.5 text-xl font-bold tracking-tight leading-tight truncate text-slate-900 dark:text-white',
-                )}>
-                    {isPeopleMode ? roleName : (employeeName || 'Unassigned')}
-                </div>
-
-
-
-                {/* E — Pills row — always a single line (role pill truncates if tight) */}
-                <div className="mt-2.5 flex items-center gap-1.5">
-                    {isPeopleMode ? (
-                        <span className={cn(pillClass, 'min-w-0')}>
-                            <span className="truncate">{shift.roster_subgroup?.name || shift.sub_group_name || 'Shift'}</span>
-                        </span>
-                    ) : (
-                        roleName !== 'No Role' && (
-                            <span className={cn(pillClass, 'min-w-0')}>
-                                <span className="truncate">{roleName}</span>
-                            </span>
-                        )
-                    )}
-                    <span className={cn(pillClass, 'shrink-0')}>{timeRange}</span>
-                    {durationLabel && <span className={cn(pillClass, 'shrink-0')}>{durationLabel}</span>}
-                    {shift.is_training && <span className={cn(pillClass, 'shrink-0')}>Training</span>}
-                </div>
-
-                {/* F — Footer band */}
-                <ShiftRuleHeader
-                    shift={shift}
-                    band
-                    liveRulesUnassigned="na"
-                    state={stateDisplay}
-                    assigned={!!employeeName}
-                    className="mt-3"
-                />
-            </div>
-        </CardShell>
+        <SharedShiftCard
+            variant="timecard"
+            organization={shift.organizations?.name || ''}
+            department={groupName || ''}
+            subGroup={shift.sub_group_name || undefined}
+            role={roleName}
+            shiftDate={shift.shift_date}
+            startTime={shift.start_time}
+            endTime={shift.end_time}
+            netLength={shift.net_length_minutes || 0}
+            paidBreak={shift.paid_break_minutes || 0}
+            unpaidBreak={shift.unpaid_break_minutes || 0}
+            lifecycleStatus={shift.lifecycle_status}
+            isPast={isPast}
+            employeeName={employeeName || undefined}
+            clockIn={shift.actual_start ? formatTime(shift.actual_start) : null}
+            clockOut={shift.actual_end ? formatTime(shift.actual_end) : null}
+            adjustedStart={resolvedStart.hhmm}
+            adjustedEnd={resolvedEnd.hhmm}
+            adjustedStartSource={resolvedStart.source === 'missing' ? null : resolvedStart.source}
+            adjustedEndSource={resolvedEnd.source === 'missing' ? null : resolvedEnd.source}
+            estimatedPay={estimatedPay}
+            estimatedPayBreakdown={estimatedPayBreakdown}
+            billablePay={billablePay}
+            billablePayBreakdown={billablePayBreakdown}
+            showPayrollRules
+            hideBreadcrumbs
+            hideSegmentedBox
+            moveTopContentToBottom
+            shiftData={shiftDataForCard}
+            isFlat={false}
+            isExpired={isPast}
+            className={cn(isSelected && 'ring-2 ring-primary/60', className)}
+            topContent={topContent}
+            footerActions={headerAction}
+        />
     );
 };
 

@@ -782,7 +782,6 @@ const GroupSection: React.FC<GroupSectionProps> = ({
   onToggleCollapse,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(isInitiallyCollapsed);
-  const deferredCollapsed = React.useDeferredValue(isCollapsed);
 
   // Sync with prop changes
   useEffect(() => {
@@ -909,7 +908,7 @@ const GroupSection: React.FC<GroupSectionProps> = ({
       </div>
 
       {/* Collapsible Content */}
-      {!deferredCollapsed && (
+      {!isCollapsed && (
         <div className="overflow-auto">
           <div role="table" className="relative" style={{ width: 'max-content', minWidth: '100%' }}>
             <div role="row" className="grid sticky top-0 z-20 bg-muted/30" style={{ gridTemplateColumns: groupGridCols(dates.length) }}>
@@ -961,12 +960,9 @@ const GroupSection: React.FC<GroupSectionProps> = ({
 
                         {/* Roster Indicator (from DB status) - Robust matching */}
                         {rosterStructures.some(r => {
-                          if (!r.startDate) return false;
-                          try {
-                            return isSameDay(parseISO(r.startDate), date);
-                          } catch {
-                            return false;
-                          }
+                          if (!r.startDate || !r.endDate) return false;
+                          const dateKey = format(date, 'yyyy-MM-dd');
+                          return dateKey >= r.startDate && dateKey <= r.endDate;
                         }) && (
                           <div
                             className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/30 border border-emerald-400/50 shadow-[0_0_12px_rgba(16,185,129,0.3)] hover:scale-125 transition-transform flex-shrink-0 cursor-help"
@@ -2211,8 +2207,8 @@ export const GroupModeView: React.FC<GroupModeViewProps> = ({
     // c. Pass the ID to the modal context
 
     const dateKey = format(date, 'yyyy-MM-dd');
-    const specificRoster = rosterStructures.find(r => r.startDate === dateKey); // rosterStructures has 'startDate'
-    let specificRosterId = specificRoster?.rosterId; // Use .rosterId (mapped from id)
+    const specificRoster = rosterStructures.find(r => dateKey >= r.startDate && dateKey <= r.endDate);
+    let specificRosterId = specificRoster?.rosterId || rosterId;
 
     // Strict Policy: Blocking shift addition if roster is not activated
     if (!specificRosterId) {
