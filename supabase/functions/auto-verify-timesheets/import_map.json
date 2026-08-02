@@ -1,9 +1,0 @@
-{
-  "//": "Function-local import map for auto-verify-timesheets.",
-  "//strategy": "Self-contained: supabase-js + pure local TS (variance.ts). The",
-  "//strategy2": "decision is a pure zero-variance computation over absolute clock",
-  "//strategy3": "instants — no compliance engine / evaluate-compliance call needed.",
-  "imports": {
-    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.50.0"
-  }
-}
