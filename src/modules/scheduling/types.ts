@@ -73,6 +73,46 @@ export interface OptimizerEmployee {
     is_flexible?: boolean;
     is_student?: boolean;
     visa_limit?: number;
+    /**
+     * True when this employee's substantive classification is Security
+     * (Schedule 3), not a general Schedule 1/2 classification. Drives the
+     * AutoScheduler's rate resolution: full-time Security Level 3-6 is paid
+     * the Schedule 2 §2 ANNUALISED hourly rate, not the generic Schedule 2 §1
+     * wage table (compliance audit finding — 2026-08-02). When not supplied
+     * via `employeeDetails`, the controller derives a best-effort value from
+     * whether this employee holds a role that appears on a Security-named
+     * shift in the current optimization batch — see
+     * `auto-scheduler.controller.ts`.
+     */
+    is_security_role?: boolean;
+    /**
+     * Schedule 4/5/6 wage classification, resolved from the employee's own
+     * Active `user_contracts` row (compliance audit finding — 2026-08-02:
+     * previously unreachable from the AutoScheduler, which only ever priced
+     * the generic Schedule 1/2 classification). None of these affect the
+     * CP-SAT solver's own cost objective (it has no apprentice/trainee/SWS
+     * wage model, only a flat `hourly_rate`) — they are consulted ONLY by
+     * the greedy-fallback's cost re-estimate (`estimateDetailedShiftCostObj`
+     * in `auto-scheduler.controller.ts`), which already implements Schedule
+     * 4/5/6 in full via `CostCalculatorOptions`. Fixing the solver's own
+     * ranking to price these correctly is a separate, larger item — see the
+     * audit's remediation notes.
+     */
+    is_apprentice?: boolean;
+    apprentice_type?: 'standard' | 'adult' | 'school_based';
+    apprentice_year?: number;
+    has_completed_year_12?: boolean;
+    is_trainee?: boolean;
+    trainee_category?: 'junior' | 'adult' | 'school_based';
+    trainee_level?: 'A' | 'B';
+    trainee_exit_year?: number;
+    trainee_years_out?: number;
+    trainee_aqf_level?: number;
+    trainee_year?: number;
+    is_training_on_job?: boolean;
+    prefers_sba_loading?: boolean;
+    is_sws?: boolean;
+    sws_capacity_percentage?: number;
     existing_shifts?: ExistingShiftRef[];
     contracts?: any[];
     qualifications?: any[];
