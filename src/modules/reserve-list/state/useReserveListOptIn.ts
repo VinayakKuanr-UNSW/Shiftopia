@@ -2,7 +2,7 @@
  * Employee opt-in toggle for Reserve List — "are you willing to receive
  * emergency replacement requests?" OFF by default; never appears in a
  * Reserve List search until switched ON (see
- * docs/audits/reserve-list-audit-and-implementation-plan.md §8).
+ * docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md §8).
  *
  * Stored at `profiles.preferences.reserve_list.opt_in` — reusing the existing
  * jsonb preferences column (already defaults to `{"notifications": {...}}`)

@@ -12,7 +12,7 @@
  *
  * Every open + every "Refresh" press runs a fresh, uncached search
  * (getReserveListCandidates) — see
- * docs/audits/reserve-list-audit-and-implementation-plan.md §10, §12.
+ * docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md §10, §12.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';

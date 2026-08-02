@@ -3,7 +3,7 @@
  *
  * Composed entirely from existing, already-correct subsystems rather than a
  * new eligibility/compliance engine — see
- * docs/audits/reserve-list-audit-and-implementation-plan.md §4, §12 for the
+ * docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md §4, §12 for the
  * full rationale:
  *   - EligibilityService.getEligibleEmployees()  → structural (org/dept/role/
  *     skill/license via active contract) eligibility.

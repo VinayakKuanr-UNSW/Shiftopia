@@ -4,7 +4,7 @@ import type { ShiftAvailabilityResult } from '@/modules/rosters/domain/availabil
  * One structurally-eligible, opted-in, overlap-free, compliance-passing
  * employee returned by a live Reserve List search. Never cached — a fresh
  * search recomputes this from scratch every time (see
- * docs/audits/reserve-list-audit-and-implementation-plan.md §4, §10).
+ * docs/investigations/2026-07-21_reserve-list-audit-and-implementation-plan.md §4, §10).
  */
 export interface ReserveListCandidate {
   employeeId: string;
