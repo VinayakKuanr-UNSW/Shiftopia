@@ -94,9 +94,23 @@ export interface ConflictResolverBaseState {
      * penalty in the scorer — operations that over-load employees who are
      * already near their contracted ceiling receive a lower composite_score.
      *
-     * If omitted, fairness scoring is skipped even when fairness_weight > 0.
+     * If omitted, the load term is skipped even when fairness_weight > 0.
      */
     employee_hours_28d?:      Map<V8EmpId, number>;
+    /**
+     * Optional: F1 longitudinal fairness-ledger debts per employee, keyed by
+     * metric (`weekend_shifts`, `night_shifts`, `denied_preferences`, …).
+     * Positive = over-share (bias away), negative = owed.
+     *
+     * Audit F-09: the scorer has ALWAYS accepted this as its 7th parameter and
+     * contained two blocks that consume it (the F1 ledger penalty and the F3
+     * preference-equity bonus), but `resolveConflicts` only ever passed six
+     * arguments — so `fairness_debts` was permanently `undefined` and both
+     * blocks were unreachable. Every swap-conflict and batch-assignment
+     * resolution ran with the ledger disabled while reading, plausibly, as
+     * though it did not.
+     */
+    fairness_debts?:          Map<V8EmpId, Record<string, number>>;
 }
 
 export interface ConflictResolverInput {

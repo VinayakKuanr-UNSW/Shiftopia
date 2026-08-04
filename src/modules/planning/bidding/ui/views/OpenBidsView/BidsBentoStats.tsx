@@ -1,19 +1,12 @@
-// src/modules/planning/bidding/ui/views/OpenBidsView/BidsBentoStats.tsx
-
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Flame, Zap, Users, ShieldCheck, TrendingUp, Sparkles, ChevronUp, ChevronDown, Filter } from 'lucide-react';
+import { Flame, Zap, Users, ShieldCheck, TrendingUp, Sparkles, ChevronUp, ChevronDown, Activity, Clock, Percent, AlertTriangle, Info, Bot, ActivitySquare } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
-import type { BidToggle } from './types';
+import type { BidToggle, ManagerBidShift } from './types';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/modules/core/ui/primitives/tooltip';
 
 interface BidsBentoStatsProps {
-  totalShifts: number;
-  totalBids: number;
-  avgBidsPerShift: string;
-  urgentCount: number;
-  readyForAutoAssign: number;
-  resolvedRate: number;
-  resolvedCount: number;
+  shifts: ManagerBidShift[];
   activeToggle: BidToggle;
   onToggleChange: (toggle: BidToggle) => void;
   onRunBatch?: () => void;
@@ -21,13 +14,7 @@ interface BidsBentoStatsProps {
 }
 
 export const BidsBentoStats: React.FC<BidsBentoStatsProps> = ({
-  totalShifts,
-  totalBids,
-  avgBidsPerShift,
-  urgentCount,
-  readyForAutoAssign,
-  resolvedRate,
-  resolvedCount,
+  shifts,
   activeToggle,
   onToggleChange,
   onRunBatch,
@@ -35,16 +22,89 @@ export const BidsBentoStats: React.FC<BidsBentoStatsProps> = ({
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
+  // Core Computations
+  const totalPublished = shifts.length;
+  const totalBids = shifts.reduce((acc, s) => acc + (s.bidCount || 0), 0);
+  const avgBidsPerShift = totalPublished > 0 ? (totalBids / totalPublished).toFixed(1) : '0.0';
+  
+  const shiftsWithBids = shifts.filter(s => s.bidCount > 0).length;
+  const bidCoverage = totalPublished > 0 ? Math.round((shiftsWithBids / totalPublished) * 100) : 0;
+  
+  const urgentCount = shifts.filter(s => s.toggle === 'urgent').length;
+  // Critical Risk: Urgent shifts with NO bids
+  const criticalCount = shifts.filter(s => s.toggle === 'urgent' && s.bidCount === 0).length;
+  
+  const autoAssignReady = shifts.filter(s => (s.toggle === 'standard' || s.toggle === 'urgent') && s.bidCount > 0).length;
+  
+  const resolvedCount = shifts.filter(s => s.toggle === 'resolved').length;
+  const resolutionRate = totalPublished > 0 ? Math.round((resolvedCount / totalPublished) * 100) : 0;
+  
+  const expiredCount = shifts.filter(s => s.toggle === 'expired').length;
+  const expiredWithoutBidCount = shifts.filter(s => s.toggle === 'expired' && s.bidCount === 0).length;
+  const expiredWithoutBidRate = totalPublished > 0 ? Math.round((expiredWithoutBidCount / totalPublished) * 100) : 0;
+
+
+
+  // Reusable sub-component for metric cards
+  const MetricCard = ({ 
+    title, value, subtitle, icon: Icon, colorClass, borderClass, bgClass, 
+    onClick, isInteractive, badgeText, badgeColorClass,
+    tooltipText 
+  }: any) => (
+    <div
+      onClick={onClick}
+      className={cn(
+        'group relative overflow-hidden rounded-xl p-3 border transition-all duration-300',
+        isInteractive ? 'cursor-pointer hover:shadow-md' : '',
+        bgClass || 'bg-card/60 backdrop-blur-xl hover:bg-card/80',
+        borderClass || 'border-border/60 hover:border-border/80 hover:border-primary/30'
+      )}
+    >
+      <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+        <Icon className={cn("h-12 w-12", colorClass)} />
+      </div>
+      <div className="flex items-start justify-between mb-2">
+        <span className={cn("text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5", colorClass)}>
+          <Icon className="h-3.5 w-3.5" />
+          {title}
+          {tooltipText && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="h-3 w-3 text-muted-foreground/60 cursor-help ml-0.5" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[200px] text-xs">
+                {tooltipText}
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </span>
+        {badgeText && (
+          <span className={cn("text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full border", badgeColorClass)}>
+            {badgeText}
+          </span>
+        )}
+      </div>
+      <div className="flex items-baseline gap-1.5 z-10 relative">
+        <span className={cn("text-xl font-black font-mono tracking-tight", colorClass)}>
+          {value}
+        </span>
+      </div>
+      <div className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground/80 font-medium z-10 relative">
+        <span>{subtitle}</span>
+      </div>
+    </div>
+  );
+
   return (
     <div className="shrink-0 px-4 pt-3 pb-1 select-none">
       {/* Header & Collapse Toggle */}
       <div className="flex items-center justify-between mb-2.5 px-1">
         <div className="flex items-center gap-2">
-          <div className="h-6 w-6 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-            <Sparkles className="h-3.5 w-3.5" />
+          <div className="h-6 w-6 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-500">
+            <ActivitySquare className="h-3.5 w-3.5" />
           </div>
           <h2 className="text-xs font-black uppercase tracking-wider text-foreground/90">
-            Manager Bidding Intelligence
+            Marketplace Analytics
           </h2>
           <span className="text-[10px] font-mono font-bold text-muted-foreground/50 bg-muted/40 px-2 py-0.5 rounded-full border border-border/40">
             Live Overview
@@ -73,158 +133,58 @@ export const BidsBentoStats: React.FC<BidsBentoStatsProps> = ({
             transition={{ duration: 0.25, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
-            {/* Bento Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pb-2">
+            {/* Bento Grid: 2 rows of 2 on md, 1 row of 4 on wide screens */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pb-2">
               
-              {/* BENTO CARD 1: Total Demand & Competition */}
-              <div
+              <MetricCard
+                title="Bid Demand"
+                value={`${avgBidsPerShift}`}
+                subtitle={`From ${totalBids} total bids`}
+                icon={Users}
+                colorClass="text-primary"
+                borderClass={activeToggle === 'standard' ? 'border-primary/40 ring-1 ring-primary/20' : ''}
+                bgClass={activeToggle === 'standard' ? 'bg-primary/10' : ''}
+                isInteractive
                 onClick={() => onToggleChange('standard')}
-                className={cn(
-                  'group relative overflow-hidden rounded-2xl p-4 border transition-all duration-300 cursor-pointer',
-                  activeToggle === 'standard'
-                    ? 'bg-primary/10 border-primary/40 shadow-lg shadow-primary/5 ring-1 ring-primary/20'
-                    : 'bg-card/60 backdrop-blur-xl border-border/60 hover:border-primary/30 hover:bg-card/80 hover:shadow-md'
-                )}
-              >
-                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                  <Users className="h-16 w-16 text-primary" />
-                </div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
-                    <Users className="h-3.5 w-3.5 text-primary" /> Demand & Bids
-                  </span>
-                  <span className="text-[9px] font-mono font-bold bg-primary/15 text-primary px-2 py-0.5 rounded-full border border-primary/20">
-                    {avgBidsPerShift} bids/shift
-                  </span>
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black font-mono tracking-tight text-foreground">
-                    {totalBids}
-                  </span>
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    total bids for <span className="font-bold text-foreground font-mono">{totalShifts}</span> shifts
-                  </span>
-                </div>
-                <div className="mt-2.5 flex items-center gap-2 text-[10px] text-muted-foreground/80 font-medium">
-                  <TrendingUp className="h-3 w-3 text-emerald-500" />
-                  <span>High candidate interest</span>
-                </div>
-              </div>
+                tooltipText="Average bids per published shift."
+              />
 
-              {/* BENTO CARD 2: Urgent Shifts */}
-              <div
-                onClick={() => onToggleChange('urgent')}
-                className={cn(
-                  'group relative overflow-hidden rounded-2xl p-4 border transition-all duration-300 cursor-pointer',
-                  activeToggle === 'urgent'
-                    ? 'bg-rose-500/10 border-rose-500/40 shadow-lg shadow-rose-500/5 ring-1 ring-rose-500/20'
-                    : 'bg-card/60 backdrop-blur-xl border-border/60 hover:border-rose-500/30 hover:bg-card/80 hover:shadow-md'
-                )}
-              >
-                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                  <Flame className="h-16 w-16 text-rose-500" />
-                </div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-rose-500/90 flex items-center gap-1.5">
-                    <Flame className="h-3.5 w-3.5 text-rose-500 animate-pulse" /> Urgent Priority
-                  </span>
-                  {urgentCount > 0 && (
-                    <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
-                  )}
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black font-mono tracking-tight text-rose-600 dark:text-rose-400">
-                    {urgentCount}
-                  </span>
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    shifts require action
-                  </span>
-                </div>
-                <div className="mt-2.5 flex items-center justify-between text-[10px]">
-                  <span className="text-rose-500/80 font-semibold">
-                    {urgentCount > 0 ? 'High risk of unfilled shift' : 'All urgent shifts covered'}
-                  </span>
-                  <span className="font-mono text-muted-foreground/60 group-hover:text-rose-500 flex items-center gap-0.5 font-bold">
-                    Filter <Filter className="h-2.5 w-2.5" />
-                  </span>
-                </div>
-              </div>
+              <MetricCard
+                title="Coverage"
+                value={`${bidCoverage}%`}
+                subtitle={`${shiftsWithBids} of ${totalPublished} shifts`}
+                icon={TrendingUp}
+                colorClass="text-emerald-500"
+                tooltipText="Percentage of published shifts that have at least one bid."
+              />
 
-              {/* BENTO CARD 3: Auto-Assign Batch Readiness */}
-              <div
-                onClick={() => onRunBatch?.()}
-                className={cn(
-                  'group relative overflow-hidden rounded-2xl p-4 border transition-all duration-300 cursor-pointer',
-                  readyForAutoAssign > 0
-                    ? 'bg-amber-500/10 border-amber-500/30 hover:border-amber-500/50 hover:bg-amber-500/15 shadow-sm'
-                    : 'bg-card/60 backdrop-blur-xl border-border/60 opacity-80'
-                )}
-              >
-                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                  <Zap className="h-16 w-16 text-amber-500" />
-                </div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                    <Zap className="h-3.5 w-3.5 text-amber-500" /> Auto-Assign Ready
-                  </span>
-                  <span className="text-[9px] font-mono font-bold bg-amber-500/20 text-amber-600 dark:text-amber-300 px-2 py-0.5 rounded-full">
-                    1-Click Batch
-                  </span>
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black font-mono tracking-tight text-amber-600 dark:text-amber-400">
-                    {readyForAutoAssign}
-                  </span>
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    shifts clear for award
-                  </span>
-                </div>
-                <div className="mt-2.5 flex items-center justify-between text-[10px]">
-                  <span className="text-amber-600/80 dark:text-amber-400/80 font-semibold">
-                    {isBatchRunning ? 'Running batch…' : 'Click to run batch now'}
-                  </span>
-                  <span className="font-bold text-amber-500 group-hover:underline">
-                    Run Batch &rarr;
-                  </span>
-                </div>
-              </div>
 
-              {/* BENTO CARD 4: Roster Resolution Rate */}
-              <div
+
+              <MetricCard
+                title="Award Completion"
+                value={`${resolutionRate}%`}
+                subtitle={`${resolvedCount} awarded`}
+                icon={ShieldCheck}
+                colorClass="text-teal-500"
+                borderClass={activeToggle === 'resolved' ? 'border-teal-500/40 ring-1 ring-teal-500/20' : ''}
+                bgClass={activeToggle === 'resolved' ? 'bg-teal-500/10' : ''}
+                isInteractive
                 onClick={() => onToggleChange('resolved')}
-                className={cn(
-                  'group relative overflow-hidden rounded-2xl p-4 border transition-all duration-300 cursor-pointer',
-                  activeToggle === 'resolved'
-                    ? 'bg-emerald-500/10 border-emerald-500/40 shadow-lg shadow-emerald-500/5 ring-1 ring-emerald-500/20'
-                    : 'bg-card/60 backdrop-blur-xl border-border/60 hover:border-emerald-500/30 hover:bg-card/80 hover:shadow-md'
-                )}
-              >
-                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                  <ShieldCheck className="h-16 w-16 text-emerald-500" />
-                </div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" /> Resolution Rate
-                  </span>
-                  <span className="text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 px-2 py-0.5 rounded-full">
-                    {resolvedCount} awarded
-                  </span>
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black font-mono tracking-tight text-emerald-600 dark:text-emerald-400">
-                    {resolvedRate}%
-                  </span>
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    shifts resolved
-                  </span>
-                </div>
-                <div className="mt-2.5 w-full bg-muted/80 h-1.5 rounded-full overflow-hidden">
-                  <div
-                    className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-                    style={{ width: `${resolvedRate}%` }}
-                  />
-                </div>
-              </div>
+                tooltipText="Percentage of published shifts that have been successfully filled."
+              />
+
+              <MetricCard
+                title="Expired W/O Bid"
+                value={`${expiredWithoutBidRate}%`}
+                subtitle={`${expiredWithoutBidCount} expired w/o bid`}
+                icon={AlertTriangle}
+                colorClass="text-slate-400"
+                borderClass={activeToggle === 'expired' ? 'border-slate-500/40 ring-1 ring-slate-500/20' : ''}
+                bgClass={activeToggle === 'expired' ? 'bg-slate-500/10' : ''}
+                isInteractive
+                onClick={() => onToggleChange('expired')}
+                tooltipText="Percentage of published shifts that expired without receiving a single bid."
+              />
 
             </div>
           </motion.div>

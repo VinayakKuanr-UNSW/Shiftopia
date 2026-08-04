@@ -41,6 +41,15 @@ import type {
 } from '../types';
 import { runV8Orchestrator } from '../index';
 
+/**
+ * Denial-rate debt at which the F3 preference-equity bonus saturates.
+ *
+ * 0.25 = losing a quarter more of your bids than the org average, which is a
+ * strong equity claim. Named because the metric is a rate in [0,1] and any
+ * threshold expressed as a raw count would silently neutralise the term.
+ */
+const DENIAL_RATE_FULL_CLAIM = 0.25;
+
 // =============================================================================
 // STANDALONE COMPLIANCE CHECK
 // =============================================================================
@@ -136,69 +145,83 @@ export function scoreOperations(
             biz_component      * config.business_weight
         ) * 10_000) / 100;    // two decimal places, range [0, 100]
 
-        // ── System-level fairness penalty ────────────────────────────────────
-        // Penalise operations that assign additional work to employees who
-        // are already at or above their 28-day contracted hours ceiling.
-        // Only applied when both fairness_weight > 0 and hours data is supplied.
-        if (config.fairness_weight > 0 && employee_hours_28d) {
-            let max_load_ratio = 0;
+        // ── System-level fairness adjustment ─────────────────────────────────
+        //
+        // Every term below is aggregated across the operation's changes FIRST
+        // and applied ONCE (audit F-17). They used to mutate `composite_score`
+        // inside a `for (const change of ...)` loop, so an operation touching
+        // three employees applied the penalty three times — which systematically
+        // favoured smaller operations in the greedy ordering and made the score
+        // depend on the order of `schedule_changes`. Exactly the operations this
+        // resolver exists to arbitrate (multi-employee swaps and batch
+        // assignments) were the ones scored on a different scale.
+        if (config.fairness_weight > 0 && (employee_hours_28d || fairness_debts)) {
+            let max_over_ceiling = 0;   // how far PAST contract, not total load
+            let max_positive_debt = 0;  // worst over-share among affected employees
+            let max_denied_prefs = 0;   // best owed-preference claim
 
             for (const change of op.schedule_changes) {
                 // Only penalise when we're adding shifts (not removals-only ops)
                 if (change.add_shift_ids.length === 0) continue;
 
-                const ctx = employee_catalog.get(change.employee_id);
-                if (!ctx) continue;
+                if (employee_hours_28d) {
+                    const ctx = employee_catalog.get(change.employee_id);
+                    // Contracted 28-day hours (casual has 0 — skip to avoid ÷0)
+                    const ceiling_28d = (ctx?.contracted_weekly_hours ?? 0) * 4;
+                    if (ceiling_28d > 0) {
+                        const current_hours = employee_hours_28d.get(change.employee_id) ?? 0;
+                        // EXCESS over the ceiling, not the raw load ratio
+                        // (audit F-16). The old `Math.min(1, current/ceiling)`
+                        // penalised an employee at 50% of contract by half the
+                        // maximum, and — because it clamped at 1 — scored 100%
+                        // and 300% of contract identically, going flat exactly
+                        // where over-work starts to matter.
+                        max_over_ceiling = Math.max(max_over_ceiling, current_hours / ceiling_28d - 1);
+                    }
+                }
 
-                // Contracted 28-day hours (casual has 0 — skip to avoid ÷0)
-                const ceiling_28d = ctx.contracted_weekly_hours * 4;
-                if (ceiling_28d <= 0) continue;
+                const debts = fairness_debts?.get(change.employee_id);
+                if (debts) {
+                    // `denial_rate` is excluded from the burden sum: it is a
+                    // rate in [0,1] while every other metric is a count or a
+                    // duration, so adding it in would be a category error.
+                    const positive = Object.entries(debts)
+                        .filter(([k]) => k !== 'denial_rate')
+                        .reduce((a, [, v]) => a + Math.max(0, v as number), 0);
+                    max_positive_debt = Math.max(max_positive_debt, positive);
 
-                const current_hours = employee_hours_28d.get(change.employee_id) ?? 0;
-                const ratio = current_hours / ceiling_28d;
-                max_load_ratio = Math.max(max_load_ratio, ratio);
-            }
-
-            // Penalty is proportional to how over-ceiling the most-loaded
-            // affected employee is.  Clamped to [0, 1] so it never exceeds
-            // fairness_weight × 100 points of reduction.
-            const penalty = Math.min(1, max_load_ratio) * config.fairness_weight * 100;
-            composite_score = Math.max(0, composite_score - penalty);
-
-            // F1: Longitudinal Fairness Ledger
-            if (fairness_debts) {
-                for (const change of op.schedule_changes) {
-                    if (change.add_shift_ids.length === 0) continue;
-                    const debts = fairness_debts.get(change.employee_id);
-                    if (!debts) continue;
-
-                    // Sum all POSITIVE debts (meaning they've done more than average)
-                    // We don't bonus negative debt here, we only penalise greedy assignments
-                    // to over-worked people.
-                    const totalDebt = Object.entries(debts)
-                        .filter(([k]) => k !== 'denied_preferences')
-                        .reduce((a, [_, b]) => a + Math.max(0, b as number), 0);
-                    // 5 units of debt = max penalty (100% of fairness weight)
-                    const ledgerPenalty = Math.min(1, totalDebt / 5) * config.fairness_weight * 50;
-                    composite_score = Math.max(0, composite_score - ledgerPenalty);
+                    if (op.type === 'BID_ACCEPT') {
+                        max_denied_prefs = Math.max(max_denied_prefs, debts.denial_rate ?? 0);
+                    }
                 }
             }
-        }
 
-        // F3: Preference Equity Bonus
-        if (fairness_debts && op.type === 'BID_ACCEPT') {
-            for (const change of op.schedule_changes) {
-                if (change.add_shift_ids.length === 0) continue;
-                const debts = fairness_debts.get(change.employee_id);
-                if (!debts || !debts.denied_preferences) continue;
+            // Over-ceiling load. Unclamped at the top so 300% of contract really
+            // is worse than 110%; the ×0.5 keeps a 2×-over operation at roughly
+            // the old full-weight magnitude.
+            const overCeilingPenalty = Math.max(0, max_over_ceiling) * 0.5 * config.fairness_weight * 100;
 
-                if (debts.denied_preferences > 0) {
-                    // Add up to 50 points of bonus for satisfying a preference for an employee
-                    // who has been denied frequently.
-                    const prefBonus = Math.min(1, debts.denied_preferences / 5) * config.fairness_weight * 50;
-                    composite_score = Math.min(100, composite_score + prefBonus);
-                }
-            }
+            // F1 longitudinal ledger. 5 units of positive debt = full penalty.
+            const ledgerPenalty = Math.min(1, max_positive_debt / 5) * config.fairness_weight * 50;
+
+            // F3 preference equity — an employee repeatedly denied gets a boost
+            // when the operation would finally satisfy a preference.
+            //
+            // Saturates at DENIAL_RATE_FULL_CLAIM, not at 5: the metric is now
+            // a RATE debt, not a denial count (stakeholder decision Q5). Left
+            // at /5 it would have divided a typical ±0.3 debt down to ~0.06 and
+            // quietly zeroed this bonus — the metric would still be read, and
+            // still be meaningless.
+            const prefBonus = Math.min(1, max_denied_prefs / DENIAL_RATE_FULL_CLAIM)
+                * config.fairness_weight * 50;
+
+            // Single clamped application, so the bonus can no longer resurrect a
+            // score the penalties had already floored at 0 (the old ordering
+            // clamped penalties to 0 and THEN added the bonus back on top).
+            composite_score = Math.max(
+                0,
+                Math.min(100, composite_score - overCeilingPenalty - ledgerPenalty + prefBonus),
+            );
         }
 
         return { op, composite_score, pre_compliance_status };

@@ -22,8 +22,15 @@ export interface OptimizerShift {
     demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
     target_employment_type?: 'FT' | 'PT' | 'Casual' | null;
     level?: number;
-    /** Used by SC-1 to apply award-rate multipliers (1.5× / 2.5×). */
+    /** Day-type flags driving the EBA cl 41 loadings (`_penalty_day`) AND the
+     *  SC-10/SC-11 fairness terms (`undesirable_shift_ids`). The controller
+     *  populates `is_sunday`/`is_public_holiday` from `core/lib/holidays.ts`;
+     *  `is_saturday` and `is_sunday` are ALSO derived server-side in
+     *  `ShiftInput.__post_init__` so the solver is self-sufficient (audit F-01).
+     *  `is_public_holiday` cannot be derived there — the optimizer service has
+     *  no holiday calendar — so it must cross the wire. */
     is_sunday?: boolean;
+    is_saturday?: boolean;
     is_public_holiday?: boolean;
     /** Lower min-engagement floor (training shifts can be 2h vs 3h). */
     is_training?: boolean;
@@ -143,6 +150,10 @@ export interface OptimizerEmployee {
     availability_overrides?: Array<[string, string, 'HARD' | 'SOFT' | 'PREFERENCE']>;
     /** F1: Ledger debts. Positive = penalty for assigning more, Negative = bonus. */
     fairness_debts?: Record<string, number>;
+    /** Prior circadian load in EFFECTIVE MINUTES spilling into the horizon's
+     *  first ISO week — SC-7's own unit. Supersedes the `initial_fatigue_score
+     *  × 60` conversion, which overstated prior load ~2.2× (audit F-07). */
+    initial_effective_minutes?: number;
 }
 
 export interface OptimizerStrategy {
@@ -387,6 +398,11 @@ export interface AutoSchedulerResult {
     /** Org scope echoed from the run input, so commit() can write the F1
      *  fairness ledger back. Undefined when no org was supplied (ledger off). */
     organizationId?: string;
+    /** F1 ledger health for THIS run (audit F-04). A silently-empty ledger used
+     *  to be indistinguishable from "nobody owes anything", so longitudinal
+     *  fairness could be off for weeks with no signal. Now every run reports
+     *  whether debts were applied, and how stale they were. */
+    fairnessLedger?: FairnessLedgerRunStatus;
     /** B3/B5 — single-mode transparency, forwarded from the solver for the UI
      *  scorecard, constraint banner, and trade-off explorer. */
     pillars?: PillarScores | null;
@@ -394,6 +410,29 @@ export interface AutoSchedulerResult {
     alternatives?: ParetoAlternative[] | null;
     /** B5 — per-assignment rationale keyed by shiftId ("why this person"). */
     rationaleByShift?: Record<string, AssignmentRationale>;
+}
+
+/**
+ * Whether the F1 longitudinal fairness ledger actually influenced a run.
+ *
+ * `applied` is the headline: when false, the roster was built with NO
+ * cross-roster fairness at all and the reason says why. `reason`:
+ *   - `no_org_scope` — the run carried no organizationId; the ledger is off by
+ *     design (not a fault).
+ *   - `no_data`      — org scoped, but the ledger has never been computed (or
+ *                      not since before the as-of date).
+ *   - `fetch_failed` — the read threw; the run continued without debts.
+ *   - `ok` / `stale` — debts WERE applied; `ageDays` says how old they were.
+ */
+export interface FairnessLedgerRunStatus {
+    applied: boolean;
+    reason: 'ok' | 'stale' | 'no_data' | 'no_org_scope' | 'fetch_failed';
+    /** Employees that carried at least one debt row. */
+    employeesWithDebts: number;
+    /** `window_end` of the freshest row used, or null. */
+    windowEnd: string | null;
+    /** Calendar days between `windowEnd` and the run date, or null. */
+    ageDays: number | null;
 }
 
 // =============================================================================

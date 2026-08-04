@@ -108,7 +108,10 @@ function scoreBid(
     // 2. Priority (0–100 → 0–1)
     const ps = (eb.bid.priority_score ?? 50) / 100;
 
-    // 3. Fairness: fewer bids submitted = higher fairness score
+    // 3. Bid-volume equity: fewer bids submitted this round = higher score.
+    //    NOT the F1 fairness ledger — see BiddingConfig.fairness_weight. This
+    //    is an anti-monopolisation term scoped to one round and it measures how
+    //    often you ASKED, not what you RECEIVED (audit F-12).
     const emp_count = ctx.bid_count_by_emp.get(eb.bid.employee_id) ?? 1;
     const count_range = Math.max(1, ctx.max_bid_count - ctx.min_bid_count);
     const fs = 1 - (emp_count - ctx.min_bid_count) / count_range;
@@ -120,10 +123,12 @@ function scoreBid(
         ? 1 - (bid_time_ms - ctx.min_bid_time_ms) / time_range
         : 0.5;    // fallback for unparseable dates
 
+    const volumeEquityWeight = config.bid_volume_equity_weight ?? config.fairness_weight;
+
     return (
         cs * config.compliance_weight +
         ps * config.priority_weight   +
-        fs * config.fairness_weight   +
+        fs * volumeEquityWeight       +
         rs * config.recency_weight
     ) * 100;
 }

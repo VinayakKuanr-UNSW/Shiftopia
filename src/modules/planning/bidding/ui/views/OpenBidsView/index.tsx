@@ -61,6 +61,10 @@ import { getAvailabilitySlots } from '@/modules/availability/api/availability.ap
 import { CompliancePanel } from '@/modules/compliance/ui/CompliancePanel';
 import { classifyBuckets, getBucketSummary } from '@/modules/compliance/ui/bucket-map';
 import type { UseCompliancePanelReturn, PanelStatus, PanelResult } from '@/modules/compliance/ui/useCompliancePanel';
+import { calculateFatigueWithRecovery, getFatigueBand } from '@/modules/rosters/domain/projections/utils/fatigue';
+import { projectFairnessImpact, classifyShift, aggregateShiftsToEntries, type EmployeeLedgerEntry, type FairnessMetric } from '@/modules/rosters/domain/fairness-ledger';
+import { fairnessLedgerQueries } from '@/modules/rosters/api/fairnessLedger.queries';
+import { BidLedgerImpact, type BidLedgerImpactData } from './BidLedgerImpact';
 
 // =============================================================================
 // GROUP COLOR SYSTEM — venue-inherited theming
@@ -162,11 +166,12 @@ function useBidsCompliancePanel(
   selectedBid: EmployeeBid | null,
   expandedShift: ReturnType<typeof useManagerBidShifts>['shifts'][number] | null,
   toastFn: ReturnType<typeof useToast>['toast'],
-): UseCompliancePanelReturn {
+): UseCompliancePanelReturn & { ledgerImpact: BidLedgerImpactData | null } {
   const [status, setStatus]   = useState<PanelStatus>('idle');
   const [result, setResult]   = useState<PanelResult | null>(null);
   const [error,  setError]    = useState<string | null>(null);
   const [warningsAcknowledged, setWarningsAcknowledged] = useState(false);
+  const [ledgerImpact, setLedgerImpact] = useState<BidLedgerImpactData | null>(null);
   const runningRef = useRef(false);
 
   // Reset when selection changes
@@ -175,6 +180,7 @@ function useBidsCompliancePanel(
     setResult(null);
     setError(null);
     setWarningsAcknowledged(false);
+    setLedgerImpact(null);
   }, [selectedBid?.id, expandedShift?.id]);
 
   const run = useCallback(async () => {
@@ -342,6 +348,77 @@ function useBidsCompliancePanel(
       const buckets = classifyBuckets(allHits);
       const summary  = getBucketSummary(buckets);
 
+      // ── Ledger impact (fairness + fatigue what-if) — best-effort, never blocks compliance ──
+      let ledger: BidLedgerImpactData | null = null;
+      try {
+        const candidate = {
+          start_time: expandedShift.startTime,
+          end_time: expandedShift.endTime,
+          unpaid_break_minutes: expandedShift.unpaidBreak || 0,
+        };
+        // Fatigue — reuse the bidder shifts already fetched above (7-day window applied inside).
+        const fatigueShifts = (existingRaw || [])
+          .filter((s: any) => s.id !== expandedShift.id)
+          .map((s: any) => ({
+            shift_date:           s.shift_date,
+            start_time:           s.start_time,
+            end_time:             s.end_time,
+            unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
+          }));
+        const fat = calculateFatigueWithRecovery(fatigueShifts, expandedShift.date, candidate);
+        const fatigue = { current: fat.current, projected: fat.projected, band: getFatigueBand(fat.projected) };
+
+        // Fairness — current team entries: persisted ledger first, else recompute from assigned shifts.
+        const orgId = expandedShift.organizationId;
+        let entries: EmployeeLedgerEntry[] = [];
+        if (orgId) {
+          // Latest window at or before today, NOT an exact `window_end = today`
+          // match (audit F-04) — the exact match found nothing on any day
+          // without a recompute, silently pushing this preview onto the
+          // department-scoped fallback below, whose team average disagrees with
+          // the org-scoped ledger the solver actually uses (audit F-14).
+          const rows = await fairnessLedgerQueries.getLatestDebts(orgId, null, format(new Date(), 'yyyy-MM-dd'));
+          if (rows.length > 0) {
+            const byEmp = new Map<string, Record<FairnessMetric, number>>();
+            for (const r of rows) {
+              const v = byEmp.get(r.employee_id) ?? { saturday_shifts: 0, sunday_shifts: 0, night_shifts: 0, public_holiday_shifts: 0, overtime_minutes: 0, total_hours: 0, denial_rate: 0 };
+              (v as Record<FairnessMetric, number>)[r.metric] = r.rolling_value;
+              byEmp.set(r.employee_id, v);
+            }
+            entries = [...byEmp].map(([employeeId, values]) => ({ employeeId, values }));
+          } else {
+            // ORG-WIDE, deliberately (audit F-14). This fallback used to pass
+            // `expandedShift.departmentId`, so when the ledger was empty the
+            // preview silently switched to a department-scoped team average
+            // while the solver kept using the org-wide one — the same employee
+            // showed a different debt depending on whether a recompute had run,
+            // with nothing on screen saying which basis was in play.
+            const raw = await fairnessLedgerQueries.fetchAssignedShifts(
+              orgId,
+              format(subDays(new Date(), 90), 'yyyy-MM-dd'),
+              format(new Date(), 'yyyy-MM-dd'),
+              undefined,
+            );
+            const classified = raw.map(s => ({
+              id: s.id, shiftDate: s.shift_date, startTime: s.start_time, endTime: s.end_time,
+              employeeId: s.assigned_employee_id, unpaidBreakMinutes: s.unpaid_break_minutes,
+              flags: classifyShift(s.shift_date, s.start_time, s.end_time),
+            }));
+            entries = aggregateShiftsToEntries(classified);
+          }
+        }
+        const fairness = entries.length > 0
+          ? projectFairnessImpact(entries, selectedBid.employeeId, {
+              shiftDate: expandedShift.date, startTime: expandedShift.startTime,
+              endTime: expandedShift.endTime, unpaidBreakMinutes: expandedShift.unpaidBreak || 0,
+            })
+          : null;
+        ledger = { fatigue, fairness };
+      } catch (impactErr) {
+        console.warn('[useBidsCompliancePanel] ledger impact failed', impactErr);
+      }
+      setLedgerImpact(ledger);
+
       setResult({
         buckets,
         summary,
@@ -371,10 +448,11 @@ function useBidsCompliancePanel(
     error,
     warningsAcknowledged,
     canProceed,
+    ledgerImpact,
     run,
     acknowledgeWarnings: setWarningsAcknowledged,
     markStale: () => setStatus(prev => prev === 'results' ? 'stale' : prev),
-    reset: () => { setStatus('idle'); setResult(null); setError(null); setWarningsAcknowledged(false); },
+    reset: () => { setStatus('idle'); setResult(null); setError(null); setWarningsAcknowledged(false); setLedgerImpact(null); },
   };
 }
 
@@ -1010,7 +1088,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
     setAutoAssignProgress({
       total: urgentShifts.length,
       current: 0,
-      currentRoleName: urgentShifts[0]?.roleName || 'Open Shift',
+      currentRoleName: urgentShifts[0]?.role || 'Open Shift',
       assigned: 0,
       skipped: 0,
       failed: 0,
@@ -1078,7 +1156,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
       setAutoAssignProgress({
         total: urgentShifts.length,
         current: i + 1,
-        currentRoleName: shift.roleName || 'Open Shift',
+        currentRoleName: shift.role || 'Open Shift',
         assigned,
         skipped,
         failed,
@@ -1108,9 +1186,13 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
               organizationId,
               allBids.map(b => b.employee_id),
             );
+            // Highest denial RATE first — the share of their own bids this
+            // employee loses, relative to the org. Was a raw denial count,
+            // which ranked whoever bid most rather than whoever loses most
+            // (stakeholder decision Q5).
             const owed = new Map<string, number>();
             for (const d of debts) {
-              if (d.metric === 'denied_preferences') owed.set(d.employeeId, d.debt);
+              if (d.metric === 'denial_rate') owed.set(d.employeeId, d.debt);
             }
             if (owed.size > 0) {
               orderedBids = [...allBids].sort(
@@ -1396,13 +1478,7 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
 
       {/* ── BENTO STATISTICS CARDS BAR ── */}
       <BidsBentoStats
-        totalShifts={shifts.length}
-        totalBids={shifts.reduce((acc, s) => acc + (s.bidCount || 0), 0)}
-        avgBidsPerShift={shifts.length > 0 ? (shifts.reduce((acc, s) => acc + (s.bidCount || 0), 0) / shifts.length).toFixed(1) : '0.0'}
-        urgentCount={counts.urgent}
-        readyForAutoAssign={shifts.filter(s => (s.toggle === 'urgent' || s.toggle === 'standard') && s.bidCount > 0).length}
-        resolvedRate={shifts.length > 0 ? Math.round((counts.resolved / shifts.length) * 100) : 0}
-        resolvedCount={counts.resolved}
+        shifts={shifts}
         activeToggle={activeToggle}
         onToggleChange={setActiveToggle}
         onRunBatch={handleAutoAssign}
@@ -1620,6 +1696,9 @@ export const OpenBidsView: React.FC<OpenBidsViewProps> = ({
                                   <p className="text-[9px] text-muted-foreground/30 mt-1 font-mono">{bidsPanel.result?.summary.passed ?? 0} checks passed</p>
                                 </div>
                               </div>
+                            )}
+                            {bidsPanel.ledgerImpact && (
+                              <BidLedgerImpact impact={bidsPanel.ledgerImpact} />
                             )}
                           </div>
                         )}

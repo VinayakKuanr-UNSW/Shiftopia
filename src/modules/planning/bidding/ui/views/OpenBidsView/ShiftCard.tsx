@@ -19,13 +19,21 @@ import { Button } from '@/modules/core/ui/primitives/button';
 import { Badge } from '@/modules/core/ui/primitives/badge';
 import { cn } from '@/modules/core/lib/utils';
 
-import type { OpenShift, TimeRemaining } from './types';
+import type { ManagerBidShift, OpenShift, TimeRemaining } from './types';
 import { formatTimeRemaining } from './utils';
-import { estimateDetailedShiftCost } from '@/modules/rosters/domain/projections/utils/cost';
+// `.../utils/cost` resolves to cost.ts — the LEGACY positional-argument
+// variant. This file calls the object-options form, so it must import the
+// barrel explicitly (same as auto-scheduler.controller.ts). Resolution
+// preferring cost.ts over cost/index.ts made this a silent mismatch.
+import { estimateDetailedShiftCost } from '@/modules/rosters/domain/projections/utils/cost/index';
 import type { EarningsLine } from '@/modules/payroll/model/gross-pay.types';
 
 interface ShiftCardProps {
-  shift: OpenShift;
+  /** `group.items` is `ManagerBidShift[]`; this card only reads `group` and
+   *  `location` from the wider `OpenShift`, and both already have `||`
+   *  fallbacks. Narrowing the prop instead of forcing a cast keeps the call
+   *  site honest about what is actually guaranteed. */
+  shift: ManagerBidShift & Partial<OpenShift>;
   isSelected: boolean;
   onClick: () => void;
   timeRemaining: TimeRemaining;
@@ -83,6 +91,7 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
       const lines: EarningsLine[] = [];
       if (detailed.ordinaryCost > 0) {
         lines.push({
+          code: 'ordinary',
           description: 'Ordinary Rate',
           hours: detailed.ordinaryHours,
           amount: detailed.ordinaryCost,
@@ -90,6 +99,7 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
       }
       if (detailed.overtimeCost > 0) {
         lines.push({
+          code: 'overtime',
           description: 'Overtime Rate',
           hours: detailed.overtimeHours,
           amount: detailed.overtimeCost,
@@ -97,12 +107,14 @@ export const ShiftCard: React.FC<ShiftCardProps> = ({
       }
       if (detailed.penaltyCost > 0) {
         lines.push({
+          code: 'penalty',
           description: 'Penalty Rates',
           amount: detailed.penaltyCost,
         });
       }
       if (detailed.allowanceCost && detailed.allowanceCost > 0) {
         lines.push({
+          code: 'other_allowance',
           description: 'Meal Allowance',
           amount: detailed.allowanceCost,
         });

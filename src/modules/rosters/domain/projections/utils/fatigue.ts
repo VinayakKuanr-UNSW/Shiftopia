@@ -16,6 +16,62 @@ const HOURS_IN_DAY = 24;
  */
 export const FATIGUE_BANDS = { OK_MAX: 20, RISK_MAX: 35 } as const;
 
+/**
+ * Minimum rest break between shifts, in hours.
+ *
+ * The same 11 hours the rest-gap compliance rule enforces. Named here because
+ * it is the anchor for the recovery rate below, and the two must not drift.
+ */
+export const MINIMUM_REST_BREAK_HOURS = 11;
+
+/**
+ * Rest recovery rate: fatigue units removed per hour of rest.
+ *
+ * DERIVED, not chosen (stakeholder decision Q8).
+ *
+ * The previous value was a bare literal `1` with no cited basis, which is the
+ * worst kind of constant: it drives who counts as rested, and therefore who is
+ * assignable, while looking like an implementation detail nobody need justify.
+ *
+ * We cannot invent a validated physiological constant, and pretending to would
+ * be worse than the status quo. What we CAN do is anchor it to a rest period
+ * the business has already committed to. The agreement requires an 11-hour
+ * break between shifts — that is a bargained statement that 11 hours is
+ * sufficient recovery. So a full break should return an employee from the top
+ * of the OK band to baseline:
+ *
+ *     OK_MAX / MINIMUM_REST_BREAK_HOURS  =  20 / 11  ≈  1.82 units/hour
+ *
+ * The old `1` under-credited rest by ~45%, so employees read as more fatigued
+ * than the agreement assumes they are after a compliant break. That is not the
+ * safe direction it appears to be: it suppressed their availability and
+ * concentrated work onto whoever the model happened to consider rested.
+ *
+ * STILL LINEAR, and real recovery is not — the early hours of a rest period
+ * restore more than the later ones. A linear model anchored at a defensible
+ * endpoint beats a linear model anchored at nothing, but this remains the
+ * fatigue stack's weakest assumption and should be revisited against real
+ * absence / incident data.
+ */
+export const RECOVERY_UNITS_PER_HOUR = FATIGUE_BANDS.OK_MAX / MINIMUM_REST_BREAK_HOURS;
+
+/**
+ * Circadian interval weights, as multipliers on clock time.
+ *
+ * MUST stay identical to `_calculate_effective_minutes` in
+ * optimizer-service/model_builder.py — the two are the one part of the fatigue
+ * stack that already agreed exactly, and `effectiveMinutes` below is what keeps
+ * them agreeing now that the solver is fed effective minutes directly.
+ *
+ * Per Award MA000080 fatigue principles:
+ *   00–02 +25% · 02–06 +50% (danger zone) · 06–08 +25%
+ *   08–10 flat · 10–16 −25% (daylight) · 16–22 flat · 22–24 +25%
+ */
+const CIRCADIAN_INTERVALS: ReadonlyArray<readonly [number, number, number]> = [
+  [0, 2, 1.25], [2, 6, 1.5], [6, 8, 1.25], [8, 10, 1.0],
+  [10, 16, 0.75], [16, 22, 1.0], [22, 24, 1.25],
+] as const;
+
 export type FatigueBand = 'ok' | 'risk' | 'critical';
 
 /** Classify a fatigue score into a display band. Single source of truth for
@@ -90,6 +146,34 @@ function getShiftTime(timeStr: string): number {
 export function calculateFatigueAccumulation(
   shift: { start_time: string; end_time: string; unpaid_break_minutes?: number | null }
 ): number {
+    const effectiveHours = effectiveMinutes(shift) / ONE_HOUR;
+
+    // Safety: Cap effective hours to 37.9 to avoid log(0) at the 38h asymptote
+    const cappedEffectiveHours = Math.min(effectiveHours, 37.9);
+
+    // Non-linear fatigue score
+    return -76 * Math.log(1 - cappedEffectiveHours / 38);
+}
+
+/**
+ * Circadian-weighted, break-adjusted duration of one shift, in minutes.
+ *
+ * This is the SAME quantity the CP-SAT solver accumulates per ISO week and
+ * bands at 1200/1800 (`_calculate_effective_minutes`). Exporting it is what
+ * lets the auto-scheduler hand the solver prior load in the solver's own unit
+ * instead of the old `initial_fatigue_score × 60` guess (audit F-07): that
+ * constant claimed "1 fatigue unit ≈ 60 effective minutes" but the log
+ * transform is convex, so it overstated by ~2.2× at a day shift and worsened
+ * from there — enough that a single prior night shift pushed an employee past
+ * the amber threshold before any assignment was made.
+ *
+ * Equivalent to the Python routine by construction: weighting each minute by
+ * its interval multiplier and then pro-rating the unpaid break is the same as
+ * scaling net minutes by the duration-weighted mean multiplier.
+ */
+export function effectiveMinutes(
+  shift: { start_time: string; end_time: string; unpaid_break_minutes?: number | null }
+): number {
     const breakMinutes = shift.unpaid_break_minutes ?? 0;
     const startTime = getShiftTime(shift.start_time);
     let endTime = getShiftTime(shift.end_time);
@@ -98,38 +182,25 @@ export function calculateFatigueAccumulation(
         endTime += HOURS_IN_DAY * ONE_HOUR;
     }
 
-    // Circadian Penalties
-    const intervalStart = [0, 2, 6, 8, 10, 16, 22].map(h => h * ONE_HOUR);
-    const intervalEnd = [2, 6, 8, 10, 16, 22, 24].map(h => h * ONE_HOUR);
-    const penalties = [0.25, 0.5, 0.25, 0, -0.25, 0, 0.25];
-
-    let totalPenalty = 0;
     const totalShiftMinutes = endTime - startTime;
+    if (totalShiftMinutes <= 0) return 0;
 
-    // Support overnight shifts by doubling intervals
-    const fullIntervalStart = [...intervalStart, ...intervalStart.map(x => x + 24 * ONE_HOUR)];
-    const fullIntervalEnd = [...intervalEnd, ...intervalEnd.map(x => x + 24 * ONE_HOUR)];
-    const fullPenalties = [...penalties, ...penalties];
-
-    for (let i = 0; i < fullIntervalStart.length; i++) {
-        const overlapStart = Math.max(startTime, fullIntervalStart[i]);
-        const overlapEnd = Math.min(endTime, fullIntervalEnd[i]);
-
-        if (overlapEnd > overlapStart) {
-            const overlapMinutes = overlapEnd - overlapStart;
-            const fraction = overlapMinutes / totalShiftMinutes;
-            totalPenalty += fraction * fullPenalties[i];
+    // Two days of intervals so a cross-midnight shift is weighted correctly.
+    let weightedMinutes = 0;
+    for (let day = 0; day < 2; day++) {
+        const dayOffset = day * HOURS_IN_DAY * ONE_HOUR;
+        for (const [fromHour, toHour, weight] of CIRCADIAN_INTERVALS) {
+            const overlapStart = Math.max(startTime, dayOffset + fromHour * ONE_HOUR);
+            const overlapEnd = Math.min(endTime, dayOffset + toHour * ONE_HOUR);
+            if (overlapEnd > overlapStart) {
+                weightedMinutes += (overlapEnd - overlapStart) * weight;
+            }
         }
     }
 
-    const shiftHours = (totalShiftMinutes - breakMinutes) / ONE_HOUR;
-    const effectiveHours = shiftHours * (1 + totalPenalty);
-
-    // Safety: Cap effective hours to 37.9 to avoid log(0) at the 38h asymptote
-    const cappedEffectiveHours = Math.min(effectiveHours, 37.9);
-    
-    // Non-linear fatigue score
-    return -76 * Math.log(1 - cappedEffectiveHours / 38);
+    // Pro-rate the unpaid break across the weighted total (mirrors Python).
+    const paidFraction = Math.max(0, totalShiftMinutes - breakMinutes) / totalShiftMinutes;
+    return weightedMinutes * paidFraction;
 }
 
 /**
@@ -140,7 +211,7 @@ export function calculateFatigueWithRecovery(
     existingShifts: Pick<Shift, 'shift_date' | 'start_time' | 'end_time' | 'unpaid_break_minutes'>[],
     referenceDate: string,
     candidate?: { start_time: string; end_time: string; unpaid_break_minutes?: number | null }
-): { current: number; projected: number } {
+): { current: number; peak: number; projected: number } {
     const windowEndHours = parseDateMidnightHours(referenceDate) + 24; // End of the reference day
     const windowStartHours = windowEndHours - 7 * 24; // Past 7 days
 
@@ -171,30 +242,56 @@ export function calculateFatigueWithRecovery(
 
     for (let i = 0; i < shiftsWithinWindow.length; i++) {
         const shift = shiftsWithinWindow[i];
-        
+
         if (previousEndTimeHours !== null) {
             const restHours = shift.startHours - previousEndTimeHours;
-            // Linear recovery: 1 hour of rest removes 1 unit of fatigue
-            fatigue = Math.max(0, fatigue - restHours);
+            fatigue = Math.max(0, fatigue - restHours * RECOVERY_UNITS_PER_HOUR);
         }
         fatigue += calculateFatigueAccumulation(shift);
         previousEndTimeHours = shift.endHours;
     }
 
-    const current = Math.round(fatigue * 10) / 10;
-    let projected = current;
+    // `peak` — the highest fatigue reached in the window: the value at the end
+    // of the last shift, before any subsequent rest. This is the planning
+    // reading ("how bad does this roster get for this person"), and it is what
+    // `computePeakFatigue` samples per day.
+    const peakRaw = fatigue;
 
+    // `current` — fatigue AT the reference instant (end of the reference day),
+    // i.e. after resting since the last shift (audit F-03).
+    //
+    // Recovery used to be applied ONLY between consecutive shifts, never from
+    // the final shift to the reference instant — so `current` was really `peak`
+    // under another name. An 8h night shift that ended today and the same shift
+    // ended six days ago both reported 26, and the only way a shift stopped
+    // counting was falling out of the 7-day window entirely: a step function,
+    // not the decay curve the module's name promises. `projected` already
+    // decayed to the candidate's start, so the two halves of the return value
+    // were being measured at different instants.
+    const currentRaw = previousEndTimeHours !== null
+        ? Math.max(0, fatigue - (windowEndHours - previousEndTimeHours) * RECOVERY_UNITS_PER_HOUR)
+        : fatigue;
+    const current = Math.round(currentRaw * 10) / 10;
+
+    // The candidate is projected from the pre-decay state at the last shift's
+    // end, then rested forward to the candidate's own start — decaying to
+    // end-of-day first and then again to the candidate start would double-count
+    // the same rest.
+    let projected = fatigue;
     if (candidate) {
       if (previousEndTimeHours !== null) {
         const candidateStartHours = parseShiftDateTimeHours(referenceDate, candidate.start_time);
         const restHours = candidateStartHours - previousEndTimeHours;
-        projected = Math.max(0, projected - restHours);
+        projected = Math.max(0, projected - restHours * RECOVERY_UNITS_PER_HOUR);
       }
       projected += calculateFatigueAccumulation(candidate);
+    } else {
+      projected = currentRaw;
     }
 
-    return { 
-      current, 
-      projected: Math.round(projected * 10) / 10 
+    return {
+      current,
+      peak: Math.round(peakRaw * 10) / 10,
+      projected: Math.round(projected * 10) / 10
     };
 }

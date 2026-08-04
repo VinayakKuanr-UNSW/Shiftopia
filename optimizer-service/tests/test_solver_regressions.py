@@ -577,9 +577,9 @@ def test_sc11_biases_undesirable_shift_toward_owed_employee():
     sunday.is_sunday = True
 
     owed = make_employee("owed")
-    owed.fairness_debts = {"weekend_shifts": -3.0}          # done fewer → should win
+    owed.fairness_debts = {"sunday_shifts": -3.0}           # done fewer → should win
     overworked = make_employee("overworked")
-    overworked.fairness_debts = {"weekend_shifts": 3.0}     # done more → avoid
+    overworked.fairness_debts = {"sunday_shifts": 3.0}      # done more → avoid
 
     out = solve([sunday], [owed, overworked])
     assert out.status in ("OPTIMAL", "FEASIBLE")
@@ -598,7 +598,7 @@ def test_sc11_no_effect_on_non_undesirable_shifts():
     'longitudinal_fairness' term should not fire)."""
     weekday = make_shift("s1", "2026-05-13", "09:00", "17:00")  # 2026-05-13 is a Wednesday
     e = make_employee("e1")
-    e.fairness_debts = {"weekend_shifts": 5.0}
+    e.fairness_debts = {"sunday_shifts": 5.0}
     out = solve([weekday], [e])
     assert out.status in ("OPTIMAL", "FEASIBLE")
     assert len(out.assignments) == 1
@@ -659,7 +659,7 @@ def test_sc11b_no_terms_when_no_hours_debt():
     weekday shift — the solve is unchanged and still assigns."""
     weekday = make_shift("s1", "2026-05-13", "09:00", "17:00")  # Wednesday
     e = make_employee("e1")
-    e.fairness_debts = {"weekend_shifts": 5.0}   # not an hours metric
+    e.fairness_debts = {"sunday_shifts": 5.0}    # not an hours metric
     out = solve([weekday], [e])
     assert out.status in ("OPTIMAL", "FEASIBLE")
     assert len(out.assignments) == 1
@@ -1384,3 +1384,173 @@ def test_unavailable_dates_exclude_employee_on_leave():
     assert "s-leave" not in assigned_ids          # leave day: refused, not covered
     assert "s-free" in assigned_ids               # other days unaffected
     assert "s-leave" in set(out.unassigned_shift_ids)
+
+
+# ---------------------------------------------------------------------------
+# Audit F-01 — day-type flags (is_sunday / is_saturday / is_public_holiday)
+#
+# These were declared on the wire model and read by BOTH `_penalty_day` (EBA
+# cl 41 loadings) and `undesirable_shift_ids` (SC-10/SC-11 fairness), but no
+# client ever set `is_sunday` / `is_public_holiday`. Consequence in production:
+#   * every Sunday was priced at the ORDINARY rate (no ×1.5 loading), and
+#   * Sunday / Saturday / PH shifts never entered the fairness terms — the
+#     `public_holiday_shifts` debt branch was unreachable code outright.
+#
+# Sat/Sun are now derived server-side in ShiftInput.__post_init__ so no client
+# can disable award pricing by omission. `is_public_holiday` still crosses the
+# wire (no holiday calendar in this service) and is pinned by the TS producer.
+# ---------------------------------------------------------------------------
+
+def test_shiftinput_derives_weekend_flags_without_wire_flags():
+    """Regression (F-01): a shift built with NO day-type flags must still know
+    it is a Saturday / Sunday. Before the fix only `is_saturday` was derived."""
+    saturday = make_shift("sat", "2026-05-16", "09:00", "17:00")
+    sunday = make_shift("sun", "2026-05-17", "09:00", "17:00")
+    weekday = make_shift("wed", "2026-05-13", "09:00", "17:00")
+
+    assert saturday.is_saturday is True and saturday.is_sunday is False
+    assert sunday.is_sunday is True and sunday.is_saturday is False
+    assert weekday.is_saturday is False and weekday.is_sunday is False
+    # Never invented — the calendar can't derive this one.
+    assert sunday.is_public_holiday is False
+
+
+def test_penalty_day_charges_sunday_without_wire_flag():
+    """Regression (F-01): `_penalty_day` returned None for a Sunday because
+    `is_sunday` arrived False and Sunday is weekday()==6, so the `is_saturday`
+    fallback missed it too — Sunday work was billed at the ordinary rate."""
+    from model_builder import _penalty_day
+
+    assert _penalty_day(make_shift("sun", "2026-05-17", "09:00", "17:00")) == "sunday"
+    assert _penalty_day(make_shift("sat", "2026-05-16", "09:00", "17:00")) == "saturday"
+    assert _penalty_day(make_shift("wed", "2026-05-13", "09:00", "17:00")) is None
+
+    ph = make_shift("ph", "2026-05-13", "09:00", "17:00")
+    ph.is_public_holiday = True
+    assert _penalty_day(ph) == "public_holiday"   # cl 41.4 — PH outranks the rest
+
+
+def test_sc11_saturday_debt_applies_to_saturday_day_shift():
+    """Regression (F-01): `undesirable_shift_ids` admitted Sunday but not
+    Saturday, so a Saturday DAY shift (not night, not PH) never reached SC-11
+    and the Saturday half of every weekend debt was unreachable — even though
+    the block right below it derived `is_weekend` as Sat OR Sun."""
+    saturday = make_shift("s1", "2026-05-16", "09:00", "17:00")   # Sat, not night
+
+    owed = make_employee("owed")
+    owed.fairness_debts = {"saturday_shifts": -3.0}         # done fewer → should win
+    overworked = make_employee("overworked")
+    overworked.fairness_debts = {"saturday_shifts": 3.0}    # done more → avoid
+
+    out = solve([saturday], [owed, overworked])
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert len(out.assignments) == 1
+    assert out.assignments[0].employee_id == "owed", (
+        "A Saturday day shift must be subject to the Saturday fairness debt. "
+        "If this fails, `undesirable_shift_ids` dropped Saturday again."
+    )
+    assert "longitudinal_fairness" in (out.objective_breakdown or {})
+
+
+def test_sc11_saturday_and_sunday_debts_do_not_cross_over():
+    """Decision Q6: Saturday and Sunday are separately weighted (EBA cl 41),
+    so Saturday debt must not steer a Sunday assignment or vice versa. Under
+    the old single `weekend_shifts` metric this distinction did not exist."""
+    sunday = make_shift("s1", "2026-05-17", "09:00", "17:00")   # Sunday
+    sunday.is_sunday = True
+
+    # Both carry the SAME magnitude of debt, but on the wrong axis for this
+    # shift — so neither should be biased and the solve must not crash.
+    a = make_employee("a")
+    a.fairness_debts = {"saturday_shifts": -5.0}
+    b = make_employee("b")
+    b.fairness_debts = {"saturday_shifts": 5.0}
+
+    out = solve([sunday], [a, b])
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert len(out.assignments) == 1
+    # Saturday debt is irrelevant to a Sunday shift, so SC-11 contributes
+    # nothing and the longitudinal term never fires.
+    assert "longitudinal_fairness" not in (out.objective_breakdown or {})
+
+
+def test_sc11_public_holiday_debt_biases_assignment():
+    """Regression (F-01): the `public_holiday_shifts` branch of SC-11 could
+    never execute, because reaching it required `is_public_holiday` — which no
+    producer set — to ALSO be what put the shift in `undesirable_shift_ids`.
+    The highest-weighted metric in the ledger (500c/unit) had never fired."""
+    ph = make_shift("s1", "2026-05-13", "09:00", "17:00")   # a Wednesday
+    ph.is_public_holiday = True
+
+    owed = make_employee("owed")
+    owed.fairness_debts = {"public_holiday_shifts": -2.0}
+    overworked = make_employee("overworked")
+    overworked.fairness_debts = {"public_holiday_shifts": 2.0}
+
+    out = solve([ph], [owed, overworked])
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert len(out.assignments) == 1
+    assert out.assignments[0].employee_id == "owed", (
+        "PH fairness debt must bias the assignment toward the owed employee."
+    )
+    assert "longitudinal_fairness" in (out.objective_breakdown or {})
+
+
+# ---------------------------------------------------------------------------
+# Audit F-07 — prior fatigue crosses the wire in EFFECTIVE MINUTES
+#
+# `init_eff_mins = initial_fatigue_score * 60` claimed "1 fatigue unit ~= 60
+# effective minutes". The TS score comes off a convex -76*ln(1-h/38) curve, so
+# the mapping overstated by ~2.2x at a day shift (14.3 -> 858 vs a true 390) and
+# worsened with load. One prior night shift injected 1560 minutes — already past
+# the 1200 amber threshold; at the old 60-unit clamp it injected 3600, past
+# CRITICAL. Both band terms then became affine in the decision sum, giving that
+# employee a FLAT $50/effective-minute marginal cost: a soft penalty acting as a
+# hard exclusion, on an input that was itself inflated.
+# ---------------------------------------------------------------------------
+
+def test_initial_effective_minutes_preferred_over_legacy_score():
+    """The new field wins when supplied; the legacy conversion is the fallback."""
+    from model_builder import EmployeeInput
+
+    e = make_employee("e1")
+    e.initial_fatigue_score = 26.0          # legacy path would give 1560
+    e.initial_effective_minutes = 660.0     # the true circadian-weighted value
+    assert isinstance(e, EmployeeInput)
+    assert e.initial_effective_minutes == 660.0
+
+    legacy = make_employee("e2")
+    legacy.initial_fatigue_score = 26.0
+    assert legacy.initial_effective_minutes is None   # falls back at use site
+
+
+def test_high_prior_load_does_not_hard_exclude_an_employee():
+    """An employee carrying real prior load must still be assignable when they
+    are the only candidate — the old inflated conversion made the marginal cost
+    so large that fatigue behaved as a hard constraint."""
+    shift = make_shift("s1", "2026-05-13", "09:00", "17:00")
+    e = make_employee("e1")
+    e.initial_effective_minutes = 1500.0    # past amber, below critical
+
+    out = solve([shift], [e])
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert len(out.assignments) == 1, (
+        "A rested-but-loaded employee must remain assignable; SC-7 is a SOFT "
+        "penalty, not an exclusion."
+    )
+
+
+def test_prior_load_still_biases_away_when_an_alternative_exists():
+    """With two identical candidates, the one carrying prior load loses."""
+    shift = make_shift("s1", "2026-05-13", "09:00", "17:00")
+    loaded = make_employee("loaded")
+    loaded.initial_effective_minutes = 1700.0
+    fresh = make_employee("fresh")
+    fresh.initial_effective_minutes = 0.0
+
+    out = solve([shift], [loaded, fresh])
+    assert out.status in ("OPTIMAL", "FEASIBLE")
+    assert len(out.assignments) == 1
+    assert out.assignments[0].employee_id == "fresh", (
+        "SC-7 should steer the shift away from the employee with prior load."
+    )

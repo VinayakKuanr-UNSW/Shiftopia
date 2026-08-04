@@ -23,6 +23,7 @@
  *   const result  = await autoSchedulerController.commit(preview);
  */
 
+import { parseISO, startOfISOWeek } from 'date-fns';
 import { optimizerClient, OptimizerError } from './optimizer/optimizer.client';
 import { solutionParser } from './optimizer/solution-parser';
 import { bulkAssignmentController, type BulkAssignmentResult } from '@/modules/rosters/bulk-assignment';
@@ -31,14 +32,22 @@ import { parseZonedDateTime, formatInTimezone, SYDNEY_TZ } from '@/modules/core/
 import { extractLevel } from '../rosters/domain/projections/utils/cost';
 import { estimateDetailedShiftCost as estimateDetailedShiftCostObj } from '../rosters/domain/projections/utils/cost/index';
 import { resolveRateSet, type RateSet } from '../rosters/domain/projections/utils/cost/rate-schedule';
-import { calculateFatigueWithRecovery } from '../rosters/domain/projections/utils/fatigue';
+import { calculateFatigueWithRecovery, effectiveMinutes, FATIGUE_BANDS } from '../rosters/domain/projections/utils/fatigue';
 import { calculateUtilization } from '../rosters/domain/projections/utils/fairness';
 import type { ShiftMeta, EmployeeMeta } from './optimizer/solution-parser';
 import type { ExistingShiftRef } from './types';
 import { auditor } from './audit/auditor';
 import { rosterFetcher, durationMinutes } from './data/roster-fetcher';
 import { fairnessLedgerService } from '@/modules/rosters/services/fairnessLedger.service';
-import { debtsToMap, type ShiftForFairness } from '@/modules/rosters/domain/fairness-ledger';
+import {
+    debtsToMap,
+    classifyShift,
+    strategyMult,
+    shiftFairnessPenaltyCents,
+    debtToObjectiveCoeff,
+    type ShiftForFairness,
+} from '@/modules/rosters/domain/fairness-ledger';
+import { getShiftDayType } from '@/modules/core/lib/holidays';
 import { EMERGENT_WINDOW_MS } from '@/modules/rosters/domain/bidding-urgency';
 import type {
     OptimizeRequest,
@@ -58,6 +67,7 @@ import type {
     BindingConstraint,
     ParetoAlternative,
     AssignmentRationale,
+    FairnessLedgerRunStatus,
 } from './types';
 
 // B1 — Single-mode policy. The autoscheduler no longer exposes cost/fatigue/
@@ -232,7 +242,45 @@ export function buildGreedyFallbackPriorOrdinaryMap(
 // greedy fallback). The solver's accumulator domains are now horizon-derived
 // so this no longer risks infeasibility, but clamping keeps the penalty
 // meaningful and bounded. (audit fix C4)
+//
+// NOTE: `initial_fatigue_score` is now a DISPLAY/compat field only — the
+// solver prefers `initial_effective_minutes` (audit F-07).
 const MAX_INITIAL_FATIGUE_SCORE = 60;
+
+/**
+ * Prior circadian load, in the solver's own effective-minute unit, that spills
+ * into the first week of the horizon (audit F-07 / F-18).
+ *
+ * SC-7 buckets effective minutes per ISO week. The only prior load the earliest
+ * bucket is missing is the employee's work in that SAME ISO week before the
+ * horizon starts — so that is exactly what we measure. No conversion constant,
+ * no fudge factor, and no dependence on "today": the old code computed a
+ * 7-day-trailing fatigue score anchored to the current date, which silently
+ * read 0 whenever the roster began far enough in the future that the fetched
+ * context didn't overlap the last week at all (F-18), and was fed through a
+ * ~2.2×-overstating `× 60` conversion when it didn't (F-07).
+ */
+function priorEffectiveMinutesForHorizon(
+    existing: ExistingShiftRef[],
+    horizonStartDate: string,
+): number {
+    const horizonStart = parseISO(horizonStartDate);
+    // ISO weeks start Monday; anything from that Monday up to (not including)
+    // the horizon start is load already banked in the first bucket.
+    const weekStart = startOfISOWeek(horizonStart);
+    let total = 0;
+    for (const s of existing) {
+        const d = parseISO(s.shift_date);
+        if (d >= weekStart && d < horizonStart) {
+            total += effectiveMinutes({
+                start_time: s.start_time,
+                end_time: s.end_time,
+                unpaid_break_minutes: s.unpaid_break_minutes,
+            });
+        }
+    }
+    return Math.round(total);
+}
 
 // Mirrors the Python service guards (ortools_runner.py). Surface to the user
 // before we serialize a giant payload and round-trip to the optimizer.
@@ -319,12 +367,17 @@ async function greedyFallback(
 
     for (const shift of shifts) {
         let assigned = false;
-        const shift_is_weekend = [0, 6].includes(new Date(shift.shift_date).getDay());
-        // Simple night check: overlaps 00:00-06:00
-        const startH = parseInt(shift.start_time.split(':')[0]);
-        const endH = parseInt(shift.end_time.split(':')[0]);
-        const isCrossMidnight = endH <= startH;
-        const shift_is_night = startH < 6 || isCrossMidnight;
+        // Shared classifier (audit F-11). This block used to roll its own:
+        //   `new Date(shift.shift_date).getDay()`  — parses as UTC midnight and
+        //       reads back in LOCAL time, so a Saturday shift classified as
+        //       Friday for any viewer west of UTC; and
+        //   `startH < 6 || endH <= startH`         — treated every shift merely
+        //       ENDING at midnight (18:00–00:00, a very common close) as night
+        //       work, which neither the ledger nor the solver does.
+        // A fallback run therefore scored these shifts differently from the
+        // solver — and the fallback fires exactly when the optimizer is
+        // unhealthy, i.e. when nobody is watching.
+        const shiftFlags = classifyShift(shift.shift_date, shift.start_time, shift.end_time);
 
         // Score each employee for this shift
         const candidateScores = employees.map(emp => {
@@ -360,48 +413,53 @@ async function greedyFallback(
             const scheduledMins = totalShiftsForEmp.reduce((acc, s) => acc + (s as any).duration_minutes || 0, 0);
             const utl = calculateUtilization(scheduledMins / 60, contractedMins / 60);
 
-            // Strategy multipliers — mirrors optimizer-service/model_builder.py `_strategy_mult`:
-            //   symmetric exponential, 0% → 0.5×, 50% → 1.0×, 100% → 2.0×.
+            // Strategy multipliers — `strategyMult` is the shared mirror of
+            // optimizer-service/model_builder.py `_strategy_mult`.
             // cost_weight is honoured only by the Python OR-Tools optimizer; the greedy
             // fallback does not compute per-shift cost and leaves that term at default.
-            const strategyMult = (w: number) => Math.pow(2, (w - 50) / 50);
-            const fatigueMult  = strategyMult(resolvedStrategy.fatigue_weight  ?? 50);
-            const fairnessMult = strategyMult(resolvedStrategy.fairness_weight ?? 50);
+            const fairnessWeight = resolvedStrategy.fairness_weight ?? 50;
+            const fatigueMult  = strategyMult(resolvedStrategy.fatigue_weight ?? 50);
+            const fairnessMult = strategyMult(fairnessWeight);
 
             // Penalty Calculation
-            // High fatigue (> 15) is penalized exponentially, scaled by fatigue_weight
-            const fatiguePenalty = health.projected > 15 ? Math.pow(health.projected - 15, 2) * 50 * fatigueMult : 0;
+            // Fatigue past the "ok" band is penalised quadratically, scaled by
+            // fatigue_weight. The knee is FATIGUE_BANDS.OK_MAX so the fallback
+            // starts penalising at exactly the point the FTG badge turns amber —
+            // it used to knee at a bare `15`, below the UI's own 20, so a
+            // manager saw green for someone the fallback was already avoiding
+            // (audit F-23).
+            const fatiguePenalty = health.projected > FATIGUE_BANDS.OK_MAX
+                ? Math.pow(health.projected - FATIGUE_BANDS.OK_MAX, 2) * 50 * fatigueMult
+                : 0;
             // Over-utilization (> 100%) is a hard over-cap, not a strategy lever
             const utilizationPenalty = utl > 100 ? (utl - 100) * 10 : 0;
             // Under-utilization (< 80%) gets a fairness bonus, scaled by fairness_weight
             const fairnessBonus = utl < 80 ? (80 - utl) * 5 * fairnessMult : 0;
 
-            // F1 Ledger Bonus/Penalty
-            let debtBonus = 0;
+            // F1 Ledger bias — the SHARED scoring kernel, identical to the
+            // solver's SC-11 (audit F-10/F-13). This block used to hardcode 50¢
+            // per debt unit where the solver uses 300¢/500¢, and contained a
+            // leftover duplicated line that counted the negative-weekend-debt
+            // bonus TWICE, so the fallback over-preferred weekend assignment by
+            // 2× relative to night and 6× weaker than the solver overall.
+            // Sign note: `shiftFairnessPenaltyCents` returns a PENALTY (positive
+            // = bias away), and this scorer maximises, so it is subtracted.
             const debts = details?.fairness_debts;
-            if (debts) {
-                if (shift_is_weekend) {
-                    if (debts.weekend_shifts < 0) debtBonus += Math.abs(debts.weekend_shifts) * 50; // owed weekend off -> bonus for this shift? No, wait.
-                    // If they are owed a weekend off (positive debt), we want to PENALIZE assigning them this weekend shift.
-                    // If they owe a weekend shift (negative debt), we want to BONUS assigning them.
-                    if (debts.weekend_shifts > 0) debtBonus -= debts.weekend_shifts * 50;
-                    if (debts.weekend_shifts < 0) debtBonus += Math.abs(debts.weekend_shifts) * 50;
-                }
-                if (shift_is_night) {
-                    if (debts.night_shifts > 0) debtBonus -= debts.night_shifts * 50;
-                    if (debts.night_shifts < 0) debtBonus += Math.abs(debts.night_shifts) * 50;
-                }
-            }
+            const debtBonus = -shiftFairnessPenaltyCents(debts, shiftFlags, fairnessWeight);
 
             // Preference discount/bonus
             const pref = new Set(details?.preferred_shift_ids || []);
             let preferenceBonus = 0;
             if (pref.has(shift.id)) {
                 preferenceBonus += 50; // base preference bonus ($5.00 equivalent)
-                if (debts && debts.denied_preferences > 0) {
-                    // boost preference bonus based on denied_preferences debt
-                    preferenceBonus += debts.denied_preferences * 20 * fairnessMult; 
-                }
+                // Owed-preference boost, via the same coefficient table the
+                // solver uses (2000¢/rate-unit) rather than a local 20.
+                // One-sided by design — a BELOW-average denial rate must not
+                // penalise you for bidding successfully.
+                preferenceBonus += Math.max(
+                    0,
+                    debtToObjectiveCoeff(debts?.denial_rate ?? 0, 'denial_rate', fairnessWeight),
+                );
             }
 
             const score = 1000 - fatiguePenalty - utilizationPenalty + fairnessBonus + debtBonus + preferenceBonus;
@@ -691,20 +749,35 @@ export class AutoSchedulerController {
 
         console.debug('[AutoScheduler] Scaling limits for %f week(s) (%d days)', weekScale.toFixed(2), diffDays);
 
-        const optimizerShifts: OptimizerShift[] = futureShifts.map(s => ({
-            id: s.id,
-            shift_date: s.shift_date,
-            start_time: s.start_time,
-            end_time: s.end_time,
-            duration_minutes: durationMinutes(s.start_time, s.end_time),
-            role_id: s.role_id,
-            priority: s.demand_source === 'baseline' ? 10 : 1, // Prioritize baseline shifts
-            demand_source: s.demand_source,
-            target_employment_type: s.target_employment_type,
-            level: s.level ?? 0,
-            is_training: (s as any).is_training ?? false,
-            unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
-        }));
+        const optimizerShifts: OptimizerShift[] = futureShifts.map(s => {
+            // Day-type flags (audit F-01). These were declared on OptimizerShift and
+            // read by the solver — `_penalty_day` for the cl 41 loadings, and
+            // `undesirable_shift_ids` for the SC-10/SC-11 fairness terms — but no
+            // producer ever set them, so `is_sunday`/`is_public_holiday` arrived
+            // permanently false: Sunday and PH work was priced at ordinary rates and
+            // was invisible to every fairness balancing term (the
+            // `public_holiday_shifts` debt branch was unreachable outright).
+            // Resolved via the app-wide holiday helper — never a local literal set
+            // and never `new Date(dateStr)`, which parses as UTC midnight and rolls
+            // the day for any viewer west of UTC.
+            const dayType = getShiftDayType(s.shift_date);
+            return {
+                id: s.id,
+                shift_date: s.shift_date,
+                start_time: s.start_time,
+                end_time: s.end_time,
+                duration_minutes: durationMinutes(s.start_time, s.end_time),
+                role_id: s.role_id,
+                priority: s.demand_source === 'baseline' ? 10 : 1, // Prioritize baseline shifts
+                demand_source: s.demand_source,
+                target_employment_type: s.target_employment_type,
+                level: s.level ?? 0,
+                is_training: (s as any).is_training ?? false,
+                unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
+                is_sunday: dayType.isSunday,
+                is_public_holiday: dayType.isPublicHoliday,
+            };
+        });
 
         // Total demand across the window — used to cap per-employee minimum
         // obligations so HC-7 (min contract hours) cannot dominate HC-1
@@ -724,16 +797,38 @@ export class AutoSchedulerController {
         // value would error and silently disable the feature anyway.
         const orgId = input.organizationId;
         let debtsMap: Map<string, Record<string, number>> | null = null;
+        // Audit F-04: record WHY the ledger did or didn't influence this run. An
+        // empty debts map used to be indistinguishable from "nobody owes
+        // anything", so longitudinal fairness could be silently off for weeks.
+        let ledgerStatus: FairnessLedgerRunStatus = {
+            applied: false, reason: 'no_org_scope',
+            employeesWithDebts: 0, windowEnd: null, ageDays: null,
+        };
         if (orgId) {
             try {
-                const rawDebts = await fairnessLedgerService.getEmployeeDebts(
+                const read = await fairnessLedgerService.getEmployeeDebtsWithStatus(
                     orgId,
                     input.employees.map(e => e.id),
                 );
-                debtsMap = debtsToMap(rawDebts);
-                console.debug('[AutoScheduler] Fetched fairness debts for %d employees', debtsMap?.size ?? 0);
+                debtsMap = debtsToMap(read.debts);
+                ledgerStatus = {
+                    applied: read.status !== 'unavailable',
+                    reason: read.status === 'unavailable' ? 'no_data' : read.status,
+                    employeesWithDebts: debtsMap.size,
+                    windowEnd: read.windowEnd,
+                    ageDays: read.ageDays,
+                };
+                console.debug(
+                    '[AutoScheduler] Fairness ledger: %s (%d employees, window_end=%s, %s days old)',
+                    ledgerStatus.reason, ledgerStatus.employeesWithDebts,
+                    read.windowEnd ?? 'none', read.ageDays ?? 'n/a',
+                );
             } catch (err) {
                 console.warn('[AutoScheduler] Failed to fetch fairness ledger, continuing without it:', err);
+                ledgerStatus = {
+                    applied: false, reason: 'fetch_failed',
+                    employeesWithDebts: 0, windowEnd: null, ageDays: null,
+                };
             }
         }
 
@@ -798,12 +893,21 @@ export class AutoSchedulerController {
                 is_student: det?.is_student ?? false,
                 visa_limit: (det as any)?.visa_limit ?? 2880,
                 employment_type: /casual/i.test(e.contract_type || '') ? 'Casual' : isPT ? 'Part-Time' : 'Full-Time',
+                // Compat/display only — the solver prefers the effective-minute
+                // field below. Still anchored to today because that is what the
+                // score means (fatigue as of now, Sydney).
                 initial_fatigue_score: Math.min(
                   MAX_INITIAL_FATIGUE_SCORE,
                   calculateFatigueWithRecovery(
                     existingRoster.get(e.id) ?? [],
-                    formatInTimezone(new Date(), SYDNEY_TZ, 'yyyy-MM-dd') // Today's fatigue (Sydney) as baseline
+                    formatInTimezone(new Date(), SYDNEY_TZ, 'yyyy-MM-dd')
                   ).current,
+                ),
+                // The value SC-7 actually uses: same unit, same interval
+                // weights, anchored to the HORIZON rather than to today.
+                initial_effective_minutes: priorEffectiveMinutesForHorizon(
+                  existingRoster.get(e.id) ?? [],
+                  dates[0],
                 ),
                 ...det,
                 fairness_debts: debtsMap?.get(e.id) ?? {},
@@ -1157,6 +1261,7 @@ export class AutoSchedulerController {
             // because greedyFallback never calls the optimizer.
             objective_breakdown: optimizerObjectiveBreakdown,
             organizationId: input.organizationId,
+            fairnessLedger: ledgerStatus,
             // B3/B5/B4 — single-mode transparency for the scorecard, constraint
             // banner, trade-off explorer, and per-shift "why" panel.
             pillars,

@@ -75,11 +75,29 @@ export interface BiddingConfig {
     /** Weight of the priority_score component (0–1). Default: 0.30 */
     priority_weight:    number;
     /**
-     * Weight of the fairness score component (0–1). Default: 0.20
-     * Fairness penalises employees who submitted many bids relative to others,
-     * and dynamically penalises employees who have already won shifts.
+     * Weight of the BID-VOLUME EQUITY component (0–1). Default: 0.20
+     *
+     * Penalises employees who submitted many bids relative to others in the
+     * same round — an anti-monopolisation / anti-spam term scoped to a single
+     * bidding round.
+     *
+     * ⚠️ This is NOT the F1 longitudinal fairness ledger, and the two can point
+     * in OPPOSITE directions (audit F-12): an employee who bids on ten shifts
+     * and wins none is "unfair" by this measure and "owed" by the ledger. The
+     * ledger measures what work you have RECEIVED; this measures how often you
+     * ASKED. Keeping the name `fairness_weight` made them look interchangeable.
+     *
+     * Retained under the old key for wire/config compatibility — see
+     * `bid_volume_equity_weight` below, which is the name to prefer.
+     *
+     * @deprecated Prefer `bid_volume_equity_weight`.
      */
     fairness_weight:    number;
+    /**
+     * Alias for `fairness_weight`, named for what it actually measures.
+     * When both are set this one wins.
+     */
+    bid_volume_equity_weight?: number;
     /** Weight of the recency (first-come-first-served) component. Default: 0.10 */
     recency_weight:     number;
 
