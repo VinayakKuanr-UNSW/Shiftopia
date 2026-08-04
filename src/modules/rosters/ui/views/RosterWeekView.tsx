@@ -5,6 +5,7 @@ import { isSydneyToday, isSydneyPast, isSydneyStarted } from '@/modules/core/lib
 import { Clock, ChevronDown, ChevronUp, Lock } from 'lucide-react';
 import { ShiftChip } from '../components/ShiftChip';
 import { cn } from '@/modules/core/lib/utils';
+import { getAnzHolidayName } from '@/modules/core/lib/anz-holidays';
 
 interface RosterWeekViewProps {
   roster: RosterDay | null;
@@ -122,15 +123,25 @@ export const RosterWeekView: React.FC<RosterWeekViewProps> = ({
                 </div>
               )}
               <div className="p-3">
-                <div className="text-center mb-2">
-                  <div className={cn(
-                    'font-bold text-sm',
-                    isCurrentDay ? 'text-purple-300' : isSelected ? 'text-blue-300' : 'text-white'
-                  )}>
-                    {format(day, 'EEE')}
-                  </div>
-                  <div className="text-xs text-white/70">{format(day, 'MMM d')}</div>
-                </div>
+                {(() => {
+                  const holidayName = getAnzHolidayName(day);
+                  return (
+                    <div className="text-center mb-2">
+                      <div className={cn(
+                        'font-bold text-sm',
+                        holidayName ? 'text-amber-400 font-extrabold' : isCurrentDay ? 'text-purple-300' : isSelected ? 'text-blue-300' : 'text-white'
+                      )}>
+                        {format(day, 'EEE')}
+                      </div>
+                      <div className={cn('text-xs', holidayName ? 'text-amber-300 font-bold' : 'text-white/70')}>{format(day, 'MMM d')}</div>
+                      {holidayName && (
+                        <div className="mt-1 px-1.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 text-[9px] font-black uppercase tracking-wider truncate max-w-full shadow-sm" title={`ANZ Public Holiday: ${holidayName}`}>
+                          {holidayName}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 <div className={cn(
                   'text-center p-2 rounded-lg mb-2',

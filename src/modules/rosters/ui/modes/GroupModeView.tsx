@@ -20,7 +20,9 @@ import {
   Lock,
   Wand2,
   Users,
+  Sparkles,
 } from 'lucide-react';
+import { getAnzHolidayName } from '@/modules/core/lib/anz-holidays';
 import { Button } from '@/modules/core/ui/primitives/button';
 import { ScrollArea } from '@/modules/core/ui/primitives/scroll-area';
 import {
@@ -919,41 +921,48 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                 const dateIsToday = isToday(date);
                 const dateIsPast = isSydneyPast(date);
                 const isGhost = !isDateInTemplate(date);
+                const holidayName = getAnzHolidayName(date);
 
                 return (
                   <div
                     role="columnheader"
                     key={idx}
                     className={cn(
-                      'px-3 py-3 text-center bg-muted/30 border-b',
+                      'px-3 py-2.5 text-center bg-muted/30 border-b transition-colors',
                       idx < dates.length - 1 && 'border-r border-border',
+                      // Public holiday highlight styling
+                      holidayName && 'bg-amber-500/10 dark:bg-amber-500/15 border-amber-500/30',
                       // Ghost cell styling
                       isGhost && 'bg-muted/40 border-dashed border-border opacity-50',
-                      // Today highlighting (only if not ghost)
-                      !isGhost && dateIsToday && 'bg-primary/5',
+                      // Today highlighting (only if not ghost and not holiday)
+                      !isGhost && dateIsToday && !holidayName && 'bg-primary/5',
                       // Past date styling (only if not ghost and not today)
                       !isGhost && dateIsPast && !dateIsToday && 'opacity-50'
                     )}
                   >
-                    <div className="flex flex-col items-center gap-1.5 pt-1">
+                    <div className="flex flex-col items-center gap-1 pt-0.5">
                       <div className={cn(
                         "text-[10px] font-bold uppercase tracking-[0.12em] font-mono leading-tight",
-                        isGhost
-                          ? 'text-muted-foreground/30'
-                          : dateIsToday
-                            ? 'text-primary'
-                            : 'text-muted-foreground'
+                        holidayName
+                          ? 'text-amber-400 dark:text-amber-300 font-extrabold'
+                          : isGhost
+                            ? 'text-muted-foreground/30'
+                            : dateIsToday
+                              ? 'text-primary'
+                              : 'text-muted-foreground'
                       )}>
                         {format(date, 'EEE')}
                       </div>
                       <div className="flex items-center gap-1.5">
                         <div className={cn(
                           "text-sm font-mono tabular-nums font-medium leading-none",
-                          isGhost
-                            ? 'text-muted-foreground/30'
-                            : dateIsToday
-                              ? 'text-primary font-bold'
-                              : 'text-muted-foreground/50'
+                          holidayName
+                            ? 'text-amber-300 dark:text-amber-200 font-bold'
+                            : isGhost
+                              ? 'text-muted-foreground/30'
+                              : dateIsToday
+                                ? 'text-primary font-bold'
+                                : 'text-muted-foreground/50'
                         )}>
                           {format(date, 'MMM d')}
                         </div>
@@ -972,6 +981,17 @@ const GroupSection: React.FC<GroupSectionProps> = ({
                           </div>
                         )}
                       </div>
+
+                      {/* ANZ Public Holiday Name beneath Date, Day */}
+                      {holidayName && (
+                        <div
+                          className="mt-0.5 px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 dark:text-amber-300 text-[9px] font-black uppercase tracking-wider truncate max-w-[240px] shadow-sm flex items-center justify-center gap-1"
+                          title={`ANZ Public Holiday: ${holidayName}`}
+                        >
+                          <Sparkles className="h-2.5 w-2.5 shrink-0 text-amber-400" />
+                          <span className="truncate">{holidayName}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

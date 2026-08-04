@@ -7,6 +7,7 @@ import {
   CreditCard,
   Link,
   DollarSign,
+
   ChevronRight
 } from 'lucide-react';
 import { cn } from '@/modules/core/lib/utils';
@@ -19,6 +20,7 @@ interface SettingsFunctionBarProps {
   transparent?: boolean;
   /** Show the manager-only Pay Rates section (gated by the caller). */
   showPayRates?: boolean;
+
 }
 
 
@@ -27,6 +29,7 @@ export const SettingsFunctionBar: React.FC<SettingsFunctionBarProps> = ({
   onSectionChange,
   transparent,
   showPayRates,
+
 }) => {
   const { t } = useTranslation();
   const { isDark } = useTheme();
@@ -39,6 +42,7 @@ export const SettingsFunctionBar: React.FC<SettingsFunctionBarProps> = ({
     { id: 'billing', label: t('settings.billing'), icon: CreditCard },
     { id: 'integrations', label: t('settings.integrations'), icon: Link },
     ...(showPayRates ? [{ id: 'pay-rates', label: t('settings.pay_rates'), icon: DollarSign }] : []),
+
   ];
 
   return (

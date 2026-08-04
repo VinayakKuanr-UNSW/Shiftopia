@@ -5323,7 +5323,6 @@ export type Database = {
           max_auto_per_employee_per_week: number
           organization_id: string
           rules: Json
-          shadow_mode: boolean
           updated_at: string
           updated_by: string | null
           version: number
@@ -5338,7 +5337,6 @@ export type Database = {
           max_auto_per_employee_per_week?: number
           organization_id: string
           rules?: Json
-          shadow_mode?: boolean
           updated_at?: string
           updated_by?: string | null
           version?: number
@@ -5353,7 +5351,6 @@ export type Database = {
           max_auto_per_employee_per_week?: number
           organization_id?: string
           rules?: Json
-          shadow_mode?: boolean
           updated_at?: string
           updated_by?: string | null
           version?: number
@@ -5478,7 +5475,6 @@ export type Database = {
           requester_shift_version: number | null
           reverted_at: string | null
           reverted_by: string | null
-          shadow: boolean
           solver_result: Json
           swap_id: string
         }
@@ -5497,7 +5493,6 @@ export type Database = {
           requester_shift_version?: number | null
           reverted_at?: string | null
           reverted_by?: string | null
-          shadow?: boolean
           solver_result?: Json
           swap_id: string
         }
@@ -5516,7 +5511,6 @@ export type Database = {
           requester_shift_version?: number | null
           reverted_at?: string | null
           reverted_by?: string | null
-          shadow?: boolean
           solver_result?: Json
           swap_id?: string
         }

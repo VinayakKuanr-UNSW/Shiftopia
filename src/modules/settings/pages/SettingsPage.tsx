@@ -19,6 +19,7 @@ import i18n from '@/platform/i18n';
 import { useAuth } from '@/platform/auth/useAuth';
 import { PayRatesSettings } from '@/modules/payroll/ui/rate-admin/PayRatesSettings';
 
+
 /* ============================================================
    HELPERS
    ============================================================ */
@@ -511,6 +512,7 @@ const SettingsPage: React.FC = () => {
             onSectionChange={handleSectionChange}
             transparent
             showPayRates={canManageRates}
+
           />
         </div>
       </div>

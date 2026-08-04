@@ -102,7 +102,8 @@ function json(
     | DryRunResponse
     | GetRunResponse
     | RollbackResponse
-    | ErrorResponse,
+    | ErrorResponse
+    | TickSummary,
 ): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -903,6 +904,22 @@ async function handleTick(service: SupabaseClient): Promise<Response> {
   const workerId = `bid-worker:${crypto.randomUUID()}`;
   const summary: TickSummary = { claimed: 0, committed: 0, manual_review: 0, done: 0, retried: 0, errors: 0 };
 
+  // ── Office-hours gate: skip the entire tick during 06:00–18:00 Sydney. ────
+  // Queued shifts survive; they drain when the window opens after 18:00.
+  const { data: windowOpen, error: windowErr } = await service.rpc(
+    'is_autopilot_window_open',
+  );
+  if (windowErr) {
+    console.warn('[auto-assign-bids/tick] window check failed → conservative skip', windowErr.message);
+    return json(200, summary); // fail-closed: don't claim if we can't verify the window
+  }
+  if (windowOpen === false) {
+    // Daytime — nothing to claim, but the worker is alive: ping so the
+    // return-to-manager sweep does not mistake the quiet window for an outage.
+    await pingHeartbeat(service, workerId);
+    return json(200, summary); // queued items wait
+  }
+
   const { data: claimedData, error: claimErr } = await service.rpc('sm_bid_queue_claim', {
     p_worker: workerId,
     p_limit: TICK_BATCH,
@@ -912,7 +929,17 @@ async function handleTick(service: SupabaseClient): Promise<Response> {
   const claimed = (claimedData ?? []) as BidQueueRow[];
   summary.claimed = claimed.length;
   for (const row of claimed) await processTickRow(service, row, summary);
+  await pingHeartbeat(service, workerId); // healthy tick — refresh liveness
   return json(200, summary);
+}
+
+/** Liveness ping consumed by autopilot_return_stale_ownership(). Best-effort. */
+async function pingHeartbeat(service: SupabaseClient, workerId: string): Promise<void> {
+  try {
+    await service.rpc('autopilot_heartbeat_ping', { p_domain: 'bids', p_worker: workerId });
+  } catch (e) {
+    console.warn('[auto-assign-bids/tick] heartbeat ping failed', e);
+  }
 }
 
 async function bidQueueComplete(service: SupabaseClient, id: string, status: 'DONE' | 'RETRY', error?: string): Promise<void> {
@@ -1000,7 +1027,9 @@ async function processTickRow(service: SupabaseClient, row: BidQueueRow, summary
     }
 
     // Reuse the request-run selection brain: first compliance-clear bidder.
-    const decision = await decideShift(shift, snap, { reject_warnings: !policy.auto_assign_warnings });
+    // AutoPilot NEVER auto-assigns a bidder with a compliance warning — any warned
+    // bidder is skipped and, if no clear bidder exists, the shift routes to a manager.
+    const decision = await decideShift(shift, snap, { reject_warnings: true });
     const winnerId = decision.outcome === 'ASSIGNED' ? decision.winner?.employee_id ?? null : null;
     const kind = winnerId ? 'AUTO_APPROVE' : 'MANUAL_REVIEW';
     const winnerName = decision.winner?.name ?? null;

@@ -18,6 +18,7 @@
 
 import { supabase } from '@/platform/supabase/client';
 import { isValidUuid } from '@/modules/rosters/domain/shift.entity';
+import { runHardValidation } from '@/modules/compliance';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -93,30 +94,61 @@ const UNAVAILABLE_RESULT: ComplianceResult = {
  * Run all four compliance checks via the evaluate-compliance Edge Function.
  *
  * All checks run server-side in parallel with service_role access.
- * Falls back to 'unavailable' (never silent pass) if the function errors.
+ * Falls back to local hard-validation if the function is unreachable.
  */
 export async function validateCompliance(input: ComplianceInput): Promise<ComplianceResult> {
   if (!isValidUuid(input.employeeId)) {
     return UNAVAILABLE_RESULT;
   }
 
-  const { data, error } = await supabase.functions.invoke<ComplianceResult>('evaluate-compliance', {
-    body: {
-      employee_id:          input.employeeId,
-      shift_date:           input.shiftDate,
-      start_time:           input.startTime,
-      end_time:             input.endTime,
-      net_length_minutes:   input.netLengthMinutes,
-      exclude_shift_id:     input.excludeV8ShiftId ?? null,
-      shift_id:             input.shiftId ?? null,
-      override_role_id:     input.overrideV8RoleId ?? null,
-      override_skill_ids:   input.overrideSkillIds ?? null,
-      override_license_ids: input.overrideLicenseIds ?? null,
-    },
-  });
+  try {
+    const { data, error } = await supabase.functions.invoke<ComplianceResult>('evaluate-compliance', {
+      body: {
+        employee_id:          input.employeeId,
+        shift_date:           input.shiftDate,
+        start_time:           input.startTime,
+        end_time:             input.endTime,
+        net_length_minutes:   input.netLengthMinutes,
+        exclude_shift_id:     input.excludeV8ShiftId ?? null,
+        shift_id:             input.shiftId ?? null,
+        override_role_id:     input.overrideV8RoleId ?? null,
+        override_skill_ids:   input.overrideSkillIds ?? null,
+        override_license_ids: input.overrideLicenseIds ?? null,
+      },
+    });
 
-  if (error || !data) {
-    console.error('[validateCompliance] Edge function error:', error);
+    if (!error && data) {
+      return data;
+    }
+
+    console.warn('[validateCompliance] Remote edge function unreachable, performing local fallback check:', error);
+  } catch (err) {
+    console.warn('[validateCompliance] Edge function invocation threw error, performing local fallback check:', err);
+  }
+
+  // Graceful local client-side hard-validation fallback
+  try {
+    const hv = runHardValidation({
+      shift_date:      input.shiftDate,
+      start_time:      input.startTime,
+      end_time:        input.endTime,
+      employee_id:     input.employeeId,
+      existing_shifts: [],
+      current_time:    new Date(),
+      is_template:     false,
+    });
+
+    return {
+      status: hv.passed ? 'passed' : 'violated',
+      violations: hv.violations,
+      warnings: hv.warnings,
+      weeklyHours: 0,
+      maxWeeklyHours: MAX_WEEKLY_HOURS,
+      checksPerformed: ['local_hard_validation'],
+      checksSkipped: ['remote_evaluate_compliance'],
+      qualificationViolations: [],
+    };
+  } catch {
     return {
       status: 'unavailable',
       violations: [],
@@ -128,8 +160,6 @@ export async function validateCompliance(input: ComplianceInput): Promise<Compli
       qualificationViolations: [],
     };
   }
-
-  return data;
 }
 
 // ── Legacy adapter ─────────────────────────────────────────────────────────

@@ -21,6 +21,7 @@ import {
   Activity,
   Palmtree,
   Wallet,
+
 } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/platform/auth/useAuth';
@@ -199,6 +200,7 @@ const NavigationLinks: React.FC<NavigationLinksProps> = ({ openMenus, toggleMenu
             indent
             sectionColor="green"
           />
+
 
           <NavItem
             icon={<Palmtree className="h-5 w-5" />}

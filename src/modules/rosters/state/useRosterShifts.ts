@@ -683,6 +683,13 @@ export function useApplyShiftOp() {
       payload?: Record<string, unknown>;
     }) => runGatewayOp(args),
 
+    onError: (_err, variables) => {
+      // Invalidate queries immediately on CAS mismatch or error to lock out stale mutations
+      queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
+      queryClient.invalidateQueries({ queryKey: rosterKeys.all });
+      invalidateShiftAggregates(queryClient);
+    },
+
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: shiftKeys.lists });
       queryClient.invalidateQueries({ queryKey: rosterKeys.all });

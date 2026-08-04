@@ -43,6 +43,7 @@ const TimesheetPage = lazy(() => import('@/modules/timesheets/ui/TimesheetPage')
 // Management
 const ManagerBidsPage = lazy(() => import('@/modules/planning/bidding/ui/pages/ManagerBids.page.tsx'));
 const ManagerSwapsPage = lazy(() => import('@/modules/planning/swapping/ui/pages/ManagerSwaps.page.tsx'));
+
 const BroadcastManagerPage = lazy(() => import('@/modules/broadcasts/ui/pages/BroadcastsManager.page.tsx'));
 
 // Features
@@ -184,6 +185,7 @@ const AppRouter: React.FC = () => {
                     <Route element={<FeatureGate feature="management" />}>
                         <Route path="/management/bids" element={<ManagerBidsPage />} />
                         <Route path="/management/swaps" element={<ManagerSwapsPage />} />
+
 
 
                     </Route>

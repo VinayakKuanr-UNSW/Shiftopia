@@ -3,11 +3,11 @@ import { supabase } from '@/platform/supabase/client';
 /**
  * Auto-Approve Swaps — policy + decision-feed API.
  *
- * Backend contract (all live in prod, shadow-first):
+ * Backend contract (all live in prod):
  *   - `swap_approval_rules`  — per-org (dept-scoped optional) policy row. RLS: gamma+ managers
  *     have full access, org-scoped via app_access_certificates.
- *   - `swap_decisions`       — one row per bot evaluation (shadow rows have shadow=true and
- *     committed=false; live auto-approve/reject rows have committed=true). RLS: gamma+ read.
+ *   - `swap_decisions`       — one row per bot evaluation (committed=true for acted-upon
+ *     AUTO_APPROVE/AUTO_REJECT decisions). RLS: gamma+ read.
  *   - `sm_swap_auto_revert(p_decision_id, p_actor)` — undoes a committed AUTO_APPROVE
  *     (re-swaps via the gateway). Self-guards to gamma+ inside the function.
  *
@@ -24,7 +24,6 @@ export interface SwapApprovalPolicy {
     organization_id: string;
     department_id: string | null;
     enabled: boolean;
-    shadow_mode: boolean;
     auto_approve_warnings: boolean;
     confidence_min: number;
     max_auto_per_employee_per_week: number;
@@ -37,7 +36,6 @@ export interface SwapApprovalPolicy {
 
 export interface SwapPolicyPatch {
     enabled?: boolean;
-    shadow_mode?: boolean;
     auto_approve_warnings?: boolean;
     confidence_min?: number;
     max_auto_per_employee_per_week?: number;
@@ -53,7 +51,7 @@ export interface SwapAutoDecision {
     swap_id: string;
     decision: SwapAutoDecisionKind;
     reason: string | null;
-    shadow: boolean;
+    shadow: boolean; // NOTE: always false (column retained for audit history)
     committed: boolean;
     reverted_at: string | null;
     reverted_by: string | null;
@@ -152,9 +150,8 @@ export const swapPolicyApi = {
             .insert({
                 organization_id: organizationId,
                 department_id: null,
-                // Shadow-first defaults; the patch may override
+                // ON/OFF — no shadow; enabled = the bot acts.
                 enabled: false,
-                shadow_mode: true,
                 ...patch,
                 updated_by: actorId ?? null,
             })
@@ -164,7 +161,7 @@ export const swapPolicyApi = {
         return data as SwapApprovalPolicy;
     },
 
-    /** Recent bot decisions (newest first) for the shadow-comparison feed. */
+    /** Recent bot decisions (newest first). */
     async getRecentDecisions(limit = 25): Promise<SwapAutoDecision[]> {
         try {
             const { data, error } = await db
