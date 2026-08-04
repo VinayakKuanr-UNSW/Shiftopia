@@ -13,7 +13,16 @@
  *   - check_shift_overlap RPC                     → cheap overlap pre-filter.
  *   - evaluateShiftAvailabilityFromSlots()         → declared-availability read.
  *   - validateCompliance() / evaluate-compliance   → the real, live V8 compliance
- *     engine (fatigue, EBA, visa, leave, overlap, qualifications) — the same
+ *     engine (EBA, visa, leave, overlap, qualifications) — the same
+ *
+ *     NOTE (audit F-25): this deliberately no longer claims a FATIGUE check.
+ *     The v8 engine has no fatigue rule — a repo-wide grep for `fatigue` under
+ *     `compliance/v8/` returns nothing. Fatigue lives only in the projections
+ *     layer (display) and the solver's SC-7 objective, neither of which this
+ *     path invokes. Whether emergency reserve-list fills — the highest
+ *     fatigue-risk assignments in the system — SHOULD carry a fatigue gate is
+ *     an open product question, not something the comments should imply is
+ *     already handled.
  *     call real shift assignment already makes.
  *   - sm_apply_shift_op ('assign' then 'publish')  → the existing version-CAS +
  *     row-locked + FSM-guarded + audited mutation gateway, hardened in
@@ -57,7 +66,7 @@ function isEmploymentEligible(p: ReserveListProfileRow, shiftDate: string): bool
  * Run a fresh Reserve List candidate search for a shift. Never cache the
  * result — call this again on every "Refresh" press (per the spec: the
  * pool must reflect the latest compliance, availability, assignments,
- * fatigue, version, qualifications, and leave every time).
+ * version, qualifications, and leave every time).
  */
 export async function getReserveListCandidates(shiftId: string): Promise<ReserveListCandidate[]> {
   if (!isValidUuid(shiftId)) return [];
@@ -142,7 +151,7 @@ export async function getReserveListCandidates(shiftId: string): Promise<Reserve
   if (overlapFreeIds.length === 0) return [];
 
   // 5. Full compliance run per remaining candidate. The spec requires the
-  //    search to ONLY return employees who pass compliance/fatigue/EBA/visa —
+  //    search to ONLY return employees who pass compliance/EBA/visa —
   //    not just structurally-eligible ones — so this runs at search time, not
   //    only on-demand per row.
   const netMinutes =

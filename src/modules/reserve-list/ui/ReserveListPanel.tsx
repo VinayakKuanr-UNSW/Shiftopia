@@ -99,7 +99,14 @@ const ReserveListPanelInner: React.FC<{ shiftId: string; onClose: () => void }> 
         shiftId: shift.id,
       });
 
-      if (compliance.status !== 'passed' && compliance.status !== 'warned') {
+      // Narrowed into a local so the assignment below type-checks:
+      // ReserveListCandidate.complianceStatus is 'passed' | 'warned', and the
+      // guard already excludes everything else.
+      const eligibleStatus: 'passed' | 'warned' | null =
+        compliance.status === 'passed' ? 'passed'
+        : compliance.status === 'warned' ? 'warned'
+        : null;
+      if (eligibleStatus === null) {
         // No longer eligible — drop from the list rather than show a stale pass.
         setCandidates((prev) => prev.filter((c) => c.employeeId !== candidate.employeeId));
         toast({
@@ -115,7 +122,7 @@ const ReserveListPanelInner: React.FC<{ shiftId: string; onClose: () => void }> 
           c.employeeId === candidate.employeeId
             ? {
                 ...c,
-                complianceStatus: compliance.status,
+                complianceStatus: eligibleStatus,
                 violations: compliance.violations,
                 warnings: compliance.warnings,
                 currentWeeklyHours: compliance.weeklyHours,

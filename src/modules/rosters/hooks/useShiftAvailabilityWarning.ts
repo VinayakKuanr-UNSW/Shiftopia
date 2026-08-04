@@ -20,6 +20,12 @@ import {
   type ShiftAvailabilityResult,
 } from '@/modules/rosters/domain/availability-check';
 
+/** 'YYYY-MM-DD' -> local-midnight Date. */
+function parseLocalDateStr(d: string): Date {
+  const [y, m, day] = d.split('-').map(Number);
+  return new Date(y, m - 1, day);
+}
+
 export function useShiftAvailabilityWarning(
   employeeId: string | null | undefined,
   date: string | null | undefined, // YYYY-MM-DD
@@ -30,7 +36,10 @@ export function useShiftAvailabilityWarning(
 
   const { data, isLoading } = useQuery({
     queryKey: ['availability', 'resolved', 'single', employeeId, date],
-    queryFn: () => getEmployeeAvailabilityForDate(employeeId!, date!),
+    // `getEmployeeAvailabilityForDate` takes a Date; `date` here is a
+    // 'YYYY-MM-DD' string. Parsed on LOCAL date parts, never `new Date(str)`
+    // (UTC midnight — rolls the day west of UTC).
+    queryFn: () => getEmployeeAvailabilityForDate(employeeId!, parseLocalDateStr(date!)),
     enabled,
     staleTime: 30_000,
   });

@@ -842,15 +842,23 @@ async function loadFairnessDebts(
   empIds: string[],
 ): Promise<{ debts: Map<string, number>; f3Degraded: boolean }> {
   try {
-    const { data, error } = await service
-      .from('fairness_ledger')
-      .select('employee_id, debt')
-      .eq('organization_id', orgId)
-      .eq('metric', 'denied_preferences')
-      .in('employee_id', empIds);
+    // `fairness_ledger` holds one row per (employee, metric, window_end) — i.e.
+    // one per DAY. A plain select with no window predicate returned every
+    // historical window in unspecified order and the Map kept whichever landed
+    // last, so F3 ordering ran on a randomly-chosen historical debt (audit
+    // F-08) and could disagree with the client-side path for the same bidders
+    // at the same instant. `get_fairness_debts_latest` returns exactly one row
+    // per (employee, metric): the newest window at or before today — the same
+    // read the TS service uses (audit F-04).
+    const { data, error } = await service.rpc('get_fairness_debts_latest', {
+      p_org_id: orgId,
+      p_employee_ids: empIds,
+      p_as_of: new Date().toISOString().slice(0, 10),
+    });
     if (error) return { debts: new Map(), f3Degraded: true };
     const debts = new Map<string, number>();
-    for (const r of (data ?? []) as Array<{ employee_id: string; debt: number }>) {
+    for (const r of (data ?? []) as Array<{ employee_id: string; metric: string; debt: number }>) {
+      if (r.metric !== 'denied_preferences') continue;
       debts.set(r.employee_id, Number(r.debt) || 0);
     }
     return { debts, f3Degraded: false };

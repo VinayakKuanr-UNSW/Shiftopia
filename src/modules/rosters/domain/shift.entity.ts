@@ -156,8 +156,8 @@ export interface Shift {
      * `*`. `*_source` carries manual|snapped|null; the booleans are the
      * equivalent flag form. normalizeShiftRow sets both.
      */
-    adjusted_start_source?: 'manual' | 'snapped' | null;
-    adjusted_end_source?: 'manual' | 'snapped' | null;
+    adjusted_start_source?: 'manual' | 'snapped' | 'auto' | null;
+    adjusted_end_source?: 'manual' | 'snapped' | 'auto' | null;
     adjusted_start_is_manual?: boolean;
     adjusted_end_is_manual?: boolean;
     

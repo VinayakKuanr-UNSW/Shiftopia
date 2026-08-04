@@ -13,7 +13,7 @@
     "arch:validate": "depcruise src --config .dependency-cruiser.cjs",
     "arch:graph": "depcruise src --include-only \"^src\" --config .dependency-cruiser.cjs --output-type dot | dot -T svg > docs/dependency-graph.svg",
     "arch:check": "npm run lint && npm run arch:validate",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsc -p tsconfig.app.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

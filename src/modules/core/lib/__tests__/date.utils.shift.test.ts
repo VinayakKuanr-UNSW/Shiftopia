@@ -4,6 +4,7 @@ import {
     formatShiftDate,
     getShiftDateKey,
     getShiftInstant,
+    type ShiftTimeFields,
 } from '../date.utils';
 
 /**
@@ -36,7 +37,12 @@ describe('canonical shift wall-clock (AEST/AEDT)', () => {
 
     it('ignores a non-Sydney tz_identifier for display (always AEST/AEDT)', () => {
         // Even if the row carried a bogus display tz, output stays Sydney wall-clock.
-        expect(formatShiftTime({ ...staleShift, tz_identifier: 'Asia/Singapore' }, 'start', 'HH:mm')).toBe('11:00');
+        // The cast is the point of the test: `tz_identifier` is deliberately NOT
+        // part of `ShiftTimeFields`, because display timezone is never taken from
+        // the row — it is always Australia/Sydney. Passing one anyway must change
+        // nothing.
+        const withBogusTz = { ...staleShift, tz_identifier: 'Asia/Singapore' } as ShiftTimeFields;
+        expect(formatShiftTime(withBogusTz, 'start', 'HH:mm')).toBe('11:00');
     });
 
     it('falls back to start_at formatted in Sydney when naive fields are absent', () => {

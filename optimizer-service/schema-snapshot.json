@@ -6,6 +6,7 @@
   ],
   "Constraints": [
     "allow_partial",
+    "enforce_availability",
     "enforce_role_match",
     "enforce_skill_match",
     "min_rest_minutes",
@@ -22,6 +23,7 @@
     "has_availability_data",
     "hourly_rate",
     "id",
+    "initial_effective_minutes",
     "is_flexible",
     "is_student",
     "level",
@@ -48,6 +50,7 @@
     "end_time",
     "id",
     "is_public_holiday",
+    "is_saturday",
     "is_sunday",
     "is_training",
     "level",
@@ -63,6 +66,7 @@
   ],
   "SolverParams": [
     "compute_alternatives",
+    "decompose_by_week",
     "enable_greedy_hint",
     "log_search",
     "max_time_seconds",

@@ -140,8 +140,14 @@ export async function validateCompliance(input: ComplianceInput): Promise<Compli
 
     return {
       status: hv.passed ? 'passed' : 'violated',
-      violations: hv.violations,
-      warnings: hv.warnings,
+      // `HardValidationResult` exposes `passed` + `errors`, never
+      // `violations`/`warnings`. This read undefined for both, so any consumer
+      // doing `.length` or `.map()` on them crashed — on the OFFLINE fallback
+      // path, i.e. exactly when the edge function is already unreachable.
+      // Every hard-validation code (PAST_SHIFT/OVERLAP/INVALID_TIME/DUPLICATE)
+      // is blocking, so they all map to violations.
+      violations: hv.errors.map(e => e.message),
+      warnings: [],
       weeklyHours: 0,
       maxWeeklyHours: MAX_WEEKLY_HOURS,
       checksPerformed: ['local_hard_validation'],

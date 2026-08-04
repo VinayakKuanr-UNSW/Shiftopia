@@ -400,8 +400,8 @@ export interface ShiftDotInput {
      * `*_source` carries full provenance (manual|snapped|null); the boolean
      * `*_is_manual` flags are an equivalent alternative — either works.
      */
-    adjusted_start_source?: 'manual' | 'snapped' | null;
-    adjusted_end_source?: 'manual' | 'snapped' | null;
+    adjusted_start_source?: 'manual' | 'snapped' | 'auto' | null;
+    adjusted_end_source?: 'manual' | 'snapped' | 'auto' | null;
     adjusted_start_is_manual?: boolean;
     adjusted_end_is_manual?: boolean;
 }

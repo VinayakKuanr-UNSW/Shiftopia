@@ -605,6 +605,19 @@ export const SharedShiftCard = forwardRef<HTMLDivElement, SharedShiftCardProps>(
                     {!moveTopContentToBottom && topContent}
                 </div>
 
+                {/* COUNTDOWN */}
+                {timerText && (
+                    <div className={cn(
+                        "mb-4 px-3 py-2 rounded-xl text-[11px] font-black font-mono flex items-center justify-center gap-2 tracking-widest transition-colors border",
+                        isExpired 
+                            ? "bg-rose-500/10 text-rose-500 border-rose-500/20" 
+                            : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                    )}>
+                        <Clock className="w-3.5 h-3.5" />
+                        <span className="uppercase">{isExpired ? 'CLOSED' : timerText}</span>
+                    </div>
+                )}
+
                 {/* Segmented Top Selector Box: DATES | ROLE | STATUS */}
                 {!hideSegmentedBox && (
                     <div className="grid grid-cols-3 rounded-xl border border-border/80 bg-muted/20 dark:bg-zinc-900/60 overflow-hidden mb-5 divide-x divide-border/80">

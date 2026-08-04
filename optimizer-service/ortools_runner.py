@@ -164,6 +164,11 @@ class EmployeeReq(BaseModel):
     # reaches EmployeeInput.fairness_debts (consumed by SC-11). Without this the
     # controller's debts are silently dropped here.
     fairness_debts: dict[str, float] = Field(default_factory=dict)
+    # Prior-week circadian load in EFFECTIVE MINUTES — SC-7's own unit. Preferred
+    # over `initial_fatigue_score * 60`, which overstated prior load ~2.2x and
+    # could push an employee past the critical band before any assignment
+    # (audit F-07). None = older client; the solver falls back.
+    initial_effective_minutes: Optional[float] = None
 
 
 class ConstraintsReq(BaseModel):

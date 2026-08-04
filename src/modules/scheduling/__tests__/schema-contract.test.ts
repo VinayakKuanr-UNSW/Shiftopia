@@ -63,7 +63,7 @@ const SHIFT_FIELDS = fieldSet<Required<OptimizerShift>>({
     id: 0, shift_date: 0, start_time: 0, end_time: 0, duration_minutes: 0,
     role_id: 0, required_skill_ids: 0, required_license_ids: 0,
     priority: 0, demand_source: 0, target_employment_type: 0, level: 0,
-    is_sunday: 0, is_public_holiday: 0, is_training: 0,
+    is_sunday: 0, is_saturday: 0, is_public_holiday: 0, is_training: 0,
     unpaid_break_minutes: 0, shift_type: 0,
 });
 
@@ -76,11 +76,24 @@ const EMPLOYEE_FIELDS = fieldSet<Required<OptimizerEmployee>>({
     existing_shifts: 0, contracts: 0, qualifications: 0,
     availability_slots: 0, has_availability_data: 0,
     availability_overrides: 0, fairness_debts: 0,
+    initial_effective_minutes: 0,
+    // Schedule 3/4/5/6 classification carriers. These had drifted out of this
+    // sample — the `Required<T>` trick was raising TS2554 the whole time, but
+    // the repo's `type-check` script points at the root tsconfig, which has
+    // `"files": []` and only project references, so `tsc --noEmit` compiled
+    // NOTHING and the drift was never surfaced. Run
+    // `tsc -p tsconfig.app.json --noEmit` to actually type-check the app.
+    is_security_role: 0,
+    is_apprentice: 0, apprentice_type: 0, apprentice_year: 0, has_completed_year_12: 0,
+    is_trainee: 0, trainee_category: 0, trainee_level: 0, trainee_exit_year: 0,
+    trainee_years_out: 0, trainee_aqf_level: 0, trainee_year: 0,
+    is_training_on_job: 0, prefers_sba_loading: 0,
+    is_sws: 0, sws_capacity_percentage: 0,
 });
 
 const CONSTRAINTS_FIELDS = fieldSet<Required<OptimizerConstraints>>({
     min_rest_minutes: 0, enforce_role_match: 0, enforce_skill_match: 0,
-    allow_partial: 0, relax_constraints: 0,
+    allow_partial: 0, relax_constraints: 0, enforce_availability: 0,
 });
 
 const STRATEGY_FIELDS = fieldSet<Required<OptimizerStrategy>>({
@@ -104,7 +117,20 @@ const BROWSER_ONLY_FIELDS: Record<string, Set<string>> = {
     // `contract_type` is the TS frontend enum ('FT'|'PT'|'CASUAL'); the
     // backend uses `employment_type` ('FT'|'PT'|'Casual'). Controller
     // maps between them. Keeping both in TS for backwards compat.
-    Employee: new Set(['contract_type', 'contracts', 'qualifications']),
+    Employee: new Set([
+        'contract_type', 'contracts', 'qualifications',
+        // Schedule 3/4/5/6 wage classification. The CP-SAT solver has no
+        // apprentice/trainee/SWS wage model — only a flat `hourly_rate` — so
+        // these deliberately do not cross the wire. They are consumed solely by
+        // the greedy fallback's own cost re-estimate, which implements
+        // Schedule 4/5/6 in full. See the OptimizerEmployee doc comment.
+        'is_security_role',
+        'is_apprentice', 'apprentice_type', 'apprentice_year', 'has_completed_year_12',
+        'is_trainee', 'trainee_category', 'trainee_level', 'trainee_exit_year',
+        'trainee_years_out', 'trainee_aqf_level', 'trainee_year',
+        'is_training_on_job', 'prefers_sba_loading',
+        'is_sws', 'sws_capacity_percentage',
+    ]),
     // `demand_source` is a frontend filter hint ('baseline' vs ML-
     // predicted) used to scale shift priority before sending. Not in
     // pydantic.

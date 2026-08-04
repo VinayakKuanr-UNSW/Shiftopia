@@ -7,6 +7,7 @@ import { applyShiftOp } from '@/modules/rosters/api/shifts.api';
 import { mapShiftOpResultToUx } from '@/modules/rosters/domain/shift-ops.contract';
 import { ShiftTimeRange, swapEvaluator, runSwapGuards, SwapGuardError } from '@/modules/compliance';
 import { fetchV8EmployeeContext } from '@/modules/compliance/employee-context';
+import type { V8ContractType } from '@/modules/compliance/v8/types';
 import { addDays, subDays, format, parseISO, differenceInHours, parse } from 'date-fns';
 
 // Audit C-4: the swap engine's SwapPartyInput.contract_type uses the
@@ -18,12 +19,26 @@ import { addDays, subDays, format, parseISO, differenceInHours, parse } from 'da
 // by award structure and the underlying FT/PT/CASUAL value is not
 // preserved once STUDENT_VISA overrides it upstream, so fall back to
 // the safe, previously-universal default (CASUAL) for that case only.
+/**
+ * Map a V8 contract type onto the swap engine's narrower vocabulary.
+ *
+ * Takes the full `V8ContractType` deliberately. The parameter used to list only
+ * four of the five members, omitting `FLEXI_PART_TIME` — so a flexi part-timer
+ * fell through to `default: return null` and reached the swap evaluator with NO
+ * contract type at all, silently skipping every contract-specific rule for
+ * exactly the cohort whose hours are most variable. Typing it as
+ * `V8ContractType` means a future member is a compile error here rather than a
+ * silent null.
+ */
 const toSwapEngineContractType = (
-    t: 'FULL_TIME' | 'PART_TIME' | 'CASUAL' | 'STUDENT_VISA' | null | undefined,
+    t: V8ContractType | null | undefined,
 ): 'FT' | 'PT' | 'CASUAL' | null => {
     switch (t) {
         case 'FULL_TIME': return 'FT';
         case 'PART_TIME': return 'PT';
+        // Flexi part-time is a part-time variant (variable rostered hours
+        // against a part-time contract), not a casual engagement.
+        case 'FLEXI_PART_TIME': return 'PT';
         case 'CASUAL': return 'CASUAL';
         case 'STUDENT_VISA': return 'CASUAL';
         default: return null;

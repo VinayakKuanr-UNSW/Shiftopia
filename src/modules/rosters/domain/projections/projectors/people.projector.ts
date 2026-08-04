@@ -247,7 +247,13 @@ export function projectPeople(
       });
       // Peak fatigue across the roster (per-shift window), not "as of today" —
       // the latter reads 0 for any future roster.
-      emp.fatigueScore = computePeakFatigue(fatigueInput);
+      //
+      // `[]` is deliberate and explicit (audit F-22): this projector only ever
+      // sees the VISIBLE shifts, so each day's trailing 7-day window is
+      // incomplete at Day/3D zoom and this value under-counts. `useRosterProjections`
+      // re-computes it with the real 7-day history once that query lands. Until
+      // then the badge is a lower bound, never an over-statement.
+      emp.fatigueScore = computePeakFatigue(fatigueInput, []);
     }
   });
 
