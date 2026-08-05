@@ -234,6 +234,12 @@ COMMENT ON FUNCTION public.recompute_all_fairness_ledgers() IS
 -- per-org rebuild through recompute_fairness_ledger only, gated below.
 REVOKE ALL ON FUNCTION public.recompute_fairness_ledger(uuid, date, integer, uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.recompute_fairness_ledger(uuid, date, integer, uuid, text) FROM anon;
+-- Supabase's default privileges grant EXECUTE on new public-schema functions
+-- DIRECTLY to `authenticated` — so revoking PUBLIC and anon is NOT enough. This
+-- was caught by get_advisors after the production apply: without it, any signed-
+-- in user could rebuild ANY organization's ledger by passing its uuid, bypassing
+-- the gate below entirely. The known gotcha has two edges, not one.
+REVOKE ALL ON FUNCTION public.recompute_fairness_ledger(uuid, date, integer, uuid, text) FROM authenticated;
 REVOKE ALL ON FUNCTION public.recompute_all_fairness_ledgers() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.recompute_all_fairness_ledgers() FROM anon;
 REVOKE ALL ON FUNCTION public.recompute_all_fairness_ledgers() FROM authenticated;
@@ -249,10 +255,21 @@ CREATE OR REPLACE FUNCTION public.request_fairness_ledger_recompute(
 )
 RETURNS integer
 LANGUAGE plpgsql
+-- SECURITY DEFINER, deliberately: `authenticated` may not call the privileged
+-- recompute directly (see the REVOKE above), so this gate is their only path
+-- and must be able to reach it. It authorises FIRST, and auth.uid() reads the
+-- JWT claim from the session, which SECURITY DEFINER does not change.
+SECURITY DEFINER
 SET search_path TO 'public'
 AS $$
 DECLARE v_rows integer;
 BEGIN
+    -- A definer function with no auth.uid() would otherwise fall through to the
+    -- predicate below with a NULL subject.
+    IF auth.uid() IS NULL THEN
+        RAISE EXCEPTION 'authentication required' USING ERRCODE = '42501';
+    END IF;
+
     -- Mirrors the fairness_ledger_org_scoped RLS predicate: legacy admins
     -- cross-org, otherwise an active gamma+ certificate for THIS org.
     IF NOT (
@@ -277,7 +294,7 @@ END $$;
 ALTER FUNCTION public.request_fairness_ledger_recompute(uuid, date) OWNER TO postgres;
 
 COMMENT ON FUNCTION public.request_fairness_ledger_recompute(uuid, date) IS
-    'Client-callable fairness-ledger rebuild. Authorises the caller against the same predicate as fairness_ledger_org_scoped, then delegates to the definer-owned recompute.';
+    'Client-callable fairness-ledger rebuild. SECURITY DEFINER: authorises the caller against the same predicate as fairness_ledger_org_scoped (and rejects an absent auth.uid()) BEFORE delegating to the privileged recompute, which authenticated may not call directly.';
 
 REVOKE ALL ON FUNCTION public.request_fairness_ledger_recompute(uuid, date) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.request_fairness_ledger_recompute(uuid, date) FROM anon;
