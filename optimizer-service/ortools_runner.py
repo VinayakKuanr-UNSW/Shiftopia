@@ -23,7 +23,7 @@ import logging
 import os
 import time
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, Union
 
 import anyio
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
@@ -36,11 +36,14 @@ from model_builder import (
     EmployeeInput,
     ExistingShiftInput,
     AvailabilitySlotInput,
+    AvailabilityOverrideInput,
     OptimizerConstraints,
     SolverParameters,
     StrategyInput,
     existing_blocks_proposal,
+    override_blocks_shift,
     shift_window,
+    _slot_covers_shift,
     _time_to_abs_minutes,
 )
 from security import (
@@ -100,6 +103,10 @@ class ShiftReq(BaseModel):
     priority: int = 1
     unpaid_break_minutes: int = 0
     target_employment_type: Optional[str] = None
+    # Narrows a 'PT' target to Flexible Part-Time staff. Declared at the wire
+    # boundary (not dataclass-only) so the TS layer's setting actually reaches
+    # SC-1 — the same omission that once silently dropped is_sunday.
+    target_requires_flexible: bool = False
     level: int = 0
     is_training: bool = False
     # Penalty-rate flags — promoted to the wire boundary so the TS layer
@@ -126,6 +133,15 @@ class ExistingShiftReq(BaseModel):
     unpaid_break_minutes: int = 0
 
 
+class AvailabilityOverrideReq(BaseModel):
+    """A window that blocks (HARD) or discourages (SOFT / PREFERENCE)
+    assignment. `date` scopes it to one day; omit it for every day."""
+    start_time: str
+    end_time: str
+    severity: str = 'SOFT'
+    date: Optional[str] = None
+
+
 class AvailabilitySlotReq(BaseModel):
     """A declared availability window for an employee on a given date."""
     slot_date: str
@@ -146,14 +162,26 @@ class EmployeeReq(BaseModel):
     license_ids: list[str] = Field(default_factory=list)
     preferred_shift_ids: list[str] = Field(default_factory=list)
     unavailable_dates: list[str] = Field(default_factory=list)
-    # Severity-based availability (dates or intervals)
-    # [ (start_time, end_time, severity) ]
-    availability_overrides: list[tuple[str, str, str]] = Field(default_factory=list)
+    # Severity-based availability windows. Objects carry an optional `date`;
+    # the legacy `(start, end, severity)` tuple is still accepted and keeps its
+    # every-day meaning. See AvailabilityOverrideInput in model_builder.py —
+    # without a date this channel could not express a dated one-off exception
+    # or leave that has been requested but not yet approved, which are the two
+    # things it is most obviously for.
+    availability_overrides: list[
+        Union[AvailabilityOverrideReq, tuple[str, str, str]]
+    ] = Field(default_factory=list)
     # Declared availability slots in the optimization window. When
     # `has_availability_data` is True, these become the only times the
     # employee may be assigned (hard filter).
     availability_slots: list[AvailabilitySlotReq] = Field(default_factory=list)
     has_availability_data: bool = False
+    # 'OPT_IN' (casual — an absent slot means unavailable) or 'OPT_OUT' (FT/PT —
+    # an absent slot means available, and unavailability must be stated via
+    # `unavailable_dates` or a HARD `availability_overrides` entry). See
+    # `normalize_availability_mode` in model_builder.py. Defaults to the strict
+    # reading, so a client that does not send it behaves exactly as before.
+    availability_mode: str = 'OPT_IN'
     existing_shifts: list[ExistingShiftReq] = Field(default_factory=list)
     level: int = 0
     is_flexible: bool = False
@@ -603,41 +631,47 @@ def _explain_eligibility(
         if not c.relax_constraints:
             reasons.append('REST_GAP')
 
-
+    # HC-5c: Employment Isolation. This mirrors `employee_eligible` and MUST
+    # stay in step with it — a gap here is worse than a missing reason code: it
+    # reports an off-target employee as PASS, so the audit report tells a
+    # manager that someone the solver can never place was "eligible, the solver
+    # just chose otherwise". Compare the (type, is_flexible) TUPLE for the same
+    # reason employee_eligible does: `normalize_employment_type()` collapses
+    # 'Flexible Part-Time' onto 'PT'.
+    if shift.target_employment_type:
+        if emp.employment_type != shift.target_employment_type:
+            reasons.append('EMPLOYMENT_TARGET')
+        elif shift.target_requires_flexible and not emp.is_flexible:
+            reasons.append('EMPLOYMENT_TARGET_FLEXIBLE')
 
     # Min engagement floor
     if shift.duration_minutes < 60:
         reasons.append('SHIFT_TOO_SHORT')
 
     # HARD availability override windows
-    for start, end, severity in emp.availability_overrides:
-        if severity == 'HARD':
-            s0, s1 = shift_window(shift)
-            a0 = _time_to_abs_minutes(shift.shift_date, start)
-            a1 = _time_to_abs_minutes(shift.shift_date, end)
-            if a1 <= a0:
-                a1 += 1440
-            if s0 < a1 and a0 < s1:
-                reasons.append('HARD_AVAILABILITY_BLOCK')
-                break
+    for ov in emp.availability_overrides:
+        if ov.severity == 'HARD' and override_blocks_shift(ov, shift):
+            reasons.append('HARD_AVAILABILITY_BLOCK')
+            break
 
-    # Declared availability slots (HC-5d).
-    # Mirrors employee_eligible: when enforce_availability is on, availability is a
-    # HARD constraint and "unset = unavailable"; otherwise only employees with
-    # records on file are restricted to their slots.
-    if c.enforce_availability or emp.has_availability_data:
-        s0, s1 = shift_window(shift)
-        covered = False
-        for slot in emp.availability_slots:
-            if slot.slot_date != shift.shift_date:
-                continue
-            a0 = _time_to_abs_minutes(slot.slot_date, slot.start_time)
-            a1 = _time_to_abs_minutes(slot.slot_date, slot.end_time)
-            if a1 <= a0:
-                a1 += 1440
-            if a0 <= s0 and a1 >= s1:
-                covered = True
-                break
+    # Declared availability slots (HC-5d). MUST mirror `employee_eligible`,
+    # including its OPT_IN / OPT_OUT split — this block previously carried only
+    # the OPT_IN half, so every permanent the solver could legitimately place
+    # was reported to the manager as OUTSIDE_DECLARED_AVAILABILITY. That is the
+    # failure this function's own header warns about, inverted: the audit
+    # claiming someone is ineligible when the solver knows they are not.
+    s0, s1 = shift_window(shift)
+    covered = any(
+        slot.slot_date == shift.shift_date and _slot_covers_shift(slot, s0, s1)
+        for slot in emp.availability_slots
+    )
+
+    if emp.availability_mode == 'OPT_OUT':
+        # Per-date: a declaration on this date binds it; silence leaves it open.
+        declared_today = any(s.slot_date == shift.shift_date for s in emp.availability_slots)
+        if declared_today and not covered:
+            reasons.append('OUTSIDE_DECLARED_AVAILABILITY')
+    elif c.enforce_availability or emp.has_availability_data:
         if not covered:
             reasons.append('OUTSIDE_DECLARED_AVAILABILITY')
 

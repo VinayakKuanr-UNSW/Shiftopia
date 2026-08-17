@@ -5,6 +5,8 @@
  * auto-scheduler controller, and the UI layer.
  */
 
+import type { TargetEmploymentType } from '@/modules/core/model/employment.types';
+
 // =============================================================================
 // OPTIMIZER REQUEST
 // =============================================================================
@@ -20,7 +22,12 @@ export interface OptimizerShift {
     required_license_ids?: string[];
     priority?: number;            // 1 (default) → higher = more important
     demand_source?: 'baseline' | 'ml_predicted' | 'derived' | null;
-    target_employment_type?: 'FT' | 'PT' | 'Casual' | null;
+    target_employment_type?: TargetEmploymentType | null;
+    /** Narrows a 'PT' target to Flexible Part-Time staff only. Pairs with
+     *  `OptimizerEmployee.is_flexible` — the solver compares the (type,
+     *  is_flexible) TUPLE, because `normalize_employment_type()` collapses
+     *  'Flexible Part-Time' onto 'PT' and a token alone cannot express this. */
+    target_requires_flexible?: boolean;
     level?: number;
     /** Day-type flags driving the EBA cl 41 loadings (`_penalty_day`) AND the
      *  SC-10/SC-11 fairness terms (`undesirable_shift_ids`). The controller
@@ -59,6 +66,30 @@ export interface AvailabilitySlotRef {
     slot_date: string;     // YYYY-MM-DD
     start_time: string;    // HH:MM
     end_time: string;      // HH:MM
+}
+
+/**
+ * A window that blocks or discourages assignment — the counterpart to
+ * `AvailabilitySlotRef`, which says where someone CAN work.
+ *
+ * `date` scopes the window to one day; omitting it means every day in the
+ * horizon. The field used to be a bare `[start, end, severity]` tuple with no
+ * date at all, and every solver site resolved those times against the shift's
+ * own date — so the channel could not express a dated one-off exception, or
+ * leave that had been requested but not yet approved, which are the two things
+ * it is most obviously for.
+ *
+ * Severity maps to the solver's tiers:
+ *   HARD       pre-filter block, same tier as approved leave
+ *   SOFT       5000c penalty — routed around unless coverage is worth more
+ *   PREFERENCE 1000c — a nudge
+ */
+export interface AvailabilityOverrideRef {
+    start_time: string;    // HH:MM
+    end_time: string;      // HH:MM
+    severity: 'HARD' | 'SOFT' | 'PREFERENCE';
+    /** YYYY-MM-DD. Omitted = applies on every day. */
+    date?: string;
 }
 
 export interface OptimizerEmployee {
@@ -139,6 +170,26 @@ export interface OptimizerEmployee {
      */
     has_availability_data?: boolean;
     /**
+     * What an ABSENT availability slot means for this employee — the two
+     * populations are opposites, and applying the wrong one silently removes
+     * people from every roster:
+     *
+     *   'OPT_IN'  — casuals. Availability is an OFFER, so no slot means "not
+     *               offered", i.e. UNAVAILABLE. The optimizer's default, and
+     *               what every employee got before this field existed.
+     *
+     *   'OPT_OUT' — FT/PT. Availability is an EXCEPTION LEDGER. These staff
+     *               carry a contract floor the solver is charged 100,000/minute
+     *               for missing (HC-7), so "no data" must not mean "cannot
+     *               work"; unavailability is stated positively instead, via
+     *               `unavailable_dates` (approved leave) or a HARD entry in
+     *               `availability_overrides`. Evaluated per DATE by the solver:
+     *               a declaration on a date still constrains that date.
+     *
+     * Omitted is read as 'OPT_IN' at both ends.
+     */
+    availability_mode?: 'OPT_IN' | 'OPT_OUT';
+    /**
      * Severity-based availability windows: tuples of
      * `[start_time, end_time, severity]` where severity is 'HARD',
      * 'SOFT', or 'PREFERENCE'. HARD entries are pre-filter blockers;
@@ -147,7 +198,7 @@ export interface OptimizerEmployee {
      * leave-management feature) but the field exists on the wire to
      * forward-compat the Python service.
      */
-    availability_overrides?: Array<[string, string, 'HARD' | 'SOFT' | 'PREFERENCE']>;
+    availability_overrides?: AvailabilityOverrideRef[];
     /** F1: Ledger debts. Positive = penalty for assigning more, Negative = bonus. */
     fairness_debts?: Record<string, number>;
     /** Prior circadian load in EFFECTIVE MINUTES spilling into the horizon's
@@ -268,7 +319,27 @@ export interface PillarScores {
     coverage: { score: number; covered: number; total: number };
     cost: { total: number; currency: string; avg_per_shift: number };
     fairness: { score: number; employees_used: number; spread_minutes: number; peak_minutes: number };
-    fatigue: { score: number; amber: number; critical: number };
+    fatigue: {
+        score: number;
+        amber: number;
+        critical: number;
+        /**
+         * HC-4 max-hours breach across the window, in minutes.
+         *
+         * The solver's hours cap is a SOFT tier-3 term that yields to coverage
+         * by design, so a roster can score 100% compliant while individuals are
+         * rostered far past their own ceiling — the breach previously showed up
+         * only as an aggregate penalty in the objective breakdown.
+         *
+         * OPTIONAL on purpose: an older optimizer image does not send these, and
+         * a stale container silently serving previous-generation fields is a
+         * trap this codebase has already hit twice. Absent ⇒ render nothing
+         * rather than "0h over", which would read as an all-clear.
+         */
+        over_cap_staff?: number;
+        over_cap_worst_minutes?: number;
+        over_cap_total_minutes?: number;
+    };
 }
 
 /** B5 — why a shift was left uncovered (drives the U5 banner). */

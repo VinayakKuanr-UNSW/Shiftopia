@@ -62,7 +62,8 @@ function fieldSet<T>(sample: { [K in keyof T]: unknown }): Set<string> {
 const SHIFT_FIELDS = fieldSet<Required<OptimizerShift>>({
     id: 0, shift_date: 0, start_time: 0, end_time: 0, duration_minutes: 0,
     role_id: 0, required_skill_ids: 0, required_license_ids: 0,
-    priority: 0, demand_source: 0, target_employment_type: 0, level: 0,
+    priority: 0, demand_source: 0, target_employment_type: 0,
+    target_requires_flexible: 0, level: 0,
     is_sunday: 0, is_saturday: 0, is_public_holiday: 0, is_training: 0,
     unpaid_break_minutes: 0, shift_type: 0,
 });
@@ -75,6 +76,7 @@ const EMPLOYEE_FIELDS = fieldSet<Required<OptimizerEmployee>>({
     is_flexible: 0, is_student: 0, visa_limit: 0,
     existing_shifts: 0, contracts: 0, qualifications: 0,
     availability_slots: 0, has_availability_data: 0,
+    availability_mode: 0,
     availability_overrides: 0, fairness_debts: 0,
     initial_effective_minutes: 0,
     // Schedule 3/4/5/6 classification carriers. These had drifted out of this

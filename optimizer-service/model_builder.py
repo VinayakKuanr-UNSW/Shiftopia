@@ -89,6 +89,48 @@ def normalize_employment_type(value: Optional[str]) -> str:
     return _EMPLOYMENT_TYPE_ALIASES.get(key, 'Casual')
 
 
+# What the ABSENCE of a declared availability slot means for this employee.
+# The two answers are opposites, and applying the wrong one silently deletes
+# people from the roster:
+#
+#   OPT_IN  (casuals) — availability is an OFFER. No slot means "I did not
+#           offer this time", so it means UNAVAILABLE. This is the existing
+#           behaviour and stays the default.
+#
+#   OPT_OUT (FT/PT)   — availability is an EXCEPTION LEDGER. These employees
+#           carry a contract obligation the solver is charged 100,000/minute
+#           for failing to meet (HC-7), so "no data" cannot mean "cannot work".
+#           Absence means AVAILABLE; unavailability has to be stated positively
+#           via `unavailable_dates` (approved leave) or a HARD entry in
+#           `availability_overrides`.
+#
+# THIS IS THE GUARD, not the feature. Once an ordinary-hours envelope is
+# materialised into `availability_slots` for permanents, those slots do the
+# real constraining — but a generator that silently stops running would then
+# take the entire permanent workforce out of every roster, which is exactly the
+# failure mode this default prevents. Production reached that state without a
+# generator at all: all 17 FT carry seeded availability rules written in one
+# transaction, five of them a 2-hour weekly window, so under OPT_IN containment
+# they are eligible for nothing while still owed 38h/week.
+_AVAILABILITY_MODE_ALIASES = {
+    'opt_in': 'OPT_IN', 'opt-in': 'OPT_IN', 'optin': 'OPT_IN', 'in': 'OPT_IN',
+    'opt_out': 'OPT_OUT', 'opt-out': 'OPT_OUT', 'optout': 'OPT_OUT', 'out': 'OPT_OUT',
+}
+
+
+def normalize_availability_mode(value: Optional[str]) -> str:
+    """Canonicalize any wire form of availability_mode to {'OPT_IN','OPT_OUT'}.
+
+    None / empty / unrecognized fall back to 'OPT_IN' — the stricter reading,
+    and the one every existing caller and test already relies on. An older
+    client that does not send the field therefore behaves exactly as before.
+    """
+    if not value:
+        return 'OPT_IN'
+    key = str(value).strip().lower()
+    return _AVAILABILITY_MODE_ALIASES.get(key, 'OPT_IN')
+
+
 # EBA cl 12.5(b): a Casual's `hourly_rate` is ALREADY loaded with the 25%
 # casual loading. cl 41.1/41.2/41.3 publish the casual Saturday/Sunday/Public
 # Holiday rates as flat percentages (150% / 175% / 275%) of the ORDINARY
@@ -228,6 +270,11 @@ class ShiftInput:
     shift_type: str = 'NORMAL'  # 'NORMAL' or 'MULTI_HIRE'
     level: int = 0
     target_employment_type: Optional[str] = None
+    # Narrows a 'PT' target to FLEXIBLE part-timers. This cannot be expressed by
+    # `target_employment_type` alone: `normalize_employment_type()` deliberately
+    # collapses 'Flexible Part-Time' onto 'PT', so a token-only target would
+    # match every part-timer. SC-1 compares the (type, is_flexible) TUPLE.
+    target_requires_flexible: bool = False
     is_training: bool = False
 
     def __post_init__(self):
@@ -238,6 +285,12 @@ class ShiftInput:
             self.target_employment_type = normalize_employment_type(
                 self.target_employment_type
             )
+        # A flexible requirement is only meaningful against a PT target — mirrors
+        # shifts_target_flexible_requires_pt_check. Normalizing here means SC-1
+        # never has to re-check the pairing, and an inconsistent wire payload
+        # degrades to the plain PT target instead of silently penalizing everyone.
+        if self.target_employment_type != 'PT':
+            self.target_requires_flexible = False
         # Server-side weekday derivation (EBA cl 41.1/41.2 — Sat ×1.25, Sun ×1.5).
         # Both flags are derivable from `shift_date` alone, so derive them here
         # rather than trusting the wire: audit F-01 found that `is_sunday` was
@@ -284,6 +337,87 @@ class ExistingShiftInput:
 
 
 @dataclass
+class AvailabilityOverrideInput:
+    """A time window that blocks or discourages assignment.
+
+    WHY THIS IS A DATACLASS AND NOT A 3-TUPLE. It used to be
+    `(start_time, end_time, severity)`, and every consumer resolved those times
+    against `shift.shift_date` — so an entry meant "this clock window on EVERY
+    day of the horizon". There was no way to say "this window on the 4th of
+    March", which makes the whole channel unable to express the two things it
+    is most obviously for: a dated one-off exception, and leave that has been
+    requested but not yet approved.
+
+    Nothing populated the field, so reshaping it broke no caller. `date = None`
+    keeps the old recurring meaning, and a bare 3-tuple is still accepted on the
+    wire and coerced here.
+
+    SEVERITY:
+      HARD       — pre-filter block; the employee is ineligible for any shift
+                   overlapping this window. Same tier as approved leave.
+      SOFT       — 5000c objective penalty. The solver routes around it unless
+                   coverage is worth more.
+      PREFERENCE — 1000c. A nudge.
+    """
+    start_time: str
+    end_time: str
+    severity: str = 'SOFT'
+    # YYYY-MM-DD, or None for "every day in the horizon".
+    date: Optional[str] = None
+
+    def __post_init__(self):
+        self.severity = (self.severity or 'SOFT').strip().upper()
+        if self.severity not in ('HARD', 'SOFT', 'PREFERENCE'):
+            # An unrecognised severity must not silently become a HARD block.
+            self.severity = 'SOFT'
+
+
+def _coerce_override(value) -> AvailabilityOverrideInput:
+    """Accept the dataclass, a mapping, or the legacy `(start, end, severity)`
+    tuple. The tuple form carries no date and so keeps its every-day meaning."""
+    if isinstance(value, AvailabilityOverrideInput):
+        return value
+    if isinstance(value, dict):
+        return AvailabilityOverrideInput(
+            start_time=value.get('start_time') or value.get('start'),
+            end_time=value.get('end_time') or value.get('end'),
+            severity=value.get('severity', 'SOFT'),
+            date=value.get('date'),
+        )
+    seq = list(value)
+    return AvailabilityOverrideInput(
+        start_time=seq[0],
+        end_time=seq[1],
+        severity=seq[2] if len(seq) > 2 else 'SOFT',
+        date=seq[3] if len(seq) > 3 else None,
+    )
+
+
+def override_applies_on(ov: AvailabilityOverrideInput, shift_date: str) -> bool:
+    """Does this override bear on a shift starting on `shift_date`?"""
+    return ov.date is None or ov.date == shift_date
+
+
+def override_blocks_shift(ov: AvailabilityOverrideInput, shift: 'ShiftInput') -> bool:
+    """Does this override OVERLAP the shift? Overlap, not containment — an
+    override says "not during this", so clipping any part of it counts.
+
+    Times are anchored to the override's own date when it has one, so a dated
+    entry lines up with the calendar rather than sliding onto whatever day the
+    shift happens to start.
+    """
+    if not override_applies_on(ov, shift.shift_date):
+        return False
+    s0, s1 = shift_window(shift)
+    anchor = ov.date or shift.shift_date
+    a0 = _time_to_abs_minutes(anchor, ov.start_time)
+    a1 = _time_to_abs_minutes(anchor, ov.end_time)
+    if a1 <= a0:
+        a1 += 1440  # cross-midnight window
+    return s0 < a1 and a0 < s1
+
+
+@dataclass
 class AvailabilitySlotInput:
     """A declared availability window for an employee on a given date.
 
@@ -316,7 +450,7 @@ class EmployeeInput:
     unavailable_dates: list[str] = field(default_factory=list)
     # Severity-based availability (dates or intervals)
     # [ (start, end, severity) ] where severity is 'HARD', 'SOFT', or 'PREFERENCE'
-    availability_overrides: list[tuple[str, str, str]] = field(default_factory=list)
+    availability_overrides: list[AvailabilityOverrideInput] = field(default_factory=list)
     level: int = 0
     is_flexible: bool = False
     is_student: bool = False
@@ -357,6 +491,10 @@ class EmployeeInput:
     # applies only when `has_availability_data` is true (see employee_eligible).
     availability_slots: list[AvailabilitySlotInput] = field(default_factory=list)
     has_availability_data: bool = False
+    # 'OPT_IN' (casual) or 'OPT_OUT' (FT/PT) — what an ABSENT slot means for
+    # this employee. See `normalize_availability_mode` and HC-5d below.
+    # Defaults to the strict reading so an older client is unaffected.
+    availability_mode: str = 'OPT_IN'
 
     def __post_init__(self):
         # Canonicalize the wire form ('Full-Time'/'Part-Time'/'Casual') to the
@@ -366,6 +504,13 @@ class EmployeeInput:
         # ortools_runner.py construct EmployeeInput(**...) via the constructor,
         # so this single point covers the main and audit paths.
         self.employment_type = normalize_employment_type(self.employment_type)
+        # Same reasoning, same boundary: normalize once here so HC-5d compares
+        # against canonical values whatever wire form arrived.
+        self.availability_mode = normalize_availability_mode(self.availability_mode)
+        # Accept the legacy 3-tuple / mapping wire forms — see `_coerce_override`.
+        self.availability_overrides = [
+            _coerce_override(o) for o in (self.availability_overrides or [])
+        ]
 
 
 @dataclass
@@ -645,6 +790,21 @@ def _iso_week_key(shift_date: str) -> tuple[int, int]:
 # ELIGIBILITY CHECK (HC-5)
 # =============================================================================
 
+def _slot_covers_shift(slot: AvailabilitySlotInput, s0: int, s1: int) -> bool:
+    """Is `[s0, s1)` (absolute minutes, from `shift_window`) FULLY contained in
+    this slot? Containment, not overlap — a shift half inside a declared window
+    is not a shift the employee said they could work.
+
+    Extracted so the OPT_IN and OPT_OUT branches of HC-5d cannot drift apart on
+    the cross-midnight adjustment.
+    """
+    a0 = _time_to_abs_minutes(slot.slot_date, slot.start_time)
+    a1 = _time_to_abs_minutes(slot.slot_date, slot.end_time)
+    if a1 <= a0:
+        a1 += 1440  # cross-midnight slot
+    return a0 <= s0 and a1 >= s1
+
+
 def employee_eligible(
     emp: EmployeeInput,
     shift: ShiftInput,
@@ -679,22 +839,66 @@ def employee_eligible(
     if shift.duration_minutes < 60:
         return False
 
-    # HC-5c: Employment Isolation (Transitioned to SOFT as per Fix #8)
-    # We allow cross-assignments but SC-1 will penalize them.
+    # HC-5c: Employment Isolation — HARD again.
+    #
+    # Fix #8 had made this soft (a 5000c SC-1 penalty), so the solver would place
+    # an off-target employee whenever coverage was worth more than $50.
+    # `shifts.target_employment_type` is now NOT NULL and enforced as a hard match
+    # by the V8 rule V8_EMPLOYMENT_TARGET and by
+    # trg_shift_employment_target_2_enforce, so such a proposal would be rejected
+    # on write — the solver must not generate one.
+    #
+    # It belongs HERE rather than as a constraint on the assignment var: this is
+    # the single eligibility predicate feeding BOTH variable creation and
+    # `compute_greedy_hint`, so the fallback incumbent obeys the same rule and no
+    # variable is created for a pair that can never be assigned.
+    if shift.target_employment_type:
+        # Compare the (type, is_flexible) TUPLE, not the token alone:
+        # `normalize_employment_type()` collapses 'Flexible Part-Time' onto 'PT',
+        # so a plain string compare would let a Flexible-PT-targeted shift match
+        # every part-timer.
+        if emp.employment_type != shift.target_employment_type:
+            return False
+        if shift.target_requires_flexible and not emp.is_flexible:
+            return False
 
-    # HARD Availability blocks
-    for start, end, severity in emp.availability_overrides:
-        if severity == 'HARD':
-            s0, s1 = shift_window(shift)
-            a0 = _time_to_abs_minutes(shift.shift_date, start)
-            a1 = _time_to_abs_minutes(shift.shift_date, end)
-            if a1 <= a0: a1 += 1440 # Cross-midnight
-
-            # Intersection check
-            if s0 < a1 and a0 < s1:
-                return False
+    # HARD Availability blocks. Dated entries bear only on their own date; an
+    # undated one still means "every day" — see AvailabilityOverrideInput.
+    for ov in emp.availability_overrides:
+        if ov.severity == 'HARD' and override_blocks_shift(ov, shift):
+            return False
 
     # HC-5d: Declared availability windows.
+    #
+    # What an ABSENT slot means depends on `availability_mode` — see
+    # `normalize_availability_mode` for why the two populations are opposites.
+    if emp.availability_mode == 'OPT_OUT':
+        # OPT-OUT (FT/PT). Evaluated PER DATE, not per employee: a declaration
+        # on this date constrains this date, and silence on it means available.
+        #
+        # Per-date rather than per-employee because the envelope these slots
+        # will carry is generated, and a generator that covers part of a horizon
+        # and stops is a realistic failure. Per-employee semantics ("has any
+        # slot anywhere => enforce everywhere") would turn that partial run into
+        # a hard block on every uncovered day; per-date confines the damage to
+        # falling back to "available", which is the pre-existing state.
+        #
+        # The safety property this rests on: under OPT_OUT, absence can never
+        # express unavailability, so unavailability MUST be stated positively.
+        # Approved leave already is — `unavailable_dates`, checked at the top of
+        # this function and unaffected by any of this — and non-leave blocks go
+        # through `availability_overrides` at HARD severity just above.
+        declared_today = [
+            slot for slot in emp.availability_slots
+            if slot.slot_date == shift.shift_date
+        ]
+        if declared_today:
+            s0, s1 = shift_window(shift)
+            if not any(_slot_covers_shift(slot, s0, s1) for slot in declared_today):
+                return False
+        return True
+
+    # OPT-IN (casual, and the default for any caller that does not send a mode).
     #
     # Policy (2026-07): when `enforce_availability` is on, availability is a HARD
     # constraint and "unset = unavailable" — an employee is eligible for a shift
@@ -711,12 +915,7 @@ def employee_eligible(
         for slot in emp.availability_slots:
             if slot.slot_date != shift.shift_date:
                 continue
-            a0 = _time_to_abs_minutes(slot.slot_date, slot.start_time)
-            a1 = _time_to_abs_minutes(slot.slot_date, slot.end_time)
-            if a1 <= a0:
-                a1 += 1440  # cross-midnight slot
-            # The shift must be fully contained within the slot.
-            if a0 <= s0 and a1 >= s1:
+            if _slot_covers_shift(slot, s0, s1):
                 covered = True
                 break
         if not covered:
@@ -986,6 +1185,29 @@ class ScheduleModelBuilder:
         frac = (amber * 0.5 + critical * 1.0) / max(1, used)
         fatigue_score = max(0, round(100 * (1 - min(1.0, frac))))
 
+        # HC-4 max-hours breach, in minutes. The cap is a SOFT tier-3 term that
+        # deliberately yields to coverage ("cover past someone's stated max if
+        # that's the only way to staff a shift"), so a roster can read 100%
+        # compliant while individuals sit far past their own ceiling. Until now
+        # the only trace of that was the objective breakdown's aggregate penalty,
+        # which a reader had to divide by 1e8 to interpret. Report it directly.
+        #
+        # Mirrors the HC-4 expression exactly — assigned GROSS minutes plus
+        # pinned existing minutes, against the caller-scaled max_weekly_minutes —
+        # so this number and the solver's penalty can never drift apart.
+        over_by_emp: dict[str, int] = {}
+        for emp in self.data.employees:
+            cap = emp.max_weekly_minutes
+            if cap <= 0:
+                continue
+            worked = mins_by_emp.get(emp.id, 0) + sum(
+                es.duration_minutes for es in emp.existing_shifts
+            )
+            over = round(worked - cap)
+            if over > 0:
+                over_by_emp[emp.id] = over
+        over_values = list(over_by_emp.values())
+
         return {
             'coverage': {'score': coverage_score, 'covered': covered, 'total': total},
             'cost': {'total': total_cost, 'currency': 'AUD',
@@ -993,7 +1215,12 @@ class ScheduleModelBuilder:
             'fairness': {'score': fairness_score, 'employees_used': used,
                          'spread_minutes': spread,
                          'peak_minutes': round(max(loads)) if loads else 0},
-            'fatigue': {'score': fatigue_score, 'amber': amber, 'critical': critical},
+            'fatigue': {
+                'score': fatigue_score, 'amber': amber, 'critical': critical,
+                'over_cap_staff': len(over_values),
+                'over_cap_worst_minutes': max(over_values) if over_values else 0,
+                'over_cap_total_minutes': sum(over_values) if over_values else 0,
+            },
         }
 
     def _compute_binding(self, unassigned: list) -> list:
@@ -1279,6 +1506,37 @@ class ScheduleModelBuilder:
         self._metrics.eligible_pairs = sum(
             len(v) for v in self._eligibility_map.values()
         )
+
+        # HC-5d mode split, plus the count of employees this run could not place
+        # anywhere. Both exist to make a silent wipe-out loud:
+        #
+        #   • An employee eligible for NOTHING contributes no variables, so HC-7
+        #     skips them (`if not terms: continue`) and they vanish from the
+        #     roster with no penalty and no diagnostic. That is precisely how a
+        #     full-timer with a stale 2-hour availability rule disappears.
+        #   • `opt_out=0` when the client believes it sent OPT_OUT employees means
+        #     the field was dropped at the wire — the usual cause being a solver
+        #     image built before `availability_mode` existed, since the Pydantic
+        #     models ignore unknown fields rather than rejecting them.
+        placeable = {e.id for v in self._eligibility_map.values() for e in v}
+        opt_out = sum(1 for e in self.data.employees if e.availability_mode == 'OPT_OUT')
+        unplaceable = [e for e in self.data.employees if e.id not in placeable]
+        logger.info(
+            '[ModelBuilder] HC-5d: %d/%d employees OPT_OUT (absent slot = available); '
+            '%d eligible for NO shift in this run',
+            opt_out, len(self.data.employees), len(unplaceable),
+        )
+        if unplaceable:
+            logger.warning(
+                '[ModelBuilder] HC-5d: %d employee(s) unplaceable — %s%s',
+                len(unplaceable),
+                ', '.join(
+                    f'{e.id}({e.employment_type}/{e.availability_mode}'
+                    f'{",owes " + str(e.min_contract_minutes) + "m" if e.min_contract_minutes > 0 else ""})'
+                    for e in unplaceable[:10]
+                ),
+                ' ...' if len(unplaceable) > 10 else '',
+            )
 
     # -- C: Variable creation --------------------------------------------------
 
@@ -1853,13 +2111,11 @@ class ScheduleModelBuilder:
                     # availability category captures the soft-window portion.
                     availability_penalty = 0
                     s0, s1 = shift_window(shift)
-                    for start, end, severity in emp.availability_overrides:
-                        a0 = _time_to_abs_minutes(shift.shift_date, start)
-                        a1 = _time_to_abs_minutes(shift.shift_date, end)
-                        if a1 <= a0: a1 += 1440
-                        if s0 < a1 and a0 < s1:
-                            if severity == 'SOFT': availability_penalty += 5000
-                            if severity == 'PREFERENCE': availability_penalty += 1000
+                    for ov in emp.availability_overrides:
+                        if not override_blocks_shift(ov, shift):
+                            continue
+                        if ov.severity == 'SOFT': availability_penalty += 5000
+                        if ov.severity == 'PREFERENCE': availability_penalty += 1000
 
                     # Note: relaxed-pair penalties are applied via
                     # _relaxed_violations_vars in the SC-9 block below — those
@@ -1963,12 +2219,12 @@ class ScheduleModelBuilder:
 
 
 
-            # SC-1: Employment Isolation (Precision Fix #8: SOFT)
-            target = getattr(shift, 'target_employment_type', None)
-            if target and emp.employment_type != target:
-                # Penalty for assigning FT to Casual shift or vice versa
-                # Strategic Importance: 5000 (equivalent to $50 penalty)
-                _t(5000 * var, 'employment_mix')
+            # SC-1: Employment Isolation is no longer priced here. It is now a
+            # HARD eligibility criterion in `employee_eligible` (HC-5c), so an
+            # off-target pair never becomes a variable in the first place and
+            # there is nothing left to penalize. The 'employment_mix' term
+            # category is retained so the objective breakdown keeps a stable
+            # shape for consumers.
 
         # -- SC-5: Overtime penalty (EBA cl 42.2 — tiered 150%/200%) -----------
         # cl 42.2: overtime is 150% of the ordinary rate for the FIRST THREE

@@ -13,8 +13,13 @@ import { AvailabilityScreen } from '../ui/AvailabilityScreen';
 import { pageVariants } from '@/modules/core/ui/motion/presets';
 import { GoldStandardHeader } from '@/modules/core/ui/components/GoldStandardHeader';
 import { useScopeFilter } from '@/platform/auth/useScopeFilter';
+import { useAuth } from '@/platform/auth/useAuth';
+import { parseISO } from 'date-fns';
 import { useTheme } from '@/modules/core/contexts/ThemeContext';
 import { cn } from '@/modules/core/lib/utils';
+import { useMyContractBasis } from '../state/useMyContractBasis';
+import { ContractBasisBanner } from '../ui/header/ContractBasisBanner';
+import { ExceptionsPanel } from '../ui/exceptions/ExceptionsPanel';
 
 type Breakpoint = 'mobile' | 'tablet' | 'desktop';
 
@@ -49,10 +54,16 @@ function useBreakpoint(): Breakpoint {
 export const AvailabilityPage: React.FC = () => {
   const breakpoint = useBreakpoint();
   const { scope, setScope, isGammaLocked } = useScopeFilter('personal');
+  const { user } = useAuth();
   const { isDark } = useTheme();
   const { toast } = useToast();
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  // What an ABSENT declaration means for this person. Without it the page
+  // shows a full-timer an empty calendar and implies they owe it an answer,
+  // when in fact a declaration NARROWS what they can be rostered for.
+  const { basis: contractBasis, loading: basisLoading } = useMyContractBasis(user?.id);
 
   const availabilityData = useAvailability({ month: currentMonth });
   const editingData = useAvailabilityEditing();
@@ -209,14 +220,28 @@ export const AvailabilityPage: React.FC = () => {
         variants={pageVariants}
         initial="hidden"
         animate="show"
-        className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6"
+        className="flex-1 min-h-0 overflow-hidden px-4 lg:px-6 pb-4 lg:pb-6 flex flex-col gap-3"
       >
-        <AvailabilityScreen 
-          layout={breakpoint === 'desktop' ? 'desktop' : breakpoint === 'tablet' ? 'tablet' : 'mobile'}
-          currentMonth={currentMonth}
-          availabilityData={availabilityData}
-          editingData={editingData}
-        />
+        <ContractBasisBanner basis={contractBasis} loading={basisLoading} />
+
+        {/* Where a permanent's agency actually lives: they cannot usefully
+            declare availability, and leave is for absences that draw down a
+            balance. Casuals keep the declaration editor as their primary tool,
+            so the panel is only surfaced for OPT_OUT staff. */}
+        {!basisLoading && contractBasis.availabilityMode === 'OPT_OUT' && user?.id && (
+          <ExceptionsPanel profileId={user.id} />
+        )}
+
+        {/* AvailabilityScreen is `h-full`; with a sibling banner above it needs
+            an explicit flex track or it overflows the column. */}
+        <div className="flex-1 min-h-0">
+          <AvailabilityScreen
+            layout={breakpoint === 'desktop' ? 'desktop' : breakpoint === 'tablet' ? 'tablet' : 'mobile'}
+            currentMonth={currentMonth}
+            availabilityData={availabilityData}
+            editingData={editingData}
+          />
+        </div>
       </motion.div>
     </div>
   );

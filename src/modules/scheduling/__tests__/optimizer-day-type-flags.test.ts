@@ -47,6 +47,8 @@ vi.mock('@/modules/scheduling/data/roster-fetcher', async (importOriginal) => {
             fetchExistingRoster:        vi.fn().mockResolvedValue(new Map()),
             fetchAvailability:          vi.fn().mockResolvedValue(new Map()),
             fetchApprovedLeave:         vi.fn().mockResolvedValue(new Map()),
+            fetchPendingLeave:          vi.fn().mockResolvedValue(new Map()),
+            fetchAvailabilityExceptions: vi.fn().mockResolvedValue(new Map()),
             fetchEmployeeContractDetails: vi.fn().mockResolvedValue(new Map()),
         },
     };

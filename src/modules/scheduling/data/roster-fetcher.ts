@@ -20,7 +20,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase as prodSupabase } from '@/platform/supabase/client';
-import type { ExistingShiftRef, OptimizerEmployee } from '../types';
+import type { AvailabilityOverrideRef, ExistingShiftRef, OptimizerEmployee } from '../types';
 import type { ShiftMeta, EmployeeMeta } from '../optimizer/solution-parser';
 
 // =============================================================================
@@ -304,8 +304,40 @@ export class RosterFetcher {
         shifts: ShiftMeta[],
         employees: EmployeeMeta[],
     ): Promise<Map<string, string[]>> {
+        return (await this.fetchLeaveByStatus(shifts, employees, 'approved')).dates;
+    }
+
+    /**
+     * Each candidate's PENDING leave dates inside the window.
+     *
+     * WHY THIS EXISTS. Only approved leave was ever read, so a request sitting
+     * in someone's inbox was invisible to the solver: a manager runs autopilot
+     * on Monday, an employee has leave pending for next week, the solver
+     * rosters them into it, the leave is approved on Wednesday — and now there
+     * is a rostered shift inside approved leave, recoverable only through the
+     * manual post-approval unassign flow.
+     *
+     * It is NOT hard-excluded. Pending leave is a request, not a decision, and
+     * treating it as binding would let anyone remove themselves from the roster
+     * by asking. It becomes a SOFT `availability_overrides` entry instead —
+     * 5000c, so the solver routes around it when it cheaply can and still
+     * covers the shift when nobody else exists.
+     */
+    async fetchPendingLeave(
+        shifts: ShiftMeta[],
+        employees: EmployeeMeta[],
+    ): Promise<Map<string, string[]>> {
+        return (await this.fetchLeaveByStatus(shifts, employees, 'pending')).dates;
+    }
+
+    /** Shared reader — the two statuses differ only in how the solver treats them. */
+    private async fetchLeaveByStatus(
+        shifts: ShiftMeta[],
+        employees: EmployeeMeta[],
+        status: 'approved' | 'pending',
+    ): Promise<{ dates: Map<string, string[]> }> {
         const result = new Map<string, string[]>();
-        if (shifts.length === 0 || employees.length === 0) return result;
+        if (shifts.length === 0 || employees.length === 0) return { dates: result };
 
         const dates = shifts.map(s => s.shift_date).sort();
         const windowStart = dates[0];
@@ -319,13 +351,16 @@ export class RosterFetcher {
             .from('leave_requests')
             .select('employee_id, start_date, end_date, status')
             .in('employee_id', employeeIds)
-            .eq('status', 'approved')
+            .eq('status', status)
             .lte('start_date', `${windowEnd}T23:59:59`)
             .gte('end_date', windowStart);
 
         if (error) {
-            console.warn('[RosterFetcher] Approved-leave fetch failed — solver will NOT exclude leave dates this run', error);
-            return result;
+            console.warn(
+                `[RosterFetcher] ${status}-leave fetch failed — solver will NOT account for it this run`,
+                error,
+            );
+            return { dates: result };
         }
 
         const toYmd = (v: string | null | undefined): string =>
@@ -349,7 +384,73 @@ export class RosterFetcher {
             result.set(emp, Array.from(new Set(days)).sort());
         }
         if (result.size > 0) {
-            console.info('[RosterFetcher] Approved leave: %d employee(s) have leave dates inside the window (hard-excluded)', result.size);
+            console.info(
+                '[RosterFetcher] %s leave: %d employee(s) have leave dates inside the window (%s)',
+                status, result.size,
+                status === 'approved' ? 'hard-excluded' : 'SOFT-penalised, still assignable',
+            );
+        }
+        return { dates: result };
+    }
+
+    /**
+     * Employee-declared availability EXCEPTIONS in the window — the producer
+     * for `availability_overrides`, which has been fully implemented in the
+     * solver since it was written and never had one.
+     *
+     * Subtractive by construction: an exception says "not during this", so
+     * unlike a declaration in `availability_rules` it can never accidentally
+     * un-roster someone by being too narrow.
+     *
+     * Fail-open: on a query error we log and return an empty map. An exception
+     * is a preference, and losing one for a run degrades the roster; blocking
+     * the run instead would be a worse trade.
+     */
+    async fetchAvailabilityExceptions(
+        shifts: ShiftMeta[],
+        employees: EmployeeMeta[],
+    ): Promise<Map<string, AvailabilityOverrideRef[]>> {
+        const result = new Map<string, AvailabilityOverrideRef[]>();
+        if (shifts.length === 0 || employees.length === 0) return result;
+
+        const dates = shifts.map(s => s.shift_date).sort();
+        const windowStart = dates[0];
+        const windowEnd = dates[dates.length - 1];
+
+        // An undated exception applies on EVERY day, so it can never be
+        // filtered out by the window — hence the `is null` arm rather than a
+        // plain range predicate.
+        const { data, error } = await (this.supabase as any)
+            .from('availability_exceptions')
+            .select('profile_id,exception_date,start_time,end_time,severity')
+            .in('profile_id', employees.map(e => e.id))
+            .or(`exception_date.is.null,and(exception_date.gte.${windowStart},exception_date.lte.${windowEnd})`);
+
+        if (error) {
+            console.warn('[RosterFetcher] Availability-exception fetch failed — solver will not see them this run', error);
+            return result;
+        }
+
+        for (const row of (data ?? []) as any[]) {
+            const profileId = row.profile_id as string | null;
+            if (!profileId) continue;
+            const list = result.get(profileId) ?? [];
+            list.push({
+                start_time: normalizeTime(row.start_time),
+                end_time: normalizeTime(row.end_time),
+                severity: row.severity as AvailabilityOverrideRef['severity'],
+                // `undefined`, never `null` — an undated override means every
+                // day, and the solver distinguishes the two by absence.
+                date: row.exception_date ? String(row.exception_date).slice(0, 10) : undefined,
+            });
+            result.set(profileId, list);
+        }
+
+        if (result.size > 0) {
+            console.info(
+                '[RosterFetcher] Availability exceptions: %d employee(s) have declared windows in this run',
+                result.size,
+            );
         }
         return result;
     }

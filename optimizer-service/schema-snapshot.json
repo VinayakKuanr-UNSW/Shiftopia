@@ -13,6 +13,7 @@
     "relax_constraints"
   ],
   "Employee": [
+    "availability_mode",
     "availability_overrides",
     "availability_slots",
     "contract_weekly_minutes",
@@ -62,6 +63,7 @@
     "shift_type",
     "start_time",
     "target_employment_type",
+    "target_requires_flexible",
     "unpaid_break_minutes"
   ],
   "SolverParams": [

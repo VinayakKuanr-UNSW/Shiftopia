@@ -35,7 +35,8 @@ import { resolveRateSet, type RateSet } from '../rosters/domain/projections/util
 import { calculateFatigueWithRecovery, effectiveMinutes, FATIGUE_BANDS } from '../rosters/domain/projections/utils/fatigue';
 import { calculateUtilization } from '../rosters/domain/projections/utils/fairness';
 import type { ShiftMeta, EmployeeMeta } from './optimizer/solution-parser';
-import type { ExistingShiftRef } from './types';
+import { toTargetEmploymentType } from '@/modules/core/model/employment.types';
+import type { AvailabilityOverrideRef, ExistingShiftRef } from './types';
 import { auditor } from './audit/auditor';
 import { rosterFetcher, durationMinutes } from './data/roster-fetcher';
 import { fairnessLedgerService } from '@/modules/rosters/services/fairnessLedger.service';
@@ -145,6 +146,274 @@ export function mergeEmployeeDetails(
         merged.set(id, { ...contractDetails.get(id), ...callerSupplied.get(id) });
     }
     return merged;
+}
+
+// ── HC-7 contract obligation: leave-aware, contract-weighted ─────────────────
+//
+// WHY THIS EXISTS. `_add_min_contract_hours()` in the optimizer charges a
+// Tier-1 penalty of 100,000 PER MINUTE for every contracted minute an FT/PT
+// employee is not given. The two numbers feeding that penalty were both wrong
+// in the same direction — they over-stated the obligation — and the solver has
+// no way to report an obligation it cannot satisfy: it just absorbs the slack,
+// which silently flattens every real trade-off ranked beneath Tier 1.
+//
+//   1. LEAVE WAS NOT DEDUCTED. The window obligation was
+//      `weeklyMinutes * weekScale` with no credit for approved leave, even
+//      though the very same approved-leave dates are handed to the solver as
+//      `unavailable_dates` (a HARD per-day exclusion). So an FT on two weeks'
+//      annual leave inside a four-week window was simultaneously told "you may
+//      not work these 14 days" and "you still owe 152 hours". The solver's only
+//      moves are to eat an unavoidable ~1e9 penalty or to cram the full
+//      obligation into the remaining fortnight.
+//
+//   2. THE FAIR-SHARE CAP WAS UNWEIGHTED. `totalDemand / headcount * 1.2`
+//      divides demand by RAW headcount, so contract obligation is diluted by
+//      the casual bench. Production carries 83 active casuals against 17 FT and
+//      4 PT, which shrinks an FT's cap to ~1/104 of window demand — well under
+//      their real 38h, so the cap (added to stop HC-7 dominating coverage) was
+//      instead erasing the obligation it was meant to bound. Weighting each
+//      employee's slice by their own contracted minutes restores the intent:
+//      the cap still bounds HC-7 on a demand-poor window, but a full-timer's
+//      share no longer depends on how many casuals are on the books.
+//
+// Both are pure arithmetic over data the controller already has in hand, so
+// neither needs a schema change or an optimizer-service redeploy.
+
+/** Head-room over an employee's weighted slice of demand before HC-7 is capped. */
+export const FAIR_SHARE_BUFFER = 1.2;
+
+/**
+ * Turn pending-leave dates into SOFT whole-day availability overrides.
+ *
+ * WHOLE DAY, because `leave_requests` records a date range and not times — the
+ * window is the full calendar day, and the solver's overlap test then catches
+ * any shift touching it. `00:00`–`23:59` rather than `24:00` so the window
+ * cannot be read as crossing midnight into the following day, which would
+ * penalise a shift the leave does not cover.
+ *
+ * SOFT, because a request is not a decision. Hard-excluding pending leave
+ * would let anyone remove themselves from the roster simply by asking for it.
+ * At 5000c the solver prefers almost any other candidate but will still cover
+ * the shift if nobody else can — coverage outranks this by design.
+ *
+ * Existing overrides from `employeeDetails` are preserved: the caller may be
+ * supplying real exceptions, and this must add to them rather than replace.
+ */
+export function buildPendingLeaveOverrides(
+    pendingLeaveDates: readonly string[],
+    existing?: readonly AvailabilityOverrideRef[],
+): AvailabilityOverrideRef[] {
+    const overrides: AvailabilityOverrideRef[] = [...(existing ?? [])];
+    // Dedupe against anything the caller already sent for the same date, so a
+    // detail map that has been through this once does not double-penalise.
+    const alreadyCovered = new Set(
+        overrides.filter(o => o.severity === 'SOFT' && o.date).map(o => o.date),
+    );
+    for (const date of new Set(pendingLeaveDates)) {
+        if (alreadyCovered.has(date)) continue;
+        overrides.push({ start_time: '00:00', end_time: '23:59', severity: 'SOFT', date });
+    }
+    return overrides;
+}
+
+/**
+ * Default weekly contracted minimum, in minutes, when no `employeeDetails`
+ * override supplies one.
+ *
+ * Nothing in `fetchEmployeeContractDetails` populates `min_contract_minutes`,
+ * so in practice this IS the obligation for every run that does not pass a
+ * caller-supplied override — which makes it the single place the FT/PT/casual
+ * baseline may be written. Casuals return 0 and are thereby exempt from HC-7,
+ * matching `_add_min_contract_hours`'s `<= 0` skip.
+ */
+export function baselineWeeklyContractMinutes(contractType: string | null | undefined): number {
+    const raw = contractType || '';
+    if (raw === 'FT' || /full/i.test(raw)) return 2280;  // 38h
+    if (raw === 'PT' || /part/i.test(raw)) return 1200;  // 20h
+    return 0;                                            // casual — HC-7 exempt
+}
+
+/**
+ * Each employee's contract-weighted slice of the window's assignable demand.
+ *
+ * `weeklyContractMinutes` is the WEEKLY basis (0 for casuals, who are exempt
+ * from HC-7 entirely — `_add_min_contract_hours` skips `<= 0`). A zero-weight
+ * employee therefore gets a zero cap, which changes nothing for them because
+ * their obligation is already zero.
+ *
+ * Falls back to the old uniform `demand / headcount` split when the pool
+ * carries no contracted obligation at all (an all-casual scope), so the
+ * division can never be by zero.
+ */
+export function buildFairShareCaps(
+    totalDemandMinutes: number,
+    weeklyContractMinutes: ReadonlyMap<string, number>,
+): Map<string, number> {
+    const caps = new Map<string, number>();
+    let totalWeight = 0;
+    for (const minutes of weeklyContractMinutes.values()) {
+        if (minutes > 0) totalWeight += minutes;
+    }
+
+    if (totalWeight <= 0) {
+        const uniform = (totalDemandMinutes / Math.max(1, weeklyContractMinutes.size))
+            * FAIR_SHARE_BUFFER;
+        for (const id of weeklyContractMinutes.keys()) caps.set(id, uniform);
+        return caps;
+    }
+
+    for (const [id, minutes] of weeklyContractMinutes) {
+        const weight = minutes > 0 ? minutes / totalWeight : 0;
+        caps.set(id, totalDemandMinutes * weight * FAIR_SHARE_BUFFER);
+    }
+    return caps;
+}
+
+export interface ContractObligationInput {
+    /** Weekly contracted minimum, in minutes. 0 for casuals. */
+    weeklyContractMinutes: number;
+    /** Window length in weeks — `diffDays / 7`, the same scale the caps use. */
+    weekScale: number;
+    /**
+     * Count of approved-leave CALENDAR dates inside the window, as produced by
+     * `RosterFetcher.fetchApprovedLeave` (which expands every date between
+     * start and end, weekends included).
+     */
+    leaveDays: number;
+    /** This employee's entry from {@link buildFairShareCaps}. */
+    fairShareCapMinutes: number;
+}
+
+/**
+ * The window obligation HC-7 should hold this employee to.
+ *
+ * LEAVE IS CREDITED PRO-RATA ON CALENDAR DAYS (`weekly / 7` per leave date),
+ * deliberately matching the basis the obligation itself is built on: `weekScale`
+ * is `diffDays / 7`, so the gross obligation is already a per-calendar-day rate.
+ * Crediting leave the same way makes a full week of leave cancel exactly one
+ * week of obligation, which is the case that matters.
+ *
+ * The known imprecision is short spells that straddle non-working days — a
+ * Fri–Mon leave spans 4 calendar dates but costs the roster 2 working days, so
+ * it over-credits by roughly half a day. That errs toward UNDER-obligating,
+ * which is the safe direction: an over-stated obligation is what makes the
+ * solver eat unavoidable slack or cram hours into the days around the leave,
+ * whereas an under-stated one merely leaves a little contract pressure on the
+ * table. Costing leave in working days instead would need the employee's
+ * roster pattern, which is exactly the ordinary-hours envelope this codebase
+ * does not model yet.
+ */
+export function resolveContractObligationMinutes(
+    input: ContractObligationInput,
+): number {
+    const { weeklyContractMinutes, weekScale, leaveDays, fairShareCapMinutes } = input;
+    const afterLeave = windowContractObligationMinutes(
+        weeklyContractMinutes, weekScale, leaveDays,
+    );
+    if (afterLeave <= 0) return 0;
+
+    return Math.min(afterLeave, Math.max(0, fairShareCapMinutes));
+}
+
+/**
+ * The same obligation BEFORE the fair-share cap is applied — i.e. what this
+ * employee's contract actually entitles them to across the window, net of
+ * leave.
+ *
+ * This, not the capped figure, is the denominator a utilization ratio wants.
+ * The cap is a safety valve on the solver's OBJECTIVE (it stops Tier-1 HC-7
+ * outbidding coverage on a demand-poor window); it is not a statement about
+ * what the employee is owed, so letting it redefine "100% utilized" would make
+ * a starved full-timer read as fully loaded precisely when the window is too
+ * thin to load them.
+ */
+export function windowContractObligationMinutes(
+    weeklyContractMinutes: number,
+    weekScale: number,
+    leaveDays: number,
+): number {
+    if (weeklyContractMinutes <= 0) return 0;
+    const gross = weeklyContractMinutes * weekScale;
+    const leaveCredit = (weeklyContractMinutes / 7) * Math.max(0, leaveDays);
+    return Math.max(0, gross - leaveCredit);
+}
+
+/**
+ * Minutes an employee is scheduled for INSIDE the optimization window — the
+ * numerator of the greedy fallback's utilization ratio.
+ *
+ * Two things this has to get right, both of which the inline reduce it
+ * replaces got wrong:
+ *
+ *   • `fetchExistingRoster` deliberately reaches 28 days behind the window to
+ *     give the rest-gap and rolling-average checks their context. Those days
+ *     are not part of this window's obligation, so they must not be counted
+ *     against a window-sized denominator.
+ *   • `acc + s.duration_minutes || 0` parses as `(acc + duration) || 0`. A
+ *     shift with no `duration_minutes` therefore produced `NaN || 0` and reset
+ *     the accumulator to zero instead of contributing nothing.
+ *
+ * A null `windowStartDate` (no shifts) disables the date filter rather than
+ * dropping everything.
+ */
+export function inWindowScheduledMinutes(
+    shifts: readonly { shift_date?: string; duration_minutes?: number }[],
+    windowStartDate: string | null,
+): number {
+    let total = 0;
+    for (const shift of shifts) {
+        if (windowStartDate !== null && (shift.shift_date ?? '') < windowStartDate) continue;
+        const minutes = shift.duration_minutes;
+        if (typeof minutes === 'number' && Number.isFinite(minutes)) total += minutes;
+    }
+    return total;
+}
+
+/** The greedy scorer's utilization term. Neutral when there is no contract. */
+export interface GreedyUtilizationTerms {
+    /** Percent of the window obligation already scheduled. 0 when undefined. */
+    utilization: number;
+    /** Subtracted from the candidate score. Over-cap only. */
+    penalty: number;
+    /** Added to the candidate score. Under-loaded only. */
+    bonus: number;
+}
+
+/** Under this percentage a candidate is "under-loaded" and gains the bonus. */
+const GREEDY_UNDER_UTILIZED_PCT = 80;
+/** Over this percentage a candidate is over-cap and takes the penalty. */
+const GREEDY_OVER_UTILIZED_PCT = 100;
+
+/**
+ * Score the utilization of one candidate.
+ *
+ * ZERO OBLIGATION IS NEUTRAL, NOT ZERO PERCENT. Casuals (and anyone whose
+ * leave spans the whole window) carry no contract floor, and
+ * `calculateUtilization` returns 0 for a zero denominator — but 0% is the
+ * deepest point of the under-utilization bonus, so reading it literally hands
+ * every casual the maximum boost and ranks them above a half-loaded
+ * full-timer. That inverts the preference this term exists to express, and it
+ * is the same starvation the solver's HC-7 floor is there to prevent. Both
+ * sides return 0 instead: utilization against a contract is undefined without
+ * a contract.
+ */
+export function greedyUtilizationTerms(
+    scheduledMinutes: number,
+    obligationMinutes: number,
+    fairnessMult: number,
+): GreedyUtilizationTerms {
+    if (!(obligationMinutes > 0)) return { utilization: 0, penalty: 0, bonus: 0 };
+
+    const utilization = calculateUtilization(scheduledMinutes / 60, obligationMinutes / 60);
+    return {
+        utilization,
+        penalty: utilization > GREEDY_OVER_UTILIZED_PCT
+            ? (utilization - GREEDY_OVER_UTILIZED_PCT) * 10
+            : 0,
+        bonus: utilization < GREEDY_UNDER_UTILIZED_PCT
+            ? (GREEDY_UNDER_UTILIZED_PCT - utilization) * 5 * fairnessMult
+            : 0,
+    };
 }
 
 // ── cl 42 weekly overtime for the greedy-fallback cost estimate (compliance
@@ -327,6 +596,15 @@ export interface CommitResult {
     totalCommitted: number;
     failedEmployees: string[];
     concurrencyConflicts: string[];   // Shift IDs that failed the recheck
+    /**
+     * The RPC's own reason for a failed commit (`SQLERRM` from
+     * sm_bulk_assign_atomic's exception handler, or its authorization message).
+     * The committer has always captured this; it was dropped here, so a
+     * trigger rejection surfaced to the user as the generic "check compliance
+     * results" — pointing at the one layer that had passed. Undefined on
+     * success.
+     */
+    message?: string;
 }
 
 // =============================================================================
@@ -347,6 +625,15 @@ async function greedyFallback(
     employeeDetails: Map<string, Partial<OptimizerEmployee>>,
     existingRoster: Map<string, ExistingShiftRef[]>,
     strategy?: OptimizerStrategy,
+    /**
+     * Per-employee WINDOW contract obligation in minutes, net of approved
+     * leave and before the fair-share cap — see
+     * `windowContractObligationMinutes`. Supplied by `run()` so the fallback
+     * measures utilization against the same contract basis the solver's HC-7
+     * does. Absent (or 0) leaves an employee out of the utilization term
+     * entirely, which is the correct reading for casuals.
+     */
+    windowObligation?: ReadonlyMap<string, number>,
 ): Promise<ValidatedProposal[]> {
     // Resolve strategy once here with the same defaults used when building
     // the Python optimizer request (see OptimizeRequest construction below).
@@ -364,6 +651,17 @@ async function greedyFallback(
     for (const emp of employees) {
         assignedByEmployee.set(emp.id, []);
     }
+
+    // First day of the optimization window. `existingRoster` deliberately
+    // reaches 28 days BEHIND it to give the rest-gap and fatigue checks their
+    // rolling context, so history must be excluded from the utilization
+    // numerator — counting it against a window-sized denominator reported
+    // everyone as massively over-utilized on a short window and never
+    // under-utilized on any.
+    const windowStartDate = shifts.reduce<string | null>(
+        (min, s) => (min === null || s.shift_date < min ? s.shift_date : min),
+        null,
+    );
 
     for (const shift of shifts) {
         let assigned = false;
@@ -395,6 +693,11 @@ async function greedyFallback(
                         shift_date: s.shift_date,
                         start_time: s.start_time,
                         end_time: s.end_time,
+                        // Was omitted, and the utilization sum below reads it.
+                        // Resolved with the SAME helper `ExistingShiftRef`
+                        // uses, so a shift contributes identically whether it
+                        // was already committed or proposed by this run.
+                        duration_minutes: durationMinutes(s.start_time, s.end_time),
                         unpaid_break_minutes: s.unpaid_break_minutes
                     } : null;
                 }).filter(Boolean)
@@ -407,11 +710,25 @@ async function greedyFallback(
                 { start_time: shift.start_time, end_time: shift.end_time, unpaid_break_minutes: shift.unpaid_break_minutes }
             );
 
-            // 2. Utilization Score
+            // 2. Utilization Score.
+            //
+            // The denominator is the WINDOW obligation passed in by `run()`,
+            // not `employeeDetails.min_contract_minutes` — nothing populates
+            // that field, so it was 0 for every employee and this whole term
+            // was inert: a penalty that could never fire and a bonus that was
+            // the same constant for everyone, cancelling out of the argmax. The
+            // fallback consequently never preferred an under-loaded permanent
+            // over a casual, which is the FT starvation HC-7 exists to prevent
+            // — in the path that runs precisely when the optimizer is unhealthy
+            // and nobody is watching. See `windowContractObligationMinutes`,
+            // `inWindowScheduledMinutes` and `greedyUtilizationTerms` for the
+            // scale and zero-obligation reasoning behind each input.
             const details = employeeDetails.get(emp.id);
-            const contractedMins = details?.min_contract_minutes ?? 0;
-            const scheduledMins = totalShiftsForEmp.reduce((acc, s) => acc + (s as any).duration_minutes || 0, 0);
-            const utl = calculateUtilization(scheduledMins / 60, contractedMins / 60);
+            const contractedMins = windowObligation?.get(emp.id) ?? 0;
+            const scheduledMins = inWindowScheduledMinutes(
+                totalShiftsForEmp as { shift_date?: string; duration_minutes?: number }[],
+                windowStartDate,
+            );
 
             // Strategy multipliers — `strategyMult` is the shared mirror of
             // optimizer-service/model_builder.py `_strategy_mult`.
@@ -431,10 +748,12 @@ async function greedyFallback(
             const fatiguePenalty = health.projected > FATIGUE_BANDS.OK_MAX
                 ? Math.pow(health.projected - FATIGUE_BANDS.OK_MAX, 2) * 50 * fatigueMult
                 : 0;
-            // Over-utilization (> 100%) is a hard over-cap, not a strategy lever
-            const utilizationPenalty = utl > 100 ? (utl - 100) * 10 : 0;
-            // Under-utilization (< 80%) gets a fairness bonus, scaled by fairness_weight
-            const fairnessBonus = utl < 80 ? (80 - utl) * 5 * fairnessMult : 0;
+            // Over-utilization (> 100%) is a hard over-cap, not a strategy
+            // lever; under-utilization (< 80%) earns a fairness bonus scaled by
+            // fairness_weight. Both are neutral without a contract — see
+            // `greedyUtilizationTerms`.
+            const { utilization: utl, penalty: utilizationPenalty, bonus: fairnessBonus } =
+                greedyUtilizationTerms(scheduledMins, contractedMins, fairnessMult);
 
             // F1 Ledger bias — the SHARED scoring kernel, identical to the
             // solver's SC-11 (audit F-10/F-13). This block used to hardcode 50¢
@@ -536,6 +855,13 @@ async function greedyFallback(
                                 name: emp.name,
                                 contracts: details?.contracts || [],
                                 qualifications: details?.qualifications || [],
+                                // Same reason as the solver path: without the raw
+                                // contract status V8_EMPLOYMENT_TARGET cannot fire,
+                                // and greedy would hand back the same off-target
+                                // assignments the DB trigger rejects.
+                                employment_statuses: emp.employment_status
+                                    ? [emp.employment_status]
+                                    : undefined,
                             } as any
                         }
                     },
@@ -668,6 +994,22 @@ export class AutoSchedulerController {
         const leaveByEmployee = await rosterFetcher.fetchApprovedLeave(
             input.shifts, input.employees,
         );
+        // ── Pending leave: SOFT, not hard ────────────────────────────────────
+        // A request is not a decision. Hard-excluding it would let anyone take
+        // themselves off the roster by asking, so it becomes a 5000c penalty
+        // the solver routes around when it cheaply can — which is enough to
+        // stop the common failure: autopilot rosters someone into leave that is
+        // approved two days later, and the only remedy left is the manual
+        // post-approval unassign flow.
+        const pendingLeaveByEmployee = await rosterFetcher.fetchPendingLeave(
+            input.shifts, input.employees,
+        );
+        // Employee-declared exceptions — the first producer this channel has
+        // ever had. Subtractive, so unlike an availability declaration a narrow
+        // one cannot un-roster the person who wrote it.
+        const exceptionsByEmployee = await rosterFetcher.fetchAvailabilityExceptions(
+            input.shifts, input.employees,
+        );
         // ── Contract-derived classification (compliance audit finding —
         // 2026-08-02): real Schedule 1/2 level, Schedule 3 Security status,
         // and Schedule 4/5/6 apprentice/trainee/SWS category from each
@@ -771,6 +1113,7 @@ export class AutoSchedulerController {
                 priority: s.demand_source === 'baseline' ? 10 : 1, // Prioritize baseline shifts
                 demand_source: s.demand_source,
                 target_employment_type: s.target_employment_type,
+                target_requires_flexible: s.target_requires_flexible ?? false,
                 level: s.level ?? 0,
                 is_training: (s as any).is_training ?? false,
                 unpaid_break_minutes: s.unpaid_break_minutes ?? 0,
@@ -788,8 +1131,36 @@ export class AutoSchedulerController {
             (acc, s) => acc + durationMinutes(s.start_time, s.end_time),
             0,
         );
-        const employeeCount = Math.max(1, input.employees.length);
-        const fairShareCap = (totalDemandMinutes / employeeCount) * 1.2;
+
+        // Weekly contracted minimum per employee, resolved ONCE here so the
+        // fair-share caps and the obligation sent to the solver cannot drift
+        // apart. See `baselineWeeklyContractMinutes` /
+        // `resolveContractObligationMinutes` for why each input is shaped the
+        // way it is.
+        const weeklyContractMinutes = new Map<string, number>(
+            input.employees.map(e => [
+                e.id,
+                employeeDetails.get(e.id)?.min_contract_minutes
+                    ?? baselineWeeklyContractMinutes(e.contract_type),
+            ]),
+        );
+        const fairShareCaps = buildFairShareCaps(totalDemandMinutes, weeklyContractMinutes);
+
+        // Uncapped, leave-credited window obligation. The solver gets the
+        // CAPPED figure (its objective needs the safety valve); the greedy
+        // fallback's utilization ratio gets this one, because the cap answers
+        // "how much work is there" and a utilization denominator has to answer
+        // "how much is this person owed".
+        const windowObligationMinutes = new Map<string, number>(
+            input.employees.map(e => [
+                e.id,
+                windowContractObligationMinutes(
+                    weeklyContractMinutes.get(e.id) ?? 0,
+                    weekScale,
+                    (leaveByEmployee.get(e.id) ?? []).length,
+                ),
+            ]),
+        );
 
         // F1 Ledger: fetch cumulative fairness debts for the optimizer run.
         // Requires a real org scope. When absent we SKIP entirely rather than
@@ -855,15 +1226,21 @@ export class AutoSchedulerController {
 
             // Default to 38h/wk (2280m) if FT, 20h/wk (1200m) if PT, else 40h/wk max for Casuals
             const baseMax = isFT ? 2280 : isPT ? 1200 : 2400;
-            const baseMin = isFT ? 2280 : isPT ? 1200 : 0;
 
             // Window-aware minimum: scale the weekly contract by `weekScale`,
-            // but cap at the demand each employee could plausibly absorb
-            // (fair-share + 20% buffer). Prevents the solver from preferring
-            // "leave shifts uncovered" over "violate min-contract slack" when
-            // the window has more obligation than work.
-            const scaledMin = (det?.min_contract_minutes ?? baseMin) * weekScale;
-            const cappedMin = Math.min(scaledMin, fairShareCap);
+            // CREDIT approved leave against it, then cap at the demand this
+            // employee could plausibly absorb (their contract-weighted share
+            // + 20% buffer). The cap stops the solver preferring "leave shifts
+            // uncovered" over "violate min-contract slack" when the window
+            // holds more obligation than work; the leave credit stops it being
+            // handed an obligation the leave exclusion has already made
+            // impossible to discharge.
+            const cappedMin = resolveContractObligationMinutes({
+                weeklyContractMinutes: weeklyContractMinutes.get(e.id) ?? 0,
+                weekScale,
+                leaveDays: (leaveByEmployee.get(e.id) ?? []).length,
+                fairShareCapMinutes: fairShareCaps.get(e.id) ?? 0,
+            });
 
             // Classification-resolved rate: explicit per-employee rate wins;
             // otherwise Schedule 2 by level (casual vs permanent column);
@@ -884,15 +1261,28 @@ export class AutoSchedulerController {
                 is_security_role: isSecurityEmployee,
 
                 hourly_rate: e.remuneration_rate ?? securityRate ?? scheduleRate ?? windowRateSet.defaultRate,
-                // Scale limits by the number of weeks in the request to support averaging
-                min_contract_minutes: Math.round(cappedMin),
-                max_weekly_minutes: Math.round((det?.max_weekly_minutes ?? baseMax) * weekScale),
                 contract_weekly_minutes: (e.contracted_weekly_hours || 38) * 60,
                 level: det?.level ?? 0,
-                is_flexible: det?.is_flexible ?? false,
+                // `employeeDetails` never sets is_flexible (fetchEmployeeContractDetails
+                // does not select employment_status), so this was permanently false and
+                // no one could ever satisfy a `target_requires_flexible` shift. Prefer
+                // the value EligibilityService already resolved from the in-scope
+                // contract; fall back to the details map for other callers.
+                is_flexible: e.is_flexible ?? det?.is_flexible ?? false,
                 is_student: det?.is_student ?? false,
                 visa_limit: (det as any)?.visa_limit ?? 2880,
-                employment_type: /casual/i.test(e.contract_type || '') ? 'Casual' : isPT ? 'Part-Time' : 'Full-Time',
+                // HC-5c compares this against `shift.target_employment_type`, and the
+                // DB trigger compares `user_contracts.employment_status` against the
+                // same target. They must therefore be derived from the SAME source, or
+                // the solver proposes assignments the write will reject. In prod 17 of
+                // 122 staff have a `profiles.employment_type` that disagrees with their
+                // Active contract (12 look Casual but are Full-Time), so preferring the
+                // raw contract status here is what keeps the two in step.
+                // `toTargetEmploymentType` is the TS mirror of the solver's
+                // `normalize_employment_type()`, so both ends canonicalise identically.
+                employment_type: e.employment_status
+                    ? toTargetEmploymentType(e.employment_status)
+                    : /casual/i.test(e.contract_type || '') ? 'Casual' : isPT ? 'Part-Time' : 'Full-Time',
                 // Compat/display only — the solver prefers the effective-minute
                 // field below. Still anchored to today because that is what the
                 // score means (fatigue as of now, Sydney).
@@ -914,6 +1304,26 @@ export class AutoSchedulerController {
                 existing_shifts: existingRoster.get(e.id) ?? [],
                 availability_slots: availabilityData.get(e.id)?.slots ?? [],
                 has_availability_data: availabilityData.get(e.id)?.hasAnyData ?? false,
+                // Driven by the CONTRACT FLOOR, not by the employment token,
+                // because that is the property the mode actually protects: if
+                // HC-7 charges the solver for failing to give this person
+                // hours, missing availability data must not be what makes
+                // giving them hours impossible. The two are then incapable of
+                // disagreeing. Uses the weekly basis rather than the
+                // window obligation so an employee whose leave happens to span
+                // this window does not flip to OPT_IN for it.
+                availability_mode: (weeklyContractMinutes.get(e.id) ?? 0) > 0
+                    ? 'OPT_OUT'
+                    : 'OPT_IN',
+                // WINDOW-SCALED limits — like `unavailable_dates` below, these MUST
+                // sit after the `...det` spread. They were previously written above
+                // it, so any caller-supplied `employeeDetails` carrying either key
+                // overwrote the derived value with a raw WEEKLY number: a 4-week run
+                // then sent a 1-week obligation and a 1-week cap, silently dropping
+                // both `weekScale` and (now) the approved-leave credit. `det`'s
+                // copies are inputs to the derivation, never its output.
+                min_contract_minutes: Math.round(cappedMin),
+                max_weekly_minutes: Math.round((det?.max_weekly_minutes ?? baseMax) * weekScale),
                 // Approved leave (audit F1) — MUST come after the `...det`
                 // spread so an employeeDetails copy can never clobber it. The
                 // solver's per-day `unavailable_dates` hard filter excludes
@@ -922,8 +1332,48 @@ export class AutoSchedulerController {
                     ...((det as { unavailable_dates?: string[] } | undefined)?.unavailable_dates ?? []),
                     ...(leaveByEmployee.get(e.id) ?? []),
                 ])),
+                // Pending leave as whole-day SOFT windows. Same placement
+                // reasoning as `unavailable_dates` — after the `...det` spread,
+                // so a caller-supplied copy cannot silently drop them.
+                availability_overrides: buildPendingLeaveOverrides(
+                    pendingLeaveByEmployee.get(e.id) ?? [],
+                    [
+                        ...((det as { availability_overrides?: AvailabilityOverrideRef[] } | undefined)
+                            ?.availability_overrides ?? []),
+                        ...(exceptionsByEmployee.get(e.id) ?? []),
+                    ],
+                ),
             };
         });
+
+        // HC-7 obligation summary. The solver cannot report an obligation it is
+        // unable to discharge — it absorbs the Tier-1 slack silently — so the
+        // only place the shape of that obligation is visible is here. `capped`
+        // is the count whose contract floor was cut by the fair-share cap
+        // rather than by leave: a persistently high number means the window
+        // holds less work than the permanent workforce is owed.
+        if (weeklyContractMinutes.size > 0) {
+            const obligated = optimizerEmployees.filter(o => (o.min_contract_minutes ?? 0) > 0);
+            let capped = 0;
+            let leaveCredited = 0;
+            for (const e of input.employees) {
+                const weekly = weeklyContractMinutes.get(e.id) ?? 0;
+                if (weekly <= 0) continue;
+                const leaveDays = (leaveByEmployee.get(e.id) ?? []).length;
+                if (leaveDays > 0) leaveCredited += 1;
+                const afterLeave = Math.max(0, weekly * weekScale - (weekly / 7) * leaveDays);
+                if ((fairShareCaps.get(e.id) ?? 0) < afterLeave) capped += 1;
+            }
+            console.info(
+                '[AutoScheduler] HC-7: %d/%d employees carry a contract floor (%dh total over %s week(s)); %d leave-credited, %d cut by the fair-share cap',
+                obligated.length,
+                input.employees.length,
+                Math.round(obligated.reduce((a, o) => a + (o.min_contract_minutes ?? 0), 0) / 60),
+                weekScale.toFixed(2),
+                leaveCredited,
+                capped,
+            );
+        }
 
         let optimizerStatus: OptimizerStatus = 'UNKNOWN';
         let solveTimeMs = 0;
@@ -1007,7 +1457,7 @@ export class AutoSchedulerController {
                 const validationStart = performance.now();
                 // Past/emergent shifts are excluded from greedy too — appended
                 // back as failed proposals so they stay visible in the UI.
-                validatedProposals = await greedyFallback(futureShifts, input.employees, employeeDetails, existingRoster, input.strategy);
+                validatedProposals = await greedyFallback(futureShifts, input.employees, employeeDetails, existingRoster, input.strategy, windowObligationMinutes);
                 validatedProposals.push(...excludedProposals);
                 validationTimeMs = Math.round(performance.now() - validationStart);
                 uncoveredV8ShiftIds = validatedProposals.filter(p => !p.passing).map(p => p.shiftId);
@@ -1023,7 +1473,8 @@ export class AutoSchedulerController {
                 validatedProposals = await this._validateProposals(
                     groups,
                     employeeDetails,
-                    existingRoster
+                    existingRoster,
+                    employeeMap
                 );
 
                 // Add back the past/emergent shifts as explicitly failed proposals (for UI visibility)
@@ -1042,7 +1493,7 @@ export class AutoSchedulerController {
                 usedFallback = true;
                 optimizerStatus = 'UNKNOWN';
                 const validationStart = performance.now();
-                validatedProposals = await greedyFallback(futureShifts, input.employees, employeeDetails, existingRoster, input.strategy);
+                validatedProposals = await greedyFallback(futureShifts, input.employees, employeeDetails, existingRoster, input.strategy, windowObligationMinutes);
                 validatedProposals.push(...excludedProposals);
                 validationTimeMs = Math.round(performance.now() - validationStart);
                 uncoveredV8ShiftIds = validatedProposals.filter(p => !p.passing).map(p => p.shiftId);
@@ -1417,11 +1868,16 @@ export class AutoSchedulerController {
             }
         }
 
+        const success = atomicResult.success
+            && allFailedEmployees.length === 0
+            && allConflicts.length === 0;
+
         return {
-            success: atomicResult.success && allFailedEmployees.length === 0 && allConflicts.length === 0,
+            success,
             totalCommitted: atomicResult.totalCommitted,
             failedEmployees: allFailedEmployees,
             concurrencyConflicts: allConflicts,
+            message: success ? undefined : atomicResult.message,
         };
     }
 
@@ -1661,8 +2117,18 @@ export class AutoSchedulerController {
         groups: ReturnType<typeof solutionParser.parse>['groups'],
         employeeDetails: Map<string, Partial<OptimizerEmployee>>,
         existingRoster: Map<string, ExistingShiftRef[]>,
+        employeeMap?: Map<string, EmployeeMeta>,
     ): Promise<ValidatedProposal[]> {
         const all: ValidatedProposal[] = [];
+
+        // The employee's raw in-scope contract status, as an array because V8
+        // models multi-contract staff. Omitted (rather than guessed) when the
+        // caller has no employee map, keeping the rule fail-open exactly as
+        // documented instead of inventing a status to match against.
+        const employmentStatusesFor = (employeeId: string): string[] | undefined => {
+            const status = employeeMap?.get(employeeId)?.employment_status;
+            return status ? [status] : undefined;
+        };
 
         // Aggregate compliance-failure diagnostics into ONE summary log at the
         // end, instead of one noisy console line per employee (100+ staff floods
@@ -1700,6 +2166,12 @@ export class AutoSchedulerController {
                                 role_id: p.roleId,
                                 lifecycle_status: 'draft',
                                 unpaid_break_minutes: p.unpaidBreakMinutes ?? 0,
+                                // Without these the rebuilt candidate loses its
+                                // employment target and V8_EMPLOYMENT_TARGET goes
+                                // silent, so this validator would keep ratifying
+                                // assignments the DB trigger rejects.
+                                target_employment_type: p.targetEmploymentType ?? null,
+                                target_requires_flexible: p.targetRequiresFlexible ?? false,
                             })) as any,
                             existingShifts: existing.map(e => ({
                                 id: e.id,
@@ -1714,6 +2186,12 @@ export class AutoSchedulerController {
                                 name: group.employeeName,
                                 contracts: details?.contracts || [],
                                 qualifications: details?.qualifications || [],
+                                // V8_EMPLOYMENT_TARGET returns [] when this is
+                                // empty, so the shift-side hydration above only
+                                // takes effect once the employee side is present
+                                // too. Raw contract status — NOT `contract_type`,
+                                // which erases the Flexible Part-Time variant.
+                                employment_statuses: employmentStatusesFor(group.employeeId),
                             } as any
                         }
                     },
