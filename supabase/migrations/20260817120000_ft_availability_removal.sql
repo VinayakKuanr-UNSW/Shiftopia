@@ -269,22 +269,110 @@ COMMENT ON FUNCTION public.sm_materialize_contract_envelope(date, date, uuid[]) 
   'rows. Skips dates covered by approved leave. Writes nothing for contracts '
   'with a NULL span, which is every contract until one is explicitly opted in.';
 
--- ── 3. Purge existing FT availability ────────────────────────────────────────
+-- ── 3. Archive tables ────────────────────────────────────────────────────────
 --
--- Rules first: availability_slots.rule_id is ON DELETE CASCADE, so this clears
--- most of the slots as a side effect.
-DELETE FROM public.availability_rules r
- WHERE public.sm_holds_active_ft_contract(r.profile_id);
+-- The purge below destroys 17 rules and 1,533 slots of real employee-entered
+-- data. `LIKE` copies the column shape and nothing else — no defaults, no keys,
+-- no FKs — which is what an archive wants: it must accept rows the live table
+-- would now reject, and it must never cascade when the live row goes.
+--
+-- Recoverability is not optional here. The purge is otherwise a one-way door,
+-- and it is keyed on `sm_holds_active_ft_contract`, so ANY error in that
+-- predicate — a contract miskeyed as Full-Time, a status typo'd to 'full time
+-- (casual)' — silently widens the blast radius to people it was never meant to
+-- touch. The archive is what turns that from data loss into a reversible
+-- mistake. See docs/runbooks/ft-availability-removal.md for the restore.
 
--- Then EVERY remaining slot for an FT profile, keyed on profile_id alone.
---
--- Not `source = 'envelope'`, and not "orphans only". Production holds 134 FT
--- slots across 10 of the 17 full-timers with rule_id IS NULL *and*
--- source = 'rule' — 70 of them dated in the future. They match neither the
--- cascade above nor a source-scoped delete, and would survive as invisible
--- declarations: the FT page no longer renders a calendar to remove them, the
--- guard in step 1 covers availability_rules rather than availability_slots, and
--- every reader that queries availability_slots directly (reserve list, DnD
--- assign, Team Availability) would go on honouring them.
-DELETE FROM public.availability_slots s
- WHERE public.sm_holds_active_ft_contract(s.profile_id);
+CREATE TABLE IF NOT EXISTS public.availability_rules_archive
+  (LIKE public.availability_rules);
+CREATE TABLE IF NOT EXISTS public.availability_slots_archive
+  (LIKE public.availability_slots);
+
+ALTER TABLE public.availability_rules_archive
+  ADD COLUMN IF NOT EXISTS archived_at timestamptz NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS archived_reason text NOT NULL DEFAULT 'unspecified';
+ALTER TABLE public.availability_slots_archive
+  ADD COLUMN IF NOT EXISTS archived_at timestamptz NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS archived_reason text NOT NULL DEFAULT 'unspecified';
+
+-- These hold one employee's stated working availability, which is the same
+-- sensitivity as the live tables — and the live ones were world-readable by
+-- `anon` until 20260809000200. Supabase's default privileges grant new public
+-- tables to anon AND authenticated, so revoking PUBLIC alone is not enough.
+-- RLS with NO policies denies every non-superuser role outright; the REVOKEs
+-- mean a future policy cannot accidentally re-expose them either.
+ALTER TABLE public.availability_rules_archive ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.availability_slots_archive ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.availability_rules_archive FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.availability_slots_archive FROM PUBLIC, anon, authenticated;
+
+COMMENT ON TABLE public.availability_rules_archive IS
+  'Cold storage for availability_rules removed by a migration or data-hygiene '
+  'job. Deliberately carries no keys or FKs so it can hold rows the live table '
+  'would now reject. Not readable by anon or authenticated; restore is a '
+  'service_role operation — see docs/runbooks/ft-availability-removal.md.';
+COMMENT ON TABLE public.availability_slots_archive IS
+  'Cold storage for availability_slots. See availability_rules_archive.';
+
+-- ── 4. Purge existing FT availability ────────────────────────────────────────
+
+DO $$
+DECLARE
+  v_reason      text := 'ft_availability_removal_20260817120000';
+  v_rules_arch  int;
+  v_slots_arch  int;
+  v_rules_del   int;
+  v_slots_del   int;
+BEGIN
+  -- Archive BOTH tables before deleting EITHER. Rules must be captured before
+  -- their delete cascades the slots out from under the slot archive.
+  INSERT INTO public.availability_rules_archive
+  SELECT r.*, now(), v_reason
+    FROM public.availability_rules r
+   WHERE public.sm_holds_active_ft_contract(r.profile_id);
+  GET DIAGNOSTICS v_rules_arch = ROW_COUNT;
+
+  INSERT INTO public.availability_slots_archive
+  SELECT s.*, now(), v_reason
+    FROM public.availability_slots s
+   WHERE public.sm_holds_active_ft_contract(s.profile_id);
+  GET DIAGNOSTICS v_slots_arch = ROW_COUNT;
+
+  -- Rules first: availability_slots.rule_id is ON DELETE CASCADE, so this
+  -- clears most of the slots as a side effect.
+  DELETE FROM public.availability_rules r
+   WHERE public.sm_holds_active_ft_contract(r.profile_id);
+  GET DIAGNOSTICS v_rules_del = ROW_COUNT;
+
+  -- Then EVERY remaining slot for an FT profile, keyed on profile_id alone.
+  --
+  -- Not `source = 'envelope'`, and not "orphans only". Production holds 134 FT
+  -- slots across 10 of the 17 full-timers with rule_id IS NULL *and*
+  -- source = 'rule' — 70 of them dated in the future. They match neither the
+  -- cascade above nor a source-scoped delete, and would survive as invisible
+  -- declarations: the FT page no longer renders a calendar to remove them, the
+  -- guard in step 1 covers availability_rules rather than availability_slots,
+  -- and every reader that queries availability_slots directly (reserve list,
+  -- DnD assign, Team Availability) would go on honouring them.
+  DELETE FROM public.availability_slots s
+   WHERE public.sm_holds_active_ft_contract(s.profile_id);
+  GET DIAGNOSTICS v_slots_del = ROW_COUNT;
+
+  -- Every archived row must still be there after the deletes. If the counts
+  -- disagree, something cascaded into the archive and the migration must not
+  -- commit — a silent partial archive is worse than no archive, because the
+  -- runbook would claim a restore is possible when it is not.
+  IF (SELECT count(*) FROM public.availability_rules_archive
+       WHERE archived_reason = v_reason) <> v_rules_arch
+     OR (SELECT count(*) FROM public.availability_slots_archive
+          WHERE archived_reason = v_reason) <> v_slots_arch THEN
+    RAISE EXCEPTION
+      'ft_availability_removal: archive verification failed — expected %/% rules/slots'
+      , v_rules_arch, v_slots_arch
+      USING ERRCODE = 'data_exception';
+  END IF;
+
+  RAISE LOG '[ft_availability_removal] archived %/% rules/slots, deleted %/% — restore: docs/runbooks/ft-availability-removal.md',
+    v_rules_arch, v_slots_arch, v_rules_del, v_slots_del;
+END;
+$$;
